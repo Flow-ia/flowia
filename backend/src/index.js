@@ -75,8 +75,14 @@ function startServer() {
   global.memCache = { get: cacheGet, set: cacheSet, del: cacheDel };
 
   // ── CORS ─────────────────────────────────────────────────────────────────
+  // Accepte plusieurs origines — FRONTEND_URL peut être une liste séparée par virgule
+  const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',').map(o => o.trim());
   app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error('CORS not allowed: ' + origin));
+    },
     credentials: true,
   }));
   app.use(express.json({ limit: '2mb' }));
