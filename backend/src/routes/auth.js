@@ -59,8 +59,9 @@ router.post('/register', async (req, res) => {
     if (rows.length) return res.status(409).json({ error: 'Cet email est déjà utilisé.' });
     const code = genCode();
     await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, phone: phone||'', address: address||'', country: country||'FR', city: city||'', lat: lat||null, lng: lng||null });
-    await sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register');
+    // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
     res.json({ ok: true });
+    setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register').catch(e => console.error('[EMAIL register]', e.message)));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -83,17 +84,15 @@ router.post('/register/confirm', async (req, res) => {
     }
 
     // Créer automatiquement booking_settings avec un slug unique basé sur le nom du commerce
-    // Les réservations en ligne sont désactivées par défaut
     const baseSlug = businessName
       .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // supprimer accents
-      .replace(/[^a-z0-9\s-]/g, '')                     // garder lettres, chiffres, espaces, tirets
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
       .trim()
-      .replace(/\s+/g, '-')                              // espaces → tirets
-      .replace(/-+/g, '-')                               // tirets multiples → 1
-      .substring(0, 30)                                  // max 30 chars
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .substring(0, 30)
       || 'mon-commerce';
-    // S'assurer que le slug est unique en ajoutant un suffixe si nécessaire
     let finalSlug = baseSlug;
     let attempt = 0;
     while (true) {
@@ -144,8 +143,8 @@ router.post('/forgot', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Aucun compte avec cet email.' });
     const code = genCode();
     await saveCode(`rst_${email.toLowerCase()}`, code, { userId: rows[0].id });
-    await sendVerificationEmail(email, code, 'Réinitialisez votre mot de passe FlowIA');
     res.json({ ok: true });
+    setImmediate(() => sendVerificationEmail(email, code, 'Réinitialisez votre mot de passe FlowIA').catch(e => console.error('[EMAIL forgot]', e.message)));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -184,8 +183,8 @@ router.post('/change-email', authMiddleware, async (req, res) => {
     if (rows.length) return res.status(409).json({ error: 'Email déjà utilisé.' });
     const code = genCode();
     await saveCode(`chg_email_${req.user.userId}`, code, { newEmail: newEmail.toLowerCase() });
-    await sendVerificationEmail(newEmail, code, 'Confirmez votre nouvel email — FlowIA', 'email');
     res.json({ ok: true });
+    setImmediate(() => sendVerificationEmail(newEmail, code, 'Confirmez votre nouvel email — FlowIA', 'email').catch(e => console.error('[EMAIL change-email]', e.message)));
   } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -208,13 +207,8 @@ router.post('/change-email/confirm', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// ═══════════════════ PIN ADMIN — ENTIÈREMENT EN BASE ══════════════════════════
-//
-// user_pins : user_id (PK, FK → users) | pin_hash | updated_at
-// → 1 PIN par compte, lié au user_id, hashé bcrypt
-// → Jamais de hash en localStorage, uniquement un pinSessionToken JWT
+// ═══════════════════ PIN ADMIN ════════════════════════════════════════════════
 
-// GET /api/auth/pin/status → ce compte a-t-il un PIN ?
 router.get('/pin/status', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT user_id FROM user_pins WHERE user_id=$1', [req.user.userId]);
@@ -222,10 +216,6 @@ router.get('/pin/status', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin/verify
-// → Compare le PIN saisi avec le hash en BDD (bcrypt)
-// → Si correct : génère un pinSessionToken (JWT 8h) lié au userId
-// → Le frontend stocke ce token, PAS le hash
 router.post('/pin/verify', authMiddleware, async (req, res) => {
   try {
     const { pin } = req.body;
@@ -234,7 +224,6 @@ router.post('/pin/verify', authMiddleware, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Aucun PIN configuré pour ce compte.' });
     const valid = await bcrypt.compare(String(pin), rows[0].pin_hash);
     if (!valid) return res.json({ ok: true, valid: false });
-    // PIN correct → session token 8h lié au userId
     const pinSessionToken = jwt.sign(
       { userId: req.user.userId, scope: 'pin_session' },
       process.env.JWT_SECRET,
@@ -244,10 +233,6 @@ router.post('/pin/verify', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin/check-session
-// → Vérifie que le pinSessionToken est valide ET appartient au compte connecté
-// → Appelé au chargement de la page admin pour savoir si la session PIN est active
-// → Si l'utilisateur change de compte, userId différent → valid: false automatiquement
 router.post('/pin/check-session', authMiddleware, async (req, res) => {
   try {
     const { pinSessionToken } = req.body;
@@ -255,7 +240,6 @@ router.post('/pin/check-session', authMiddleware, async (req, res) => {
     let decoded;
     try { decoded = jwt.verify(pinSessionToken, process.env.JWT_SECRET); }
     catch { return res.json({ ok: true, valid: false }); }
-    // VÉRIFICATION CRITIQUE : userId du token PIN === userId du compte connecté
     if (decoded.scope !== 'pin_session' || decoded.userId !== req.user.userId) {
       return res.json({ ok: true, valid: false });
     }
@@ -263,7 +247,6 @@ router.post('/pin/check-session', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin/set → créer ou remplacer le PIN en BDD
 router.post('/pin/set', authMiddleware, async (req, res) => {
   try {
     const { pin } = req.body;
@@ -279,7 +262,6 @@ router.post('/pin/set', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// DELETE /api/auth/pin → supprimer le PIN du compte
 router.delete('/pin', authMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM user_pins WHERE user_id=$1', [req.user.userId]);
@@ -287,7 +269,6 @@ router.delete('/pin', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin-change-request → OTP email pour autoriser changement PIN
 router.post('/pin-change-request', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT email FROM users WHERE id=$1', [req.user.userId]);
@@ -300,7 +281,6 @@ router.post('/pin-change-request', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin-change-confirm → vérifie l'OTP, retourne authToken 5min
 router.post('/pin-change-confirm', authMiddleware, async (req, res) => {
   try {
     const { code } = req.body;
@@ -317,13 +297,12 @@ router.post('/pin-change-confirm', authMiddleware, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin-forgot-request → OTP email sans être connecté
 router.post('/pin-forgot-request', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis.' });
     const { rows } = await pool.query('SELECT id,email FROM users WHERE email=LOWER($1)', [email.toLowerCase()]);
-    if (!rows.length) return res.json({ ok: true, emailMasked: maskEmail(email) }); // sécurité
+    if (!rows.length) return res.json({ ok: true, emailMasked: maskEmail(email) });
     const user = rows[0];
     const code = genCode();
     await saveCode(`pin_forgot_${user.id}`, code, { userId: user.id }, 15);
@@ -332,7 +311,6 @@ router.post('/pin-forgot-request', async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin-forgot-verify
 router.post('/pin-forgot-verify', async (req, res) => {
   try {
     const { email, code } = req.body;
@@ -348,7 +326,6 @@ router.post('/pin-forgot-verify', async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-// POST /api/auth/pin-lockout-notify
 router.post('/pin-lockout-notify', async (req, res) => {
   try {
     const { email } = req.body || {};
@@ -361,7 +338,6 @@ router.post('/pin-lockout-notify', async (req, res) => {
   } catch (err) { console.error(err); res.json({ ok: true }); }
 });
 
-// GET /api/auth/me — retourne les infos complètes du commerçant depuis la BDD
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -385,8 +361,6 @@ router.get('/me', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-
-// ── POST /api/auth/change-password ───────────────────────────────────────────
 router.post('/change-password', authMiddleware, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
@@ -402,7 +376,6 @@ router.post('/change-password', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── PUT /api/auth/profile — mise à jour infos commerçant ────────────────────
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const { businessName, phone, address, city, postalCode, googleBusinessUrl } = req.body;
