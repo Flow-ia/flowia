@@ -1,14 +1,8 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: parseInt(process.env.SMTP_PORT) === 465,
-  family: 4, // Forcer IPv4 — Render free tier bloque IPv6
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  tls: { rejectUnauthorized: false },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM = process.env.RESEND_FROM || 'FlowIA <noreply@flowia.fr>';
 
 // ── Email code vérification (OTP) ─────────────────────────────────────────
 async function sendVerificationEmail(to, code, subject = 'Votre code de vérification', context = 'default') {
@@ -46,10 +40,7 @@ async function sendVerificationEmail(to, code, subject = 'Votre code de vérific
 </body></html>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, subject, html,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL OK] ${subject} -> ${to}`);
   } catch (err) {
     console.error(`[MAIL ERREUR] ${err.message}`);
@@ -223,12 +214,7 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
 </body></html>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to,
-      subject: `✅ RDV confirmé — ${serviceName} le ${dateCapitalized} à ${startTime.substring(0,5)} · #${refId}`,
-      html,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL RDV OK] #${refId} -> ${to}`);
   } catch (err) {
     console.error(`[MAIL RDV ERREUR] ${err.message}`);
@@ -295,11 +281,7 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
 </body></html>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, html,
-      subject: `📊 Récap du ${dateCapitalized} · CA ${fmtMoney(ca)} € · ${businessName}`,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL RECAP OK] ${date} -> ${to}`);
   } catch(err) { console.error(`[MAIL RECAP ERR] ${err.message}`); }
 }
@@ -349,11 +331,7 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
 </body></html>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, html,
-      subject: `⏰ Rappel — ${serviceName} demain à ${startTime.substring(0,5)} · ${businessName}`,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL REMINDER OK] -> ${to}`);
   } catch(err) { console.error(`[MAIL REMINDER ERR] ${err.message}`); }
 }
@@ -412,11 +390,7 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
 </body></html>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, html,
-      subject: `🎉 Récompense fidélité — ${discountStr} chez ${businessName} · Code : ${rewardCode}`,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL LOYALTY OK] ${rewardCode} -> ${to}`);
   } catch(err) { console.error(`[MAIL LOYALTY ERR] ${err.message}`); }
 }
@@ -453,10 +427,7 @@ async function sendClientInvite(to, clientName, businessName, inviteUrl) {
   </div>
 </body></html>`;
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, subject: `${businessName} vous invite sur FlowIA`, html,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     return true;
   } catch(e) { console.error('[sendClientInvite]', e.message); return false; }
 }
@@ -518,11 +489,7 @@ async function sendAppointmentCancellation({ to, clientName, businessName, servi
 </body></html>`;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, html,
-      subject: `❌ RDV annulé — ${serviceName} le ${dateCapitalized} · #${refId}`,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL ANNUL OK] #${refId} -> ${to}`);
   } catch (err) { console.error(`[MAIL ANNUL ERR] ${err.message}`); }
 }
@@ -563,11 +530,7 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
   </div>
 </body></html>`;
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`,
-      to, html,
-      subject: `📋 Prestation dans ${delayLabel} — ${clientName} · ${String(startTime).slice(0,5)}`,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     console.log(`[MAIL EMP REMINDER OK] -> ${to}`);
   } catch(err) { console.error(`[MAIL EMP REMINDER ERR] ${err.message}`); }
 }
@@ -575,35 +538,31 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
 
 // ── Réinitialisation mot de passe client ──────────────────────────────────────
 async function sendPasswordReset({ to, clientName, code }) {
-  if (!transporter) return;
   const firstName = (clientName || '').split(' ')[0] || 'Client';
-  await transporter.sendMail({
-    from: `"${process.env.SMTP_FROM_NAME || 'FlowIA'}" <${process.env.SMTP_FROM_EMAIL}>`,
-    to,
-    subject: 'Réinitialisation de votre mot de passe',
-    html: `
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
-<style>
-  body{margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
-  .wrap{max-width:520px;margin:40px auto;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.08)}
-  .hdr{background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:36px 40px;text-align:center}
-  .hdr h1{color:#fff;margin:0;font-size:22px;font-weight:800}
-  .body{padding:36px 40px}
-  .code{font-size:40px;font-weight:900;letter-spacing:0.18em;color:#6366f1;background:#f0f0ff;border-radius:16px;padding:20px 32px;text-align:center;margin:24px 0;font-family:monospace}
-  .note{font-size:13px;color:#64748b;margin-top:24px;text-align:center}
-</style></head><body>
-<div class="wrap">
-  <div class="hdr"><h1>🔐 Réinitialisation du mot de passe</h1></div>
-  <div class="body">
-    <p style="font-size:15px;color:#1e293b">Bonjour ${firstName},</p>
-    <p style="font-size:14px;color:#475569">Vous avez demandé à réinitialiser votre mot de passe. Voici votre code de vérification :</p>
-    <div class="code">${code}</div>
-    <p style="font-size:14px;color:#475569">Ce code est valable <strong>15 minutes</strong>. Si vous n'avez pas fait cette demande, ignorez cet email.</p>
-    <p class="note">Pour votre sécurité, ne partagez jamais ce code.</p>
+  const subject = 'Réinitialisation de votre mot de passe — FlowIA';
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
+  <div style="max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;">
+      <h1 style="color:white;margin:0;font-size:22px;font-weight:800;">FlowIA</h1>
+    </div>
+    <div style="padding:40px 36px;text-align:center;">
+      <h2 style="color:#0f172a;font-size:20px;margin:0 0 10px;font-weight:800;">Réinitialisation mot de passe</h2>
+      <p style="color:#64748b;font-size:14px;margin:0 0 32px;">Bonjour ${firstName}, utilisez ce code pour réinitialiser votre mot de passe :</p>
+      <div style="background:#f1f5f9;border:2px solid #e2e8f0;border-radius:20px;padding:28px 24px;margin-bottom:28px;">
+        <div style="letter-spacing:14px;font-size:40px;font-weight:900;color:#0f172a;font-family:monospace;">${code}</div>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;margin:0;">⏱ Ce code expire dans <strong>15 minutes</strong>.</p>
+    </div>
+    <div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
+      <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
+    </div>
   </div>
-</div>
-</body></html>`,
-  });
+</body></html>`;
+  try {
+    await resend.emails.send({ from: FROM, to, subject, html });
+    console.log(`[MAIL OK] ${subject} -> ${to}`);
+  } catch(err) { console.error(`[MAIL PWD RESET ERR] ${err.message}`); }
 }
 
 // ── Email campagne promo ──────────────────────────────────────────────────────
@@ -675,12 +634,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo }) {
 </html>`;
 
   try {
-    await transporter.sendMail({
-      from: `"${businessName}" <${process.env.SMTP_USER}>`,
-      to,
-      subject: `🎁 Offre spéciale — Code ${code} · ${businessName}`,
-      html,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html });
     return true;
   } catch(e) {
     console.error('[sendPromoEmail]', e.message);
