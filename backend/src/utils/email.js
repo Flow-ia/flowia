@@ -1,14 +1,27 @@
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT) || 465,
-  secure: true,   // SSL natif port 465 — fonctionne sur Render (pas IPv6)
-  auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  tls:    { rejectUnauthorized: false },
-});
-const FROM = process.env.SMTP_FROM || `FlowIA <${process.env.SMTP_USER}>`;
+// ── Brevo (ex-Sendinblue) — API HTTPS, jamais bloqué par Render ───────────
+async function sendEmail({ to, subject, html }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept':       'application/json',
+      'api-key':      process.env.BREVO_API_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender:   { name: 'FlowIA', email: process.env.BREVO_FROM || 'noreply@flowia.fr' },
+      to:       [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Brevo error ${res.status}: ${err}`);
+  }
+  return res.json();
+}
 
 // ── Email code vérification (OTP) ─────────────────────────────────────────
 async function sendVerificationEmail(to, code, subject = 'Votre code de vérification', context = 'default') {
@@ -46,7 +59,7 @@ async function sendVerificationEmail(to, code, subject = 'Votre code de vérific
 </body></html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL OK] ${subject} -> ${to}`);
   } catch (err) {
     console.error(`[MAIL ERREUR] ${err.message}`);
@@ -220,7 +233,7 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
 </body></html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL RDV OK] #${refId} -> ${to}`);
   } catch (err) {
     console.error(`[MAIL RDV ERREUR] ${err.message}`);
@@ -287,7 +300,7 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
 </body></html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL RECAP OK] ${date} -> ${to}`);
   } catch(err) { console.error(`[MAIL RECAP ERR] ${err.message}`); }
 }
@@ -337,7 +350,7 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
 </body></html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL REMINDER OK] -> ${to}`);
   } catch(err) { console.error(`[MAIL REMINDER ERR] ${err.message}`); }
 }
@@ -396,7 +409,7 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
 </body></html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL LOYALTY OK] ${rewardCode} -> ${to}`);
   } catch(err) { console.error(`[MAIL LOYALTY ERR] ${err.message}`); }
 }
@@ -433,7 +446,7 @@ async function sendClientInvite(to, clientName, businessName, inviteUrl) {
   </div>
 </body></html>`;
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     return true;
   } catch(e) { console.error('[sendClientInvite]', e.message); return false; }
 }
@@ -495,7 +508,7 @@ async function sendAppointmentCancellation({ to, clientName, businessName, servi
 </body></html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL ANNUL OK] #${refId} -> ${to}`);
   } catch (err) { console.error(`[MAIL ANNUL ERR] ${err.message}`); }
 }
@@ -536,7 +549,7 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
   </div>
 </body></html>`;
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL EMP REMINDER OK] -> ${to}`);
   } catch(err) { console.error(`[MAIL EMP REMINDER ERR] ${err.message}`); }
 }
@@ -566,7 +579,7 @@ async function sendPasswordReset({ to, clientName, code }) {
   </div>
 </body></html>`;
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     console.log(`[MAIL OK] ${subject} -> ${to}`);
   } catch(err) { console.error(`[MAIL PWD RESET ERR] ${err.message}`); }
 }
@@ -640,7 +653,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo }) {
 </html>`;
 
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html });
+    await sendEmail({ to, subject, html });
     return true;
   } catch(e) {
     console.error('[sendPromoEmail]', e.message);
