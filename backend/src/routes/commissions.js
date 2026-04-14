@@ -1,0 +1,64 @@
+// routes/commissions.js  ─  Feature 6 : Commissions employés
+const express  = require('express');
+const { pool } = require('../db');
+const { authMiddleware } = require('../middleware/auth');
+const router   = express.Router();
+router.use(authMiddleware);
+
+// ── GET /api/commissions?from=&to= ───────────────────────────────────────────
+// Calcule les commissions dues par employé sur la période
+router.get('/', async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const fromD = from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+    const toD   = to   || new Date().toISOString().split('T')[0];
+
+    // Revenus par employé avec taux de commission
+    const { rows } = await pool.query(
+      `SELECT
+         e.id as employee_id, e.name as employee_name, e.avatar_color,
+         e.commission_pct as default_pct,
+         COALESCE(SUM(t.amount), 0) as total_revenue,
+         COUNT(t.id) as tx_count,
+         COALESCE(SUM(t.qty_total), 0) as total_qty,
+         COALESCE(SUM(t.amount * COALESCE(e.commission_pct,0) / 100), 0) as commission_due
+       FROM employees e
+       LEFT JOIN transactions t ON t.employee_id=e.id
+         AND t.user_id=$1 AND t.type='revenue'
+         AND t.date BETWEEN $2 AND $3
+       WHERE e.user_id=$1 AND e.is_active=TRUE
+       GROUP BY e.id, e.name, e.avatar_color, e.commission_pct
+       ORDER BY commission_due DESC`,
+      [req.user.userId, fromD, toD]
+    );
+    res.json({ from: fromD, to: toD, employees: rows });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/commissions/settings ── taux de commission par employé ──────────
+router.get('/settings', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, avatar_color, commission_pct FROM employees WHERE user_id=$1 AND is_active=TRUE ORDER BY name`,
+      [req.user.userId]
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/commissions/settings/:employeeId ────────────────────────────────
+router.put('/settings/:employeeId', async (req, res) => {
+  try {
+    const { commission_pct } = req.body;
+    if (commission_pct < 0 || commission_pct > 100)
+      return res.status(400).json({ error: 'Taux invalide (0-100).' });
+    const { rows } = await pool.query(
+      `UPDATE employees SET commission_pct=$1 WHERE id=$2 AND user_id=$3 RETURNING id, name, commission_pct`,
+      [commission_pct, req.params.employeeId, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Employé introuvable.' });
+    res.json(rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+module.exports = router;

@@ -1,0 +1,817 @@
+const { Pool } = require('pg');
+require('dotenv').config();
+
+// Supporte DATABASE_URL ou variables séparées DB_HOST/DB_USER/DB_PASSWORD
+let pool;
+if (process.env.DATABASE_URL) {
+  // Forcer ssl: false et password string pour les URLs sans credentials
+  const connConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl:              process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    max:              parseInt(process.env.DB_POOL_MAX)  || 50,
+    min:              parseInt(process.env.DB_POOL_MIN)  || 5,
+    idleTimeoutMillis:       parseInt(process.env.DB_IDLE_TIMEOUT)  || 30000,
+    connectionTimeoutMillis: parseInt(process.env.DB_CONN_TIMEOUT)  || 5000,
+    statement_timeout:       parseInt(process.env.DB_STMT_TIMEOUT)  || 15000,
+  };
+  // Si l'URL ne contient pas de password, pg peut planter → on force via URL parsing
+  try {
+    const url = new URL(process.env.DATABASE_URL);
+    if (!url.password) {
+      // Reconstruire la config sans passer par connectionString
+      pool = new Pool({
+        host:     url.hostname || 'localhost',
+        port:     parseInt(url.port) || 5432,
+        database: url.pathname.replace(/^\//, '') || 'flowfinances',
+        user:     url.username || 'postgres',
+        password: '',
+        ssl:      false,
+      });
+    } else {
+      pool = new Pool(connConfig);
+    }
+  } catch {
+    pool = new Pool(connConfig);
+  }
+} else {
+  pool = new Pool({
+    host:     process.env.DB_HOST     || 'localhost',
+    port:     parseInt(process.env.DB_PORT) || 5432,
+    database: process.env.DB_NAME     || 'flowfinances',
+    user:     process.env.DB_USER     || 'postgres',
+    password: String(process.env.DB_PASSWORD || ''),
+    ssl:      false,
+    max:              parseInt(process.env.DB_POOL_MAX)  || 50,
+    min:              parseInt(process.env.DB_POOL_MIN)  || 5,
+    idleTimeoutMillis:       30000,
+    connectionTimeoutMillis: 5000,
+    statement_timeout:       15000,
+  });
+}
+
+async function initDB() {
+  await pool.query(`
+    -- ── Tables de base ──────────────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      business_name VARCHAR(255) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS verification_codes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      key VARCHAR(255) UNIQUE NOT NULL,
+      code VARCHAR(10) NOT NULL,
+      data JSONB,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_pins (
+      user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      pin_hash VARCHAR(255) NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(100) NOT NULL,
+      type VARCHAR(20) NOT NULL DEFAULT 'revenue' CHECK (type IN ('revenue','expense')),
+      icon VARCHAR(50) DEFAULT 'Tag',
+      color VARCHAR(20) DEFAULT '#3b82f6',
+      parent_id UUID,
+      price NUMERIC(10,2) DEFAULT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS employees (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name VARCHAR(100) NOT NULL,
+      role VARCHAR(100),
+      phone VARCHAR(50),
+      avatar_color VARCHAR(20) DEFAULT '#3b82f6',
+      is_active BOOLEAN DEFAULT TRUE,
+      can_cancel BOOLEAN DEFAULT FALSE,
+      can_modify BOOLEAN DEFAULT FALSE,
+      can_encash BOOLEAN DEFAULT FALSE,
+      show_on_booking BOOLEAN DEFAULT TRUE,
+      show_in_caisse BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+      category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      type VARCHAR(10) NOT NULL CHECK (type IN ('income','expense','revenue')),
+      payment_method VARCHAR(20) DEFAULT 'cash',
+      description TEXT,
+      date DATE NOT NULL DEFAULT CURRENT_DATE,
+      time TIME,
+      datetime_iso TEXT,
+      source VARCHAR(50) DEFAULT 'manual',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- ── Système de réservation ───────────────────────────────────────────────
+
+    CREATE TABLE IF NOT EXISTS booking_settings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      is_enabled BOOLEAN DEFAULT FALSE,
+      slug VARCHAR(100) UNIQUE,
+      business_description TEXT,
+      address TEXT,
+      phone VARCHAR(50),
+      timezone VARCHAR(50) DEFAULT 'Europe/Paris',
+      advance_booking_days INT DEFAULT 30,
+      min_notice_hours INT DEFAULT 1,
+      require_account BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS business_hours (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      open_time TIME DEFAULT '09:00',
+      close_time TIME DEFAULT '18:00',
+      is_open BOOLEAN DEFAULT TRUE,
+      UNIQUE(user_id, day_of_week)
+    );
+
+    CREATE TABLE IF NOT EXISTS booking_services (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      duration_minutes INT NOT NULL DEFAULT 30,
+      price NUMERIC(10,2),
+      color VARCHAR(20) DEFAULT '#7c6af7',
+      is_active BOOLEAN DEFAULT TRUE,
+      sort_order INT DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Horaires propres à chaque employé (1 ligne par jour)
+    CREATE TABLE IF NOT EXISTS employee_hours (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      open_time TIME DEFAULT '09:00',
+      close_time TIME DEFAULT '18:00',
+      is_open BOOLEAN DEFAULT TRUE,
+      use_business_hours BOOLEAN DEFAULT TRUE,
+      UNIQUE(employee_id, day_of_week)
+    );
+
+    CREATE TABLE IF NOT EXISTS employee_availability (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      is_available BOOLEAN DEFAULT FALSE,
+      note TEXT,
+      UNIQUE(employee_id, date)
+    );
+
+    CREATE TABLE IF NOT EXISTS client_accounts (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255),
+      first_name VARCHAR(100) NOT NULL,
+      last_name VARCHAR(100) NOT NULL,
+      phone VARCHAR(50),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, email)
+    );
+
+    CREATE TABLE IF NOT EXISTS appointments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES booking_services(id) ON DELETE SET NULL,
+      employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+      client_id UUID REFERENCES client_accounts(id) ON DELETE SET NULL,
+      client_name VARCHAR(255) NOT NULL,
+      client_email VARCHAR(255),
+      client_phone VARCHAR(50),
+      date DATE NOT NULL,
+      start_time TIME NOT NULL,
+      end_time TIME NOT NULL,
+      duration_minutes INT NOT NULL,
+      status VARCHAR(20) DEFAULT 'pending'
+        CHECK (status IN ('pending','confirmed','cancelled','completed','no_show')),
+      notes TEXT,
+      cancel_reason TEXT,
+      paid BOOLEAN DEFAULT FALSE,
+      paid_method VARCHAR(20),
+      transaction_id UUID,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- ── Lignes de RDV (multi-services) ──────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS appointment_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES booking_services(id) ON DELETE SET NULL,
+      service_name VARCHAR(255) NOT NULL,
+      qty INT NOT NULL DEFAULT 1,
+      unit_price NUMERIC(10,2) DEFAULT 0,
+      duration_minutes INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- ── Lignes de transaction (détail prestations) ──────────────────────────
+    CREATE TABLE IF NOT EXISTS transaction_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES booking_services(id) ON DELETE SET NULL,
+      service_name VARCHAR(255) NOT NULL,
+      qty INT NOT NULL DEFAULT 1,
+      unit_price NUMERIC(10,2) DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- ── Index ────────────────────────────────────────────────────────────────
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_id   ON transactions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_date      ON transactions(date);
+    CREATE INDEX IF NOT EXISTS idx_categories_user_id     ON categories(user_id);
+    CREATE INDEX IF NOT EXISTS idx_employees_user_id      ON employees(user_id);
+    CREATE INDEX IF NOT EXISTS idx_appointments_user_date ON appointments(user_id, date);
+    CREATE INDEX IF NOT EXISTS idx_appointments_employee  ON appointments(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_employee_hours_emp     ON employee_hours(employee_id);
+
+    -- ── Migrations pour bases existantes ─────────────────────────────────────
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_name='booking_settings' AND column_name='require_account') THEN
+        ALTER TABLE booking_settings ADD COLUMN require_account BOOLEAN DEFAULT FALSE;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_name='booking_settings' AND column_name='google_business_url') THEN
+        ALTER TABLE booking_settings ADD COLUMN google_business_url TEXT;
+      END IF;
+    END $$;
+
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_name='employee_hours' AND column_name='use_business_hours') THEN
+        ALTER TABLE employee_hours ADD COLUMN use_business_hours BOOLEAN DEFAULT TRUE;
+      END IF;
+    END $$;
+
+
+    ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
+    DO $x$ BEGIN
+      ALTER TABLE transactions ADD CONSTRAINT transactions_type_check
+        CHECK (type IN ('income','expense','revenue'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $x$;
+
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='show_on_booking') THEN
+        ALTER TABLE employees ADD COLUMN show_on_booking BOOLEAN DEFAULT TRUE;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='show_in_caisse') THEN
+        ALTER TABLE employees ADD COLUMN show_in_caisse BOOLEAN DEFAULT TRUE;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='can_cancel') THEN
+        ALTER TABLE employees ADD COLUMN can_cancel BOOLEAN DEFAULT FALSE;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='can_modify') THEN
+        ALTER TABLE employees ADD COLUMN can_modify BOOLEAN DEFAULT FALSE;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='can_encash') THEN
+        ALTER TABLE employees ADD COLUMN can_encash BOOLEAN DEFAULT FALSE;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='source') THEN
+        ALTER TABLE transactions ADD COLUMN source VARCHAR(50) DEFAULT 'manual';
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transactions' AND column_name='appointment_id') THEN
+        ALTER TABLE transactions ADD COLUMN appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='paid') THEN
+        ALTER TABLE appointments ADD COLUMN paid BOOLEAN DEFAULT FALSE;
+        ALTER TABLE appointments ADD COLUMN paid_method VARCHAR(20);
+        ALTER TABLE appointments ADD COLUMN transaction_id UUID;
+      END IF;
+    END $$;
+  `);
+  // Migration : colonnes total_amount + total_duration sur appointments
+  await pool.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='total_amount') THEN
+        ALTER TABLE appointments ADD COLUMN total_amount NUMERIC(10,2) DEFAULT 0;
+        ALTER TABLE appointments ADD COLUMN total_duration INT DEFAULT 0;
+      END IF;
+    END $$;
+  `);
+  // Migration : table appointment_items
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS appointment_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES booking_services(id) ON DELETE SET NULL,
+      service_name VARCHAR(255) NOT NULL,
+      qty INT NOT NULL DEFAULT 1,
+      unit_price NUMERIC(10,2) DEFAULT 0,
+      duration_minutes INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // Migration : categories.price
+  await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT NULL`);
+  // Migration : transactions.qty_total
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qty_total INT DEFAULT 1`);
+  // Migration : table transaction_items
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS transaction_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES booking_services(id) ON DELETE SET NULL,
+      service_name VARCHAR(255) NOT NULL,
+      qty INT NOT NULL DEFAULT 1,
+      unit_price NUMERIC(10,2) DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // ── Migrations audit trail ──────────────────────────────────────────────────
+  await pool.query(`
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT TRUE;
+
+    CREATE TABLE IF NOT EXISTS transaction_audit_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      action VARCHAR(20) NOT NULL CHECK (action IN ('create','update','delete')),
+      changed_by_type VARCHAR(20) NOT NULL DEFAULT 'admin',
+      snapshot_before JSONB,
+      snapshot_after  JSONB,
+      reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_log_tx ON transaction_audit_log(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_user ON transaction_audit_log(user_id, created_at DESC);
+  `);
+
+
+  // ── Feature 3 : Notifications journalières ─────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notification_settings (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      daily_recap_enabled BOOLEAN DEFAULT FALSE,
+      daily_recap_time TIME DEFAULT '20:00',
+      daily_recap_email VARCHAR(255),
+      reminder_enabled BOOLEAN DEFAULT FALSE,
+      reminder_hours_before INT DEFAULT 24,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS notification_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type VARCHAR(50) NOT NULL,
+      sent_at TIMESTAMPTZ DEFAULT NOW(),
+      status VARCHAR(20) DEFAULT 'sent',
+      meta JSONB
+    );
+  `);
+
+  // ── Feature 5 : Absences / congés employés ──────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS employee_absences (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      type VARCHAR(30) DEFAULT 'conges' CHECK (type IN ('conges','maladie','formation','autre')),
+      label VARCHAR(255),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_absences_employee ON employee_absences(employee_id, start_date, end_date);
+    CREATE INDEX IF NOT EXISTS idx_absences_user ON employee_absences(user_id, start_date);
+  `);
+
+  // ── Feature 6 : Commissions employés ────────────────────────────────────────
+  await pool.query(`
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS commission_pct NUMERIC(5,2) DEFAULT 0;
+    ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_use_promo BOOLEAN DEFAULT TRUE;
+    CREATE TABLE IF NOT EXISTS service_commissions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      service_id UUID REFERENCES booking_services(id) ON DELETE CASCADE,
+      category_id UUID REFERENCES categories(id) ON DELETE CASCADE,
+      employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
+      commission_pct NUMERIC(5,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(employee_id, service_id),
+      UNIQUE(employee_id, category_id)
+    );
+  `);
+
+
+  // ── Feature 8b : Comptes clients globaux (multi-commerces) ───────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS global_clients (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email        VARCHAR(255) UNIQUE,
+      phone        VARCHAR(50),
+      first_name   VARCHAR(100) NOT NULL,
+      last_name    VARCHAR(100),
+      password_hash VARCHAR(255),
+      is_verified  BOOLEAN DEFAULT FALSE,
+      invite_token VARCHAR(100),
+      invite_sent_at TIMESTAMPTZ,
+      reset_token        VARCHAR(6),
+      reset_token_expires TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_global_clients_email ON global_clients(email);
+    CREATE INDEX IF NOT EXISTS idx_global_clients_phone ON global_clients(phone);
+  `);
+
+  // ── Feature 9 : Fidélité clients ────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS loyalty_programs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      enabled BOOLEAN DEFAULT FALSE,
+      stamps_required INT DEFAULT 10,
+      reward_label VARCHAR(255) DEFAULT 'Prestation offerte',
+      reward_type VARCHAR(20) DEFAULT 'percent' CHECK (reward_type IN ('percent','fixed')),
+      reward_value NUMERIC(10,2) DEFAULT 10,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS client_loyalty (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id UUID REFERENCES client_accounts(id) ON DELETE CASCADE,
+      client_email VARCHAR(255),
+      client_name VARCHAR(255),
+      stamps INT DEFAULT 0,
+      total_stamps_ever INT DEFAULT 0,
+      rewards_earned INT DEFAULT 0,
+      last_visit DATE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, client_email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_loyalty_user ON client_loyalty(user_id);
+    CREATE INDEX IF NOT EXISTS idx_loyalty_email ON client_loyalty(user_id, client_email);
+  `);
+
+  // ── Feature 10 : Codes promo / remises ──────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code VARCHAR(50) NOT NULL,
+      type VARCHAR(20) NOT NULL CHECK (type IN ('percent','fixed')),
+      value NUMERIC(10,2) NOT NULL,
+      max_uses INT DEFAULT NULL,
+      uses_count INT DEFAULT 0,
+      valid_from DATE DEFAULT CURRENT_DATE,
+      valid_until DATE DEFAULT NULL,
+      is_active BOOLEAN DEFAULT TRUE,
+      target_clients VARCHAR(20) DEFAULT 'all',
+      owner_client_email VARCHAR(255),
+      is_loyalty_reward BOOLEAN DEFAULT FALSE,
+      client_loyalty_id UUID,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, code)
+    );
+    ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS target_clients VARCHAR(20) DEFAULT 'all';
+    ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS owner_client_email VARCHAR(255);
+    ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_loyalty_reward BOOLEAN DEFAULT FALSE;
+    ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS client_loyalty_id UUID;
+
+    -- Colonnes promo sur appointments (ici APRÈS promo_codes pour respecter la FK)
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS promo_code_id UUID REFERENCES promo_codes(id) ON DELETE SET NULL;
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS promo_code VARCHAR(50);
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2) DEFAULT 0;
+    ALTER TABLE appointments ADD COLUMN IF NOT EXISTS original_amount NUMERIC(10,2) DEFAULT 0;
+
+    CREATE TABLE IF NOT EXISTS client_notes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_email VARCHAR(255) NOT NULL,
+      client_name  VARCHAR(255),
+      note_text    TEXT NOT NULL,
+      appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      created_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+      created_by_name VARCHAR(255),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_notes_user_email
+      ON client_notes(user_id, client_email);
+
+        CREATE TABLE IF NOT EXISTS promo_usage_logs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      promo_code_id UUID,
+      code_snapshot VARCHAR(50),
+      client_email VARCHAR(255),
+      client_name VARCHAR(255),
+      transaction_id UUID,
+      appointment_id UUID,
+      discount_applied NUMERIC(10,2) DEFAULT 0,
+      used_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS promo_code_id UUID REFERENCES promo_codes(id) ON DELETE SET NULL;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2) DEFAULT 0;
+    ALTER TABLE transactions ADD COLUMN IF NOT EXISTS original_amount NUMERIC(10,2) DEFAULT NULL;
+  `);
+
+  // ── Migrations client_accounts + client_loyalty enrichis ───────────────────
+  const runMig = async (sql) => { try { await pool.query(sql); } catch(e) { if (!e.message.includes('already exists') && !e.message.includes('n\'existe pas')) console.warn('[DB mig]', e.message.slice(0,80)); } };
+  await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS global_client_id UUID REFERENCES global_clients(id) ON DELETE SET NULL`);
+  await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+  await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS notes TEXT`);
+  await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS total_visits INT DEFAULT 0`);
+  await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS total_spent NUMERIC(10,2) DEFAULT 0`);
+  await runMig(`ALTER TABLE client_loyalty  ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+  await runMig(`CREATE INDEX IF NOT EXISTS idx_client_accounts_user_email ON client_accounts(user_id, email)`);
+  await runMig(`CREATE INDEX IF NOT EXISTS idx_client_accounts_global ON client_accounts(global_client_id)`);
+  // Users : adresse et téléphone commerçant
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(10) DEFAULT 'FR'`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20)`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_business_url TEXT`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)`);
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng NUMERIC(10,7)`);
+  // Rappels multiples
+  await runMig(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS reminder_delays TEXT DEFAULT '1440'`);
+  await runMig(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS employee_reminder_enabled BOOLEAN DEFAULT FALSE`);
+  await runMig(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS employee_reminder_delays TEXT DEFAULT '60'`);
+  // employees: email pour recevoir rappels
+  await runMig(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS email VARCHAR(255)`);
+
+    // ── Migrations colonnes (séparées pour résistance aux erreurs) ────────────
+  const runMigration = async (sql) => { try { await pool.query(sql); } catch(e) { if (!e.message.includes('already exists')) console.warn('[DB migration]', e.message); } };
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS reward_type VARCHAR(20) DEFAULT 'percent'`);
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS count_trigger VARCHAR(20) DEFAULT 'both'`);
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS reward_value NUMERIC(10,2) DEFAULT 10`);
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS loyalty_mode VARCHAR(20) DEFAULT 'stamps'`);
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS points_per_euro NUMERIC(10,2) DEFAULT 1`);
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS min_purchase NUMERIC(10,2) DEFAULT 0`);
+  await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS validity_days INT DEFAULT 90`);
+  await runMigration(`ALTER TABLE client_loyalty ADD COLUMN IF NOT EXISTS points NUMERIC(10,2) DEFAULT 0`);
+  await runMigration(`ALTER TABLE client_loyalty ADD COLUMN IF NOT EXISTS total_points_ever NUMERIC(10,2) DEFAULT 0`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS client_note TEXT`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS client_email VARCHAR(255)`);
+  await runMigration(`ALTER TABLE promo_usage_logs ADD COLUMN IF NOT EXISTS transaction_amount NUMERIC(10,2) DEFAULT 0`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_use_promo BOOLEAN DEFAULT TRUE`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS target_clients VARCHAR(20) DEFAULT 'all'`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS owner_client_email VARCHAR(255)`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS is_loyalty_reward BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS client_loyalty_id UUID`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS min_purchase NUMERIC(10,2) DEFAULT 0`);
+
+  // Réinitialisation de mot de passe client
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS reset_token VARCHAR(6)`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`);
+
+  // ── Gestion source client (règles client interne vs plateforme) ──────────────
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'internal'`);
+  await runMigration(`UPDATE client_accounts SET source='platform' WHERE global_client_id IS NOT NULL AND source='internal'`);
+
+  // ── Système de crédit client ─────────────────────────────────────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS client_credits (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_email  VARCHAR(255) NOT NULL,
+      client_name   VARCHAR(255),
+      balance       NUMERIC(10,2) NOT NULL DEFAULT 0,
+      total_granted NUMERIC(10,2) NOT NULL DEFAULT 0,
+      total_repaid  NUMERIC(10,2) NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, client_email)
+    )
+  `);
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS credit_transactions (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      credit_id      UUID NOT NULL REFERENCES client_credits(id) ON DELETE CASCADE,
+      client_email   VARCHAR(255) NOT NULL,
+      employee_id    UUID REFERENCES employees(id) ON DELETE SET NULL,
+      employee_name  VARCHAR(255),
+      type           VARCHAR(20) NOT NULL CHECK (type IN ('grant','repay')),
+      amount         NUMERIC(10,2) NOT NULL,
+      note           TEXT,
+      payment_method VARCHAR(20),
+      transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL,
+      appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      created_at     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_credits_user_email ON client_credits(user_id, client_email)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_credit_tx_credit_id ON credit_transactions(credit_id)`);
+  // Permissions crédit sur les employés
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_grant_credit BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_repay_credit BOOLEAN DEFAULT FALSE`);
+  // Colonnes compatibilité credit_transactions (si table existait déjà sans ces colonnes)
+  await runMigration(`ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20)`);
+  await runMigration(`ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL`);
+
+  // ── Système de code PIN employé ──────────────────────────────────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS employee_pins (
+      employee_id UUID PRIMARY KEY REFERENCES employees(id) ON DELETE CASCADE,
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      pin_hash    VARCHAR(255) NOT NULL,
+      is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_employee_pins_user_id ON employee_pins(user_id)`);
+
+  // ── Web Push — abonnements navigateur/mobile ─────────────────────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint    TEXT NOT NULL UNIQUE,
+      p256dh      TEXT NOT NULL,
+      auth_key    TEXT NOT NULL,
+      user_agent  TEXT,
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      last_used   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)`);
+
+  // ── Notifications in-app (centre de notifications) ────────────────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS app_notifications (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type        VARCHAR(50) NOT NULL, -- 'new_appointment' | 'appointment_reminder' | 'caisse'
+      title       TEXT NOT NULL,
+      body        TEXT,
+      data        JSONB,
+      is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_app_notifs_user ON app_notifications(user_id, is_read, created_at DESC)`);
+
+  // ── Paramètres sons & notifs in-app ──────────────────────────────────────────
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS sound_caisse BOOLEAN DEFAULT TRUE`);
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS sound_new_appt BOOLEAN DEFAULT TRUE`);
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS sound_reminder BOOLEAN DEFAULT TRUE`);
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS sound_repeat INTEGER DEFAULT 2`);
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS sound_rdv_before INTEGER DEFAULT 15`);
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS push_enabled BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS inapp_enabled BOOLEAN DEFAULT TRUE`);
+
+  // ── Absences employés — colonnes supplémentaires ─────────────────────────────
+  await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS reason TEXT`);
+  await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+  await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS cancelled_reason TEXT`);
+  // Nouveaux types d'absence
+  await runMigration(`ALTER TABLE employee_absences DROP CONSTRAINT IF EXISTS employee_absences_type_check`);
+  await runMigration(`ALTER TABLE employee_absences ADD CONSTRAINT employee_absences_type_check CHECK (type IN ('conges','maladie','formation','autre','accident_travail','maternite','paternite','sans_solde'))`);
+
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS time_from TIME DEFAULT NULL`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS time_until TIME DEFAULT NULL`);
+  await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS time_allday BOOLEAN NOT NULL DEFAULT TRUE`);
+
+  // ── Catégories : montant libre ────────────────────────────────────────────────
+  await runMigration(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_free_price BOOLEAN NOT NULL DEFAULT FALSE`);
+
+  // ── Blocage réservation client par le commerçant ──────────────────────────────
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS is_booking_blocked BOOLEAN NOT NULL DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ`);
+
+
+  // ── Pauses commerçant (ex: pause déjeuner 13h-15h) ──────────────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS business_breaks (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day_of_week  INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      break_start  TIME NOT NULL,
+      break_end    TIME NOT NULL
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_business_breaks_user ON business_breaks(user_id)`);
+
+  // ── Plages horaires multiples par employé par jour ────────────────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS employee_time_slots (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      employee_id UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      slot_start  TIME NOT NULL,
+      slot_end    TIME NOT NULL
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_emp_slots_employee ON employee_time_slots(employee_id)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_emp_slots_user ON employee_time_slots(user_id)`);
+
+  
+  // ── Table media (images profil, galerie, services) ──────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS media (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type        VARCHAR(30) NOT NULL CHECK (type IN ('profile','cover','service')),
+      ref_id      UUID,
+      path        TEXT NOT NULL,
+      provider    VARCHAR(30) NOT NULL DEFAULT 'local',
+      sort_order  INT NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id, type)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_media_ref  ON media(ref_id, type)`);
+
+  // ── Catégories de services réservation ───────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS booking_service_categories (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        VARCHAR(120) NOT NULL,
+      icon        VARCHAR(60)  NOT NULL DEFAULT 'Scissors',
+      color       VARCHAR(30)  NOT NULL DEFAULT '#7c6af7',
+      sort_order  INT          NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_bsc_user ON booking_service_categories(user_id)`);
+  // Ajouter booking_category_id sur booking_services (distinct du category_id caisse)
+  await pool.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'booking_services' AND column_name = 'booking_category_id'
+      ) THEN
+        ALTER TABLE booking_services
+          ADD COLUMN booking_category_id UUID
+          REFERENCES booking_service_categories(id) ON DELETE SET NULL;
+        CREATE INDEX idx_bs_booking_cat ON booking_services(booking_category_id);
+      END IF;
+    END $$
+  `);
+
+  // ── Index performance critique ────────────────────────────────────────────
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_settings_slug
+    ON booking_settings(slug) WHERE slug IS NOT NULL`).catch(()=>{});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user_date_type
+    ON transactions(user_id, date DESC, type)`).catch(()=>{});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_appointments_user_emp_date_status
+    ON appointments(user_id, employee_id, date, status)`).catch(()=>{});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_biz_hours_user_day
+    ON business_hours(user_id, day_of_week)`).catch(()=>{});
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_biz_breaks_user_day
+    ON business_breaks(user_id, day_of_week)`).catch(()=>{});
+
+console.log('[DB] Tables initialisées');
+}
+
+
+module.exports = { pool, initDB };
+
+// ── PATCH pauses commerçant & plages horaires employés ────────────────────────
+// Ajouté pour gérer les pauses du commerce et les plages multiples par employé
+

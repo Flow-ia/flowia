@@ -1,0 +1,260 @@
+import { useState, useEffect } from 'react';
+
+// ── Spinner ───────────────────────────────────────────────────────────────────
+export function Spinner({ size = 20, color = '#6366f1' }) {
+  return (
+    <div className="animate-spin"
+      style={{ width: size, height: size, borderRadius: '50%',
+        border: `2px solid ${color}20`, borderTopColor: color }} />
+  );
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+export function Badge({ label, color = '#6366f1', bg, className = '', dot }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${className}`}
+      style={{ color, backgroundColor: bg || `${color}12`, border: `1px solid ${color}22` }}>
+      {dot && <span style={{ width:6, height:6, borderRadius:'50%', background:color, display:'inline-block', flexShrink:0 }} />}
+      {label}
+    </span>
+  );
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+export function Avatar({ name, color, size = 36 }) {
+  const initial = name?.charAt(0)?.toUpperCase() || '?';
+  return (
+    <div className="flex items-center justify-center flex-shrink-0 font-bold text-white"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.35),
+        backgroundColor: color || '#6366f1', fontSize: Math.round(size * 0.42) }}>
+      {initial}
+    </div>
+  );
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+export function Toast({ msg, type = 'ok' }) {
+  if (!msg) return null;
+  const cfg = {
+    ok:    { bg: '#ecfdf5', border: '#a7f3d0', text: '#065f46', icon: '✓' },
+    error: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b', icon: '✕' },
+    info:  { bg: '#eef2ff', border: '#c7d2fe', text: '#3730a3', icon: 'ℹ' },
+  };
+  const c = cfg[type] || cfg.ok;
+  return (
+    <div className="anim-slideUp fixed top-4 left-1/2 z-[9999] flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+      style={{ transform: 'translateX(-50%)',
+        backgroundColor: c.bg, border: `1px solid ${c.border}`, color: c.text,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.1)', whiteSpace: 'nowrap' }}>
+      <span>{c.icon}</span>
+      {msg}
+    </div>
+  );
+}
+
+export function useToast() {
+  const [t, setT] = useState(null);
+  const show = (msg, type = 'ok') => {
+    setT({ msg, type });
+    setTimeout(() => setT(null), 3000);
+  };
+  return [t, show];
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+export function Modal({ open, onClose, title, children, theme, maxW = 480 }) {
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+  if (!open) return null;
+  const isDark = theme?.mode === 'dark';
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0" onClick={onClose}
+        style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} />
+      <div className="animate-scaleIn relative w-full flex flex-col overflow-hidden"
+        style={{ maxWidth: maxW, maxHeight: '92vh', borderRadius: 20,
+          background: isDark ? '#1c2128' : '#ffffff',
+          border: `1px solid ${isDark ? 'rgba(205,217,229,0.1)' : 'rgba(0,0,0,0.07)'}`,
+          boxShadow: isDark ? '0 32px 80px rgba(0,0,0,0.7)' : '0 24px 64px rgba(0,0,0,0.16)' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{ borderBottom: `1px solid ${isDark ? 'rgba(205,217,229,0.08)' : 'rgba(0,0,0,0.06)'}` }}>
+          <h2 className="font-semibold text-base" style={{ color: isDark ? '#e6edf3' : '#111827' }}>{title}</h2>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-colors"
+            style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+              color: isDark ? '#768390' : '#6B7280' }}>
+            ✕
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Confirm ───────────────────────────────────────────────────────────────────
+export function Confirm({ open, onClose, onConfirm, title, message, danger = true, theme }) {
+  if (!open) return null;
+  const isDark = theme?.mode === 'dark';
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
+      <div className="anim-scaleIn relative w-full max-w-sm rounded-2xl overflow-hidden"
+        style={{ background: isDark ? '#1c2128' : '#ffffff',
+          border: `1px solid ${isDark ? 'rgba(205,217,229,0.1)' : 'rgba(0,0,0,0.08)'}`,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+        <div className="p-6">
+          <h3 className="font-semibold text-base mb-2" style={{ color: isDark ? '#e6edf3' : '#111827' }}>{title}</h3>
+          <p className="text-sm" style={{ color: isDark ? '#768390' : '#6B7280' }}>{message}</p>
+        </div>
+        <div className="flex gap-3 px-6 pb-6">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+            style={{ background: isDark ? 'rgba(255,255,255,0.07)' : '#f3f4f6',
+              color: isDark ? '#adbac7' : '#374151' }}>
+            Annuler
+          </button>
+          <button onClick={() => { onConfirm(); onClose(); }}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+            style={{ background: danger ? '#ef4444' : '#6366f1' }}>
+            Confirmer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+export function Input({ label, error, theme, className = '', ...props }) {
+  const isDark = theme?.mode === 'dark';
+  return (
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+      {label && <label className="text-xs font-medium" style={{ color: isDark ? '#adbac7' : '#374151' }}>{label}</label>}
+      <input {...props}
+        className="w-full px-3 py-2.5 rounded-xl text-sm transition-colors"
+        style={{
+          background: isDark ? 'rgba(255,255,255,0.05)' : '#f9f9fb',
+          border: `1px solid ${error ? '#ef4444' : isDark ? 'rgba(205,217,229,0.12)' : 'rgba(0,0,0,0.12)'}`,
+          color: isDark ? '#e6edf3' : '#111827',
+          fontFamily: 'inherit',
+        }} />
+      {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+    </div>
+  );
+}
+
+// ── Btn ───────────────────────────────────────────────────────────────────────
+export function Btn({ children, variant = 'primary', size = 'md', loading, disabled, className = '', style = {}, ...props }) {
+  const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all';
+  const sizes = { sm: 'px-3 py-1.5 text-xs', md: 'px-4 py-2.5 text-sm', lg: 'px-5 py-3 text-sm' };
+  const vars = {
+    primary:   { background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: 'white', boxShadow: '0 4px 14px rgba(99,102,241,0.35)' },
+    secondary: { background: '#f3f4f6', color: '#374151', border: '1px solid rgba(0,0,0,0.08)' },
+    danger:    { background: 'linear-gradient(135deg,#ef4444,#f87171)', color: 'white', boxShadow: '0 4px 14px rgba(239,68,68,0.3)' },
+    ghost:     { background: 'transparent', color: '#6366f1', border: '1px solid rgba(99,102,241,0.25)' },
+    success:   { background: 'linear-gradient(135deg,#10b981,#34d399)', color: 'white', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' },
+    warning:   { background: 'linear-gradient(135deg,#f59e0b,#fbbf24)', color: 'white', boxShadow: '0 4px 14px rgba(245,158,11,0.3)' },
+  };
+  const v = vars[variant] || vars.primary;
+  return (
+    <button {...props} disabled={disabled || loading}
+      className={`${base} ${sizes[size]} ${className}`}
+      style={{ ...v, opacity: (disabled || loading) ? 0.5 : 1, cursor: (disabled || loading) ? 'not-allowed' : 'pointer', ...style }}>
+      {loading ? <Spinner size={14} color={variant === 'primary' ? 'white' : '#6366f1'} /> : children}
+    </button>
+  );
+}
+
+// ── Section card ──────────────────────────────────────────────────────────────
+export function Card({ children, className = '', theme, style = {}, hover, ...props }) {
+  const isDark = theme?.mode === 'dark';
+  return (
+    <div className={`rounded-2xl ${hover ? 'card-hover cursor-pointer' : ''} ${className}`}
+      style={{
+        background: isDark ? '#1c2128' : '#ffffff',
+        border: `1px solid ${isDark ? 'rgba(205,217,229,0.1)' : 'rgba(0,0,0,0.06)'}`,
+        boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.35)' : '0 2px 12px rgba(0,0,0,0.06)',
+        transition: 'all 0.15s ease',
+        ...style,
+      }} {...props}>
+      {children}
+    </div>
+  );
+}
+
+// ── CodeInput ─────────────────────────────────────────────────────────────────
+export function CodeInput({ length = 6, value = '', onChange, theme, error }) {
+  const isDark = theme?.mode === 'dark';
+  const cells = Array.from({ length });
+
+  const handleChange = (i, e) => {
+    const char = e.target.value.replace(/\D/g, '').slice(-1);
+    const arr = value.split('');
+    arr[i] = char;
+    const next = arr.join('').slice(0, length);
+    onChange(next);
+    if (char && i < length - 1) {
+      document.getElementById(`code-input-${i + 1}`)?.focus();
+    }
+  };
+
+  const handleKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !value[i] && i > 0) {
+      document.getElementById(`code-input-${i - 1}`)?.focus();
+    }
+  };
+
+  const handlePaste = (e) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+    if (pasted) { onChange(pasted); e.preventDefault(); }
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+      {cells.map((_, i) => (
+        <input
+          key={i}
+          id={`code-input-${i}`}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={value[i] || ''}
+          onChange={e => handleChange(i, e)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          autoFocus={i === 0}
+          style={{
+            width: 48, height: 56,
+            textAlign: 'center',
+            fontSize: 22, fontWeight: 600,
+            borderRadius: 12,
+            border: `1.5px solid ${error ? '#ef4444' : value[i] ? (isDark ? 'rgba(99,102,241,0.6)' : '#6366f1') : (isDark ? 'rgba(205,217,229,0.15)' : 'rgba(0,0,0,0.12)')}`,
+            background: isDark ? 'rgba(255,255,255,0.05)' : '#f9f9fb',
+            color: isDark ? '#e6edf3' : '#111827',
+            outline: 'none',
+            transition: 'border-color 0.15s',
+            fontFamily: 'monospace',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── PageHeader ────────────────────────────────────────────────────────────────
+export function PageHeader({ title, subtitle, actions, theme }) {
+  const isDark = theme?.mode === 'dark';
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 pt-5 pb-4">
+      <div>
+        <h1 className="text-xl font-bold" style={{ color: isDark ? '#e6edf3' : '#111827' }}>{title}</h1>
+        {subtitle && <p className="text-sm mt-0.5" style={{ color: isDark ? '#768390' : '#6B7280' }}>{subtitle}</p>}
+      </div>
+      {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+    </div>
+  );
+}

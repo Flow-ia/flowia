@@ -1,0 +1,30 @@
+# render.yaml — Configuration déploiement Render
+# Placer à la RACINE du projet GitHub
+
+services:
+  - type: web
+    name: flowia-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: APP_NAME
+        value: FlowIA
+      - key: WEB_CONCURRENCY
+        value: 1
+      - key: DB_POOL_MAX
+        value: 25
+      # Ces variables sont à renseigner manuellement dans le dashboard Render :
+      # DATABASE_URL  → fournie automatiquement par Render si DB liée
+      # JWT_SECRET    → générer avec : openssl rand -hex 32
+      # FRONTEND_URL  → https://ton-app.vercel.app
+      # SMTP_HOST, SMTP_USER, SMTP_PASS
+      # CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+      # VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL

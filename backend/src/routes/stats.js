@@ -1,0 +1,199 @@
+const express = require('express');
+const { pool } = require('../db');
+const { authMiddleware } = require('../middleware/auth');
+const router = express.Router();
+router.use(authMiddleware);
+
+// ── GET /api/stats/products?from=&to=&employee_id= ────────────────────────────
+// Statistiques par produit/service (depuis transaction_items) + par catégorie
+router.get('/products', async (req, res) => {
+  try {
+    const { from, to, employee_id } = req.query;
+    const userId = req.user.userId;
+    const _k = `stats:products:${userId}:${from||''}:${to||''}:${employee_id||''}`;
+    const _h = global.memCache?.get(_k);
+    if (_h) return res.json(_h);
+
+    // Construire les filtres de date et employé sur la transaction
+    const conditions = ['t.user_id = $1', "t.type = 'revenue'"];
+    const params     = [userId];
+
+    if (from) { params.push(from); conditions.push(`t.date >= $${params.length}`); }
+    if (to)   { params.push(to);   conditions.push(`t.date <= $${params.length}`); }
+    if (employee_id && employee_id !== 'all') {
+      params.push(employee_id);
+      conditions.push(`t.employee_id = $${params.length}`);
+    }
+    const where = conditions.join(' AND ');
+
+    // ── 1. Stats par service/produit (depuis transaction_items) ───────────────
+    const { rows: productRows } = await pool.query(`
+      SELECT
+        ti.service_name,
+        ti.service_id,
+        SUM(ti.qty)                         AS qty_sold,
+        SUM(ti.qty * ti.unit_price)         AS revenue,
+        AVG(ti.unit_price)                  AS avg_price,
+        COUNT(DISTINCT ti.transaction_id)   AS tx_count
+      FROM transaction_items ti
+      JOIN transactions t ON t.id = ti.transaction_id
+      WHERE ${where}
+      GROUP BY ti.service_name, ti.service_id
+      ORDER BY SUM(ti.qty * ti.unit_price) DESC
+    `, params);
+
+    // ── 2. Stats par catégorie (depuis transactions.category_id) ─────────────
+    const { rows: catRows } = await pool.query(`
+      SELECT
+        t.category_id,
+        c.name   AS category_name,
+        c.color  AS category_color,
+        c.icon   AS category_icon,
+        SUM(t.qty_total)                    AS qty_sold,
+        SUM(t.amount)                       AS revenue,
+        COUNT(t.id)                         AS tx_count
+      FROM transactions t
+      LEFT JOIN categories c ON c.id = t.category_id
+      WHERE ${where}
+      GROUP BY t.category_id, c.name, c.color, c.icon
+      ORDER BY SUM(t.amount) DESC
+    `, params);
+
+    // ── 3. Totaux globaux ─────────────────────────────────────────────────────
+    const { rows: totals } = await pool.query(`
+      SELECT
+        SUM(t.qty_total)   AS total_qty,
+        SUM(t.amount)      AS total_revenue,
+        COUNT(t.id)        AS total_tx
+      FROM transactions t
+      WHERE ${where}
+    `, params);
+
+    // ── 4. Top employee breakdown par produit ─────────────────────────────────
+    const { rows: empProductRows } = await pool.query(`
+      SELECT
+        ti.service_name,
+        t.employee_id,
+        e.name AS employee_name,
+        e.avatar_color,
+        SUM(ti.qty)                 AS qty_sold,
+        SUM(ti.qty * ti.unit_price) AS revenue
+      FROM transaction_items ti
+      JOIN transactions t ON t.id = ti.transaction_id
+      LEFT JOIN employees e ON e.id = t.employee_id
+      WHERE ${where}
+      GROUP BY ti.service_name, t.employee_id, e.name, e.avatar_color
+      ORDER BY ti.service_name, SUM(ti.qty * ti.unit_price) DESC
+    `, params);
+
+    const _r = { products: productRows, categories: catRows,
+      totals: totals[0] || { total_qty: 0, total_revenue: 0, total_tx: 0 },
+      emp_products: empProductRows };
+    global.memCache?.set(_k, _r, 2 * 60 * 1000);
+    res.json(_r);
+  } catch(e) {
+    console.error('[STATS PRODUCTS]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+
+// ── GET /api/stats/forecast?months=3 ── Prévisions de CA ────────────────────
+router.get('/forecast', async (req, res) => {
+  try {
+    const months = Math.min(6, parseInt(req.query.months)||3);
+    const _fk = `stats:forecast:${req.user.userId}:${months}`;
+    const _fh = global.memCache?.get(_fk);
+    if (_fh) return res.json(_fh);
+    // Récupérer les 12 derniers mois de CA
+    const { rows } = await pool.query(
+      `SELECT
+         TO_CHAR(date,'YYYY-MM') as month,
+         SUM(amount) as revenue,
+         COUNT(*) as tx_count
+       FROM transactions
+       WHERE user_id=$1 AND type='revenue'
+         AND date >= CURRENT_DATE - INTERVAL '12 months'
+       GROUP BY TO_CHAR(date,'YYYY-MM')
+       ORDER BY month ASC`,
+      [req.user.userId]
+    );
+
+    if (rows.length < 2) return res.json({ historical: rows, forecasts: [] });
+
+    // Calcul moyenne mobile pondérée (mois récents = poids plus fort)
+    const revenues = rows.map(r => parseFloat(r.revenue)||0);
+    const n = revenues.length;
+    const weights = revenues.map((_,i) => i+1); // poids croissants
+    const totalW = weights.reduce((s,w)=>s+w, 0);
+    const avgWeighted = revenues.reduce((s,v,i)=>s+v*weights[i], 0) / totalW;
+
+    // Tendance (régression linéaire simple)
+    const xMean = (n-1)/2;
+    const yMean = revenues.reduce((s,v)=>s+v,0)/n;
+    const slope = revenues.reduce((s,v,i)=>s+(i-xMean)*(v-yMean),0) /
+                  revenues.reduce((s,_,i)=>s+(i-xMean)**2,0);
+
+    const forecasts = [];
+    const lastMonth = rows[rows.length-1]?.month || new Date().toISOString().substring(0,7);
+    const [ly, lm] = lastMonth.split('-').map(Number);
+    for (let i=1; i<=months; i++) {
+      const d = new Date(ly, lm-1+i, 1);
+      const month = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const projected = Math.max(0, avgWeighted + slope * i);
+      forecasts.push({
+        month,
+        projected: Math.round(projected * 100) / 100,
+        projected_low:  Math.round(Math.max(0, projected * 0.85) * 100) / 100,
+        projected_high: Math.round(projected * 1.15 * 100) / 100,
+      });
+    }
+
+    const _fr = { historical: rows, forecasts, avg_monthly: Math.round(avgWeighted*100)/100, slope: Math.round(slope*100)/100 };
+    global.memCache?.set(_fk, _fr, 5 * 60 * 1000);
+    res.json(_fr);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/stats/heatmap ── Heures de pointe ────────────────────────────────
+router.get('/heatmap', async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const _hk = `stats:heatmap:${req.user.userId}:${from||''}:${to||''}`;
+    const _hh = global.memCache?.get(_hk);
+    if (_hh) return res.json(_hh);
+    const fromD = from || new Date(new Date().setMonth(new Date().getMonth()-3)).toISOString().split('T')[0];
+    const toD   = to   || new Date().toISOString().split('T')[0];
+
+    const { rows } = await pool.query(
+      `SELECT
+         EXTRACT(DOW FROM date)::int as day_of_week,
+         EXTRACT(HOUR FROM COALESCE(time, '12:00:00'))::int as hour_of_day,
+         COUNT(*) as count,
+         SUM(amount) as revenue
+       FROM transactions
+       WHERE user_id=$1 AND type='revenue'
+         AND date BETWEEN $2 AND $3
+         AND time IS NOT NULL
+       GROUP BY day_of_week, hour_of_day
+       ORDER BY day_of_week, hour_of_day`,
+      [req.user.userId, fromD, toD]
+    );
+
+    // Construire la grille 7x24
+    const grid = {};
+    let maxCount = 0;
+    for (const r of rows) {
+      const key = `${r.day_of_week}_${r.hour_of_day}`;
+      grid[key] = { count: parseInt(r.count), revenue: parseFloat(r.revenue)||0 };
+      if (parseInt(r.count) > maxCount) maxCount = parseInt(r.count);
+    }
+
+    const _hr = { grid, maxCount, from: fromD, to: toD };
+    global.memCache?.set(_hk, _hr, 10 * 60 * 1000);
+    res.json(_hr);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+module.exports = router;

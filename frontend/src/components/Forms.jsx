@@ -1,0 +1,463 @@
+import { useState, useEffect, useMemo } from 'react';
+import { I, ICON_MAP, ICON_NAMES, PAL } from '../utils/icons';
+import { todayStr, nowStr } from '../utils/dates';
+import { Modal } from './UI';
+import { useTheme, BRAND } from '../hooks/useTheme';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function inp(theme, extra={}) {
+  const isDark = theme.mode==='dark';
+  return { display:'block', width:'100%', padding:'13px 16px', borderRadius:14, fontSize:14, fontFamily:'inherit', outline:'none', transition:'border-color .15s, box-shadow .15s', backgroundColor: isDark?'rgba(255,255,255,0.09)':'#ebebf5', border:`1.5px solid ${isDark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.15)'}`, color: isDark?'rgba(255,255,255,0.95)':'#0c0c10', colorScheme: isDark?'dark':'light', ...extra };
+}
+
+function FormLabel({ children, theme }) {
+  return <label style={{ display:'block', marginBottom:6, fontSize:11, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:theme.muted }}>{children}</label>;
+}
+
+function FormInput({ theme, style:extra, ...props }) {
+  const isDark = theme.mode==='dark';
+  return (
+    <input {...props} style={inp(theme, extra)}
+      onFocus={e => { e.target.style.borderColor='#111827'; e.target.style.boxShadow='0 0 0 3px rgba(17,24,39,0.18)'; e.target.style.backgroundColor=isDark?'rgba(255,255,255,0.13)':'#e0e0f0'; }}
+      onBlur={e  => { e.target.style.borderColor=isDark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.15)'; e.target.style.boxShadow='none'; e.target.style.backgroundColor=isDark?'rgba(255,255,255,0.09)':'#ebebf5'; }}
+    />
+  );
+}
+
+function FormSelect({ theme, children, ...props }) {
+  return (
+    <div style={{ position:'relative' }}>
+      <select {...props} style={inp(theme, { cursor:'pointer', appearance:'none', WebkitAppearance:'none', paddingRight:36 })}>{children}</select>
+      <I.ChevD style={{ width:16, height:16, position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:theme.muted }} />
+    </div>
+  );
+}
+
+function CancelBtn({ onClick, theme }) {
+  const isDark = theme.mode==='dark';
+  return (
+    <button type="button" onClick={onClick}
+      style={{ flex:1, padding:'14px', borderRadius:20, fontSize:14, fontWeight:700, cursor:'pointer', background: isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)', color: isDark?'rgba(255,255,255,0.6)':'#374151', border:`1px solid ${theme.border}` }}>
+      Annuler
+    </button>
+  );
+}
+
+function TypeToggle({ value, onChange, options, theme }) {
+  return (
+    <div style={{ display:'flex', gap:8, padding:4, borderRadius:20, background: theme.mode==='dark'?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)' }}>
+      {options.map(([v,l,grad]) => (
+        <button key={v} type="button" onClick={()=>onChange(v)}
+          style={{ flex:1, padding:'11px', borderRadius:16, fontSize:14, fontWeight:700, cursor:'pointer', border:'none', background: value===v?grad:'transparent', color: value===v?'white':theme.muted }}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── CategoryForm — deux modes : catégorie ou produit/service ────────────────
+// mode='category' => crée une catégorie (groupe)
+// mode='product'  => crée un produit/service (peut être rattaché à une catégorie)
+export function CategoryForm({ open, onClose, onSubmit, init, allCategories=[], defaultMode='product' }) {
+  const { theme } = useTheme();
+  const isDark = theme.mode==='dark';
+
+  // Détecter le mode selon init
+  const initMode = init ? (init.parent_id !== null && init.parent_id !== undefined ? 'product' : 'category') : defaultMode;
+  const [mode, setMode] = useState(initMode);
+
+  const blankCat = { name:'', type:'revenue', icon:'Tag', color:PAL[0], parent_id:null, price:'' };
+  const blankProd = { name:'', type:'revenue', icon:'Scissors', color:PAL[1], parent_id:'', price:'' };
+  const [f, setF] = useState(blankCat);
+  const [ld, setLd] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const m = init ? (init.parent_id != null ? 'product' : 'category') : defaultMode;
+    setMode(m);
+    if (init) {
+      // Si is_free_price=true, on représente le price par le sentinel 'FREE'
+      const priceVal = init.is_free_price ? 'FREE' : (init.price != null ? String(init.price) : '');
+      setF({ name:init.name||'', type:init.type||'revenue', icon:init.icon||'Tag', color:init.color||PAL[0], parent_id:init.parent_id||'', price: priceVal });
+    } else {
+      setF(m === 'category' ? blankCat : blankProd);
+    }
+  }, [open, init?.id]);
+
+  useEffect(() => {
+    if (!init) setF(mode === 'category' ? blankCat : blankProd);
+  }, [mode]);
+
+  // Catégories parentes disponibles pour rattacher un produit
+  const parentCategories = allCategories.filter(c =>
+    c.type === f.type &&
+    !c.parent_id &&
+    c.id !== init?.id
+  );
+
+  const Icon = ICON_MAP[f.icon] || I.Tag;
+  const sub = async e => {
+    e.preventDefault();
+    setLd(true);
+    // price: 'FREE' = montant libre (null en base), sinon valeur numérique ou null
+    const priceVal = f.price === 'FREE' ? null : (f.price !== '' ? parseFloat(f.price) : null);
+    const payload = { ...f, parent_id: mode === 'category' ? null : (f.parent_id || null), price: priceVal, is_free_price: f.price === 'FREE' };
+    await onSubmit(payload);
+    setLd(false);
+    onClose();
+  };
+
+  const optBg = isDark?'#1e1e30':'#f8f8ff';
+  const optColor = isDark?'rgba(255,255,255,0.9)':'#0c0c10';
+
+  return (
+    <Modal open={open} onClose={onClose} title={init ? 'Modifier' : (mode === 'category' ? 'Nouvelle categorie' : 'Nouveau produit / service')} theme={theme}>
+      <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:18 }}>
+
+        {/* Sélecteur mode (seulement si on crée, pas si on édite) */}
+        {!init && (
+          <div style={{ display:'flex', gap:0, padding:3, borderRadius:16, background: isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)' }}>
+            {[['category','📁 Categorie'],['product','🛍️ Produit / Service']].map(([v,l]) => (
+              <button key={v} type="button" onClick={() => setMode(v)}
+                style={{ flex:1, padding:'10px 8px', borderRadius:12, fontSize:13, fontWeight:700, cursor:'pointer', border:'none', background: mode===v?(isDark?'#20202e':'#ffffff'):'transparent', color: mode===v?theme.text:theme.muted, boxShadow: mode===v&&!isDark?'0 1px 4px rgba(0,0,0,0.12)':'none', transition:'all .15s' }}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Description contextuelle */}
+        <div style={{ padding:'10px 14px', borderRadius:12, background: mode==='category'?'rgba(6,182,212,0.07)':'rgba(17,24,39,0.07)', border:`1px solid ${mode==='category'?'rgba(6,182,212,0.2)':'rgba(17,24,39,0.2)'}` }}>
+          <p style={{ fontSize:11, color: mode==='category'?'#374151':'#111827', fontWeight:700, lineHeight:1.5 }}>
+            {mode === 'category'
+              ? '📁 Une categorie est un groupe. Ex : Boissons, Soins, Accessoires, Hommes, Femmes...'
+              : '🛍️ Un produit/service est une prestation ou article. Il peut être rattaché a une categorie ou rester seul.'}
+          </p>
+        </div>
+
+        {/* Aperçu icône */}
+        <div style={{ textAlign:'center' }}>
+          <div style={{ width:56, height:56, borderRadius:18, background:f.color, display:'inline-flex', alignItems:'center', justifyContent:'center', boxShadow:`0 8px 20px ${f.color}55` }}>
+            <Icon style={{ width:28, height:28, color:'white' }} />
+          </div>
+        </div>
+
+        {/* Type Revenu / Dépense */}
+        <TypeToggle value={f.type} onChange={v=>setF({...f,type:v,parent_id:''})} theme={theme} options={[
+          ['revenue','↑ Revenu', 'linear-gradient(135deg,#4ade80,#22c55e)'],
+          ['expense','↓ Depense','linear-gradient(135deg,#f87171,#ef4444)'],
+        ]} />
+
+        {/* Nom */}
+        <div>
+          <FormLabel theme={theme}>{mode === 'category' ? 'Nom de la categorie *' : 'Nom du produit / service *'}</FormLabel>
+          <FormInput theme={theme} value={f.name} onChange={e=>setF({...f,name:e.target.value})} required
+            placeholder={mode === 'category' ? 'Ex : Boissons, Soins, Femmes, Hommes...' : 'Ex : Coupe, Espresso, Massage, T-shirt...'} />
+        </div>
+
+        {/* Prix (seulement pour produit/service) */}
+        {mode === 'product' && (
+          <div>
+            <FormLabel theme={theme}>Prix du service / produit</FormLabel>
+            {/* Toggle : Prix fixe / Montant libre */}
+            <div style={{ display:'flex', gap:0, padding:3, borderRadius:12, background: isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', marginBottom:10 }}>
+              {[['fixed','💰 Prix fixe'],['free','✏️ Montant libre']].map(([v,l]) => (
+                <button key={v} type="button"
+                  onClick={() => setF({...f, price: v === 'free' ? 'FREE' : ''})}
+                  style={{ flex:1, padding:'8px 6px', borderRadius:9, fontSize:12, fontWeight:700, cursor:'pointer', border:'none',
+                    background: (v === 'free' ? f.price === 'FREE' : f.price !== 'FREE') ? (isDark?'#20202e':'#ffffff') : 'transparent',
+                    color: (v === 'free' ? f.price === 'FREE' : f.price !== 'FREE') ? theme.text : theme.muted,
+                    boxShadow: (v === 'free' ? f.price === 'FREE' : f.price !== 'FREE') && !isDark ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                    transition:'all .15s' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {f.price === 'FREE' ? (
+              <div style={{ padding:'10px 14px', borderRadius:12, background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)' }}>
+                <p style={{ fontSize:11, fontWeight:700, color:'#f59e0b', margin:0 }}>✏️ Montant libre — le caissier saisira le montant manuellement lors de chaque vente</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ position:'relative' }}>
+                  <FormInput theme={theme}
+                    type="number" step="0.01" min="0"
+                    value={f.price === 'FREE' ? '' : f.price}
+                    onChange={e => setF({...f, price: e.target.value})}
+                    placeholder="Ex : 25.00 — laisser vide = montant libre"
+                    style={{ paddingRight: 36 }}
+                  />
+                  <span style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', fontSize:15, fontWeight:700, color:theme.muted, pointerEvents:'none' }}>€</span>
+                </div>
+                {f.price && f.price !== 'FREE' && parseFloat(f.price) > 0 && (
+                  <div style={{ marginTop:7, padding:'6px 12px', borderRadius:10, background:'rgba(16,185,129,0.1)', border:'1px solid rgba(16,185,129,0.2)' }}>
+                    <p style={{ fontSize:11, fontWeight:700, color:'#10b981' }}>✓ Prix defini : {parseFloat(f.price).toFixed(2)} € - il s'appliquera automatiquement en caisse</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Rattachement à une catégorie (seulement pour produit) */}
+        {mode === 'product' && (
+          <div>
+            <FormLabel theme={theme}>Catégorie parente (optionnel)</FormLabel>
+            <FormSelect theme={theme} value={f.parent_id} onChange={e=>setF({...f,parent_id:e.target.value})}>
+              <option value="" style={{ background:optBg, color:optColor }}>— Aucune catégorie —</option>
+              {parentCategories.map(c => (
+                <option key={c.id} value={c.id} style={{ background:optBg, color:optColor }}>{c.name}</option>
+              ))}
+            </FormSelect>
+            {!parentCategories.length && (
+              <p style={{ fontSize:11, color:theme.muted, marginTop:6 }}>Créez d'abord une catégorie pour pouvoir rattacher ce produit.</p>
+            )}
+            {f.parent_id && (
+              <div style={{ marginTop:8, padding:'7px 12px', borderRadius:10, background:'rgba(17,24,39,0.1)', border:'1px solid rgba(17,24,39,0.2)' }}>
+                <p style={{ fontSize:11, fontWeight:700, color:'#111827' }}>
+                  ✓ Rattaché à "{parentCategories.find(c=>c.id===f.parent_id)?.name}"
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Icône */}
+        <div>
+          <FormLabel theme={theme}>Icône</FormLabel>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
+            {ICON_NAMES.map(n => {
+              const Ic = ICON_MAP[n]; const active = f.icon===n;
+              return (
+                <button key={n} type="button" onClick={()=>setF({...f,icon:n})}
+                  style={{ padding:8, borderRadius:12, cursor:'pointer', background: active?'rgba(17,24,39,0.2)':'rgba(0,0,0,0.04)', border: active?'1.5px solid #111827':`1.5px solid ${theme.border}` }}>
+                  <Ic style={{ width:20, height:20, color: active?'#818cf8':theme.muted, display:'block', margin:'auto' }} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Couleur */}
+        <div>
+          <FormLabel theme={theme}>Couleur</FormLabel>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            {PAL.map(c => (
+              <button key={c} type="button" onClick={()=>setF({...f,color:c})}
+                style={{ width:36, height:36, borderRadius:12, cursor:'pointer', backgroundColor:c, border:'none', boxShadow: f.color===c?`0 0 0 2px ${theme.card}, 0 0 0 4px ${c}`:'none', transform: f.color===c?'scale(1.15)':'scale(1)', transition:'transform .15s, box-shadow .15s' }} />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:12, paddingTop:4 }}>
+          <CancelBtn onClick={onClose} theme={theme} />
+          <button type="submit" disabled={ld}
+            style={{ flex:1, padding:'14px', borderRadius:20, fontSize:14, fontWeight:800, color:'white', cursor:'pointer', border:'none', background: '#111827', opacity:ld?0.3:1 }}>
+            {ld ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+// ─── EmployeeForm ─────────────────────────────────────────────────────────────
+export function EmployeeForm({ open, onClose, onSubmit, init }) {
+  const { theme } = useTheme();
+  const COLORS = ['#111827','#374151','#10b981','#f87171','#f59e0b','#f97316','#ec4899','#8b5cf6'];
+  const blank = { name:'', role:'', phone:'', email:'', avatar_color:COLORS[0] };
+  const [f, setF] = useState(blank);
+  const [ld, setLd] = useState(false);
+
+  useEffect(() => {
+    if (open) setF(init ? { name:init.name||'', role:init.role||'', phone:init.phone||'', email:init.email||'', avatar_color:init.avatar_color||COLORS[0] } : blank);
+  }, [open, init?.id]);
+
+  const sub = async e => { e.preventDefault(); setLd(true); await onSubmit({...f}); setLd(false); onClose(); };
+
+  return (
+    <Modal open={open} onClose={onClose} title={init?"Modifier l'employe":'Nouvel employé'} theme={theme}>
+      <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ textAlign:'center', marginBottom:4 }}>
+          <div style={{ width:64, height:64, borderRadius:20, backgroundColor:f.avatar_color, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:28, fontWeight:900 }}>
+            {f.name?.charAt(0)?.toUpperCase()||'?'}
+          </div>
+        </div>
+        {[{k:'name',l:'Nom *',ph:'Prenom Nom',req:true},{k:'role',l:'Poste',ph:'Ex: Manager, Vendeur, Technicien'},{k:'phone',l:'Télephone',ph:'06 00 00 00 00'},{k:'email',l:'Email (rappels)',ph:'employe@email.com',type:'email'}].map(({k,l,ph,req,type})=>(
+          <div key={k}>
+            <FormLabel theme={theme}>{l}</FormLabel>
+            <FormInput theme={theme} type={type||'text'} value={f[k]} onChange={e=>setF({...f,[k]:e.target.value})} required={!!req} placeholder={ph} />
+          </div>
+        ))}
+        <div>
+          <FormLabel theme={theme}>Couleur avatar</FormLabel>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            {COLORS.map(c => (
+              <button key={c} type="button" onClick={()=>setF({...f,avatar_color:c})}
+                style={{ width:36, height:36, borderRadius:12, cursor:'pointer', backgroundColor:c, border:'none', boxShadow: f.avatar_color===c?`0 0 0 2px ${theme.card}, 0 0 0 4px ${c}`:'none', transform: f.avatar_color===c?'scale(1.15)':'scale(1)', transition:'transform .15s, box-shadow .15s' }} />
+            ))}
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:12, paddingTop:4 }}>
+          <CancelBtn onClick={onClose} theme={theme} />
+          <button type="submit" disabled={ld} style={{ flex:1, padding:'14px', borderRadius:20, fontSize:14, fontWeight:800, color:'white', cursor:'pointer', border:'none', background: '#111827', opacity:ld?0.3:1 }}>
+            {ld?'...':'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── TransactionForm avec sélection catégorie→prestation ─────────────────────
+export function TransactionForm({ open, onClose, onSubmit, employees, categories, init }) {
+  const { theme } = useTheme();
+  const isDark = theme.mode==='dark';
+
+  const blank = { type:'revenue', amount:'', description:'', category_id:'', employee_id:'', payment_method:'cash', date:todayStr(), time:nowStr() };
+  const [f, setF] = useState(blank);
+  const [ld, setLd] = useState(false);
+
+  useEffect(() => {
+    if (open) setF(init ? { type:init.type||'revenue', amount:String(init.amount||''), description:init.description||'', category_id:init.category_id||'', employee_id:init.employee_id||'', payment_method:init.payment_method||'cash', date:init.date?init.date.substring(0,10):todayStr(), time:init.time||nowStr() } : blank);
+  }, [open, init?.id]);
+
+  // Système catégorie → prestation
+  const typeCats = categories.filter(c => c.type === f.type);
+  const parentCats = typeCats.filter(c => !c.parent_id);
+  const hasHierarchy = parentCats.length > 0 && typeCats.some(c => c.parent_id);
+
+  // Groupes pour l'affichage
+  const catGroups = useMemo(() => {
+    if (!hasHierarchy) return [{ parent:null, items:typeCats }];
+    const groups = parentCats.map(p => ({
+      parent: p,
+      items: typeCats.filter(c => c.parent_id===p.id),
+    })).filter(g => g.items.length > 0);
+    const standalone = typeCats.filter(c => !c.parent_id && !typeCats.some(ch=>ch.parent_id===c.id));
+    if (standalone.length > 0) groups.push({ parent:null, items:standalone });
+    return groups;
+  }, [categories, f.type]);
+
+  const sub = async e => {
+    e.preventDefault();
+    if (!f.amount || parseFloat(f.amount) <= 0) return;
+    setLd(true);
+    await onSubmit({...f, amount:parseFloat(f.amount), datetime_iso:new Date(f.date+'T'+f.time).toISOString()});
+    setLd(false); onClose();
+  };
+
+  const PAY = [
+    { v:'cash',     l:'Especes',  color:'#10b981', Ic:I.Wallet },
+    { v:'card',     l:'Carte',    color:'#111827', Ic:I.CreditCard },
+    { v:'transfer', l:'Virement', color:'#374151', Ic:I.Bank },
+    { v:'other',    l:'Autre',    color:'#f59e0b', Ic:I.MoreH },
+  ];
+  const optBg=isDark?'#1e1e30':'#f8f8ff';
+  const optColor=isDark?'rgba(255,255,255,0.9)':'#0c0c10';
+
+  return (
+    <Modal open={open} onClose={onClose} title={init?'Modifier la transaction':'Nouvelle transaction'} theme={theme}>
+      <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:18 }}>
+
+        <TypeToggle value={f.type} onChange={v=>setF({...f,type:v,category_id:''})} theme={theme} options={[
+          ['revenue','↑ Revenu','#111827'],
+          ['expense','↓ Depense','linear-gradient(135deg,#f87171,#ef4444)'],
+        ]} />
+
+        <div>
+          <FormLabel theme={theme}>Montant (€) *</FormLabel>
+          <FormInput theme={theme} type="number" step="0.01" min="0.01" value={f.amount} onChange={e=>setF({...f,amount:e.target.value})} required placeholder="0.00"
+            style={{ fontSize:24, fontWeight:900, fontFamily:'var(--mono,"DM Mono",monospace)', textAlign:'center' }} />
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div><FormLabel theme={theme}>Date</FormLabel><FormInput theme={theme} type="date" value={f.date} onChange={e=>setF({...f,date:e.target.value})} /></div>
+          <div><FormLabel theme={theme}>Heure</FormLabel><FormInput theme={theme} type="time" value={f.time} onChange={e=>setF({...f,time:e.target.value})} /></div>
+        </div>
+
+        {/* Catégorie / Prestation groupée */}
+        {typeCats.length > 0 && (
+          <div>
+            <FormLabel theme={theme}>Produit / Service</FormLabel>
+            {hasHierarchy ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {catGroups.map((grp, gi) => {
+                  const ParentIc = grp.parent ? (ICON_MAP[grp.parent.icon]||null) : null;
+                  return (
+                    <div key={gi}>
+                      {grp.parent && (
+                        <p style={{ fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.1em', color:grp.parent.color||'#111827', marginBottom:8, display:'flex', alignItems:'center', gap:5 }}>
+                          {ParentIc && <ParentIc style={{ width:11, height:11 }} />}
+                          {grp.parent.name}
+                        </p>
+                      )}
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                        {grp.items.map(c => {
+                          const active = f.category_id===c.id;
+                          const CIc = ICON_MAP[c.icon];
+                          return (
+                            <button key={c.id} type="button" onClick={()=>setF({...f,category_id:c.id})}
+                              style={{ padding:'12px 10px', borderRadius:16, border:`1.5px solid ${active?'#111827':theme.border}`, background: active?'rgba(17,24,39,0.18)':theme.inputBg, color: active?'#818cf8':theme.text, fontWeight:700, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:7, textAlign:'left' }}>
+                              {CIc && <CIc style={{ width:14, height:14, flexShrink:0, color: active?'#818cf8':(c.color||theme.muted) }} />}
+                              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <FormSelect theme={theme} value={f.category_id} onChange={e=>setF({...f,category_id:e.target.value})}>
+                <option value="" style={{ background:optBg, color:optColor }}>— Sélectionner —</option>
+                {typeCats.map(c=><option key={c.id} value={c.id} style={{ background:optBg, color:optColor }}>{c.name}</option>)}
+              </FormSelect>
+            )}
+          </div>
+        )}
+
+        {/* Employé */}
+        {employees.length > 0 && (
+          <div>
+            <FormLabel theme={theme}>Employé</FormLabel>
+            <FormSelect theme={theme} value={f.employee_id} onChange={e=>setF({...f,employee_id:e.target.value})}>
+              <option value="" style={{ background:optBg, color:optColor }}>— Sélectionner —</option>
+              {employees.map(e=><option key={e.id} value={e.id} style={{ background:optBg, color:optColor }}>{e.name}</option>)}
+            </FormSelect>
+          </div>
+        )}
+
+        {/* Paiement */}
+        <div>
+          <FormLabel theme={theme}>Mode de paiement</FormLabel>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {PAY.map(({v,l,color,Ic}) => {
+              const active = f.payment_method===v;
+              return (
+                <button key={v} type="button" onClick={()=>setF({...f,payment_method:v})}
+                  style={{ padding:'13px 8px', borderRadius:16, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7, border:`1.5px solid ${active?color+'90':theme.border}`, background: active?color+'22':(isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'), color: active?color:theme.muted }}>
+                  <Ic style={{ width:14, height:14, flexShrink:0 }} />{l}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Note */}
+        <div>
+          <FormLabel theme={theme}>Note (optionnel)</FormLabel>
+          <FormInput theme={theme} value={f.description} onChange={e=>setF({...f,description:e.target.value})} placeholder="Remarque…" />
+        </div>
+
+        <div style={{ display:'flex', gap:12, paddingTop:4 }}>
+          <CancelBtn onClick={onClose} theme={theme} />
+          <button type="submit" disabled={ld} style={{ flex:1, padding:'14px', borderRadius:20, fontSize:14, fontWeight:800, color:'white', cursor:'pointer', border:'none', background: '#111827', opacity:ld?0.3:1 }}>
+            {ld?'Enregistrement...':'Enregistrer'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
