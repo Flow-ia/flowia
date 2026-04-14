@@ -26,6 +26,9 @@ function startServer() {
 
   const app = express();
 
+  // ── Trust proxy (Render, Vercel, Nginx) ──────────────────────────────────
+  app.set('trust proxy', 1);
+
   // ── Compression gzip/brotli — réduit la bande passante de 60-80% ──────────
   app.use(compression({
     level: 6,
