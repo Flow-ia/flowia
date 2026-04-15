@@ -35,6 +35,7 @@ export const api = {
   // ── Auth — Inscription ──────────────────────────────────────────────────
   register:           (b) => request('/auth/register',            { method: 'POST', body: JSON.stringify(b) }),
   confirmRegister:    (b) => request('/auth/register/confirm',    { method: 'POST', body: JSON.stringify(b) }),
+  resendCode:         (b) => request('/auth/resend-code',          { method: 'POST', body: JSON.stringify(b) }),
 
   // ── Auth — Connexion ────────────────────────────────────────────────────
   login:              (b) => request('/auth/login',               { method: 'POST', body: JSON.stringify(b) }),

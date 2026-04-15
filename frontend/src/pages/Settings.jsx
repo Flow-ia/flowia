@@ -5058,7 +5058,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
     { id: 'forecast',     label: 'Previsions', icon: I.TrendUp },
     { id: 'heatmap',      label: 'Heures',     icon: I.Flame },
     { id: 'account',      label: 'Compte',     icon: I.User },
-    { id: 'rgpd',         label: 'RGPD',       icon: I.Lock },
   ];
 
   return (
@@ -5124,7 +5123,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'heatmap'      && <TabHeatmap theme={theme} />}
         {tab === 'notifications'&& <TabNotifications theme={theme} showToast={show} />}
         {tab === 'account'      && <TabAccount showToast={show} theme={theme} onLock={onLock} />}
-        {tab === 'rgpd'         && <TabRGPD showToast={show} theme={theme} />}
+
       </div>
     </div>
   );
@@ -6091,6 +6090,33 @@ function TabAccount({ showToast, theme, onLock }) {
               </button>
             </>
           )}
+        </div>
+      </div>
+
+      {/* ── Mes données (RGPD) ── */}
+      <div style={{ background: isDark?'rgba(255,255,255,0.03)':'#f8fafc',
+        borderRadius:16, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
+        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${theme.border}`,
+          display:'flex', alignItems:'center', gap:8 }}>
+          <I.Lock style={{ width:14, height:14, color:theme.muted }} />
+          <p style={{ margin:0, fontWeight:800, fontSize:13, color:theme.text }}>Mes données & RGPD</p>
+        </div>
+        <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+          {[
+            ['✅ Consentement', 'Enregistré à l'inscription avec horodatage et IP'],
+            ['📦 Portabilité', 'Vos clients peuvent exporter leurs données depuis leur profil'],
+            ['🗑 Effacement', 'Suppression en cascade disponible depuis le profil client'],
+            ['🔐 Sécurité', 'Mots de passe hashés bcrypt, communications TLS'],
+          ].map(([t,d]) => (
+            <div key={t} style={{ display:'flex', gap:8 }}>
+              <p style={{ margin:0, fontSize:12, fontWeight:700, color:theme.text, minWidth:120 }}>{t}</p>
+              <p style={{ margin:0, fontSize:12, color:theme.muted, flex:1 }}>{d}</p>
+            </div>
+          ))}
+          <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on" target="_blank" rel="noopener noreferrer"
+            style={{ fontSize:11, color:'#6366f1', textDecoration:'underline', marginTop:4 }}>
+            📖 Guide CNIL — RGPD pour les TPE/PME
+          </a>
         </div>
       </div>
 

@@ -15,7 +15,7 @@ export default function AuthFlow() {
   const go = (sc, email) => { if (email) setPendingEmail(email); setScreen(sc); };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative" style={{ minHeight: "100dvh" }}>
       <div className="absolute top-12 right-5"><ThemeToggle /></div>
       <Toast msg={t?.msg} type={t?.type} />
       <div className="w-full max-w-sm">
@@ -36,7 +36,7 @@ export default function AuthFlow() {
           }}
           onBack={() => go('register')}
           onResend={async () => {
-            try { await api.register({ email: pendingEmail, resend: true }); show('Code renvoye !'); } catch (e) { show(e.message, 'err'); }
+            try { await api.resendCode({ email: pendingEmail }); show('Code renvoyé !'); } catch (e) { show(e.message, 'err'); }
           }}
         />}
         {screen === 'forgot' && <ForgotScreen show={show} onBack={() => go('login')} onSent={(em) => go('vreset', em)} />}
