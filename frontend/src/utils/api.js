@@ -242,6 +242,10 @@ export const pubApi = {
   checkPromo:     (slug, body) => pubRequest(`/${slug}/check-promo`, { method: 'POST', body: JSON.stringify(body) }),
   updateClientProfile: (slug, body) => pubRequest(`/${slug}/client/profile`, { method: 'PUT', body: JSON.stringify(body) }),
   checkEmail:     (slug, email) => pubRequest(`/${slug}/client/check-email?email=${encodeURIComponent(email)}`),
+  googleAuthUrl:  (slug) => {
+    const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
+    return `${BASE}/api/pub/${slug}/client/auth/google`;
+  },
 };
 
 // ── Notifications (Feature 3 & 7) ────────────────────────────────────────────

@@ -868,6 +868,30 @@ function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '
     if (initialEmail) handleEmailChange(initialEmail);
   }, []);
 
+  // Connexion via Google — ouvre une popup
+  const loginWithGoogle = () => {
+    const url = pubApi.googleAuthUrl(slug);
+    const popup = window.open(url, 'google_auth',
+      'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
+      Math.round((window.screen.width - 500) / 2)
+    );
+    const handler = (e) => {
+      if (e.data?.type !== 'GOOGLE_AUTH_SUCCESS') return;
+      window.removeEventListener('message', handler);
+      if (popup && !popup.closed) popup.close();
+      const { token, client } = e.data;
+      if (!token || !client) return;
+      localStorage.setItem('ff_client_token', token);
+      localStorage.setItem('ff_client_info', JSON.stringify(client));
+      onAuth(client);
+    };
+    window.addEventListener('message', handler);
+    // Nettoyage si popup fermée sans auth
+    const checkClosed = setInterval(() => {
+      if (popup?.closed) { clearInterval(checkClosed); window.removeEventListener('message', handler); }
+    }, 500);
+  };
+
   const submit = async () => {
     setLoading(true); setErr(''); setOk('');
     try {
@@ -1585,6 +1609,25 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
           {tab==='profile' && (
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
 
+              {/* Avatar Google si disponible */}
+              {gcUser?.avatar_url && (
+                <div style={{ display:'flex', alignItems:'center', gap:12,
+                  padding:'14px 16px', background:th.card,
+                  borderRadius:16, border:`1px solid ${th.border}` }}>
+                  <img src={gcUser.avatar_url} alt="avatar"
+                    style={{ width:48, height:48, borderRadius:99, objectFit:'cover',
+                      border:`2px solid ${th.border}` }} />
+                  <div>
+                    <p style={{ margin:'0 0 2px', fontWeight:700, fontSize:14, color:th.text }}>
+                      {gcUser.first_name} {gcUser.last_name}
+                    </p>
+                    <p style={{ margin:0, fontSize:11, color:th.muted }}>
+                      🔗 Connecté via Google
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Édition du profil */}
               <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}` }}>
                 <p style={{ margin:'0 0 14px', fontWeight:800, fontSize:15, color:th.text }}>Mes informations</p>
@@ -1749,6 +1792,29 @@ export default function BookingPage({ slug }) {
   // ── Routing — synchronisation URL ↔ état réservation ──────────────────
   const navigate  = useNavigate();
   const location  = useLocation();
+
+  // Gérer le retour Google OAuth (URL directe sans popup)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gcToken  = params.get('gc_token');
+    const gcClient = params.get('gc_client');
+    const authErr  = params.get('auth_error');
+
+    if (gcToken && gcClient) {
+      try {
+        const client = JSON.parse(decodeURIComponent(gcClient));
+        localStorage.setItem('ff_client_token', gcToken);
+        localStorage.setItem('ff_client_info', JSON.stringify(client));
+        setClientUser(client);
+        // Nettoyer l'URL
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch(e) { console.error('[GOOGLE CALLBACK]', e); }
+    }
+    if (authErr) {
+      console.warn('[GOOGLE AUTH ERROR]', decodeURIComponent(authErr));
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // Lire l'URL au montage et restaurer la vue (client/rdv, client/profil)
   // + gérer les ancres hash pour scroll automatique vers les sections

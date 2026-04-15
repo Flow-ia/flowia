@@ -509,4 +509,145 @@ router.put('/profile', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  GOOGLE OAUTH — Callback générique (1 seule URL pour tous les commerçants)
+//  URL enregistrée chez Google : /api/auth/google/callback
+//  Le slug du commerçant est récupéré via le paramètre `state`
+// ═══════════════════════════════════════════════════════════════════════════
+router.get('/google/callback', async (req, res) => {
+  const { code, state: slug, error } = req.query;
+  const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
+  const FRONTEND_URL = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'https://haircoifflille.fr';
+  const redirectUri  = `${BACKEND_URL}/api/auth/google/callback`;
+
+  if (error || !code || !slug) {
+    return res.redirect(`${FRONTEND_URL}?auth_error=google_denied`);
+  }
+
+  try {
+    const clientId     = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    // 1. Échanger le code contre un access_token
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: clientId, client_secret: clientSecret,
+        redirect_uri: redirectUri, grant_type: 'authorization_code',
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error('Token Google invalide');
+
+    // 2. Récupérer les infos du profil Google
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await profileRes.json();
+    const { id: googleId, email, given_name, family_name, picture } = profile;
+    if (!email) throw new Error('Email non fourni par Google');
+
+    const emailLow = email.toLowerCase().trim();
+
+    // 3. Récupérer le user_id du commerçant via le slug
+    const { rows: biz } = await pool.query(
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE', [slug]
+    );
+    if (!biz.length) throw new Error('Commerce introuvable');
+    const userId = biz[0].user_id;
+
+    // 4. Trouver ou créer le compte global_clients
+    let gc;
+    const { rows: byGoogle } = await pool.query(
+      'SELECT * FROM global_clients WHERE google_id=$1', [googleId]
+    );
+    if (byGoogle.length) {
+      gc = byGoogle[0];
+      await pool.query(
+        'UPDATE global_clients SET avatar_url=$1, updated_at=NOW() WHERE id=$2',
+        [picture || null, gc.id]
+      );
+    } else {
+      const { rows: byEmail } = await pool.query(
+        'SELECT * FROM global_clients WHERE LOWER(email)=$1', [emailLow]
+      );
+      if (byEmail.length) {
+        await pool.query(
+          'UPDATE global_clients SET google_id=$1, avatar_url=$2, is_verified=TRUE, updated_at=NOW() WHERE id=$3',
+          [googleId, picture || null, byEmail[0].id]
+        );
+        gc = { ...byEmail[0], google_id: googleId, avatar_url: picture };
+      } else {
+        const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+        const { rows: created } = await pool.query(
+          `INSERT INTO global_clients
+             (email, google_id, first_name, last_name, avatar_url, is_verified, consent_at, consent_ip)
+           VALUES ($1,$2,$3,$4,$5,TRUE,NOW(),$6) RETURNING *`,
+          [emailLow, googleId, given_name || '', family_name || '', picture || null, consentIp]
+        );
+        gc = created[0];
+      }
+    }
+
+    // 5. Créer/mettre à jour la fiche locale chez ce commerçant
+    const { rows: localRows } = await pool.query(
+      `INSERT INTO client_accounts
+         (user_id, email, first_name, last_name, global_client_id, source)
+       VALUES ($1,$2,$3,$4,$5,'google')
+       ON CONFLICT (user_id, email) DO UPDATE SET
+         global_client_id = EXCLUDED.global_client_id,
+         first_name = COALESCE(NULLIF(client_accounts.first_name,''), EXCLUDED.first_name),
+         last_name  = COALESCE(NULLIF(client_accounts.last_name,''),  EXCLUDED.last_name)
+       RETURNING *`,
+      [userId, emailLow, gc.first_name, gc.last_name || '', gc.id]
+    );
+    const local = localRows[0];
+
+    // 6. Générer le JWT
+    const token = jwt.sign(
+      { clientId: local.id, merchantId: userId, globalClientId: gc.id, scope: 'client' },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    const clientObj = {
+      id: local.id, email: gc.email,
+      first_name: gc.first_name, last_name: gc.last_name,
+      avatar_url: gc.avatar_url || null,
+      global_client_id: gc.id, has_global_account: true,
+    };
+
+    // 7. Page HTML qui ferme la popup ou redirige
+    res.send(`<!DOCTYPE html><html><head><title>Connexion...</title>
+    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f0f0f;color:#fff}</style>
+    </head><body>
+      <div style="text-align:center">
+        <div style="font-size:32px;margin-bottom:12px">✅</div>
+        <p style="font-size:15px;font-weight:600">Connexion réussie</p>
+        <p style="font-size:12px;opacity:0.6">Fermeture en cours...</p>
+      </div>
+      <script>
+        const token  = ${JSON.stringify(token)};
+        const client = ${JSON.stringify(clientObj)};
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', token, client }, '*');
+          setTimeout(() => window.close(), 400);
+        } else {
+          // Fallback : redirection directe (mobile / no-popup)
+          const p = encodeURIComponent(JSON.stringify(client));
+          window.location.href = ${JSON.stringify(`${FRONTEND_URL}/book/${slug}`)} +
+            '?gc_token=' + encodeURIComponent(token) + '&gc_client=' + p;
+        }
+      </script>
+    </body></html>`);
+
+    console.log(`[GOOGLE OAUTH] ${emailLow} connecté sur slug=${slug}`);
+
+  } catch(e) {
+    console.error('[GOOGLE OAUTH]', e.message);
+    res.redirect(`${FRONTEND_URL}/book/${slug || ''}?auth_error=${encodeURIComponent(e.message)}`);
+  }
+});
+
 module.exports = router;

@@ -806,6 +806,10 @@ async function initDB() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_biz_breaks_user_day
     ON business_breaks(user_id, day_of_week)`).catch(()=>{});
 
+// ── Google OAuth : colonne google_id sur global_clients ─────────────────────
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+
 // ── RGPD : consentement et données personnelles ─────────────────────────────
   await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS consent_ip VARCHAR(60)`);

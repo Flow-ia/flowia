@@ -1241,4 +1241,32 @@ router.post('/:slug/check-promo', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  GOOGLE OAUTH — Connexion client via compte Google
+//  Callback générique — le slug est passé dans le state OAuth
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /:slug/client/auth/google — redirige vers Google
+router.get('/:slug/client/auth/google', (req, res) => {
+  const { slug } = req.params;
+  const clientId    = process.env.GOOGLE_CLIENT_ID;
+  const BACKEND_URL = process.env.BACKEND_URL || 'https://flowia-backend.onrender.com';
+  // Callback générique — 1 seule URL enregistrée chez Google
+  const redirectUri = `${BACKEND_URL}/api/auth/google/callback`;
+
+  const params = new URLSearchParams({
+    client_id:     clientId,
+    redirect_uri:  redirectUri,
+    response_type: 'code',
+    scope:         'openid email profile',
+    access_type:   'online',
+    prompt:        'select_account',
+    state:         slug,   // slug transmis via state OAuth
+  });
+
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// NOTE : Callback générique dans backend/src/routes/auth.js → GET /api/auth/google/callback
+
 module.exports = router;
