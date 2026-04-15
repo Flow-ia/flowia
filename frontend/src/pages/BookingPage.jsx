@@ -2107,7 +2107,7 @@ export default function BookingPage({ slug }) {
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 
       {/* ══ CORPS 2 COLONNES ══ */}
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 24px 80px',
+      <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 16px 80px',
         display:'flex', gap:32, alignItems:'flex-start' }} className="bk-2c">
 
         {/* ── COLONNE GAUCHE ── */}
@@ -2629,7 +2629,7 @@ export default function BookingPage({ slug }) {
                     </strong>
                   </p>
                   <div style={{ background:th.card, border:`1px solid ${th.border}`,
-                    borderRadius:12, padding:20 }}>
+                    borderRadius:16, padding:'20px 12px' }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
                       <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
                         style={{ width:36,height:36,borderRadius:8,border:`1px solid ${th.border}`,
@@ -2647,12 +2647,12 @@ export default function BookingPage({ slug }) {
                           style={{width:14,height:14,color:th.muted}}><polyline points="9 18 15 12 9 6"/></svg>
                       </button>
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:6}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:8}}>
                       {DAYS_MINI.map((d,i)=>(
-                        <div key={i} style={{textAlign:'center',fontSize:11,fontWeight:700,color:th.dim,padding:'4px 0'}}>{d}</div>
+                        <div key={i} style={{textAlign:'center',fontSize:12,fontWeight:800,color:th.muted,padding:'6px 0'}}>{d}</div>
                       ))}
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
                       {calDays.map((d,i)=>{
                         if(!d) return <div key={i}/>;
                         const isPast=d<today, isFuture=d>maxDate;
@@ -2665,7 +2665,7 @@ export default function BookingPage({ slug }) {
                         const disabled=isPast||isFuture||isClosed||isFull;
                         return(
                           <button key={i} onClick={()=>{if(!disabled){setSelDate(d);goToStep(4,null,null,d);}}} disabled={disabled}
-                            style={{ height:36, borderRadius:8, fontSize:13, fontWeight:600,
+                            style={{ height:44, borderRadius:10, fontSize:14, fontWeight:700,
                               border:isSel?`2px solid ${th.accent}`:isToday2?`1px solid ${th.accent}40`:'1px solid transparent',
                               background:isSel?th.accent:'transparent',
                               color:isSel?th.accentText:(isClosed||isFull?th.dim:disabled?th.dim:th.text),
@@ -2709,10 +2709,10 @@ export default function BookingPage({ slug }) {
                       </button>
                     </div>
                   ) : (
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
                       {visibleSlots.map(s=>(
                         <button key={s} onClick={()=>{setSelSlot(s);goToStep(5,null,null,null,s);}}
-                          style={{ padding:'14px 8px', borderRadius:10, fontSize:14, fontWeight:700,
+                          style={{ padding:'16px 8px', borderRadius:14, fontSize:15, fontWeight:800,
                             border:selSlot===s?`2px solid ${th.accent}`:`1px solid ${th.border}`,
                             background:selSlot===s?th.accent:th.card,
                             color:selSlot===s?th.accentText:th.text, cursor:'pointer' }}>

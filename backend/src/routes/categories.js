@@ -14,16 +14,14 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT c.*,
-         COALESCE(p.sort_order, c.sort_order) AS parent_sort_order,
+         COALESCE(p.created_at, c.created_at) AS parent_created_at,
          CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END AS is_child
        FROM categories c
        LEFT JOIN categories p ON p.id = c.parent_id
        WHERE c.user_id = $1
        ORDER BY
-         COALESCE(p.sort_order, c.sort_order) ASC,
          COALESCE(p.created_at, c.created_at) ASC,
          is_child ASC,
-         c.sort_order ASC,
          c.created_at ASC`,
       [req.user.userId]
     );
@@ -31,7 +29,7 @@ router.get('/', async (req, res) => {
     const _cd = rows.map(r => ({ id:r.id,user_id:r.user_id,name:r.name,type:r.type,icon:r.icon,color:r.color,parent_id:r.parent_id,price:r.price,is_free_price:r.is_free_price,sort_order:r.sort_order,created_at:r.created_at }));
     global.memCache?.set(_ck, _cd, 10 * 60 * 1000);
     res.json(_cd);
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) { console.error('[CATEGORIES]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }
 });
 
 router.post('/', async (req, res) => {
@@ -46,7 +44,7 @@ router.post('/', async (req, res) => {
     );
     global.memCache?.del('cats:' + req.user.userId);
     res.status(201).json(rows[0]);
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) { console.error('[CATEGORIES]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }
 });
 
 router.put('/:id', async (req, res) => {
@@ -61,7 +59,7 @@ router.put('/:id', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Catégorie introuvable.' });
     res.json(rows[0]);
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) { console.error('[CATEGORIES]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }
 });
 
 router.delete('/:id', async (req, res) => {
@@ -72,7 +70,7 @@ router.delete('/:id', async (req, res) => {
     );
     await pool.query('DELETE FROM categories WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) { console.error('[CATEGORIES]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }
 });
 
 // PATCH /reorder — mise à jour sort_order en batch
