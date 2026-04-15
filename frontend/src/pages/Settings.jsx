@@ -4862,6 +4862,132 @@ function TabHeatmap({ theme }) {
 // ── Wrapper Analytics (onglet Ventes enrichi) ────────────────────────────────
 // On enrichit TabProductStats en lui ajoutant des sous-onglets analytics
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  ONGLET RGPD
+// ═══════════════════════════════════════════════════════════════════════════
+function TabRGPD({ showToast, theme }) {
+  const isDark = theme.mode === 'dark';
+  const [retention, setRetention] = useState(24); // mois
+  const [saving, setSaving] = useState(false);
+  const inp = {
+    padding: '10px 12px', borderRadius: 10, outline: 'none',
+    background: theme.inputBg, border: `1px solid ${theme.inputBorder}`,
+    color: theme.text, fontSize: 13, width: '100%', boxSizing: 'border-box',
+  };
+
+  const RIGHTS = [
+    ['📋 Art. 13 — Information', 'Les clients sont informés de la collecte lors de leur inscription via une case à cocher obligatoire.'],
+    ['✅ Art. 6 — Licéité', 'Traitement basé sur le consentement explicite (réservations) et l'exécution du contrat.'],
+    ['🗑 Art. 17 — Effacement', 'Les clients peuvent supprimer leur compte depuis leur profil. Suppression en cascade de toutes les données personnelles.'],
+    ['📦 Art. 20 — Portabilité', 'Les clients peuvent exporter leurs données en JSON depuis leur profil (compte, RDV, fidélité).'],
+    ['🔐 Art. 32 — Sécurité', 'Mots de passe hashés bcrypt, communications TLS, accès par JWT, audit trail sur les transactions.'],
+    ['⏱ Art. 5 — Conservation', 'Données personnelles conservées le temps de l'inscription. Historiques comptables anonymisés.'],
+  ];
+
+  return (
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* En-tête */}
+      <div style={{ background: isDark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)',
+        borderRadius: 20, padding: 20, border: '1px solid rgba(99,102,241,0.2)' }}>
+        <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: 16, color: theme.text }}>
+          🔒 Conformité RGPD
+        </p>
+        <p style={{ margin: 0, fontSize: 13, color: theme.muted, lineHeight: 1.6 }}>
+          FlowIA intègre nativement les exigences du Règlement Général sur la Protection des Données.
+          Voici le récapitulatif des mesures en place pour votre application.
+        </p>
+      </div>
+
+      {/* Mesures en place */}
+      <div style={{ background: theme.card, borderRadius: 20, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${theme.border}` }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: theme.text }}>✅ Mesures appliquées</p>
+        </div>
+        {RIGHTS.map(([title, desc]) => (
+          <div key={title} style={{ padding: '12px 18px', borderBottom: `1px solid ${theme.border}` }}>
+            <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 13, color: theme.text }}>{title}</p>
+            <p style={{ margin: 0, fontSize: 12, color: theme.muted, lineHeight: 1.5 }}>{desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Durée de conservation */}
+      <div style={{ background: theme.card, borderRadius: 20, border: `1px solid ${theme.border}`, padding: 20 }}>
+        <p style={{ margin: '0 0 4px', fontWeight: 800, fontSize: 14, color: theme.text }}>
+          ⏱ Durée de conservation des données inactives
+        </p>
+        <p style={{ margin: '0 0 14px', fontSize: 12, color: theme.muted, lineHeight: 1.5 }}>
+          Information indicative — les clients inactifs depuis plus de {retention} mois
+          peuvent être supprimés manuellement depuis la liste clients.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <input type="number" min="6" max="60" value={retention}
+            onChange={e => setRetention(parseInt(e.target.value) || 24)}
+            style={{ ...inp, width: 80 }} />
+          <span style={{ fontSize: 13, color: theme.muted }}>mois d'inactivité</span>
+        </div>
+        <p style={{ margin: '10px 0 0', fontSize: 11, color: theme.dim }}>
+          💡 La suppression automatique n'est pas activée — vous gardez le contrôle total.
+        </p>
+      </div>
+
+      {/* Données collectées */}
+      <div style={{ background: theme.card, borderRadius: 20, border: `1px solid ${theme.border}`, padding: 20 }}>
+        <p style={{ margin: '0 0 14px', fontWeight: 800, fontSize: 14, color: theme.text }}>
+          📊 Données collectées sur vos clients
+        </p>
+        {[
+          ['Identité', 'Prénom, nom (obligatoire)', '✅ Nécessaire'],
+          ['Contact', 'Email, téléphone', '✅ Nécessaire'],
+          ['Réservations', 'Historique des RDV, services', '✅ Nécessaire'],
+          ['Fidélité', 'Tampons, récompenses', '✅ Nécessaire'],
+          ['Paiement', 'Montant (pas de CB)', '✅ Comptabilité'],
+          ['Tracking', 'Aucun cookie tiers, aucune pub', '✅ Aucun'],
+        ].map(([cat, data, status]) => (
+          <div key={cat} style={{ display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', padding: '8px 0',
+            borderBottom: `1px solid ${theme.border}` }}>
+            <div>
+              <p style={{ margin: '0 0 1px', fontSize: 13, fontWeight: 600, color: theme.text }}>{cat}</p>
+              <p style={{ margin: 0, fontSize: 11, color: theme.muted }}>{data}</p>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981',
+              background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 99 }}>
+              {status}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Mentions légales à ajouter */}
+      <div style={{ background: 'rgba(245,158,11,0.05)', borderRadius: 20,
+        border: '1px solid rgba(245,158,11,0.2)', padding: 20 }}>
+        <p style={{ margin: '0 0 10px', fontWeight: 800, fontSize: 14, color: '#d97706' }}>
+          ⚠️ À faire de votre côté
+        </p>
+        {[
+          'Désigner un responsable de traitement (vous, en tant que commerçant)',
+          'Mentionner votre activité dans votre politique de confidentialité',
+          'En cas de violation de données, notifier la CNIL sous 72h',
+          'Pour plus de 250 salariés : tenir un registre de traitement',
+        ].map(item => (
+          <div key={item} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+            <span style={{ color: '#d97706', flexShrink: 0 }}>→</span>
+            <p style={{ margin: 0, fontSize: 12, color: theme.muted }}>{item}</p>
+          </div>
+        ))}
+        <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on" target="_blank" rel="noopener noreferrer"
+          style={{ display: 'inline-block', marginTop: 10, fontSize: 12, color: '#6366f1',
+            textDecoration: 'underline' }}>
+          📖 Guide CNIL — RGPD pour les TPE/PME
+        </a>
+      </div>
+
+    </div>
+  );
+}
+
 export default function Settings({ transactions, employees, categories, onAddCat, onUpdCat, onDelCat, onReorderCat, onAddEmp, onUpdEmp, onDelEmp, onUpdTx, onDelTx, onLock }) {
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -4932,6 +5058,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
     { id: 'forecast',     label: 'Previsions', icon: I.TrendUp },
     { id: 'heatmap',      label: 'Heures',     icon: I.Flame },
     { id: 'account',      label: 'Compte',     icon: I.User },
+    { id: 'rgpd',         label: 'RGPD',       icon: I.Shield },
   ];
 
   return (
@@ -4997,6 +5124,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'heatmap'      && <TabHeatmap theme={theme} />}
         {tab === 'notifications'&& <TabNotifications theme={theme} showToast={show} />}
         {tab === 'account'      && <TabAccount showToast={show} theme={theme} onLock={onLock} />}
+        {tab === 'rgpd'         && <TabRGPD showToast={show} theme={theme} />}
       </div>
     </div>
   );

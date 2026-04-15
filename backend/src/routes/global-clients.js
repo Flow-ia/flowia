@@ -484,57 +484,142 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE /api/global-clients/me — Suppression de compte (anonymisation RGPD)
-// Les transactions et statistiques sont conservées côté commerçant
-// Seules les données nominatives sont effacées
+// DELETE /api/global-clients/me — Suppression RGPD complète
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/me', globalClientAuth, async (req, res) => {
   try {
     const gid = req.globalClient.globalClientId;
 
-    // Récupérer l'email actuel pour anonymiser les données liées
     const { rows: gcRows } = await pool.query(
-      'SELECT email FROM global_clients WHERE id=$1',
-      [gid]
+      'SELECT email, first_name FROM global_clients WHERE id=$1', [gid]
     );
     if (!gcRows.length) return res.status(404).json({ error: 'Compte introuvable.' });
-    const email = gcRows[0].email;
+    const { email } = gcRows[0];
 
-    // 1. Détacher les rendez-vous (garder l'historique mais effacer le lien client_id)
+    // 1. Anonymiser les RDV — garder l'historique commerçant mais effacer identité
     await pool.query(
-      'UPDATE appointments SET client_id=NULL WHERE client_id=$1',
+      `UPDATE appointments SET
+         client_id=NULL,
+         client_name='[Client supprimé]',
+         client_email=NULL,
+         client_phone=NULL
+       WHERE client_id=$1`,
       [gid]
     );
-
-    // 2. Supprimer les fiches locales (client_accounts) — les transactions gardent
-    //    leur client_email historique mais la fiche est supprimée
-    await pool.query(
-      'DELETE FROM client_accounts WHERE global_client_id=$1',
-      [gid]
-    );
-
-    // 3. Supprimer les tokens JWT actifs (loyal, etc.) en supprimant le compte
-    //    Les promo_usage_logs, transaction_audit_log, transactions → conservés
-    //    Les client_loyalty → supprimés (données propres au client)
     if (email) {
       await pool.query(
-        'DELETE FROM client_loyalty WHERE client_email=LOWER($1)',
+        `UPDATE appointments SET
+           client_name='[Client supprimé]',
+           client_email=NULL,
+           client_phone=NULL
+         WHERE LOWER(client_email)=LOWER($1) AND client_id IS NULL`,
         [email]
       );
-      // Anonymiser les notes clients (garder le texte, effacer l'identité)
+    }
+
+    // 2. Anonymiser les transactions (garder le montant pour la comptabilité)
+    if (email) {
       await pool.query(
-        `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
+        `UPDATE transactions SET
+           client_email=NULL,
+           client_note=NULL
          WHERE LOWER(client_email)=LOWER($1)`,
         [email]
       );
     }
 
-    // 4. Supprimer le compte global (données nominatives effacées)
+    // 3. Supprimer les fiches locales chez tous les commerçants
+    await pool.query(
+      'DELETE FROM client_accounts WHERE global_client_id=$1', [gid]
+    );
+    if (email) {
+      await pool.query(
+        'DELETE FROM client_accounts WHERE LOWER(email)=LOWER($1)', [email]
+      );
+    }
+
+    // 4. Supprimer fidélité, notes, crédits
+    if (email) {
+      await pool.query('DELETE FROM client_loyalty WHERE LOWER(client_email)=LOWER($1)', [email]);
+      await pool.query(
+        `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
+         WHERE LOWER(client_email)=LOWER($1)`, [email]
+      );
+      await pool.query(
+        `UPDATE client_credits SET
+           client_email=NULL,
+           client_name='[Compte supprimé]'
+         WHERE LOWER(client_email)=LOWER($1)`, [email]
+      );
+    }
+
+    // 5. Supprimer le compte global
     await pool.query('DELETE FROM global_clients WHERE id=$1', [gid]);
 
-    res.json({ ok: true, message: 'Votre compte a été supprimé. Vos données de transaction sont conservées par les commerçants.' });
+    console.log(`[RGPD] Suppression compte ${gid} — email anonymisé`);
+    res.json({
+      ok: true,
+      message: 'Votre compte et vos données personnelles ont été supprimés. Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.',
+    });
   } catch(e) {
     console.error('[DELETE ACCOUNT]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/global-clients/me/export — Export RGPD (portabilité des données)
+router.get('/me/export', globalClientAuth, async (req, res) => {
+  try {
+    const gid = req.globalClient.globalClientId;
+
+    // Données du compte
+    const { rows: [gc] } = await pool.query(
+      'SELECT id, email, first_name, last_name, phone, created_at FROM global_clients WHERE id=$1',
+      [gid]
+    );
+    if (!gc) return res.status(404).json({ error: 'Compte introuvable.' });
+
+    // RDV
+    const { rows: appts } = await pool.query(
+      `SELECT a.date, a.start_time, a.end_time, a.status,
+              s.name as service, u.business_name as commerce
+       FROM appointments a
+       LEFT JOIN booking_services s ON s.id = a.service_id
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE a.client_id=$1
+       ORDER BY a.date DESC LIMIT 200`,
+      [gid]
+    );
+
+    // Fidélité
+    const { rows: loyalty } = await pool.query(
+      `SELECT cl.stamps_count, cl.total_rewards, lp.reward_label, u.business_name
+       FROM client_loyalty cl
+       JOIN loyalty_programs lp ON lp.id = cl.program_id
+       JOIN users u ON u.id = cl.user_id
+       WHERE LOWER(cl.client_email)=LOWER($1)`,
+      [gc.email]
+    );
+
+    const exportData = {
+      export_date: new Date().toISOString(),
+      account: {
+        email:      gc.email,
+        first_name: gc.first_name,
+        last_name:  gc.last_name,
+        phone:      gc.phone,
+        created_at: gc.created_at,
+      },
+      appointments: appts,
+      loyalty_cards: loyalty,
+      note: 'Export RGPD — Article 20 du Règlement Général sur la Protection des Données',
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="mes-donnees-flowia.json"');
+    res.json(exportData);
+  } catch(e) {
+    console.error('[RGPD EXPORT]', e.message);
     res.status(500).json({ error: e.message });
   }
 });

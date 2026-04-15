@@ -371,4 +371,7 @@ export const globalClientApi = {
   changePwd:      (token, data) => gcRequest('/global-clients/change-password', { method:'POST', body: JSON.stringify(data) }, token),
   forgotPassword: (data)        => gcRequest('/global-clients/forgot-password', { method:'POST', body: JSON.stringify(data) }),
   resetPassword:  (data)        => gcRequest('/global-clients/reset-password',  { method:'POST', body: JSON.stringify(data) }),
+  // RGPD
+  exportData:     ()            => gcRequest('/global-clients/me/export'),
+  deleteAccount:  ()            => gcRequest('/global-clients/me',              { method:'DELETE' }),
 };

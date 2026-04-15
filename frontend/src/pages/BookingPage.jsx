@@ -830,6 +830,8 @@ function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '
   const [err, setErr]           = useState('');
   const [ok, setOk]             = useState('');
   const [loading, setLoading]   = useState(false);
+  const [consent, setConsent]   = useState(false);
+  const [showRgpdModal, setShowRgpdModal] = useState(false);
 
   // Détection intelligente du type de compte à la saisie email
   const [emailType, setEmailType]   = useState(null);   // null | 'free' | 'local' | 'global' | 'both'
@@ -1133,11 +1135,30 @@ function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '
             )}
             {ok && <p style={{fontSize:12,color:'#16a34a',fontWeight:600}}>{ok}</p>}
 
+            {/* Consentement RGPD — uniquement à l'inscription */}
+            {mode === 'register' && (
+              <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
+                borderRadius:9, background:'rgba(99,102,241,0.04)',
+                border:'1px solid rgba(99,102,241,0.15)' }}>
+                <input type="checkbox" id="consent-rgpd" checked={consent}
+                  onChange={e=>setConsent(e.target.checked)}
+                  style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer' }} />
+                <label htmlFor="consent-rgpd" style={{ fontSize:11, color:th.muted, lineHeight:1.5, cursor:'pointer' }}>
+                  J'accepte que mes données personnelles (nom, email, téléphone) soient utilisées
+                  pour gérer mes réservations, conformément au{' '}
+                  <a href="#rgpd-policy" onClick={e=>{e.preventDefault();setShowRgpdModal(true);}}
+                    style={{ color:'#6366f1', textDecoration:'underline' }}>
+                    règlement RGPD
+                  </a>. Vous pouvez supprimer votre compte à tout moment.
+                </label>
+              </div>
+            )}
+
             {/* Bouton principal */}
             <button onClick={submit}
-              disabled={loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()))}
+              disabled={loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()||!consent))}
               style={{...S.btnPrimary,
-                opacity:loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()))?0.5:1,
+                opacity:loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()||!consent))?0.5:1,
                 marginTop:4}}>
               {loading ? '...' : mode==='login' ? '→ Se connecter' : '→ Creer mon compte'}
             </button>
@@ -1149,6 +1170,37 @@ function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '
                   color:th.muted, textAlign:'center', padding:'2px 0' }}>
                 Mot de passe oublié ?
               </button>
+            )}
+
+            {/* Modal RGPD depuis inscription */}
+            {showRgpdModal && (
+              <div style={{ position:'fixed', inset:0, zIndex:2000,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                padding:16, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)' }}
+                onClick={()=>setShowRgpdModal(false)}>
+                <div style={{ background:th.card||'#fff', borderRadius:20, padding:24,
+                  maxWidth:420, width:'100%', maxHeight:'75vh', overflowY:'auto' }}
+                  onClick={e=>e.stopPropagation()}>
+                  <p style={{ margin:'0 0 12px', fontWeight:800, fontSize:15, color:'#111' }}>🔒 Politique de confidentialité</p>
+                  {[
+                    ['Données collectées','Prénom, nom, email, téléphone — utilisés pour gérer vos réservations.'],
+                    ['Finalité','Gestion des rendez-vous, confirmations, rappels, fidélité.'],
+                    ['Conservation','Données supprimées sur demande. Historiques conservés anonymement.'],
+                    ['Vos droits','Accès, rectification, effacement, portabilité depuis votre profil.'],
+                    ['Sécurité','Mots de passe chiffrés (bcrypt). Communications SSL/TLS.'],
+                  ].map(([t,d])=>(
+                    <div key={t} style={{ marginBottom:10 }}>
+                      <p style={{ margin:'0 0 2px', fontWeight:700, fontSize:12, color:'#374151' }}>{t}</p>
+                      <p style={{ margin:0, fontSize:11, color:'#6b7280', lineHeight:1.5 }}>{d}</p>
+                    </div>
+                  ))}
+                  <button onClick={()=>setShowRgpdModal(false)}
+                    style={{ width:'100%', padding:'11px', borderRadius:10, marginTop:8,
+                      background:'#6366f1', color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                    Fermer
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Continuer sans compte */}
@@ -1194,9 +1246,11 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
   const [pwdOk,      setPwdOk]      = useState('');
   const [pwdErr,     setPwdErr]     = useState('');
   const [pwdLoad,    setPwdLoad]    = useState(false);
-  // Suppression de compte
+  // Suppression de compte + RGPD
   const [delConfirm, setDelConfirm] = useState('');
   const [delLoad,    setDelLoad]    = useState(false);
+  const [showRgpd,   setShowRgpd]   = useState(false);
+  const [exportLoad, setExportLoad] = useState(false);
   const [delErr,     setDelErr]     = useState('');
   // Forgot password dans GlobalAccountView
   const [gcForgotEmail, setGcForgotEmail] = useState('');
@@ -1267,7 +1321,29 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
       await globalClientApi.deleteAccount(gcToken);
       onLogout();
     } catch(e) { setDelErr(e.message || 'Erreur lors de la suppression'); setDelLoad(false); }
-  };
+  }
+
+  // Export RGPD — télécharge les données personnelles en JSON
+  const exportMyData = async () => {
+    setExportLoad(true);
+    try {
+      const token = gcToken || localStorage.getItem('ff_gc_token');
+      const BASE = import.meta.env.VITE_API_URL || '/api';
+      const res = await fetch(`${BASE}/global-clients/me/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Erreur export');
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'mes-donnees-flowia.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert(e.message || 'Erreur lors de l\'export');
+    } finally { setExportLoad(false); }
+  };;
 
   const handleLogin = async () => {
     setLoading(true); setErr('');
@@ -1554,21 +1630,90 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
                 </button>
               </div>
 
+              {/* Export données RGPD */}
+              <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}` }}>
+                <p style={{ margin:'0 0 4px', fontWeight:800, fontSize:15, color:th.text }}>📦 Mes données personnelles</p>
+                <p style={{ margin:'0 0 14px', fontSize:12, color:th.muted, lineHeight:1.5 }}>
+                  Conformément au RGPD (Art. 20), vous pouvez télécharger l'ensemble de vos données personnelles
+                  stockées sur FlowIA : compte, rendez-vous, fidélité.
+                </p>
+                <button onClick={exportMyData} disabled={exportLoad}
+                  style={{ width:'100%', padding:'12px', borderRadius:12,
+                    background:'rgba(99,102,241,0.08)', color:'#6366f1',
+                    border:'1px solid rgba(99,102,241,0.2)',
+                    fontWeight:700, fontSize:13, cursor:'pointer',
+                    opacity:exportLoad?0.6:1, marginBottom:10 }}>
+                  {exportLoad ? '⏳ Préparation...' : '⬇️ Télécharger mes données (JSON)'}
+                </button>
+                <button onClick={()=>setShowRgpd(true)}
+                  style={{ width:'100%', padding:'10px', borderRadius:12,
+                    background:'transparent', color:th.muted,
+                    border:`1px solid ${th.border}`,
+                    fontWeight:600, fontSize:12, cursor:'pointer' }}>
+                  📋 Politique de confidentialité
+                </button>
+              </div>
+
               {/* Suppression de compte */}
               <div style={{ background:'rgba(239,68,68,0.04)', borderRadius:20, padding:20, border:'1px solid rgba(239,68,68,0.15)' }}>
-                <p style={{ margin:'0 0 6px', fontWeight:800, fontSize:15, color:'#ef4444' }}>Supprimer mon compte</p>
+                <p style={{ margin:'0 0 6px', fontWeight:800, fontSize:15, color:'#ef4444' }}>🗑 Supprimer mon compte</p>
                 <p style={{ margin:'0 0 14px', fontSize:12, color:th.muted, lineHeight:1.5 }}>
-                  Vos données personnelles (nom, email, téléphone) seront effacées. Vos transactions chez les commerçants sont conservées pour leur comptabilité.
+                  Vos données personnelles (nom, email, téléphone) seront <strong>définitivement effacées</strong>.
+                  Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.
                 </p>
                 <input placeholder="Tapez SUPPRIMER pour confirmer" value={delConfirm}
                   onChange={e=>{ setDelConfirm(e.target.value.toUpperCase()); setDelErr(''); }}
-                  style={{ ...inp, border:'1px solid rgba(239,68,68,0.3)', marginBottom:10 }} />
+                  style={{ width:'100%', padding:'12px 14px', borderRadius:10, outline:'none',
+                    background:th.inputBg, border:'1px solid rgba(239,68,68,0.3)',
+                    color:th.text, fontSize:13, marginBottom:10, boxSizing:'border-box' }} />
                 {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight:600 }}>{delErr}</p>}
                 <button onClick={deleteAccount} disabled={delLoad || delConfirm !== 'SUPPRIMER'}
-                  style={{ width:'100%', padding:'13px', borderRadius:14, background:'rgba(239,68,68,0.12)', color:'#ef4444', border:'1px solid rgba(239,68,68,0.25)', fontWeight:800, fontSize:14, cursor:'pointer', opacity:(delLoad||delConfirm!=='SUPPRIMER')?0.5:1 }}>
-                  {delLoad ? '...' : '🗑 Supprimer definitivement mon compte'}
+                  style={{ width:'100%', padding:'13px', borderRadius:14,
+                    background:'rgba(239,68,68,0.12)', color:'#ef4444',
+                    border:'1px solid rgba(239,68,68,0.25)',
+                    fontWeight:800, fontSize:14, cursor:'pointer',
+                    opacity:(delLoad||delConfirm!=='SUPPRIMER')?0.5:1 }}>
+                  {delLoad ? '...' : '🗑 Supprimer définitivement mon compte'}
                 </button>
               </div>
+
+              {/* Modal Politique de confidentialité RGPD */}
+              {showRgpd && (
+                <div style={{ position:'fixed', inset:0, zIndex:1000,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  padding:16, background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}
+                  onClick={()=>setShowRgpd(false)}>
+                  <div style={{ background:th.card, borderRadius:24, padding:28,
+                    maxWidth:480, width:'100%', maxHeight:'80vh', overflowY:'auto',
+                    border:`1px solid ${th.border}` }}
+                    onClick={e=>e.stopPropagation()}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                      <p style={{ margin:0, fontWeight:800, fontSize:16, color:th.text }}>🔒 Politique de confidentialité</p>
+                      <button onClick={()=>setShowRgpd(false)}
+                        style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:th.muted }}>×</button>
+                    </div>
+                    {[
+                      ['📋 Données collectées', 'Lors de votre inscription et de vos réservations, nous collectons : prénom, nom, email, téléphone. Ces données sont nécessaires pour gérer vos rendez-vous.'],
+                      ['🎯 Finalité', 'Vos données sont utilisées exclusivement pour : la gestion de vos réservations, l'envoi de confirmations et rappels, le programme de fidélité.'],
+                      ['⏱ Durée de conservation', 'Vos données personnelles sont conservées le temps de votre inscription. Les historiques de transactions sont conservés de façon anonyme à des fins comptables.'],
+                      ['✅ Vos droits (Art. 15-22 RGPD)', 'Vous disposez d'un droit d'accès, de rectification, d'effacement, de portabilité et d'opposition. Exercez-les depuis votre profil ou en contactant le commerçant.'],
+                      ['🔐 Sécurité', 'Vos mots de passe sont chiffrés (bcrypt). Les communications sont sécurisées par SSL/TLS. Aucune donnée n'est vendue à des tiers.'],
+                      ['📧 Contact', 'Pour toute question relative à vos données personnelles, contactez directement le commerçant ou écrivez à l'adresse indiquée sur le site de réservation.'],
+                    ].map(([title, text]) => (
+                      <div key={title} style={{ marginBottom:14 }}>
+                        <p style={{ margin:'0 0 4px', fontWeight:700, fontSize:13, color:th.text }}>{title}</p>
+                        <p style={{ margin:0, fontSize:12, color:th.muted, lineHeight:1.6 }}>{text}</p>
+                      </div>
+                    ))}
+                    <button onClick={()=>setShowRgpd(false)}
+                      style={{ width:'100%', padding:'12px', borderRadius:12, marginTop:8,
+                        background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white',
+                        border:'none', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                      Fermer
+                    </button>
+                  </div>
+                </div>
+              )}
 
             </div>
           )}

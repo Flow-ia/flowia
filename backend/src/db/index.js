@@ -806,6 +806,12 @@ async function initDB() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_biz_breaks_user_day
     ON business_breaks(user_id, day_of_week)`).catch(()=>{});
 
+// ── RGPD : consentement et données personnelles ─────────────────────────────
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS consent_ip VARCHAR(60)`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ`);
+
 console.log('[DB] Tables initialisées');
 }
 
@@ -814,4 +820,3 @@ module.exports = { pool, initDB };
 
 // ── PATCH pauses commerçant & plages horaires employés ────────────────────────
 // Ajouté pour gérer les pauses du commerce et les plages multiples par employé
-

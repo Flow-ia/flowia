@@ -826,10 +826,12 @@ router.post('/:slug/client/register', async (req, res) => {
       gcId = updated[0].id;
     } else {
       // Nouveau compte global
+      const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
       const { rows: newGc } = await pool.query(
-        `INSERT INTO global_clients (email, password_hash, first_name, last_name, phone, is_verified)
-         VALUES ($1,$2,$3,$4,$5,TRUE) RETURNING id`,
-        [emailLow, hash, first_name, last_name||'', phone||null]
+        `INSERT INTO global_clients
+           (email, password_hash, first_name, last_name, phone, is_verified, consent_at, consent_ip)
+         VALUES ($1,$2,$3,$4,$5,TRUE,NOW(),$6) RETURNING id`,
+        [emailLow, hash, first_name, last_name||'', phone||null, consentIp]
       );
       gcId = newGc[0].id;
     }
