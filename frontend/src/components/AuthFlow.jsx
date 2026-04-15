@@ -209,8 +209,10 @@ function AddressField({ address, onChange }) {
 
 function RegisterScreen({ show, onBack, onSent }) {
   const [f, setF]   = useState({ biz:'', email:'', pw:'', cpw:'', phone:'', country:'FR', address:'', city:'', lat:null, lng:null });
-  const [vis, setVis] = useState(false);
-  const [ld,  setLd]  = useState(false);
+  const [vis, setVis]     = useState(false);
+  const [ld,  setLd]      = useState(false);
+  const [consent, setConsent] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(false);
 
   const sub = async e => {
     e.preventDefault();
@@ -286,10 +288,64 @@ function RegisterScreen({ show, onBack, onSent }) {
           <input type="password" required value={f.cpw} onChange={e => setF({...f, cpw: e.target.value})}
             placeholder="Répétez le mot de passe" className={inp} />
         </div>
-        <button type="submit" disabled={ld}
+        {/* Consentement CGU + politique confidentialité */}
+        <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
+          borderRadius:10, background:'rgba(99,102,241,0.04)',
+          border:'1px solid rgba(99,102,241,0.15)' }}>
+          <input type="checkbox" id="merchant-consent" checked={consent}
+            onChange={e=>setConsent(e.target.checked)}
+            style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer', width:15, height:15 }} />
+          <label htmlFor="merchant-consent"
+            style={{ fontSize:11, color:'#64748b', lineHeight:1.5, cursor:'pointer' }}>
+            J'accepte les{' '}
+            <button type="button" onClick={()=>setShowPolicy(true)}
+              style={{ color:'#6366f1', background:'none', border:'none',
+                textDecoration:'underline', cursor:'pointer', fontSize:11, padding:0 }}>
+              conditions d'utilisation et la politique de confidentialité
+            </button>
+            . Mes données sont traitées conformément au RGPD.
+          </label>
+        </div>
+
+        <button type="submit" disabled={ld || !consent}
           className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 transition-colors">
           {ld ? 'Creation en cours...' : 'Creer mon compte →'}
         </button>
+
+        {/* Modal politique de confidentialité */}
+        {showPolicy && (
+          <div style={{ position:'fixed', inset:0, zIndex:1000,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            padding:16, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)' }}
+            onClick={()=>setShowPolicy(false)}>
+            <div style={{ background:'white', borderRadius:20, padding:24,
+              maxWidth:440, width:'100%', maxHeight:'80vh', overflowY:'auto' }}
+              onClick={e=>e.stopPropagation()}>
+              <p style={{ margin:'0 0 16px', fontWeight:800, fontSize:16, color:'#0f172a' }}>
+                🔒 Conditions & Confidentialité
+              </p>
+              {[
+                ['📋 Données collectées', "Nom du commerce, email, téléphone, adresse. Utilisés pour gérer votre compte et vos réservations."],
+                ['🎯 Utilisation', "Vos données permettent de gérer votre activité (réservations, caisse, statistiques). Elles ne sont jamais vendues à des tiers."],
+                ['⏱ Conservation', "Conservées le temps de votre abonnement. Supprimables à tout moment depuis votre compte."],
+                ['✅ Vos droits RGPD', "Accès, rectification, suppression disponibles depuis Paramètres → Compte. Délai de réponse : 30 jours max."],
+                ['🔐 Sécurité', "Mots de passe hashés bcrypt. Communications TLS. Accès sécurisé par JWT."],
+                ['📧 Contact', "Pour toute question : utilisez le formulaire de contact ou supprimez votre compte depuis les paramètres."],
+              ].map(([t,d])=>(
+                <div key={t} style={{ marginBottom:12 }}>
+                  <p style={{ margin:'0 0 3px', fontWeight:700, fontSize:13, color:'#1e293b' }}>{t}</p>
+                  <p style={{ margin:0, fontSize:12, color:'#64748b', lineHeight:1.5 }}>{d}</p>
+                </div>
+              ))}
+              <button onClick={()=>setShowPolicy(false)}
+                style={{ width:'100%', padding:'12px', borderRadius:10, marginTop:8,
+                  background:'#0f172a', color:'white', border:'none',
+                  fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

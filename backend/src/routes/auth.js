@@ -392,6 +392,59 @@ router.post('/pin-lockout-notify', async (req, res) => {
   } catch (err) { console.error(err); res.json({ ok: true }); }
 });
 
+// ═══════════════════ SUPPRESSION COMPTE COMMERÇANT ══════════════════════════
+// DELETE /api/auth/account — RGPD : suppression du compte commerçant
+// Règles : anonymiser les RDV/transactions, supprimer les données perso
+router.delete('/account', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    // 1. Anonymiser les RDV (garder l'historique pour les clients)
+    await pool.query(
+      `UPDATE appointments SET
+         client_name='[Commerçant supprimé]',
+         client_email=NULL, client_phone=NULL
+       WHERE user_id=$1`, [userId]
+    );
+
+    // 2. Anonymiser les transactions (garder montants pour comptabilité)
+    await pool.query(
+      `UPDATE transactions SET
+         description=COALESCE(description,'Transaction'),
+         client_email=NULL, client_note=NULL
+       WHERE user_id=$1`, [userId]
+    );
+
+    // 3. Supprimer les données liées (en cascade ou manuellement)
+    const cascadeTables = [
+      'push_subscriptions', 'notification_settings', 'notification_log',
+      'app_notifications', 'employee_pins', 'user_pins',
+      'verification_codes', 'booking_settings',
+      'business_hours', 'business_breaks',
+      'booking_services', 'booking_service_categories',
+      'employee_time_slots', 'employee_hours', 'employee_availability',
+      'employee_absences', 'service_commissions', 'employee_commissions',
+      'promo_codes', 'loyalty_programs',
+      'client_accounts', 'client_notes', 'client_credits',
+      'credit_transactions', 'media',
+      'categories', 'employees',
+    ];
+    for (const table of cascadeTables) {
+      await pool.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId])
+        .catch(() => {}); // Ignorer si table n'a pas user_id
+    }
+
+    // 4. Supprimer le compte utilisateur (déclenche ON DELETE CASCADE)
+    await pool.query('DELETE FROM users WHERE id=$1', [userId]);
+
+    console.log(`[RGPD] Suppression compte commerçant ${userId}`);
+    res.json({ ok: true, message: 'Votre compte a été supprimé définitivement.' });
+  } catch(e) {
+    console.error('[DELETE MERCHANT ACCOUNT]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/auth/me — retourne les infos complètes du commerçant depuis la BDD
 router.get('/me', authMiddleware, async (req, res) => {
   try {

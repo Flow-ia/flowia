@@ -5777,6 +5777,10 @@ function TabAccount({ showToast, theme, onLock }) {
   const [profLoad, setProfLoad] = useState(false);
   const [profErr,  setProfErr]  = useState('');
   const [profOk,   setProfOk]   = useState('');
+  const [delAccConfirm, setDelAccConfirm] = useState('');
+  const [delAccLoad,    setDelAccLoad]    = useState(false);
+  const [delAccErr,     setDelAccErr]     = useState('');
+  const [showDelAcc,    setShowDelAcc]    = useState(false);
   const [form, setForm] = useState({
     businessName:      user?.businessName      || '',
     address:           user?.address           || '',
@@ -5799,6 +5803,16 @@ function TabAccount({ showToast, theme, onLock }) {
       });
     }
   }, [user, editing]);
+
+  const deleteAccount = async () => {
+    if (delAccConfirm !== 'SUPPRIMER') { setDelAccErr('Tapez SUPPRIMER pour confirmer.'); return; }
+    setDelAccLoad(true); setDelAccErr('');
+    try {
+      await api.deleteMerchantAccount();
+      logout();
+    } catch(e) { setDelAccErr(e.message || 'Erreur lors de la suppression.'); }
+    finally { setDelAccLoad(false); }
+  };
 
   const saveProfile = async () => {
     if (!form.businessName.trim()) { setProfErr('Le nom du commerce est requis.'); return; }
@@ -6121,6 +6135,53 @@ function TabAccount({ showToast, theme, onLock }) {
           </a>
         </div>
       </div>
+
+      {/* ── Zone danger : suppression compte ── */}
+      {!showDelAcc ? (
+        <button onClick={() => setShowDelAcc(true)}
+          style={{ width:'100%', padding:'12px', borderRadius:14,
+            border:'1px solid rgba(239,68,68,0.2)',
+            background:'rgba(239,68,68,0.04)', color:'#ef4444',
+            fontWeight:700, fontSize:13, cursor:'pointer' }}>
+          🗑 Supprimer mon compte
+        </button>
+      ) : (
+        <div style={{ background:'rgba(239,68,68,0.04)', borderRadius:16, padding:20,
+          border:'1px solid rgba(239,68,68,0.2)' }}>
+          <p style={{ margin:'0 0 6px', fontWeight:800, fontSize:14, color:'#ef4444' }}>
+            ⚠️ Suppression définitive du compte
+          </p>
+          <p style={{ margin:'0 0 14px', fontSize:12, color:isDark?'#9ca3af':'#6b7280', lineHeight:1.5 }}>
+            Toutes vos données seront supprimées. Les transactions sont conservées de façon anonyme pour la comptabilité. Cette action est irréversible.
+          </p>
+          <input
+            placeholder="Tapez SUPPRIMER pour confirmer"
+            value={delAccConfirm}
+            onChange={e=>{ setDelAccConfirm(e.target.value.toUpperCase()); setDelAccErr(''); }}
+            style={{ width:'100%', padding:'11px 14px', borderRadius:10, outline:'none',
+              background:isDark?'rgba(255,255,255,0.05)':'white',
+              border:'1px solid rgba(239,68,68,0.3)',
+              color:isDark?'#f5f5f5':'#111827', fontSize:13,
+              marginBottom:10, boxSizing:'border-box' }}
+          />
+          {delAccErr && <p style={{ color:'#ef4444', fontSize:12, margin:'0 0 10px', fontWeight:600 }}>{delAccErr}</p>}
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={() => { setShowDelAcc(false); setDelAccConfirm(''); setDelAccErr(''); }}
+              style={{ flex:1, padding:'11px', borderRadius:10, border:`1px solid ${theme.border}`,
+                background:'transparent', color:theme.muted, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+              Annuler
+            </button>
+            <button onClick={deleteAccount}
+              disabled={delAccLoad || delAccConfirm !== 'SUPPRIMER'}
+              style={{ flex:2, padding:'11px', borderRadius:10, border:'none',
+                background: delAccConfirm === 'SUPPRIMER' ? '#ef4444' : 'rgba(239,68,68,0.3)',
+                color:'white', fontWeight:800, fontSize:13, cursor:'pointer',
+                opacity: delAccLoad ? 0.7 : 1 }}>
+              {delAccLoad ? 'Suppression...' : '🗑 Supprimer définitivement'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Déconnexion ── */}
       <button onClick={() => { logout(); if(onLock) onLock(); }}
