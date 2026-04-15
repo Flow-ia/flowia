@@ -450,7 +450,8 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, email, business_name, phone, address, city, postal_code,
-              google_business_url, created_at
+              google_business_url, created_at, first_name, last_name,
+              onboarding_completed, google_id, avatar_url
        FROM users WHERE id=$1`,
       [req.user.userId]
     );
@@ -460,11 +461,16 @@ router.get('/me', authMiddleware, async (req, res) => {
       ...req.user,
       email:              u.email,
       businessName:       u.business_name,
+      firstName:          u.first_name,
+      lastName:           u.last_name,
       phone:              u.phone,
       address:            u.address,
       city:               u.city,
       postalCode:         u.postal_code,
       googleBusinessUrl:  u.google_business_url,
+      onboardingCompleted: u.onboarding_completed,
+      hasGoogle:          !!u.google_id,
+      avatarUrl:          u.avatar_url,
     }});
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -507,6 +513,196 @@ router.put('/profile', authMiddleware, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     res.json({ ok: true, user: rows[0] });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  GOOGLE OAUTH — Commerçant (inscription / connexion)
+//  URL enregistrée chez Google : /api/auth/merchant/google/callback
+//  state = "merchant" pour distinguer du flow client
+// ═══════════════════════════════════════════════════════════════════════════
+router.get('/merchant/google/callback', async (req, res) => {
+  const { code, error } = req.query;
+  const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
+  const FRONTEND_URL = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'https://haircoifflille.fr';
+  const redirectUri  = `${BACKEND_URL}/api/auth/merchant/google/callback`;
+
+  if (error || !code) {
+    return res.redirect(`${FRONTEND_URL}?auth_error=google_denied`);
+  }
+
+  try {
+    const clientId     = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    // 1. Échanger le code contre un access_token
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code, client_id: clientId, client_secret: clientSecret,
+        redirect_uri: redirectUri, grant_type: 'authorization_code',
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error('Token Google invalide');
+
+    // 2. Récupérer les infos du profil Google
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await profileRes.json();
+    const { id: googleId, email, given_name, family_name, picture } = profile;
+    if (!email) throw new Error('Email non fourni par Google');
+
+    const emailLow = email.toLowerCase().trim();
+
+    // 3. Chercher un commerçant existant par google_id OU email
+    let user;
+    const { rows: byGoogle } = await pool.query('SELECT * FROM users WHERE google_id=$1', [googleId]);
+    if (byGoogle.length) {
+      user = byGoogle[0];
+      // Mettre à jour l'avatar
+      await pool.query('UPDATE users SET avatar_url=$1 WHERE id=$2', [picture || null, user.id]);
+    } else {
+      const { rows: byEmail } = await pool.query('SELECT * FROM users WHERE email=LOWER($1)', [emailLow]);
+      if (byEmail.length) {
+        // Lier le compte Google à un compte email existant
+        user = byEmail[0];
+        await pool.query('UPDATE users SET google_id=$1, avatar_url=$2 WHERE id=$3',
+          [googleId, picture || null, user.id]);
+      } else {
+        // 4. Créer un nouveau commerçant (onboarding NON complété)
+        const { rows: created } = await pool.query(
+          `INSERT INTO users (email, password_hash, business_name, google_id, first_name, last_name, avatar_url, onboarding_completed)
+           VALUES (LOWER($1), '', $2, $3, $4, $5, $6, FALSE) RETURNING *`,
+          [emailLow, `Commerce de ${given_name || 'Nouveau'}`, googleId, given_name || '', family_name || '', picture || null]
+        );
+        user = created[0];
+
+        // Seed catégories par défaut
+        for (const cat of SEED_CATS) {
+          await pool.query('INSERT INTO categories (user_id,name,type,icon,color) VALUES ($1,$2,$3,$4,$5)',
+            [user.id, cat.name, cat.type, cat.icon, cat.color]);
+        }
+
+        // Créer booking_settings avec slug unique
+        const baseSlug = (given_name || 'commerce')
+          .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 30) || 'mon-commerce';
+        let finalSlug = baseSlug;
+        let attempt = 0;
+        while (true) {
+          const { rows: existing } = await pool.query('SELECT id FROM booking_settings WHERE slug=$1', [finalSlug]);
+          if (!existing.length) break;
+          attempt++;
+          finalSlug = `${baseSlug}-${attempt}`;
+        }
+        await pool.query(
+          `INSERT INTO booking_settings (user_id, is_enabled, slug, advance_booking_days, min_notice_hours)
+           VALUES ($1, false, $2, 30, 1) ON CONFLICT (user_id) DO NOTHING`,
+          [user.id, finalSlug]
+        );
+      }
+    }
+
+    // 5. Générer le JWT commerçant
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, businessName: user.business_name },
+      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    const userObj = {
+      id: user.id, email: user.email, businessName: user.business_name,
+      firstName: user.first_name, lastName: user.last_name,
+      onboardingCompleted: user.onboarding_completed,
+      avatarUrl: user.avatar_url,
+    };
+
+    // 6. Page HTML qui ferme la popup et envoie le token au parent
+    res.send(`<!DOCTYPE html><html><head><title>Connexion...</title>
+    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#fff}</style>
+    </head><body>
+      <div style="text-align:center">
+        <div style="font-size:32px;margin-bottom:12px">&#10003;</div>
+        <p style="font-size:15px;font-weight:600">Connexion reussie</p>
+        <p style="font-size:12px;opacity:0.6">Fermeture en cours...</p>
+      </div>
+      <script>
+        const token = ${JSON.stringify(token)};
+        const user  = ${JSON.stringify(userObj)};
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({ type: 'MERCHANT_GOOGLE_AUTH_SUCCESS', token, user }, '*');
+          setTimeout(() => window.close(), 400);
+        } else {
+          localStorage.setItem('ff_token', token);
+          window.location.href = '/';
+        }
+      </script>
+    </body></html>`);
+
+    console.log(`[GOOGLE OAUTH MERCHANT] ${emailLow} connecté`);
+
+  } catch(e) {
+    console.error('[GOOGLE OAUTH MERCHANT]', e.message);
+    res.redirect(`${FRONTEND_URL}?auth_error=${encodeURIComponent(e.message)}`);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  POST /api/auth/onboarding — Complétion obligatoire du profil commerçant
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/onboarding', authMiddleware, async (req, res) => {
+  try {
+    const { firstName, lastName, businessName, phone, address, city, postalCode, country, lat, lng } = req.body;
+    if (!firstName?.trim() || !lastName?.trim() || !businessName?.trim() || !phone?.trim() || !address?.trim() || !city?.trim() || !postalCode?.trim()) {
+      return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE users SET
+         first_name = $1, last_name = $2, business_name = $3,
+         phone = $4, address = $5, city = $6, postal_code = $7,
+         country = COALESCE($8, 'FR'), lat = $9, lng = $10,
+         onboarding_completed = TRUE
+       WHERE id = $11
+       RETURNING id, email, business_name, first_name, last_name, phone, address, city, postal_code, onboarding_completed`,
+      [firstName.trim(), lastName.trim(), businessName.trim(), phone.trim(), address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    const u = rows[0];
+
+    // Mettre à jour le slug si le nom du commerce a changé
+    const baseSlug = businessName.trim()
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 30) || 'mon-commerce';
+    let finalSlug = baseSlug;
+    let attempt = 0;
+    while (true) {
+      const { rows: existing } = await pool.query('SELECT id FROM booking_settings WHERE slug=$1 AND user_id!=$2', [finalSlug, req.user.userId]);
+      if (!existing.length) break;
+      attempt++;
+      finalSlug = `${baseSlug}-${attempt}`;
+    }
+    await pool.query('UPDATE booking_settings SET slug=$1 WHERE user_id=$2', [finalSlug, req.user.userId]);
+
+    // Nouveau token avec le bon businessName
+    const token = jwt.sign(
+      { userId: u.id, email: u.email, businessName: u.business_name },
+      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({
+      ok: true, token,
+      user: {
+        id: u.id, email: u.email, businessName: u.business_name,
+        firstName: u.first_name, lastName: u.last_name,
+        onboardingCompleted: true,
+      }
+    });
+  } catch (e) {
+    console.error('[ONBOARDING]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -462,8 +462,8 @@ router.post('/:slug/book', async (req, res) => {
 
     const { service_id, employee_id, date, start_time,
             client_name, client_email, client_phone, notes, client_token } = req.body;
-    if (!service_id || !date || !start_time || !client_name)
-      return res.status(400).json({ error: 'Données manquantes.' });
+    if (!service_id || !date || !start_time || !client_name || !client_phone)
+      return res.status(400).json({ error: 'Données manquantes (nom et téléphone obligatoires).' });
 
     // Vérif compte obligatoire
     let clientId = null;

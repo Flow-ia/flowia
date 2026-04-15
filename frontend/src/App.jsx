@@ -6,7 +6,7 @@ import { useAdmin } from './hooks/useAdmin';
 import { useTheme, BRAND } from './hooks/useTheme';
 import { useNotifications, playSound } from './hooks/useNotifications';
 import { PinEntry, PinSetup } from './components/PinGate';
-import AuthFlow from './components/AuthFlow';
+import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
@@ -1024,7 +1024,7 @@ function NotificationCenter({ theme }) {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const { user, loading, logout }                                      = useAuth();
+  const { user, loading, logout, login }                                = useAuth();
   const { unlocked, hasPin, checking, changePin, lock, checkSession } = useAdmin();
   const { theme, toggle, isLight }                                     = useTheme();
   const navigate   = useNavigate();
@@ -1172,9 +1172,17 @@ export default function App() {
 
   if (loading || checking) return <Splash theme={theme} />;
 
-  // Authentification requise pour toutes les routes App (sauf /book/:slug géré dans index.jsx)
+  // Authentification requise pour toutes les routes App (sauf /book/:slug gere dans index.jsx)
   if (!user) return <AuthFlow />;
-  if (dataLoading) return <Splash text="Chargement…" theme={theme} />;
+
+  // Onboarding obligatoire : si le commercant n'a pas complete son profil (inscription Google)
+  if (user.onboardingCompleted === false) {
+    return <MerchantOnboarding user={user} onComplete={(token, userData) => {
+      login(token, userData);
+    }} />;
+  }
+
+  if (dataLoading) return <Splash text="Chargement..." theme={theme} />;
 
   const isDark = theme.mode === 'dark';
 

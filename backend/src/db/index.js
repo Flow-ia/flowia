@@ -816,6 +816,14 @@ async function initDB() {
   await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ`);
 
+  // ── Google OAuth commerçant + onboarding obligatoire ─────────────────────────
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE`);
+  // Les comptes existants ont TRUE par défaut ; seuls les nouveaux comptes Google auront FALSE
+
 console.log('[DB] Tables initialisées');
 }
 

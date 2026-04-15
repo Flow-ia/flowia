@@ -54,6 +54,13 @@ export const api = {
   me:                 ()  => request('/auth/me'),
   changePassword:     (b) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(b) }),
   updateProfile:      (b) => request('/auth/profile',         { method: 'PUT',  body: JSON.stringify(b) }),
+  completeOnboarding: (b) => request('/auth/onboarding',      { method: 'POST', body: JSON.stringify(b) }),
+  merchantGoogleAuthUrl: () => {
+    const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
+    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '617078873498-8ld0i31lskvpfjnhmbddjb7ti8rli98q.apps.googleusercontent.com';
+    const redirectUri = `${BACKEND || window.location.origin}/api/auth/merchant/google/callback`;
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('openid email profile')}&access_type=offline&prompt=consent&state=merchant`;
+  },
 
   // ── PIN Admin — vérification via BDD (jamais en local) ──────────────────
   // Statut : le compte a-t-il un PIN en base ?
