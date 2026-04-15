@@ -88,9 +88,34 @@ function startServer() {
   app.use(express.json({ limit: '2mb' }));
 
   // ── Rate limiting ────────────────────────────────────────────────────────
+  // Auth général (forgot, pin, etc.)
   const authLimiter = rateLimit({
     windowMs: 2 * 60 * 1000, max: 20,
     message: { error: 'Trop de tentatives, réessayez dans 2 minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
+  // Register : 5 inscriptions max par IP par 10 minutes (anti-spam)
+  const registerLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, max: 5,
+    message: { error: 'Trop de tentatives d\'inscription, réessayez dans 10 minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
+  // Login : 10 tentatives par IP par 5 minutes (anti-brute force)
+  const loginLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, max: 10,
+    message: { error: 'Trop de tentatives de connexion, réessayez dans 5 minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
+  // Notifications : moins fréquent
+  const notifLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, max: 60,
+    message: { error: 'Trop de requêtes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
+  // Stats : cache fort, limite basse
+  const statsLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, max: 60,
+    message: { error: 'Trop de requêtes stats.' },
     standardHeaders: true, legacyHeaders: false,
   });
   const apiLimiter = rateLimit({
@@ -105,7 +130,11 @@ function startServer() {
   });
 
   // ── Routes ───────────────────────────────────────────────────────────────
-  app.use('/api/auth',           authLimiter, require('./routes/auth'));
+  // Routes auth avec limiters spécifiques par endpoint
+  const authRouter = require('./routes/auth');
+  app.use('/api/auth/register', registerLimiter);
+  app.use('/api/auth/login',    loginLimiter);
+  app.use('/api/auth',          authLimiter, authRouter);
   app.use('/api/pub',            pubLimiter,  require('./routes/public-booking'));
   app.use('/api/categories',     apiLimiter,  require('./routes/categories'));
   app.use('/api/employees',      apiLimiter,  require('./routes/employees'));
@@ -113,7 +142,7 @@ function startServer() {
   app.use('/api/booking/service-categories', apiLimiter, require('./routes/booking-service-categories'));
   app.use('/api/media',          apiLimiter,  require('./routes/media'));
   app.use('/api/booking',        apiLimiter,  require('./routes/booking'));
-  app.use('/api/stats',          apiLimiter,  require('./routes/stats'));
+  app.use('/api/stats',          statsLimiter, require('./routes/stats'));
   app.use('/api/absences',       apiLimiter,  require('./routes/absences'));
   app.use('/api/commissions',    apiLimiter,  require('./routes/commissions'));
   app.use('/api/loyalty',        apiLimiter,  require('./routes/loyalty').router);
@@ -127,7 +156,7 @@ function startServer() {
 
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
     require('./routes/notifications');
-  app.use('/api/notifications',  apiLimiter,  notifRouter);
+  app.use('/api/notifications',  notifLimiter, notifRouter);
 
   // ── Health ───────────────────────────────────────────────────────────────
   app.get('/api/health', (req, res) => {

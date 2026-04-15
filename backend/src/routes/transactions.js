@@ -27,12 +27,28 @@ async function audit(userId, txId, action, before, after, reason) {
   );
 }
 
-// ── GET / ─────────────────────────────────────────────────────────────────────
+// ── GET / — supporte ?from=&to=&limit=&offset= ───────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const _tk = 'txs:' + req.user.userId;
-    const _th = global.memCache?.get(_tk);
-    if (_th) return res.json(_th);
+    const { from, to, limit = 500, offset = 0 } = req.query;
+    const userId = req.user.userId;
+
+    // Cache uniquement si pas de filtre (chargement initial)
+    const noFilter = !from && !to && parseInt(offset) === 0;
+    const _tk = `txs:${userId}`;
+    if (noFilter) {
+      const _th = global.memCache?.get(_tk);
+      if (_th) return res.json(_th);
+    }
+
+    const params  = [userId];
+    const filters = ['t.user_id=$1'];
+
+    if (from) { params.push(from); filters.push(`t.date >= $${params.length}`); }
+    if (to)   { params.push(to);   filters.push(`t.date <= $${params.length}`); }
+
+    params.push(parseInt(limit));
+    params.push(parseInt(offset));
 
     const { rows } = await pool.query(
       `SELECT t.id, t.user_id, t.type, t.amount, t.description,
@@ -46,11 +62,13 @@ router.get('/', async (req, res) => {
        FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id
        LEFT JOIN employees e ON t.employee_id = e.id
-       WHERE t.user_id=$1
-       ORDER BY t.date DESC, t.time DESC NULLS LAST, t.created_at DESC`,
-      [req.user.userId]
+       WHERE ${filters.join(' AND ')}
+       ORDER BY t.date DESC, t.time DESC NULLS LAST, t.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
     );
-    global.memCache?.set(_tk, rows, 30 * 1000);
+
+    if (noFilter) global.memCache?.set(_tk, rows, 30 * 1000);
     res.json(rows);
   } catch(e) { console.error('[TX GET]', e.message); res.status(500).json({ error: e.message }); }
 });

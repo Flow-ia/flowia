@@ -196,4 +196,69 @@ router.get('/heatmap', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── GET /api/stats/today — Stats du jour (employés + admin) ──────────────────
+// Données légères : CA du jour, nb transactions, top catégorie
+router.get('/today', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const today  = new Date().toISOString().split('T')[0];
+    const _k     = `stats:today:${userId}:${today}`;
+    const _h     = global.memCache?.get(_k);
+    if (_h) return res.json(_h);
+
+    // CA + nb transactions du jour
+    const { rows: summary } = await pool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN type='revenue' THEN amount ELSE 0 END), 0) AS ca_today,
+        COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0) AS expenses_today,
+        COUNT(CASE WHEN type='revenue' THEN 1 END)                        AS tx_count,
+        COUNT(CASE WHEN type='revenue' AND employee_id IS NOT NULL THEN 1 END) AS with_employee
+      FROM transactions
+      WHERE user_id=$1 AND date=$2
+    `, [userId, today]);
+
+    // Top employé du jour
+    const { rows: topEmp } = await pool.query(`
+      SELECT e.name, e.avatar_color,
+             SUM(t.amount) AS ca,
+             COUNT(t.id)   AS nb
+      FROM transactions t
+      JOIN employees e ON e.id = t.employee_id
+      WHERE t.user_id=$1 AND t.date=$2 AND t.type='revenue'
+      GROUP BY e.id, e.name, e.avatar_color
+      ORDER BY SUM(t.amount) DESC
+      LIMIT 1
+    `, [userId, today]);
+
+    // RDV du jour
+    const { rows: appts } = await pool.query(`
+      SELECT COUNT(*) AS total,
+             COUNT(CASE WHEN status='confirmed' THEN 1 END) AS confirmed,
+             COUNT(CASE WHEN status='cancelled' THEN 1 END) AS cancelled
+      FROM appointments
+      WHERE user_id=$1 AND date=$2
+    `, [userId, today]);
+
+    const result = {
+      date:     today,
+      ca_today: parseFloat(summary[0].ca_today),
+      expenses_today: parseFloat(summary[0].expenses_today),
+      tx_count: parseInt(summary[0].tx_count),
+      top_employee: topEmp[0] || null,
+      appointments: {
+        total:     parseInt(appts[0].total),
+        confirmed: parseInt(appts[0].confirmed),
+        cancelled: parseInt(appts[0].cancelled),
+      },
+    };
+
+    global.memCache?.set(_k, result, 60 * 1000); // cache 1 min
+    res.json(result);
+  } catch(e) {
+    console.error('[STATS TODAY]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

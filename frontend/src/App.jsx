@@ -1105,8 +1105,14 @@ export default function App() {
     if (!user) return;
     checkSession();
     setDl(true);
-    Promise.all([api.getCategories(), api.getEmployees(), api.getTransactions()])
-      .then(([cats, emps, txs]) => { setCats(cats); setEmps(emps); setTxs(txs); })
+    // Charger les transactions des 3 derniers mois seulement (optimisation)
+    const _from = new Date(); _from.setMonth(_from.getMonth() - 3);
+    const _fromStr = _from.toISOString().split('T')[0];
+    Promise.all([
+      api.getCategories(),
+      api.getEmployees(),
+      api.getTransactions({ from: _fromStr }),
+    ]).then(([cats, emps, txs]) => { setCats(cats); setEmps(emps); setTxs(txs); })
       .catch(console.error)
       .finally(() => setDl(false));
   }, [user]);

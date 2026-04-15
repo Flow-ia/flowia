@@ -106,7 +106,7 @@ export const api = {
   checkEmployeePinSession:   (empId, b)   => request(`/employee-pins/${empId}/check-session`,  { method: 'POST',   body: JSON.stringify(b) }),
 
   // ── Transactions ──────────────────────────────────────────────────────────
-  getTransactions:    ()       => request('/transactions'),
+  getTransactions:    (q)      => request('/transactions' + (q ? '?' + new URLSearchParams(q) : '')),
   createTransaction:  (b)      => request('/transactions',        { method: 'POST',   body: JSON.stringify(b) }),
   updateTransaction:  (id, b)  => adminRequest(`/transactions/${id}`,  { method: 'PUT',    body: JSON.stringify(b) }),
   deleteTransaction:  (id)     => adminRequest(`/transactions/${id}`,  { method: 'DELETE' }),
@@ -320,6 +320,7 @@ export const statsApi = {
   getProductStats: (q) => request('/stats/products' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
   getForecast:     (q) => request('/stats/forecast?' + new URLSearchParams(q||{})),
   getHeatmap:      (q) => request('/stats/heatmap?' + new URLSearchParams(q||{})),
+  getToday:        ()  => request('/stats/today'),
 };
 
 export const clientNotesApi = {
