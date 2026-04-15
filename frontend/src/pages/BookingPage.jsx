@@ -1821,7 +1821,9 @@ export default function BookingPage({ slug }) {
   useEffect(() => {
     const path = location.pathname;
     const hash = location.hash; // ex: #equipe, #adresse, #commentaires, #prestations
-    if (path.includes('/client/profil')) {
+    if (path.endsWith('/auth')) {
+      setShowAuthPanel(true);
+    } else if (path.includes('/client/profil')) {
       setView('myAppts');
       setMyApptsInitTab('profile');
     } else if (path.includes('/client/rdv')) {
@@ -2329,7 +2331,7 @@ export default function BookingPage({ slug }) {
 
       {/* ══ NAVBAR — composant partagé ══ */}
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
-        onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
+        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); }}
         onMyAppts={()=>setView('myAppts')}
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
@@ -2347,7 +2349,7 @@ export default function BookingPage({ slug }) {
               <AuthPanel slug={slug} th={th} requireAccount={requireAccount}
                 initialEmail={authInitEmail}
                 onAuth={u => { handleAuth(u); setAuthInitEmail(''); }}
-                onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); }} />
+                onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); navigate(`/book/${slug}`, {replace:true}); }} />
             </div>
           )}
 

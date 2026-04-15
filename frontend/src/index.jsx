@@ -38,6 +38,7 @@ root.render(
               <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date"                                     element={<BookingPageWrapper />} />
               <Route path="/book/:slug/employe/:employeeId"                                                          element={<BookingPageWrapper />} />
               <Route path="/book/:slug/service/:serviceId/employe"                                                      element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/auth"                                                                                    element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/profil"                                                                        element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/rdv"                                                                           element={<BookingPageWrapper />} />
               <Route path="/book/:slug"                                                                                  element={<BookingPageWrapper />} />
