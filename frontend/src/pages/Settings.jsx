@@ -2897,15 +2897,17 @@ function TabProfil({ theme, showToast }) {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
+  const userId = user?.userId;
+
   const load = useCallback(async () => {
-    if (!user?.userId) return;
+    if (!userId) return;
     setLoading(true);
     try {
-      const m = await mediaApi.getMeta(user.userId);
+      const m = await mediaApi.getMeta(userId);
       setMeta(m);
     } catch { /* pas d'images → meta null */ }
     finally { setLoading(false); }
-  }, [user]);
+  }, [userId]); // userId (string) stable → pas de boucle infinie
 
   useEffect(() => { load(); }, [load]);
 

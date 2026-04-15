@@ -128,7 +128,7 @@ router.post('/resend-code', async (req, res) => {
     const key = `reg_${email.toLowerCase()}`;
     const rec = await getCode(key);
     if (!rec) return res.status(404).json({
-      error: 'Session expirée. Veuillez recommencer l'inscription.',
+      error: "Session expirée. Veuillez recommencer l'inscription.",
       code: 'SESSION_EXPIRED',
     });
 
