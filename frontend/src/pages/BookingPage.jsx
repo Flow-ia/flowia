@@ -1779,14 +1779,6 @@ export default function BookingPage({ slug }) {
     localStorage.setItem('ff_booking_theme', next);
   };
 
-  // Auto-avancer à l'étape 6 si client déjà connecté quand il arrive à étape 5
-  useEffect(() => {
-    if (step === 5 && clientUser) {
-      // Client déjà authentifié → pas besoin de l'étape 5, aller directement à 6
-      goToStep(6);
-    }
-  }, [step, clientUser]);
-
   // Synchroniser le fond du body avec le thème
   useEffect(() => {
     document.body.style.background = th.bg;
@@ -2044,10 +2036,9 @@ export default function BookingPage({ slug }) {
     setCP(client.phone || '');
     setShowAuthPanel(false);
     setInlineAuthMode('none');
-    // Si connecté à l'étape 5 (informations), avancer automatiquement à 6 (confirmation)
-    // Évite la boucle : connecté → retour formulaire sans compte → re-demande connexion
+    // Si connecté à l'étape 5 → avancer directement à 6 (évite la boucle)
     if (step === 5) {
-      setTimeout(() => goToStep(6), 50);
+      setTimeout(() => setStep(6), 50);
     }
   };
 
