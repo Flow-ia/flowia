@@ -6103,7 +6103,7 @@ function TabAccount({ showToast, theme, onLock }) {
         </div>
         <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
           {[
-            ['✅ Consentement', 'Enregistré à l'inscription avec horodatage et IP'],
+            ['✅ Consentement', "Enregistré à l'inscription avec horodatage et IP"],
             ['📦 Portabilité', 'Vos clients peuvent exporter leurs données depuis leur profil'],
             ['🗑 Effacement', 'Suppression en cascade disponible depuis le profil client'],
             ['🔐 Sécurité', 'Mots de passe hashés bcrypt, communications TLS'],
