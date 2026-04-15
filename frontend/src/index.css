@@ -20,11 +20,11 @@ body {
   background: #f8f9fc;
   color: #111827;
   overscroll-behavior: none;
+  scrollbar-width: none;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { display: none; }
-scrollbar-width: none;
 
 /* Animations */
 @keyframes spin    { to { transform: rotate(360deg); } }
