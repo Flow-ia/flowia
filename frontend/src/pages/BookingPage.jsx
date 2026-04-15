@@ -2045,7 +2045,9 @@ export default function BookingPage({ slug }) {
   const handleBook = async () => {
     // Si compte requis et pas encore connecté → ouvrir auth + mémoriser qu'on voulait réserver
     const localToken = localStorage.getItem('ff_client_token');
-    if (!clientUser && !localToken) { setShowAuthPanel(true); setPendingBook(true); return; }
+    if (requireAccount && !clientUser && !localToken) { setShowAuthPanel(true); setPendingBook(true); return; }
+    // Sans compte requis : permettre la réservation si les champs obligatoires sont remplis
+    if (!requireAccount && !clientUser && !localToken && (!clientName.trim() || !clientPhone.trim())) { setBookErr('Nom et téléphone obligatoires.'); return; }
     setBooking(true); setBookErr('');
     try {
       // ── Re-vérification du code promo au moment de la confirmation ──────────
@@ -2092,7 +2094,7 @@ export default function BookingPage({ slug }) {
       setBooked(result);
       setView('success');
     } catch (e) {
-      if (e.message?.includes('compte')) { setShowAuthPanel(true); setPendingBook(true); }
+      if (requireAccount && e.message?.includes('compte')) { setShowAuthPanel(true); setPendingBook(true); }
       else if (e.message?.includes('n\'accepte plus') || e.message?.includes('bloque')) { setIsBlocked(true); }
       else setBookErr(e.message);
     }
@@ -2330,7 +2332,7 @@ export default function BookingPage({ slug }) {
         onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
         onMyAppts={()=>setView('myAppts')}
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
-        onNavigateHome={(id)=>{ setView('booking'); goToStep(1); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
+        onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 
       {/* ══ CORPS 2 COLONNES ══ */}
       <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 16px 80px',
@@ -3029,20 +3031,6 @@ export default function BookingPage({ slug }) {
                         /* ── AuthPanel INLINE — login ou register directement ── */
                         /* requireAccount=true → TOUJOURS ici, pas de formulaire sans compte */
                         <div>
-                          {requireAccount && (
-                            <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',
-                              borderRadius:10,background:'rgba(245,158,11,0.07)',
-                              border:'1px solid rgba(245,158,11,0.2)',marginBottom:16}}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"
-                                style={{width:15,height:15,flexShrink:0}}>
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                              </svg>
-                              <p style={{margin:0,fontSize:12,fontWeight:700,color:'#d97706'}}>
-                                Un compte est requis pour réserver
-                              </p>
-                            </div>
-                          )}
                           <AuthPanel
                             slug={slug} th={th}
                             requireAccount={requireAccount}
