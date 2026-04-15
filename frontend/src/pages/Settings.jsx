@@ -4877,11 +4877,11 @@ function TabRGPD({ showToast, theme }) {
 
   const RIGHTS = [
     ['📋 Art. 13 — Information', 'Les clients sont informés de la collecte lors de leur inscription via une case à cocher obligatoire.'],
-    ['✅ Art. 6 — Licéité', 'Traitement basé sur le consentement explicite (réservations) et l'exécution du contrat.'],
+    ['✅ Art. 6 — Licéité', "Traitement basé sur le consentement explicite (réservations) et l'exécution du contrat."],
     ['🗑 Art. 17 — Effacement', 'Les clients peuvent supprimer leur compte depuis leur profil. Suppression en cascade de toutes les données personnelles.'],
-    ['📦 Art. 20 — Portabilité', 'Les clients peuvent exporter leurs données en JSON depuis leur profil (compte, RDV, fidélité).'],
-    ['🔐 Art. 32 — Sécurité', 'Mots de passe hashés bcrypt, communications TLS, accès par JWT, audit trail sur les transactions.'],
-    ['⏱ Art. 5 — Conservation', 'Données personnelles conservées le temps de l'inscription. Historiques comptables anonymisés.'],
+    ['📦 Art. 20 — Portabilité', "Les clients peuvent exporter leurs données en JSON depuis leur profil (compte, RDV, fidélité)."],
+    ['🔐 Art. 32 — Sécurité', "Mots de passe hashés bcrypt, communications TLS, accès par JWT, audit trail sur les transactions."],
+    ['⏱ Art. 5 — Conservation', "Données personnelles conservées le temps de l'inscription. Historiques comptables anonymisés."],
   ];
 
   return (
