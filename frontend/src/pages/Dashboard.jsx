@@ -11,7 +11,7 @@ const fmt  = n => Number(n || 0).toFixed(2);
 
 const PM_CFG = {
   cash:     { label: 'Especes',  color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-  card:     { label: 'Carte',    color: '#111827', bg: 'rgba(17,24,39,0.1)' },
+  card:     { label: 'Carte',    color: '#6366f1', bg: 'rgba(99,102,241,0.1)' },
   transfer: { label: 'Virement', color: '#374151', bg: 'rgba(6,182,212,0.1)'  },
   other:    { label: 'Autre',    color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
 };
@@ -81,7 +81,7 @@ function PinDots({ count, shake, theme }) {
       {[0,1,2,3].map(i => (
         <div key={i} style={{ transition:'all 0.2s',
           width:13, height:13, borderRadius:'50%',
-          background: i < count ? '#111827' : 'transparent',
+          background: i < count ? (isDark?'#e6edf3':'#111827') : 'transparent',
           border: i < count ? 'none' : `2px solid ${isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)'}`,
           transform: i < count ? 'scale(1.2)' : 'scale(1)',
           boxShadow: i < count ? '0 0 8px rgba(17,24,39,0.6)' : 'none' }}/>
@@ -243,7 +243,7 @@ function StatsAccessModal({ open, onClose, onSuccess, employees, theme }) {
               <p style={{ fontWeight:800,fontSize:15,color:theme.text,margin:0 }}>{selEmp.name}</p>
               <p style={{ fontSize:12,marginTop:5,padding:'3px 12px',borderRadius:99,
                 background:isDark?'rgba(17,24,39,0.12)':'rgba(17,24,39,0.08)',
-                color:'#111827',border:'1px solid rgba(17,24,39,0.2)' }}>
+                color:isDark?'#e6edf3':'#111827',border:`1px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(17,24,39,0.2)'}` }}>
                 Voir les stats du jour
               </p>
             </div>
@@ -332,7 +332,7 @@ function NotifModal({ open, onClose, theme }) {
           </div>
           <div style={{ flex:1,minWidth:0 }}>
             <div style={{ display:'flex',alignItems:'center',gap:6,marginBottom:2 }}>
-              {!n.is_read&&<span style={{ width:6,height:6,borderRadius:'50%',background:'#111827',flexShrink:0 }}/>}
+              {!n.is_read&&<span style={{ width:6,height:6,borderRadius:'50%',background:isDark?'#e6edf3':'#111827',flexShrink:0 }}/>}
               <p style={{ fontWeight:n.is_read?600:800,fontSize:13,color:isDark?'#f1f5f9':'#1e293b',
                 margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{n.title}</p>
             </div>
@@ -404,7 +404,7 @@ function StatsModal({ open, onClose, theme, transactions, employees, categories 
       <div style={{ padding:'12px 0 24px' }}>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,padding:'0 16px',marginBottom:20 }}>
           {[
-            {label:'CA total',     value:`${fmtN(dayRev)} €`,color:'#111827'},
+            {label:'CA total',     value:`${fmtN(dayRev)} €`,color:isDark?'#e6edf3':'#111827'},
             {label:'Prestations',  value:prestCount,          color:'#374151'},
             {label:'Depenses',     value:`${fmtN(dayExp)} €`,color:'#ef4444'},
             {label:'Transactions', value:todayAll.length,     color:'#f59e0b'},
@@ -463,7 +463,7 @@ function StatsModal({ open, onClose, theme, transactions, employees, categories 
               <p style={{ fontWeight:700,fontSize:13,color:isDark?'#f1f5f9':'#1e293b',margin:0 }}>{emp.name}</p>
               <p style={{ fontSize:11,color:isDark?'#64748b':'#94a3b8',margin:0 }}>{emp.count} prestation{emp.count>1?'s':''}</p>
             </div>
-            <span style={{ fontWeight:800,fontSize:14,color:'#111827',fontFamily:'monospace' }}>{fmtN(emp.ca)} €</span>
+            <span style={{ fontWeight:800,fontSize:14,color:isDark?'#e6edf3':'#111827',fontFamily:'monospace' }}>{fmtN(emp.ca)} €</span>
           </div>
         )))}
         
@@ -500,7 +500,7 @@ function TileAgenda({ theme, onClick, upcomingCount }) {
         transform:hov?'translateY(-3px)':'none' })}>
       {upcomingCount>0&&(
         <div style={{ position:'absolute',top:-10,left:14,
-          background:'#111827',color:'white',
+          background:isDark?'#e6edf3':'#111827',color:isDark?'#111827':'white',
           fontWeight:900,fontSize:10,borderRadius:99,padding:'3px 9px',
           boxShadow:'0 3px 12px rgba(17,24,39,0.4)',
           border:'2px solid '+(isDark?'#0d1117':'#fff'),whiteSpace:'nowrap' }}>

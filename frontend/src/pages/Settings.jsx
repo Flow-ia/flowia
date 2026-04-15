@@ -189,7 +189,7 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
               {employees.map(e => (
                 <button key={e.id} onClick={() => setSel(e.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all"
-                  style={{ background: selEmp===e.id ? 'rgba(17,24,39,0.15)' : 'transparent', borderColor: selEmp===e.id ? '#111827' : theme.border, color: selEmp===e.id ? '#a5a0ff' : theme.muted }}>
+                  style={{ background: selEmp===e.id ? (isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.15)') : 'transparent', borderColor: selEmp===e.id ? '#111827' : theme.border, color: selEmp===e.id ? '#a5a0ff' : theme.muted }}>
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: e.avatar_color || '#111827' }} />
                   {e.name}
                 </button>
@@ -617,7 +617,7 @@ function TabEmployeesMain({ employees, transactions, onAdd, onUpd, onDel, showTo
               style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
                 padding:'9px 8px', borderRadius:12, border:'none', cursor:'pointer', transition:'all .15s',
                 background: active ? (isDark ? 'rgba(17,24,39,0.25)' : '#fff') : 'transparent',
-                color: active ? '#111827' : theme.muted,
+                color: active ? (isDark?'#e6edf3':'#111827') : theme.muted,
                 fontWeight: active ? 800 : 600, fontSize:13,
                 boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none' }}>
               <Ic style={{ width:15, height:15 }} />
@@ -815,7 +815,7 @@ function TeamTab({ employees, businessHours, bizBreaks, showToast, theme: t }) {
               <div className="p-4 space-y-4" style={{ borderTop:`1px solid ${t.border}` }}>
                 {loading[emp.id] ? (
                   <div className="flex justify-center py-6">
-                    <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor:'rgba(17,24,39,0.2)', borderTopColor:'#111827' }} />
+                    <div className="w-7 h-7 rounded-full border-2 animate-spin" style={{ borderColor:isDark?'rgba(255,255,255,0.15)':'rgba(17,24,39,0.2)', borderTopColor:isDark?'#e6edf3':'#111827' }} />
                   </div>
                 ) : (
                   <>
@@ -866,7 +866,7 @@ function TeamTab({ employees, businessHours, bizBreaks, showToast, theme: t }) {
                                 </div>
                                 {bizOpen && (
                                   <button onClick={()=>addSlot(emp.id, dayIdx)}
-                                    style={{ fontSize:11, color:'#111827', background:'rgba(17,24,39,0.1)',
+                                    style={{ fontSize:11, color:isDark?'#e6edf3':'#111827', background:isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.1)',
                                              border:'none', borderRadius:8, padding:'3px 8px', cursor:'pointer', fontWeight:700 }}>
                                     + Plage
                                   </button>
@@ -928,7 +928,7 @@ function TeamTab({ employees, businessHours, bizBreaks, showToast, theme: t }) {
 
                     <button onClick={()=>save(emp.id)} disabled={saving}
                       className="w-full py-3.5 rounded-2xl font-bold text-white text-sm disabled:opacity-40"
-                      style={{ background:'#111827' }}>
+                      style={{ background: isDark?'#e6edf3':'#111827', color: isDark?'#111827':'white' }}>
                       {saving ? 'Enregistrement...' : `Sauvegarder - ${emp.name}`}
                     </button>
                   </>
@@ -1062,7 +1062,7 @@ function EmployeePinManager({ emp, onClose, showToast, theme }) {
       {[0,1,2,3].map(i => (
         <div key={i} style={{
           width:12, height:12, borderRadius:'50%',
-          background: i<count ? '#111827' : 'transparent',
+          background: i<count ? (isDark?'#e6edf3':'#111827') : 'transparent',
           border: i<count ? 'none' : `2px solid ${isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)'}`,
           transform: i<count?'scale(1.2)':'scale(1)',
           transition: 'all 0.15s',
@@ -1130,7 +1130,7 @@ function EmployeePinManager({ emp, onClose, showToast, theme }) {
             {/* Bouton créer / modifier PIN */}
             <button onClick={() => { setStep('set_pin'); setPin1(''); setPin2(''); setNewPin(''); setErr(''); }}
               className="w-full py-3.5 rounded-2xl font-semibold text-white text-sm flex items-center justify-center gap-2"
-              style={{ background: '#111827', boxShadow:'0 6px 20px rgba(17,24,39,0.3)' }}>
+              style={{ background: isDark?'#e6edf3':'#111827', color:isDark?'#111827':'white', boxShadow:'0 6px 20px rgba(17,24,39,0.3)' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
                 <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
               </svg>
@@ -1250,7 +1250,7 @@ function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, showToast,
     <div className="space-y-3">
       <button onClick={() => setForm({ open: true, init: null })}
         className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-        style={{ background: '#111827' }}>
+        style={{ background: isDark?'#e6edf3':'#111827', color: isDark?'#111827':'white' }}>
         <I.Plus className="w-5 h-5" /> Ajouter un employé
       </button>
 
@@ -1466,7 +1466,7 @@ function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, showToast,
               {smartDelLoading && !smartDelResult && (
                 <div className="flex flex-col items-center gap-3 py-8">
                   <div className="w-8 h-8 rounded-full border-2 animate-spin"
-                    style={{ borderColor: 'rgba(17,24,39,0.2)', borderTopColor: '#111827' }} />
+                    style={{ borderColor:isDark?'rgba(255,255,255,0.15)':'rgba(17,24,39,0.2)', borderTopColor:isDark?'#e6edf3':'#111827' }} />
                   <p className="text-sm" style={{ color: theme.muted }}>Analyse des rendez-vous…</p>
                 </div>
               )}
@@ -1517,7 +1517,7 @@ function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, showToast,
                   )}
                   <button onClick={() => { setSmartDelModal(null); setFutureAppts([]); setSmartDelResult(null); }}
                     className="w-full py-3 rounded-2xl font-bold text-white"
-                    style={{ background: '#111827' }}>
+                    style={{ background: isDark?'#e6edf3':'#111827', color: isDark?'#111827':'white' }}>
                     Fermer
                   </button>
                 </div>
@@ -1700,7 +1700,7 @@ function TabAbsences({ employees, theme }) {
 
       {loading ? (
         <div style={{ padding:40, textAlign:'center' }}>
-          <div style={{ width:28,height:28,borderRadius:99,border:'2px solid rgba(17,24,39,0.2)',borderTopColor:'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/>
+          <div style={{ width:28,height:28,borderRadius:99,border:`2px solid ${isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.2)'}`,borderTopColor:isDark?'#e6edf3':'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/>
         </div>
       ) : absences.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:theme.muted, fontSize:14 }}>
@@ -1717,7 +1717,7 @@ function TabAbsences({ employees, theme }) {
                 <div style={{ width:40, height:40, borderRadius:10, flexShrink:0,
                   background:`${emp?.avatar_color||'#111827'}18`,
                   display:'flex', alignItems:'center', justifyContent:'center',
-                  fontWeight:800, fontSize:15, color:emp?.avatar_color||'#111827' }}>
+                  fontWeight:800, fontSize:15, color:emp?.avatar_color||(isDark?'#e6edf3':'#111827') }}>
                   {emp?.name?.charAt(0)||'?'}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
@@ -1813,7 +1813,7 @@ function TabCommissions({ employees, theme }) {
                   onBlur={ev=>saveRate(e.id, ev.target.value)}
                   style={{...inp, width:64, textAlign:'center'}}/>
                 <span style={{ fontSize:13, color:theme.muted }}>%</span>
-                {saving[e.id] && <div style={{ width:14,height:14,borderRadius:99,border:'2px solid rgba(17,24,39,0.2)',borderTopColor:'#111827',animation:'spin .7s linear infinite' }}/>}
+                {saving[e.id] && <div style={{ width:14,height:14,borderRadius:99,border:`2px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(17,24,39,0.2)'}`,borderTopColor:isDark?'#e6edf3':'#111827',animation:'spin .7s linear infinite' }}/>}
               </div>
             </div>
           ))}
@@ -1835,7 +1835,7 @@ function TabCommissions({ employees, theme }) {
       {/* Résultats */}
       {loading ? (
         <div style={{ padding:40, textAlign:'center' }}>
-          <div style={{ width:28,height:28,borderRadius:99,border:'2px solid rgba(17,24,39,0.2)',borderTopColor:'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/>
+          <div style={{ width:28,height:28,borderRadius:99,border:`2px solid ${isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.2)'}`,borderTopColor:isDark?'#e6edf3':'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/>
         </div>
       ) : data?.employees?.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:theme.muted, fontSize:14 }}>
@@ -1864,7 +1864,7 @@ function TabCommissions({ employees, theme }) {
                   CA : {fmt(e.total_revenue)} € · Taux : {e.commission_pct||0} %
                 </p>
               </div>
-              <p style={{ fontSize:16, fontWeight:900, color:'#111827', margin:0, fontFamily:'monospace' }}>
+              <p style={{ fontSize:16, fontWeight:900, color:isDark?'#e6edf3':'#111827', margin:0, fontFamily:'monospace' }}>
                 {fmt(e.commission_due)} €
               </p>
             </div>
@@ -1907,7 +1907,7 @@ function TabCategories({ categories, transactions, onAdd, onUpd, onDel, onReorde
               style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
                 padding:'9px 8px', borderRadius:12, border:'none', cursor:'pointer', transition:'all .15s',
                 background: active ? (isDark ? 'rgba(17,24,39,0.25)' : '#fff') : 'transparent',
-                color: active ? '#111827' : theme.muted,
+                color: active ? (isDark?'#e6edf3':'#111827') : theme.muted,
                 fontWeight: active ? 800 : 600, fontSize:13,
                 boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none' }}>
               <Ic style={{ width:15, height:15 }} />
@@ -3080,7 +3080,7 @@ function TabMarketing({ theme, showToast }) {
               style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
                 padding:'9px 8px', borderRadius:12, border:'none', cursor:'pointer', transition:'all .15s',
                 background: active ? (isDark ? 'rgba(17,24,39,0.25)' : '#fff') : 'transparent',
-                color: active ? '#111827' : theme.muted,
+                color: active ? (isDark?'#e6edf3':'#111827') : theme.muted,
                 fontWeight: active ? 800 : 600, fontSize:13,
                 boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none' }}>
               <Ic style={{ width:15, height:15 }} />
@@ -5058,7 +5058,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
     { id: 'forecast',     label: 'Previsions', icon: I.TrendUp },
     { id: 'heatmap',      label: 'Heures',     icon: I.Flame },
     { id: 'account',      label: 'Compte',     icon: I.User },
-    { id: 'rgpd',         label: 'RGPD',       icon: I.Shield },
+    { id: 'rgpd',         label: 'RGPD',       icon: I.Lock },
   ];
 
   return (
@@ -5235,7 +5235,7 @@ function TabNotifications({ theme, showToast }) {
     background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.05)',
     border:`1px solid ${theme.border}`, color:theme.text, fontSize:13, fontFamily:'inherit' };
 
-  if (loading) return <div style={{ padding:48, textAlign:'center' }}><div style={{ width:28,height:28,borderRadius:99,border:'2px solid rgba(17,24,39,0.2)',borderTopColor:'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/></div>;
+  if (loading) return <div style={{ padding:48, textAlign:'center' }}><div style={{ width:28,height:28,borderRadius:99,border:`2px solid ${isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.2)'}`,borderTopColor:isDark?'#e6edf3':'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/></div>;
   if (!cfg) return null;
 
   return (
@@ -5688,7 +5688,7 @@ function TabProductStats({ employees, theme }) {
 
       {loading ? (
         <div style={{ padding:48, textAlign:'center' }}>
-          <div style={{ width:28,height:28,borderRadius:99,border:'2px solid rgba(17,24,39,0.2)',borderTopColor:'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/>
+          <div style={{ width:28,height:28,borderRadius:99,border:`2px solid ${isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.2)'}`,borderTopColor:isDark?'#e6edf3':'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/>
         </div>
       ) : !data ? (
         <div style={{ padding:48, textAlign:'center', color:theme.muted }}>Aucune donnée</div>

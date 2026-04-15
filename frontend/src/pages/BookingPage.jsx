@@ -66,7 +66,7 @@ function NavBar({ th, slug, business, clientUser, onToggleTheme, onShowAuth, onM
           style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0,
             background:'none', border:'none', cursor:'pointer', padding:0 }}>
           <div style={{ width:36, height:36, borderRadius:8, overflow:'hidden', flexShrink:0,
-            background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
             {business?.profile_url
               ? <img src={business.profile_url} alt={business.business_name}
                   style={{ width:'100%', height:'100%', objectFit:'cover' }}
@@ -1736,6 +1736,16 @@ export default function BookingPage({ slug }) {
     localStorage.setItem('ff_booking_theme', next);
   };
 
+  // Synchroniser le fond du body avec le thème
+  useEffect(() => {
+    document.body.style.background = th.bg;
+    document.documentElement.style.background = th.bg;
+    return () => {
+      document.body.style.background = '';
+      document.documentElement.style.background = '';
+    };
+  }, [th.bg]);
+
   // ── Routing — synchronisation URL ↔ état réservation ──────────────────
   const navigate  = useNavigate();
   const location  = useLocation();
@@ -2242,6 +2252,7 @@ export default function BookingPage({ slug }) {
         *{ box-sizing:border-box }
         @media(min-width:768px){ .bk-mo{ display:none!important } }
         @media(max-width:767px){ .bk-do{ display:none!important } .bk-2c{ flex-direction:column!important } .bk-sb{ order:-1!important } }
+        @media(max-width:480px){ .bk-steps{ padding:0 4px!important } }
       `}</style>
 
       {/* ══ NAVBAR — composant partagé ══ */}
@@ -2256,7 +2267,7 @@ export default function BookingPage({ slug }) {
         display:'flex', gap:32, alignItems:'flex-start' }} className="bk-2c">
 
         {/* ── COLONNE GAUCHE ── */}
-        <div style={{ flex:'1 1 0%', minWidth:0, paddingTop:32 }}>
+        <div style={{ flex:'1 1 0%', minWidth:0, paddingTop:32, width:'100%' }}>
 
           {/* Panneau auth */}
           {showAuthPanel && (
@@ -2277,7 +2288,7 @@ export default function BookingPage({ slug }) {
                 background:th.card, borderRadius:16, border:`1px solid ${th.border}` }}>
                 <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
                   <div style={{ width:56, height:56, borderRadius:12, overflow:'hidden', flexShrink:0,
-                    background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
                     {business?.profile_url
                       ? <img src={business.profile_url} alt={business.business_name}
                           style={{ width:'100%', height:'100%', objectFit:'cover' }}
@@ -2323,7 +2334,7 @@ export default function BookingPage({ slug }) {
                     : business.cover_urls.length === 2 ? '1fr 1fr' : '2fr 1fr',
                   maxHeight:220 }}>
                   {business.cover_urls.slice(0,3).map((c,i) => (
-                    <div key={c.id||i} style={{ overflow:'hidden', background:'#f3f4f6',
+                    <div key={c.id||i} style={{ overflow:'hidden', background:th.cardAlt,
                       gridRow: i===0&&business.cover_urls.length>=3?'1/3':'auto' }}>
                       <img src={c.url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
                     </div>
@@ -2374,7 +2385,7 @@ export default function BookingPage({ slug }) {
                       onMouseEnter={ev=>ev.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'}
                       onMouseLeave={ev=>ev.currentTarget.style.boxShadow='none'}>
                       <div style={{ width:48, height:48, borderRadius:99, flexShrink:0,
-                        background:'#f3f4f6', overflow:'hidden',
+                        background:th.cardAlt, overflow:'hidden',
                         display:'flex', alignItems:'center', justifyContent:'center' }}>
                         <span style={{ fontSize:20, fontWeight:800,
                           color:e.avatar_color||'#374151' }}>
@@ -2631,7 +2642,7 @@ export default function BookingPage({ slug }) {
 
           {/* ══ ÉTAPES 2–6 : Flow réservation ══ */}
           {!showAuthPanel && step >= 2 && (
-            <div style={{ maxWidth:520, animation:'fadeIn .15s ease' }}>
+            <div className="bk-steps" style={{ maxWidth:600, width:'100%', animation:'fadeIn .15s ease' }}>
 
               {/* Bouton retour */}
               <button
@@ -2668,7 +2679,7 @@ export default function BookingPage({ slug }) {
                         background:th.card, border:`1px solid ${th.border}`,
                         borderRadius:12, marginBottom:20 }}>
                         <div style={{ width:40, height:40, borderRadius:99, flexShrink:0,
-                          background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center',
+                          background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
                           fontSize:16, fontWeight:800, color:selEmp.avatar_color||'#374151' }}>
                           {selEmp.name.charAt(0)}
                         </div>
@@ -2721,14 +2732,15 @@ export default function BookingPage({ slug }) {
                       </p>
                       <button
                         onClick={()=>{ const emp={id:null,name:'Premier disponible',_anyEmployee:true,avatar_color:'#6366f1'}; setSelEmp(emp); setSelDate(null); setSelSlot(null); setMonthKey(''); goToStep(3, null, emp); }}
-                        style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'16px',
-                          background:th.card, border:`1px solid ${th.border}`, borderRadius:12,
-                          cursor:'pointer', marginBottom:10, textAlign:'left' }}
-                        onMouseEnter={ev=>ev.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'}
-                        onMouseLeave={ev=>ev.currentTarget.style.boxShadow='none'}>
-                        <div style={{ width:48, height:48, borderRadius:99, flexShrink:0,
-                          background:'#f3f4f6', display:'flex', alignItems:'center',
-                          justifyContent:'center', fontSize:20 }}>✨</div>
+                        style={{ width:'100%', display:'flex', alignItems:'center', gap:16, padding:'18px 20px',
+                          background:th.card, border:`1px solid ${th.border}`, borderRadius:16,
+                          cursor:'pointer', marginBottom:12, textAlign:'left',
+                          transition:'box-shadow 0.15s, transform 0.1s' }}
+                        onMouseEnter={ev=>{ev.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';ev.currentTarget.style.transform='translateY(-1px)';}}
+                        onMouseLeave={ev=>{ev.currentTarget.style.boxShadow='none';ev.currentTarget.style.transform='none';}}>
+                        <div style={{ width:56, height:56, borderRadius:99, flexShrink:0,
+                          background:th.cardAlt, display:'flex', alignItems:'center',
+                          justifyContent:'center', fontSize:24 }}>✨</div>
                         <div style={{flex:1}}>
                           <p style={{fontSize:14,fontWeight:700,color:th.text,margin:'0 0 2px'}}>Peu importe</p>
                           <p style={{fontSize:12,color:th.muted,margin:0}}>Premier membre disponible</p>
@@ -2739,14 +2751,17 @@ export default function BookingPage({ slug }) {
                       {employees.map(e=>(
                         <button key={e.id}
                           onClick={()=>{ setSelEmp(e); setSelDate(null); setSelSlot(null); setMonthKey(''); goToStep(3, null, e); }}
-                          style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'16px',
-                            background:th.card, border:`1px solid ${th.border}`, borderRadius:12,
-                            cursor:'pointer', marginBottom:10, textAlign:'left' }}
-                          onMouseEnter={ev=>ev.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'}
-                          onMouseLeave={ev=>ev.currentTarget.style.boxShadow='none'}>
-                          <div style={{ width:48, height:48, borderRadius:99, flexShrink:0,
-                            background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center',
-                            fontSize:18, fontWeight:800, color:e.avatar_color||'#374151' }}>
+                          style={{ width:'100%', display:'flex', alignItems:'center', gap:16, padding:'18px 20px',
+                            background:th.card, border:`1px solid ${th.border}`, borderRadius:16,
+                            cursor:'pointer', marginBottom:12, textAlign:'left',
+                            transition:'box-shadow 0.15s, transform 0.1s' }}
+                          onMouseEnter={ev=>{ev.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';ev.currentTarget.style.transform='translateY(-1px)';}}
+                          onMouseLeave={ev=>{ev.currentTarget.style.boxShadow='none';ev.currentTarget.style.transform='none';}}>
+                          <div style={{ width:56, height:56, borderRadius:99, flexShrink:0,
+                            background:e.avatar_color ? `${e.avatar_color}20` : th.cardAlt,
+                            display:'flex', alignItems:'center', justifyContent:'center',
+                            fontSize:20, fontWeight:800, color:e.avatar_color||'#374151',
+                            border:`2px solid ${e.avatar_color||th.border}30` }}>
                             {e.name.charAt(0)}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
@@ -2774,7 +2789,7 @@ export default function BookingPage({ slug }) {
                     </strong>
                   </p>
                   <div style={{ background:th.card, border:`1px solid ${th.border}`,
-                    borderRadius:16, padding:'20px 12px' }}>
+                    borderRadius:20, padding:'24px 16px' }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
                       <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
                         style={{ width:36,height:36,borderRadius:8,border:`1px solid ${th.border}`,
@@ -2792,12 +2807,12 @@ export default function BookingPage({ slug }) {
                           style={{width:14,height:14,color:th.muted}}><polyline points="9 18 15 12 9 6"/></svg>
                       </button>
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:8}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:10}}>
                       {DAYS_MINI.map((d,i)=>(
-                        <div key={i} style={{textAlign:'center',fontSize:12,fontWeight:800,color:th.muted,padding:'6px 0'}}>{d}</div>
+                        <div key={i} style={{textAlign:'center',fontSize:13,fontWeight:800,color:th.muted,padding:'8px 0'}}>{d}</div>
                       ))}
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6}}>
                       {calDays.map((d,i)=>{
                         if(!d) return <div key={i}/>;
                         const isPast=d<today, isFuture=d>maxDate;
@@ -2810,7 +2825,7 @@ export default function BookingPage({ slug }) {
                         const disabled=isPast||isFuture||isClosed||isFull;
                         return(
                           <button key={i} onClick={()=>{if(!disabled){setSelDate(d);goToStep(4,null,null,d);}}} disabled={disabled}
-                            style={{ height:44, borderRadius:10, fontSize:14, fontWeight:700,
+                            style={{ height:48, borderRadius:12, fontSize:15, fontWeight:700,
                               border:isSel?`2px solid ${th.accent}`:isToday2?`1px solid ${th.accent}40`:'1px solid transparent',
                               background:isSel?th.accent:'transparent',
                               color:isSel?th.accentText:(isClosed||isFull?th.dim:disabled?th.dim:th.text),
@@ -2854,10 +2869,10 @@ export default function BookingPage({ slug }) {
                       </button>
                     </div>
                   ) : (
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
                       {visibleSlots.map(s=>(
                         <button key={s} onClick={()=>{setSelSlot(s);goToStep(5,null,null,null,s);}}
-                          style={{ padding:'16px 8px', borderRadius:14, fontSize:15, fontWeight:800,
+                          style={{ padding:'18px 8px', borderRadius:16, fontSize:16, fontWeight:800,
                             border:selSlot===s?`2px solid ${th.accent}`:`1px solid ${th.border}`,
                             background:selSlot===s?th.accent:th.card,
                             color:selSlot===s?th.accentText:th.text, cursor:'pointer' }}>
@@ -3218,7 +3233,7 @@ export default function BookingPage({ slug }) {
             <div style={{ padding:'24px 20px 20px', textAlign:'center',
               borderBottom:`1px solid ${th.border}` }}>
               <div style={{ width:80, height:80, borderRadius:99, margin:'0 auto 12px',
-                overflow:'hidden', background:'#f3f4f6',
+                overflow:'hidden', background:th.cardAlt,
                 display:'flex', alignItems:'center', justifyContent:'center',
                 border:`3px solid ${th.border}` }}>
                 {business?.profile_url ? (

@@ -282,7 +282,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
           style={{ borderBottom:`1px solid ${sepBd}` }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background:'#fffbeb', border:'1px solid #fde68a' }}>
+              style={{ background:isDark?'rgba(245,158,11,0.1)':'#fffbeb', border:`1px solid ${isDark?'rgba(245,158,11,0.3)':'#fde68a'}` }}>
               <I.Zap style={{ width:16, height:16, color:'#f59e0b' }} />
             </div>
             <div>
@@ -387,7 +387,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
                           style={{ background:BRAND.primaryBg, color:BRAND.primary }}>+</button>
                         <button onClick={()=>removeFromCart(idx)}
                           className="w-6 h-6 rounded-md flex items-center justify-center ml-1"
-                          style={{ background:'#fef2f2' }}>
+                          style={{ background:isDark?'rgba(239,68,68,0.1)':'#fef2f2' }}>
                           <I.Trash style={{ width:11,height:11,color:'#ef4444' }} />
                         </button>
                       </div>
@@ -655,7 +655,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg mb-2"
                   style={{ background:'#ecfdf5',border:'1px solid #a7f3d0' }}>
                   <span style={{ fontSize:11,color:'#10b981',fontWeight:600 }}>✓</span>
-                  <span style={{ fontSize:12,color:'#111827' }}>{clientName}</span>
+                  <span style={{ fontSize:12,color:isDark?'#e6edf3':'#111827' }}>{clientName}</span>
                   {clientEmail && <span style={{ fontSize:11,color:'#6B7280' }}>({clientEmail})</span>}
                   <button onClick={()=>{setClientEmail('');setClientName('');setClientSearch('');}}
                     style={{ marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'#9CA3AF',fontSize:14 }}>✕</button>
@@ -684,28 +684,28 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
 // ── DesktopSidebar ───────────────────────────────────────────────────────────
 function DesktopSidebar({ onHome, onLogout, theme, toggle, isLight }) {
   const isDark = theme.mode === 'dark';
-  const NavBtn = ({ onClick, label, icon, color = '#111827', bg, borderColor, danger }) => (
+  const NavBtn = ({ onClick, label, icon, color, bg, borderColor, danger }) => (
     <button onClick={onClick}
       style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
-        padding:'10px 16px', borderRadius:14, border:`1px solid ${borderColor || (isDark?'rgba(17,24,39,0.25)':'rgba(17,24,39,0.18)')}`,
-        background: bg || (isDark?'rgba(17,24,39,0.1)':'rgba(17,24,39,0.07)'),
+        padding:'10px 16px', borderRadius:14, border:`1px solid ${borderColor || (isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)')}`,
+        background: bg || (isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'),
         cursor:'pointer', transition:'all 0.15s' }}
       onMouseEnter={e => {
         e.currentTarget.style.background = danger
           ? (isDark?'rgba(239,68,68,0.18)':'rgba(239,68,68,0.12)')
-          : (isDark?'rgba(17,24,39,0.2)':'rgba(17,24,39,0.14)');
+          : (isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)');
         e.currentTarget.style.transform = 'translateX(2px)';
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.background = bg || (isDark?'rgba(17,24,39,0.1)':'rgba(17,24,39,0.07)');
+        e.currentTarget.style.background = bg || (isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)');
         e.currentTarget.style.transform = 'none';
       }}>
       <div style={{ width:32, height:32, borderRadius:9, flexShrink:0,
-        background: danger?'rgba(239,68,68,0.12)':(isDark?'rgba(17,24,39,0.15)':'rgba(17,24,39,0.1)'),
+        background: danger?'rgba(239,68,68,0.12)':(isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)'),
         display:'flex', alignItems:'center', justifyContent:'center' }}>
         {icon}
       </div>
-      <span style={{ fontSize:13, fontWeight:700, color: danger?'#ef4444':color, whiteSpace:'nowrap' }}>{label}</span>
+      <span style={{ fontSize:13, fontWeight:700, color: danger?'#ef4444':(color||(isDark?'#e6edf3':'#111827')), whiteSpace:'nowrap' }}>{label}</span>
     </button>
   );
 
@@ -1004,7 +1004,7 @@ function NotificationCenter({ theme }) {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
-                      {!n.is_read && <span style={{ width:6, height:6, borderRadius:'50%', background:'#111827', flexShrink:0 }} />}
+                      {!n.is_read && <span style={{ width:6, height:6, borderRadius:'50%', background:isDark?'#e6edf3':'#111827', flexShrink:0 }} />}
                       <p style={{ margin:0, fontWeight:n.is_read?600:800, fontSize:13, color:theme.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{n.title}</p>
                     </div>
                     {n.body && <p style={{ margin:0, fontSize:11, color:theme.muted, lineHeight:1.4 }}>{n.body}</p>}
