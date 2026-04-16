@@ -2058,8 +2058,8 @@ export default function BookingPage({ slug }) {
     setCP(client.phone || '');
     setShowAuthPanel(false);
     setInlineAuthMode('none');
-    // Si connecté à l'étape 5 → avancer directement à 6 (évite la boucle)
-    if (step === 5) {
+    // Si connecté à l'étape 5 → avancer à 6 seulement si le téléphone est renseigné
+    if (step === 5 && client.phone) {
       setTimeout(() => setStep(6), 50);
     }
   };
@@ -2070,6 +2070,8 @@ export default function BookingPage({ slug }) {
     if (requireAccount && !clientUser && !localToken) { setShowAuthPanel(true); setPendingBook(true); return; }
     // Sans compte requis : permettre la réservation si les champs obligatoires sont remplis
     if (!requireAccount && !clientUser && !localToken && (!clientName.trim() || !clientPhone.trim())) { setBookErr('Nom et téléphone obligatoires.'); return; }
+    // Connecté mais téléphone manquant → renvoyer à l'étape 5
+    if ((clientUser || localToken) && !clientPhone.trim()) { setBookErr('Téléphone obligatoire. Veuillez compléter votre profil.'); setStep(5); return; }
     setBooking(true); setBookErr('');
     try {
       // ── Re-vérification du code promo au moment de la confirmation ──────────
@@ -3025,6 +3027,24 @@ export default function BookingPage({ slug }) {
                           Profil
                         </button>
                       </div>
+                      {/* Champ téléphone obligatoire si manquant (ex: après Google OAuth) */}
+                      {!clientPhone.trim() && (
+                        <div style={{background:'rgba(245,158,11,0.06)',border:'1px solid rgba(245,158,11,0.25)',
+                          borderRadius:10,padding:'12px 14px',marginBottom:14}}>
+                          <p style={{fontSize:12,fontWeight:700,color:'#d97706',margin:'0 0 8px'}}>
+                            Complétez votre profil pour continuer
+                          </p>
+                          <label style={{display:'block',fontSize:11,fontWeight:700,
+                            color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                            Téléphone *
+                          </label>
+                          <input type="tel" placeholder="06 00 00 00 00" value={clientPhone}
+                            onChange={e=>setCP(e.target.value)}
+                            style={{width:'100%',padding:'11px 12px',borderRadius:9,outline:'none',
+                              background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                              color:th.text,fontSize:13,boxSizing:'border-box'}}/>
+                        </div>
+                      )}
                       <label style={{display:'block',fontSize:12,fontWeight:600,color:th.muted,marginBottom:6}}>
                         Note (optionnelle)
                       </label>
@@ -3033,11 +3053,30 @@ export default function BookingPage({ slug }) {
                         style={{width:'100%',padding:'12px 14px',borderRadius:10,outline:'none',
                           background:th.inputBg,border:`1px solid ${th.inputBorder}`,
                           color:th.text,fontSize:13,resize:'none',lineHeight:1.5}}/>
-                      <button onClick={()=>goToStep(6)}
+                      <button onClick={async ()=>{
+                        // Si téléphone vient d'être renseigné → sauvegarder dans le profil backend
+                        if(clientPhone.trim() && clientUser && !clientUser.phone){
+                          try{
+                            const tk=localStorage.getItem('ff_client_token');
+                            if(tk) await pubApi.updateClientProfile(slug,{
+                              first_name:clientUser.first_name,last_name:clientUser.last_name,
+                              email:clientUser.email,phone:clientPhone.trim()
+                            });
+                            const updated={...clientUser,phone:clientPhone.trim()};
+                            setClientUser(updated);
+                            localStorage.setItem('ff_client_info',JSON.stringify(updated));
+                          }catch{}
+                        }
+                        goToStep(6);
+                      }}
+                        disabled={!clientPhone.trim()}
                         style={{width:'100%',marginTop:16,padding:'15px',borderRadius:12,
-                          background:th.accent,border:'none',fontWeight:800,fontSize:15,
-                          color:th.accentText,cursor:'pointer'}}>
-                        Continuer →
+                          background:!clientPhone.trim()?th.border:th.accent,
+                          border:'none',fontWeight:800,fontSize:15,
+                          color:!clientPhone.trim()?th.muted:th.accentText,
+                          cursor:!clientPhone.trim()?'not-allowed':'pointer',
+                          opacity:!clientPhone.trim()?0.5:1}}>
+                        {!clientPhone.trim() ? '📱 Téléphone requis' : 'Continuer →'}
                       </button>
                     </div>
                   ) : (

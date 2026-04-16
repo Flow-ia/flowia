@@ -810,6 +810,7 @@ router.get('/google/callback', async (req, res) => {
     const clientObj = {
       id: local.id, email: gc.email,
       first_name: gc.first_name, last_name: gc.last_name,
+      phone: local.phone || null,
       avatar_url: gc.avatar_url || null,
       global_client_id: gc.id, has_global_account: true,
     };
