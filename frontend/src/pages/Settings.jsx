@@ -5079,6 +5079,114 @@ const SMS_COST_UNIT = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045');
 const SMS_MARGIN_PCT = parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30');
 const SMS_PRICE_UNIT = SMS_COST_UNIT * (1 + SMS_MARGIN_PCT / 100);
 
+// ── Charge le SDK SumUp Card Widget une seule fois ─────────────────────────
+const SUMUP_SDK_URL = 'https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js';
+let sumupSdkPromise = null;
+function loadSumupSdk() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  if (window.SumUpCard) return Promise.resolve(window.SumUpCard);
+  if (sumupSdkPromise) return sumupSdkPromise;
+  sumupSdkPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${SUMUP_SDK_URL}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.SumUpCard));
+      existing.addEventListener('error', () => reject(new Error('Impossible de charger SumUp')));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = SUMUP_SDK_URL;
+    s.async = true;
+    s.onload = () => resolve(window.SumUpCard);
+    s.onerror = () => { sumupSdkPromise = null; reject(new Error('Impossible de charger SumUp')); };
+    document.head.appendChild(s);
+  });
+  return sumupSdkPromise;
+}
+
+// ── Modal qui embarque le widget carte SumUp ──────────────────────────────
+function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const mountRef = useRef(null);
+  const widgetRef = useRef(null);
+  const [status, setStatus] = useState('loading'); // loading | ready | processing | done | error
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    loadSumupSdk()
+      .then(SumUpCard => {
+        if (cancelled || !mountRef.current) return;
+        mountRef.current.innerHTML = '';
+        widgetRef.current = SumUpCard.mount({
+          id: 'sumup-card-container',
+          checkoutId,
+          locale: 'fr-FR',
+          showFooter: false,
+          onLoad: () => { if (!cancelled) setStatus('ready'); },
+          onResponse: (type, body) => {
+            if (cancelled) return;
+            if (type === 'success' || type === 'sent') {
+              setStatus('done');
+              onSuccess?.();
+            } else if (type === 'error' || type === 'invalid') {
+              setStatus('error');
+              setErrorMsg(body?.message || 'Paiement refuse');
+            } else if (type === 'auth-screen') {
+              setStatus('processing');
+            }
+          }
+        });
+      })
+      .catch(err => {
+        if (!cancelled) { setStatus('error'); setErrorMsg(err.message || 'Erreur SumUp'); }
+      });
+    return () => {
+      cancelled = true;
+      try { widgetRef.current?.unmount?.(); } catch(_) {}
+    };
+  }, [checkoutId]);
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={status === 'processing' ? undefined : onClose}
+        style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(8px)' }} />
+      <div style={{ position:'relative', width:'100%', maxWidth:460, maxHeight:'92vh', overflow:'auto',
+        background:isDark?'#161622':'#fff', borderRadius:20, border:`1px solid ${theme.border}`, padding:22 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div>
+            <p style={{ fontSize:12, fontWeight:800, color:theme.muted, margin:0, textTransform:'uppercase', letterSpacing:'0.06em' }}>Paiement securise</p>
+            <p style={{ fontSize:20, fontWeight:900, color:theme.text, margin:'2px 0 0' }}>{Number(amount).toFixed(2)} EUR</p>
+          </div>
+          <button onClick={onClose} disabled={status === 'processing'}
+            style={{ width:30, height:30, borderRadius:8, border:'none',
+              background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', color:theme.muted,
+              cursor: status === 'processing' ? 'not-allowed' : 'pointer', fontSize:16 }}>✕</button>
+        </div>
+
+        {status === 'loading' && (
+          <p style={{ fontSize:13, color:theme.muted, textAlign:'center', padding:'24px 0' }}>Chargement du formulaire SumUp...</p>
+        )}
+        {status === 'error' && (
+          <div style={{ padding:14, borderRadius:12, background:'rgba(239,68,68,0.1)', color:'#ef4444', fontSize:13, marginBottom:10 }}>
+            {errorMsg || 'Une erreur est survenue.'}
+          </div>
+        )}
+        {status === 'done' && (
+          <div style={{ padding:14, borderRadius:12, background:'rgba(16,185,129,0.1)', color:'#10b981', fontSize:13, marginBottom:10, fontWeight:700 }}>
+            Paiement confirme. Credit du solde en cours...
+          </div>
+        )}
+
+        <div ref={mountRef} id="sumup-card-container" style={{ minHeight:status === 'loading' ? 0 : 320 }} />
+
+        <p style={{ fontSize:11, color:theme.dim, textAlign:'center', margin:'14px 0 0' }}>
+          Paiement traite par SumUp — vos donnees bancaires ne transitent pas par FlowIA.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function TabSMS({ showToast, theme }) {
   const isDark = theme.mode === 'dark';
   const [balance, setBalance]       = useState(null);
@@ -5088,6 +5196,7 @@ function TabSMS({ showToast, theme }) {
   const [amount, setAmount]         = useState('20');
   const [loading, setLoading]       = useState(true);
   const [paying, setPaying]         = useState(false);
+  const [checkoutData, setCheckoutData] = useState(null); // { checkout_id, amount, estimated_sms }
 
   const loadData = useCallback(async () => {
     try {
@@ -5146,18 +5255,39 @@ function TabSMS({ showToast, theme }) {
     }
     setPaying(true);
     try {
-      const { checkout_url, checkout_id, estimated_sms } = await paymentsApi.createSMSCheckout(amt);
+      const { checkout_id, estimated_sms } = await paymentsApi.createSMSCheckout(amt);
 
-      if (!checkout_url) {
-        throw new Error('URL de paiement non recue');
+      if (!checkout_id) {
+        throw new Error('Paiement non disponible (checkout non cree)');
       }
 
-      // Rediriger vers SumUp (Hosted Checkout)
-      window.location.href = checkout_url;
+      // Ouvrir le widget SumUp Card embarque
+      setCheckoutData({ checkout_id, amount: amt, estimated_sms });
 
     } catch(e) {
       showToast(e.message || 'Erreur creation paiement', 'error');
+    } finally {
       setPaying(false);
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    const cid = checkoutData?.checkout_id;
+    setCheckoutData(null);
+    if (!cid) { loadData(); return; }
+    try {
+      const result = await paymentsApi.verifySMSCheckout(cid);
+      if (result?.credited) {
+        showToast(`+${result.sms_count} SMS credites (${result.amount}EUR)`, 'success');
+      } else if (result?.already_credited) {
+        showToast('Recharge deja effectuee');
+      } else {
+        showToast('Paiement en attente de confirmation...', 'info');
+      }
+    } catch(e) {
+      showToast('Verification: ' + (e.message || 'erreur'), 'error');
+    } finally {
+      loadData();
     }
   };
 
@@ -5206,7 +5336,7 @@ function TabSMS({ showToast, theme }) {
               color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:800, fontSize:14, border:'none',
               cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
               boxShadow: numAmt >= 5 ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}>
-            {paying ? 'Redirection...' : 'Recharger'}
+            {paying ? 'Ouverture...' : 'Recharger'}
           </button>
         </div>
       </div>
@@ -5302,6 +5432,17 @@ function TabSMS({ showToast, theme }) {
           </div>
         )}
       </div>
+
+      {checkoutData && (
+        <SumupCheckoutModal
+          theme={theme}
+          checkoutId={checkoutData.checkout_id}
+          amount={checkoutData.amount}
+          onClose={() => setCheckoutData(null)}
+          onSuccess={handlePaymentSuccess}
+          showToast={showToast}
+        />
+      )}
 
     </div>
   );

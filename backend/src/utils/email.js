@@ -69,6 +69,7 @@ async function sendVerificationEmail(to, code, subject = 'Votre code de vérific
 // ── Email confirmation RDV (design carte rendez-vous) ─────────────────────
 async function sendAppointmentConfirmation({ to, clientName, businessName, serviceName, employeeName, date, startTime, endTime, durationMinutes, price, finalPrice, discountAmount, promoCode, notes, appointmentId, bookingUrl, items }) {
   const refId = appointmentId.substring(0, 8).toUpperCase();
+  const subject = `Confirmation de rendez-vous #${refId} — ${businessName}`;
   // Parser la date YYYY-MM-DD sans ambiguïté de timezone
   // new Date('2026-03-13') → UTC minuit → peut décaler d'1 jour selon timezone serveur
   // Solution : construire la date en local explicitement
@@ -247,6 +248,7 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
   const dateObj = new Date(dy, dm - 1, dd);
   const dateFr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
+  const subject = `Récap du ${dateCapitalized} — ${businessName}`;
   const fmtMoney = v => Number(v||0).toFixed(2).replace('.', ',');
   const gradGreen = 'linear-gradient(135deg,#10b981,#059669)';
 
@@ -311,6 +313,7 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
   const dateObj = new Date(dy, dm - 1, dd);
   const dateFr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
+  const subject = `Rappel : votre rendez-vous ${hoursBeforeLabel ? 'dans ' + hoursBeforeLabel : ''} — ${businessName}`;
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -361,6 +364,7 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
   const discountStr = rewardType === 'percent'
     ? `-${rewardValue}%`
     : `-${Number(rewardValue).toFixed(2)} €`;
+  const subject = `🎉 Récompense fidélité débloquée : ${discountStr} chez ${businessName}`;
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -416,6 +420,7 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
 
 // ── Email invitation client à créer son compte global ──────────────────────
 async function sendClientInvite(to, clientName, businessName, inviteUrl) {
+  const subject = `${businessName} vous invite à créer votre compte client`;
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
@@ -455,6 +460,7 @@ async function sendClientInvite(to, clientName, businessName, inviteUrl) {
 // ── Email annulation RDV ─────────────────────────────────────────────────────
 async function sendAppointmentCancellation({ to, clientName, businessName, serviceName, date, startTime, reason, appointmentId }) {
   const refId = (appointmentId || '').substring(0, 8).toUpperCase();
+  const subject = `Annulation de votre rendez-vous #${refId} — ${businessName}`;
   const [dy, dm, dd] = date.split('-').map(Number);
   const dateObj = new Date(dy, dm - 1, dd);
   const dateFr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -524,6 +530,8 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
   else if (minutesBefore < 1440) delayLabel = `${minutesBefore/60}h`;
   else                            delayLabel = `${Math.round(minutesBefore/1440)} jour(s)`;
 
+  const subject = `Rappel prestation : ${clientName} dans ${delayLabel} — ${businessName}`;
+
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;margin:0;padding:32px 16px;">
   <div style="max-width:520px;margin:0 auto;">
@@ -587,6 +595,7 @@ async function sendPasswordReset({ to, clientName, code }) {
 // ── Email campagne promo ──────────────────────────────────────────────────────
 async function sendPromoEmail({ to, clientName, businessName, promo }) {
   const { code, type, value, valid_from, valid_until, time_allday, time_from, time_until, min_purchase, max_uses, target_clients } = promo;
+  const subject = `Offre exclusive : ${code} chez ${businessName}`;
 
   const discountLabel = type === 'percent'
     ? `<strong style="color:#7c6af7;font-size:32px;font-weight:900;">${value}% de réduction</strong>`

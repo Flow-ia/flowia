@@ -41,18 +41,17 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
     const smsPrice  = parseFloat((smsCost * (1 + smsMargin / 100)).toFixed(4));
     const estimatedSms = Math.floor(amount / smsPrice);
 
-    // Etape 2 : creer le checkout SumUp
-    // redirect_url = ou SumUp redirige apres paiement
-    const redirectAfterPayment =
-      `${FRONTEND_URL}/settings/marketing?recharge=pending&ref=${ref}`;
-
+    // Etape 2 : creer le checkout SumUp.
+    // SumUp ne fournit PAS de page hebergee (pay.sumup.com renvoie 404).
+    // Le paiement se fait via le widget embarque SumUp Card (SDK JS).
+    // On renvoie donc uniquement le checkout_id au frontend, qui mounte le widget.
     const checkoutBody = {
       checkout_reference: ref,
       amount: parseFloat(amount.toFixed(2)),
       currency: 'EUR',
       merchant_code: merchantCode,
       description: 'Recharge SMS FlowIA',
-      redirect_url: redirectAfterPayment
+      return_url: `${FRONTEND_URL}/settings/marketing?recharge=pending&ref=${ref}`
     };
 
     console.log('[SUMUP] Creation checkout:', JSON.stringify(checkoutBody));
@@ -75,13 +74,7 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
       });
     }
 
-    // Etape 3 : construire l'URL de paiement
-    const checkoutUrl = checkout.hosted_checkout_url
-      || `https://pay.sumup.com/b2c/checkout?checkout-id=${checkout.id}`;
-
-    console.log('[SUMUP] URL paiement:', checkoutUrl);
-
-    // Etape 4 : enregistrer EN ATTENTE — NE PAS CREDITER ICI
+    // Etape 3 : enregistrer EN ATTENTE — NE PAS CREDITER ICI
     await pool.query(`
       INSERT INTO sms_transactions
         (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
@@ -89,7 +82,6 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
     `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, checkout.id]);
 
     res.json({
-      checkout_url: checkoutUrl,
       checkout_id: checkout.id,
       checkout_ref: ref,
       estimated_sms: estimatedSms

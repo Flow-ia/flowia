@@ -12,7 +12,8 @@
       "Bash(node -c \"C:\\\\Users\\\\gaci\\\\Desktop\\\\noti\\\\FlowIA-final\\\\FlowIA\\\\backend\\\\src\\\\routes\\\\auth.js\")",
       "Bash(node -c \"C:\\\\Users\\\\gaci\\\\Desktop\\\\noti\\\\FlowIA-final\\\\FlowIA\\\\backend\\\\src\\\\routes\\\\public-booking.js\")",
       "Bash(node -c \"C:\\\\Users\\\\gaci\\\\Desktop\\\\noti\\\\FlowIA-final\\\\FlowIA\\\\backend\\\\src\\\\db\\\\index.js\")",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "WebFetch(domain:developer.sumup.com)"
     ]
   }
 }
