@@ -5086,10 +5086,6 @@ function TabSMS({ showToast, theme }) {
   const [amount, setAmount]         = useState('20');
   const [loading, setLoading]       = useState(true);
   const [paying, setPaying]         = useState(false);
-  const [showPayModal, setShowPayModal] = useState(false);
-  const [payError, setPayError]     = useState('');
-  const [payCheckoutId, setPayCheckoutId] = useState('');
-  const [payEstimated, setPayEstimated]   = useState(0);
 
   const loadData = useCallback(async () => {
     try {
@@ -5104,39 +5100,63 @@ function TabSMS({ showToast, theme }) {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadData(); }, []);
+  // Au montage : verifier retour SumUp puis charger
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutId = params.get('checkout_id');
+    const recharge   = params.get('recharge');
+
+    // Nettoyer l'URL immediatement
+    if (recharge || checkoutId) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    if (recharge === 'pending' && checkoutId) {
+      // Verifier le paiement cote backend (qui verifie cote SumUp)
+      paymentsApi.verifySMSCheckout(checkoutId)
+        .then(result => {
+          if (result.credited) {
+            showToast(
+              `Recharge reussie ! +${result.sms_count} SMS credites (${result.amount}EUR)`,
+              'success'
+            );
+          } else if (result.already_credited) {
+            // Deja credite via webhook, juste recharger les donnees
+          } else {
+            showToast(
+              'Paiement non confirme. Contactez le support si vous avez ete debite.',
+              'error'
+            );
+          }
+          loadData();
+        })
+        .catch(() => loadData());
+    } else {
+      loadData();
+    }
+  }, []);
 
   const handleRecharge = async () => {
-    const num = parseFloat(amount);
-    if (!num || num < 5) return showToast('Montant minimum 5 EUR', 'err');
-    setPaying(true); setPayError('');
+    const amt = parseFloat(amount);
+    if (!amt || amt < 5) {
+      showToast('Montant minimum : 5EUR', 'error');
+      return;
+    }
+    setPaying(true);
     try {
-      const { checkout_id, estimated_sms } = await paymentsApi.createSMSCheckout(num);
-      setPayCheckoutId(checkout_id);
-      setPayEstimated(estimated_sms || 0);
-      setShowPayModal(true);
-      // Monter le widget SumUp apres rendu de la modal
-      setTimeout(() => {
-        if (window.SumUpCard) {
-          window.SumUpCard.mount({
-            checkoutId: checkout_id,
-            onResponse: async (type, body) => {
-              if (type === 'success') {
-                setShowPayModal(false);
-                try {
-                  await paymentsApi.verifySMSCheckout(checkout_id);
-                } catch(e) { /* webhook s'en chargera */ }
-                showToast(`+${estimated_sms || Math.floor(num / SMS_PRICE_UNIT)} SMS credites !`);
-                loadData();
-              } else if (type === 'error') {
-                setPayError(body?.message || 'Paiement echoue');
-              }
-            }
-          });
-        }
-      }, 300);
-    } catch(e) { showToast(e.message, 'err'); }
-    finally { setPaying(false); }
+      const { checkout_url, checkout_id, estimated_sms } = await paymentsApi.createSMSCheckout(amt);
+
+      if (!checkout_url) {
+        throw new Error('URL de paiement non recue');
+      }
+
+      // Rediriger vers SumUp (Hosted Checkout)
+      window.location.href = checkout_url;
+
+    } catch(e) {
+      showToast(e.message || 'Erreur creation paiement', 'error');
+      setPaying(false);
+    }
   };
 
   const numAmt = parseFloat(amount) || 0;
@@ -5184,7 +5204,7 @@ function TabSMS({ showToast, theme }) {
               color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:800, fontSize:14, border:'none',
               cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
               boxShadow: numAmt >= 5 ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}>
-            {paying ? 'Chargement...' : 'Recharger'}
+            {paying ? 'Redirection...' : 'Recharger'}
           </button>
         </div>
       </div>
@@ -5281,31 +5301,6 @@ function TabSMS({ showToast, theme }) {
         )}
       </div>
 
-      {/* Modal paiement SumUp */}
-      {showPayModal && (
-        <div style={{ position:'fixed', inset:0, zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-          <div onClick={() => setShowPayModal(false)}
-            style={{ position:'absolute', inset:0, background: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)', backdropFilter:'blur(8px)' }} />
-          <div style={{ position:'relative', width:'100%', maxWidth:420, background: isDark ? '#1c2128' : '#fff',
-            borderRadius:20, border:`1px solid ${theme.border}`, padding:24, boxShadow:'0 24px 64px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ fontWeight:800, fontSize:17, color:theme.text, margin:'0 0 6px', textAlign:'center' }}>Recharger votre solde SMS</h3>
-            <p style={{ fontSize:13, color:theme.muted, textAlign:'center', margin:'0 0 20px' }}>
-              {parseFloat(amount) || 0} EUR — environ {payEstimated || estimatedSms} SMS
-            </p>
-            {payError && (
-              <div style={{ padding:'10px 14px', borderRadius:10, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', marginBottom:16 }}>
-                <p style={{ fontSize:12, fontWeight:700, color:'#ef4444', margin:0 }}>{payError}</p>
-              </div>
-            )}
-            <div id="sumup-card" style={{ minHeight:200 }} />
-            <button onClick={() => setShowPayModal(false)}
-              style={{ width:'100%', marginTop:16, padding:'11px', borderRadius:12, background:theme.inputBg,
-                border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, fontSize:13, cursor:'pointer' }}>
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

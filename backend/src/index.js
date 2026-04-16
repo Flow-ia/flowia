@@ -390,6 +390,20 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       try { await processAppointmentReminders(); } catch (e) { console.error('[CRON reminders]', e.message); }
     }, 60 * 60 * 1000);
 
+    // Nettoyer les transactions pending depuis plus de 2h (paiement abandonne)
+    setInterval(async () => {
+      try {
+        await dbPool.query(`
+          UPDATE sms_transactions
+          SET status = 'expired'
+          WHERE status = 'pending'
+          AND created_at < NOW() - INTERVAL '2 hours'
+        `);
+      } catch(e) {
+        console.error('[CRON CLEANUP]', e.message);
+      }
+    }, 2 * 60 * 60 * 1000);
+
     console.log('⏰ Cron démarré (worker', process.pid, ')');
   }
 
