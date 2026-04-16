@@ -75,8 +75,17 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
 
     console.log('[SUMUP] Checkout cree:', checkout.id, '| Statut: pending | Montant:', amount);
 
+    const checkoutUrl = checkout.hosted_checkout_url
+      || `https://pay.sumup.com/b2c/checkout?checkout-id=${checkout.id}`
+      || `https://checkout.sumup.com/pay/${checkout.id}`;
+
+    if (!checkoutUrl) {
+      console.error('[SUMUP] Pas de checkout_url. Reponse complete:', JSON.stringify(checkout));
+      return res.status(500).json({ error: 'URL de paiement non recue de SumUp' });
+    }
+
     res.json({
-      checkout_url: checkout.hosted_checkout_url,
+      checkout_url: checkoutUrl,
       checkout_id: checkout.id,
       estimated_sms: estimatedSms
     });
