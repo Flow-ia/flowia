@@ -3870,6 +3870,7 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                 setSendingCampaign(true);
                 try {
                   const emailHtml = `<div style="font-family:-apple-system,sans-serif;max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;"><h1 style="color:white;margin:0;font-size:22px;">Offre speciale !</h1></div><div style="padding:32px 36px;text-align:center;"><p style="font-size:18px;font-weight:700;color:#0f172a;">Code promo : <span style="color:#1a73e8;font-family:monospace;font-size:24px;">${code}</span></p><p style="color:#64748b;font-size:14px;">${type === 'percent' ? `-${value}%` : `-${value}€`} sur votre prochaine prestation</p></div></div>`;
+                  console.log('[CAMPAIGN] Envoi:', { channel: campaignChannel, targetType: campaignTarget, message_email: emailHtml?.substring(0,50) });
                   await campaignsApi.sendCampaign({
                     promo_code_id: saved.id,
                     target_type: campaignTarget,
@@ -3877,6 +3878,7 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                     channel: campaignChannel,
                     message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
                     message_email: emailHtml,
+                    promo_code: code,
                   });
                 } catch(e) { alert('Campagne: ' + e.message); }
                 finally { setSendingCampaign(false); }

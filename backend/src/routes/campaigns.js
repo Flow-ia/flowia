@@ -3,7 +3,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { sendSMS, sleep, chunk, SMS_COST, SMS_PRICE } = require('../utils/messenger');
-const { sendEmail } = require('../utils/email');
+const { sendMarketingEmail, getEmailQuota } = require('../utils/emailSender');
 const router = express.Router();
 
 // Toutes les routes nécessitent une authentification commerçant
@@ -122,7 +122,7 @@ router.get('/preview', async (req, res) => {
 // ── POST /api/campaigns/send ────────────────────────────────────────────────
 router.post('/send', async (req, res) => {
   try {
-    const { promo_code_id, target_type, custom_count, channel, message_sms, message_email } = req.body;
+    const { promo_code_id, target_type, custom_count, channel, message_sms, message_email, promo_code } = req.body;
     const userId = req.user.userId;
     const limit = getTargetCount(target_type, custom_count);
 
@@ -132,6 +132,14 @@ router.post('/send', async (req, res) => {
     // Récupérer les clients cibles
     const smsClients = needSMS ? await getTopClients(userId, limit, true, false) : [];
     const emailClients = needEmail ? await getTopClients(userId, limit, false, true) : [];
+
+    console.log('[CAMPAIGN SEND] Start:', {
+      userId, channel, target_type,
+      emailClients: emailClients?.length,
+      smsClients: smsClients?.length,
+      message_email: message_email?.substring(0, 50),
+      promo_code
+    });
 
     if (needSMS && !smsClients.length) return res.status(400).json({ error: 'Aucun client avec numero de telephone valide.' });
     if (needEmail && !emailClients.length) return res.status(400).json({ error: 'Aucun client avec email valide.' });
@@ -197,40 +205,40 @@ router.post('/send', async (req, res) => {
       );
     }
 
-    // Envoyer emails
-    if (needEmail && message_email) {
-      const emailsToSendNow = Math.min(emailClients.length, quota.available_today);
+    // Envoyer emails via sendMarketingEmail (Brevo)
+    if (needEmail && (message_email || message_sms)) {
+      const emailQuota = getEmailQuota();
+      const emailsToSendNow = Math.min(emailClients.length, emailQuota.available_today);
       const emailsToQueue = emailClients.slice(emailsToSendNow);
       const emailsNow = emailClients.slice(0, emailsToSendNow);
 
-      // Envoi immédiat par batch de 20 avec 2s de pause
+      console.log(`[CAMPAIGN] Emails: ${emailsNow.length} maintenant, ${emailsToQueue.length} en file d'attente`);
+
+      // Envoi immediat par batch de 20 avec 2s de pause
       const emailBatches = chunk(emailsNow, 20);
       for (const batch of emailBatches) {
-        for (const client of batch) {
+        await Promise.allSettled(batch.map(async (client) => {
           try {
-            // Vérifier le compteur global
-            if (global.emailsToday >= EMAIL_DAILY_LIMIT) {
-              // Mettre en file d'attente
-              await pool.query(
-                `INSERT INTO campaign_queue (user_id, campaign_id, client_id, client_email, client_name, message, status)
-                 VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
-                [userId, campaignId, client.id, client.email, `${client.first_name} ${client.last_name}`, message_email]
-              );
-              continue;
-            }
-            await sendEmail({
-              to: client.email,
-              subject: 'Offre speciale de votre commerce',
-              html: message_email,
-            });
-            await pool.query(
-              `INSERT INTO message_log (user_id, campaign_id, email, channel, status)
-               VALUES ($1,$2,$3,'email','sent')`,
-              [userId, campaignId, client.email]
+            const msg = (message_email || message_sms || '')
+              .replace(/\{prénom\}/g, client.first_name || '')
+              .replace(/\{prenom\}/g, client.first_name || '')
+              .replace(/\{nom\}/g, client.last_name || '');
+
+            await sendMarketingEmail(
+              client.email,
+              `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+              msg,
+              promo_code || null
             );
             sentEmail++;
-            global.emailsToday = (global.emailsToday || 0) + 1;
+
+            await pool.query(
+              `INSERT INTO message_log (user_id, campaign_id, email, channel, cost, status)
+               VALUES ($1,$2,$3,'email',0,'sent')`,
+              [userId, campaignId, client.email]
+            );
           } catch (e) {
+            console.error('[CAMPAIGN EMAIL ERROR]', client.email, e.message);
             failedCount++;
             await pool.query(
               `INSERT INTO message_log (user_id, campaign_id, email, channel, status)
@@ -238,7 +246,14 @@ router.post('/send', async (req, res) => {
               [userId, campaignId, client.email]
             );
           }
-        }
+        }));
+
+        // Incrementer compteur DB
+        await pool.query(
+          `UPDATE users SET email_sent_today = email_sent_today + $1, email_sent_month = email_sent_month + $1 WHERE id=$2`,
+          [batch.length, userId]
+        );
+
         await sleep(2000);
       }
 
@@ -247,15 +262,11 @@ router.post('/send', async (req, res) => {
         await pool.query(
           `INSERT INTO campaign_queue (user_id, campaign_id, client_id, client_email, client_name, message, status)
            VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
-          [userId, campaignId, client.id, client.email, `${client.first_name} ${client.last_name}`, message_email]
+          [userId, campaignId, client.id, client.email, `${client.first_name} ${client.last_name}`, message_email || message_sms]
         );
       }
 
-      // Mettre à jour les compteurs email
-      await pool.query(
-        `UPDATE users SET email_sent_today = email_sent_today + $2, email_sent_month = email_sent_month + $2 WHERE id=$1`,
-        [userId, sentEmail]
-      );
+      console.log(`[CAMPAIGN] Emails: ${sentEmail} envoyes, ${failedCount} echecs`);
     }
 
     // Finaliser la campagne
