@@ -3064,36 +3064,34 @@ function TabProfil({ theme, showToast }) {
 
 function TabMarketing({ theme, showToast }) {
   const isDark = theme.mode === 'dark';
-  const [sub, setSub] = useState('loyalty');
+  const [marketingTab, setMarketingTab] = useState('promotions');
 
-  const SUB_TABS = [
-    { id: 'loyalty', label: "Fidélité",   icon: I.Gift },
-    { id: 'promo',   label: 'Promotions', icon: I.Percent },
+  const MTABS = [
+    { id: 'fidelite',   label: 'Fidelite' },
+    { id: 'promotions', label: '% Promotions' },
+    { id: 'solde',      label: 'Solde marketing' },
   ];
 
   return (
     <div className="space-y-4">
       {/* Sous-navigation */}
-      <div style={{ display:'flex', gap:6, background:theme.inputBg, borderRadius:16, padding:4, border:`1px solid ${theme.border}` }}>
-        {SUB_TABS.map(({ id, label, icon: Ic }) => {
-          const active = sub === id;
-          return (
-            <button key={id} onClick={() => setSub(id)}
-              style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                padding:'9px 8px', borderRadius:12, border:'none', cursor:'pointer', transition:'all .15s',
-                background: active ? (isDark ? 'rgba(17,24,39,0.25)' : '#fff') : 'transparent',
-                color: active ? (isDark?'#e6edf3':'#111827') : theme.muted,
-                fontWeight: active ? 800 : 600, fontSize:13,
-                boxShadow: active ? '0 2px 8px rgba(0,0,0,0.08)' : 'none' }}>
-              <Ic style={{ width:15, height:15 }} />
-              {label}
-            </button>
-          );
-        })}
+      <div style={{ display:'flex', gap:6, marginBottom:20,
+        background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', borderRadius:12, padding:4 }}>
+        {MTABS.map(({ id, label }) => (
+          <button key={id} onClick={() => setMarketingTab(id)}
+            style={{ flex:1, padding:'9px 8px', borderRadius:9, border:'none', fontWeight:700, fontSize:12,
+              cursor:'pointer', background: marketingTab === id ? theme.card : 'transparent',
+              color: marketingTab === id ? theme.text : theme.muted,
+              boxShadow: marketingTab === id ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              transition:'all 0.15s', whiteSpace:'nowrap' }}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      {sub === 'loyalty' && <TabLoyalty theme={theme} />}
-      {sub === 'promo'   && <TabPromo theme={theme} showToast={showToast} />}
+      {marketingTab === 'fidelite'   && <TabLoyalty theme={theme} />}
+      {marketingTab === 'promotions' && <TabPromo theme={theme} showToast={showToast} />}
+      {marketingTab === 'solde'      && <TabSMS showToast={showToast} theme={theme} />}
     </div>
   );
 }
@@ -3818,14 +3816,32 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                     {previewLoading ? 'Calcul...' : 'Calculer le cout'}
                   </button>
                   {preview && (
-                    <div style={{ marginTop:10, padding:'10px 12px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.06)' : 'white', border:`1px solid ${theme.border}`, fontSize:11 }}>
-                      {preview.email && <p style={{ margin:'2px 0', color:theme.text }}>Email : <strong>{preview.email.count} clients</strong> · Quota dispo : {preview.email.quota?.available_today || 0}/jour</p>}
-                      {preview.email?.plan && <p style={{ margin:'2px 0', color:'#f59e0b', fontWeight:600 }}>Envoi etale sur {preview.email.plan.days_needed + 1} jours ({preview.email.plan.today} aujourd'hui, {preview.email.plan.remaining} en file d'attente)</p>}
-                      {preview.sms && <p style={{ margin:'2px 0', color:theme.text }}>SMS : <strong>{preview.sms.count} clients</strong> · Cout : <strong>{preview.sms.cost?.toFixed(2)}€</strong></p>}
-                      {preview.sms && !preview.sms.sufficient && (
-                        <p style={{ margin:'4px 0', color:'#ef4444', fontWeight:700 }}>
-                          Solde insuffisant ({preview.sms.balance?.toFixed(2)}€). <a href="/settings/sms" style={{ color:'#1a73e8' }}>Recharger</a>
-                        </p>
+                    <div style={{ marginTop:10, padding:'10px 12px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.06)' : 'white', border:`1px solid ${theme.border}`, fontSize:12 }}>
+                      {preview.email && (
+                        <>
+                          <p style={{ margin:'3px 0', color:theme.text }}><strong>{preview.email.count} clients</strong> recevront un email</p>
+                          {preview.email.plan
+                            ? <p style={{ margin:'3px 0', color:'#f59e0b', fontWeight:600 }}>Envoi sur {preview.email.plan.days_needed + 1} jours automatiquement</p>
+                            : <p style={{ margin:'3px 0', color:'#10b981', fontWeight:600 }}>Envoi possible aujourd'hui</p>
+                          }
+                        </>
+                      )}
+                      {preview.sms && (
+                        <>
+                          <p style={{ margin:'3px 0', color:theme.text }}><strong>{preview.sms.count} clients</strong> recevront un SMS</p>
+                          <p style={{ margin:'3px 0', color:theme.text }}>Cout : <strong>{preview.sms.cost?.toFixed(2)} EUR</strong></p>
+                          {preview.sms.sufficient
+                            ? <p style={{ margin:'3px 0', color:'#10b981', fontWeight:700 }}>Solde OK ({preview.sms.balance?.toFixed(2)} EUR)</p>
+                            : <p style={{ margin:'3px 0', color:'#ef4444', fontWeight:700 }}>
+                                Il vous manque {(preview.sms.cost - preview.sms.balance).toFixed(2)} EUR
+                                <button onClick={() => window.location.href='/settings/marketing?recharge=need'}
+                                  style={{ marginLeft:8, padding:'3px 10px', borderRadius:6, fontSize:11, fontWeight:700,
+                                    background:'rgba(99,102,241,0.12)', color:'#6366f1', border:'none', cursor:'pointer' }}>
+                                  Recharger mon solde
+                                </button>
+                              </p>
+                          }
+                        </>
                       )}
                     </div>
                   )}
@@ -5059,20 +5075,19 @@ function TabRGPD({ showToast, theme }) {
 // ════════════════════════════════════════════════════════════════════════════
 const SMS_COST_UNIT = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045');
 const SMS_MARGIN_PCT = parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30');
-const SMS_PRICE_UNIT = parseFloat((SMS_COST_UNIT * (1 + SMS_MARGIN_PCT / 100)).toFixed(4));
+const SMS_PRICE_UNIT = SMS_COST_UNIT * (1 + SMS_MARGIN_PCT / 100);
 
 function TabSMS({ showToast, theme }) {
   const isDark = theme.mode === 'dark';
   const [balance, setBalance]       = useState(null);
   const [quota, setQuota]           = useState(null);
   const [history, setHistory]       = useState([]);
-  const [transactions, setTx]       = useState([]);
-  const [amount, setAmount]         = useState('10');
+  const [smsTx, setSmsTx]           = useState([]);
+  const [amount, setAmount]         = useState('20');
   const [loading, setLoading]       = useState(true);
   const [paying, setPaying]         = useState(false);
-  const location = useLocation();
 
-  const load = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
       const [b, q, h, t] = await Promise.all([
         paymentsApi.getSMSBalance(),
@@ -5080,142 +5095,142 @@ function TabSMS({ showToast, theme }) {
         campaignsApi.getCampaignHistory(),
         paymentsApi.getSMSTransactions(),
       ]);
-      setBalance(b);
-      setQuota(q);
-      setHistory(h);
-      setTx(t);
+      setBalance(b); setQuota(q); setHistory(h); setSmsTx(t);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
-  // Vérifier recharge au retour SumUp
+  // Au montage : verifier retour SumUp puis charger
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(window.location.search);
     const checkoutId = params.get('checkout_id');
-    const recharge = params.get('recharge');
-    if (recharge === 'success' && checkoutId) {
-      paymentsApi.verifySMSCheckout(checkoutId).then(r => {
-        if (r.credited) showToast(`Recharge de ${r.amount}€ creditee !`);
-        else if (r.already_credited) showToast('Recharge deja creditee.');
-        load();
-      }).catch(() => {});
-    }
-  }, [location.search]);
+    if (params.get('recharge') === 'success' && checkoutId) {
+      paymentsApi.verifySMSCheckout(checkoutId)
+        .then(r => { if (r.credited) showToast('Recharge effectuee !', 'success'); loadData(); })
+        .catch(() => loadData());
+      window.history.replaceState({}, '', window.location.pathname);
+    } else { loadData(); }
+  }, []);
 
   const handleCheckout = async () => {
     const num = parseFloat(amount);
-    if (!num || num < 5) return showToast('Montant minimum 5€', 'err');
+    if (!num || num < 5) return showToast('Montant minimum 5EUR', 'err');
     setPaying(true);
     try {
       const r = await paymentsApi.createSMSCheckout(num);
       if (r.checkout_url) window.location.href = r.checkout_url;
+      else if (r.redirect_url) window.location.href = r.redirect_url;
     } catch(e) { showToast(e.message, 'err'); }
     finally { setPaying(false); }
   };
 
-  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
   const numAmt = parseFloat(amount) || 0;
   const estimatedSms = numAmt > 0 ? Math.floor(numAmt / SMS_PRICE_UNIT) : 0;
-  const sumupFee = numAmt > 0 ? (numAmt * 0.0169).toFixed(2) : '0.00';
+  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
 
   if (loading) return <div style={{ textAlign:'center', padding:40, color:theme.muted }}>Chargement...</div>;
+
+  // Couleur barre quota
+  const barColor = (sent, max) => {
+    const pct = sent / max;
+    if (pct > 0.9) return '#ef4444';
+    if (pct > 0.7) return '#f59e0b';
+    return '#10b981';
+  };
 
   return (
     <div className="space-y-4">
       {/* Section 1 — Solde SMS */}
-      <Card theme={theme}>
-        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Solde SMS</p>
-        <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:8 }}>
-          <span style={{ fontSize:36, fontWeight:900, color:theme.text }}>{(balance?.balance || 0).toFixed(2)}€</span>
-          <span style={{ fontSize:13, color:theme.muted }}>≈ {balance?.estimated_sms || 0} SMS disponibles</span>
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:16, textTransform:'uppercase', letterSpacing:'0.05em' }}>Solde SMS</p>
+        <div style={{ textAlign:'center', marginBottom:20 }}>
+          <span style={{ fontSize:40, fontWeight:900, color:theme.text }}>{(balance?.balance || 0).toFixed(2)} EUR</span>
+          <p style={{ fontSize:14, color:theme.muted, margin:'6px 0 0' }}>Environ {balance?.estimated_sms || 0} SMS disponibles</p>
         </div>
-        <p style={{ fontSize:11, color:theme.dim, marginBottom:16 }}>
-          Prix unitaire : {SMS_PRICE_UNIT.toFixed(4)}€ / SMS (cout Brevo {SMS_COST_UNIT}€ + marge {SMS_MARGIN_PCT}%)
-        </p>
 
         <div style={{ padding:'16px', borderRadius:14, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border:`1px solid ${theme.border}` }}>
-          <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Recharger votre solde SMS</label>
+          <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Montant</label>
           <div style={{ display:'flex', gap:10, marginBottom:10 }}>
             <div style={{ position:'relative', flex:1 }}>
               <input type="number" min="5" step="1" value={amount} onChange={e => setAmount(e.target.value)}
-                placeholder="10" style={{...inp, paddingRight:24}} />
-              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:700, color:theme.muted }}>€</span>
+                placeholder="20" style={{...inp, paddingRight:30, fontSize:16, fontWeight:700}} />
+              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:700, color:theme.muted }}>EUR</span>
             </div>
-            <button onClick={handleCheckout} disabled={paying || numAmt < 5}
-              style={{ padding:'10px 20px', borderRadius:12, background: numAmt >= 5 ? '#1a73e8' : theme.inputBg,
-                color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:700, fontSize:13, border:'none',
-                cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
-                boxShadow: numAmt >= 5 ? '0 4px 14px rgba(26,115,232,0.35)' : 'none' }}>
-              {paying ? 'Redirection...' : 'Payer avec SumUp'}
-            </button>
           </div>
           {numAmt >= 5 && (
-            <div style={{ fontSize:11, color:theme.muted, lineHeight:1.6 }}>
-              ≈ <strong>{estimatedSms} SMS</strong> · Frais SumUp 1.69% : {sumupFee}€ · Total : {(numAmt + parseFloat(sumupFee)).toFixed(2)}€
-            </div>
+            <p style={{ fontSize:13, color:theme.text, margin:'0 0 12px' }}>
+              Avec <strong>{numAmt} EUR</strong> vous obtenez environ <strong>{estimatedSms} SMS</strong>
+            </p>
           )}
-          {numAmt > 0 && numAmt < 5 && <p style={{ fontSize:11, color:'#ef4444', fontWeight:600 }}>Montant minimum : 5€</p>}
+          {numAmt > 0 && numAmt < 5 && <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>Montant minimum : 5 EUR</p>}
+          <button onClick={handleCheckout} disabled={paying || numAmt < 5}
+            style={{ width:'100%', padding:'13px', borderRadius:12,
+              background: numAmt >= 5 ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : theme.inputBg,
+              color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:800, fontSize:14, border:'none',
+              cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
+              boxShadow: numAmt >= 5 ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}>
+            {paying ? 'Redirection...' : 'Recharger'}
+          </button>
         </div>
-      </Card>
+      </div>
 
-      {/* Section 2 — Quota Email */}
-      <Card theme={theme}>
-        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Quota Email Marketing</p>
+      {/* Section 2 — Emails marketing */}
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:16, textTransform:'uppercase', letterSpacing:'0.05em' }}>Emails marketing disponibles</p>
         {quota?.email && (
           <>
-            <div style={{ marginBottom:12 }}>
+            <div style={{ marginBottom:14 }}>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:theme.text }}>
                 <span>Aujourd'hui</span>
                 <span style={{ fontWeight:700 }}>{quota.email.sent_today} / {quota.email.daily_limit}</span>
               </div>
               <div style={{ height:8, borderRadius:4, background: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }}>
-                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_today/quota.email.daily_limit)*100)}%`,
-                  background: quota.email.sent_today > quota.email.daily_limit * 0.8 ? '#ef4444' : '#10b981', transition:'width 0.3s' }} />
+                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_today / quota.email.daily_limit) * 100)}%`,
+                  background: barColor(quota.email.sent_today, quota.email.daily_limit), transition:'width 0.3s' }} />
               </div>
             </div>
-            <div style={{ marginBottom:12 }}>
+            <div style={{ marginBottom:14 }}>
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:theme.text }}>
                 <span>Ce mois</span>
                 <span style={{ fontWeight:700 }}>{quota.email.sent_month} / {quota.email.monthly_limit}</span>
               </div>
               <div style={{ height:8, borderRadius:4, background: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }}>
-                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_month/quota.email.monthly_limit)*100)}%`,
-                  background: quota.email.sent_month > quota.email.monthly_limit * 0.8 ? '#ef4444' : '#1a73e8', transition:'width 0.3s' }} />
+                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_month / quota.email.monthly_limit) * 100)}%`,
+                  background: barColor(quota.email.sent_month, quota.email.monthly_limit), transition:'width 0.3s' }} />
               </div>
             </div>
-            <p style={{ fontSize:11, color:theme.dim, fontStyle:'italic' }}>
-              Les emails de confirmation RDV ne comptent pas dans ce quota
-            </p>
+            {quota.email.month_reset && (
+              <p style={{ fontSize:11, color:theme.dim }}>
+                Reset le {new Date(new Date(quota.email.month_reset).getFullYear(), new Date(quota.email.month_reset).getMonth() + 1, 1).toLocaleDateString('fr-FR')}
+              </p>
+            )}
           </>
         )}
-      </Card>
+      </div>
 
-      {/* Section 3 — Historique campagnes */}
-      <Card theme={theme}>
-        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Historique campagnes</p>
+      {/* Section 3 — Historique campagnes (compact, 10 max) */}
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Historique</p>
         {!history.length ? (
-          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:20 }}>Aucune campagne</p>
+          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:16 }}>Aucune campagne</p>
         ) : (
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', fontSize:12, borderCollapse:'collapse' }}>
               <thead>
                 <tr style={{ borderBottom:`1px solid ${theme.border}` }}>
-                  {['Date','Code promo','Canal','Envoyes','Cout','Statut'].map(h => (
-                    <th key={h} style={{ textAlign:'left', padding:'8px 6px', fontWeight:700, color:theme.muted, fontSize:11 }}>{h}</th>
+                  {['Date','Canal','Envoyes','Cout','Statut'].map(h => (
+                    <th key={h} style={{ textAlign:'left', padding:'7px 6px', fontWeight:700, color:theme.muted, fontSize:11 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {history.map(c => (
+                {history.slice(0, 10).map(c => (
                   <tr key={c.id} style={{ borderBottom:`1px solid ${theme.border}` }}>
-                    <td style={{ padding:'8px 6px', color:theme.text }}>{c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td style={{ padding:'8px 6px', color:theme.text, fontFamily:'monospace', fontWeight:700 }}>{c.promo_code || '-'}</td>
-                    <td style={{ padding:'8px 6px', color:theme.text }}>{c.channel}</td>
-                    <td style={{ padding:'8px 6px', color:theme.text }}>{(c.sent_sms||0)+(c.sent_email||0)}</td>
-                    <td style={{ padding:'8px 6px', color:theme.text }}>{Number(c.sms_cost||0).toFixed(2)}€</td>
-                    <td style={{ padding:'8px 6px' }}>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{c.channel}</td>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{(c.sent_sms||0)+(c.sent_email||0)}</td>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{Number(c.sms_cost||0).toFixed(2)}EUR</td>
+                    <td style={{ padding:'7px 6px' }}>
                       <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6,
                         background: c.status === 'completed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
                         color: c.status === 'completed' ? '#10b981' : '#f59e0b' }}>{c.status}</span>
@@ -5226,31 +5241,30 @@ function TabSMS({ showToast, theme }) {
             </table>
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* Section 4 — Transactions SMS */}
-      <Card theme={theme}>
-        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Transactions SMS</p>
-        {!transactions.length ? (
-          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:20 }}>Aucune transaction</p>
+      {/* Section 4 — Transactions (compact, 10 max) */}
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Transactions</p>
+        {!smsTx.length ? (
+          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:16 }}>Aucune transaction</p>
         ) : (
           <div className="space-y-2">
-            {transactions.map(tx => (
+            {smsTx.slice(0, 10).map(tx => (
               <div key={tx.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-                padding:'10px 12px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
-                border:`1px solid ${theme.border}` }}>
+                padding:'8px 10px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc' }}>
                 <div>
-                  <p style={{ fontSize:13, fontWeight:600, color:theme.text, margin:0 }}>{tx.description || tx.type}</p>
-                  <p style={{ fontSize:11, color:theme.muted, margin:'2px 0 0' }}>{tx.created_at ? new Date(tx.created_at).toLocaleDateString('fr-FR') : ''}</p>
+                  <p style={{ fontSize:12, fontWeight:600, color:theme.text, margin:0 }}>{tx.description || tx.type}</p>
+                  <p style={{ fontSize:10, color:theme.muted, margin:'2px 0 0' }}>{tx.created_at ? new Date(tx.created_at).toLocaleDateString('fr-FR') : ''}</p>
                 </div>
-                <span style={{ fontSize:14, fontWeight:800, color: tx.type === 'credit' ? '#10b981' : '#ef4444' }}>
-                  {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount||0).toFixed(2)}€
+                <span style={{ fontSize:13, fontWeight:800, color: tx.type === 'credit' ? '#10b981' : '#ef4444' }}>
+                  {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount||0).toFixed(2)} EUR
                 </span>
               </div>
             ))}
           </div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
@@ -5274,7 +5288,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
     'categories':   'categories',
     'profil':       'profil',
     'marketing':    'marketing',
-    'sms':          'sms',
     'clients':      'clients',
     'export':       'export',
     'previsions':   'forecast',
@@ -5296,7 +5309,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
     'categories':   '/settings/categories',
     'profil':       '/settings/profil',
     'marketing':    '/settings/marketing',
-    'sms':          '/settings/sms',
     'clients':      '/settings/clients',
     'export':       '/settings/export',
     'forecast':     '/settings/previsions',
@@ -5320,7 +5332,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
     { id: 'categories',   label: 'Categories', icon: I.Tag },
     { id: 'profil',       label: 'Images',     icon: I.Camera },
     { id: 'marketing',    label: 'Marketing',  icon: I.Gift },
-    { id: 'sms',          label: 'SMS',        icon: I.Send },
     { id: 'clients',      label: 'Clients',    icon: I.UserCheck },
     { id: 'notifications',label: 'Notifs',     icon: I.Bell },
     { id: 'export',       label: 'Export',     icon: I.Download },
@@ -5388,7 +5399,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'profil'       && <TabProfil theme={theme} showToast={show} />}
         {tab === 'clients'       && <TabClients theme={theme} showToast={show} />}
         {tab === 'marketing'    && <TabMarketing theme={theme} showToast={show} />}
-        {tab === 'sms'          && <TabSMS showToast={show} theme={theme} />}
         {tab === 'export'       && <TabExport employees={employees} categories={categories} theme={theme} />}
         {tab === 'forecast'     && <TabForecastStats theme={theme} />}
         {tab === 'heatmap'      && <TabHeatmap theme={theme} />}

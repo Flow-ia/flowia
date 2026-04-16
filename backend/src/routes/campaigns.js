@@ -12,8 +12,8 @@ router.use(authMiddleware);
 // ── Constantes ──────────────────────────────────────────────────────────────
 const EMAIL_DAILY_LIMIT   = 300;
 const EMAIL_MONTHLY_LIMIT = 9000;
-const EMAIL_RESERVE       = 80;
-const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT - EMAIL_RESERVE; // 220/jour
+// Plus de EMAIL_RESERVE fixe — le compteur inclut tous les emails
+const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT; // 300/jour total
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

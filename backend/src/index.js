@@ -232,7 +232,7 @@ function startServer() {
       if (!rows.length) return;
       for (const item of rows) {
         try {
-          if (global.emailsToday >= 220) {
+          if (global.emailsToday >= 300) {
             console.log('[CRON queue] Limite email marketing atteinte, arret');
             break;
           }

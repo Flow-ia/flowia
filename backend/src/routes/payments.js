@@ -13,50 +13,83 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:3000').split
 // ── POST /api/payments/sms/checkout ─────────────────────────────────────────
 router.post('/sms/checkout', authMiddleware, async (req, res) => {
   try {
-    const { amount } = req.body;
-    const numAmount = parseFloat(amount);
-    if (!numAmount || numAmount < 5) return res.status(400).json({ error: 'Montant minimum 5€.' });
-
     const userId = req.user.userId;
-    const reference = `sms_${userId}_${Date.now()}`;
+    const amount = parseFloat(req.body.amount);
 
-    const checkoutRes = await fetch('https://api.sumup.com/v0.1/checkouts', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.SUMUP_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        checkout_reference: reference,
-        amount: numAmount,
-        currency: 'EUR',
-        description: `Recharge SMS FlowIA - ${numAmount}€`,
-        return_url: `${BACKEND_URL}/api/payments/sms/webhook`,
-        redirect_url: `${FRONTEND_URL}/settings/sms?recharge=success&checkout_id=CHECKOUT_ID`,
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    const checkout = await checkoutRes.json();
-    if (!checkoutRes.ok) {
-      console.error('[SUMUP checkout]', checkout);
-      return res.status(500).json({ error: 'Erreur creation checkout SumUp.' });
+    if (!amount || amount < 5) {
+      return res.status(400).json({ error: 'Montant minimum : 5EUR' });
     }
 
+    const SUMUP_KEY    = process.env.SUMUP_SECRET_KEY;
+    const BACK_URL     = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
+    const FRONT_URL    = (process.env.FRONTEND_URL || 'https://haircoifflille.fr').split(',')[0].trim();
+    const ref = `sms_${userId}_${Date.now()}`;
+
+    // Etape 1 : recuperer le merchant_code depuis /me
+    const meRes = await fetch('https://api.sumup.com/v0.1/me', {
+      headers: { 'Authorization': `Bearer ${SUMUP_KEY}` }
+    });
+    const meData = await meRes.json();
+    const merchantCode = meData.merchant_profile?.merchant_code;
+
+    if (!merchantCode) {
+      console.error('[SUMUP] merchant_code introuvable:', JSON.stringify(meData));
+      return res.status(500).json({ error: 'Compte SumUp non configure.' });
+    }
+
+    // Etape 2 : creer le checkout
+    const checkoutBody = {
+      checkout_reference: ref,
+      amount: parseFloat(amount.toFixed(2)),
+      currency: 'EUR',
+      merchant_code: merchantCode,
+      description: 'Recharge SMS FlowIA',
+      return_url: `${BACK_URL}/api/payments/sms/webhook`
+    };
+
+    console.log('[SUMUP CHECKOUT] body:', JSON.stringify(checkoutBody));
+
+    const response = await fetch('https://api.sumup.com/v0.1/checkouts', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUMUP_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(checkoutBody)
+    });
+
+    const checkout = await response.json();
+    console.log('[SUMUP CHECKOUT] reponse:', JSON.stringify(checkout));
+
+    if (!checkout.id) {
+      return res.status(500).json({
+        error: 'Erreur SumUp: ' + (checkout.message || JSON.stringify(checkout))
+      });
+    }
+
+    // Calculer SMS estimes
+    const estimatedSms = Math.floor(amount / SMS_PRICE);
+
     // Enregistrer la transaction en attente
-    await pool.query(
-      `INSERT INTO sms_transactions (user_id, type, amount, description, sumup_checkout_id, status)
-       VALUES ($1,'credit',$2,$3,$4,'pending')`,
-      [userId, numAmount, `Recharge SMS - ${numAmount}€`, checkout.id]
-    );
+    await pool.query(`
+      INSERT INTO sms_transactions
+        (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
+      VALUES ($1, 'credit', $2, $3, $4, $5, 'pending')
+    `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, checkout.id]);
 
-    // Mettre à jour l'URL de redirection avec le vrai checkout_id
-    const redirectUrl = `${FRONTEND_URL}/settings/sms?recharge=success&checkout_id=${checkout.id}`;
+    // URL de redirection apres paiement
+    const redirectUrl = `${FRONT_URL}/settings/marketing?recharge=success&checkout_id=${checkout.id}`;
 
-    res.json({ checkout_url: checkout.checkout_url || redirectUrl, checkout_id: checkout.id });
-  } catch (err) {
-    console.error('[PAYMENTS checkout]', err.message);
-    res.status(500).json({ error: 'Erreur serveur.' });
+    res.json({
+      checkout_url: checkout.hosted_checkout_url || `https://checkout.sumup.com/${checkout.id}`,
+      checkout_id: checkout.id,
+      estimated_sms: estimatedSms,
+      redirect_url: redirectUrl
+    });
+
+  } catch(e) {
+    console.error('[SUMUP CHECKOUT ERROR]', e.message, e.stack);
+    res.status(500).json({ error: 'Erreur creation checkout: ' + e.message });
   }
 });
 
