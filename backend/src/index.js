@@ -153,6 +153,8 @@ function startServer() {
   app.use('/api/export',         apiLimiter,  require('./routes/export'));
   app.use('/api/credits',        apiLimiter,  require('./routes/credits'));
   app.use('/api/employee-pins',  apiLimiter,  require('./routes/employee-pins'));
+  app.use('/api/campaigns',     apiLimiter,  require('./routes/campaigns'));
+  app.use('/api/payments',      apiLimiter,  require('./routes/payments'));
 
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
     require('./routes/notifications');
@@ -195,7 +197,175 @@ function startServer() {
     res.sendFile(indexHtml, { root: '/' }, err => { if (err) next(); });
   });
 
+  // ── Protection Brevo gratuit — compteur global emails ────────────────────
+  global.emailsToday = 0;
+  // Reset chaque jour à minuit
+  const resetEmailCounter = () => {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    setTimeout(() => {
+      global.emailsToday = 0;
+      console.log('[EMAIL] Compteur journalier reset');
+      setInterval(() => { global.emailsToday = 0; }, 24 * 60 * 60 * 1000);
+    }, midnight - now);
+  };
+  resetEmailCounter();
+
   // ── Cron — uniquement sur le worker 1 pour éviter les doublons ───────────
+  const { sendEmail } = require('./utils/email');
+  const { pool: dbPool } = require('./db');
+  const { sleep: cronSleep } = require('./utils/messenger');
+
+  // Traitement file d'attente campagnes email (toutes les heures, 8h-20h)
+  async function processCampaignQueue() {
+    const hour = new Date().getHours();
+    if (hour < 8 || hour > 20) return;
+    try {
+      const { rows } = await dbPool.query(`
+        SELECT * FROM campaign_queue
+        WHERE status='pending' AND scheduled_date <= CURRENT_DATE
+        ORDER BY created_at ASC
+        LIMIT 30
+        FOR UPDATE SKIP LOCKED
+      `);
+      if (!rows.length) return;
+      for (const item of rows) {
+        try {
+          if (global.emailsToday >= 220) {
+            console.log('[CRON queue] Limite email marketing atteinte, arret');
+            break;
+          }
+          await sendEmail({ to: item.client_email, subject: 'Offre speciale de votre commerce', html: item.message });
+          await dbPool.query(`UPDATE campaign_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [item.id]);
+          await dbPool.query(
+            `UPDATE users SET email_sent_today = email_sent_today + 1, email_sent_month = email_sent_month + 1 WHERE id=$1`,
+            [item.user_id]
+          );
+          global.emailsToday++;
+          if (global.emailsToday > 250) console.warn('[EMAIL] Warning: > 250 emails aujourd\'hui !');
+          await cronSleep(500);
+        } catch (e) {
+          await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`, [item.id, e.message]);
+        }
+      }
+      console.log(`[CRON queue] ${rows.length} emails traites`);
+    } catch (e) {
+      console.error('[CRON queue]', e.message);
+    }
+  }
+
+  // Rappels email automatiques avant RDV (toutes les heures, 7h-20h)
+  async function processAppointmentReminders() {
+    const hour = new Date().getHours();
+    if (hour < 7 || hour > 20) return;
+    try {
+      // Rappel 24h avant
+      const { rows: reminders24 } = await dbPool.query(`
+        SELECT a.id, a.client_name, a.client_email, a.date, a.start_time, a.duration_minutes,
+          bs.name AS service_name, e.name AS employee_name,
+          u.business_name, u.address AS business_address
+        FROM appointments a
+        LEFT JOIN booking_services bs ON bs.id = a.service_id
+        LEFT JOIN employees e ON e.id = a.employee_id
+        LEFT JOIN users u ON u.id = a.user_id
+        WHERE a.status IN ('confirmed','pending')
+          AND a.reminder_24h_sent = FALSE
+          AND a.client_email IS NOT NULL AND a.client_email != ''
+          AND a.date = CURRENT_DATE + INTERVAL '1 day'
+          AND ABS(EXTRACT(EPOCH FROM (a.start_time::time - CURRENT_TIME)) - 86400) < 1800
+      `);
+      for (const r of reminders24) {
+        try {
+          const dateStr = new Date(r.date).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+          const timeStr = r.start_time?.toString().slice(0,5) || '';
+          await sendEmail({
+            to: r.client_email,
+            subject: `Rappel RDV - ${r.service_name || 'Votre prestation'} demain a ${timeStr}`,
+            html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
+<div style="max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+<div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;">
+<div style="font-size:40px;margin-bottom:10px;">📅</div>
+<h1 style="color:white;margin:0;font-size:22px;font-weight:800;">Rappel de rendez-vous</h1>
+</div>
+<div style="padding:32px 36px;">
+<p style="color:#0f172a;font-size:16px;font-weight:700;">Bonjour ${r.client_name},</p>
+<p style="color:#64748b;font-size:14px;">Nous vous rappelons votre rendez-vous demain :</p>
+<div style="background:#f1f5f9;border-radius:16px;padding:20px;margin:20px 0;">
+<p style="margin:6px 0;font-size:14px;"><strong>Service :</strong> ${r.service_name || 'N/A'}</p>
+<p style="margin:6px 0;font-size:14px;"><strong>Date :</strong> ${dateStr}</p>
+<p style="margin:6px 0;font-size:14px;"><strong>Heure :</strong> ${timeStr}</p>
+${r.employee_name ? `<p style="margin:6px 0;font-size:14px;"><strong>Avec :</strong> ${r.employee_name}</p>` : ''}
+${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse :</strong> ${r.business_address}</p>` : ''}
+</div>
+<p style="color:#64748b;font-size:13px;">A bientot chez <strong>${r.business_name || 'votre commerce'}</strong> !</p>
+</div>
+<div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
+</div></div></body></html>`,
+          });
+          await dbPool.query(`UPDATE appointments SET reminder_24h_sent=TRUE WHERE id=$1`, [r.id]);
+          global.emailsToday++;
+        } catch (e) { console.error('[REMINDER 24h]', e.message); }
+      }
+
+      // Rappel 2h avant
+      const { rows: reminders2 } = await dbPool.query(`
+        SELECT a.id, a.client_name, a.client_email, a.date, a.start_time,
+          bs.name AS service_name, e.name AS employee_name,
+          u.business_name, u.address AS business_address
+        FROM appointments a
+        LEFT JOIN booking_services bs ON bs.id = a.service_id
+        LEFT JOIN employees e ON e.id = a.employee_id
+        LEFT JOIN users u ON u.id = a.user_id
+        WHERE a.status IN ('confirmed','pending')
+          AND a.reminder_2h_sent = FALSE
+          AND a.client_email IS NOT NULL AND a.client_email != ''
+          AND a.date = CURRENT_DATE
+          AND a.start_time BETWEEN (CURRENT_TIME + INTERVAL '1 hour 45 minutes') AND (CURRENT_TIME + INTERVAL '2 hours 15 minutes')
+      `);
+      for (const r of reminders2) {
+        try {
+          const timeStr = r.start_time?.toString().slice(0,5) || '';
+          await sendEmail({
+            to: r.client_email,
+            subject: `Votre RDV est dans 2h - ${r.service_name || 'Votre prestation'} a ${timeStr}`,
+            html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
+<div style="max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+<div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;">
+<div style="font-size:40px;margin-bottom:10px;">⏰</div>
+<h1 style="color:white;margin:0;font-size:22px;font-weight:800;">Votre RDV approche !</h1>
+</div>
+<div style="padding:32px 36px;">
+<p style="color:#0f172a;font-size:16px;font-weight:700;">Bonjour ${r.client_name},</p>
+<p style="color:#64748b;font-size:14px;">Votre rendez-vous est dans <strong>2 heures</strong> :</p>
+<div style="background:#f1f5f9;border-radius:16px;padding:20px;margin:20px 0;">
+<p style="margin:6px 0;font-size:14px;"><strong>Service :</strong> ${r.service_name || 'N/A'}</p>
+<p style="margin:6px 0;font-size:14px;"><strong>Heure :</strong> ${timeStr}</p>
+${r.employee_name ? `<p style="margin:6px 0;font-size:14px;"><strong>Avec :</strong> ${r.employee_name}</p>` : ''}
+${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse :</strong> ${r.business_address}</p>` : ''}
+</div>
+<p style="color:#64748b;font-size:13px;">A tout de suite !</p>
+</div>
+<div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
+<p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
+</div></div></body></html>`,
+          });
+          await dbPool.query(`UPDATE appointments SET reminder_2h_sent=TRUE WHERE id=$1`, [r.id]);
+          global.emailsToday++;
+        } catch (e) { console.error('[REMINDER 2h]', e.message); }
+      }
+
+      if (reminders24.length || reminders2.length) {
+        console.log(`[CRON reminders] 24h: ${reminders24.length}, 2h: ${reminders2.length}`);
+      }
+    } catch (e) {
+      console.error('[CRON reminders]', e.message);
+    }
+  }
+
   function startCron() {
     // Décaler chaque tâche pour ne pas tout lancer en même temps
     setInterval(async () => {
@@ -209,6 +379,16 @@ function startServer() {
     setInterval(async () => {
       try { await runDailyRecaps();       } catch (e) { console.error('[CRON recap]', e.message); }
     }, 5 * 60 * 1000); // moins fréquent, toutes les 5 min
+
+    // File d'attente campagnes email — toutes les heures
+    setInterval(async () => {
+      try { await processCampaignQueue(); } catch (e) { console.error('[CRON queue]', e.message); }
+    }, 60 * 60 * 1000);
+
+    // Rappels email RDV — toutes les heures
+    setInterval(async () => {
+      try { await processAppointmentReminders(); } catch (e) { console.error('[CRON reminders]', e.message); }
+    }, 60 * 60 * 1000);
 
     console.log('⏰ Cron démarré (worker', process.pid, ')');
   }

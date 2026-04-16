@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { I, ICON_MAP, PAL, PAL2 } from '../utils/icons';
 import { Toast, useToast, CodeInput, Confirm, Modal } from '../components/UI';
-import { notifApi, exportApi, absencesApi, commissionsApi, loyaltyApi, promoApi, statsApi, clientsApi, bookingApi, mediaApi } from '../utils/api';
+import { notifApi, exportApi, absencesApi, commissionsApi, loyaltyApi, promoApi, statsApi, clientsApi, bookingApi, mediaApi, campaignsApi, paymentsApi } from '../utils/api';
 import { CategoryForm, EmployeeForm, TransactionForm } from '../components/Forms';
 import { PinSetup } from '../components/PinGate';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -3645,7 +3645,13 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
   const [timeFrom, setTimeFrom]     = useState('10:00');
   const [timeUntil, setTimeUntil]   = useState('14:00');
   const [saving, setSaving] = useState(false);
-  const [sendEmail, setSendEmail] = useState(false); // option envoi auto email
+  const [campaignChannel, setCampaignChannel] = useState('none'); // none|email|sms|both
+  const [campaignTarget, setCampaignTarget] = useState('top50');
+  const [customCount, setCustomCount] = useState('50');
+  const [smsMessage, setSmsMessage] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [sendingCampaign, setSendingCampaign] = useState(false);
 
   useEffect(() => {
     if (init) {
@@ -3660,29 +3666,11 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
       setValidFrom(new Date().toISOString().split('T')[0]); setValidUntil('');
       setTargetClients('all'); setTimeAllday(true); setTimeFrom('10:00'); setTimeUntil('14:00');
     }
+    setCampaignChannel('none'); setPreview(null); setSmsMessage('');
   }, [init, open]);
 
   if (!open) return null;
   const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
-
-  const handleSave = async () => {
-    if (!code || !value) return;
-    setSaving(true);
-    try {
-      const saved = await onSave({
-        code, type, value:parseFloat(value),
-        max_uses:maxUses?parseInt(maxUses):null,
-        valid_from:validFrom||null, valid_until:validUntil||null,
-        target_clients:targetClients,
-        time_allday: timeAllday,
-        time_from:  timeAllday ? null : timeFrom,
-        time_until: timeAllday ? null : timeUntil,
-        send_email: sendEmail && targetClients === 'all' && !init,
-      });
-      onClose();
-    } catch(e) { alert(e.message); }
-    finally { setSaving(false); }
-  };
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
@@ -3769,48 +3757,124 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
               </button>
             </div>
           </div>
-          {/* Option envoi email : visible si tous les clients selectionnes */}
-          {targetClients === 'all' && !init && (
-            <div style={{ padding:'12px 14px', borderRadius:12,
-              background: sendEmail
-                ? 'rgba(26,115,232,0.08)'
-                : (isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)'),
-              border: `1px solid ${sendEmail ? 'rgba(26,115,232,0.3)' : theme.border}`,
-              cursor:'pointer' }}
-              onClick={()=>setSendEmail(v=>!v)}>
-              <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-                <div style={{ width:18, height:18, borderRadius:5, flexShrink:0,
-                  background: sendEmail ? '#1a73e8' : 'transparent',
-                  border: `2px solid ${sendEmail ? '#1a73e8' : theme.border}`,
-                  display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  {sendEmail && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"
-                      style={{width:11,height:11}}>
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+          {/* ── Section : Envoyer aux clients ── */}
+          {!init && (
+            <div style={{ padding:'14px', borderRadius:14, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border:`1px solid ${theme.border}` }}>
+              <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:10, textTransform:'uppercase', letterSpacing:'0.05em' }}>Envoyer aux clients</p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:10 }}>
+                {[
+                  { id:'none', label:'Ne pas envoyer', color:theme.muted },
+                  { id:'email', label:'Email (gratuit)', color:'#1a73e8' },
+                  { id:'sms', label:'SMS (payant)', color:'#f59e0b' },
+                  { id:'both', label:'Email + SMS', color:'#8b5cf6' },
+                ].map(ch => (
+                  <button key={ch.id} onClick={() => { setCampaignChannel(ch.id); setPreview(null); }}
+                    style={{ padding:'9px 8px', borderRadius:10, fontWeight:700, fontSize:11, cursor:'pointer',
+                      border:`1px solid ${campaignChannel===ch.id ? ch.color : theme.border}`,
+                      background: campaignChannel===ch.id ? `${ch.color}15` : theme.inputBg,
+                      color: campaignChannel===ch.id ? ch.color : theme.muted }}>{ch.label}</button>
+                ))}
+              </div>
+              {campaignChannel !== 'none' && (
+                <>
+                  <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Ciblage</label>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+                    {[{id:'top50',l:'Top 50'},{id:'top100',l:'Top 100'},{id:'top200',l:'Top 200'},{id:'all',l:'Tous'},{id:'custom',l:'Personnalise'}].map(t => (
+                      <button key={t.id} onClick={() => setCampaignTarget(t.id)}
+                        style={{ padding:'6px 12px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer',
+                          border:`1px solid ${campaignTarget===t.id ? '#1a73e8' : theme.border}`,
+                          background: campaignTarget===t.id ? 'rgba(26,115,232,0.12)' : theme.inputBg,
+                          color: campaignTarget===t.id ? '#1a73e8' : theme.muted }}>{t.l}</button>
+                    ))}
+                  </div>
+                  {campaignTarget === 'custom' && (
+                    <div style={{ marginBottom:10 }}>
+                      <input type="number" min="1" value={customCount} onChange={e => setCustomCount(e.target.value)}
+                        placeholder="Nombre de clients" style={{...inp, fontSize:12}} />
+                    </div>
                   )}
-                </div>
-                <div>
-                  <p style={{ fontSize:13, fontWeight:700, color:theme.text, margin:0 }}>
-                    Envoyer le code par email aux clients
-                  </p>
-                  <p style={{ fontSize:11, color:theme.muted, margin:'2px 0 0' }}>
-                    Un email marketing sera envoyé à tous vos clients
-                  </p>
-                </div>
-              </label>
+                  {(campaignChannel === 'sms' || campaignChannel === 'both') && (
+                    <div style={{ marginBottom:10 }}>
+                      <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Message SMS (160 car. max)</label>
+                      <textarea value={smsMessage} onChange={e => setSmsMessage(e.target.value.slice(0,160))}
+                        placeholder="Profitez de -10% avec le code PROMO10 !"
+                        style={{...inp, height:60, resize:'none', fontSize:12}} />
+                      <p style={{ fontSize:10, color: smsMessage.length > 150 ? '#ef4444' : theme.muted, textAlign:'right' }}>{smsMessage.length}/160</p>
+                    </div>
+                  )}
+                  <button onClick={async () => {
+                    setPreviewLoading(true);
+                    try {
+                      const p = await campaignsApi.getCampaignPreview({
+                        target_type: campaignTarget, custom_count: customCount, channel: campaignChannel
+                      });
+                      setPreview(p);
+                    } catch(e) { alert(e.message); }
+                    finally { setPreviewLoading(false); }
+                  }} disabled={previewLoading}
+                    style={{ width:'100%', padding:'8px', borderRadius:10, fontSize:12, fontWeight:700,
+                      background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.text,
+                      cursor:'pointer', opacity:previewLoading?0.6:1 }}>
+                    {previewLoading ? 'Calcul...' : 'Calculer le cout'}
+                  </button>
+                  {preview && (
+                    <div style={{ marginTop:10, padding:'10px 12px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.06)' : 'white', border:`1px solid ${theme.border}`, fontSize:11 }}>
+                      {preview.email && <p style={{ margin:'2px 0', color:theme.text }}>Email : <strong>{preview.email.count} clients</strong> · Quota dispo : {preview.email.quota?.available_today || 0}/jour</p>}
+                      {preview.email?.plan && <p style={{ margin:'2px 0', color:'#f59e0b', fontWeight:600 }}>Envoi etale sur {preview.email.plan.days_needed + 1} jours ({preview.email.plan.today} aujourd'hui, {preview.email.plan.remaining} en file d'attente)</p>}
+                      {preview.sms && <p style={{ margin:'2px 0', color:theme.text }}>SMS : <strong>{preview.sms.count} clients</strong> · Cout : <strong>{preview.sms.cost?.toFixed(2)}€</strong></p>}
+                      {preview.sms && !preview.sms.sufficient && (
+                        <p style={{ margin:'4px 0', color:'#ef4444', fontWeight:700 }}>
+                          Solde insuffisant ({preview.sms.balance?.toFixed(2)}€). <a href="/settings/sms" style={{ color:'#1a73e8' }}>Recharger</a>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
           <button onClick={onClose} style={{ flex:1, padding:'12px', borderRadius:12, background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, cursor:'pointer' }}>Annuler</button>
-          <button onClick={handleSave} disabled={saving||!code||!value}
+          <button onClick={async () => {
+            if (!code || !value) return;
+            setSaving(true);
+            try {
+              const saved = await onSave({
+                code, type, value:parseFloat(value),
+                max_uses:maxUses?parseInt(maxUses):null,
+                valid_from:validFrom||null, valid_until:validUntil||null,
+                target_clients:targetClients,
+                time_allday: timeAllday,
+                time_from:  timeAllday ? null : timeFrom,
+                time_until: timeAllday ? null : timeUntil,
+              });
+              // Envoyer la campagne si demande
+              if (campaignChannel !== 'none' && saved?.id) {
+                setSendingCampaign(true);
+                try {
+                  const emailHtml = `<div style="font-family:-apple-system,sans-serif;max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;"><h1 style="color:white;margin:0;font-size:22px;">Offre speciale !</h1></div><div style="padding:32px 36px;text-align:center;"><p style="font-size:18px;font-weight:700;color:#0f172a;">Code promo : <span style="color:#1a73e8;font-family:monospace;font-size:24px;">${code}</span></p><p style="color:#64748b;font-size:14px;">${type === 'percent' ? `-${value}%` : `-${value}€`} sur votre prochaine prestation</p></div></div>`;
+                  await campaignsApi.sendCampaign({
+                    promo_code_id: saved.id,
+                    target_type: campaignTarget,
+                    custom_count: customCount,
+                    channel: campaignChannel,
+                    message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
+                    message_email: emailHtml,
+                  });
+                } catch(e) { alert('Campagne: ' + e.message); }
+                finally { setSendingCampaign(false); }
+              }
+              onClose();
+            } catch(e) { alert(e.message); }
+            finally { setSaving(false); }
+          }} disabled={saving||sendingCampaign||!code||!value||(campaignChannel==='sms'&&preview&&!preview.sms?.sufficient)}
             style={{ flex:2, padding:'13px', borderRadius:12,
               background: (!code||!value) ? theme.inputBg : '#1a73e8',
               color: (!code||!value) ? theme.muted : 'white',
               fontWeight:800, fontSize:14, border:'none', cursor:(!code||!value)?'not-allowed':'pointer',
-              opacity:saving?0.6:1, boxShadow:(!code||!value)?'none':'0 4px 14px rgba(26,115,232,0.35)' }}>
-            {saving ? 'Enregistrement...' : init ? 'Modifier' : sendEmail ? 'Créer et envoyer' : 'Créer le code'}
+              opacity:(saving||sendingCampaign)?0.6:1, boxShadow:(!code||!value)?'none':'0 4px 14px rgba(26,115,232,0.35)' }}>
+            {saving ? 'Enregistrement...' : sendingCampaign ? 'Envoi campagne...' : campaignChannel !== 'none' ? 'Creer + Envoyer' : init ? 'Modifier' : 'Creer le code'}
           </button>
         </div>
       </div>
@@ -4990,6 +5054,207 @@ function TabRGPD({ showToast, theme }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// TAB SMS — Solde, recharge, quota email, historique campagnes
+// ════════════════════════════════════════════════════════════════════════════
+const SMS_COST_UNIT = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045');
+const SMS_MARGIN_PCT = parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30');
+const SMS_PRICE_UNIT = parseFloat((SMS_COST_UNIT * (1 + SMS_MARGIN_PCT / 100)).toFixed(4));
+
+function TabSMS({ showToast, theme }) {
+  const isDark = theme.mode === 'dark';
+  const [balance, setBalance]       = useState(null);
+  const [quota, setQuota]           = useState(null);
+  const [history, setHistory]       = useState([]);
+  const [transactions, setTx]       = useState([]);
+  const [amount, setAmount]         = useState('10');
+  const [loading, setLoading]       = useState(true);
+  const [paying, setPaying]         = useState(false);
+  const location = useLocation();
+
+  const load = useCallback(async () => {
+    try {
+      const [b, q, h, t] = await Promise.all([
+        paymentsApi.getSMSBalance(),
+        campaignsApi.getCampaignQuota(),
+        campaignsApi.getCampaignHistory(),
+        paymentsApi.getSMSTransactions(),
+      ]);
+      setBalance(b);
+      setQuota(q);
+      setHistory(h);
+      setTx(t);
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Vérifier recharge au retour SumUp
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const checkoutId = params.get('checkout_id');
+    const recharge = params.get('recharge');
+    if (recharge === 'success' && checkoutId) {
+      paymentsApi.verifySMSCheckout(checkoutId).then(r => {
+        if (r.credited) showToast(`Recharge de ${r.amount}€ creditee !`);
+        else if (r.already_credited) showToast('Recharge deja creditee.');
+        load();
+      }).catch(() => {});
+    }
+  }, [location.search]);
+
+  const handleCheckout = async () => {
+    const num = parseFloat(amount);
+    if (!num || num < 5) return showToast('Montant minimum 5€', 'err');
+    setPaying(true);
+    try {
+      const r = await paymentsApi.createSMSCheckout(num);
+      if (r.checkout_url) window.location.href = r.checkout_url;
+    } catch(e) { showToast(e.message, 'err'); }
+    finally { setPaying(false); }
+  };
+
+  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
+  const numAmt = parseFloat(amount) || 0;
+  const estimatedSms = numAmt > 0 ? Math.floor(numAmt / SMS_PRICE_UNIT) : 0;
+  const sumupFee = numAmt > 0 ? (numAmt * 0.0169).toFixed(2) : '0.00';
+
+  if (loading) return <div style={{ textAlign:'center', padding:40, color:theme.muted }}>Chargement...</div>;
+
+  return (
+    <div className="space-y-4">
+      {/* Section 1 — Solde SMS */}
+      <Card theme={theme}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Solde SMS</p>
+        <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:8 }}>
+          <span style={{ fontSize:36, fontWeight:900, color:theme.text }}>{(balance?.balance || 0).toFixed(2)}€</span>
+          <span style={{ fontSize:13, color:theme.muted }}>≈ {balance?.estimated_sms || 0} SMS disponibles</span>
+        </div>
+        <p style={{ fontSize:11, color:theme.dim, marginBottom:16 }}>
+          Prix unitaire : {SMS_PRICE_UNIT.toFixed(4)}€ / SMS (cout Brevo {SMS_COST_UNIT}€ + marge {SMS_MARGIN_PCT}%)
+        </p>
+
+        <div style={{ padding:'16px', borderRadius:14, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border:`1px solid ${theme.border}` }}>
+          <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Recharger votre solde SMS</label>
+          <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+            <div style={{ position:'relative', flex:1 }}>
+              <input type="number" min="5" step="1" value={amount} onChange={e => setAmount(e.target.value)}
+                placeholder="10" style={{...inp, paddingRight:24}} />
+              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:700, color:theme.muted }}>€</span>
+            </div>
+            <button onClick={handleCheckout} disabled={paying || numAmt < 5}
+              style={{ padding:'10px 20px', borderRadius:12, background: numAmt >= 5 ? '#1a73e8' : theme.inputBg,
+                color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:700, fontSize:13, border:'none',
+                cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
+                boxShadow: numAmt >= 5 ? '0 4px 14px rgba(26,115,232,0.35)' : 'none' }}>
+              {paying ? 'Redirection...' : 'Payer avec SumUp'}
+            </button>
+          </div>
+          {numAmt >= 5 && (
+            <div style={{ fontSize:11, color:theme.muted, lineHeight:1.6 }}>
+              ≈ <strong>{estimatedSms} SMS</strong> · Frais SumUp 1.69% : {sumupFee}€ · Total : {(numAmt + parseFloat(sumupFee)).toFixed(2)}€
+            </div>
+          )}
+          {numAmt > 0 && numAmt < 5 && <p style={{ fontSize:11, color:'#ef4444', fontWeight:600 }}>Montant minimum : 5€</p>}
+        </div>
+      </Card>
+
+      {/* Section 2 — Quota Email */}
+      <Card theme={theme}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Quota Email Marketing</p>
+        {quota?.email && (
+          <>
+            <div style={{ marginBottom:12 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:theme.text }}>
+                <span>Aujourd'hui</span>
+                <span style={{ fontWeight:700 }}>{quota.email.sent_today} / {quota.email.daily_limit}</span>
+              </div>
+              <div style={{ height:8, borderRadius:4, background: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }}>
+                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_today/quota.email.daily_limit)*100)}%`,
+                  background: quota.email.sent_today > quota.email.daily_limit * 0.8 ? '#ef4444' : '#10b981', transition:'width 0.3s' }} />
+              </div>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:theme.text }}>
+                <span>Ce mois</span>
+                <span style={{ fontWeight:700 }}>{quota.email.sent_month} / {quota.email.monthly_limit}</span>
+              </div>
+              <div style={{ height:8, borderRadius:4, background: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }}>
+                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_month/quota.email.monthly_limit)*100)}%`,
+                  background: quota.email.sent_month > quota.email.monthly_limit * 0.8 ? '#ef4444' : '#1a73e8', transition:'width 0.3s' }} />
+              </div>
+            </div>
+            <p style={{ fontSize:11, color:theme.dim, fontStyle:'italic' }}>
+              Les emails de confirmation RDV ne comptent pas dans ce quota
+            </p>
+          </>
+        )}
+      </Card>
+
+      {/* Section 3 — Historique campagnes */}
+      <Card theme={theme}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Historique campagnes</p>
+        {!history.length ? (
+          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:20 }}>Aucune campagne</p>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', fontSize:12, borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom:`1px solid ${theme.border}` }}>
+                  {['Date','Code promo','Canal','Envoyes','Cout','Statut'].map(h => (
+                    <th key={h} style={{ textAlign:'left', padding:'8px 6px', fontWeight:700, color:theme.muted, fontSize:11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {history.map(c => (
+                  <tr key={c.id} style={{ borderBottom:`1px solid ${theme.border}` }}>
+                    <td style={{ padding:'8px 6px', color:theme.text }}>{c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td style={{ padding:'8px 6px', color:theme.text, fontFamily:'monospace', fontWeight:700 }}>{c.promo_code || '-'}</td>
+                    <td style={{ padding:'8px 6px', color:theme.text }}>{c.channel}</td>
+                    <td style={{ padding:'8px 6px', color:theme.text }}>{(c.sent_sms||0)+(c.sent_email||0)}</td>
+                    <td style={{ padding:'8px 6px', color:theme.text }}>{Number(c.sms_cost||0).toFixed(2)}€</td>
+                    <td style={{ padding:'8px 6px' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6,
+                        background: c.status === 'completed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                        color: c.status === 'completed' ? '#10b981' : '#f59e0b' }}>{c.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Section 4 — Transactions SMS */}
+      <Card theme={theme}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Transactions SMS</p>
+        {!transactions.length ? (
+          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:20 }}>Aucune transaction</p>
+        ) : (
+          <div className="space-y-2">
+            {transactions.map(tx => (
+              <div key={tx.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                padding:'10px 12px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+                border:`1px solid ${theme.border}` }}>
+                <div>
+                  <p style={{ fontSize:13, fontWeight:600, color:theme.text, margin:0 }}>{tx.description || tx.type}</p>
+                  <p style={{ fontSize:11, color:theme.muted, margin:'2px 0 0' }}>{tx.created_at ? new Date(tx.created_at).toLocaleDateString('fr-FR') : ''}</p>
+                </div>
+                <span style={{ fontSize:14, fontWeight:800, color: tx.type === 'credit' ? '#10b981' : '#ef4444' }}>
+                  {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount||0).toFixed(2)}€
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function Settings({ transactions, employees, categories, onAddCat, onUpdCat, onDelCat, onReorderCat, onAddEmp, onUpdEmp, onDelEmp, onUpdTx, onDelTx, onLock }) {
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -5009,6 +5274,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
     'categories':   'categories',
     'profil':       'profil',
     'marketing':    'marketing',
+    'sms':          'sms',
     'clients':      'clients',
     'export':       'export',
     'previsions':   'forecast',
@@ -5030,6 +5296,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
     'categories':   '/settings/categories',
     'profil':       '/settings/profil',
     'marketing':    '/settings/marketing',
+    'sms':          '/settings/sms',
     'clients':      '/settings/clients',
     'export':       '/settings/export',
     'forecast':     '/settings/previsions',
@@ -5053,6 +5320,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
     { id: 'categories',   label: 'Categories', icon: I.Tag },
     { id: 'profil',       label: 'Images',     icon: I.Camera },
     { id: 'marketing',    label: 'Marketing',  icon: I.Gift },
+    { id: 'sms',          label: 'SMS',        icon: I.Send },
     { id: 'clients',      label: 'Clients',    icon: I.UserCheck },
     { id: 'notifications',label: 'Notifs',     icon: I.Bell },
     { id: 'export',       label: 'Export',     icon: I.Download },
@@ -5120,6 +5388,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'profil'       && <TabProfil theme={theme} showToast={show} />}
         {tab === 'clients'       && <TabClients theme={theme} showToast={show} />}
         {tab === 'marketing'    && <TabMarketing theme={theme} showToast={show} />}
+        {tab === 'sms'          && <TabSMS showToast={show} theme={theme} />}
         {tab === 'export'       && <TabExport employees={employees} categories={categories} theme={theme} />}
         {tab === 'forecast'     && <TabForecastStats theme={theme} />}
         {tab === 'heatmap'      && <TabHeatmap theme={theme} />}

@@ -6,7 +6,13 @@
       "Bash(wc -l /c/Users/gaci/Desktop/noti/FlowIA-final/FlowIA/backend/src/routes/*.js /c/Users/gaci/Desktop/noti/FlowIA-final/FlowIA/frontend/src/pages/*.jsx)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(xargs grep *)",
+      "Bash(node -e \"require\\('./src/routes/auth.js'\\); console.log\\('auth.js OK'\\);\")",
+      "Bash(node -c \"C:\\\\Users\\\\gaci\\\\Desktop\\\\noti\\\\FlowIA-final\\\\FlowIA\\\\backend\\\\src\\\\routes\\\\auth.js\")",
+      "Bash(node -c \"C:\\\\Users\\\\gaci\\\\Desktop\\\\noti\\\\FlowIA-final\\\\FlowIA\\\\backend\\\\src\\\\routes\\\\public-booking.js\")",
+      "Bash(node -c \"C:\\\\Users\\\\gaci\\\\Desktop\\\\noti\\\\FlowIA-final\\\\FlowIA\\\\backend\\\\src\\\\db\\\\index.js\")",
+      "Bash(npx vite *)"
     ]
   }
 }

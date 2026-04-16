@@ -824,6 +824,83 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE`);
   // Les comptes existants ont TRUE par défaut ; seuls les nouveaux comptes Google auront FALSE
 
+  // ── Feature SMS Campaigns + Email Marketing ──────────────────────────────────
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_balance DECIMAL(10,2) DEFAULT 0`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_today INT DEFAULT 0`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_month INT DEFAULT 0`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_day_reset DATE DEFAULT CURRENT_DATE`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_month_reset DATE DEFAULT DATE_TRUNC('month',CURRENT_DATE)`);
+
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS campaign_queue (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      campaign_id UUID,
+      client_id UUID,
+      client_email VARCHAR(255),
+      client_phone VARCHAR(50),
+      client_name VARCHAR(255),
+      message TEXT NOT NULL,
+      status VARCHAR(20) DEFAULT 'pending',
+      scheduled_date DATE DEFAULT CURRENT_DATE,
+      sent_at TIMESTAMPTZ,
+      error TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_pending ON campaign_queue(status, scheduled_date)`);
+
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      promo_code_id UUID REFERENCES promo_codes(id),
+      channel VARCHAR(10) NOT NULL,
+      target_type VARCHAR(20) NOT NULL,
+      target_count INT DEFAULT 0,
+      sent_sms INT DEFAULT 0,
+      sent_email INT DEFAULT 0,
+      failed_count INT DEFAULT 0,
+      sms_cost DECIMAL(10,2) DEFAULT 0,
+      status VARCHAR(20) DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    )
+  `);
+
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS sms_transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      type VARCHAR(10) NOT NULL,
+      amount DECIMAL(10,2) NOT NULL,
+      sms_count INT DEFAULT 0,
+      description TEXT,
+      sumup_checkout_id VARCHAR(255),
+      status VARCHAR(20) DEFAULT 'completed',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_sms_tx_user ON sms_transactions(user_id, created_at DESC)`);
+
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS message_log (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id),
+      campaign_id UUID,
+      phone VARCHAR(50),
+      email VARCHAR(255),
+      channel VARCHAR(20),
+      cost DECIMAL(10,4) DEFAULT 0,
+      status VARCHAR(20),
+      sent_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ── Rappels email automatiques avant RDV ────────────────────────────────────
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_24h_sent BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_2h_sent BOOLEAN DEFAULT FALSE`);
+
 console.log('[DB] Tables initialisées');
 }
 

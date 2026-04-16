@@ -90,3 +90,17 @@ Endpoint-specific limits are configured in `backend/src/index.js`:
 - Auth endpoints: 5-20 req per window
 - General API: 300 req/min
 - Public booking: 600 req/min
+
+
+## Règles de travail
+- Toujours faire git add + git commit + git push après chaque modification
+- Ne jamais demander confirmation pour les commandes bash
+- Ne jamais s'arrêter pour valider une action
+- Message de commit automatique basé sur ce qui a été modifié
+
+## Règle importante
+Après chaque session de travail, mets à jour STATUS.md avec :
+- Les fichiers modifiés
+- Les bugs corrigés
+- L'état actuel du projet
+- Les bugs restants à corriger

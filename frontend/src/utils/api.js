@@ -356,6 +356,23 @@ export const clientsApi = {
   block:   (id, blocked) => request('/clients/' + id + '/block', { method:'PATCH', body: JSON.stringify({ blocked }) }),
 };
 
+// ── Campagnes SMS/Email ───────────────────────────────────────────────────────
+export const campaignsApi = {
+  getCampaignPreview:  (p) => request(`/campaigns/preview?${new URLSearchParams(p)}`),
+  sendCampaign:       (b) => request('/campaigns/send',   { method:'POST', body:JSON.stringify(b) }),
+  getCampaignQuota:   ()  => request('/campaigns/quota'),
+  getCampaignHistory: ()  => request('/campaigns/history'),
+};
+
+// ── Paiements SMS ────────────────────────────────────────────────────────────
+export const paymentsApi = {
+  getSMSBalance:      ()  => request('/payments/sms/balance'),
+  createSMSCheckout:  (amount) => request('/payments/sms/checkout',
+                      { method:'POST', body:JSON.stringify({ amount }) }),
+  getSMSTransactions: ()  => request('/payments/sms/transactions'),
+  verifySMSCheckout:  (id) => request(`/payments/sms/verify/${id}`),
+};
+
 export const creditsApi = {
   list:       (params={}) => request('/credits?' + new URLSearchParams(params)),
   getClient:  (clientId)  => request('/credits/client/' + clientId),

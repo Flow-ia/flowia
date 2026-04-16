@@ -98,6 +98,7 @@ function PhoneField({ country, phone, onChange, label = 'Telephone', required: i
 }
 
 // ── AddressField avec api-adresse.data.gouv.fr (sans emoji) ───────────────────
+const addressCache = new Map();
 function AddressField({ address, onChange, label = 'Adresse du commerce' }) {
   const [suggestions, setSuggestions] = useState([]);
   const [addrBusy,    setAddrBusy]    = useState(false);
@@ -109,14 +110,24 @@ function AddressField({ address, onChange, label = 'Adresse du commerce' }) {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (val.trim().length < 4) { setSuggestions([]); return; }
     timerRef.current = setTimeout(async () => {
+      const key = val.trim().toLowerCase();
+      if (addressCache.has(key)) { setSuggestions(addressCache.get(key)); return; }
       setAddrBusy(true);
       try {
-        const r = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(val)}&limit=5`);
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 3000);
+        const r = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(val)}&limit=5`, {
+          headers: { 'User-Agent': 'FlowIA/1.0' },
+          signal: ctrl.signal,
+        });
+        clearTimeout(timeout);
         const data = await r.json();
-        setSuggestions(data.features || []);
+        const features = data.features || [];
+        addressCache.set(key, features);
+        setSuggestions(features);
       } catch { setSuggestions([]); }
       finally { setAddrBusy(false); }
-    }, 300);
+    }, 600);
   };
 
   return (
@@ -368,46 +379,67 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
       <Divider />
 
       <form onSubmit={sub} className="space-y-4">
-        {/* Nom du commerce */}
-        <div className="relative">
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nom du commerce *</label>
-          <input type="text" required value={f.biz} onChange={e => setF({...f, biz: e.target.value})}
-            placeholder="Mon Salon, Barbershop..." className={inp + " pr-10"} />
-          <I.Store className="w-4 h-4 text-slate-400 absolute right-3 top-[38px]" />
+        {/* ── Section : Votre commerce ── */}
+        <div style={{ padding:'14px 16px', borderRadius:14, background:'#f8fafc', border:'1px solid #e2e8f0' }}>
+          <p style={{ fontSize:12, fontWeight:800, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Votre commerce</p>
+          <div className="relative" style={{ marginBottom:12 }}>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nom du commerce *</label>
+            <input type="text" required value={f.biz} onChange={e => setF({...f, biz: e.target.value})}
+              placeholder="Mon Salon, Barbershop..." className={inp + " pr-10"} />
+            <I.Store className="w-4 h-4 text-slate-400 absolute right-3 top-[38px]" />
+            {f.biz.trim() && <span style={{ position:'absolute', right:28, top:38, color:'#10b981', fontSize:14 }}>&#10003;</span>}
+          </div>
+          <AddressField address={f.address} onChange={upd => setF(prev => ({...prev, ...upd}))} />
+          {f.address && f.city && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr', gap:10, marginTop:12 }}>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Code postal</label>
+                <input type="text" value={f.postalCode} onChange={e => setF({...f, postalCode: e.target.value.replace(/[^\d]/g,'').slice(0,5)})}
+                  placeholder="75001" className={inp} maxLength={5} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Ville</label>
+                <input type="text" value={f.city} onChange={e => setF({...f, city: e.target.value})}
+                  placeholder="Paris" className={inp} />
+              </div>
+            </div>
+          )}
         </div>
-        {/* Email */}
-        <div className="relative">
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email *</label>
-          <input type="email" required value={f.email} onChange={e => setF({...f, email: e.target.value})}
-            placeholder="votre@email.com" className={inp + " pr-10"} />
-          <I.Mail className="w-4 h-4 text-slate-400 absolute right-3 top-[38px]" />
+
+        {/* ── Section : Votre identite ── */}
+        <div style={{ padding:'14px 16px', borderRadius:14, background:'#f8fafc', border:'1px solid #e2e8f0' }}>
+          <p style={{ fontSize:12, fontWeight:800, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Votre identite</p>
+          <div className="relative" style={{ marginBottom:12 }}>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email *</label>
+            <input type="email" required value={f.email} onChange={e => setF({...f, email: e.target.value})}
+              placeholder="votre@email.com" className={inp + " pr-10"} />
+            <I.Mail className="w-4 h-4 text-slate-400 absolute right-3 top-[38px]" />
+            {f.email && /\S+@\S+\.\S+/.test(f.email) && <span style={{ position:'absolute', right:28, top:38, color:'#10b981', fontSize:14 }}>&#10003;</span>}
+          </div>
+          <PhoneField country={f.country} phone={f.phone} onChange={upd => setF(prev => ({...prev, ...upd}))} label="Telephone du commerce" />
         </div>
-        {/* Telephone avec indicatif compact */}
-        <PhoneField
-          country={f.country} phone={f.phone}
-          onChange={upd => setF(prev => ({...prev, ...upd}))}
-          label="Telephone du commerce"
-        />
-        {/* Adresse avec autocompletion gouv.fr */}
-        <AddressField
-          address={f.address}
-          onChange={upd => setF(prev => ({...prev, ...upd}))}
-        />
-        {/* Mot de passe */}
-        <div className="relative">
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Mot de passe *</label>
-          <input type={vis ? 'text' : 'password'} required value={f.pw}
-            onChange={e => setF({...f, pw: e.target.value})} placeholder="Min. 6 caracteres"
-            className={inp + " pr-10"} />
-          <button type="button" onClick={() => setVis(!vis)} className="absolute right-3 top-[38px]">
-            {vis ? <I.EyeOff className="w-4 h-4 text-slate-400" /> : <I.Eye className="w-4 h-4 text-slate-400" />}
-          </button>
-        </div>
-        {/* Confirmer mot de passe */}
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Confirmer le mot de passe *</label>
-          <input type="password" required value={f.cpw} onChange={e => setF({...f, cpw: e.target.value})}
-            placeholder="Repetez le mot de passe" className={inp} />
+
+        {/* ── Section : Securite ── */}
+        <div style={{ padding:'14px 16px', borderRadius:14, background:'#f8fafc', border:'1px solid #e2e8f0' }}>
+          <p style={{ fontSize:12, fontWeight:800, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Securite</p>
+          <div className="relative" style={{ marginBottom:12 }}>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Mot de passe *</label>
+            <input type={vis ? 'text' : 'password'} required value={f.pw}
+              onChange={e => setF({...f, pw: e.target.value})} placeholder="Min. 6 caracteres"
+              className={inp + " pr-10"} />
+            <button type="button" onClick={() => setVis(!vis)} className="absolute right-3 top-[38px]">
+              {vis ? <I.EyeOff className="w-4 h-4 text-slate-400" /> : <I.Eye className="w-4 h-4 text-slate-400" />}
+            </button>
+            {f.pw.length >= 6 && <span style={{ position:'absolute', right:28, top:38, color:'#10b981', fontSize:14 }}>&#10003;</span>}
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Confirmer le mot de passe *</label>
+            <input type="password" required value={f.cpw} onChange={e => setF({...f, cpw: e.target.value})}
+              placeholder="Repetez le mot de passe" className={inp}
+              style={{ borderColor: f.cpw && f.cpw !== f.pw ? '#ef4444' : undefined }} />
+            {f.cpw && f.cpw === f.pw && <span style={{ color:'#10b981', fontSize:11, marginTop:2, display:'block' }}>Mots de passe identiques</span>}
+            {f.cpw && f.cpw !== f.pw && <span style={{ color:'#ef4444', fontSize:11, marginTop:2, display:'block' }}>Les mots de passe ne correspondent pas</span>}
+          </div>
         </div>
         {/* Consentement CGU + politique confidentialite */}
         <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
