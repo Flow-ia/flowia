@@ -1,324 +1,332 @@
-# FlowIA — Fix emails campagne marketing
+# FlowIA — Fix SumUp widget paiement + confirmation
 # Lis ce fichier et exécute TOUT dans l'ordre.
 # Ne jamais s'arrêter pour demander confirmation.
-# À la FIN : git add -A && git commit -m "fix: emails campagne marketing + brevo integration" && git push
+# À la FIN : git add -A && git commit -m "fix: SumUp widget confirmation + fallback polling" && git push
 
 ---
 
 ## Règles de travail
-- Lire TOUT le code existant avant de modifier
+- Lire le code existant avant toute modification
 - Modifications chirurgicales uniquement
 - Ne jamais demander confirmation
 - Commentaires en français
 
 ---
 
-# DIAGNOSTIC — Lire ces fichiers d'abord
+# CONTEXTE
 
-Avant tout, lire ces fichiers et identifier les problèmes :
-1. backend/src/routes/campaigns.js — chercher sendMarketingEmail
-2. backend/src/utils/messenger.js — chercher sendEmail
-3. backend/src/index.js — chercher sendBrevoEmail ou sendEmail
-4. backend/src/routes/auth.js — chercher comment les emails sont envoyés actuellement
+Le widget SumUp s'affiche et le formulaire carte fonctionne.
+Mais après saisie de la carte : "Paiement en attente" sans confirmation.
 
----
-
-# FIX 1 — Créer/corriger backend/src/utils/emailSender.js
-
-Créer ce fichier s'il n'existe pas, ou le corriger s'il existe :
-
-```javascript
-// backend/src/utils/emailSender.js
-// Utilitaire centralisé pour tous les envois email via Brevo
-
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const SENDER_EMAIL  = process.env.SENDER_EMAIL  || 'noreply@haircoifflille.fr';
-const SENDER_NAME   = process.env.SENDER_NAME   || 'FlowIA';
-
-// Compteur global emails journalier (protection quota Brevo gratuit)
-let emailsToday = 0;
-let emailsTodayDate = new Date().toDateString();
-
-function resetCounterIfNewDay() {
-  const today = new Date().toDateString();
-  if (today !== emailsTodayDate) {
-    emailsToday = 0;
-    emailsTodayDate = today;
-  }
-}
-
-// Fonction principale d'envoi email
-async function sendEmail({ to, toName, subject, htmlContent, type = 'transactional' }) {
-  resetCounterIfNewDay();
-
-  const EMAIL_DAILY_LIMIT = 300;
-  const EMAIL_MARKETING_MAX = 220; // reserve 80 pour transactionnel
-
-  // Bloquer marketing si quota atteint
-  if (type === 'marketing' && emailsToday >= EMAIL_MARKETING_MAX) {
-    throw new Error(`Quota email marketing atteint (${emailsToday}/${EMAIL_MARKETING_MAX}). Reessayez demain.`);
-  }
-
-  if (!BREVO_API_KEY) {
-    throw new Error('BREVO_API_KEY manquante dans les variables environnement');
-  }
-
-  const body = {
-    sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-    to: [{ email: to, name: toName || to }],
-    subject: subject,
-    htmlContent: htmlContent
-  };
-
-  console.log(`[EMAIL] Envoi ${type} → ${to} | Sujet: ${subject}`);
-
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': BREVO_API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    console.error('[EMAIL ERROR]', JSON.stringify(data));
-    throw new Error(data.message || 'Erreur envoi email Brevo');
-  }
-
-  emailsToday++;
-  console.log(`[EMAIL] ✅ Envoye → ${to} | Total aujourd'hui: ${emailsToday}`);
-  return data;
-}
-
-// Email marketing campagne code promo
-async function sendMarketingEmail(clientEmail, clientName, message, promoCode) {
-  const subject = promoCode 
-    ? `Offre exclusive : -${promoCode} vous attend !`
-    : 'Une offre exclusive pour vous';
-
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; }
-        .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px; text-align: center; }
-        .header h1 { color: white; margin: 0; font-size: 24px; }
-        .body { padding: 32px; }
-        .message { font-size: 16px; color: #333; line-height: 1.6; white-space: pre-wrap; }
-        .footer { padding: 20px 32px; background: #f8fafc; text-align: center; font-size: 12px; color: #999; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>🎉 Offre exclusive pour vous !</h1>
-        </div>
-        <div class="body">
-          <p style="font-size:16px;color:#333;">Bonjour ${clientName || 'cher client'},</p>
-          <div class="message">${message}</div>
-        </div>
-        <div class="footer">
-          <p>Vous recevez cet email car vous êtes client de notre établissement.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-  return sendEmail({
-    to: clientEmail,
-    toName: clientName,
-    subject,
-    htmlContent,
-    type: 'marketing'
-  });
-}
-
-// Obtenir le quota restant
-function getEmailQuota() {
-  resetCounterIfNewDay();
-  return {
-    sent_today: emailsToday,
-    available_today: Math.max(0, 220 - emailsToday),
-    daily_max: 220
-  };
-}
-
-module.exports = { sendEmail, sendMarketingEmail, getEmailQuota };
-```
+Causes possibles :
+1. onResponse callback ne reçoit pas 'success' → besoin de polling
+2. Le checkout n'est pas "processed" → SumUp sandbox nécessite PUT /checkouts/{id}
+3. redirect_url ou return_url mal configuré
 
 ---
 
-# FIX 2 — Corriger campaigns.js pour utiliser sendMarketingEmail
+# FIX 1 — Ajouter polling de confirmation dans le frontend
 
-## Lire d'abord backend/src/routes/campaigns.js
+## Dans Settings.jsx — composant TabSMS
 
-Puis vérifier :
+Lire le code existant du modal SumUp puis le corriger.
 
-### 1. Import en haut du fichier
-S'assurer que cet import existe :
-```javascript
-const { sendMarketingEmail, getEmailQuota } = require('../utils/emailSender');
-```
+Le problème : après SumUpCard.mount(), le widget affiche le formulaire
+mais onResponse peut ne jamais être appelé en sandbox si 3DS est requis.
 
-### 2. Dans la route POST /api/campaigns/send
-Trouver la partie qui envoie les emails et la corriger :
+Solution : après mount du widget, démarrer un polling toutes les 3 secondes
+qui vérifie le statut du checkout côté backend.
 
 ```javascript
-// Envoi email pour chaque client (batch de 20 avec 2s pause)
-const emailBatches = chunk(emailClients.slice(0, quota.available_today), 20);
-let sentEmailCount = 0;
-let failedEmailCount = 0;
-
-for (const batch of emailBatches) {
-  await Promise.allSettled(batch.map(async (client) => {
-    try {
-      const msg = (message_email || message_sms || '')
-        .replace(/\{prénom\}/g, client.first_name || '')
-        .replace(/\{prenom\}/g, client.first_name || '')
-        .replace(/\{nom\}/g, client.last_name || '');
-
-      await sendMarketingEmail(
-        client.email,
-        `${client.first_name || ''} ${client.last_name || ''}`.trim(),
-        msg,
-        promoCode
-      );
-      sentEmailCount++;
-
-      // Logger l'envoi
-      await pool.query(`
-        INSERT INTO message_log
-          (user_id, campaign_id, email, channel, cost, status)
-        VALUES ($1, $2, $3, 'email', 0, 'sent')
-      `, [userId, campaignId, client.email]);
-
-    } catch(e) {
-      console.error('[CAMPAIGN EMAIL ERROR]', client.email, e.message);
-      failedEmailCount++;
+// Dans la fonction qui mount le widget SumUp
+const mountSumUpWidget = (checkoutId, estimatedSms, amount) => {
+  // Démarrer polling après 5 secondes (laisser le temps à SumUp)
+  let pollCount = 0;
+  const maxPolls = 20; // 20 × 3s = 60s max
+  
+  const pollInterval = setInterval(async () => {
+    pollCount++;
+    if (pollCount > maxPolls) {
+      clearInterval(pollInterval);
+      setPayLoading(false);
+      showToast('Délai dépassé. Vérifiez votre solde dans quelques minutes.', 'info');
+      return;
     }
-  }));
+    
+    try {
+      const result = await api.verifySMSCheckout(checkoutId);
+      if (result.credited || result.already_credited) {
+        clearInterval(pollInterval);
+        setShowPayModal(false);
+        setPayLoading(false);
+        if (result.credited) {
+          showToast(`+${result.sms_count} SMS crédités !`, 'success');
+        }
+        loadData();
+      }
+      // Si status = PAID mais pas encore crédité → la vérification a crédité
+      if (result.status === 'PAID') {
+        clearInterval(pollInterval);
+        setShowPayModal(false);
+        setPayLoading(false);
+        showToast(`Recharge confirmée !`, 'success');
+        loadData();
+      }
+    } catch(e) {
+      // Continuer le polling en cas d'erreur réseau
+    }
+  }, 3000);
 
-  // Incrementer le compteur DB
-  await pool.query(`
-    UPDATE users SET
-      email_sent_today  = email_sent_today  + $1,
-      email_sent_month  = email_sent_month  + $1
-    WHERE id = $2
-  `, [batch.length, userId]);
-
-  await sleep(2000); // 2s entre batches
-}
-
-console.log(`[CAMPAIGN] Emails: ${sentEmailCount} envoyés, ${failedEmailCount} echecs`);
-```
-
-### 3. Dans la route GET /api/campaigns/preview
-Corriger le calcul quota email :
-```javascript
-const { available_today, daily_max } = getEmailQuota();
-// Utiliser cette valeur pour le calcul
+  // Mount le widget SumUp
+  if (window.SumUpCard) {
+    window.SumUpCard.mount({
+      checkoutId: checkoutId,
+      onResponse: async (type, body) => {
+        console.log('[SUMUP WIDGET]', type, body);
+        clearInterval(pollInterval);
+        
+        if (type === 'success') {
+          setShowPayModal(false);
+          try {
+            const result = await api.verifySMSCheckout(checkoutId);
+            if (result.credited) {
+              showToast(`+${result.sms_count} SMS crédités !`, 'success');
+            } else {
+              showToast('Paiement reçu, solde mis à jour bientôt.', 'info');
+            }
+          } catch(e) {
+            showToast('Paiement reçu !', 'success');
+          }
+          setPayLoading(false);
+          loadData();
+          
+        } else if (type === 'error') {
+          setPayError(body?.message || 'Paiement refusé');
+          setPayLoading(false);
+          
+        } else if (type === 'sent') {
+          // Paiement envoyé, en attente de confirmation 3DS
+          // Continuer le polling
+          setPayStatus('Vérification en cours...');
+        }
+      }
+    });
+  } else {
+    clearInterval(pollInterval);
+    showToast('Widget SumUp non chargé. Rechargez la page.', 'error');
+  }
+};
 ```
 
 ---
 
-# FIX 3 — Vérifier que BREVO_API_KEY est bien utilisée
+# FIX 2 — Améliorer la route GET /sms/verify dans payments.js
 
-## Dans backend/src/routes/auth.js ou partout où des emails sont envoyés
+## Lire backend/src/routes/payments.js
 
-Chercher TOUTES les fonctions d'envoi email existantes.
-S'assurer qu'elles utilisent toutes process.env.BREVO_API_KEY.
+La route doit aussi vérifier dans transactions[] de la réponse SumUp
+car en sandbox le statut principal peut rester PENDING
+même si une transaction SUCCESSFUL existe dans le tableau.
 
-Si une fonction utilise une autre clé ou une autre méthode,
-la remplacer par un import de sendEmail depuis emailSender.js.
-
----
-
-# FIX 4 — Ajouter logs détaillés dans campaigns.js
-
-Au début de la route POST /api/campaigns/send, ajouter :
 ```javascript
-console.log('[CAMPAIGN SEND] Start:', {
-  userId,
-  channel,
-  target_type,
-  emailClients: emailClients?.length,
-  smsClients: smsClients?.length,
-  message_email: message_email?.substring(0, 50)
+router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
+  try {
+    const { checkoutId } = req.params;
+    const userId = req.user.userId;
+    const SUMUP_KEY = process.env.SUMUP_SECRET_KEY;
+
+    // Verifier le statut reel chez SumUp
+    const sumupRes = await fetch(
+      `https://api.sumup.com/v0.1/checkouts/${checkoutId}`,
+      { headers: { 'Authorization': `Bearer ${SUMUP_KEY}` } }
+    );
+    const checkout = await sumupRes.json();
+    console.log('[SUMUP VERIFY] Status:', checkout.status, 
+                '| Transactions:', checkout.transactions?.length);
+
+    // Verifier si PAID OU si une transaction SUCCESSFUL existe
+    const hasPaidTransaction = checkout.transactions?.some(
+      t => t.status === 'SUCCESSFUL'
+    );
+    const isPaid = checkout.status === 'PAID' || hasPaidTransaction;
+
+    if (!isPaid) {
+      return res.json({
+        credited: false,
+        status: checkout.status || 'unknown',
+        transactions: checkout.transactions?.map(t => t.status)
+      });
+    }
+
+    // Chercher la transaction en DB
+    const { rows: txRows } = await pool.query(
+      `SELECT * FROM sms_transactions 
+       WHERE sumup_checkout_id = $1 AND user_id = $2`,
+      [checkoutId, userId]
+    );
+
+    if (!txRows.length) {
+      return res.status(404).json({ error: 'Transaction introuvable.' });
+    }
+
+    const tx = txRows[0];
+
+    // Deja credite ?
+    if (tx.status === 'completed') {
+      const { rows: [user] } = await pool.query(
+        'SELECT sms_balance FROM users WHERE id=$1', [userId]
+      );
+      return res.json({
+        credited: false,
+        already_credited: true,
+        new_balance: parseFloat(user?.sms_balance || 0).toFixed(2)
+      });
+    }
+
+    // Crediter maintenant
+    await pool.query(
+      'UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
+      [tx.amount, userId]
+    );
+    await pool.query(
+      "UPDATE sms_transactions SET status='completed' WHERE id=$1",
+      [tx.id]
+    );
+
+    const { rows: [user] } = await pool.query(
+      'SELECT sms_balance FROM users WHERE id=$1', [userId]
+    );
+
+    const smsCost   = parseFloat(process.env.SMS_COST_UNIT)      || 0.045;
+    const smsMargin = parseFloat(process.env.SMS_MARGIN_PERCENT)  || 30;
+    const smsPrice  = parseFloat((smsCost * (1 + smsMargin / 100)).toFixed(4));
+
+    console.log('[SUMUP VERIFY] Credite:', tx.amount, 'EUR → user:', userId);
+
+    res.json({
+      credited: true,
+      amount: tx.amount,
+      sms_count: tx.sms_count,
+      new_balance: parseFloat(user.sms_balance).toFixed(2),
+      new_sms_estimated: Math.floor(parseFloat(user.sms_balance) / smsPrice),
+      status: 'PAID'
+    });
+
+  } catch(e) {
+    console.error('[SUMUP VERIFY ERROR]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 ```
 
-Et après chaque étape importante, loguer le résultat.
-Cela permettra de voir dans les logs Render exactement où ça bloque.
+---
+
+# FIX 3 — Vérifier que le script SumUp est chargé dans index.html
+
+## Dans frontend/index.html
+
+Vérifier que cette ligne existe dans le <head> :
+```html
+<script src="https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"></script>
+```
+
+Si elle n'existe pas, l'ajouter.
+Si elle existe déjà, vérifier qu'elle est bien dans <head> avant les autres scripts.
 
 ---
 
-# FIX 5 — Corriger la popup code promo dans Settings.jsx
+# FIX 4 — Ajouter logs détaillés dans le frontend
 
-## Problème possible dans le frontend
+## Dans Settings.jsx TabSMS
 
-Lire le composant CampaignSection dans Settings.jsx.
-Vérifier que le bouton "Créer + Envoyer" appelle bien api.sendCampaign().
+Ajouter des console.log pour débugger :
 
-S'assurer que le body envoyé contient :
 ```javascript
-{
-  promo_code_id: promoCode.id,
-  channel: channel,          // 'email', 'sms', ou 'both'
-  target_type: targetType,   // 'top50', 'top100', etc.
-  custom_count: customCount,
-  message_sms: messageSms,
-  message_email: messageSms, // utiliser le même message si pas de message_email séparé
-  promo_code: promoCode.code // pour le template email
-}
-```
+// Avant de monter le widget
+console.log('[SUMUP] Montage widget pour checkout:', checkoutId);
+console.log('[SUMUP] SumUpCard disponible:', !!window.SumUpCard);
 
-Vérifier aussi que le channel 'email' est bien envoyé et pas undefined.
-Ajouter un console.log avant l'appel API pour vérifier :
-```javascript
-console.log('[CAMPAIGN] Envoi:', { channel, targetType, message_email: messageSms?.substring(0,50) });
+// Dans onResponse
+console.log('[SUMUP WIDGET onResponse]', type, JSON.stringify(body));
+
+// Après verifySMSCheckout
+console.log('[SUMUP VERIFY résultat]', result);
 ```
 
 ---
 
-# Variables Render à vérifier ABSOLUMENT
+# FIX 5 — Bouton "Vérifier mon paiement" dans le modal
 
-```
-BREVO_API_KEY=xkeysib-xxxxx  (récupérer depuis app.brevo.com → Settings → API Keys)
-SENDER_EMAIL=noreply@haircoifflille.fr  (domaine vérifié Brevo)
-SENDER_NAME=FlowIA
+Si le commerçant attend et que le paiement est bloqué,
+ajouter un bouton manuel dans le modal :
+
+```jsx
+{/* Dans le modal SumUp, après le div#sumup-card */}
+{payStatus === 'pending' && (
+  <button
+    onClick={async () => {
+      const result = await api.verifySMSCheckout(currentCheckoutId);
+      if (result.credited || result.already_credited) {
+        setShowPayModal(false);
+        showToast('Solde mis à jour !', 'success');
+        loadData();
+      } else {
+        showToast('Paiement pas encore confirmé par SumUp', 'info');
+      }
+    }}
+    style={{
+      marginTop: 12, width: '100%', padding: '10px',
+      background: 'transparent', border: '1px solid #6366f1',
+      color: '#6366f1', borderRadius: 8, cursor: 'pointer',
+      fontSize: 13, fontWeight: 600
+    }}
+  >
+    Vérifier mon paiement
+  </button>
+)}
 ```
 
-Si BREVO_API_KEY est absente ou incorrecte → AUCUN email ne sera envoyé.
+---
+
+# NOTE IMPORTANTE — Clé sandbox SumUp
+
+La clé sandbox sup_sk_t5PrlG4B0BuKXfeL7umWk4k6KYuJLgdBS
+doit avoir le scope "payments" activé.
+
+Si le paiement reste toujours en PENDING avec la sandbox :
+→ C'est normal avec certains comptes sandbox SumUp
+→ Tester directement avec la clé production
+→ La clé prod : sup_sk_a8HamuZ3HIZSVLrPiG2h7fpuMxpKjfOuG
+
+Pour passer en prod temporairement sur Render :
+SUMUP_SECRET_KEY=sup_sk_a8HamuZ3HIZSVLrPiG2h7fpuMxpKjfOuG
 
 ---
 
 # Ordre d'exécution
 
-1. Lire auth.js pour comprendre comment les emails fonctionnent actuellement
-2. Créer/corriger emailSender.js (FIX 1)
-3. Corriger campaigns.js imports + envoi email (FIX 2)
-4. Vérifier BREVO_API_KEY dans tous les fichiers (FIX 3)
+1. Lire Settings.jsx pour trouver le code SumUp actuel
+2. Ajouter polling dans le modal (FIX 1)
+3. Corriger /sms/verify pour checker transactions[] (FIX 2)
+4. Vérifier script dans index.html (FIX 3)
 5. Ajouter logs (FIX 4)
-6. Corriger popup frontend si nécessaire (FIX 5)
+6. Ajouter bouton vérification manuelle (FIX 5)
 7. Vérifier build : cd frontend && npx vite build
-8. Si OK : git add -A && git commit -m "fix: emails campagne marketing + brevo integration" && git push
-9. Si KO : corriger erreurs puis recommencer étape 8
+8. Si OK : git add -A && git commit -m "fix: SumUp polling + verify transactions + logs" && git push
+9. Si KO : corriger puis recommencer
 
 # Test après déploiement
 
-1. Créer un code promo dans Settings → Marketing → Promotions
-2. Choisir canal Email, Top 50 clients
-3. Cliquer Calculer → vérifier les logs Render pour [CAMPAIGN SEND]
-4. Cliquer Créer + Envoyer
-5. Vérifier dans les logs Render :
-   [CAMPAIGN SEND] Start: { channel: 'email', ... }
-   [EMAIL] Envoi marketing → client@email.com
-   [EMAIL] ✅ Envoye → client@email.com
-6. Vérifier sur app.brevo.com → Transactionnel → Log des emails
+1. Ouvrir la console Chrome (F12)
+2. Aller sur Settings → Marketing → Solde marketing
+3. Entrer 20€ → Recharger
+4. Dans la console chercher :
+   [SUMUP] Montage widget pour checkout: xxx
+   [SUMUP] SumUpCard disponible: true
+5. Saisir carte : 4111 1111 1111 1111 | 12/2026 | 123
+6. Dans la console chercher :
+   [SUMUP WIDGET onResponse] success {...}
+   OU le polling qui vérifie toutes les 3s
+7. Dans les logs Render chercher :
+   [SUMUP VERIFY] Status: PAID
+   [SUMUP VERIFY] Credite: 20 EUR

@@ -163,13 +163,19 @@ router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
     });
     const checkout = await sumupRes.json();
 
-    console.log('[SUMUP VERIFY]', checkoutId, '| Status:', checkout.status);
+    const txStatuses = (checkout.transactions || []).map(t => t.status);
+    console.log('[SUMUP VERIFY]', checkoutId, '| Status:', checkout.status, '| Transactions:', txStatuses);
 
-    // Etape 2 : verifier que c'est bien PAID
-    if (checkout.status !== 'PAID') {
+    // Etape 2 : en sandbox le statut principal peut rester PENDING
+    // meme si une transaction SUCCESSFUL existe dans le tableau.
+    const hasPaidTransaction = (checkout.transactions || []).some(t => t.status === 'SUCCESSFUL');
+    const isPaid = checkout.status === 'PAID' || hasPaidTransaction;
+
+    if (!isPaid) {
       return res.json({
         credited: false,
         status: checkout.status || 'unknown',
+        transactions: txStatuses,
         message: 'Paiement non confirme par SumUp'
       });
     }
@@ -195,6 +201,7 @@ router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
       return res.json({
         credited: false,
         already_credited: true,
+        status: 'PAID',
         new_balance: parseFloat(userBal.sms_balance).toFixed(2)
       });
     }
@@ -216,14 +223,15 @@ router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
       'SELECT sms_balance FROM users WHERE id=$1', [userId]
     );
 
-    console.log('[SUMUP] Solde credite:', tx.amount, 'EUR pour user:', userId);
+    console.log('[SUMUP VERIFY] Credite:', tx.amount, 'EUR → user:', userId);
 
     res.json({
       credited: true,
       amount: tx.amount,
       sms_count: tx.sms_count,
       new_balance: parseFloat(user.sms_balance).toFixed(2),
-      new_sms_estimated: Math.floor(parseFloat(user.sms_balance) / SMS_PRICE)
+      new_sms_estimated: Math.floor(parseFloat(user.sms_balance) / SMS_PRICE),
+      status: 'PAID'
     });
 
   } catch(e) {
