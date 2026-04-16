@@ -663,9 +663,10 @@ async function sendPromoEmail({ to, clientName, businessName, promo }) {
 
   try {
     await sendEmail({ to, subject, html });
+    console.log(`[MAIL PROMO OK] ${promo?.code || '?'} -> ${to}`);
     return true;
   } catch(e) {
-    console.error('[sendPromoEmail]', e.message);
+    console.error(`[MAIL PROMO ERR] ${promo?.code || '?'} -> ${to} | ${e.message}`);
     return false;
   }
 }

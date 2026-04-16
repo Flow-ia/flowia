@@ -21,7 +21,12 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
 
     const SUMUP_KEY    = process.env.SUMUP_SECRET_KEY;
     const BACKEND_URL  = process.env.BACKEND_URL || 'https://flowia-backend.onrender.com';
-    const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://haircoifflille.fr').split(',')[0].trim();
+    // Parse defensif : sur Render la variable peut contenir "FRONTEND_URL = https://..."
+    // (l'utilisateur a colle la ligne complete au lieu de la valeur seule).
+    // On extrait la premiere URL http(s)://... valide.
+    const rawFront = process.env.FRONTEND_URL || 'https://haircoifflille.fr';
+    const urlMatch = rawFront.match(/https?:\/\/[^\s,]+/);
+    const FRONTEND_URL = (urlMatch ? urlMatch[0] : rawFront.split(',')[0].trim()).replace(/\/+$/, '');
 
     // Etape 1 : recuperer le merchant_code
     const meRes = await fetch('https://api.sumup.com/v0.1/me', {
@@ -167,7 +172,34 @@ router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
     const txStatuses = (checkout.transactions || []).map(t => t.status);
     console.log('[SUMUP VERIFY]', checkoutId, '| Status:', checkout.status, '| Transactions:', txStatuses);
 
-    // Etape 2 : en sandbox le statut principal peut rester PENDING
+    // Etape 2a : detecter echec definitif (FAILED / EXPIRED) pour stopper le polling frontend
+    const hasFailedTransaction = (checkout.transactions || []).some(
+      t => t.status === 'FAILED' || t.status === 'CANCELLED'
+    );
+    const isFailed = checkout.status === 'FAILED' || checkout.status === 'EXPIRED' || hasFailedTransaction;
+
+    if (isFailed) {
+      // Marquer la transaction DB comme failed (si encore pending)
+      await pool.query(
+        "UPDATE sms_transactions SET status='failed' WHERE sumup_checkout_id=$1 AND user_id=$2 AND status='pending'",
+        [checkoutId, userId]
+      );
+      // Extraire la raison la plus utile disponible
+      const failedTx = (checkout.transactions || []).find(t => t.status === 'FAILED' || t.status === 'CANCELLED');
+      const reason = failedTx?.payout_reason
+        || failedTx?.internal_reason
+        || checkout.transaction_code
+        || 'Paiement refuse par la banque ou par SumUp.';
+      return res.json({
+        credited: false,
+        failed: true,
+        status: checkout.status || 'FAILED',
+        transactions: txStatuses,
+        message: reason
+      });
+    }
+
+    // Etape 2b : en sandbox le statut principal peut rester PENDING
     // meme si une transaction SUCCESSFUL existe dans le tableau.
     const hasPaidTransaction = (checkout.transactions || []).some(t => t.status === 'SUCCESSFUL');
     const isPaid = checkout.status === 'PAID' || hasPaidTransaction;

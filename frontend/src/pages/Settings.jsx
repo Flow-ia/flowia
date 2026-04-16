@@ -5121,7 +5121,7 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
   useEffect(() => { onSuccessRef.current = onSuccess; });
   useEffect(() => { showToastRef.current = showToast; });
 
-  // Verification partagee (polling, onResponse success, bouton manuel)
+  // Verification partagee (bouton manuel). Le polling/onResponse utilisent leur propre copie pour avoir acces a `cancelled`.
   const runVerify = async (source = 'unknown') => {
     if (finishedRef.current) return null;
     try {
@@ -5136,6 +5136,13 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
         onSuccessRef.current?.(result);
         return result;
       }
+      if (result?.failed) {
+        finishedRef.current = true;
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        setStatus('error');
+        setErrorMsg(result.message || 'Paiement refuse par SumUp.');
+        return result;
+      }
       return result;
     } catch(e) {
       console.warn('[SUMUP VERIFY erreur]', source, e.message);
@@ -5148,7 +5155,9 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
     setVerifying(true);
     try {
       const r = await runVerify('manual');
-      if (!r?.credited && !r?.already_credited) {
+      if (r?.failed) {
+        // l'erreur est deja affichee par runVerify
+      } else if (!r?.credited && !r?.already_credited) {
         showToastRef.current?.('Paiement pas encore confirme par SumUp', 'info');
       }
     } finally {
@@ -5168,12 +5177,27 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
         console.log('[SUMUP VERIFY request]', source, '→', checkoutId);
         const result = await paymentsApi.verifySMSCheckout(checkoutId);
         console.log('[SUMUP VERIFY resultat]', source, result);
+
+        // Succes : credite (ou deja credite)
         if (result?.credited || result?.already_credited) {
           finishedRef.current = true;
           if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
           if (!cancelled) setStatus('done');
           onSuccessRef.current?.(result);
+          return result;
         }
+
+        // Echec definitif SumUp (FAILED/EXPIRED) : stopper le polling
+        if (result?.failed) {
+          finishedRef.current = true;
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (!cancelled) {
+            setStatus('error');
+            setErrorMsg(result.message || 'Paiement refuse par SumUp. Reessayez avec une autre carte.');
+          }
+          return result;
+        }
+
         return result;
       } catch(e) {
         console.warn('[SUMUP VERIFY erreur]', source, e.message);

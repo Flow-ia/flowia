@@ -1,60 +1,31 @@
-Voici ton texte corrigé proprement :
-
----
-
-Voici les logs côté Render.
-
-Lors du paiement avec SumUp, le statut reste sur **« vérification de paiement par SumUp »**, puis rien ne se passe. Parfois, un message **« paiement non vérifié »** s’affiche.
-
-👉 De plus :
-
-* aucune transaction n’apparaît côté sandbox SumUp
-* aucune vente n’est enregistrée
-
-Voici les logs Render :
-
-```
+lors de recharge et apré sa voir cliquer sur payer Verification en cours cote SumUp...
+ et coté los j'ai ca  : Available at your primary URL https://flowia-backend.onrender.com
+==> 
 ==> ///////////////////////////////////////////////////////////
-[SUMUP VERIFY] 28e14c98-1506-4b23-a865-1c3c95cbe2f1 | Status: PENDING | Transactions: []
-==> Detected service running on port 5000
-==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+[SUMUP] Creation checkout: {"checkout_reference":"sms_e0c677b0-5270-4cd0-8542-940fb0eabf83_1776377245942","amount":20,"currency":"EUR","merchant_code":"M4A9JCQC","description":"Recharge SMS FlowIA","redirect_url":"FRONTEND_URL = https://haircoifflille.fr/settings/marketing?recharge=pending&ref=sms_e0c677b0-5270-4cd0-8542-940fb0eabf83_1776377245942"}
+[SUMUP] Reponse complete: {"amount":20,"checkout_reference":"sms_e0c677b0-5270-4cd0-8542-940fb0eabf83_1776377245942","checkout_type":"checkout","currency":"EUR","date":"2026-04-16T22:07:26.090+00:00","description":"Recharge SMS FlowIA","id":"79f7384b-4c15-4c03-ac26-f59e79c7955d","merchant_code":"M4A9JCQC","merchant_country":"FR","merchant_name":"Hungry box","pay_to_email":"hungrybox.fr@gmail.com","purpose":"CHECKOUT","redirect_url":"FRONTEND_URL = https://haircoifflille.fr/settings/marketing?recharge=pending&ref=sms_e0c677b0-5270-4cd0-8542-940fb0eabf83_1776377245942","status":"PENDING","transactions":[]}
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: PENDING | Transactions: []
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
+[SUMUP VERIFY] 79f7384b-4c15-4c03-ac26-f59e79c7955d | Status: FAILED | Transactions: [ 'FAILED' ]
 
-[SUMUP] Creation checkout: {
-  "checkout_reference":"sms_e0c677b0-5270-4cd0-8542-940fb0eabf83_1776375985805",
-  "amount":10,
-  "currency":"EUR",
-  "merchant_code":"M4A9JCQC",
-  "description":"Recharge SMS FlowIA",
-  "return_url":"https://haircoifflille.fr/settings/marketing?recharge=pending&ref=sms_e0c677b0-5270-4cd0-8542-940fb0eabf83_1776375985805"
-}
 
-[SUMUP] Réponse complète: {
-  "status":"PENDING",
-  "transactions":[]
-}
-
-[SUMUP VERIFY] b11e2764-d92e-4b83-8b40-027beae4f1b9 | Status: PENDING | Transactions: []
-(repeat...)
-
-[SUMUP VERIFY] e34c4e72-7131-4453-abe0-e20605664728 | Status: FAILED | Transactions: ['FAILED']
-```
-
----
-
-### ❗ Problèmes constatés
-
-* Le statut reste bloqué sur **PENDING**
-* Aucune transaction n’est créée (`transactions: []`)
-* Puis le paiement passe en **FAILED**
-* Aucune vente visible côté SumUp sandbox
-
----
-
-### 📧 Problème supplémentaire
-
-Les emails ne fonctionnent pas du tout :
-
-* aucun email reçu
-* aucune campagne envoyée lors de la création d’un code promo
-
-👉 Le système d’envoi d’emails semble complètement inactif ou mal configuré.
+et qunad je clique sur vérifier mon paiement ca m'affiche toujours 'paiement  naps encore confirmé par SumUp' , commetn faire corrige moi car jsquua présent tu nas pas résolu les probleems et je vois aucun logs de envoie de mail ou déclanchement des emails envoyé aprés la création de code promo

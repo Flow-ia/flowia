@@ -1,46 +1,54 @@
 # STATUS — FlowIA
 
-## Derniere session : 2026-04-16 (session 9 — hardening SumUp)
+## Derniere session : 2026-04-17 (session 10 — diagnostic log production)
+
+### Diagnostic des logs fournis
+Les logs Render montrent :
+- `redirect_url":"FRONTEND_URL = https://haircoifflille.fr/..."` → **la variable Render FRONTEND_URL contient "FRONTEND_URL = " prefixe** (l'utilisateur a colle la ligne complete au lieu de la valeur). L'URL de retour est donc invalide mais **ce n'est pas ce qui bloque le paiement** puisque le widget n'attend pas cette URL pour le flow principal.
+- `Status: FAILED | Transactions: [ 'FAILED' ]` **repete en boucle** → le paiement est bien **refuse par SumUp** puis le frontend continue a poller indefiniment car rien ne lui dit que c'est definitif.
 
 ### Bugs corriges dans cette passe
 
-1. **Widget SumUp demonte/remonte a chaque render parent**
-   - Cause : `useEffect` avait `runVerify` et `showToast` dans ses deps. `runVerify` etait recree quand `onSuccess` changeait ; `onSuccess` = `handlePaymentSuccess` non memoise → nouvelle identite a chaque render de TabSMS → effet relance → widget demonte/remonte (formulaire carte clignote, polling redemarre).
-   - Fix : refs stables `onSuccessRef`/`showToastRef` + useEffect avec la seule dep `[checkoutId]`. `handlePaymentSuccess` desormais `useCallback([loadData, showToast])`.
+1. **Frontend poll indefini sur FAILED/EXPIRED**
+   - Backend `/sms/verify` renvoie desormais `{ failed: true, message: <raison>, status: 'FAILED' }` des que `checkout.status === 'FAILED'` / `EXPIRED` ou qu'une transaction est `FAILED`/`CANCELLED`.
+   - La transaction DB est automatiquement passee en `status='failed'` (plus de pending zombie).
+   - Frontend `verify()` / `runVerify()` : sur `failed: true` → `clearInterval`, `finishedRef=true`, `setStatus('error')`, `setErrorMsg(message)`.
+   - Bouton "Verifier mon paiement" : affiche desormais la vraie raison SumUp au lieu de "pas encore confirme".
 
-2. **Mauvais nom de champ SumUp**
-   - Cause : j'avais utilise `return_url` au lieu de `redirect_url` (champ officiel de l'API `/v0.1/checkouts`).
-   - Fix : remis `redirect_url`.
+2. **FRONTEND_URL pollue par `KEY = ` prefixe**
+   - `payments.js` extrait la premiere URL `https?://...` avec une regex avant d'utiliser la valeur. Supprime aussi les `/` traînants.
+   - Ne corrige pas la config Render mais rend l'app tolerante.
 
-3. **`onLoad` non fiable**
-   - Cause : le SDK SumUp Card n'expose pas d'event `onLoad` documente ; le status restait bloque sur `loading` et le bouton manuel/texte n'apparaissait pas.
-   - Fix : `setStatus('ready')` directement apres retour de `SumUpCard.mount()`. Si `mount()` throw, on passe en `error` avec message explicite.
+3. **Aucun log email promo**
+   - `sendPromoEmail` : ajout `console.log('[MAIL PROMO OK] ${code} -> ${to}')` et `console.error('[MAIL PROMO ERR] ...')` en echec.
+   - Route `/api/promo/:id/send-emails` : logs `[PROMO EMAILS] Debut / Fin` avec `user`, `promo code`, `clients count`, `brevo_key=OK|MISSING`, `sent`, `failed`.
 
-4. **Hauteur du conteneur widget = 0 quand status=loading**
-   - Cause : `minHeight: status === 'loading' ? 0 : 320` → le widget SumUp montait dans un div sans hauteur reservee.
-   - Fix : `minHeight: 320` toujours.
+### Cause reelle du paiement refuse en sandbox
+Les transactions sont marquees `FAILED` cote SumUp → causes probables a verifier cote config :
+- La cle utilisee (`SUMUP_SECRET_KEY`) n'a pas le scope `payments` pour ce compte.
+- Le compte SumUp (merchant `M4A9JCQC` / `hungrybox.fr@gmail.com`) est un compte **production** mais utilise comme sandbox → echec systematique.
+- Le numero de carte saisi n'est pas une carte de test SumUp valide.
+- Le mode sandbox/prod n'est pas aligne entre la cle et les cartes utilisees.
 
-### FIX 1-5 de onboarding.md (rappel, finalises)
-
-- FIX 1 — Polling backend toutes les 3s (max 20, delai initial 5s), partage `finishedRef` avec onResponse pour eviter double-credit
-- FIX 2 — `/sms/verify` accepte `checkout.status === 'PAID'` **ou** `transactions[].status === 'SUCCESSFUL'` (sandbox)
-- FIX 3 — `<script src="...sumup.../sdk.js" defer>` dans `<head>` de `index.html`
-- FIX 4 — Logs `[SUMUP]` / `[SUMUP VERIFY]` / `[SUMUP WIDGET onResponse]`
-- FIX 5 — Bouton "Verifier mon paiement" visible en `ready`/`processing`
+Carte de test SumUp valide :
+- PAN : `4000 0000 0000 0002`
+- Expiration : toute date future
+- CVV : `123`
 
 ### Fichiers modifies
-- `frontend/src/pages/Settings.jsx` — refactor `SumupCheckoutModal`, memoisation `handlePaymentSuccess`
-- `backend/src/routes/payments.js` — `redirect_url` correct + verify accepte transactions[]
-- `frontend/index.html` — SDK SumUp pre-charge
+- `backend/src/routes/payments.js`
+  - Parse defensif `FRONTEND_URL`
+  - `/sms/verify` renvoie `failed:true` + raison, marque DB en `status='failed'`
+- `backend/src/utils/email.js` — logs `[MAIL PROMO OK/ERR]`
+- `backend/src/routes/promo.js` — logs `[PROMO EMAILS] Debut/Fin`
+- `frontend/src/pages/Settings.jsx` — modal SumUp stoppe polling sur `failed:true`
 
 ### Etat
-- Build frontend : OK (24.72s)
+- Build frontend : OK (20.23s)
 - Syntaxe backend : OK
 
-### Carte test sandbox SumUp
-- Visa : `4000 0000 0000 0002`
-- 3DS : `4000 0027 6000 3184`
-- Expiration : n'importe quelle date future / CVV : `123`
-
-### Bugs restants
-- Aucun identifie cote code.
+### Action utilisateur a faire
+1. Dans Render → Environment : verifier que `FRONTEND_URL` contient **uniquement** `https://haircoifflille.fr` (pas `FRONTEND_URL = https://...`).
+2. Sur le dashboard SumUp developer → verifier que la cle a bien le scope **payments** et est alignee avec le mode (prod vs sandbox).
+3. Tester avec la carte sandbox `4000 0000 0000 0002`.
+4. Redeployer le backend Render pour recuperer les nouveaux logs `[PROMO EMAILS]`.

@@ -221,12 +221,14 @@ router.post('/:id/send-emails', async (req, res) => {
     if (!clients.length) return res.json({ sent:0, failed:0, message:'Aucun client avec email.' });
 
     const { sendPromoEmail } = require('../utils/email');
+    console.log(`[PROMO EMAILS] Debut envoi | user=${req.user.userId} | promo=${promo.code} | clients=${clients.length} | brevo_key=${process.env.BREVO_API_KEY ? 'OK' : 'MISSING'}`);
     let sent = 0, failed = 0;
     for (const client of clients) {
       const name = [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Client';
       const ok = await sendPromoEmail({ to: client.email, clientName: name, businessName, promo });
       if (ok) sent++; else failed++;
     }
+    console.log(`[PROMO EMAILS] Fin | promo=${promo.code} | sent=${sent} | failed=${failed} | total=${clients.length}`);
     res.json({ sent, failed, total: clients.length,
       message: sent + ' email' + (sent>1?'s':'') + ' envoy' + (sent>1?'és':'é') + ' avec succès.' });
   } catch(e) { console.error('[send-emails]', e); res.status(500).json({ error: e.message }); }
