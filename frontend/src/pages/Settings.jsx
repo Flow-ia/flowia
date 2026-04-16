@@ -5103,30 +5103,30 @@ function TabSMS({ showToast, theme }) {
   // Au montage : verifier retour SumUp puis charger
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const checkoutId = params.get('checkout_id');
-    const recharge   = params.get('recharge');
+    const ref = params.get('ref');
+    const recharge = params.get('recharge');
 
     // Nettoyer l'URL immediatement
-    if (recharge || checkoutId) {
+    if (recharge || ref) {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    if (recharge === 'pending' && checkoutId) {
-      // Verifier le paiement cote backend (qui verifie cote SumUp)
-      paymentsApi.verifySMSCheckout(checkoutId)
+    if (recharge === 'pending' && ref) {
+      // Chercher le checkout_id par la ref dans nos transactions
+      paymentsApi.getSMSTransactionByRef(ref)
+        .then(tx => {
+          if (tx && tx.sumup_checkout_id) {
+            return paymentsApi.verifySMSCheckout(tx.sumup_checkout_id);
+          }
+        })
         .then(result => {
-          if (result.credited) {
+          if (result?.credited) {
             showToast(
-              `Recharge reussie ! +${result.sms_count} SMS credites (${result.amount}EUR)`,
+              `+${result.sms_count} SMS credites (${result.amount}EUR)`,
               'success'
             );
-          } else if (result.already_credited) {
-            // Deja credite via webhook, juste recharger les donnees
-          } else {
-            showToast(
-              'Paiement non confirme. Contactez le support si vous avez ete debite.',
-              'error'
-            );
+          } else if (result?.already_credited) {
+            showToast('Recharge deja effectuee');
           }
           loadData();
         })

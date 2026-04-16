@@ -36,17 +36,26 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
     }
 
     const ref = `sms_${userId}_${Date.now()}`;
-    const estimatedSms = Math.floor(amount / SMS_PRICE);
+    const smsCost   = parseFloat(process.env.SMS_COST_UNIT)      || 0.045;
+    const smsMargin = parseFloat(process.env.SMS_MARGIN_PERCENT)  || 30;
+    const smsPrice  = parseFloat((smsCost * (1 + smsMargin / 100)).toFixed(4));
+    const estimatedSms = Math.floor(amount / smsPrice);
 
     // Etape 2 : creer le checkout SumUp
+    // redirect_url = ou SumUp redirige apres paiement
+    const redirectAfterPayment =
+      `${FRONTEND_URL}/settings/marketing?recharge=pending&ref=${ref}`;
+
     const checkoutBody = {
       checkout_reference: ref,
       amount: parseFloat(amount.toFixed(2)),
       currency: 'EUR',
       merchant_code: merchantCode,
       description: 'Recharge SMS FlowIA',
-      redirect_url: `${FRONTEND_URL}/settings/marketing?recharge=pending&checkout_id=CHECKOUT_ID_PLACEHOLDER`
+      redirect_url: redirectAfterPayment
     };
+
+    console.log('[SUMUP] Creation checkout:', JSON.stringify(checkoutBody));
 
     const response = await fetch('https://api.sumup.com/v0.1/checkouts', {
       method: 'POST',
@@ -58,35 +67,31 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
     });
 
     const checkout = await response.json();
-    console.log('[SUMUP CHECKOUT]', JSON.stringify(checkout));
+    console.log('[SUMUP] Reponse complete:', JSON.stringify(checkout));
 
     if (!checkout.id) {
       return res.status(500).json({
-        error: 'Erreur SumUp: ' + (checkout.message || JSON.stringify(checkout))
+        error: 'SumUp error: ' + (checkout.message || JSON.stringify(checkout))
       });
     }
 
-    // Etape 3 : enregistrer EN ATTENTE — NE PAS CREDITER
+    // Etape 3 : construire l'URL de paiement
+    const checkoutUrl = checkout.hosted_checkout_url
+      || `https://pay.sumup.com/b2c/checkout?checkout-id=${checkout.id}`;
+
+    console.log('[SUMUP] URL paiement:', checkoutUrl);
+
+    // Etape 4 : enregistrer EN ATTENTE — NE PAS CREDITER ICI
     await pool.query(`
       INSERT INTO sms_transactions
         (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
       VALUES ($1, 'credit', $2, $3, $4, $5, 'pending')
     `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, checkout.id]);
 
-    console.log('[SUMUP] Checkout cree:', checkout.id, '| Statut: pending | Montant:', amount);
-
-    const checkoutUrl = checkout.hosted_checkout_url
-      || `https://pay.sumup.com/b2c/checkout?checkout-id=${checkout.id}`
-      || `https://checkout.sumup.com/pay/${checkout.id}`;
-
-    if (!checkoutUrl) {
-      console.error('[SUMUP] Pas de checkout_url. Reponse complete:', JSON.stringify(checkout));
-      return res.status(500).json({ error: 'URL de paiement non recue de SumUp' });
-    }
-
     res.json({
       checkout_url: checkoutUrl,
       checkout_id: checkout.id,
+      checkout_ref: ref,
       estimated_sms: estimatedSms
     });
 
@@ -185,18 +190,20 @@ router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
     );
 
     if (!txRows.length) {
-      return res.status(403).json({ error: 'Transaction introuvable.' });
+      return res.status(404).json({ error: 'Transaction introuvable.' });
     }
 
     const tx = txRows[0];
 
     // Etape 4 : verifier pas deja credite (protection doublon)
     if (tx.status === 'completed') {
+      const { rows: [userBal] } = await pool.query(
+        'SELECT sms_balance FROM users WHERE id=$1', [userId]
+      );
       return res.json({
         credited: false,
         already_credited: true,
-        message: 'Deja creditee',
-        new_balance: null
+        new_balance: parseFloat(userBal.sms_balance).toFixed(2)
       });
     }
 
@@ -267,6 +274,23 @@ router.get('/sms/transactions', authMiddleware, async (req, res) => {
       LIMIT 10
     `, [req.user.userId]);
     res.json(rows);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/payments/sms/transaction-by-ref/:ref ───────────────────────────
+// Chercher une transaction par sa reference (checkout_reference)
+router.get('/sms/transaction-by-ref/:ref', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM sms_transactions
+       WHERE description LIKE $1 AND user_id=$2
+       ORDER BY created_at DESC LIMIT 1`,
+      [`%${req.params.ref}%`, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Introuvable' });
+    res.json(rows[0]);
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
