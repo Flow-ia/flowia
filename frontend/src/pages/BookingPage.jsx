@@ -1938,6 +1938,58 @@ export default function BookingPage({ slug }) {
   const [booking, setBooking] = useState(false);
   const [bookErr, setBookErr] = useState('');
 
+  // Téléphone avec indicatif pays
+  const PHONE_COUNTRIES = [
+    { code:'FR', dial:'+33', flag:'🇫🇷', len:[9,10], label:'France' },
+    { code:'BE', dial:'+32', flag:'🇧🇪', len:[8,9],  label:'Belgique' },
+    { code:'CH', dial:'+41', flag:'🇨🇭', len:[9,10], label:'Suisse' },
+    { code:'LU', dial:'+352',flag:'🇱🇺', len:[8,9],  label:'Luxembourg' },
+    { code:'CA', dial:'+1',  flag:'🇨🇦', len:[10],   label:'Canada' },
+    { code:'MA', dial:'+212',flag:'🇲🇦', len:[9],    label:'Maroc' },
+    { code:'TN', dial:'+216',flag:'🇹🇳', len:[8],    label:'Tunisie' },
+    { code:'DZ', dial:'+213',flag:'🇩🇿', len:[9],    label:'Algérie' },
+    { code:'SN', dial:'+221',flag:'🇸🇳', len:[9],    label:'Sénégal' },
+    { code:'CI', dial:'+225',flag:'🇨🇮', len:[10],   label:'Côte d\'Ivoire' },
+    { code:'DE', dial:'+49', flag:'🇩🇪', len:[10,11],label:'Allemagne' },
+    { code:'ES', dial:'+34', flag:'🇪🇸', len:[9],    label:'Espagne' },
+    { code:'IT', dial:'+39', flag:'🇮🇹', len:[9,10], label:'Italie' },
+    { code:'PT', dial:'+351',flag:'🇵🇹', len:[9],    label:'Portugal' },
+    { code:'GB', dial:'+44', flag:'🇬🇧', len:[10,11],label:'Royaume-Uni' },
+    { code:'US', dial:'+1',  flag:'🇺🇸', len:[10],   label:'États-Unis' },
+  ];
+  const [phoneCC, setPhoneCC]       = useState(PHONE_COUNTRIES[0]); // pays sélectionné
+  const [phoneLocal, setPhoneLocal] = useState(''); // numéro local brut
+  const [phoneDrop, setPhoneDrop]   = useState(false); // dropdown ouvert
+  const [phoneErr, setPhoneErr]     = useState('');
+
+  // Formater le numéro final : +<dial><numéro sans zéro initial>
+  const formatPhone = (country, local) => {
+    const digits = local.replace(/\D/g, '');
+    if (!digits) return '';
+    const stripped = digits.startsWith('0') ? digits.slice(1) : digits;
+    return `${country.dial}${stripped}`;
+  };
+  // Valider le numéro local
+  const validatePhone = (country, local) => {
+    const digits = local.replace(/\D/g, '');
+    if (!digits) return 'Numéro requis';
+    const stripped = digits.startsWith('0') ? digits.slice(1) : digits;
+    if (!country.len.includes(stripped.length)) {
+      return `Numéro invalide pour ${country.label} (${country.len.join(' ou ')} chiffres attendus)`;
+    }
+    return '';
+  };
+  // Parser un numéro international existant → { country, local }
+  const parsePhone = (phone) => {
+    if (!phone) return { country: PHONE_COUNTRIES[0], local: '' };
+    const match = PHONE_COUNTRIES.find(c => phone.startsWith(c.dial));
+    if (match) {
+      const rest = phone.slice(match.dial.length);
+      return { country: match, local: rest };
+    }
+    return { country: PHONE_COUNTRIES[0], local: phone };
+  };
+
   // Vérification email en temps réel (étape 5)
   const [emailStatus, setEmailStatus] = useState('idle'); // 'idle'|'checking'|'exists'|'free'|'invalid'
   const emailCheckTimer = useRef(null);
@@ -1984,7 +2036,9 @@ export default function BookingPage({ slug }) {
         setClientUser(info);
         setCN(`${info.first_name} ${info.last_name}`);
         setCE(info.email);
-        setCP(info.phone || '');
+        const ph = info.phone || '';
+        setCP(ph);
+        if (ph) { const p = parsePhone(ph); setPhoneCC(p.country); setPhoneLocal(p.local); }
       } catch {}
     }
   }, []);
@@ -2055,7 +2109,11 @@ export default function BookingPage({ slug }) {
     setClientUser(client);
     setCN(`${client.first_name} ${client.last_name}`);
     setCE(client.email);
-    setCP(client.phone || '');
+    const ph = client.phone || '';
+    setCP(ph);
+    if (ph) { const p = parsePhone(ph); setPhoneCC(p.country); setPhoneLocal(p.local); }
+    else { setPhoneLocal(''); }
+    setPhoneErr('');
     setShowAuthPanel(false);
     setInlineAuthMode('none');
     // Si connecté à l'étape 5 → avancer à 6 seulement si le téléphone est renseigné
@@ -2131,6 +2189,7 @@ export default function BookingPage({ slug }) {
     setPromoCode(''); setPromoData(null); setPromoErr('');
     setPendingBook(false);
     setInlineAuthMode('none');
+    setPhoneLocal(''); setPhoneErr(''); setPhoneDrop(false);
     navigate(`/book/${slug}`, { replace: true });
   };
 
@@ -3038,11 +3097,40 @@ export default function BookingPage({ slug }) {
                             color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
                             Téléphone *
                           </label>
-                          <input type="tel" placeholder="06 00 00 00 00" value={clientPhone}
-                            onChange={e=>setCP(e.target.value)}
-                            style={{width:'100%',padding:'11px 12px',borderRadius:9,outline:'none',
-                              background:th.inputBg,border:`1px solid ${th.inputBorder}`,
-                              color:th.text,fontSize:13,boxSizing:'border-box'}}/>
+                          <div style={{display:'flex',gap:6,position:'relative'}}>
+                            <div style={{position:'relative'}}>
+                              <button type="button" onClick={()=>setPhoneDrop(!phoneDrop)}
+                                style={{display:'flex',alignItems:'center',gap:4,padding:'11px 10px',
+                                  borderRadius:9,background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                                  color:th.text,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',height:'100%'}}>
+                                <span style={{fontSize:16}}>{phoneCC.flag}</span>
+                                <span style={{fontSize:12,fontWeight:600}}>{phoneCC.dial}</span>
+                                <span style={{fontSize:9,opacity:0.5}}>▼</span>
+                              </button>
+                              {phoneDrop && (
+                                <div style={{position:'absolute',top:'100%',left:0,zIndex:999,marginTop:4,
+                                  background:th.card,border:`1px solid ${th.border}`,borderRadius:10,
+                                  boxShadow:'0 8px 24px rgba(0,0,0,0.15)',maxHeight:200,overflowY:'auto',minWidth:200}}>
+                                  {PHONE_COUNTRIES.map(c=>(
+                                    <button key={c.code} type="button" onClick={()=>{setPhoneCC(c);setPhoneDrop(false);setPhoneErr('');}}
+                                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'9px 12px',
+                                        background:phoneCC.code===c.code?'rgba(99,102,241,0.08)':'transparent',
+                                        border:'none',cursor:'pointer',color:th.text,fontSize:13,textAlign:'left'}}>
+                                      <span style={{fontSize:16}}>{c.flag}</span>
+                                      <span style={{fontWeight:600}}>{c.dial}</span>
+                                      <span style={{color:th.muted,fontSize:12}}>{c.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <input type="tel" placeholder="6 03 04 46 17" value={phoneLocal}
+                              onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
+                              style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
+                                background:th.inputBg,border:`1px solid ${phoneErr?'#ef4444':th.inputBorder}`,
+                                color:th.text,fontSize:13,boxSizing:'border-box'}}/>
+                          </div>
+                          {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight:600}}>{phoneErr}</p>}
                         </div>
                       )}
                       <label style={{display:'block',fontSize:12,fontWeight:600,color:th.muted,marginBottom:6}}>
@@ -3054,29 +3142,36 @@ export default function BookingPage({ slug }) {
                           background:th.inputBg,border:`1px solid ${th.inputBorder}`,
                           color:th.text,fontSize:13,resize:'none',lineHeight:1.5}}/>
                       <button onClick={async ()=>{
-                        // Si téléphone vient d'être renseigné → sauvegarder dans le profil backend
-                        if(clientPhone.trim() && clientUser && !clientUser.phone){
-                          try{
-                            const tk=localStorage.getItem('ff_client_token');
-                            if(tk) await pubApi.updateClientProfile(slug,{
-                              first_name:clientUser.first_name,last_name:clientUser.last_name,
-                              email:clientUser.email,phone:clientPhone.trim()
-                            });
-                            const updated={...clientUser,phone:clientPhone.trim()};
-                            setClientUser(updated);
-                            localStorage.setItem('ff_client_info',JSON.stringify(updated));
-                          }catch{}
+                        // Valider et formater le téléphone si pas encore fait
+                        if(!clientPhone.trim()){
+                          const err=validatePhone(phoneCC,phoneLocal);
+                          if(err){setPhoneErr(err);return;}
+                          const formatted=formatPhone(phoneCC,phoneLocal);
+                          setCP(formatted);
+                          // Sauvegarder dans le profil backend
+                          if(clientUser && !clientUser.phone){
+                            try{
+                              const tk=localStorage.getItem('ff_client_token');
+                              if(tk) await pubApi.updateClientProfile(slug,{
+                                first_name:clientUser.first_name,last_name:clientUser.last_name,
+                                email:clientUser.email,phone:formatted
+                              });
+                              const updated={...clientUser,phone:formatted};
+                              setClientUser(updated);
+                              localStorage.setItem('ff_client_info',JSON.stringify(updated));
+                            }catch{}
+                          }
                         }
                         goToStep(6);
                       }}
-                        disabled={!clientPhone.trim()}
+                        disabled={!clientPhone.trim()&&!phoneLocal.replace(/\D/g,'')}
                         style={{width:'100%',marginTop:16,padding:'15px',borderRadius:12,
-                          background:!clientPhone.trim()?th.border:th.accent,
+                          background:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?th.border:th.accent,
                           border:'none',fontWeight:800,fontSize:15,
-                          color:!clientPhone.trim()?th.muted:th.accentText,
-                          cursor:!clientPhone.trim()?'not-allowed':'pointer',
-                          opacity:!clientPhone.trim()?0.5:1}}>
-                        {!clientPhone.trim() ? '📱 Téléphone requis' : 'Continuer →'}
+                          color:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?th.muted:th.accentText,
+                          cursor:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?'not-allowed':'pointer',
+                          opacity:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?0.5:1}}>
+                        {(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,'')) ? 'Téléphone requis' : 'Continuer →'}
                       </button>
                     </div>
                   ) : (
@@ -3225,11 +3320,40 @@ export default function BookingPage({ slug }) {
                                 color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
                                 Téléphone *
                               </label>
-                              <input type="tel" placeholder="06 00 00 00 00" value={clientPhone}
-                                onChange={e=>setCP(e.target.value)}
-                                style={{width:'100%',padding:'11px 12px',borderRadius:9,outline:'none',
-                                  background:th.inputBg,border:`1px solid ${th.inputBorder}`,
-                                  color:th.text,fontSize:13}}/>
+                              <div style={{display:'flex',gap:6,position:'relative'}}>
+                                <div style={{position:'relative'}}>
+                                  <button type="button" onClick={()=>setPhoneDrop(!phoneDrop)}
+                                    style={{display:'flex',alignItems:'center',gap:4,padding:'11px 10px',
+                                      borderRadius:9,background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                                      color:th.text,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',height:'100%'}}>
+                                    <span style={{fontSize:16}}>{phoneCC.flag}</span>
+                                    <span style={{fontSize:12,fontWeight:600}}>{phoneCC.dial}</span>
+                                    <span style={{fontSize:9,opacity:0.5}}>▼</span>
+                                  </button>
+                                  {phoneDrop && (
+                                    <div style={{position:'absolute',top:'100%',left:0,zIndex:999,marginTop:4,
+                                      background:th.card,border:`1px solid ${th.border}`,borderRadius:10,
+                                      boxShadow:'0 8px 24px rgba(0,0,0,0.15)',maxHeight:200,overflowY:'auto',minWidth:200}}>
+                                      {PHONE_COUNTRIES.map(c=>(
+                                        <button key={c.code} type="button" onClick={()=>{setPhoneCC(c);setPhoneDrop(false);setPhoneErr('');}}
+                                          style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'9px 12px',
+                                            background:phoneCC.code===c.code?'rgba(99,102,241,0.08)':'transparent',
+                                            border:'none',cursor:'pointer',color:th.text,fontSize:13,textAlign:'left'}}>
+                                          <span style={{fontSize:16}}>{c.flag}</span>
+                                          <span style={{fontWeight:600}}>{c.dial}</span>
+                                          <span style={{color:th.muted,fontSize:12}}>{c.label}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <input type="tel" placeholder="6 03 04 46 17" value={phoneLocal}
+                                  onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
+                                  style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
+                                    background:th.inputBg,border:`1px solid ${phoneErr?'#ef4444':th.inputBorder}`,
+                                    color:th.text,fontSize:13}}/>
+                              </div>
+                              {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight:600}}>{phoneErr}</p>}
                             </div>
 
                             <div>
@@ -3246,15 +3370,20 @@ export default function BookingPage({ slug }) {
                           </div>
 
                           <button
-                            onClick={()=>{goToStep(6);}}
-                            disabled={!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!clientPhone.trim()}
+                            onClick={()=>{
+                              const err=validatePhone(phoneCC,phoneLocal);
+                              if(err){setPhoneErr(err);return;}
+                              setCP(formatPhone(phoneCC,phoneLocal));
+                              goToStep(6);
+                            }}
+                            disabled={!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,'')}
                             style={{width:'100%',marginTop:16,padding:'14px',borderRadius:12,
-                              background:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!clientPhone.trim())?th.border:th.accent,
+                              background:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?th.border:th.accent,
                               border:'none',fontWeight:800,fontSize:14,
-                              color:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!clientPhone.trim())?th.muted:th.accentText,
-                              cursor:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!clientPhone.trim())?'not-allowed':'pointer',
-                              opacity:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!clientPhone.trim())?0.5:1}}>
-                            {emailStatus==='exists' ? "⚠️ Connectez-vous d'abord" : 'Continuer →'}
+                              color:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?th.muted:th.accentText,
+                              cursor:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?'not-allowed':'pointer',
+                              opacity:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?0.5:1}}>
+                            {emailStatus==='exists' ? "Connectez-vous d'abord" : 'Continuer →'}
                           </button>
                         </div>
                       )}
