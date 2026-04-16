@@ -5114,8 +5114,15 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
   const [errorMsg, setErrorMsg] = useState('');
   const [verifying, setVerifying] = useState(false);
 
-  // Declenche la verification (partagee entre polling, onResponse success, bouton manuel)
-  const runVerify = useCallback(async (source = 'unknown') => {
+  // Refs stables pour les callbacks parents — evite de relancer l'effet
+  // (et donc de demonter/remonter le widget) quand le parent re-render.
+  const onSuccessRef = useRef(onSuccess);
+  const showToastRef = useRef(showToast);
+  useEffect(() => { onSuccessRef.current = onSuccess; });
+  useEffect(() => { showToastRef.current = showToast; });
+
+  // Verification partagee (polling, onResponse success, bouton manuel)
+  const runVerify = async (source = 'unknown') => {
     if (finishedRef.current) return null;
     try {
       console.log('[SUMUP VERIFY request]', source, '→ checkout:', checkoutId);
@@ -5126,7 +5133,7 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
         finishedRef.current = true;
         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
         setStatus('done');
-        onSuccess?.(result);
+        onSuccessRef.current?.(result);
         return result;
       }
       return result;
@@ -5134,7 +5141,7 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
       console.warn('[SUMUP VERIFY erreur]', source, e.message);
       return null;
     }
-  }, [checkoutId, onSuccess]);
+  };
 
   // Bouton manuel "Verifier mon paiement"
   const handleManualVerify = async () => {
@@ -5142,16 +5149,37 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
     try {
       const r = await runVerify('manual');
       if (!r?.credited && !r?.already_credited) {
-        showToast?.('Paiement pas encore confirme par SumUp', 'info');
+        showToastRef.current?.('Paiement pas encore confirme par SumUp', 'info');
       }
     } finally {
       setVerifying(false);
     }
   };
 
+  // Effet principal : monte le widget une seule fois par checkoutId.
   useEffect(() => {
     let cancelled = false;
     console.log('[SUMUP] Montage widget pour checkout:', checkoutId);
+
+    // Verify autonome (re-lit les refs) — utilise par le polling et onResponse.
+    const verify = async (source) => {
+      if (finishedRef.current || cancelled) return null;
+      try {
+        console.log('[SUMUP VERIFY request]', source, '→', checkoutId);
+        const result = await paymentsApi.verifySMSCheckout(checkoutId);
+        console.log('[SUMUP VERIFY resultat]', source, result);
+        if (result?.credited || result?.already_credited) {
+          finishedRef.current = true;
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (!cancelled) setStatus('done');
+          onSuccessRef.current?.(result);
+        }
+        return result;
+      } catch(e) {
+        console.warn('[SUMUP VERIFY erreur]', source, e.message);
+        return null;
+      }
+    };
 
     // Polling de secours : en sandbox onResponse peut ne jamais etre appele.
     // Demarre apres 5s pour laisser le widget se setup, puis toutes les 3s, max 20 fois (1 minute).
@@ -5160,16 +5188,16 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
     const startPolling = () => {
       pollRef.current = setInterval(async () => {
         pollCount++;
-        if (finishedRef.current) { clearInterval(pollRef.current); pollRef.current = null; return; }
+        if (finishedRef.current || cancelled) { clearInterval(pollRef.current); pollRef.current = null; return; }
         if (pollCount > maxPolls) {
           clearInterval(pollRef.current); pollRef.current = null;
           if (!finishedRef.current) {
             console.warn('[SUMUP] Polling timeout apres', maxPolls * 3, 's');
-            showToast?.('Delai depasse. Cliquez sur "Verifier mon paiement" ou reessayez.', 'info');
+            showToastRef.current?.('Delai depasse. Cliquez sur "Verifier mon paiement" ou reessayez.', 'info');
           }
           return;
         }
-        await runVerify('poll#' + pollCount);
+        await verify('poll#' + pollCount);
       }, 3000);
     };
     const pollStartTimer = setTimeout(startPolling, 5000);
@@ -5179,41 +5207,36 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
         console.log('[SUMUP] SumUpCard disponible:', !!SumUpCard);
         if (cancelled || !mountRef.current) return;
         mountRef.current.innerHTML = '';
-        widgetRef.current = SumUpCard.mount({
-          id: 'sumup-card-container',
-          checkoutId,
-          locale: 'fr-FR',
-          showFooter: false,
-          onLoad: () => {
-            if (cancelled) return;
-            console.log('[SUMUP WIDGET onLoad]');
-            setStatus('ready');
-          },
-          onResponse: async (type, body) => {
-            if (cancelled) return;
-            console.log('[SUMUP WIDGET onResponse]', type, JSON.stringify(body || {}));
+        try {
+          widgetRef.current = SumUpCard.mount({
+            id: 'sumup-card-container',
+            checkoutId,
+            locale: 'fr-FR',
+            showFooter: false,
+            onResponse: async (type, body) => {
+              if (cancelled) return;
+              console.log('[SUMUP WIDGET onResponse]', type, JSON.stringify(body || {}));
 
-            if (type === 'success') {
-              setStatus('processing');
-              // Pas besoin d'attendre : verifier tout de suite cote serveur.
-              const r = await runVerify('onResponse:success');
-              if (!r?.credited && !r?.already_credited) {
-                // Le polling continuera jusqu'a confirmation serveur.
+              if (type === 'success') {
                 setStatus('processing');
+                await verify('onResponse:success');
+              } else if (type === 'sent' || type === 'auth-screen') {
+                setStatus('processing');
+              } else if (type === 'error' || type === 'invalid') {
+                setStatus('error');
+                setErrorMsg(body?.message || body?.error_message || 'Paiement refuse');
+                if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+                finishedRef.current = true;
               }
-            } else if (type === 'sent') {
-              // Paiement envoye, 3DS ou confirmation asynchrone en cours.
-              setStatus('processing');
-            } else if (type === 'auth-screen') {
-              setStatus('processing');
-            } else if (type === 'error' || type === 'invalid') {
-              setStatus('error');
-              setErrorMsg(body?.message || 'Paiement refuse');
-              if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-              finishedRef.current = true;
             }
-          }
-        });
+          });
+          // Le SDK n'expose pas d'evenement "pret" fiable : on considere que le formulaire
+          // est utilisable des le retour de mount(). Si le mount echoue, on passe en error.
+          if (!cancelled) setStatus('ready');
+        } catch(mountErr) {
+          console.error('[SUMUP] mount error:', mountErr);
+          if (!cancelled) { setStatus('error'); setErrorMsg('Widget SumUp indisponible : ' + mountErr.message); }
+        }
       })
       .catch(err => {
         console.error('[SUMUP] SDK load error:', err);
@@ -5225,8 +5248,9 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
       clearTimeout(pollStartTimer);
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
       try { widgetRef.current?.unmount?.(); } catch(_) {}
+      widgetRef.current = null;
     };
-  }, [checkoutId, runVerify, showToast]);
+  }, [checkoutId]);
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
@@ -5264,7 +5288,7 @@ function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, sho
           </div>
         )}
 
-        <div ref={mountRef} id="sumup-card-container" style={{ minHeight:status === 'loading' ? 0 : 320 }} />
+        <div ref={mountRef} id="sumup-card-container" style={{ minHeight:320 }} />
 
         {(status === 'ready' || status === 'processing') && (
           <button onClick={handleManualVerify} disabled={verifying}
@@ -5368,7 +5392,7 @@ function TabSMS({ showToast, theme }) {
   };
 
   // Le modal a deja appele paymentsApi.verifySMSCheckout et passe le resultat ici.
-  const handlePaymentSuccess = (result) => {
+  const handlePaymentSuccess = useCallback((result) => {
     setCheckoutData(null);
     if (result?.credited) {
       showToast(`+${result.sms_count} SMS credites (${result.amount}EUR)`, 'success');
@@ -5376,7 +5400,7 @@ function TabSMS({ showToast, theme }) {
       showToast('Recharge deja effectuee');
     }
     loadData();
-  };
+  }, [loadData, showToast]);
 
   const numAmt = parseFloat(amount) || 0;
   const estimatedSms = numAmt > 0 ? Math.floor(numAmt / SMS_PRICE_UNIT) : 0;

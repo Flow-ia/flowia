@@ -51,7 +51,8 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
       currency: 'EUR',
       merchant_code: merchantCode,
       description: 'Recharge SMS FlowIA',
-      return_url: `${FRONTEND_URL}/settings/marketing?recharge=pending&ref=${ref}`
+      // URL de retour apres 3DS (le widget embarque revient ici si redirection 3DS necessaire)
+      redirect_url: `${FRONTEND_URL}/settings/marketing?recharge=pending&ref=${ref}`
     };
 
     console.log('[SUMUP] Creation checkout:', JSON.stringify(checkoutBody));
