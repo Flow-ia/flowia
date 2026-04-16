@@ -517,14 +517,14 @@ router.put('/profile', authMiddleware, async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  GOOGLE OAUTH — Commerçant (inscription / connexion)
-//  URL enregistrée chez Google : /api/auth/merchant/google/callback
+//  URL enregistrée chez Google : /api/auth/google/merchant/callback
 //  state = "merchant" pour distinguer du flow client
 // ═══════════════════════════════════════════════════════════════════════════
-router.get('/merchant/google/callback', async (req, res) => {
+router.get('/google/merchant/callback', async (req, res) => {
   const { code, error } = req.query;
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
   const FRONTEND_URL = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'https://haircoifflille.fr';
-  const redirectUri  = `${BACKEND_URL}/api/auth/merchant/google/callback`;
+  const redirectUri  = `${BACKEND_URL}/api/auth/google/merchant/callback`;
 
   if (error || !code) {
     return res.redirect(`${FRONTEND_URL}?auth_error=google_denied`);
