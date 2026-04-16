@@ -5086,6 +5086,10 @@ function TabSMS({ showToast, theme }) {
   const [amount, setAmount]         = useState('20');
   const [loading, setLoading]       = useState(true);
   const [paying, setPaying]         = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payError, setPayError]     = useState('');
+  const [payCheckoutId, setPayCheckoutId] = useState('');
+  const [payEstimated, setPayEstimated]   = useState(0);
 
   const loadData = useCallback(async () => {
     try {
@@ -5100,26 +5104,37 @@ function TabSMS({ showToast, theme }) {
     finally { setLoading(false); }
   }, []);
 
-  // Au montage : verifier retour SumUp puis charger
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const checkoutId = params.get('checkout_id');
-    if (params.get('recharge') === 'success' && checkoutId) {
-      paymentsApi.verifySMSCheckout(checkoutId)
-        .then(r => { if (r.credited) showToast('Recharge effectuee !', 'success'); loadData(); })
-        .catch(() => loadData());
-      window.history.replaceState({}, '', window.location.pathname);
-    } else { loadData(); }
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
-  const handleCheckout = async () => {
+  const handleRecharge = async () => {
     const num = parseFloat(amount);
-    if (!num || num < 5) return showToast('Montant minimum 5EUR', 'err');
-    setPaying(true);
+    if (!num || num < 5) return showToast('Montant minimum 5 EUR', 'err');
+    setPaying(true); setPayError('');
     try {
-      const r = await paymentsApi.createSMSCheckout(num);
-      if (r.checkout_url) window.location.href = r.checkout_url;
-      else if (r.redirect_url) window.location.href = r.redirect_url;
+      const { checkout_id, estimated_sms } = await paymentsApi.createSMSCheckout(num);
+      setPayCheckoutId(checkout_id);
+      setPayEstimated(estimated_sms || 0);
+      setShowPayModal(true);
+      // Monter le widget SumUp apres rendu de la modal
+      setTimeout(() => {
+        if (window.SumUpCard) {
+          window.SumUpCard.mount({
+            checkoutId: checkout_id,
+            onResponse: async (type, body) => {
+              if (type === 'success') {
+                setShowPayModal(false);
+                try {
+                  await paymentsApi.verifySMSCheckout(checkout_id);
+                } catch(e) { /* webhook s'en chargera */ }
+                showToast(`+${estimated_sms || Math.floor(num / SMS_PRICE_UNIT)} SMS credites !`);
+                loadData();
+              } else if (type === 'error') {
+                setPayError(body?.message || 'Paiement echoue');
+              }
+            }
+          });
+        }
+      }, 300);
     } catch(e) { showToast(e.message, 'err'); }
     finally { setPaying(false); }
   };
@@ -5163,13 +5178,13 @@ function TabSMS({ showToast, theme }) {
             </p>
           )}
           {numAmt > 0 && numAmt < 5 && <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>Montant minimum : 5 EUR</p>}
-          <button onClick={handleCheckout} disabled={paying || numAmt < 5}
+          <button onClick={handleRecharge} disabled={paying || numAmt < 5}
             style={{ width:'100%', padding:'13px', borderRadius:12,
               background: numAmt >= 5 ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : theme.inputBg,
               color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:800, fontSize:14, border:'none',
               cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
               boxShadow: numAmt >= 5 ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}>
-            {paying ? 'Redirection...' : 'Recharger'}
+            {paying ? 'Chargement...' : 'Recharger'}
           </button>
         </div>
       </div>
@@ -5265,6 +5280,32 @@ function TabSMS({ showToast, theme }) {
           </div>
         )}
       </div>
+
+      {/* Modal paiement SumUp */}
+      {showPayModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div onClick={() => setShowPayModal(false)}
+            style={{ position:'absolute', inset:0, background: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)', backdropFilter:'blur(8px)' }} />
+          <div style={{ position:'relative', width:'100%', maxWidth:420, background: isDark ? '#1c2128' : '#fff',
+            borderRadius:20, border:`1px solid ${theme.border}`, padding:24, boxShadow:'0 24px 64px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ fontWeight:800, fontSize:17, color:theme.text, margin:'0 0 6px', textAlign:'center' }}>Recharger votre solde SMS</h3>
+            <p style={{ fontSize:13, color:theme.muted, textAlign:'center', margin:'0 0 20px' }}>
+              {parseFloat(amount) || 0} EUR — environ {payEstimated || estimatedSms} SMS
+            </p>
+            {payError && (
+              <div style={{ padding:'10px 14px', borderRadius:10, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', marginBottom:16 }}>
+                <p style={{ fontSize:12, fontWeight:700, color:'#ef4444', margin:0 }}>{payError}</p>
+              </div>
+            )}
+            <div id="sumup-card" style={{ minHeight:200 }} />
+            <button onClick={() => setShowPayModal(false)}
+              style={{ width:'100%', marginTop:16, padding:'11px', borderRadius:12, background:theme.inputBg,
+                border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

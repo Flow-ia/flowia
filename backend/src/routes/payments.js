@@ -21,8 +21,6 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
     }
 
     const SUMUP_KEY    = process.env.SUMUP_SECRET_KEY;
-    const BACK_URL     = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
-    const FRONT_URL    = (process.env.FRONTEND_URL || 'https://haircoifflille.fr').split(',')[0].trim();
     const ref = `sms_${userId}_${Date.now()}`;
 
     // Etape 1 : recuperer le merchant_code depuis /me
@@ -43,8 +41,7 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
       amount: parseFloat(amount.toFixed(2)),
       currency: 'EUR',
       merchant_code: merchantCode,
-      description: 'Recharge SMS FlowIA',
-      return_url: `${BACK_URL}/api/payments/sms/webhook`
+      description: 'Recharge SMS FlowIA'
     };
 
     console.log('[SUMUP CHECKOUT] body:', JSON.stringify(checkoutBody));
@@ -77,14 +74,9 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
       VALUES ($1, 'credit', $2, $3, $4, $5, 'pending')
     `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, checkout.id]);
 
-    // URL de redirection apres paiement
-    const redirectUrl = `${FRONT_URL}/settings/marketing?recharge=success&checkout_id=${checkout.id}`;
-
     res.json({
-      checkout_url: checkout.hosted_checkout_url || `https://checkout.sumup.com/${checkout.id}`,
       checkout_id: checkout.id,
-      estimated_sms: estimatedSms,
-      redirect_url: redirectUrl
+      estimated_sms: estimatedSms
     });
 
   } catch(e) {
