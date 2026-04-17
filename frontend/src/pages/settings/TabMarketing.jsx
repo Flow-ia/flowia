@@ -1,0 +1,1700 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { I } from '../../utils/icons';
+import { Confirm } from '../../components/UI';
+import { loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
+
+export default function TabMarketing({ theme, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const [marketingTab, setMarketingTab] = useState('promotions');
+
+  const MTABS = [
+    { id: 'fidelite',   label: 'Fidelite' },
+    { id: 'promotions', label: '% Promotions' },
+    { id: 'solde',      label: 'Solde marketing' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div style={{ display:'flex', gap:6, marginBottom:20,
+        background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', borderRadius:12, padding:4 }}>
+        {MTABS.map(({ id, label }) => (
+          <button key={id} onClick={() => setMarketingTab(id)}
+            style={{ flex:1, padding:'9px 8px', borderRadius:9, border:'none', fontWeight:700, fontSize:12,
+              cursor:'pointer', background: marketingTab === id ? theme.card : 'transparent',
+              color: marketingTab === id ? theme.text : theme.muted,
+              boxShadow: marketingTab === id ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+              transition:'all 0.15s', whiteSpace:'nowrap' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {marketingTab === 'fidelite'   && <TabLoyalty theme={theme} />}
+      {marketingTab === 'promotions' && <TabPromo theme={theme} showToast={showToast} />}
+      {marketingTab === 'solde'      && <TabSMS showToast={showToast} theme={theme} />}
+    </div>
+  );
+}
+
+function TabLoyalty({ theme }) {
+  const isDark = theme.mode === 'dark';
+  const [program, setProgram]   = useState(null);
+  const [clients, setClients]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [editProg, setEditProg] = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [search, setSearch]     = useState('');
+  const [stampModal, setStampModal] = useState(null);
+  const [stampEmail, setStampEmail] = useState('');
+  const [stampName, setStampName]   = useState('');
+  const [stamping, setStamping]     = useState(false);
+  const [delId, setDelId] = useState(null);
+
+  const [promoHist, setPromoHist] = useState([]);
+  const [showHist,  setShowHist]  = useState(false);
+  const [histLoad,  setHistLoad]  = useState(false);
+
+  const [showAddSvc,    setShowAddSvc]    = useState(false);
+  const [svcSearch,     setSvcSearch]     = useState('');
+  const [svcResults,    setSvcResults]    = useState([]);
+  const [svcClient,     setSvcClient]     = useState(null);
+  const [svcQty,        setSvcQty]        = useState(1);
+  const [svcBusy,       setSvcBusy]       = useState(false);
+  const [svcMsg,        setSvcMsg]        = useState('');
+  const [svcSearchLoad, setSvcSearchLoad] = useState(false);
+
+  const [loyaltyStats, setLoyaltyStats] = useState(null);
+  const [showLoyaltyStats, setShowLoyaltyStats] = useState(false);
+  const [loyaltyStatsLoad, setLoyaltyStatsLoad] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [p, cl] = await Promise.all([loyaltyApi.getProgram(), loyaltyApi.getClients({ search })]);
+      setProgram(p); setClients(cl);
+    } finally { setLoading(false); }
+  }, [search]);
+
+  const loadLoyaltyStats = async () => {
+    setLoyaltyStatsLoad(true);
+    try { const s = await loyaltyApi.getStats(); setLoyaltyStats(s); setShowLoyaltyStats(true); }
+    catch(e) { console.error(e); }
+    finally { setLoyaltyStatsLoad(false); }
+  };
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveProg = async () => {
+    setSaving(true);
+    try { const p = await loyaltyApi.saveProgram(program); setProgram(p); setEditProg(false); }
+    finally { setSaving(false); }
+  };
+
+  const loadHistory = async () => {
+    setHistLoad(true);
+    try { const h = await loyaltyApi.promoHistory(); setPromoHist(h); setShowHist(true); }
+    catch(e) { console.error(e); }
+    finally { setHistLoad(false); }
+  };
+
+  useEffect(() => {
+    if (!svcSearch || svcSearch.trim().length < 2) { setSvcResults([]); return; }
+    setSvcSearchLoad(true);
+    const t = setTimeout(async () => {
+      try { const r = await loyaltyApi.searchClients(svcSearch); setSvcResults(r); }
+      catch { setSvcResults([]); }
+      finally { setSvcSearchLoad(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [svcSearch]);
+
+  const doAddService = async () => {
+    if (!svcClient) return;
+    setSvcBusy(true); setSvcMsg('');
+    try {
+      const res = await loyaltyApi.addService({
+        client_email: svcClient.email,
+        client_name:  svcClient.name,
+        stamps_to_add: svcQty,
+      });
+      const msg = res.reward_triggered
+        ? `Tampon(s) ajoute(s) ! Recompense declenchee - code : ${res.reward_code}`
+        : `${svcQty} tampon(s) ajoute(s). Total : ${res.client?.stamps || 0}/${res.stamps_required}`;
+      setSvcMsg(msg);
+      setSvcClient(null); setSvcSearch(''); setSvcQty(1); setSvcResults([]);
+      load();
+    } catch(e) { setSvcMsg('Erreur : ' + e.message); }
+    finally { setSvcBusy(false); }
+  };
+
+  const doStamp = async () => {
+    if (!stampEmail) return;
+    setStamping(true);
+    try {
+      const res = await loyaltyApi.addStamp({ client_email:stampEmail, client_name:stampName, stamps_to_add:1 });
+      if (res.reward_triggered) {
+        alert(`${stampName||stampEmail} a atteint ${res.stamps_required} tampons ! Recompense debloquee : ${program.reward_label}`);
+      }
+      setStampModal(null); setStampEmail(''); setStampName('');
+      load();
+    } finally { setStamping(false); }
+  };
+
+  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
+
+  return (
+    <div className="space-y-4">
+      <div style={{ background:theme.card, borderRadius:20, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
+        <div style={{ padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:`1px solid ${theme.separator}` }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:36, height:36, borderRadius:12, background:'rgba(245,158,11,0.12)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <I.Gift style={{ width:18, height:18, color:'#f59e0b' }} />
+            </div>
+            <div>
+              <p style={{ fontWeight:800, fontSize:15, color:theme.text, margin:0 }}>Programme fidélité</p>
+              {program && <p style={{ fontSize:12, color:theme.muted, margin:0 }}>{program.stamps_required} tampons → {program.reward_label}</p>}
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            {program && (
+              <button onClick={()=>{ setProgram(p=>({...p,enabled:!p.enabled})); loyaltyApi.saveProgram({...program,enabled:!program.enabled}); }}
+                style={{ width:40, height:24, borderRadius:12, background: program.enabled?'#f59e0b':theme.inputBg, border:`2px solid ${program.enabled?'#f59e0b':theme.border}`, position:'relative', cursor:'pointer', transition:'all 0.2s' }}>
+                <div style={{ width:16, height:16, borderRadius:8, background:'white', position:'absolute', top:2, left: program.enabled?20:2, transition:'left 0.2s' }} />
+              </button>
+            )}
+            <button onClick={()=>setEditProg(!editProg)} style={{ padding:'6px 12px', borderRadius:10, background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.2)', color:'#f59e0b', fontWeight:700, fontSize:12, cursor:'pointer' }}>
+              {editProg ? '✓' : '⚙️'}
+            </button>
+          </div>
+        </div>
+        {editProg && program && (
+          <div style={{ padding:16, display:'flex', flexDirection:'column', gap:12 }}>
+            <div>
+              <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Mode de fidélité</label>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={()=>setProgram(p=>({...p,loyalty_mode:'stamps'}))}
+                  style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer',
+                    border:`1px solid ${(program.loyalty_mode||'stamps')==='stamps'?'#f59e0b':theme.border}`,
+                    background:(program.loyalty_mode||'stamps')==='stamps'?'rgba(245,158,11,0.12)':theme.inputBg,
+                    color:(program.loyalty_mode||'stamps')==='stamps'?'#f59e0b':theme.muted }}>
+                  🎫 Passages
+                </button>
+                <button onClick={()=>setProgram(p=>({...p,loyalty_mode:'points'}))}
+                  style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer',
+                    border:`1px solid ${(program.loyalty_mode||'stamps')==='points'?'#111827':theme.border}`,
+                    background:(program.loyalty_mode||'stamps')==='points'?'rgba(17,24,39,0.12)':theme.inputBg,
+                    color:(program.loyalty_mode||'stamps')==='points'?'#111827':theme.muted }}>
+                  ⭐ Points
+                </button>
+              </div>
+            </div>
+
+            {(program.loyalty_mode||'stamps')==='points' && (
+              <div>
+                <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Points gagnés par euro dépensé</label>
+                <input type="number" min="0.01" step="0.1" value={program.points_per_euro||1}
+                  onChange={e=>setProgram(p=>({...p,points_per_euro:parseFloat(e.target.value)||1}))} style={inp} />
+                <p style={{ fontSize:11, color:theme.muted, marginTop:4 }}>Ex : 1 point = 1 € dépensé → seuil {program.stamps_required||100} points</p>
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>
+                {(program.loyalty_mode||'stamps')==='points' ? 'Points requis pour la recompense' : 'Passages requis pour la recompense'}
+              </label>
+              <input type="number" min="1" max="9999" value={program.stamps_required}
+                onChange={e=>setProgram(p=>({...p,stamps_required:parseInt(e.target.value)||10}))} style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Type de r&#233;compense</label>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={()=>setProgram(p=>({...p,reward_type:'percent'}))}
+                  style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer', border:`1px solid ${program.reward_type==='percent'?'#111827':theme.border}`, background:program.reward_type==='percent'?'rgba(17,24,39,0.12)':theme.inputBg, color:program.reward_type==='percent'?'#111827':theme.muted }}>
+                  % R&#233;duction
+                </button>
+                <button onClick={()=>setProgram(p=>({...p,reward_type:'fixed'}))}
+                  style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer', border:`1px solid ${program.reward_type==='fixed'?'#10b981':theme.border}`, background:program.reward_type==='fixed'?'rgba(16,185,129,0.12)':theme.inputBg, color:program.reward_type==='fixed'?'#10b981':theme.muted }}>
+                  &#8364; Montant fixe
+                </button>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>
+                Valeur de la r&#233;compense ({program.reward_type==='percent'?'%':'&#8364;'})
+              </label>
+              <div style={{ position:'relative' }}>
+                <input type="number" min="1" max={program.reward_type==='percent'?100:9999} step="0.5"
+                  value={program.reward_value||10}
+                  onChange={e=>setProgram(p=>({...p,reward_value:parseFloat(e.target.value)||10}))}
+                  style={{...inp, paddingRight:36}} />
+                <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:800, color:theme.muted, fontSize:15 }}>
+                  {program.reward_type==='percent'?'%':'€'}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Libel&#233; de la r&#233;compense</label>
+              <input placeholder="ex: Prestation offerte" value={program.reward_label||''} onChange={e=>setProgram(p=>({...p,reward_label:e.target.value}))} style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Comptabiliser les passages</label>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {[
+                  { v:'physical', l:'Physique uniquement',   d:'Caisse et prestation ajoutee sur place' },
+                  { v:'online',   l:'En ligne uniquement',    d:'Reservations via le site public' },
+                  { v:'both',     l:'Les deux (recommande)', d:'Physique + en ligne' },
+                ].map(opt => (
+                  <button key={opt.v} onClick={()=>setProgram(p=>({...p,count_trigger:opt.v}))}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:12, cursor:'pointer', textAlign:'left',
+                      border:`1.5px solid ${(program.count_trigger||'both')===opt.v?'#f59e0b':theme.border}`,
+                      background:(program.count_trigger||'both')===opt.v?'rgba(245,158,11,0.1)':theme.inputBg }}>
+                    <div style={{ width:16, height:16, borderRadius:8, border:`2px solid ${(program.count_trigger||'both')===opt.v?'#f59e0b':theme.muted}`,
+                      background:(program.count_trigger||'both')===opt.v?'#f59e0b':'transparent', flexShrink:0 }} />
+                    <div>
+                      <p style={{ margin:0, fontWeight:700, fontSize:13, color:theme.text }}>{opt.l}</p>
+                      <p style={{ margin:0, fontSize:11, color:theme.muted }}>{opt.d}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Achat minimum (€)</label>
+                <input type="number" min="0" step="0.5" value={program.min_purchase||0}
+                  onChange={e=>setProgram(p=>({...p,min_purchase:parseFloat(e.target.value)||0}))}
+                  style={inp} />
+              </div>
+              <div>
+                <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Validité du code (jours)</label>
+                <input type="number" min="1" max="365" value={program.validity_days||90}
+                  onChange={e=>setProgram(p=>({...p,validity_days:parseInt(e.target.value)||90}))}
+                  style={inp} />
+              </div>
+            </div>
+            <div style={{ background:'rgba(245,158,11,0.08)', borderRadius:12, padding:'10px 14px' }}>
+              <p style={{ fontSize:12, color:'#92400e', margin:0, fontWeight:600 }}>
+                {program.stamps_required} {(program.loyalty_mode||'stamps')==='points'?'points':'passages'} → {program.reward_type==='percent'?`${program.reward_value||10}%`:`${Number(program.reward_value||10).toFixed(2)} €`} · valide {program.validity_days||90}j{(program.min_purchase||0)>0?` · min ${program.min_purchase}€`:''}
+              </p>
+            </div>
+            <button onClick={saveProg} disabled={saving} style={{ padding:'11px', borderRadius:12, background:'linear-gradient(135deg,#f59e0b,#fbbf24)', color:'white', fontWeight:800, border:'none', cursor:'pointer' }}>
+              {saving ? '&#9203;...' : '&#128190; Sauvegarder'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <div style={{ flex:1, minWidth:160, position:'relative' }}>
+          <I.Search style={{ width:14, height:14, position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:theme.muted }} />
+          <input placeholder="Rechercher un client..." value={search} onChange={e=>setSearch(e.target.value)} style={{ width:'100%', padding:'10px 10px 10px 34px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+        </div>
+        <button onClick={()=>setStampModal(true)} disabled={!program?.enabled}
+          style={{ padding:'10px 14px', borderRadius:12, background:'linear-gradient(135deg,#f59e0b,#fbbf24)', color:'white', fontWeight:800, fontSize:13, border:'none', cursor:'pointer', flexShrink:0, opacity:program?.enabled?1:0.4 }}>
+          + Tampon
+        </button>
+        <button onClick={loadLoyaltyStats} disabled={loyaltyStatsLoad}
+          style={{ padding:'10px 14px', borderRadius:12, background:theme.cardAlt, border:`1px solid ${theme.border}`, color:theme.text, fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0 }}>
+          {loyaltyStatsLoad ? '⏳' : '📊'} Traçabilité
+        </button>
+      </div>
+
+      {showLoyaltyStats && loyaltyStats && (
+        <div style={{ background:isDark?'rgba(17,24,39,0.06)':'rgba(17,24,39,0.03)', border:'1px solid rgba(17,24,39,0.2)', borderRadius:18, padding:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+            <p style={{ fontWeight:800, fontSize:14, color:theme.text, margin:0 }}>Traçabilité fidélité</p>
+            <button onClick={()=>setShowLoyaltyStats(false)} style={{ background:'none', border:'none', cursor:'pointer', color:theme.muted, fontSize:18 }}>✕</button>
+          </div>
+          {(() => {
+            const s = loyaltyStats.summary || {};
+            const codesGeneres  = parseInt(s.total_codes   || 0);
+            const mtUtilise     = parseFloat(s.montant_utilise || 0);
+            const codesUtilises = parseInt(s.codes_utilises || 0);
+            const codesRestants = parseInt(s.codes_restants || 0);
+            return (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:8, marginBottom:16 }}>
+                {[
+                  { l:'Codes généres',   v: codesGeneres,              c:'#f59e0b' },
+                  { l:'Remises utilisees', v: `${mtUtilise.toFixed(2)} €`, c:'#ef4444' },
+                  { l:'Codes utilises',  v: codesUtilises,             c:'#10b981' },
+                  { l:'Codes restants',  v: codesRestants,             c:'#111827' },
+                ].map(({l,v,c}) => (
+                  <div key={l} style={{ borderRadius:12, padding:'10px 12px', textAlign:'center', background:isDark?`${c}22`:`${c}11`, border:`1px solid ${c}33` }}>
+                    <p style={{ fontSize:9, fontWeight:800, textTransform:'uppercase', color:c, margin:'0 0 4px' }}>{l}</p>
+                    <p style={{ fontSize:16, fontWeight:900, color:c, margin:0 }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+          {loyaltyStats.clients && loyaltyStats.clients.length > 0 && (
+            <div>
+              <p style={{ fontSize:12, fontWeight:700, color:theme.muted, margin:'0 0 10px' }}>CA par client</p>
+              <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:220, overflowY:'auto' }}>
+                {loyaltyStats.clients.map((cl,i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', background:theme.card, borderRadius:12, border:`1px solid ${theme.border}` }}>
+                    <div>
+                      <p style={{ margin:0, fontWeight:700, fontSize:13, color:theme.text }}>{cl.client_name || cl.client_email}</p>
+                      <p style={{ margin:0, fontSize:11, color:theme.muted }}>{cl.total_stamps_ever} passage{cl.total_stamps_ever>1?'s':''} · {cl.rewards_earned} recompense{cl.rewards_earned>1?'s':''}</p>
+                    </div>
+                    <span style={{ fontWeight:900, fontSize:14, color:'#10b981' }}>{Number(cl.ca_total).toFixed(2)} €</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading ? <div className="py-16 text-center"><I.Loader className="w-6 h-6 mx-auto animate-spin" style={{ color:theme.muted }} /></div>
+      : clients.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'40px 20px', background:theme.card, borderRadius:18, border:`1px solid ${theme.border}` }}>
+          <I.Gift style={{ width:36, height:36, margin:'0 auto 10px', color:theme.dim }} />
+          <p style={{ color:theme.muted, fontSize:14, margin:0 }}>Aucun client fidélité</p>
+        </div>
+      ) : (
+        <div style={{ background:theme.card, borderRadius:18, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
+          {clients.map((cl,i) => {
+            const isPoints = (program?.loyalty_mode||'stamps') === 'points';
+            const currentVal = isPoints ? (parseFloat(cl.points)||0) : (parseInt(cl.stamps)||0);
+            const pct = program ? Math.min(100, (currentVal / (program.stamps_required||10))*100) : 0;
+            return (
+              <div key={cl.id} style={{ padding:'14px 16px', borderBottom: i<clients.length-1?`1px solid ${theme.separator}`:'none' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                  <div style={{ width:36, height:36, borderRadius:12, background:'rgba(245,158,11,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:15, color:'#f59e0b', flexShrink:0 }}>
+                    {(cl.client_name||cl.client_email||'?').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontWeight:700, fontSize:14, color:theme.text, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cl.client_name||'-'}</p>
+                    <p style={{ fontSize:11, color:theme.muted, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cl.client_email}</p>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    {(program?.loyalty_mode||'stamps')==='points' ? (
+                      <>
+                        <p style={{ fontWeight:900, fontSize:18, color:theme.text, margin:0 }}>
+                          {Math.floor(cl.points||0)}<span style={{ fontSize:11, color:theme.muted, fontWeight:600 }}>pts/{program?.stamps_required||100}</span>
+                        </p>
+                        <p style={{ fontSize:10, color:theme.dim, margin:0 }}>{cl.total_points_ever||0} pts cumulés</p>
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ fontWeight:900, fontSize:18, color:'#f59e0b', margin:0 }}>
+                          {cl.stamps}<span style={{ fontSize:11, color:theme.muted, fontWeight:600 }}>/{program?.stamps_required||10}</span>
+                        </p>
+                        <p style={{ fontSize:10, color:theme.dim, margin:0 }}>{cl.rewards_earned} 🎁 gagnée(s)</p>
+                      </>
+                    )}
+                  </div>
+                  <button onClick={()=>setDelId(cl.id)} style={{ width:26, height:26, borderRadius:8, background:'rgba(239,68,68,0.1)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <I.Trash style={{ width:11, height:11, color:'#ef4444' }} />
+                  </button>
+                </div>
+                <div style={{ display:'flex', gap:4 }}>
+                  {Array.from({length:program?.stamps_required||10}).map((_,j) => (
+                    <div key={j} style={{ flex:1, height:6, borderRadius:3, background: j < cl.stamps ? '#f59e0b' : isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.08)' }} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {stampModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div onClick={()=>setStampModal(null)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(12px)' }} />
+          <div style={{ position:'relative', width:'100%', maxWidth:380, background: isDark?'#161620':'#fff', borderRadius:24, border:`1px solid ${theme.border}`, padding:24 }}>
+            <h3 style={{ fontWeight:800, fontSize:17, color:theme.text, margin:'0 0 20px' }}>Ajouter un tampon</h3>
+            <div className="space-y-3">
+              <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Email client *</label><input type="email" placeholder="client@email.fr" value={stampEmail} onChange={e=>setStampEmail(e.target.value)} style={inp} /></div>
+              <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Nom (optionnel)</label><input placeholder="Prénom Nom" value={stampName} onChange={e=>setStampName(e.target.value)} style={inp} /></div>
+            </div>
+            <div style={{ display:'flex', gap:10, marginTop:20 }}>
+              <button onClick={()=>setStampModal(null)} style={{ flex:1, padding:'12px', borderRadius:12, background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, cursor:'pointer' }}>Annuler</button>
+              <button onClick={doStamp} disabled={stamping||!stampEmail} style={{ flex:2, padding:'12px', borderRadius:12, background:'linear-gradient(135deg,#f59e0b,#fbbf24)', color:'white', fontWeight:800, border:'none', cursor:'pointer', opacity:!stampEmail?0.5:1 }}>
+                {stamping ? '⏳...' : '🎫 Valider le tampon'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ background:theme.card, borderRadius:20, padding:20, border:`1px solid ${theme.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <I.Plus style={{ width:18, height:18, color:'#10b981' }} />
+            <span style={{ fontWeight:800, fontSize:15, color:theme.text }}>Ajouter une prestation client</span>
+          </div>
+          <button onClick={()=>{ setShowAddSvc(!showAddSvc); setSvcMsg(''); }}
+            style={{ padding:'6px 14px', borderRadius:10, background:'rgba(16,185,129,0.1)', border:'1px solid rgba(16,185,129,0.25)', color:'#10b981', fontWeight:700, fontSize:12, cursor:'pointer' }}>
+            {showAddSvc ? 'Fermer' : 'Ouvrir'}
+          </button>
+        </div>
+        {showAddSvc && (
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ position:'relative' }}>
+              <input placeholder="Rechercher par nom, email, téléphone..."
+                value={svcSearch} onChange={e=>{ setSvcSearch(e.target.value); setSvcClient(null); }}
+                style={{ width:'100%', padding:'11px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:13, outline:'none', boxSizing:'border-box' }}
+              />
+              {svcSearchLoad && <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:12, color:theme.muted }}>⏳</span>}
+            </div>
+            {svcResults.length > 0 && !svcClient && (
+              <div style={{ background:theme.inputBg, border:`1px solid ${theme.border}`, borderRadius:12, overflow:'hidden' }}>
+                {svcResults.map(r => (
+                  <div key={r.id} onClick={()=>{ setSvcClient(r); setSvcResults([]); setSvcSearch(r.name + (r.email?' - '+r.email:'')); }}
+                    style={{ padding:'10px 14px', cursor:'pointer', borderBottom:`1px solid ${theme.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div>
+                      <p style={{ margin:0, fontWeight:700, fontSize:13, color:theme.text }}>{r.name}</p>
+                      <p style={{ margin:0, fontSize:11, color:theme.muted }}>{r.email}{r.phone?' · '+r.phone:''}</p>
+                    </div>
+                    <span style={{ fontSize:11, fontWeight:700, color:'#f59e0b', background:'rgba(245,158,11,0.1)', padding:'2px 8px', borderRadius:6 }}>{r.stamps||0} 🎫</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {svcClient && (
+              <div style={{ background:'rgba(16,185,129,0.06)', border:'1px solid rgba(16,185,129,0.2)', borderRadius:12, padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div>
+                  <p style={{ margin:0, fontWeight:700, fontSize:13, color:'#10b981' }}>{svcClient.name}</p>
+                  <p style={{ margin:0, fontSize:11, color:theme.muted }}>{svcClient.email} · {svcClient.stamps||0}/{program?.stamps_required||'?'} tampons</p>
+                </div>
+                <button onClick={()=>{ setSvcClient(null); setSvcSearch(''); }}
+                  style={{ background:'none', border:'none', cursor:'pointer', color:theme.muted, fontSize:18 }}>✕</button>
+              </div>
+            )}
+            <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+              <div style={{ flex:1 }}>
+                <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Nb de tampons à ajouter</label>
+                <input type="number" min="1" max="20" value={svcQty} onChange={e=>setSvcQty(parseInt(e.target.value)||1)}
+                  style={{ width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+              </div>
+              <button onClick={doAddService} disabled={!svcClient||svcBusy}
+                style={{ padding:'10px 18px', borderRadius:12, background:'linear-gradient(135deg,#10b981,#059669)', color:'white', fontWeight:800, fontSize:13, border:'none', cursor:'pointer', marginTop:20, opacity:!svcClient?0.4:1 }}>
+                {svcBusy ? '⏳' : '+ Ajouter'}
+              </button>
+            </div>
+            {svcMsg && (
+              <p style={{ margin:0, fontSize:12, fontWeight:700, color: svcMsg.includes('Erreur') ? '#ef4444' : '#10b981', background: svcMsg.includes('Erreur')?'rgba(239,68,68,0.07)':'rgba(16,185,129,0.07)', padding:'8px 12px', borderRadius:10 }}>{svcMsg}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div style={{ background:theme.card, borderRadius:20, padding:20, border:`1px solid ${theme.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: showHist ? 14 : 0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <I.FileText style={{ width:18, height:18, color:'#111827' }} />
+            <span style={{ fontWeight:800, fontSize:15, color:theme.text }}>Historique codes fidélité</span>
+          </div>
+          <button onClick={()=>{ if (!showHist) loadHistory(); else setShowHist(false); }}
+            style={{ padding:'6px 14px', borderRadius:10, background:theme.cardAlt, border:`1px solid ${theme.border}`, color:theme.text, fontWeight:700, fontSize:12, cursor:'pointer' }}>
+            {histLoad ? '⏳' : showHist ? 'Masquer' : 'Afficher'}
+          </button>
+        </div>
+        {showHist && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {promoHist.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'32px 0', color:theme.muted }}>
+                <p style={{ fontSize:32, margin:'0 0 8px' }}>🎫</p>
+                <p style={{ fontSize:14, fontWeight:600 }}>Aucun code fidélité généré pour l'instant</p>
+              </div>
+            ) : promoHist.map(row => {
+              const used = row.uses_count > 0;
+              const expired = !row.is_active || (row.valid_until && new Date(row.valid_until) < new Date());
+              const statusColor = used ? '#10b981' : expired ? '#ef4444' : '#f59e0b';
+              const statusLabel = used ? 'Utilise' : expired ? 'Expire' : 'Disponible';
+              return (
+                <div key={row.id} style={{ background:theme.card, border:`1px solid ${theme.border}`, borderRadius:16, padding:'14px 16px' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, marginBottom:10 }}>
+                    <div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:15, color:'#f59e0b', letterSpacing:'0.08em' }}>{row.code}</span>
+                        <span style={{ padding:'2px 8px', borderRadius:99, fontSize:10, fontWeight:800, background:`${statusColor}18`, color:statusColor }}>{statusLabel}</span>
+                      </div>
+                      <p style={{ margin:0, fontSize:12, color:theme.muted }}>
+                        Client : <strong style={{ color:theme.text }}>{row.owner_name || row.owner_client_email || '-'}</strong>
+                      </p>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <p style={{ margin:0, fontWeight:900, fontSize:16, color:theme.text }}>
+                        {row.type==='percent' ? `-${row.value}%` : `-${Number(row.value||0).toFixed(2)} €`}
+                      </p>
+                      {row.min_purchase > 0 && (
+                        <p style={{ margin:'2px 0 0', fontSize:10, color:theme.muted }}>Min. {Number(row.min_purchase).toFixed(2)} €</p>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:10, fontSize:11 }}>
+                    <span style={{ color:theme.muted }}>📅 Généré le <strong>{row.created_at ? new Date(row.created_at).toLocaleDateString('fr-FR') : '-'}</strong></span>
+                    <span style={{ color:row.valid_until && new Date(row.valid_until)<new Date() ? '#ef4444' : theme.muted }}>
+                      ⏳ Expire le <strong>{row.valid_until ? new Date(row.valid_until).toLocaleDateString('fr-FR') : '-'}</strong>
+                    </span>
+                    {used && (
+                      <span style={{ color:'#10b981' }}>✓ Utilise le <strong>{row.used_at ? new Date(row.used_at).toLocaleDateString('fr-FR') : '-'}</strong></span>
+                    )}
+                    {row.discount_applied && (
+                      <span style={{ color:'#10b981', fontWeight:700 }}>Remise appliquée : <strong>-{Number(row.discount_applied).toFixed(2)} €</strong></span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Confirm open={!!delId} onClose={()=>setDelId(null)} title="Supprimer ce client fidélité ?" desc="Ses tampons seront perdus." theme={theme}
+        onConfirm={async()=>{ await loyaltyApi.removeClient(delId); setClients(p=>p.filter(c=>c.id!==delId)); setDelId(null); }} />
+    </div>
+  );
+}
+
+function PromoForm({ open, onClose, init, onSave, theme }) {
+  const isDark = theme.mode === 'dark';
+  const [code, setCode]       = useState('');
+  const [type, setType]       = useState('percent');
+  const [value, setValue]     = useState('');
+  const [maxUses, setMaxUses] = useState('');
+  const [validFrom, setValidFrom]   = useState(new Date().toISOString().split('T')[0]);
+  const [validUntil, setValidUntil] = useState('');
+  const [targetClients, setTargetClients] = useState('all');
+  const [timeAllday, setTimeAllday] = useState(true);
+  const [timeFrom, setTimeFrom]     = useState('10:00');
+  const [timeUntil, setTimeUntil]   = useState('14:00');
+  const [saving, setSaving] = useState(false);
+  const [campaignChannel, setCampaignChannel] = useState('none');
+  const [campaignTarget, setCampaignTarget] = useState('top50');
+  const [customCount, setCustomCount] = useState('50');
+  const [smsMessage, setSmsMessage] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [sendingCampaign, setSendingCampaign] = useState(false);
+
+  useEffect(() => {
+    if (init) {
+      setCode(init.code||''); setType(init.type||'percent'); setValue(init.value||'');
+      setMaxUses(init.max_uses||''); setValidFrom(init.valid_from||''); setValidUntil(init.valid_until||'');
+      setTargetClients(init.target_clients||'all');
+      setTimeAllday(init.time_allday !== false);
+      setTimeFrom(init.time_from ? init.time_from.substring(0,5) : '10:00');
+      setTimeUntil(init.time_until ? init.time_until.substring(0,5) : '14:00');
+    } else {
+      setCode(''); setType('percent'); setValue(''); setMaxUses('');
+      setValidFrom(new Date().toISOString().split('T')[0]); setValidUntil('');
+      setTargetClients('all'); setTimeAllday(true); setTimeFrom('10:00'); setTimeUntil('14:00');
+    }
+    setCampaignChannel('none'); setPreview(null); setSmsMessage('');
+  }, [init, open]);
+
+  if (!open) return null;
+  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(12px)' }} />
+      <div style={{ position:'relative', width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
+        background: isDark?'#161620':'#fff', borderRadius:24, border:`1px solid ${theme.border}`, padding:24 }}>
+        <h3 style={{ fontWeight:800, fontSize:17, color:theme.text, margin:'0 0 20px' }}>{init ? 'Modifier le code' : 'Nouveau code promo'}</h3>
+        <div className="space-y-3">
+          <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Code *</label>
+            <input placeholder="BIENVENUE10" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} style={{...inp, textTransform:'uppercase', fontFamily:'monospace', fontWeight:700, fontSize:16, letterSpacing:'0.1em'}} /></div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Type de remise</label>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setType('percent')} style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer', border:`1px solid ${type==='percent'?'#1a73e8':theme.border}`, background: type==='percent'?'rgba(26,115,232,0.12)':theme.inputBg, color: type==='percent'?'#1a73e8':theme.muted }}>% Pourcentage</button>
+              <button onClick={()=>setType('fixed')} style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer', border:`1px solid ${type==='fixed'?'#10b981':theme.border}`, background: type==='fixed'?'rgba(16,185,129,0.12)':theme.inputBg, color: type==='fixed'?'#10b981':theme.muted }}>€ Montant fixe</button>
+            </div>
+          </div>
+          <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Valeur *</label>
+            <div style={{ position:'relative' }}>
+              <input type="number" min="0" placeholder={type==='percent'?'10':'5.00'} value={value} onChange={e=>setValue(e.target.value)} style={{...inp, paddingRight:36}} />
+              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:700, color:theme.muted, fontSize:16 }}>{type==='percent'?'%':'€'}</span>
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Valide du</label><input type="date" value={validFrom} onChange={e=>setValidFrom(e.target.value)} style={inp} /></div>
+            <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Jusqu&apos;au</label><input type="date" value={validUntil} onChange={e=>setValidUntil(e.target.value)} style={inp} /></div>
+          </div>
+
+          <div>
+            <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Plage horaire d&apos;utilisation</label>
+            <div style={{ display:'flex', gap:8, marginBottom: timeAllday ? 0 : 10 }}>
+              <button onClick={()=>setTimeAllday(true)}
+                style={{ flex:1, padding:'9px', borderRadius:11, fontWeight:700, fontSize:12, cursor:'pointer',
+                  border:`1px solid ${timeAllday?'#1a73e8':theme.border}`,
+                  background:timeAllday?'rgba(26,115,232,0.12)':theme.inputBg,
+                  color:timeAllday?'#1a73e8':theme.muted }}>🕐 Toute la journée</button>
+              <button onClick={()=>setTimeAllday(false)}
+                style={{ flex:1, padding:'9px', borderRadius:11, fontWeight:700, fontSize:12, cursor:'pointer',
+                  border:`1px solid ${!timeAllday?'#f59e0b':theme.border}`,
+                  background:!timeAllday?'rgba(245,158,11,0.12)':theme.inputBg,
+                  color:!timeAllday?'#f59e0b':theme.muted }}>⏰ Plage horaire</button>
+            </div>
+            {!timeAllday && (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:8 }}>
+                <div>
+                  <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:5 }}>De</label>
+                  <input type="time" value={timeFrom} onChange={e=>setTimeFrom(e.target.value)} style={inp} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:5 }}>À</label>
+                  <input type="time" value={timeUntil} onChange={e=>setTimeUntil(e.target.value)} style={inp} />
+                </div>
+              </div>
+            )}
+            {!timeAllday && timeFrom && timeUntil && (
+              <div style={{ marginTop:8, padding:'7px 12px', borderRadius:10,
+                background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)' }}>
+                <p style={{ fontSize:11, fontWeight:700, color:'#f59e0b', margin:0 }}>
+                  ⏰ Code valide de {timeFrom} à {timeUntil}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div><label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Utilisations max (vide = illimité)</label>
+            <input type="number" min="1" placeholder="Illimité" value={maxUses} onChange={e=>setMaxUses(e.target.value)} style={inp} /></div>
+          <div>
+            <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:8 }}>Applicable à</label>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>setTargetClients('all')}
+                style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer',
+                  border:`1px solid ${targetClients==='all'?'#1a73e8':theme.border}`,
+                  background:targetClients==='all'?'rgba(26,115,232,0.12)':theme.inputBg,
+                  color:targetClients==='all'?'#1a73e8':theme.muted }}>
+                Tous les clients
+              </button>
+              <button onClick={()=>setTargetClients('new')}
+                style={{ flex:1, padding:'10px', borderRadius:11, fontWeight:700, fontSize:13, cursor:'pointer',
+                  border:`1px solid ${targetClients==='new'?'#10b981':theme.border}`,
+                  background:targetClients==='new'?'rgba(16,185,129,0.12)':theme.inputBg,
+                  color:targetClients==='new'?'#10b981':theme.muted }}>
+                Nouveaux clients
+              </button>
+            </div>
+          </div>
+          {!init && (
+            <div style={{ padding:'14px', borderRadius:14, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border:`1px solid ${theme.border}` }}>
+              <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:10, textTransform:'uppercase', letterSpacing:'0.05em' }}>Envoyer aux clients</p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, marginBottom:10 }}>
+                {[
+                  { id:'none', label:'Ne pas envoyer', color:theme.muted },
+                  { id:'email', label:'Email (gratuit)', color:'#1a73e8' },
+                  { id:'sms', label:'SMS (payant)', color:'#f59e0b' },
+                  { id:'both', label:'Email + SMS', color:'#8b5cf6' },
+                ].map(ch => (
+                  <button key={ch.id} onClick={() => { setCampaignChannel(ch.id); setPreview(null); }}
+                    style={{ padding:'9px 8px', borderRadius:10, fontWeight:700, fontSize:11, cursor:'pointer',
+                      border:`1px solid ${campaignChannel===ch.id ? ch.color : theme.border}`,
+                      background: campaignChannel===ch.id ? `${ch.color}15` : theme.inputBg,
+                      color: campaignChannel===ch.id ? ch.color : theme.muted }}>{ch.label}</button>
+                ))}
+              </div>
+              {campaignChannel !== 'none' && (
+                <>
+                  <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:6 }}>Ciblage</label>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
+                    {[{id:'top50',l:'Top 50'},{id:'top100',l:'Top 100'},{id:'top200',l:'Top 200'},{id:'all',l:'Tous'},{id:'custom',l:'Personnalise'}].map(t => (
+                      <button key={t.id} onClick={() => setCampaignTarget(t.id)}
+                        style={{ padding:'6px 12px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer',
+                          border:`1px solid ${campaignTarget===t.id ? '#1a73e8' : theme.border}`,
+                          background: campaignTarget===t.id ? 'rgba(26,115,232,0.12)' : theme.inputBg,
+                          color: campaignTarget===t.id ? '#1a73e8' : theme.muted }}>{t.l}</button>
+                    ))}
+                  </div>
+                  {campaignTarget === 'custom' && (
+                    <div style={{ marginBottom:10 }}>
+                      <input type="number" min="1" value={customCount} onChange={e => setCustomCount(e.target.value)}
+                        placeholder="Nombre de clients" style={{...inp, fontSize:12}} />
+                    </div>
+                  )}
+                  {(campaignChannel === 'sms' || campaignChannel === 'both') && (
+                    <div style={{ marginBottom:10 }}>
+                      <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Message SMS (160 car. max)</label>
+                      <textarea value={smsMessage} onChange={e => setSmsMessage(e.target.value.slice(0,160))}
+                        placeholder="Profitez de -10% avec le code PROMO10 !"
+                        style={{...inp, height:60, resize:'none', fontSize:12}} />
+                      <p style={{ fontSize:10, color: smsMessage.length > 150 ? '#ef4444' : theme.muted, textAlign:'right' }}>{smsMessage.length}/160</p>
+                    </div>
+                  )}
+                  <button onClick={async () => {
+                    setPreviewLoading(true);
+                    try {
+                      const p = await campaignsApi.getCampaignPreview({
+                        target_type: campaignTarget, custom_count: customCount, channel: campaignChannel
+                      });
+                      setPreview(p);
+                    } catch(e) { alert(e.message); }
+                    finally { setPreviewLoading(false); }
+                  }} disabled={previewLoading}
+                    style={{ width:'100%', padding:'8px', borderRadius:10, fontSize:12, fontWeight:700,
+                      background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.text,
+                      cursor:'pointer', opacity:previewLoading?0.6:1 }}>
+                    {previewLoading ? 'Calcul...' : 'Calculer le cout'}
+                  </button>
+                  {preview && (
+                    <div style={{ marginTop:10, padding:'10px 12px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.06)' : 'white', border:`1px solid ${theme.border}`, fontSize:12 }}>
+                      {preview.email && (
+                        <>
+                          <p style={{ margin:'3px 0', color:theme.text }}><strong>{preview.email.count} clients</strong> recevront un email</p>
+                          {preview.email.plan
+                            ? <p style={{ margin:'3px 0', color:'#f59e0b', fontWeight:600 }}>Envoi sur {preview.email.plan.days_needed + 1} jours automatiquement</p>
+                            : <p style={{ margin:'3px 0', color:'#10b981', fontWeight:600 }}>Envoi possible aujourd'hui</p>
+                          }
+                        </>
+                      )}
+                      {preview.sms && (
+                        <>
+                          <p style={{ margin:'3px 0', color:theme.text }}><strong>{preview.sms.count} clients</strong> recevront un SMS</p>
+                          <p style={{ margin:'3px 0', color:theme.text }}>Cout : <strong>{preview.sms.cost?.toFixed(2)} EUR</strong></p>
+                          {preview.sms.sufficient
+                            ? <p style={{ margin:'3px 0', color:'#10b981', fontWeight:700 }}>Solde OK ({preview.sms.balance?.toFixed(2)} EUR)</p>
+                            : <p style={{ margin:'3px 0', color:'#ef4444', fontWeight:700 }}>
+                                Il vous manque {(preview.sms.cost - preview.sms.balance).toFixed(2)} EUR
+                                <button onClick={() => window.location.href='/settings/marketing?recharge=need'}
+                                  style={{ marginLeft:8, padding:'3px 10px', borderRadius:6, fontSize:11, fontWeight:700,
+                                    background:'rgba(99,102,241,0.12)', color:'#6366f1', border:'none', cursor:'pointer' }}>
+                                  Recharger mon solde
+                                </button>
+                              </p>
+                          }
+                        </>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <div style={{ display:'flex', gap:10, marginTop:20 }}>
+          <button onClick={onClose} style={{ flex:1, padding:'12px', borderRadius:12, background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, cursor:'pointer' }}>Annuler</button>
+          <button onClick={async () => {
+            if (!code || !value) return;
+            setSaving(true);
+            try {
+              const saved = await onSave({
+                code, type, value:parseFloat(value),
+                max_uses:maxUses?parseInt(maxUses):null,
+                valid_from:validFrom||null, valid_until:validUntil||null,
+                target_clients:targetClients,
+                time_allday: timeAllday,
+                time_from:  timeAllday ? null : timeFrom,
+                time_until: timeAllday ? null : timeUntil,
+              });
+              if (campaignChannel !== 'none' && saved?.id) {
+                setSendingCampaign(true);
+                try {
+                  const emailHtml = `<div style="font-family:-apple-system,sans-serif;max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;"><h1 style="color:white;margin:0;font-size:22px;">Offre speciale !</h1></div><div style="padding:32px 36px;text-align:center;"><p style="font-size:18px;font-weight:700;color:#0f172a;">Code promo : <span style="color:#1a73e8;font-family:monospace;font-size:24px;">${code}</span></p><p style="color:#64748b;font-size:14px;">${type === 'percent' ? `-${value}%` : `-${value}€`} sur votre prochaine prestation</p></div></div>`;
+                  console.log('[CAMPAIGN] Envoi:', { channel: campaignChannel, targetType: campaignTarget, message_email: emailHtml?.substring(0,50) });
+                  await campaignsApi.sendCampaign({
+                    promo_code_id: saved.id,
+                    target_type: campaignTarget,
+                    custom_count: customCount,
+                    channel: campaignChannel,
+                    message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
+                    message_email: emailHtml,
+                    promo_code: code,
+                  });
+                } catch(e) { alert('Campagne: ' + e.message); }
+                finally { setSendingCampaign(false); }
+              }
+              onClose();
+            } catch(e) { alert(e.message); }
+            finally { setSaving(false); }
+          }} disabled={saving||sendingCampaign||!code||!value||(campaignChannel==='sms'&&preview&&!preview.sms?.sufficient)}
+            style={{ flex:2, padding:'13px', borderRadius:12,
+              background: (!code||!value) ? theme.inputBg : '#1a73e8',
+              color: (!code||!value) ? theme.muted : 'white',
+              fontWeight:800, fontSize:14, border:'none', cursor:(!code||!value)?'not-allowed':'pointer',
+              opacity:(saving||sendingCampaign)?0.6:1, boxShadow:(!code||!value)?'none':'0 4px 14px rgba(26,115,232,0.35)' }}>
+            {saving ? 'Enregistrement...' : sendingCampaign ? 'Envoi campagne...' : campaignChannel !== 'none' ? 'Creer + Envoyer' : init ? 'Modifier' : 'Creer le code'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SendPromoEmailModal({ promo, theme, onClose, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const [clients, setClients]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [sending, setSending]         = useState(false);
+  const [selected, setSelected]       = useState(new Set());
+  const [selectAll, setSelectAll]     = useState(true);
+  const [searchQ, setSearchQ]         = useState('');
+  const [result, setResult]           = useState(null);
+
+  useEffect(() => {
+    clientsApi.list({ limit: 500 })
+      .then(d => {
+        const withEmail = (d.clients || []).filter(c => c.email);
+        setClients(withEmail);
+        setSelected(new Set(withEmail.map(c => c.id)));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = clients.filter(c =>
+    !searchQ || `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase().includes(searchQ.toLowerCase())
+  );
+
+  const toggleClient = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      setSelectAll(next.size === clients.length);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) { setSelected(new Set()); setSelectAll(false); }
+    else { setSelected(new Set(clients.map(c => c.id))); setSelectAll(true); }
+  };
+
+  const handleSend = async () => {
+    if (selected.size === 0) { showToast('Selectionnez au moins un client', 'error'); return; }
+    setSending(true);
+    try {
+      const clientIds = selectAll ? [] : Array.from(selected);
+      const res = await promoApi.sendEmails(promo.id, { client_ids: clientIds });
+      setResult(res);
+      showToast(`✉️ ${res.sent} email${res.sent > 1 ? 's' : ''} envoye${res.sent > 1 ? 's' : ''} !`);
+    } catch(e) {
+      showToast(e.message || 'Erreur lors de l\'envoi', 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const discountLabel = promo.type === 'percent'
+    ? `-${promo.value}%`
+    : `-${Number(promo.value).toFixed(2)} €`;
+
+  const inp = { width:'100%', padding:'9px 12px', borderRadius:10, border:`1px solid ${theme.border}`,
+    background:theme.inputBg, color:theme.text, fontSize:13, outline:'none', boxSizing:'border-box' };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(8px)' }} />
+      <div style={{ position:'relative', width:'100%', maxWidth:480, maxHeight:'88vh', display:'flex',
+        flexDirection:'column', background:isDark?'#161622':'#fff',
+        borderRadius:24, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
+
+        <div style={{ padding:'20px 22px 16px', borderBottom:`1px solid ${theme.border}`,
+          background: isDark?'rgba(6,182,212,0.06)':'rgba(6,182,212,0.04)' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:38, height:38, borderRadius:12, background:'rgba(6,182,212,0.12)',
+                display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>✉️</div>
+              <div>
+                <p style={{ fontWeight:900, fontSize:15, color:theme.text, margin:0 }}>Envoyer la promo par email</p>
+                <p style={{ fontSize:12, color:theme.muted, margin:0 }}>Prévenez vos clients de cette offre</p>
+              </div>
+            </div>
+            <button onClick={onClose} style={{ width:28, height:28, borderRadius:8, border:'none',
+              background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', color:theme.muted, cursor:'pointer', fontSize:16 }}>✕</button>
+          </div>
+
+          <div style={{ padding:'10px 14px', borderRadius:12, background:isDark?'rgba(17,24,39,0.12)':'rgba(17,24,39,0.07)',
+            border:'1px solid rgba(17,24,39,0.2)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:theme.text, letterSpacing:'0.1em' }}>{promo.code}</span>
+            <span style={{ padding:'4px 10px', borderRadius:8, background:theme.cardAlt, color:theme.text, fontWeight:700, fontSize:13 }}>{discountLabel}</span>
+          </div>
+        </div>
+
+        {result && (
+          <div style={{ padding:'14px 22px', background:'rgba(16,185,129,0.08)', borderBottom:`1px solid ${theme.border}` }}>
+            <p style={{ fontWeight:800, fontSize:14, color:'#10b981', margin:'0 0 4px' }}>✅ Envoi terminé</p>
+            <p style={{ fontSize:13, color:theme.muted, margin:0 }}>
+              {result.sent} envoyé{result.sent>1?'s':''} · {result.failed} echec{result.failed>1?'s':''}
+              {result.failed > 0 && ' (adresses invalides ou SMTP non configure)'}
+            </p>
+          </div>
+        )}
+
+        <div style={{ padding:'12px 22px 8px', borderBottom:`1px solid ${theme.border}` }}>
+          <input placeholder="Rechercher un client…" value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{...inp, marginBottom:10}} />
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, color:theme.text, fontWeight:600 }}>
+              <input type="checkbox" checked={selectAll} onChange={handleSelectAll}
+                style={{ width:15, height:15, accentColor:'#111827', cursor:'pointer' }} />
+              Tous les clients ({clients.length} avec email)
+            </label>
+            <span style={{ fontSize:12, color:theme.muted }}>{selected.size} sélectionné{selected.size>1?'s':''}</span>
+          </div>
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
+          {loading ? (
+            <div style={{ padding:'32px', textAlign:'center', color:theme.muted }}>Chargement…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding:'32px', textAlign:'center', color:theme.muted }}>
+              {clients.length === 0 ? 'Aucun client avec email enregistre' : 'Aucun resultat'}
+            </div>
+          ) : filtered.map(c => (
+            <label key={c.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'9px 22px', cursor:'pointer',
+              background: selected.has(c.id) ? (isDark?'rgba(17,24,39,0.06)':'rgba(17,24,39,0.04)') : 'transparent',
+              transition:'background 0.1s' }}>
+              <input type="checkbox" checked={selected.has(c.id)} onChange={()=>toggleClient(c.id)}
+                style={{ width:15, height:15, accentColor:'#111827', cursor:'pointer', flexShrink:0 }} />
+              <div style={{ width:32, height:32, borderRadius:9, background:c.avatar_color||'#111827', flexShrink:0,
+                display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:13 }}>
+                {(c.first_name||'?').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={{ fontWeight:600, fontSize:13, color:theme.text, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {c.first_name} {c.last_name}
+                </p>
+                <p style={{ fontSize:11, color:theme.muted, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {c.email}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        <div style={{ padding:'14px 22px', borderTop:`1px solid ${theme.border}`, display:'flex', gap:10 }}>
+          <button onClick={onClose} style={{ flex:1, padding:'12px', borderRadius:12, background:theme.inputBg,
+            border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, cursor:'pointer', fontSize:13 }}>
+            Fermer
+          </button>
+          <button onClick={handleSend} disabled={sending || selected.size === 0}
+            style={{ flex:2, padding:'13px', borderRadius:12, fontWeight:800, fontSize:13, border:'none',
+              cursor: selected.size===0 ? 'not-allowed' : 'pointer',
+              background: selected.size===0 ? theme.inputBg : 'linear-gradient(135deg,#374151,#0891b2)',
+              color: selected.size===0 ? theme.muted : 'white',
+              opacity: sending ? 0.6 : 1,
+              boxShadow: selected.size===0 ? 'none' : '0 4px 14px rgba(6,182,212,0.35)' }}>
+            {sending
+              ? 'Envoi en cours...'
+              : `Envoyer a ${selected.size} client${selected.size>1?'s':''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabPromo({ theme, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const [promos, setPromos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [edit, setEdit] = useState(null);
+  const [delId, setDelId] = useState(null);
+  const [statsData, setStatsData] = useState([]);
+  const [showStats, setShowStats] = useState(false);
+  const [statsLoad, setStatsLoad] = useState(false);
+  const [sendModal, setSendModal] = useState(null);
+  const [createdConfirm, setCreatedConfirm] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setPromos(await promoApi.list()); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const loadStats = async () => {
+    setStatsLoad(true);
+    try { setStatsData(await promoApi.getStats()); setShowStats(true); }
+    catch(e) { console.error(e); }
+    finally { setStatsLoad(false); }
+  };
+
+  const handleSave = async (d) => {
+    const { send_email, ...promoData } = d;
+    if (edit) {
+      const u = await promoApi.update(edit.id, {...promoData, is_active:edit.is_active});
+      setPromos(p=>p.map(x=>x.id===edit.id?u:x));
+      setEdit(null); showToast('Code modifié ✓');
+    } else {
+      const created = await promoApi.create(promoData);
+      setPromos(p=>[created,...p]);
+      if (send_email && created?.id) {
+        try {
+          const res = await promoApi.sendEmails(created.id, { client_ids: [] });
+          setCreatedConfirm({ code: created.code, sentCount: res.sent || 0 });
+        } catch(e) {
+          setCreatedConfirm({ code: created.code, sentCount: 0, emailError: e.message });
+        }
+      } else {
+        setCreatedConfirm({ code: created.code, sentCount: null });
+      }
+    }
+  };
+
+  const toggleActive = async (promo) => {
+    const u = await promoApi.update(promo.id, {...promo, is_active:!promo.is_active});
+    setPromos(p=>p.map(x=>x.id===promo.id?u:x));
+  };
+
+  const fmt = v => {
+    const d = new Date(v+'T12:00:00');
+    return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});
+  };
+
+  return (
+    <div className="space-y-4">
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+        <button onClick={loadStats} disabled={statsLoad}
+          style={{ padding:'10px 14px', borderRadius:12, background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.25)', color:'#f59e0b', fontWeight:700, fontSize:12, cursor:'pointer' }}>
+          {statsLoad ? '⏳' : '📊'} Traçabilité
+        </button>
+        <button onClick={()=>{ setEdit(null); setModal(true); }}
+          style={{ padding:'10px 16px', borderRadius:12, background:'#1a73e8', color:'white', fontWeight:800, fontSize:13, border:'none', cursor:'pointer' }}>
+          + Nouveau code
+        </button>
+      </div>
+
+      {showStats && (
+        <div style={{ background:isDark?'rgba(245,158,11,0.08)':'rgba(245,158,11,0.04)', border:'1px solid rgba(245,158,11,0.2)', borderRadius:18, padding:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+            <p style={{ fontWeight:800, fontSize:14, color:'#f59e0b', margin:0 }}>📊 Traçabilité des codes promo</p>
+            <button onClick={()=>setShowStats(false)} style={{ background:'none', border:'none', cursor:'pointer', color:theme.muted, fontSize:18 }}>✕</button>
+          </div>
+          {(() => {
+            const totalGenere = statsData.reduce((s,p) => s + parseFloat(p.total_discount_used||0) + parseFloat(p.value||0)*(p.max_uses - (p.uses_count||0) > 0 ? (p.max_uses - (p.uses_count||0)) : 0), 0);
+            const totalUtilise = statsData.reduce((s,p) => s + parseFloat(p.total_discount_used||0), 0);
+            const totalCA = statsData.reduce((s,p) => s + parseFloat(p.total_revenue_generated||0), 0);
+            return (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
+                {[
+                  { l:'CA génére', v:`${Number(totalCA).toFixed(2)} €`, c:'#10b981' },
+                  { l:'Remises utilisees', v:`${Number(totalUtilise).toFixed(2)} €`, c:'#ef4444' },
+                  { l:'Codes actifs', v: statsData.filter(p=>p.is_active).length, c:'#111827' },
+                ].map(({l,v,c}) => (
+                  <div key={l} style={{ borderRadius:12, padding:'10px 8px', textAlign:'center', background:isDark?`${c}22`:`${c}11`, border:`1px solid ${c}33` }}>
+                    <p style={{ fontSize:9, fontWeight:800, textTransform:'uppercase', color:c, margin:'0 0 4px' }}>{l}</p>
+                    <p style={{ fontSize:14, fontWeight:900, color:c, margin:0 }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {statsData.map(p => (
+              <div key={p.id} style={{ background:theme.card, borderRadius:14, padding:'12px 14px', border:`1px solid ${theme.border}` }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div>
+                    <span style={{ fontWeight:900, fontSize:14, color:theme.text, fontFamily:'var(--mono)' }}>{p.code}</span>
+                    <span style={{ marginLeft:8, fontSize:11, padding:'2px 8px', borderRadius:99, background: p.is_active?'rgba(16,185,129,0.12)':'rgba(239,68,68,0.1)', color:p.is_active?'#10b981':'#ef4444', fontWeight:700 }}>{p.is_active?'Actif':'Expire'}</span>
+                    {p.is_loyalty_reward && <span style={{ marginLeft:4, fontSize:11, padding:'2px 8px', borderRadius:99, background:'rgba(245,158,11,0.12)', color:'#f59e0b', fontWeight:700 }}>🎫 Fidélité</span>}
+                  </div>
+                  <span style={{ fontWeight:700, fontSize:13, color:theme.muted }}>{p.type==='percent'?`${p.value}%`:`${Number(p.value).toFixed(2)} €`}</span>
+                </div>
+                <div style={{ display:'flex', gap:16, marginTop:8, fontSize:12 }}>
+                  <span style={{ color:'#ef4444' }}>Utilisé : <strong>{Number(p.total_discount_used||0).toFixed(2)} €</strong></span>
+                  <span style={{ color:'#10b981' }}>CA : <strong>{Number(p.total_revenue_generated||0).toFixed(2)} €</strong></span>
+                  <span style={{ color:theme.muted }}>{p.usage_count||0} fois{p.max_uses?` / ${p.max_uses}`:''}</span>
+                </div>
+                {p.owner_client_email && <p style={{ fontSize:11, color:theme.dim, margin:'4px 0 0' }}>Propriétaire : {p.owner_client_email}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading ? <div className="py-16 text-center"><I.Loader className="w-6 h-6 mx-auto animate-spin" style={{ color:theme.muted }} /></div>
+      : promos.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'48px 20px', background:theme.card, borderRadius:20, border:`1px solid ${theme.border}` }}>
+          <I.Percent style={{ width:40, height:40, margin:'0 auto 12px', color:theme.dim }} />
+          <p style={{ color:theme.muted, fontSize:14, margin:0 }}>Aucun code promo</p>
+        </div>
+      ) : (
+        <div style={{ background:theme.card, borderRadius:20, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
+          {promos.map((p,i) => (
+            <div key={p.id} style={{ padding:'14px 16px', borderBottom: i<promos.length-1?`1px solid ${theme.separator}`:'none', opacity: p.is_active?1:0.5 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                    <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:16, color:theme.text, letterSpacing:'0.08em' }}>{p.code}</span>
+                    <span style={{ padding:'3px 8px', borderRadius:6, background: p.type==='percent'?'rgba(17,24,39,0.12)':'rgba(16,185,129,0.12)', color: p.type==='percent'?'#111827':'#10b981', fontSize:12, fontWeight:700 }}>
+                      {p.type==='percent' ? `-${p.value}%` : `-${Number(p.value).toFixed(2)} €`}
+                    </span>
+                    {!p.is_active && <span style={{ padding:'2px 6px', borderRadius:5, background:'rgba(239,68,68,0.1)', color:'#ef4444', fontSize:10, fontWeight:700 }}>INACTIF</span>}
+                  </div>
+                  <p style={{ fontSize:11, color:theme.muted, margin:0 }}>
+                    {p.uses_count} utilisation(s){p.max_uses ? ` / ${p.max_uses} max` : ' · illimite'}
+                    {p.valid_until ? ` · exp. ${fmt(p.valid_until)}` : ''}
+                  </p>
+                </div>
+                <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+                  <button onClick={()=>setSendModal(p)}
+                    title="Envoyer par email aux clients"
+                    style={{ width:28, height:28, borderRadius:8, background:'rgba(6,182,212,0.1)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:12,height:12}}>
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  </button>
+                  {!p.is_loyalty_reward && (
+                    <button onClick={()=>toggleActive(p)} style={{ width:28, height:28, borderRadius:8, background: p.is_active?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <span style={{ fontSize:13 }}>{p.is_active?'✓':'○'}</span>
+                    </button>
+                  )}
+                  {!p.is_loyalty_reward && (
+                    <button onClick={()=>{ setEdit(p); setModal(true); }} style={{ width:28, height:28, borderRadius:8, background:isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.05)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <I.Edit style={{ width:12, height:12, color:theme.muted }} />
+                    </button>
+                  )}
+                  {!p.is_loyalty_reward && (
+                    <button onClick={()=>setDelId(p.id)} style={{ width:28, height:28, borderRadius:8, background:'rgba(239,68,68,0.1)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <I.Trash style={{ width:12, height:12, color:'#ef4444' }} />
+                    </button>
+                  )}
+                  {p.is_loyalty_reward && (
+                    <span style={{ fontSize:10, padding:'3px 9px', borderRadius:99, background:'rgba(245,158,11,0.12)', color:'#f59e0b', fontWeight:700, display:'flex', alignItems:'center' }}>🎫 Fidélité</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <PromoForm open={modal} onClose={()=>{ setModal(false); setEdit(null); }} init={edit} onSave={handleSave} theme={theme} />
+
+      {createdConfirm && (
+        <div style={{ position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div onClick={()=>{ setCreatedConfirm(null); setModal(false); setEdit(null); }}
+            style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', backdropFilter:'blur(8px)' }} />
+          <div style={{ position:'relative', width:'100%', maxWidth:380, borderRadius:24,
+            background:isDark?'#161620':'#fff', border:`1px solid ${theme.border}`, padding:28,
+            boxShadow:'0 24px 64px rgba(0,0,0,0.2)', textAlign:'center' }}>
+            <div style={{ width:64, height:64, borderRadius:20, background:'rgba(34,197,94,0.1)',
+              display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" style={{width:32,height:32}}>
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <p style={{ fontSize:20, fontWeight:900, color:theme.text, margin:'0 0 8px' }}>
+              Code créé !
+            </p>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'8px 20px',
+              borderRadius:12, background:isDark?'rgba(255,255,255,0.06)':'#f3f4f6',
+              border:`1px solid ${theme.border}`, marginBottom:16 }}>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, letterSpacing:'0.1em', color:theme.text }}>
+                {createdConfirm.code}
+              </span>
+            </div>
+            {createdConfirm.sentCount !== null && (
+              <div style={{ padding:'12px 16px', borderRadius:12, marginBottom:20,
+                background: createdConfirm.emailError
+                  ? 'rgba(239,68,68,0.06)' : 'rgba(26,115,232,0.06)',
+                border: `1px solid ${createdConfirm.emailError ? 'rgba(239,68,68,0.2)' : 'rgba(26,115,232,0.2)'}` }}>
+                {createdConfirm.emailError ? (
+                  <p style={{ fontSize:13, color:'#ef4444', margin:0 }}>
+                    Erreur envoi email : {createdConfirm.emailError}
+                  </p>
+                ) : (
+                  <p style={{ fontSize:13, color:'#1a73e8', fontWeight:600, margin:0 }}>
+                    {createdConfirm.sentCount > 0
+                      ? `${createdConfirm.sentCount} email${createdConfirm.sentCount > 1 ? 's' : ''} envoyé${createdConfirm.sentCount > 1 ? 's' : ''} à vos clients`
+                      : 'Aucun client avec email enregistré'}
+                  </p>
+                )}
+              </div>
+            )}
+            <button onClick={()=>{ setCreatedConfirm(null); setModal(false); setEdit(null); }}
+              style={{ width:'100%', padding:'13px', borderRadius:12, background:'#1a73e8',
+                color:'white', fontWeight:800, fontSize:14, border:'none', cursor:'pointer',
+                boxShadow:'0 4px 14px rgba(26,115,232,0.35)' }}>
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+      {sendModal && <SendPromoEmailModal promo={sendModal} theme={theme} onClose={()=>setSendModal(null)} showToast={showToast} />}
+      <Confirm open={!!delId} onClose={()=>setDelId(null)} title="Supprimer ce code promo ?" desc="Cette action est irréversible." theme={theme}
+        onConfirm={async()=>{ await promoApi.remove(delId); setPromos(p=>p.filter(x=>x.id!==delId)); setDelId(null); showToast('Code supprime'); }} />
+    </div>
+  );
+}
+
+const SMS_COST_UNIT = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045');
+const SMS_MARGIN_PCT = parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30');
+const SMS_PRICE_UNIT = SMS_COST_UNIT * (1 + SMS_MARGIN_PCT / 100);
+
+const SUMUP_SDK_URL = 'https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js';
+let sumupSdkPromise = null;
+function loadSumupSdk() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  if (window.SumUpCard) return Promise.resolve(window.SumUpCard);
+  if (sumupSdkPromise) return sumupSdkPromise;
+  sumupSdkPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${SUMUP_SDK_URL}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.SumUpCard));
+      existing.addEventListener('error', () => reject(new Error('Impossible de charger SumUp')));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = SUMUP_SDK_URL;
+    s.async = true;
+    s.onload = () => resolve(window.SumUpCard);
+    s.onerror = () => { sumupSdkPromise = null; reject(new Error('Impossible de charger SumUp')); };
+    document.head.appendChild(s);
+  });
+  return sumupSdkPromise;
+}
+
+function SumupCheckoutModal({ theme, checkoutId, amount, onClose, onSuccess, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const mountRef = useRef(null);
+  const widgetRef = useRef(null);
+  const pollRef = useRef(null);
+  const finishedRef = useRef(false);
+  const [status, setStatus] = useState('loading');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [verifying, setVerifying] = useState(false);
+
+  const onSuccessRef = useRef(onSuccess);
+  const showToastRef = useRef(showToast);
+  useEffect(() => { onSuccessRef.current = onSuccess; });
+  useEffect(() => { showToastRef.current = showToast; });
+
+  const runVerify = async (source = 'unknown') => {
+    if (finishedRef.current) return null;
+    try {
+      console.log('[SUMUP VERIFY request]', source, '→ checkout:', checkoutId);
+      const result = await paymentsApi.verifySMSCheckout(checkoutId);
+      console.log('[SUMUP VERIFY resultat]', source, result);
+
+      if (result?.credited || result?.already_credited) {
+        finishedRef.current = true;
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        setStatus('done');
+        onSuccessRef.current?.(result);
+        return result;
+      }
+      if (result?.failed) {
+        finishedRef.current = true;
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        setStatus('error');
+        setErrorMsg(result.message || 'Paiement refuse par SumUp.');
+        return result;
+      }
+      return result;
+    } catch(e) {
+      console.warn('[SUMUP VERIFY erreur]', source, e.message);
+      return null;
+    }
+  };
+
+  const handleManualVerify = async () => {
+    setVerifying(true);
+    try {
+      const r = await runVerify('manual');
+      if (r?.failed) {
+      } else if (!r?.credited && !r?.already_credited) {
+        showToastRef.current?.('Paiement pas encore confirme par SumUp', 'info');
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    console.log('[SUMUP] Montage widget pour checkout:', checkoutId);
+
+    const verify = async (source) => {
+      if (finishedRef.current || cancelled) return null;
+      try {
+        console.log('[SUMUP VERIFY request]', source, '→', checkoutId);
+        const result = await paymentsApi.verifySMSCheckout(checkoutId);
+        console.log('[SUMUP VERIFY resultat]', source, result);
+
+        if (result?.credited || result?.already_credited) {
+          finishedRef.current = true;
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (!cancelled) setStatus('done');
+          onSuccessRef.current?.(result);
+          return result;
+        }
+
+        if (result?.failed) {
+          finishedRef.current = true;
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          if (!cancelled) {
+            setStatus('error');
+            setErrorMsg(result.message || 'Paiement refuse par SumUp. Reessayez avec une autre carte.');
+          }
+          return result;
+        }
+
+        return result;
+      } catch(e) {
+        console.warn('[SUMUP VERIFY erreur]', source, e.message);
+        return null;
+      }
+    };
+
+    let pollCount = 0;
+    const maxPolls = 20;
+    const startPolling = () => {
+      pollRef.current = setInterval(async () => {
+        pollCount++;
+        if (finishedRef.current || cancelled) { clearInterval(pollRef.current); pollRef.current = null; return; }
+        if (pollCount > maxPolls) {
+          clearInterval(pollRef.current); pollRef.current = null;
+          if (!finishedRef.current) {
+            console.warn('[SUMUP] Polling timeout apres', maxPolls * 3, 's');
+            showToastRef.current?.('Delai depasse. Cliquez sur "Verifier mon paiement" ou reessayez.', 'info');
+          }
+          return;
+        }
+        await verify('poll#' + pollCount);
+      }, 3000);
+    };
+    const pollStartTimer = setTimeout(startPolling, 5000);
+
+    loadSumupSdk()
+      .then(SumUpCard => {
+        console.log('[SUMUP] SumUpCard disponible:', !!SumUpCard);
+        if (cancelled || !mountRef.current) return;
+        mountRef.current.innerHTML = '';
+        try {
+          widgetRef.current = SumUpCard.mount({
+            id: 'sumup-card-container',
+            checkoutId,
+            locale: 'fr-FR',
+            showFooter: false,
+            onResponse: async (type, body) => {
+              if (cancelled) return;
+              console.log('[SUMUP WIDGET onResponse]', type, JSON.stringify(body || {}));
+
+              if (type === 'success') {
+                setStatus('processing');
+                await verify('onResponse:success');
+              } else if (type === 'sent' || type === 'auth-screen') {
+                setStatus('processing');
+              } else if (type === 'error' || type === 'invalid') {
+                setStatus('error');
+                setErrorMsg(body?.message || body?.error_message || 'Paiement refuse');
+                if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+                finishedRef.current = true;
+              }
+            }
+          });
+          if (!cancelled) setStatus('ready');
+        } catch(mountErr) {
+          console.error('[SUMUP] mount error:', mountErr);
+          if (!cancelled) { setStatus('error'); setErrorMsg('Widget SumUp indisponible : ' + mountErr.message); }
+        }
+      })
+      .catch(err => {
+        console.error('[SUMUP] SDK load error:', err);
+        if (!cancelled) { setStatus('error'); setErrorMsg(err.message || 'Erreur SumUp'); }
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(pollStartTimer);
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      try { widgetRef.current?.unmount?.(); } catch(_) {}
+      widgetRef.current = null;
+    };
+  }, [checkoutId]);
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={status === 'processing' ? undefined : onClose}
+        style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(8px)' }} />
+      <div style={{ position:'relative', width:'100%', maxWidth:460, maxHeight:'92vh', overflow:'auto',
+        background:isDark?'#161622':'#fff', borderRadius:20, border:`1px solid ${theme.border}`, padding:22 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div>
+            <p style={{ fontSize:12, fontWeight:800, color:theme.muted, margin:0, textTransform:'uppercase', letterSpacing:'0.06em' }}>Paiement securise</p>
+            <p style={{ fontSize:20, fontWeight:900, color:theme.text, margin:'2px 0 0' }}>{Number(amount).toFixed(2)} EUR</p>
+          </div>
+          <button onClick={onClose} disabled={status === 'processing'}
+            style={{ width:30, height:30, borderRadius:8, border:'none',
+              background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', color:theme.muted,
+              cursor: status === 'processing' ? 'not-allowed' : 'pointer', fontSize:16 }}>✕</button>
+        </div>
+
+        {status === 'loading' && (
+          <p style={{ fontSize:13, color:theme.muted, textAlign:'center', padding:'24px 0' }}>Chargement du formulaire SumUp...</p>
+        )}
+        {status === 'processing' && (
+          <div style={{ padding:12, borderRadius:12, background:'rgba(99,102,241,0.1)', color:'#6366f1', fontSize:13, marginBottom:10, fontWeight:600 }}>
+            Verification en cours cote SumUp...
+          </div>
+        )}
+        {status === 'error' && (
+          <div style={{ padding:14, borderRadius:12, background:'rgba(239,68,68,0.1)', color:'#ef4444', fontSize:13, marginBottom:10 }}>
+            {errorMsg || 'Une erreur est survenue.'}
+          </div>
+        )}
+        {status === 'done' && (
+          <div style={{ padding:14, borderRadius:12, background:'rgba(16,185,129,0.1)', color:'#10b981', fontSize:13, marginBottom:10, fontWeight:700 }}>
+            Paiement confirme. Credit du solde en cours...
+          </div>
+        )}
+
+        <div ref={mountRef} id="sumup-card-container" style={{ minHeight:320 }} />
+
+        {(status === 'ready' || status === 'processing') && (
+          <button onClick={handleManualVerify} disabled={verifying}
+            style={{ marginTop:12, width:'100%', padding:10, background:'transparent',
+              border:`1px solid ${theme.border}`, color:theme.text, borderRadius:10,
+              cursor: verifying ? 'wait' : 'pointer', fontSize:13, fontWeight:600, opacity:verifying?0.6:1 }}>
+            {verifying ? 'Verification...' : 'Verifier mon paiement'}
+          </button>
+        )}
+
+        <p style={{ fontSize:11, color:theme.dim, textAlign:'center', margin:'14px 0 0' }}>
+          Paiement traite par SumUp — vos donnees bancaires ne transitent pas par FlowIA.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TabSMS({ showToast, theme }) {
+  const isDark = theme.mode === 'dark';
+  const [balance, setBalance]       = useState(null);
+  const [quota, setQuota]           = useState(null);
+  const [history, setHistory]       = useState([]);
+  const [smsTx, setSmsTx]           = useState([]);
+  const [amount, setAmount]         = useState('20');
+  const [loading, setLoading]       = useState(true);
+  const [paying, setPaying]         = useState(false);
+  const [checkoutData, setCheckoutData] = useState(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [b, q, h, t] = await Promise.all([
+        paymentsApi.getSMSBalance(),
+        campaignsApi.getCampaignQuota(),
+        campaignsApi.getCampaignHistory(),
+        paymentsApi.getSMSTransactions(),
+      ]);
+      setBalance(b); setQuota(q); setHistory(h); setSmsTx(t);
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    const recharge = params.get('recharge');
+
+    if (recharge || ref) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    if (recharge === 'pending' && ref) {
+      paymentsApi.getSMSTransactionByRef(ref)
+        .then(tx => {
+          if (tx && tx.sumup_checkout_id) {
+            return paymentsApi.verifySMSCheckout(tx.sumup_checkout_id);
+          }
+        })
+        .then(result => {
+          if (result?.credited) {
+            showToast(
+              `+${result.sms_count} SMS credites (${result.amount}EUR)`,
+              'success'
+            );
+          } else if (result?.already_credited) {
+            showToast('Recharge deja effectuee');
+          }
+          loadData();
+        })
+        .catch(() => loadData());
+    } else {
+      loadData();
+    }
+  }, []);
+
+  const handleRecharge = async () => {
+    const amt = parseFloat(amount);
+    if (!amt || amt < 5) {
+      showToast('Montant minimum : 5EUR', 'error');
+      return;
+    }
+    setPaying(true);
+    try {
+      const { checkout_id, estimated_sms } = await paymentsApi.createSMSCheckout(amt);
+
+      if (!checkout_id) {
+        throw new Error('Paiement non disponible (checkout non cree)');
+      }
+
+      setCheckoutData({ checkout_id, amount: amt, estimated_sms });
+
+    } catch(e) {
+      showToast(e.message || 'Erreur creation paiement', 'error');
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const handlePaymentSuccess = useCallback((result) => {
+    setCheckoutData(null);
+    if (result?.credited) {
+      showToast(`+${result.sms_count} SMS credites (${result.amount}EUR)`, 'success');
+    } else if (result?.already_credited) {
+      showToast('Recharge deja effectuee');
+    }
+    loadData();
+  }, [loadData, showToast]);
+
+  const numAmt = parseFloat(amount) || 0;
+  const estimatedSms = numAmt > 0 ? Math.floor(numAmt / SMS_PRICE_UNIT) : 0;
+  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
+
+  if (loading) return <div style={{ textAlign:'center', padding:40, color:theme.muted }}>Chargement...</div>;
+
+  const barColor = (sent, max) => {
+    const pct = sent / max;
+    if (pct > 0.9) return '#ef4444';
+    if (pct > 0.7) return '#f59e0b';
+    return '#10b981';
+  };
+
+  return (
+    <div className="space-y-4">
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:16, textTransform:'uppercase', letterSpacing:'0.05em' }}>Solde SMS</p>
+        <div style={{ textAlign:'center', marginBottom:20 }}>
+          <span style={{ fontSize:40, fontWeight:900, color:theme.text }}>{(balance?.balance || 0).toFixed(2)} EUR</span>
+          <p style={{ fontSize:14, color:theme.muted, margin:'6px 0 0' }}>Environ {balance?.estimated_sms || 0} SMS disponibles</p>
+        </div>
+
+        <div style={{ padding:'16px', borderRadius:14, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border:`1px solid ${theme.border}` }}>
+          <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Montant</label>
+          <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+            <div style={{ position:'relative', flex:1 }}>
+              <input type="number" min="5" step="1" value={amount} onChange={e => setAmount(e.target.value)}
+                placeholder="20" style={{...inp, paddingRight:30, fontSize:16, fontWeight:700}} />
+              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:700, color:theme.muted }}>EUR</span>
+            </div>
+          </div>
+          {numAmt >= 5 && (
+            <p style={{ fontSize:13, color:theme.text, margin:'0 0 12px' }}>
+              Avec <strong>{numAmt} EUR</strong> vous obtenez environ <strong>{estimatedSms} SMS</strong>
+            </p>
+          )}
+          {numAmt > 0 && numAmt < 5 && <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>Montant minimum : 5 EUR</p>}
+          <button onClick={handleRecharge} disabled={paying || numAmt < 5}
+            style={{ width:'100%', padding:'13px', borderRadius:12,
+              background: numAmt >= 5 ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : theme.inputBg,
+              color: numAmt >= 5 ? 'white' : theme.muted, fontWeight:800, fontSize:14, border:'none',
+              cursor: numAmt >= 5 ? 'pointer' : 'not-allowed', opacity: paying ? 0.6 : 1,
+              boxShadow: numAmt >= 5 ? '0 4px 16px rgba(99,102,241,0.35)' : 'none' }}>
+            {paying ? 'Ouverture...' : 'Recharger'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:16, textTransform:'uppercase', letterSpacing:'0.05em' }}>Emails marketing disponibles</p>
+        {quota?.email && (
+          <>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:theme.text }}>
+                <span>Aujourd'hui</span>
+                <span style={{ fontWeight:700 }}>{quota.email.sent_today} / {quota.email.daily_limit}</span>
+              </div>
+              <div style={{ height:8, borderRadius:4, background: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }}>
+                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_today / quota.email.daily_limit) * 100)}%`,
+                  background: barColor(quota.email.sent_today, quota.email.daily_limit), transition:'width 0.3s' }} />
+              </div>
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4, color:theme.text }}>
+                <span>Ce mois</span>
+                <span style={{ fontWeight:700 }}>{quota.email.sent_month} / {quota.email.monthly_limit}</span>
+              </div>
+              <div style={{ height:8, borderRadius:4, background: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }}>
+                <div style={{ height:8, borderRadius:4, width:`${Math.min(100, (quota.email.sent_month / quota.email.monthly_limit) * 100)}%`,
+                  background: barColor(quota.email.sent_month, quota.email.monthly_limit), transition:'width 0.3s' }} />
+              </div>
+            </div>
+            {quota.email.month_reset && (
+              <p style={{ fontSize:11, color:theme.dim }}>
+                Reset le {new Date(new Date(quota.email.month_reset).getFullYear(), new Date(quota.email.month_reset).getMonth() + 1, 1).toLocaleDateString('fr-FR')}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Historique</p>
+        {!history.length ? (
+          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:16 }}>Aucune campagne</p>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', fontSize:12, borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom:`1px solid ${theme.border}` }}>
+                  {['Date','Canal','Envoyes','Cout','Statut'].map(h => (
+                    <th key={h} style={{ textAlign:'left', padding:'7px 6px', fontWeight:700, color:theme.muted, fontSize:11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {history.slice(0, 10).map(c => (
+                  <tr key={c.id} style={{ borderBottom:`1px solid ${theme.border}` }}>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{c.created_at ? new Date(c.created_at).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{c.channel}</td>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{(c.sent_sms||0)+(c.sent_email||0)}</td>
+                    <td style={{ padding:'7px 6px', color:theme.text }}>{Number(c.sms_cost||0).toFixed(2)}EUR</td>
+                    <td style={{ padding:'7px 6px' }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6,
+                        background: c.status === 'completed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                        color: c.status === 'completed' ? '#10b981' : '#f59e0b' }}>{c.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
+        <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>Transactions</p>
+        {!smsTx.length ? (
+          <p style={{ fontSize:13, color:theme.dim, textAlign:'center', padding:16 }}>Aucune transaction</p>
+        ) : (
+          <div className="space-y-2">
+            {smsTx.slice(0, 10).map(tx => (
+              <div key={tx.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                padding:'8px 10px', borderRadius:10, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc' }}>
+                <div>
+                  <p style={{ fontSize:12, fontWeight:600, color:theme.text, margin:0 }}>{tx.description || tx.type}</p>
+                  <p style={{ fontSize:10, color:theme.muted, margin:'2px 0 0' }}>{tx.created_at ? new Date(tx.created_at).toLocaleDateString('fr-FR') : ''}</p>
+                </div>
+                <span style={{ fontSize:13, fontWeight:800, color: tx.type === 'credit' ? '#10b981' : '#ef4444' }}>
+                  {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount||0).toFixed(2)} EUR
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {checkoutData && (
+        <SumupCheckoutModal
+          theme={theme}
+          checkoutId={checkoutData.checkout_id}
+          amount={checkoutData.amount}
+          onClose={() => setCheckoutData(null)}
+          onSuccess={handlePaymentSuccess}
+          showToast={showToast}
+        />
+      )}
+
+    </div>
+  );
+}
