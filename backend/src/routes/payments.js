@@ -1,332 +1,203 @@
-// routes/payments.js — Paiements recharge SMS via SumUp (securise)
+// routes/payments.js — Recharge SMS via Stripe
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
-const SMS_COST   = parseFloat(process.env.SMS_COST_UNIT)     || 0.045;
-const SMS_MARGIN = parseFloat(process.env.SMS_MARGIN_PERCENT) || 30;
+const SMS_COST   = parseFloat(process.env.SMS_COST_UNIT)      || 0.045;
+const SMS_MARGIN = parseFloat(process.env.SMS_MARGIN_PERCENT)  || 30;
 const SMS_PRICE  = parseFloat((SMS_COST * (1 + SMS_MARGIN / 100)).toFixed(4));
 
-// ── POST /api/payments/sms/checkout ─────────────────────────────────────────
-// Cree un checkout SumUp. NE CREDITE PAS le solde — attend confirmation.
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY manquante sur Render');
+  return require('stripe')(key);
+}
+
+// POST /api/payments/sms/checkout
 router.post('/sms/checkout', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     const amount = parseFloat(req.body.amount);
-
     if (!amount || amount < 5) {
       return res.status(400).json({ error: 'Montant minimum : 5EUR' });
     }
+    const stripe = getStripe();
+    const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')
+      .match(/https?:\/\/[^\s,]+/)?.[0]?.replace(/\/$/, '') || 'https://haircoifflille.fr';
+    const estimatedSms = Math.floor(amount / SMS_PRICE);
 
-    const SUMUP_KEY    = process.env.SUMUP_SECRET_KEY;
-    const BACKEND_URL  = process.env.BACKEND_URL || 'https://flowia-backend.onrender.com';
-    // Parse defensif : sur Render la variable peut contenir "FRONTEND_URL = https://..."
-    // (l'utilisateur a colle la ligne complete au lieu de la valeur seule).
-    // On extrait la premiere URL http(s)://... valide.
-    const rawFront = process.env.FRONTEND_URL || 'https://haircoifflille.fr';
-    const urlMatch = rawFront.match(/https?:\/\/[^\s,]+/);
-    const FRONTEND_URL = (urlMatch ? urlMatch[0] : rawFront.split(',')[0].trim()).replace(/\/+$/, '');
-
-    // Etape 1 : recuperer le merchant_code
-    const meRes = await fetch('https://api.sumup.com/v0.1/me', {
-      headers: { 'Authorization': `Bearer ${SUMUP_KEY}` }
-    });
-    const meData = await meRes.json();
-    const merchantCode = meData.merchant_profile?.merchant_code;
-
-    if (!merchantCode) {
-      console.error('[SUMUP /me] reponse:', JSON.stringify(meData));
-      return res.status(500).json({ error: 'Compte SumUp non configure.' });
-    }
-
-    const ref = `sms_${userId}_${Date.now()}`;
-    const smsCost   = parseFloat(process.env.SMS_COST_UNIT)      || 0.045;
-    const smsMargin = parseFloat(process.env.SMS_MARGIN_PERCENT)  || 30;
-    const smsPrice  = parseFloat((smsCost * (1 + smsMargin / 100)).toFixed(4));
-    const estimatedSms = Math.floor(amount / smsPrice);
-
-    // Etape 2 : creer le checkout SumUp.
-    // SumUp ne fournit PAS de page hebergee (pay.sumup.com renvoie 404).
-    // Le paiement se fait via le widget embarque SumUp Card (SDK JS).
-    // On renvoie donc uniquement le checkout_id au frontend, qui mounte le widget.
-    const checkoutBody = {
-      checkout_reference: ref,
-      amount: parseFloat(amount.toFixed(2)),
-      currency: 'EUR',
-      merchant_code: merchantCode,
-      description: 'Recharge SMS FlowIA',
-      // URL de retour apres 3DS (le widget embarque revient ici si redirection 3DS necessaire)
-      redirect_url: `${FRONTEND_URL}/settings/marketing?recharge=pending&ref=${ref}`
-    };
-
-    console.log('[SUMUP] Creation checkout:', JSON.stringify(checkoutBody));
-
-    const response = await fetch('https://api.sumup.com/v0.1/checkouts', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUMUP_KEY}`,
-        'Content-Type': 'application/json'
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          product_data: {
+            name: 'Recharge SMS FlowIA',
+            description: `environ ${estimatedSms} SMS`,
+          },
+          unit_amount: Math.round(amount * 100),
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        user_id: userId,
+        amount: amount.toString(),
+        sms_count: estimatedSms.toString(),
       },
-      body: JSON.stringify(checkoutBody)
+      success_url: `${FRONTEND_URL}/settings/marketing?recharge=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${FRONTEND_URL}/settings/marketing?recharge=cancelled`,
     });
 
-    const checkout = await response.json();
-    console.log('[SUMUP] Reponse complete:', JSON.stringify(checkout));
-
-    if (!checkout.id) {
-      return res.status(500).json({
-        error: 'SumUp error: ' + (checkout.message || JSON.stringify(checkout))
-      });
-    }
-
-    // Etape 3 : enregistrer EN ATTENTE — NE PAS CREDITER ICI
+    // Enregistrer EN ATTENTE — ne pas crediter ici
     await pool.query(`
       INSERT INTO sms_transactions
         (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
-      VALUES ($1, 'credit', $2, $3, $4, $5, 'pending')
-    `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, checkout.id]);
+      VALUES ($1,'credit',$2,$3,$4,$5,'pending')
+    `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, session.id]);
 
-    res.json({
-      checkout_id: checkout.id,
-      checkout_ref: ref,
-      estimated_sms: estimatedSms
-    });
+    console.log('[STRIPE] Session creee:', session.id, '| Montant:', amount, '| User:', userId);
+    res.json({ checkout_url: session.url, session_id: session.id, estimated_sms: estimatedSms });
 
   } catch(e) {
-    console.error('[SUMUP CHECKOUT ERROR]', e.message);
-    res.status(500).json({ error: 'Erreur: ' + e.message });
+    console.error('[STRIPE CHECKOUT ERROR]', e.message);
+    res.status(500).json({ error: 'Erreur paiement: ' + e.message });
   }
 });
 
-// ── POST /api/payments/sms/webhook ──────────────────────────────────────────
-// SumUp envoie un POST quand le statut change. On VERIFIE toujours via l'API.
-router.post('/sms/webhook', async (req, res) => {
-  // Repondre immediatement 200 (SumUp exige)
-  res.sendStatus(200);
+// POST /api/payments/sms/webhook — Stripe envoie l'evenement ici
+router.post('/sms/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    res.json({ received: true }); // repondre immediatement
 
-  try {
-    const { event_type, id: checkoutId } = req.body;
-    console.log('[SUMUP WEBHOOK]', event_type, checkoutId);
+    try {
+      let event;
+      const sig = req.headers['stripe-signature'];
+      const secret = process.env.STRIPE_WEBHOOK_SECRET;
+      const stripe = getStripe();
 
-    if (event_type !== 'CHECKOUT_STATUS_CHANGED' || !checkoutId) return;
+      if (secret && sig) {
+        event = stripe.webhooks.constructEvent(req.body, sig, secret);
+      } else {
+        event = JSON.parse(req.body.toString());
+        console.warn('[STRIPE WEBHOOK] Pas de secret — signature non verifiee');
+      }
 
-    const SUMUP_KEY = process.env.SUMUP_SECRET_KEY;
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        if (session.payment_status !== 'paid') return;
 
-    // TOUJOURS verifier avec l'API SumUp (ne pas faire confiance au webhook seul)
-    const sumupRes = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
-      headers: { 'Authorization': `Bearer ${SUMUP_KEY}` }
-    });
-    const checkout = await sumupRes.json();
+        const userId   = session.metadata?.user_id;
+        const amount   = parseFloat(session.metadata?.amount || 0);
+        const smsCount = parseInt(session.metadata?.sms_count || 0);
 
-    if (checkout.status !== 'PAID') {
-      console.log('[SUMUP WEBHOOK] Statut non PAID:', checkout.status);
-      return;
+        // Protection doublon
+        const { rows: existing } = await pool.query(
+          "SELECT id FROM sms_transactions WHERE sumup_checkout_id=$1 AND status='completed'",
+          [session.id]
+        );
+        if (existing.length > 0) return;
+
+        await pool.query(
+          'UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
+          [amount, userId]
+        );
+        await pool.query(
+          "UPDATE sms_transactions SET status='completed' WHERE sumup_checkout_id=$1",
+          [session.id]
+        );
+        console.log('[STRIPE WEBHOOK] Credite:', amount, 'EUR ->', userId, '|', smsCount, 'SMS');
+      }
+    } catch(e) {
+      console.error('[STRIPE WEBHOOK ERROR]', e.message);
     }
-
-    // Trouver la transaction pending
-    const { rows: txRows } = await pool.query(
-      "SELECT * FROM sms_transactions WHERE sumup_checkout_id=$1 AND status='pending'",
-      [checkoutId]
-    );
-
-    if (!txRows.length) {
-      console.log('[SUMUP WEBHOOK] Transaction introuvable ou deja traitee:', checkoutId);
-      return;
-    }
-
-    const tx = txRows[0];
-
-    // Crediter le solde
-    await pool.query(
-      'UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
-      [tx.amount, tx.user_id]
-    );
-
-    await pool.query(
-      "UPDATE sms_transactions SET status='completed' WHERE id=$1",
-      [tx.id]
-    );
-
-    console.log('[SUMUP WEBHOOK] Solde credite:', tx.amount, 'EUR pour user:', tx.user_id);
-
-  } catch(e) {
-    console.error('[SUMUP WEBHOOK ERROR]', e.message);
   }
-});
+);
 
-// ── GET /api/payments/sms/verify/:checkoutId ────────────────────────────────
-// Verification manuelle au retour du commercant. VERIFIE avec SumUp avant credit.
-router.get('/sms/verify/:checkoutId', authMiddleware, async (req, res) => {
+// GET /api/payments/sms/verify/:sessionId
+router.get('/sms/verify/:sessionId', authMiddleware, async (req, res) => {
   try {
-    const { checkoutId } = req.params;
+    const { sessionId } = req.params;
     const userId = req.user.userId;
-    const SUMUP_KEY = process.env.SUMUP_SECRET_KEY;
+    const stripe = getStripe();
 
-    // Etape 1 : verifier avec SumUp (TOUJOURS)
-    const sumupRes = await fetch(`https://api.sumup.com/v0.1/checkouts/${checkoutId}`, {
-      headers: { 'Authorization': `Bearer ${SUMUP_KEY}` }
-    });
-    const checkout = await sumupRes.json();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    console.log('[STRIPE VERIFY]', sessionId, '| Status:', session.payment_status);
 
-    const txStatuses = (checkout.transactions || []).map(t => t.status);
-    console.log('[SUMUP VERIFY]', checkoutId, '| Status:', checkout.status, '| Transactions:', txStatuses);
-
-    // Etape 2a : detecter echec definitif (FAILED / EXPIRED) pour stopper le polling frontend
-    const hasFailedTransaction = (checkout.transactions || []).some(
-      t => t.status === 'FAILED' || t.status === 'CANCELLED'
-    );
-    const isFailed = checkout.status === 'FAILED' || checkout.status === 'EXPIRED' || hasFailedTransaction;
-
-    if (isFailed) {
-      // Marquer la transaction DB comme failed (si encore pending)
-      await pool.query(
-        "UPDATE sms_transactions SET status='failed' WHERE sumup_checkout_id=$1 AND user_id=$2 AND status='pending'",
-        [checkoutId, userId]
-      );
-      // Extraire la raison la plus utile disponible
-      const failedTx = (checkout.transactions || []).find(t => t.status === 'FAILED' || t.status === 'CANCELLED');
-      const reason = failedTx?.payout_reason
-        || failedTx?.internal_reason
-        || checkout.transaction_code
-        || 'Paiement refuse par la banque ou par SumUp.';
+    if (session.payment_status !== 'paid') {
       return res.json({
         credited: false,
-        failed: true,
-        status: checkout.status || 'FAILED',
-        transactions: txStatuses,
-        message: reason
+        status: session.payment_status,
+        message: 'Paiement non confirme'
       });
     }
 
-    // Etape 2b : en sandbox le statut principal peut rester PENDING
-    // meme si une transaction SUCCESSFUL existe dans le tableau.
-    const hasPaidTransaction = (checkout.transactions || []).some(t => t.status === 'SUCCESSFUL');
-    const isPaid = checkout.status === 'PAID' || hasPaidTransaction;
-
-    if (!isPaid) {
-      return res.json({
-        credited: false,
-        status: checkout.status || 'unknown',
-        transactions: txStatuses,
-        message: 'Paiement non confirme par SumUp'
-      });
+    if (session.metadata?.user_id !== userId) {
+      return res.status(403).json({ error: 'Non autorise' });
     }
 
-    // Etape 3 : verifier que ce checkout appartient bien a cet utilisateur
     const { rows: txRows } = await pool.query(
-      `SELECT * FROM sms_transactions
-       WHERE sumup_checkout_id=$1 AND user_id=$2`,
-      [checkoutId, userId]
+      'SELECT * FROM sms_transactions WHERE sumup_checkout_id=$1 AND user_id=$2',
+      [sessionId, userId]
     );
-
-    if (!txRows.length) {
-      return res.status(404).json({ error: 'Transaction introuvable.' });
-    }
+    if (!txRows.length) return res.status(404).json({ error: 'Transaction introuvable' });
 
     const tx = txRows[0];
-
-    // Etape 4 : verifier pas deja credite (protection doublon)
     if (tx.status === 'completed') {
-      const { rows: [userBal] } = await pool.query(
-        'SELECT sms_balance FROM users WHERE id=$1', [userId]
-      );
+      const { rows: [u] } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
       return res.json({
-        credited: false,
-        already_credited: true,
-        status: 'PAID',
-        new_balance: parseFloat(userBal.sms_balance).toFixed(2)
+        credited: false, already_credited: true,
+        new_balance: parseFloat(u.sms_balance).toFixed(2)
       });
     }
 
-    // Etape 5 : crediter le solde MAINTENANT (paiement confirme)
-    await pool.query(
-      'UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
-      [tx.amount, userId]
-    );
+    // Crediter
+    await pool.query('UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2', [tx.amount, userId]);
+    await pool.query("UPDATE sms_transactions SET status='completed' WHERE id=$1", [tx.id]);
 
-    // Etape 6 : marquer la transaction comme completee
-    await pool.query(
-      "UPDATE sms_transactions SET status='completed' WHERE id=$1",
-      [tx.id]
-    );
-
-    // Retourner le nouveau solde
-    const { rows: [user] } = await pool.query(
-      'SELECT sms_balance FROM users WHERE id=$1', [userId]
-    );
-
-    console.log('[SUMUP VERIFY] Credite:', tx.amount, 'EUR → user:', userId);
+    const { rows: [u] } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
+    console.log('[STRIPE VERIFY] Credite:', tx.amount, 'EUR ->', userId);
 
     res.json({
       credited: true,
       amount: tx.amount,
       sms_count: tx.sms_count,
-      new_balance: parseFloat(user.sms_balance).toFixed(2),
-      new_sms_estimated: Math.floor(parseFloat(user.sms_balance) / SMS_PRICE),
-      status: 'PAID'
+      new_balance: parseFloat(u.sms_balance).toFixed(2),
+      new_sms_estimated: Math.floor(parseFloat(u.sms_balance) / SMS_PRICE),
     });
-
   } catch(e) {
-    console.error('[SUMUP VERIFY ERROR]', e.message);
+    console.error('[STRIPE VERIFY ERROR]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── GET /api/payments/sms/balance ───────────────────────────────────────────
+// GET /api/payments/sms/balance
 router.get('/sms/balance', authMiddleware, async (req, res) => {
   try {
-    const cacheKey = `sms_balance_${req.user.userId}`;
-    const cached = global.memCache?.get(cacheKey);
-    if (cached) return res.json(cached);
-
-    const { rows } = await pool.query(`SELECT sms_balance FROM users WHERE id=$1`, [req.user.userId]);
-    const balance = parseFloat(rows[0]?.sms_balance || 0);
-    const result = {
-      balance,
+    const { rows: [u] } = await pool.query(
+      'SELECT sms_balance FROM users WHERE id=$1', [req.user.userId]
+    );
+    const balance = parseFloat(u?.sms_balance || 0);
+    res.json({
+      balance: balance.toFixed(2),
       estimated_sms: Math.floor(balance / SMS_PRICE),
       price_per_sms: SMS_PRICE,
-    };
-    global.memCache?.set(cacheKey, result, 30000);
-    res.json(result);
-  } catch (err) {
-    console.error('[BALANCE sms]', err.message);
-    res.status(500).json({ error: 'Erreur serveur.' });
-  }
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── GET /api/payments/sms/transactions ──────────────────────────────────────
-// Ne retourne PAS les transactions pending (pas encore confirmees)
+// GET /api/payments/sms/transactions
 router.get('/sms/transactions', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT * FROM sms_transactions
-      WHERE user_id=$1
-      AND status != 'pending'
-      ORDER BY created_at DESC
-      LIMIT 10
+      WHERE user_id=$1 AND status NOT IN ('pending','expired')
+      ORDER BY created_at DESC LIMIT 10
     `, [req.user.userId]);
     res.json(rows);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ── GET /api/payments/sms/transaction-by-ref/:ref ───────────────────────────
-// Chercher une transaction par sa reference (checkout_reference)
-router.get('/sms/transaction-by-ref/:ref', authMiddleware, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM sms_transactions
-       WHERE description LIKE $1 AND user_id=$2
-       ORDER BY created_at DESC LIMIT 1`,
-      [`%${req.params.ref}%`, req.user.userId]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Introuvable' });
-    res.json(rows[0]);
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

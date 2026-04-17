@@ -2,7 +2,7 @@
 // Utilitaire centralise pour tous les envois email marketing via Brevo
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const SENDER_EMAIL  = process.env.SENDER_EMAIL  || process.env.BREVO_FROM || 'noreply@haircoifflille.fr';
+const SENDER_EMAIL  = process.env.SENDER_EMAIL  || process.env.BREVO_FROM || 'contact@haircoifflille.fr';
 const SENDER_NAME   = process.env.SENDER_NAME   || 'FlowIA';
 
 // Compteur global emails journalier (protection quota Brevo gratuit)

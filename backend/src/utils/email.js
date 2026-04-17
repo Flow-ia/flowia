@@ -10,7 +10,10 @@ async function sendEmail({ to, subject, html }) {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      sender:   { name: 'FlowIA', email: process.env.BREVO_FROM || 'noreply@flowia.fr' },
+      sender: {
+        name: process.env.SENDER_NAME || 'Hair Coiff Lille',
+        email: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@haircoifflille.fr'
+      },
       to:       [{ email: to }],
       subject,
       htmlContent: html,

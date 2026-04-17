@@ -370,8 +370,7 @@ export const paymentsApi = {
   createSMSCheckout:  (amount) => request('/payments/sms/checkout',
                       { method:'POST', body:JSON.stringify({ amount }) }),
   getSMSTransactions: ()  => request('/payments/sms/transactions'),
-  verifySMSCheckout:  (id) => request(`/payments/sms/verify/${id}`),
-  getSMSTransactionByRef: (ref) => request(`/payments/sms/transaction-by-ref/${ref}`),
+  verifySMSCheckout:  (sessionId) => request(`/payments/sms/verify/${sessionId}`),
 };
 
 export const creditsApi = {
