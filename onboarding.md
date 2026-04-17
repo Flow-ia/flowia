@@ -1,16 +1,20 @@
-C’est réglé pour les emails : je les reçois bien maintenant. Cependant, Gmail classe encore ces messages comme des promotions, alors qu’ils devraient apparaître directement dans la boîte de réception principale des clients. Il faut donc optimiser intelligemment l’envoi pour maximiser leur placement en boîte principale, de manière fiable et efficace.
+Ajoute des URLs pour chaque section et sous-page, en particulier dans la partie marketing, afin de permettre une actualisation de la page sans perdre le contexte. L’objectif est que l’utilisateur reste automatiquement dans la section où il se trouvait, même après un rafraîchissement.
 
-Concernant les SMS, vérifie bien tout le système. Le message SMS envoyé aux clients doit être automatiquement prérempli avec les informations du code promo. Il doit également être possible de modifier ce contenu via l’input « Message SMS (160 caractères max) ».
+Concernant le paiement, il ne faut pas rediriger vers une page externe comme Stripe. Tout le processus doit se faire sur une seule et même page, avec une interface moderne et claire.
 
-Le message prérempli doit inclure, si disponibles :
+L’interface doit afficher de manière explicite les différentes étapes du paiement :
 
-* le nom du commerçant
-* son adresse
-* son numéro de téléphone
+* chargement du paiement
+* traitement en cours
+* finalisation
+* confirmation du paiement (recharge approuvée)
 
-Si ces informations ne sont pas connues, elles ne doivent pas apparaître.
+Le but est que le commerçant comprenne parfaitement ce qui se passe à chaque étape.
 
-Après l’envoi des SMS, une pop-up moderne doit s’afficher pour confirmer l’opération, indiquant clairement que les SMS ont été envoyés au nombre de clients ciblés. Cette confirmation doit inclure un indicateur visuel clair, comme un check vert.
+Il doit également être possible :
 
-Enfin, il ne faut utiliser aucun console.log pour afficher des confirmations. Utilise uniquement une interface utilisateur propre et moderne, comme une pop-up ou une alerte visuelle pertinente, fiable et visible à l’écran.
+* de payer rapidement avec un moyen de paiement enregistré (usage quotidien)
+* d’ajouter une nouvelle carte
+* de modifier les informations d’une carte existante
 
+Le tout doit être fluide et inspiré des standards des grandes applications modernes, avec une expérience utilisateur simple, rassurante et intuitive.

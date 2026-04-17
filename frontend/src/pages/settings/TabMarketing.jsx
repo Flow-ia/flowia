@@ -1,17 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
+import SMSRechargeModal from '../../components/SMSRechargeModal';
 import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
 
 export default function TabMarketing({ theme, showToast }) {
-  const isDark = theme.mode === 'dark';
-  const [marketingTab, setMarketingTab] = useState('promotions');
+  const isDark   = theme.mode === 'dark';
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const MTABS = [
     { id: 'fidelite',   label: 'Fidelite' },
     { id: 'promotions', label: '% Promotions' },
     { id: 'solde',      label: 'Solde marketing' },
   ];
+
+  // Extrait le sous-onglet depuis l'URL : /settings/marketing/{sub}
+  const parts = location.pathname.replace(/^\/settings\/marketing\/?/, '').split('/').filter(Boolean);
+  const rawSub = parts[0] || 'promotions';
+  const marketingTab = MTABS.some(t => t.id === rawSub) ? rawSub : 'promotions';
+
+  const setMarketingTab = (id) => {
+    // conserve les segments suivants (utile si sous-page imbriquée plus tard)
+    navigate('/settings/marketing/' + id, { replace: false });
+  };
 
   return (
     <div className="space-y-4">
@@ -1335,19 +1348,14 @@ function TabPromo({ theme, showToast }) {
   );
 }
 
-const SMS_COST_UNIT = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045');
-const SMS_MARGIN_PCT = parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30');
-const SMS_PRICE_UNIT = SMS_COST_UNIT * (1 + SMS_MARGIN_PCT / 100);
-
 function TabSMS({ showToast, theme }) {
   const isDark = theme.mode === 'dark';
   const [balance, setBalance]       = useState(null);
   const [quota, setQuota]           = useState(null);
   const [history, setHistory]       = useState([]);
   const [smsTx, setSmsTx]           = useState([]);
-  const [amount, setAmount]         = useState('20');
   const [loading, setLoading]       = useState(true);
-  const [paying, setPaying]         = useState(false);
+  const [rechargeOpen, setRechargeOpen] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -1366,7 +1374,7 @@ function TabSMS({ showToast, theme }) {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session_id');
     const recharge  = params.get('recharge');
-
+    // Compatibilité : si on revient d'une ancienne redirection Stripe Checkout
     if (recharge && sessionId) {
       window.history.replaceState({}, '', window.location.pathname);
       if (recharge === 'success') {
@@ -1381,34 +1389,11 @@ function TabSMS({ showToast, theme }) {
         showToast('Paiement annule', 'info');
         loadData();
       }
-    } else if (recharge) {
-      window.history.replaceState({}, '', window.location.pathname);
-      loadData();
     } else {
+      if (recharge) window.history.replaceState({}, '', window.location.pathname);
       loadData();
     }
   }, []);
-
-  const handleRecharge = async () => {
-    const amt = parseFloat(amount);
-    if (!amt || amt < 5) {
-      showToast('Montant minimum : 5EUR', 'error');
-      return;
-    }
-    setPaying(true);
-    try {
-      const { checkout_url } = await paymentsApi.createSMSCheckout(amt);
-      if (!checkout_url) throw new Error('URL de paiement non recue');
-      window.location.href = checkout_url;
-    } catch(e) {
-      showToast(e.message || 'Erreur creation paiement', 'error');
-      setPaying(false);
-    }
-  };
-
-  const numAmt = parseFloat(amount) || 0;
-  const estimatedSms = numAmt > 0 ? Math.floor(numAmt / SMS_PRICE_UNIT) : 0;
-  const inp = { width:'100%', padding:'10px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background:theme.inputBg, color:theme.text, fontSize:14, outline:'none', boxSizing:'border-box' };
 
   if (loading) return <div style={{ textAlign:'center', padding:40, color:theme.muted }}>Chargement...</div>;
 
@@ -1428,37 +1413,25 @@ function TabSMS({ showToast, theme }) {
           <p style={{ fontSize:14, color:theme.muted, margin:'6px 0 0' }}>Environ {balance?.estimated_sms || 0} SMS disponibles</p>
         </div>
 
-        <div style={{ padding:'16px', borderRadius:14, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border:`1px solid ${theme.border}` }}>
-          <label style={{ fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Montant</label>
-          <div style={{ display:'flex', gap:10, marginBottom:10 }}>
-            <div style={{ position:'relative', flex:1 }}>
-              <input type="number" min="5" step="1" value={amount} onChange={e => setAmount(e.target.value)}
-                placeholder="20" style={{...inp, paddingRight:30, fontSize:16, fontWeight:700}} />
-              <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontWeight:700, color:theme.muted }}>EUR</span>
-            </div>
-          </div>
-          {numAmt >= 5 && (
-            <p style={{ fontSize:13, color:theme.text, margin:'0 0 12px' }}>
-              Avec <strong>{numAmt} EUR</strong> vous obtenez environ <strong>{estimatedSms} SMS</strong>
-            </p>
-          )}
-          {numAmt > 0 && numAmt < 5 && <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>Montant minimum : 5 EUR</p>}
-          <button
-            onClick={handleRecharge}
-            disabled={paying || !amount || parseFloat(amount) < 5}
-            style={{
-              width: '100%', padding: 14, borderRadius: 12, border: 'none',
-              background: (!amount || parseFloat(amount) < 5 || paying)
-                ? theme.border
-                : 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-              color: (!amount || parseFloat(amount) < 5 || paying) ? theme.muted : 'white',
-              fontWeight: 800, fontSize: 14, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-            }}>
-            {paying ? 'Redirection...' : `Payer ${amount ? parseFloat(amount || 0).toFixed(2) + 'EUR' : ''} avec Stripe`}
-          </button>
-        </div>
+        <button onClick={() => setRechargeOpen(true)}
+          style={{
+            width:'100%', padding:14, borderRadius:12, border:'none',
+            background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white',
+            fontWeight:800, fontSize:14, cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+            boxShadow:'0 6px 18px rgba(99,102,241,0.35)',
+          }}>
+          ⚡ Recharger mon solde SMS
+        </button>
       </div>
+
+      <SMSRechargeModal
+        open={rechargeOpen}
+        theme={theme}
+        onClose={() => setRechargeOpen(false)}
+        onSuccess={() => { loadData(); }}
+        showToast={showToast}
+      />
 
       <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
         <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:16, textTransform:'uppercase', letterSpacing:'0.05em' }}>Emails marketing disponibles</p>

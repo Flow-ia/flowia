@@ -371,6 +371,16 @@ export const paymentsApi = {
                       { method:'POST', body:JSON.stringify({ amount }) }),
   getSMSTransactions: ()  => request('/payments/sms/transactions'),
   verifySMSCheckout:  (sessionId) => request(`/payments/sms/verify/${sessionId}`),
+  // Embedded Stripe Elements
+  createIntent:       (body)   => request('/payments/sms/intent',
+                       { method:'POST', body: JSON.stringify(body) }),
+  verifyIntent:       (intentId) => request('/payments/sms/verify-intent',
+                       { method:'POST', body: JSON.stringify({ intent_id: intentId }) }),
+  listPaymentMethods: ()       => request('/payments/sms/payment-methods'),
+  deletePaymentMethod:(id)     => request('/payments/sms/payment-methods/' + id,
+                       { method: 'DELETE' }),
+  setDefaultPaymentMethod: (id) => request('/payments/sms/set-default',
+                       { method: 'POST', body: JSON.stringify({ payment_method_id: id }) }),
 };
 
 export const creditsApi = {

@@ -825,6 +825,8 @@ async function initDB() {
   // Les comptes existants ont TRUE par défaut ; seuls les nouveaux comptes Google auront FALSE
 
   // ── Feature SMS Campaigns + Email Marketing ──────────────────────────────────
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_balance DECIMAL(10,2) DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_today INT DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_month INT DEFAULT 0`);
