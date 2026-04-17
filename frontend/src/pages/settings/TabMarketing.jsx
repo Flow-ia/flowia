@@ -591,22 +591,45 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
     api.me().then(r => setMerchant(r.user || r)).catch(() => {});
   }, [open]);
 
-  // Préremplit le SMS automatiquement tant que l'utilisateur n'a pas édité manuellement
+  // Préremplit le SMS en multi-ligne tant que l'utilisateur n'a pas édité manuellement
   useEffect(() => {
     if (smsUserEdited || !open) return;
+    const fmtDate = (d) => {
+      if (!d) return '';
+      const [y,m,dd] = String(d).split('-');
+      return `${dd}/${m}/${y}`;
+    };
     const discount = type === 'percent' ? `-${value || 0}%` : `-${value || 0}€`;
     const bn   = merchant?.businessName || '';
     const tel  = merchant?.phone || '';
     const addr = merchant?.address || '';
-    const parts = [];
-    if (bn) parts.push(bn);
-    parts.push(`${discount} avec le code ${code || 'XXX'}`);
-    if (tel)  parts.push(`Tel: ${tel}`);
-    if (addr) parts.push(addr);
-    let msg = parts.join('. ') + '.';
+
+    const lines = [];
+    if (bn) lines.push(bn);
+    lines.push(`Profitez de ${discount} avec le code ${code || 'XXXX'}`);
+
+    // Validité
+    if (validFrom && validUntil)      lines.push(`Valable du ${fmtDate(validFrom)} au ${fmtDate(validUntil)}`);
+    else if (validFrom)               lines.push(`Valable dès le ${fmtDate(validFrom)}`);
+    else if (validUntil)              lines.push(`Valable jusqu'au ${fmtDate(validUntil)}`);
+
+    // Plage horaire
+    if (!timeAllday && timeFrom && timeUntil) {
+      const fmtH = (t) => String(t).substring(0,5).replace(':','h');
+      lines.push(`de ${fmtH(timeFrom)} à ${fmtH(timeUntil)}`);
+    }
+
+    // Conditions: Offre limitée (si max_uses défini)
+    if (maxUses && parseInt(maxUses) > 0) lines.push('Offre limitée');
+
+    // Coordonnées
+    const contact = [addr, tel].filter(Boolean).join(' - ');
+    if (contact) lines.push(contact);
+
+    let msg = lines.join('\n');
     if (msg.length > 160) msg = msg.slice(0, 157) + '...';
     setSmsMessage(msg);
-  }, [code, value, type, merchant, open, smsUserEdited]);
+  }, [code, value, type, merchant, open, smsUserEdited, validFrom, validUntil, timeAllday, timeFrom, timeUntil, maxUses]);
 
   useEffect(() => {
     if (init) {

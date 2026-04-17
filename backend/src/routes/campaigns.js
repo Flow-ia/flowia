@@ -17,18 +17,45 @@ const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT; // 300/jour total
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+// ── Scoring RFM (Recency · Frequency · Monetary) ─────────────────────────────
+// Chaque client reçoit un score combiné basé sur :
+//   • Fréquence   : total_visits (passages cumulés)   → poids 3
+//   • Monétaire   : total_spent (CA total généré)      → poids 0.5
+//   • RDV payés   : appointments.status='completed'    → poids 2
+//   • Récence     : jours depuis dernière visite       → bonus 0-30 (récent = mieux)
+// Les poids sont choisis pour qu'un client fidèle récent score haut, et qu'un
+// client dormant chute même s'il a dépensé. LATERAL JOIN = 1 requête unique.
 async function getTopClients(userId, limit, needPhone, needEmail) {
-  let where = `WHERE ca.user_id = $1`;
-  if (needPhone) where += ` AND ca.phone IS NOT NULL AND ca.phone != ''`;
-  if (needEmail) where += ` AND ca.email IS NOT NULL AND ca.email != '' AND ca.email LIKE '%@%'`;
+  let conds = [`ca.user_id = $1`];
+  if (needPhone) conds.push(`ca.phone IS NOT NULL AND ca.phone != ''`);
+  if (needEmail) conds.push(`ca.email IS NOT NULL AND ca.email != '' AND ca.email LIKE '%@%'`);
 
   const { rows } = await pool.query(`
-    SELECT ca.id, ca.email, ca.phone, ca.first_name, ca.last_name,
-      COALESCE(ca.total_visits, 0) AS visits,
-      COALESCE(ca.total_spent, 0) AS spent
+    SELECT
+      ca.id, ca.email, ca.phone, ca.first_name, ca.last_name,
+      COALESCE(ca.total_visits, 0)      AS visits,
+      COALESCE(ca.total_spent, 0)::float AS spent,
+      COALESCE(stats.paid_appts, 0)     AS paid_appts,
+      stats.last_visit,
+      (
+        COALESCE(ca.total_visits, 0) * 3.0
+        + COALESCE(ca.total_spent, 0)::float * 0.5
+        + COALESCE(stats.paid_appts, 0) * 2.0
+        + GREATEST(0, 30 - LEAST(365, COALESCE(
+            EXTRACT(DAY FROM (NOW() - stats.last_visit))::int,
+            365
+          )) / 12.0)
+      ) AS score
     FROM client_accounts ca
-    ${where}
-    ORDER BY COALESCE(ca.total_visits,0) DESC, COALESCE(ca.total_spent,0) DESC
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) FILTER (WHERE a.status = 'completed') AS paid_appts,
+        MAX(a.date)                                     AS last_visit
+      FROM appointments a
+      WHERE a.user_id = ca.user_id AND LOWER(a.client_email) = LOWER(ca.email)
+    ) stats ON TRUE
+    WHERE ${conds.join(' AND ')}
+    ORDER BY score DESC, ca.total_spent DESC NULLS LAST
     LIMIT $2
   `, [userId, limit]);
   return rows;

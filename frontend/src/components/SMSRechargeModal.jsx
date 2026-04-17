@@ -128,11 +128,13 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
     setSubmitting(true);
 
     try {
-      // ── Étape 1 — Si carte neuve, on la tokenise d'abord côté client ─────
+      // ── Étape 1 — Tokenisation carte neuve AVANT tout changement de step ─
+      // Important: ne pas démonter le CardForm tant que createPaymentMethod
+      // n'a pas terminé, sinon Stripe ne trouve plus les éléments CVC/Expiry.
       let paymentMethodId = isNew ? null : selectedPm;
       if (isNew) {
-        setStep('loading');
         const cardEl = elements.getElement(CardNumberElement);
+        if (!cardEl) throw new Error('Formulaire de carte non chargé, réessayez.');
         const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
           type: 'card', card: cardEl,
         });
@@ -140,8 +142,10 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
         paymentMethodId = paymentMethod.id;
       }
 
-      // ── Étape 2 — Création du PaymentIntent côté serveur ─────────────────
+      // Désormais on peut changer le step — les éléments ne sont plus nécessaires
       setStep('loading');
+
+      // ── Étape 2 — Création du PaymentIntent côté serveur ─────────────────
       const r = await paymentsApi.createIntent({
         amount: numAmt,
         payment_method_id: paymentMethodId,
