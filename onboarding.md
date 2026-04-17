@@ -1,20 +1,7 @@
-Ajoute des URLs pour chaque section et sous-page, en particulier dans la partie marketing, afin de permettre une actualisation de la page sans perdre le contexte. L’objectif est que l’utilisateur reste automatiquement dans la section où il se trouvait, même après un rafraîchissement.
+Dans la section recharge, plusieurs éléments ne fonctionnent pas correctement. Le bouton « + Nouvelle carte » ne fonctionne pas, et il n’y a aucun champ permettant de saisir les informations de carte (numéro, date d’expiration, etc.). De plus, le bouton « Payer » fonctionne même sans saisie de carte, ce qui est incompréhensible et nuit fortement à l’expérience utilisateur.
 
-Concernant le paiement, il ne faut pas rediriger vers une page externe comme Stripe. Tout le processus doit se faire sur une seule et même page, avec une interface moderne et claire.
+Il est indispensable de tester entièrement ce processus afin de garantir que la recharge fonctionne correctement dans tous les cas et toutes les situations.
 
-L’interface doit afficher de manière explicite les différentes étapes du paiement :
+Actuellement, seule la mention « Recharge SMS – Paiement sécurisé » s’affiche, sans aucun contenu ni étape visible en dessous, ce qui rend le processus incomplet.
 
-* chargement du paiement
-* traitement en cours
-* finalisation
-* confirmation du paiement (recharge approuvée)
-
-Le but est que le commerçant comprenne parfaitement ce qui se passe à chaque étape.
-
-Il doit également être possible :
-
-* de payer rapidement avec un moyen de paiement enregistré (usage quotidien)
-* d’ajouter une nouvelle carte
-* de modifier les informations d’une carte existante
-
-Le tout doit être fluide et inspiré des standards des grandes applications modernes, avec une expérience utilisateur simple, rassurante et intuitive.
+Il faut donc simplifier et fiabiliser le parcours de recharge, avec une interface moderne, claire et pertinente, inspirée des standards des grandes plateformes comme Amazon, afin de rendre la recharge rapide, fluide et intuitive.

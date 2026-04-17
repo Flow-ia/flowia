@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import {
+  Elements,
+  CardNumberElement,
+  CardExpiryElement,
+  CardCvcElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
 import { paymentsApi } from '../utils/api';
 
-// Clé publique Stripe — via env Vite
+// ── Clé publique Stripe (env Vite) ──────────────────────────────────────────
 const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 let stripePromise = null;
 function getStripeSingleton() {
@@ -11,107 +18,35 @@ function getStripeSingleton() {
   return stripePromise;
 }
 
-// Étapes visibles pour le commerçant
-const STEPS = [
-  { id: 'idle',       label: 'Montant' },
-  { id: 'loading',    label: 'Chargement du paiement' },
-  { id: 'processing', label: 'Traitement en cours' },
-  { id: 'finalizing', label: 'Finalisation' },
-  { id: 'success',    label: 'Recharge approuvée' },
-];
-
+// Wrapper qui met Elements autour du form — Elements doit envelopper tout composant qui utilise useStripe/useElements
 export default function SMSRechargeModal({ open, theme, onClose, onSuccess, showToast }) {
-  const [step, setStep]         = useState('idle');
-  const [amount, setAmount]     = useState('20');
-  const [methods, setMethods]   = useState([]);
-  const [defaultPm, setDefault] = useState(null);
-  const [loadingPm, setLoadingPm] = useState(true);
-  const [selectedPm, setSelectedPm] = useState(null);   // id ou 'new'
-  const [saveCard, setSaveCard] = useState(true);
-  const [clientSecret, setClientSecret] = useState(null);
-  const [intentId, setIntentId] = useState(null);
-  const [estimatedSms, setEstimatedSms] = useState(0);
-  const [creditedInfo, setCreditedInfo] = useState(null);
-  const [error, setError]       = useState(null);
-
-  const reload = useCallback(async () => {
-    setLoadingPm(true);
-    try {
-      const r = await paymentsApi.listPaymentMethods();
-      setMethods(r.methods || []);
-      setDefault(r.default || null);
-      const first = (r.methods && r.methods[0]) ? r.methods[0].id : 'new';
-      setSelectedPm(r.default || first);
-    } catch {
-      setMethods([]); setSelectedPm('new');
-    } finally { setLoadingPm(false); }
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    setStep('idle'); setError(null); setClientSecret(null); setCreditedInfo(null);
-    reload();
-  }, [open, reload]);
-
-  const numAmt = parseFloat(amount) || 0;
-  const canPay = numAmt >= 5 && !!selectedPm;
-
-  // Démarre le process : création du PaymentIntent
-  const start = async () => {
-    if (!canPay) return;
-    setError(null); setStep('loading');
-    try {
-      const isNewCard = selectedPm === 'new';
-      const body = { amount: numAmt };
-      if (!isNewCard) body.payment_method_id = selectedPm;
-      body.save_card = isNewCard && saveCard;
-
-      const r = await paymentsApi.createIntent(body);
-      setEstimatedSms(r.estimated_sms || 0);
-      setIntentId(r.intent_id);
-
-      if (isNewCard) {
-        // Flux carte neuve → PaymentElement confirme côté client
-        setClientSecret(r.client_secret);
-        setStep('processing');
-      } else {
-        // Flux carte enregistrée → server a déjà confirm off_session
-        if (r.status === 'succeeded') {
-          setStep('finalizing');
-          const v = await paymentsApi.verifyIntent(r.intent_id);
-          setCreditedInfo(v);
-          setStep('success');
-          onSuccess?.(v);
-        } else if (r.status === 'requires_action') {
-          // SCA requis — on passe par PaymentElement pour handleNextAction
-          setClientSecret(r.client_secret);
-          setStep('processing');
-        } else {
-          throw new Error('Statut paiement inattendu : ' + r.status);
-        }
-      }
-    } catch(e) {
-      setError(e.message || 'Erreur paiement');
-      setStep('idle');
-    }
-  };
-
-  const stripeInstance = getStripeSingleton();
-
-  const isDark = theme.mode === 'dark';
   if (!open) return null;
-  const bg = isDark ? '#161622' : '#ffffff';
+  const stripe = getStripeSingleton();
+  if (!stripe) {
+    return (
+      <ModalShell theme={theme} onClose={onClose}>
+        <ConfigMissing theme={theme} />
+      </ModalShell>
+    );
+  }
+  return (
+    <Elements stripe={stripe} options={{
+      appearance: { theme: theme.mode === 'dark' ? 'night' : 'stripe',
+        variables: { colorPrimary: '#6366f1', borderRadius: '10px', fontSizeBase: '15px' } },
+    }}>
+      <RechargeInner theme={theme} onClose={onClose} onSuccess={onSuccess} showToast={showToast} />
+    </Elements>
+  );
+}
 
+function ModalShell({ theme, onClose, children }) {
+  const isDark = theme.mode === 'dark';
   return (
     <div style={{ position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-      <div onClick={step === 'success' || step === 'idle' ? onClose : undefined}
-        style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(12px)' }} />
-
-      <div style={{ position:'relative', width:'100%', maxWidth:460, background:bg, borderRadius:24,
-        border:`1px solid ${theme.border}`, padding:'28px 26px', maxHeight:'92vh', overflowY:'auto',
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(12px)' }} />
+      <div style={{ position:'relative', width:'100%', maxWidth:460, background: isDark ? '#161622' : '#fff',
+        borderRadius:24, border:`1px solid ${theme.border}`, padding:'28px 26px', maxHeight:'92vh', overflowY:'auto',
         boxShadow:'0 30px 80px rgba(0,0,0,0.45)' }}>
-
-        {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
           <div>
             <p style={{ margin:0, fontSize:12, fontWeight:800, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.08em' }}>Recharge SMS</p>
@@ -121,145 +56,274 @@ export default function SMSRechargeModal({ open, theme, onClose, onSuccess, show
             style={{ width:34, height:34, borderRadius:10, border:'none', cursor:'pointer',
               background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', color:theme.muted, fontSize:18 }}>×</button>
         </div>
-
-        {/* Stepper */}
-        <StepBar step={step} theme={theme} />
-
-        {step === 'idle' && (
-          <IdleView
-            theme={theme} amount={amount} setAmount={setAmount}
-            methods={methods} loadingPm={loadingPm}
-            selectedPm={selectedPm} setSelectedPm={setSelectedPm}
-            saveCard={saveCard} setSaveCard={setSaveCard}
-            onReload={reload} onStart={start} canPay={canPay}
-            defaultPm={defaultPm} error={error}
-            showToast={showToast}
-          />
-        )}
-
-        {step === 'loading' && (
-          <CenterMessage theme={theme} icon="⏳" title="Création du paiement..." subtitle="Connexion sécurisée à Stripe." />
-        )}
-
-        {step === 'processing' && clientSecret && stripeInstance && (
-          <Elements stripe={stripeInstance} options={{
-            clientSecret,
-            appearance: { theme: isDark ? 'night' : 'stripe',
-              variables: { colorPrimary: '#6366f1', borderRadius: '12px' } },
-          }}>
-            <NewCardConfirm
-              theme={theme} clientSecret={clientSecret} intentId={intentId}
-              onProcessing={() => setStep('processing')}
-              onFinalizing={() => setStep('finalizing')}
-              onSuccess={async (pi) => {
-                try {
-                  const v = await paymentsApi.verifyIntent(pi.id);
-                  setCreditedInfo(v);
-                  setStep('success');
-                  onSuccess?.(v);
-                } catch(e) { setError(e.message); setStep('idle'); }
-              }}
-              onError={(msg) => { setError(msg); setStep('idle'); }}
-            />
-          </Elements>
-        )}
-
-        {step === 'finalizing' && (
-          <CenterMessage theme={theme} icon="🔄" title="Finalisation..." subtitle="Mise à jour de votre solde SMS." />
-        )}
-
-        {step === 'success' && creditedInfo && (
-          <SuccessView theme={theme} info={creditedInfo} estimatedSms={estimatedSms} onClose={onClose} />
-        )}
+        {children}
       </div>
     </div>
   );
 }
 
-// ── Sous-composants ─────────────────────────────────────────────────────────
+function ConfigMissing({ theme }) {
+  return (
+    <div style={{ padding:'24px 8px', textAlign:'center' }}>
+      <div style={{ fontSize:42, marginBottom:14 }}>⚠️</div>
+      <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>Stripe non configuré</p>
+      <p style={{ margin:'8px 0 0', fontSize:13, color:theme.muted }}>
+        La variable <code>VITE_STRIPE_PUBLISHABLE_KEY</code> doit être définie dans l'environnement Vercel.
+      </p>
+    </div>
+  );
+}
+
+// ── Étapes du paiement ──────────────────────────────────────────────────────
+const STEPS = [
+  { id: 'idle',       label: 'Informations' },
+  { id: 'loading',    label: 'Création du paiement' },
+  { id: 'processing', label: 'Traitement' },
+  { id: 'finalizing', label: 'Finalisation' },
+  { id: 'success',    label: 'Recharge approuvée' },
+];
+
+function RechargeInner({ theme, onClose, onSuccess, showToast }) {
+  const stripe   = useStripe();
+  const elements = useElements();
+  const isDark   = theme.mode === 'dark';
+
+  const [step, setStep]             = useState('idle');
+  const [amount, setAmount]         = useState('20');
+  const [methods, setMethods]       = useState([]);
+  const [defaultPm, setDefaultPm]   = useState(null);
+  const [selectedPm, setSelectedPm] = useState(null);
+  const [loadingPm, setLoadingPm]   = useState(true);
+  const [saveCard, setSaveCard]     = useState(true);
+  const [cardReady, setCardReady]   = useState({ number:false, expiry:false, cvc:false });
+  const [cardError, setCardError]   = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]           = useState(null);
+  const [result, setResult]         = useState(null);
+
+  const reload = useCallback(async () => {
+    setLoadingPm(true);
+    try {
+      const r = await paymentsApi.listPaymentMethods();
+      setMethods(r.methods || []);
+      setDefaultPm(r.default || null);
+      const first = (r.methods?.[0]?.id) || 'new';
+      setSelectedPm(r.default || first);
+    } catch {
+      setMethods([]); setSelectedPm('new');
+    } finally { setLoadingPm(false); }
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const numAmt = parseFloat(amount) || 0;
+  const amountOk = numAmt >= 5;
+  const isNew  = selectedPm === 'new';
+  const cardComplete = cardReady.number && cardReady.expiry && cardReady.cvc;
+  const canPay = amountOk && !!selectedPm && (!isNew || cardComplete) && !submitting;
+
+  async function handlePay() {
+    if (!stripe || !elements) return;
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      // ── Étape 1 — Si carte neuve, on la tokenise d'abord côté client ─────
+      let paymentMethodId = isNew ? null : selectedPm;
+      if (isNew) {
+        setStep('loading');
+        const cardEl = elements.getElement(CardNumberElement);
+        const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({
+          type: 'card', card: cardEl,
+        });
+        if (pmErr) { setCardError(pmErr.message); throw pmErr; }
+        paymentMethodId = paymentMethod.id;
+      }
+
+      // ── Étape 2 — Création du PaymentIntent côté serveur ─────────────────
+      setStep('loading');
+      const r = await paymentsApi.createIntent({
+        amount: numAmt,
+        payment_method_id: paymentMethodId,
+        save_card: isNew && saveCard,
+      });
+
+      // ── Étape 3 — Traitement (gestion SCA si nécessaire) ─────────────────
+      setStep('processing');
+      if (r.status === 'requires_action' || r.status === 'requires_confirmation') {
+        const { error: confErr, paymentIntent } = await stripe.confirmCardPayment(r.client_secret);
+        if (confErr) throw new Error(confErr.message);
+        if (paymentIntent.status !== 'succeeded')
+          throw new Error('Statut inattendu : ' + paymentIntent.status);
+      } else if (r.status !== 'succeeded') {
+        throw new Error('Statut inattendu : ' + r.status);
+      }
+
+      // ── Étape 4 — Finalisation (crédit du solde) ─────────────────────────
+      setStep('finalizing');
+      const verified = await paymentsApi.verifyIntent(r.intent_id);
+
+      setResult(verified);
+      setStep('success');
+      onSuccess?.(verified);
+      await reload();
+    } catch(e) {
+      setError(e.message || 'Erreur de paiement');
+      setStep('idle');
+    } finally { setSubmitting(false); }
+  }
+
+  async function deleteCard(id) {
+    if (!confirm('Supprimer cette carte ?')) return;
+    try { await paymentsApi.deletePaymentMethod(id); await reload(); showToast?.('Carte supprimée'); }
+    catch(e) { showToast?.(e.message, 'error'); }
+  }
+  async function setAsDefault(id) {
+    try { await paymentsApi.setDefaultPaymentMethod(id); await reload(); showToast?.('Carte par défaut mise à jour'); }
+    catch(e) { showToast?.(e.message, 'error'); }
+  }
+
+  return (
+    <ModalShell theme={theme} onClose={onClose}>
+      <StepBar step={step} theme={theme} />
+
+      {step === 'success' && result ? (
+        <SuccessView theme={theme} info={result} onClose={onClose} />
+      ) : step === 'loading' ? (
+        <CenterMessage theme={theme} title="Création du paiement..." subtitle="Connexion sécurisée à Stripe." />
+      ) : step === 'processing' ? (
+        <CenterMessage theme={theme} title="Traitement en cours..." subtitle="Votre banque vérifie la transaction." />
+      ) : step === 'finalizing' ? (
+        <CenterMessage theme={theme} title="Finalisation..." subtitle="Mise à jour de votre solde SMS." />
+      ) : (
+        // IDLE — formulaire complet Amazon-like
+        <>
+          <AmountField theme={theme} amount={amount} setAmount={setAmount} />
+          <PaymentMethods
+            theme={theme} methods={methods} loadingPm={loadingPm}
+            selectedPm={selectedPm} setSelectedPm={setSelectedPm}
+            defaultPm={defaultPm}
+            onDelete={deleteCard} onSetDefault={setAsDefault}
+          />
+          {isNew && (
+            <CardForm theme={theme}
+              cardError={cardError} setCardError={setCardError}
+              setCardReady={setCardReady}
+              saveCard={saveCard} setSaveCard={setSaveCard}
+            />
+          )}
+
+          {error && (
+            <div style={{ padding:'10px 14px', borderRadius:10, background:'rgba(239,68,68,0.08)',
+              border:'1px solid rgba(239,68,68,0.25)', marginBottom:12 }}>
+              <p style={{ margin:0, fontSize:13, color:'#ef4444' }}>{error}</p>
+            </div>
+          )}
+
+          <button onClick={handlePay} disabled={!canPay}
+            style={{ width:'100%', padding:14, borderRadius:12, border:'none', fontWeight:800, fontSize:15,
+              cursor: canPay ? 'pointer' : 'not-allowed',
+              background: canPay ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : (isDark?'rgba(255,255,255,0.08)':theme.border),
+              color: canPay ? 'white' : theme.muted,
+              boxShadow: canPay ? '0 6px 16px rgba(99,102,241,0.35)' : 'none' }}>
+            {submitting
+              ? 'Traitement...'
+              : isNew && !cardComplete
+                ? 'Complétez les infos de carte'
+                : !amountOk
+                  ? 'Montant minimum : 5 EUR'
+                  : `Payer ${numAmt.toFixed(2)} EUR`}
+          </button>
+          <p style={{ margin:'10px 0 0', fontSize:10, textAlign:'center', color:theme.muted }}>
+            🔒 Paiement sécurisé Stripe · 3D Secure · aucune donnée carte stockée chez nous
+          </p>
+        </>
+      )}
+    </ModalShell>
+  );
+}
+
+// ── Sous-composants UI ──────────────────────────────────────────────────────
 
 function StepBar({ step, theme }) {
   const idx = STEPS.findIndex(s => s.id === step);
   return (
-    <div style={{ display:'flex', gap:4, marginBottom:22 }}>
-      {STEPS.map((s, i) => {
-        const done   = i < idx;
-        const active = i === idx;
-        const color  = s.id === 'success' && active ? '#10b981'
-                     : active ? '#6366f1'
-                     : done   ? '#6366f1'
-                     : theme.border;
-        return (
-          <div key={s.id} title={s.label} style={{
-            flex:1, height:6, borderRadius:3, background: color,
-            opacity: done || active ? 1 : 0.4,
-            transition:'background 0.3s, opacity 0.3s',
-          }} />
-        );
-      })}
-    </div>
+    <>
+      <div style={{ display:'flex', gap:4, marginBottom:10 }}>
+        {STEPS.map((s, i) => {
+          const done   = i < idx;
+          const active = i === idx;
+          const color  = (s.id === 'success' && active) ? '#10b981'
+                       : (active || done) ? '#6366f1' : theme.border;
+          return (
+            <div key={s.id} style={{
+              flex:1, height:6, borderRadius:3, background:color,
+              opacity: done || active ? 1 : 0.4, transition:'all 0.3s',
+            }} />
+          );
+        })}
+      </div>
+      <p style={{ margin:'0 0 16px', fontSize:11, fontWeight:700, color:theme.muted, textAlign:'center',
+        textTransform:'uppercase', letterSpacing:'0.08em' }}>
+        {STEPS[Math.max(0, idx)]?.label || STEPS[0].label}
+      </p>
+    </>
   );
 }
 
-function CenterMessage({ theme, icon, title, subtitle }) {
+function CenterMessage({ theme, title, subtitle }) {
   return (
-    <div style={{ padding:'30px 16px', textAlign:'center' }}>
-      <div style={{ fontSize:42, marginBottom:14 }}>{icon}</div>
+    <div style={{ padding:'28px 8px 6px', textAlign:'center' }}>
+      <div style={{ display:'flex', justifyContent:'center', marginBottom:16 }}>
+        <div style={{ width:36, height:36, borderRadius:'50%',
+          border:`3px solid ${theme.border}`, borderTopColor:'#6366f1',
+          animation:'ffsp 0.9s linear infinite' }} />
+      </div>
       <p style={{ margin:0, fontSize:16, fontWeight:800, color:theme.text }}>{title}</p>
       {subtitle && <p style={{ margin:'6px 0 0', fontSize:13, color:theme.muted }}>{subtitle}</p>}
-      <div style={{ marginTop:22, display:'flex', justifyContent:'center' }}>
-        <div style={{ width:28, height:28, borderRadius:'50%', border:`3px solid ${theme.border}`,
-          borderTopColor:'#6366f1', animation:'spin 0.9s linear infinite' }} />
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      <style>{`@keyframes ffsp { to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 }
 
-function IdleView({ theme, amount, setAmount, methods, loadingPm, selectedPm, setSelectedPm,
-  saveCard, setSaveCard, onReload, onStart, canPay, defaultPm, error, showToast }) {
+function AmountField({ theme, amount, setAmount }) {
   const isDark = theme.mode === 'dark';
+  return (
+    <div style={{ padding:'14px 16px', borderRadius:14, border:`1px solid ${theme.border}`,
+      background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', marginBottom:14 }}>
+      <label style={{ fontSize:11, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Montant</label>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6 }}>
+        <input type="number" min="5" step="1" value={amount} onChange={e => setAmount(e.target.value)}
+          style={{ flex:1, fontSize:24, fontWeight:800, border:'none', outline:'none',
+            background:'transparent', color:theme.text, padding:0 }} />
+        <span style={{ fontWeight:800, color:theme.muted, fontSize:16 }}>EUR</span>
+      </div>
+      <div style={{ display:'flex', gap:6, marginTop:10 }}>
+        {[10, 20, 50, 100].map(v => {
+          const active = String(amount) === String(v);
+          return (
+            <button key={v} onClick={() => setAmount(String(v))}
+              style={{ flex:1, padding:'6px 0', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer',
+                border:`1px solid ${active ? '#6366f1' : theme.border}`,
+                background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
+                color: active ? '#6366f1' : theme.muted }}>
+              {v}€
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
+function PaymentMethods({ theme, methods, loadingPm, selectedPm, setSelectedPm, defaultPm, onDelete, onSetDefault }) {
+  const isDark = theme.mode === 'dark';
   const brandLabel = (b) => ({ visa:'Visa', mastercard:'Mastercard', amex:'Amex',
     discover:'Discover', jcb:'JCB', unionpay:'UnionPay' }[b] || (b || 'Carte'));
 
-  const deleteCard = async (id) => {
-    if (!confirm('Supprimer cette carte ?')) return;
-    try { await paymentsApi.deletePaymentMethod(id); await onReload(); showToast?.('Carte supprimée'); }
-    catch(e) { showToast?.(e.message, 'error'); }
-  };
-  const setAsDefault = async (id) => {
-    try { await paymentsApi.setDefaultPaymentMethod(id); await onReload(); showToast?.('Carte par défaut'); }
-    catch(e) { showToast?.(e.message, 'error'); }
-  };
-
   return (
     <>
-      {/* Montant */}
-      <div style={{ padding:'14px 16px', borderRadius:14, border:`1px solid ${theme.border}`,
-        background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', marginBottom:14 }}>
-        <label style={{ fontSize:11, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Montant</label>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6 }}>
-          <input type="number" min="5" step="1" value={amount} onChange={e => setAmount(e.target.value)}
-            style={{ flex:1, fontSize:22, fontWeight:800, border:'none', outline:'none',
-              background:'transparent', color:theme.text, padding:0 }} />
-          <span style={{ fontWeight:800, color:theme.muted }}>EUR</span>
-        </div>
-        <div style={{ display:'flex', gap:6, marginTop:10 }}>
-          {[10, 20, 50, 100].map(v => (
-            <button key={v} onClick={() => setAmount(String(v))}
-              style={{ flex:1, padding:'6px 0', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer',
-                border:`1px solid ${String(amount)===String(v)?'#6366f1':theme.border}`,
-                background: String(amount)===String(v) ? 'rgba(99,102,241,0.12)' : 'transparent',
-                color: String(amount)===String(v) ? '#6366f1' : theme.muted }}>
-              {v}€
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Cartes enregistrées */}
-      <p style={{ margin:'4px 0 8px', fontSize:11, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+      <p style={{ margin:'0 0 8px', fontSize:11, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>
         Moyen de paiement
       </p>
       <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
@@ -274,118 +338,119 @@ function IdleView({ theme, amount, setAmount, methods, loadingPm, selectedPm, se
                 background: active ? 'rgba(99,102,241,0.06)' : (isDark ? 'rgba(255,255,255,0.03)' : '#fff'),
                 display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ width:40, height:28, borderRadius:6, background:'#111', color:'white',
-                fontSize:10, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                fontSize:9, fontWeight:900, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 {brandLabel(pm.brand).toUpperCase().slice(0,4)}
               </div>
-              <div style={{ flex:1 }}>
+              <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ margin:0, fontSize:14, fontWeight:700, color:theme.text, fontFamily:'monospace' }}>
-                  •••• •••• •••• {pm.last4}
+                  •••• {pm.last4}
                 </p>
                 <p style={{ margin:'2px 0 0', fontSize:11, color:theme.muted }}>
-                  {brandLabel(pm.brand)} · exp. {String(pm.exp_month).padStart(2,'0')}/{String(pm.exp_year).slice(-2)}
+                  {brandLabel(pm.brand)} · {String(pm.exp_month).padStart(2,'0')}/{String(pm.exp_year).slice(-2)}
                   {isDefault && <span style={{ marginLeft:6, padding:'1px 6px', borderRadius:5,
                     background:'rgba(16,185,129,0.14)', color:'#10b981', fontWeight:700 }}>Par défaut</span>}
                 </p>
               </div>
               {!isDefault && (
-                <button onClick={(e) => { e.stopPropagation(); setAsDefault(pm.id); }}
+                <button onClick={(e) => { e.stopPropagation(); onSetDefault(pm.id); }}
                   style={{ background:'transparent', border:`1px solid ${theme.border}`,
                     color:theme.muted, fontSize:10, padding:'3px 8px', borderRadius:6, cursor:'pointer' }}>
                   Par défaut
                 </button>
               )}
-              <button onClick={(e) => { e.stopPropagation(); deleteCard(pm.id); }}
-                aria-label="Supprimer"
+              <button onClick={(e) => { e.stopPropagation(); onDelete(pm.id); }} aria-label="Supprimer"
                 style={{ background:'transparent', border:'none', color:'#ef4444',
-                  fontSize:16, cursor:'pointer', padding:4 }}>×</button>
+                  fontSize:18, cursor:'pointer', padding:4, lineHeight:1 }}>×</button>
             </div>
           );
         })}
-        {/* Nouvelle carte */}
         <div onClick={() => setSelectedPm('new')}
           style={{ padding:'12px 14px', borderRadius:12, cursor:'pointer',
             border:`2px dashed ${selectedPm==='new' ? '#6366f1' : theme.border}`,
             background: selectedPm==='new' ? 'rgba(99,102,241,0.06)' : 'transparent',
             display:'flex', alignItems:'center', gap:10 }}>
           <div style={{ width:40, height:28, borderRadius:6, background: isDark?'rgba(255,255,255,0.06)':'#f1f5f9',
-            color:theme.muted, fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>+</div>
+            color: selectedPm==='new' ? '#6366f1' : theme.muted, fontSize:20, fontWeight:700,
+            display:'flex', alignItems:'center', justifyContent:'center' }}>+</div>
           <p style={{ margin:0, fontSize:14, fontWeight:700, color:theme.text }}>Nouvelle carte</p>
         </div>
       </div>
-
-      {/* Option save card */}
-      {selectedPm === 'new' && (
-        <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:theme.text,
-          marginBottom:14, cursor:'pointer' }}>
-          <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} />
-          Enregistrer cette carte pour les prochaines recharges
-        </label>
-      )}
-
-      {error && (
-        <div style={{ padding:'10px 14px', borderRadius:10, background:'rgba(239,68,68,0.08)',
-          border:'1px solid rgba(239,68,68,0.25)', marginBottom:12 }}>
-          <p style={{ margin:0, fontSize:13, color:'#ef4444' }}>{error}</p>
-        </div>
-      )}
-
-      <button onClick={onStart} disabled={!canPay}
-        style={{ width:'100%', padding:14, borderRadius:12, border:'none', fontWeight:800, fontSize:15,
-          cursor: canPay ? 'pointer' : 'not-allowed',
-          background: canPay ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : theme.border,
-          color: canPay ? 'white' : theme.muted,
-          boxShadow: canPay ? '0 6px 16px rgba(99,102,241,0.35)' : 'none' }}>
-        {selectedPm === 'new' ? `Payer ${parseFloat(amount||0).toFixed(2)} EUR` : `Recharger ${parseFloat(amount||0).toFixed(2)} EUR`}
-      </button>
-      <p style={{ margin:'10px 0 0', fontSize:10, textAlign:'center', color:theme.muted }}>
-        🔒 Paiement sécurisé par Stripe · aucune donnée carte stockée sur nos serveurs
-      </p>
     </>
   );
 }
 
-function NewCardConfirm({ theme, clientSecret, intentId, onProcessing, onFinalizing, onSuccess, onError }) {
-  const stripe   = useStripe();
-  const elements = useElements();
-  const [submitting, setSubmitting] = useState(false);
+function CardForm({ theme, cardError, setCardError, setCardReady, saveCard, setSaveCard }) {
+  const isDark = theme.mode === 'dark';
+  const elStyle = {
+    style: {
+      base: {
+        fontSize: '16px',
+        color: isDark ? '#f1f5f9' : '#0f172a',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        '::placeholder': { color: isDark ? '#64748b' : '#94a3b8' },
+      },
+      invalid: { color: '#ef4444' },
+    },
+  };
+  const fieldWrap = {
+    padding: '12px 14px',
+    borderRadius: 10,
+    border: `1px solid ${theme.border}`,
+    background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+  };
+  const label = {
+    display: 'block', fontSize: 11, fontWeight: 700, color: theme.muted,
+    textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5,
+  };
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setSubmitting(true);
-    onProcessing?.();
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements, redirect: 'if_required',
-    });
-    if (error) {
-      onError?.(error.message || 'Erreur de paiement');
-      setSubmitting(false);
-      return;
-    }
-    onFinalizing?.();
-    if (paymentIntent && paymentIntent.status === 'succeeded') {
-      onSuccess?.(paymentIntent);
-    } else {
-      onError?.('Statut inattendu : ' + paymentIntent?.status);
-    }
-    setSubmitting(false);
+  const handleChange = (field) => (e) => {
+    setCardReady(prev => ({ ...prev, [field]: e.complete }));
+    setCardError(e.error ? e.error.message : null);
   };
 
   return (
-    <form onSubmit={submit}>
-      <PaymentElement options={{ layout: 'tabs' }} />
-      <button type="submit" disabled={!stripe || submitting}
-        style={{ width:'100%', padding:14, borderRadius:12, border:'none', fontWeight:800, fontSize:15,
-          marginTop:16, cursor:'pointer',
-          background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white',
-          boxShadow:'0 6px 16px rgba(99,102,241,0.35)', opacity: submitting ? 0.7 : 1 }}>
-        {submitting ? 'Paiement en cours...' : 'Confirmer le paiement'}
-      </button>
-    </form>
+    <div style={{ padding:'14px 14px 12px', borderRadius:14, border:`1px solid ${theme.border}`,
+      background: isDark ? 'rgba(255,255,255,0.02)' : '#fafbfc', marginBottom:14 }}>
+      <p style={{ margin:'0 0 12px', fontSize:12, fontWeight:800, color:theme.text,
+        textTransform:'uppercase', letterSpacing:'0.06em' }}>Informations de carte</p>
+
+      <label style={label}>Numéro de carte</label>
+      <div style={{ ...fieldWrap, marginBottom:10 }}>
+        <CardNumberElement options={{ ...elStyle, showIcon: true, placeholder: '1234 1234 1234 1234' }}
+          onChange={handleChange('number')} />
+      </div>
+
+      <div style={{ display:'flex', gap:10 }}>
+        <div style={{ flex:1 }}>
+          <label style={label}>Expiration</label>
+          <div style={fieldWrap}>
+            <CardExpiryElement options={{ ...elStyle, placeholder: 'MM / AA' }}
+              onChange={handleChange('expiry')} />
+          </div>
+        </div>
+        <div style={{ flex:1 }}>
+          <label style={label}>CVC</label>
+          <div style={fieldWrap}>
+            <CardCvcElement options={{ ...elStyle, placeholder: '123' }}
+              onChange={handleChange('cvc')} />
+          </div>
+        </div>
+      </div>
+
+      {cardError && (
+        <p style={{ margin:'10px 0 0', fontSize:12, color:'#ef4444', fontWeight:600 }}>{cardError}</p>
+      )}
+
+      <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:theme.text,
+        marginTop:14, cursor:'pointer' }}>
+        <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} />
+        Enregistrer cette carte pour les prochaines recharges
+      </label>
+    </div>
   );
 }
 
-function SuccessView({ theme, info, estimatedSms, onClose }) {
+function SuccessView({ theme, info, onClose }) {
   return (
     <div style={{ padding:'18px 8px 0', textAlign:'center' }}>
       <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(16,185,129,0.12)',
@@ -406,7 +471,7 @@ function SuccessView({ theme, info, estimatedSms, onClose }) {
         <div style={{ flex:1, padding:'14px 10px', borderRadius:14, background:'rgba(99,102,241,0.08)',
           border:'1px solid rgba(99,102,241,0.25)' }}>
           <p style={{ margin:0, fontSize:10, fontWeight:800, color:'#6366f1', textTransform:'uppercase', letterSpacing:'0.06em' }}>SMS disponibles</p>
-          <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:900, color:theme.text, fontFamily:'monospace' }}>≈ {info.new_sms_estimated || estimatedSms}</p>
+          <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:900, color:theme.text, fontFamily:'monospace' }}>≈ {info.new_sms_estimated}</p>
         </div>
       </div>
       <button onClick={onClose}
