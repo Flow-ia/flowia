@@ -675,6 +675,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo }) {
 }
 
 module.exports = {
+  sendEmail,
   sendVerificationEmail,
   sendAppointmentConfirmation,
   sendAppointmentCancellation,

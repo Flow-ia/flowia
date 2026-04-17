@@ -168,6 +168,21 @@ function startServer() {
     res.json({ ok: true, pid: process.pid, uptime: process.uptime(), time: new Date() });
   });
 
+  // ── Route de test email — À SUPPRIMER APRÈS TEST ─────────────────────────
+  app.get('/api/test-email', async (req, res) => {
+    try {
+      const { sendEmail } = require('./utils/email');
+      await sendEmail({
+        to: 'gacinoufel@gmail.com',
+        subject: 'Test email FlowIA',
+        html: '<p>Test email depuis FlowIA backend</p>'
+      });
+      res.json({ ok: true, message: 'Email envoyé' });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── Métriques cache + stats détaillées ─────────────────────────────────
   app.get('/api/health/cache', (req, res) => {
     const now = Date.now();

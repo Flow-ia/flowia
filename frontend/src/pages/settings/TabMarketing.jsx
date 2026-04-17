@@ -746,11 +746,11 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                       {preview.sms && (
                         <>
                           <p style={{ margin:'3px 0', color:theme.text }}><strong>{preview.sms.count} clients</strong> recevront un SMS</p>
-                          <p style={{ margin:'3px 0', color:theme.text }}>Cout : <strong>{preview.sms.cost?.toFixed(2)} EUR</strong></p>
+                          <p style={{ margin:'3px 0', color:theme.text }}>Cout : <strong>{parseFloat(preview.sms.cost || 0).toFixed(2)} EUR</strong></p>
                           {preview.sms.sufficient
-                            ? <p style={{ margin:'3px 0', color:'#10b981', fontWeight:700 }}>Solde OK ({preview.sms.balance?.toFixed(2)} EUR)</p>
+                            ? <p style={{ margin:'3px 0', color:'#10b981', fontWeight:700 }}>Solde OK ({parseFloat(preview.sms.balance || 0).toFixed(2)} EUR)</p>
                             : <p style={{ margin:'3px 0', color:'#ef4444', fontWeight:700 }}>
-                                Il vous manque {(preview.sms.cost - preview.sms.balance).toFixed(2)} EUR
+                                Il vous manque {parseFloat((preview.sms.cost || 0) - (preview.sms.balance || 0)).toFixed(2)} EUR
                                 <button onClick={() => window.location.href='/settings/marketing?recharge=need'}
                                   style={{ marginLeft:8, padding:'3px 10px', borderRadius:6, fontSize:11, fontWeight:700,
                                     background:'rgba(99,102,241,0.12)', color:'#6366f1', border:'none', cursor:'pointer' }}>
@@ -1305,7 +1305,7 @@ function TabSMS({ showToast, theme }) {
       <div style={{ background:theme.card, borderRadius:16, border:`1px solid ${theme.border}`, padding:20 }}>
         <p style={{ fontSize:12, fontWeight:800, color:theme.muted, marginBottom:16, textTransform:'uppercase', letterSpacing:'0.05em' }}>Solde SMS</p>
         <div style={{ textAlign:'center', marginBottom:20 }}>
-          <span style={{ fontSize:40, fontWeight:900, color:theme.text }}>{(balance?.balance || 0).toFixed(2)} EUR</span>
+          <span style={{ fontSize:40, fontWeight:900, color:theme.text }}>{parseFloat(balance?.balance || 0).toFixed(2)} EUR</span>
           <p style={{ fontSize:14, color:theme.muted, margin:'6px 0 0' }}>Environ {balance?.estimated_sms || 0} SMS disponibles</p>
         </div>
 
@@ -1336,7 +1336,7 @@ function TabSMS({ showToast, theme }) {
               fontWeight: 800, fontSize: 14, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
             }}>
-            {paying ? 'Redirection...' : `Payer ${amount ? parseFloat(amount).toFixed(2) + 'EUR' : ''} avec Stripe`}
+            {paying ? 'Redirection...' : `Payer ${amount ? parseFloat(amount || 0).toFixed(2) + 'EUR' : ''} avec Stripe`}
           </button>
         </div>
       </div>

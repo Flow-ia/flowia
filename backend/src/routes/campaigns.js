@@ -20,7 +20,7 @@ const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT; // 300/jour total
 async function getTopClients(userId, limit, needPhone, needEmail) {
   let where = `WHERE ca.user_id = $1`;
   if (needPhone) where += ` AND ca.phone IS NOT NULL AND ca.phone != ''`;
-  if (needEmail) where += ` AND ca.email IS NOT NULL AND ca.email != ''`;
+  if (needEmail) where += ` AND ca.email IS NOT NULL AND ca.email != '' AND ca.email LIKE '%@%'`;
 
   const { rows } = await pool.query(`
     SELECT ca.id, ca.email, ca.phone, ca.first_name, ca.last_name,
@@ -133,12 +133,14 @@ router.post('/send', async (req, res) => {
     const smsClients = needSMS ? await getTopClients(userId, limit, true, false) : [];
     const emailClients = needEmail ? await getTopClients(userId, limit, false, true) : [];
 
-    console.log('[CAMPAIGN SEND] Start:', {
+    console.log('[CAMPAIGN SEND] Start', {
       userId, channel, target_type,
       emailClients: emailClients?.length,
       smsClients: smsClients?.length,
       message_email: message_email?.substring(0, 50),
-      promo_code
+      promo_code,
+      brevoKey: process.env.BREVO_API_KEY ? 'OK' : 'MANQUANTE',
+      senderEmail: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'non défini'
     });
 
     if (needSMS && !smsClients.length) return res.status(400).json({ error: 'Aucun client avec numero de telephone valide.' });
