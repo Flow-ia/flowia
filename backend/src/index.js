@@ -275,20 +275,25 @@ function startServer() {
     }
   }
 
-  // ── Traitement file d'attente SMS (toutes les heures, 9h-19h) ──────────────
-  // Les envois sont planifiés par campagne IA avec scheduled_date par phase.
-  // Le coût a déjà été débité du sms_balance lors de la planification.
+  // ── Traitement file d'attente SMS (toutes les 30 min, 9h-20h) ──────────────
+  // Les envois IA sont planifiés avec scheduled_at précis (date + heure).
+  // On envoie uniquement les SMS dont l'heure planifiée est passée.
   const { sendSMS } = require('./utils/messenger');
   async function processSmsQueue() {
     const hour = new Date().getHours();
-    if (hour < 9 || hour > 19) return;
+    if (hour < 9 || hour > 20) return;
     try {
+      // scheduled_at (timestamp précis) si défini, sinon fallback scheduled_date
       const { rows } = await dbPool.query(`
         SELECT * FROM campaign_queue
-        WHERE status='pending' AND scheduled_date <= CURRENT_DATE
+        WHERE status='pending'
           AND channel = 'sms'
           AND client_phone IS NOT NULL AND client_phone != ''
-        ORDER BY created_at ASC
+          AND (
+            (scheduled_at IS NOT NULL AND scheduled_at <= NOW()) OR
+            (scheduled_at IS NULL AND scheduled_date <= CURRENT_DATE)
+          )
+        ORDER BY COALESCE(scheduled_at, scheduled_date::timestamptz) ASC
         LIMIT 50
         FOR UPDATE SKIP LOCKED
       `);
@@ -305,12 +310,25 @@ function startServer() {
                VALUES ($1,$2,$3,'sms',$4,'sent')`,
               [item.user_id, item.campaign_id, item.client_phone, require('./utils/messenger').SMS_PRICE || 0.045]
             );
+            // Traçabilité IA — marque le code comme sent
+            if (item.ai_code_id) {
+              await dbPool.query(
+                `UPDATE ai_campaign_codes SET sent_at=NOW(), status='sent' WHERE id=$1`,
+                [item.ai_code_id]
+              ).catch(() => {});
+            }
           } else {
             failed++;
             await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`,
               [item.id, r.reason || 'Echec envoi']);
+            if (item.ai_code_id) {
+              await dbPool.query(
+                `UPDATE ai_campaign_codes SET status='failed' WHERE id=$1`,
+                [item.ai_code_id]
+              ).catch(() => {});
+            }
           }
-          await cronSleep(200); // respect rate Brevo
+          await cronSleep(200);
         } catch (e) {
           failed++;
           await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`, [item.id, e.message]);

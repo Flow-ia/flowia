@@ -690,6 +690,15 @@ router.post('/:slug/book', async (req, res) => {
           [userId, promoCodeId, client_email||null, client_name||null,
            appt.id, discountAmt, finalPrice]
         );
+        // Traçabilité IA — marquer le code comme utilisé (conversion)
+        await pool.query(
+          `UPDATE ai_campaign_codes
+             SET used_at = NOW(),
+                 used_appointment_id = $1,
+                 status = 'used'
+           WHERE promo_code_id = $2 AND used_at IS NULL`,
+          [appt.id, promoCodeId]
+        ).catch(() => {});
       } catch(promoErr) { console.error('[PROMO USE ERR]', promoErr.message); }
     }
 

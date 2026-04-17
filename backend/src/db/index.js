@@ -855,6 +855,50 @@ async function initDB() {
   // Politique d'annulation côté client (en heures avant RDV)
   // 0 = à tout moment · 1 = 1h avant · 2 = 2h · 6 · 24 · 48 avant RDV
   await runMigration(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS cancellation_policy_hours INT DEFAULT 2`);
+
+  // ── Marketing IA : envoi prédictif avec codes personnels ──────────────────
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS ai_campaigns (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      budget NUMERIC(10,2) NOT NULL,
+      duration_days INT NOT NULL,
+      status VARCHAR(20) DEFAULT 'scheduled',
+      phases JSONB,
+      estimates JSONB,
+      total_sms INT DEFAULT 0,
+      total_cost NUMERIC(10,2) DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ai_campaigns_user ON ai_campaigns(user_id, created_at DESC)`);
+
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS ai_campaign_codes (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ai_campaign_id UUID REFERENCES ai_campaigns(id) ON DELETE CASCADE,
+      client_id UUID,
+      promo_code_id UUID,
+      personal_code VARCHAR(30) UNIQUE,
+      segment VARCHAR(20),
+      discount_percent INT,
+      scheduled_at TIMESTAMPTZ,
+      sent_at TIMESTAMPTZ,
+      used_at TIMESTAMPTZ,
+      used_appointment_id UUID,
+      status VARCHAR(20) DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ai_codes_campaign ON ai_campaign_codes(ai_campaign_id)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ai_codes_promo ON ai_campaign_codes(promo_code_id)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ai_codes_status ON ai_campaign_codes(status, scheduled_at)`);
+
+  // Ajouter scheduled_at à campaign_queue pour scheduling précis à l'heure
+  await runMigration(`ALTER TABLE campaign_queue ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE campaign_queue ADD COLUMN IF NOT EXISTS ai_code_id UUID`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_scheduled_at ON campaign_queue(status, channel, scheduled_at)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_channel ON campaign_queue(status, channel, scheduled_date)`);
 
   await runMigration(`

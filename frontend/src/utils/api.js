@@ -370,8 +370,13 @@ export const campaignsApi = {
   getCampaignHistory: ()  => request('/campaigns/history'),
   getAutoPlan:        ({ budget, duration_days }) =>
     request(`/campaigns/auto-plan?${new URLSearchParams({ budget, duration_days })}`),
-  sendAutoCampaign:   ({ budget, duration_days }) =>
-    request('/campaigns/auto-send', { method:'POST', body: JSON.stringify({ budget, duration_days }) }),
+  sendAutoCampaign:   ({ budget, duration_days, discounts }) =>
+    request('/campaigns/auto-send',
+      { method:'POST', body: JSON.stringify({ budget, duration_days, discounts }) }),
+  recalculateAutoPlan: ({ budget, duration_days, discounts }) =>
+    request('/campaigns/auto-recalculate',
+      { method:'POST', body: JSON.stringify({ budget, duration_days, discounts }) }),
+  getAiHistory:       () => request('/campaigns/ai-history'),
 };
 
 // ── Paiements SMS ────────────────────────────────────────────────────────────

@@ -63,10 +63,45 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [launched, setLaunched] = useState(null);
+  const [discounts, setDiscounts] = useState({ risque: 15, perdu: 25, fidele: 10 });
+  const [recalcing, setRecalcing] = useState(false);
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
     paymentsApi.getSMSBalance().then(b => setBalance(parseFloat(b.balance))).catch(() => {});
+    campaignsApi.getAiHistory().then(setHistory).catch(() => {});
   }, []);
+
+  // Recalculer le plan (estimates) quand les % changent
+  useEffect(() => {
+    if (step !== 2 || !plan) return;
+    let cancelled = false;
+    setRecalcing(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await campaignsApi.recalculateAutoPlan({
+          budget, duration_days: duration, discounts,
+        });
+        if (!cancelled) {
+          setPlan(prev => prev ? {
+            ...prev,
+            total_sms: r.total_sms,
+            estimated_cost: r.estimated_cost,
+            estimated_clients_min: r.estimated_clients_min,
+            estimated_clients_max: r.estimated_clients_max,
+            estimated_revenue_min: r.estimated_revenue_min,
+            estimated_revenue_max: r.estimated_revenue_max,
+            balance_sufficient: r.balance_sufficient,
+            phases: prev.phases.map((p, i) => {
+              const u = r.phases.find(x => x.segment === p.segment);
+              return u ? { ...p, sms_count: u.sms_count, discount: u.discount } : p;
+            }),
+          } : prev);
+        }
+      } catch {} finally { if (!cancelled) setRecalcing(false); }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [discounts.risque, discounts.perdu, discounts.fidele, budget, duration]);
 
   const pricePerSms = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045')
                     * (1 + parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30') / 100);
@@ -84,6 +119,8 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
     try {
       const p = await campaignsApi.getAutoPlan({ budget, duration_days: duration });
       setPlan(p);
+      // Initialise discounts avec les % adaptatifs calculés par le backend
+      if (p.discounts) setDiscounts({ ...p.discounts });
       setStep(2);
     } catch(e) {
       showToast(e.message || 'Erreur génération plan', 'error');
@@ -93,15 +130,36 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
   const launch = async () => {
     setLoading(true);
     try {
-      const r = await campaignsApi.sendAutoCampaign({ budget, duration_days: duration });
+      const r = await campaignsApi.sendAutoCampaign({ budget, duration_days: duration, discounts });
       setLaunched(r);
       setStep(3);
-      // Rafraichir solde
       paymentsApi.getSMSBalance().then(b => setBalance(parseFloat(b.balance))).catch(() => {});
+      campaignsApi.getAiHistory().then(setHistory).catch(() => {});
     } catch(e) {
       showToast(e.message || 'Erreur lancement', 'error');
     } finally { setLoading(false); }
   };
+
+  // Aperçu SMS côté client (miroir de buildPersonalizedSms)
+  function previewSmsFor(phase) {
+    const firstClient = phase.clients?.[0];
+    const fn = firstClient?.first_name || 'Client';
+    const code = firstClient?.personal_code || `PRENOM${phase.discount}`;
+    const m = plan?.merchant || {};
+    const validity = phase.validity_days || (duration + 7);
+    const parts = [
+      `${fn}, -${phase.discount}% avec le code ${code}`,
+      `Valable ${validity}j sur place & en ligne`,
+    ];
+    if (m.business_name) parts.push(m.business_name);
+    if (m.phone)         parts.push(`Tel: ${m.phone}`);
+    if (m.address)       parts.push(m.address);
+    if (m.site_url)      parts.push(m.site_url);
+    let msg = parts.join('. ');
+    if (msg.length > 160 && m.address) msg = parts.filter(p => p !== m.address).join('. ');
+    if (msg.length > 160) msg = msg.slice(0, 157) + '...';
+    return msg;
+  }
 
   const reset = () => { setPlan(null); setLaunched(null); setStep(1); };
 
@@ -164,7 +222,7 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
           panier moyen : {plan.avg_price}€ (calculé sur vos transactions)
         </p>
 
-        {/* Phases */}
+        {/* Phases — discount éditable 5-35 par pas de 5 */}
         {plan.phases.map(p => (
           <div key={p.segment} style={{ padding:'14px 16px', borderRadius:14, background:theme.card,
             border:`1px solid ${theme.border}`, opacity: p.sms_count===0 ? 0.55 : 1 }}>
@@ -176,21 +234,32 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
                 J{p.start_day}-J{p.end_day}
               </span>
             </div>
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+            <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:10 }}>
               <span style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
                 background:'rgba(99,102,241,0.12)', color:'#6366f1' }}>
                 {p.sms_count} SMS
               </span>
-              <span style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
-                background:'rgba(239,68,68,0.12)', color:'#ef4444' }}>
-                -{p.discount}%
-              </span>
+              <label style={{ fontSize:11, fontWeight:700, color:theme.muted, marginLeft:4 }}>Remise :</label>
+              <select value={discounts[p.segment] || p.discount}
+                onChange={e => setDiscounts(d => ({ ...d, [p.segment]: parseInt(e.target.value) }))}
+                style={{ padding:'4px 8px', borderRadius:6, border:`1px solid ${theme.border}`,
+                  background: isDark ? 'rgba(255,255,255,0.06)' : '#fff', color:theme.text,
+                  fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                {[5,10,15,20,25,30,35].map(v => <option key={v} value={v}>-{v}%</option>)}
+              </select>
             </div>
-            <p style={{ margin:0, fontSize:12, color:theme.muted, fontStyle:'italic',
-              padding:'8px 10px', borderRadius:8, background:isDark?'rgba(255,255,255,0.04)':'#f8fafc',
-              border:`1px dashed ${theme.border}` }}>
-              "{p.template}"
-            </p>
+            {p.sms_count > 0 && (
+              <div style={{ padding:'10px 12px', borderRadius:8,
+                background:isDark?'rgba(255,255,255,0.04)':'#f8fafc',
+                border:`1px dashed ${theme.border}` }}>
+                <p style={{ margin:'0 0 4px', fontSize:10, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                  Aperçu SMS ({previewSmsFor(p).length}/160)
+                </p>
+                <p style={{ margin:0, fontSize:12, color:theme.text, whiteSpace:'pre-wrap', lineHeight:1.45 }}>
+                  {previewSmsFor(p)}
+                </p>
+              </div>
+            )}
           </div>
         ))}
 
@@ -306,6 +375,72 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
           boxShadow: (insufficient || loading) ? 'none' : '0 6px 18px rgba(99,102,241,0.4)' }}>
         {loading ? 'Génération...' : 'Générer le plan'}
       </button>
+
+      {/* ─── Historique IA ─────────────────────────────────────────────── */}
+      {history.length > 0 && (
+        <div style={{ marginTop:28 }}>
+          <p style={{ margin:'0 0 10px', fontSize:12, fontWeight:800, color:theme.muted,
+            textTransform:'uppercase', letterSpacing:'0.06em' }}>
+            Historique des campagnes IA
+          </p>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {history.map(c => <HistoryItem key={c.id} c={c} theme={theme} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HistoryItem({ c, theme }) {
+  const isDark = theme.mode === 'dark';
+  const convPct = Math.round((c.conversion_rate || 0) * 100);
+  const date = new Date(c.created_at).toLocaleDateString('fr-FR', {
+    day:'2-digit', month:'short', year:'numeric'
+  });
+  const isGood = convPct >= 10 || c.roi >= 2;
+  return (
+    <div style={{ padding:'12px 14px', borderRadius:12, background:theme.card, border:`1px solid ${theme.border}` }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <div>
+          <p style={{ margin:0, fontSize:13, fontWeight:800, color:theme.text }}>
+            Campagne {date}
+          </p>
+          <p style={{ margin:'2px 0 0', fontSize:11, color:theme.muted }}>
+            {c.total_sms} SMS · {c.duration_days}j · {c.total_cost.toFixed(2)}€
+          </p>
+        </div>
+        <span style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
+          background: c.status === 'completed' ? 'rgba(16,185,129,0.12)' : 'rgba(99,102,241,0.12)',
+          color: c.status === 'completed' ? '#10b981' : '#6366f1' }}>
+          {c.status === 'completed' ? 'Terminée' : 'En cours'}
+        </span>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
+        <MiniKpi theme={theme} label="Envoyés" value={c.codes_sent} accent="#6366f1" />
+        <MiniKpi theme={theme} label="Utilisés" value={c.codes_used} accent={isGood ? '#10b981' : theme.text} />
+        <MiniKpi theme={theme} label="Taux" value={`${convPct}%`} accent={convPct >= 10 ? '#10b981' : theme.text} />
+      </div>
+      {c.real_revenue > 0 && (
+        <div style={{ marginTop:10, padding:'8px 10px', borderRadius:8,
+          background: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
+          border:'1px solid rgba(16,185,129,0.25)',
+          display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:12, color:theme.muted }}>CA réel généré</span>
+          <span style={{ fontSize:14, fontWeight:900, color:'#10b981', fontFamily:'monospace' }}>
+            +{c.real_revenue.toFixed(2)}€ {c.roi > 0 && <span style={{ fontSize:11, opacity:0.8 }}>(ROI x{c.roi})</span>}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniKpi({ theme, label, value, accent }) {
+  return (
+    <div style={{ padding:'6px 8px', borderRadius:8, background:'rgba(0,0,0,0.03)', textAlign:'center' }}>
+      <p style={{ margin:0, fontSize:9, fontWeight:700, color:theme.muted, textTransform:'uppercase' }}>{label}</p>
+      <p style={{ margin:'2px 0 0', fontSize:13, fontWeight:900, color: accent || theme.text }}>{value}</p>
     </div>
   );
 }

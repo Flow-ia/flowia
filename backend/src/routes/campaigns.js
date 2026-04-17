@@ -140,12 +140,187 @@ async function getClientSegments(userId, excludeRecentSms = true) {
   return bySegment;
 }
 
-// ── Plan de campagne automatique par budget/durée ────────────────────────────
-// Ciblage: 40% risque, 35% perdu, 25% fidele (les 3 segments qui ont besoin de relance)
-// 3 phases selon la durée: 1/3 risque, 1/3 perdu, 1/3 fidele
-async function generateCampaignPlan(userId, budget, durationDays) {
+// ── Récupération des segments AVEC habitudes prédictives en une seule requête ─
+// Retourne pour chaque client:
+//   pref_dow   : jour de la semaine préféré (MODE des RDV passés, 0=dim..6=sam)
+//   pref_slot  : 1=matin (9-12h), 2=après-midi (12-17h), 3=soir (17-20h)
+//   visit_count: total RDV passés (pour juger si pref fiable)
+//   last_visit : pour le calcul du score d'inactivité
+async function getClientSegmentsWithHabits(userId) {
+  const { rows } = await pool.query(`
+    WITH avg_spent AS (
+      SELECT COALESCE(AVG(total_spent), 0) AS avg_val
+      FROM client_accounts WHERE user_id = $1
+    ),
+    habits AS (
+      SELECT
+        ca.id AS client_id,
+        MODE() WITHIN GROUP (ORDER BY EXTRACT(DOW FROM a.date))::int AS pref_dow,
+        MODE() WITHIN GROUP (ORDER BY
+          CASE
+            WHEN EXTRACT(HOUR FROM a.start_time) < 12 THEN 1
+            WHEN EXTRACT(HOUR FROM a.start_time) < 17 THEN 2
+            ELSE 3
+          END
+        )::int AS pref_slot,
+        COUNT(*) AS visit_count,
+        MAX(a.date) AS last_visit
+      FROM client_accounts ca
+      LEFT JOIN appointments a ON a.user_id = ca.user_id
+        AND LOWER(COALESCE(a.client_email,'')) = LOWER(COALESCE(ca.email,''))
+        AND a.status IN ('completed','confirmed')
+      WHERE ca.user_id = $1
+      GROUP BY ca.id
+    )
+    SELECT
+      ca.id, ca.first_name, ca.last_name, ca.phone, ca.email,
+      COALESCE(ca.total_visits, 0)::int    AS visits,
+      COALESCE(ca.total_spent, 0)::float   AS spent,
+      h.pref_dow, h.pref_slot, h.visit_count, h.last_visit,
+      CASE
+        WHEN h.last_visit IS NULL OR h.last_visit < (CURRENT_DATE - INTERVAL '90 days') THEN 'perdu'
+        WHEN h.last_visit < (CURRENT_DATE - INTERVAL '30 days') THEN 'risque'
+        WHEN COALESCE(ca.total_visits,0) >= 5
+             AND COALESCE(ca.total_spent,0) > (SELECT avg_val*2 FROM avg_spent) THEN 'champion'
+        WHEN COALESCE(ca.total_visits,0) >= 3 THEN 'fidele'
+        ELSE 'prometteur'
+      END AS segment
+    FROM client_accounts ca
+    LEFT JOIN habits h ON h.client_id = ca.id
+    WHERE ca.user_id = $1
+      AND ca.phone IS NOT NULL AND ca.phone != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM message_log ml
+        WHERE ml.user_id = ca.user_id AND ml.phone = ca.phone
+          AND ml.channel = 'sms' AND ml.sent_at > NOW() - INTERVAL '7 days'
+      )
+    ORDER BY COALESCE(ca.total_spent,0) DESC, COALESCE(ca.total_visits,0) DESC
+  `, [userId]);
+
+  const bySegment = { champion: [], fidele: [], prometteur: [], risque: [], perdu: [] };
+  rows.forEach(c => { if (bySegment[c.segment]) bySegment[c.segment].push(c); });
+  return bySegment;
+}
+
+// ── Pourcentages adaptatifs (multiples de 5 entre 5-35) ──────────────────────
+// Base: risque=15, perdu=25, fidele=10
+// Bonus: +5 par 30j d'inactivité supplémentaires au-delà du seuil du segment
+// Historique: si campagnes IA précédentes avec conversion >10%, on s'inspire
+async function computeAdaptivePercentages(userId) {
+  const base = { risque: 15, perdu: 25, fidele: 10 };
+  const roundTo5 = (n) => Math.max(5, Math.min(35, Math.round(n / 5) * 5));
+
+  // 1. Ajustement selon l'ancienneté moyenne d'inactivité (depuis appointments)
+  const { rows: ages } = await pool.query(`
+    SELECT
+      CASE
+        WHEN stats.last_visit IS NULL OR stats.last_visit < (CURRENT_DATE - INTERVAL '90 days') THEN 'perdu'
+        WHEN stats.last_visit < (CURRENT_DATE - INTERVAL '30 days') THEN 'risque'
+        ELSE 'fidele'
+      END AS segment,
+      AVG(EXTRACT(DAY FROM NOW() - COALESCE(stats.last_visit, NOW() - INTERVAL '365 days')))::float AS avg_age
+    FROM client_accounts ca
+    LEFT JOIN LATERAL (
+      SELECT MAX(a.date) AS last_visit
+      FROM appointments a
+      WHERE a.user_id = ca.user_id
+        AND LOWER(COALESCE(a.client_email,'')) = LOWER(COALESCE(ca.email,''))
+    ) stats ON TRUE
+    WHERE ca.user_id = $1 AND ca.phone IS NOT NULL AND ca.phone != ''
+    GROUP BY 1
+  `, [userId]).catch(() => ({ rows: [] }));
+
+  const adjusted = { ...base };
+  for (const r of ages) {
+    if (r.segment === 'perdu' && r.avg_age > 180) adjusted.perdu = Math.min(35, base.perdu + 5);
+    if (r.segment === 'risque' && r.avg_age > 60) adjusted.risque = Math.min(25, base.risque + 5);
+  }
+
+  // 2. Historique: meilleur taux de conversion par segment (si campagnes passées)
+  try {
+    const { rows: hist } = await pool.query(`
+      SELECT segment, discount_percent,
+             COUNT(*) AS total,
+             COUNT(used_at) AS used,
+             (COUNT(used_at)::float / NULLIF(COUNT(*), 0)) AS conv_rate
+      FROM ai_campaign_codes acc
+      JOIN ai_campaigns ac ON ac.id = acc.ai_campaign_id
+      WHERE ac.user_id = $1 AND acc.sent_at IS NOT NULL
+      GROUP BY segment, discount_percent
+      HAVING COUNT(*) >= 5 AND (COUNT(used_at)::float / NULLIF(COUNT(*), 0)) > 0.10
+      ORDER BY segment, conv_rate DESC
+    `, [userId]);
+    const bestBySegment = {};
+    for (const r of hist) {
+      if (!bestBySegment[r.segment]) bestBySegment[r.segment] = parseInt(r.discount_percent);
+    }
+    for (const seg of ['risque','perdu','fidele']) {
+      if (bestBySegment[seg]) adjusted[seg] = bestBySegment[seg];
+    }
+  } catch {}
+
+  return {
+    risque: roundTo5(adjusted.risque),
+    perdu:  roundTo5(adjusted.perdu),
+    fidele: roundTo5(adjusted.fidele),
+  };
+}
+
+// ── Scheduling prédictif: calcule scheduled_at pour un client ───────────────
+// Se base sur pref_dow et pref_slot extraits de ses RDV passés.
+// Règles: jamais dimanche (dow=0), jamais avant 9h ni après 20h.
+// Fallback: pas assez de données → mardi ou jeudi à 11h.
+function computeScheduledAt(client, phaseStartDay, phaseEndDay, nowRef) {
+  const base = nowRef ? new Date(nowRef) : new Date();
+  const hasData = (parseInt(client.visit_count) || 0) >= 2;
+  let prefDow = hasData && client.pref_dow != null ? parseInt(client.pref_dow) : null;
+  if (prefDow === 0) prefDow = null;
+
+  const slot = hasData && client.pref_slot != null ? parseInt(client.pref_slot) : 2;
+  const hour = slot === 1 ? 11 : slot === 3 ? 18 : 14;
+  const minute = slot === 2 ? 30 : 0;
+
+  const fallbackDows = [2, 4]; // mardi, jeudi
+  const dowsToTry = prefDow != null ? [prefDow, ...fallbackDows] : fallbackDows;
+
+  for (let d = phaseStartDay; d <= phaseEndDay; d++) {
+    const date = new Date(base);
+    date.setDate(date.getDate() + d);
+    const dow = date.getDay();
+    if (dow === 0) continue;
+    if (dowsToTry.includes(dow)) {
+      date.setHours(hour, minute, 0, 0);
+      return date;
+    }
+  }
+  // Fallback: premier jour non-dimanche de la phase
+  for (let d = phaseStartDay; d <= phaseEndDay; d++) {
+    const date = new Date(base);
+    date.setDate(date.getDate() + d);
+    if (date.getDay() !== 0) {
+      date.setHours(11, 0, 0, 0);
+      return date;
+    }
+  }
+  const fallback = new Date(base);
+  fallback.setDate(fallback.getDate() + phaseStartDay);
+  fallback.setHours(11, 0, 0, 0);
+  return fallback;
+}
+
+// ── Code personnel unique: PRENOM + 4 chars random ──────────────────────────
+function generatePersonalCode(firstName, discount) {
+  const prefix = (firstName || 'CLI').replace(/[^A-Za-z]/g, '').slice(0,3).toUpperCase().padEnd(3, 'X');
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase().replace(/[OIL01]/g, 'X');
+  return `${prefix}${discount}${rand}`;
+}
+
+// ── Plan de campagne IA — prédictif + adaptatif + codes personnels ──────────
+// Tout calculé en une passe, aucune écriture DB.
+async function generateCampaignPlan(userId, budget, durationDays, customDiscounts = null) {
   const maxSmsByBudget = Math.floor(budget / SMS_PRICE);
 
+  // Panier moyen réel
   const { rows: avgR } = await pool.query(
     `SELECT AVG(amount)::float AS avg_price
      FROM transactions WHERE user_id=$1 AND type='revenue' AND amount > 0`,
@@ -153,38 +328,51 @@ async function generateCampaignPlan(userId, budget, durationDays) {
   );
   const avgPrice = Math.round(parseFloat(avgR[0]?.avg_price) || 29);
 
+  // Solde
   const { rows: balR } = await pool.query(
     `SELECT sms_balance FROM users WHERE id=$1`, [userId]
   );
   const balance = parseFloat(balR[0]?.sms_balance || 0);
 
-  const segments = await getClientSegments(userId, true);
+  // Coordonnées merchant pour personnalisation SMS
+  const { rows: mRows } = await pool.query(
+    `SELECT u.business_name, u.address, u.phone, bs.slug
+     FROM users u LEFT JOIN booking_settings bs ON bs.user_id = u.id
+     WHERE u.id=$1`, [userId]
+  );
+  const merchant = mRows[0] || {};
+
+  // Segments avec habitudes prédictives
+  const segments = await getClientSegmentsWithHabits(userId);
+
+  // Pourcentages adaptatifs (ou custom si fournis par le merchant)
+  const adaptive = await computeAdaptivePercentages(userId);
+  const DISCOUNTS = {
+    risque: customDiscounts?.risque ?? adaptive.risque,
+    perdu:  customDiscounts?.perdu  ?? adaptive.perdu,
+    fidele: customDiscounts?.fidele ?? adaptive.fidele,
+  };
 
   const ALLOC = { risque: 0.40, perdu: 0.35, fidele: 0.25 };
-  const DISCOUNTS = { risque: 15, perdu: 25, fidele: 10 };
-  const TEMPLATES = {
-    risque: '[prenom], ca fait un moment ! -[reduction]% sur ta prochaine coupe. Valable [duree] jours.',
-    perdu:  '[prenom], tu nous manques ! -[reduction]% exceptionnel sur ta prochaine coupe.',
-    fidele: '[prenom], merci pour ta fidelite ! -[reduction]% pour toi ce mois-ci.',
-  };
   const META = {
     risque: { label: "Clients à risque", emoji: '⚠️' },
     perdu:  { label: 'Clients perdus',    emoji: '😴' },
     fidele: { label: 'Clients fidèles',   emoji: '⭐' },
   };
 
-  // Répartition temporelle en 3 phases de ~ même durée
+  // 3 phases sur la durée
   const d = Math.max(3, Math.min(30, parseInt(durationDays) || 15));
   const third = Math.max(1, Math.round(d / 3));
   const PHASE_WINDOWS = {
-    risque: { start_day: 1,            end_day: third },
-    perdu:  { start_day: third + 1,    end_day: third * 2 },
-    fidele: { start_day: third * 2 + 1,end_day: d },
+    risque: { start_day: 1,             end_day: third },
+    perdu:  { start_day: third + 1,     end_day: third * 2 },
+    fidele: { start_day: third * 2 + 1, end_day: d },
   };
 
   const order = ['risque', 'perdu', 'fidele'];
   const phases = [];
   let totalSms = 0;
+  const nowRef = new Date();
 
   for (const segId of order) {
     const wantedFromBudget = Math.floor(maxSmsByBudget * ALLOC[segId]);
@@ -194,9 +382,25 @@ async function generateCampaignPlan(userId, budget, durationDays) {
     totalSms += allocation;
 
     const win = PHASE_WINDOWS[segId];
-    const tmpl = TEMPLATES[segId]
-      .replace('[reduction]', DISCOUNTS[segId])
-      .replace('[duree]', '30');
+    const discount = DISCOUNTS[segId];
+    const validityDays = d + 7; // validité = durée campagne + 7 jours tampon
+
+    // Pour chaque client: scheduling prédictif + personal_code preview
+    const clients = clientsInPhase.map(c => {
+      const scheduledAt = computeScheduledAt(c, win.start_day, win.end_day, nowRef);
+      const personalCode = generatePersonalCode(c.first_name, discount);
+      return {
+        id: c.id,
+        first_name: c.first_name,
+        last_name:  c.last_name,
+        phone:      c.phone,
+        pref_dow:   c.pref_dow,
+        pref_slot:  c.pref_slot,
+        visit_count: c.visit_count || 0,
+        scheduled_at: scheduledAt.toISOString(),
+        personal_code: personalCode,
+      };
+    });
 
     phases.push({
       segment: segId,
@@ -205,23 +409,31 @@ async function generateCampaignPlan(userId, budget, durationDays) {
       start_day: win.start_day,
       end_day:   win.end_day,
       sms_count: allocation,
-      discount:  DISCOUNTS[segId],
-      template:  tmpl,
-      clients:   clientsInPhase.map(c => ({
-        id: c.id, first_name: c.first_name, last_name: c.last_name, phone: c.phone,
-      })),
+      discount,
+      validity_days: validityDays,
+      clients,
     });
   }
 
   const estimatedCost = parseFloat((totalSms * SMS_PRICE).toFixed(2));
-  const smsRemaining  = maxSmsByBudget - totalSms;
 
-  const estClientsMin = Math.round(totalSms * 0.08);
-  const estClientsMax = Math.round(totalSms * 0.20);
-  const estRevMin     = Math.round(estClientsMin * avgPrice);
-  const estRevMax     = Math.round(estClientsMax * avgPrice);
+  // Estimation retour pondérée par discount (plus la remise est élevée, plus le retour grimpe)
+  const weightedRate = (discount) => 0.08 + Math.min(0.12, (discount - 10) * 0.006);
+  let estClientsMin = 0, estClientsMax = 0, estRevMin = 0, estRevMax = 0;
+  for (const p of phases) {
+    const r = weightedRate(p.discount);
+    const minR = Math.max(0.05, r - 0.04);
+    const maxR = Math.min(0.35, r + 0.08);
+    const minC = Math.round(p.sms_count * minR);
+    const maxC = Math.round(p.sms_count * maxR);
+    estClientsMin += minC;
+    estClientsMax += maxC;
+    // CA ajusté pour la remise: avgPrice * (1 - discount/100)
+    const netPrice = avgPrice * (1 - p.discount / 100);
+    estRevMin += Math.round(minC * netPrice);
+    estRevMax += Math.round(maxC * netPrice);
+  }
 
-  // Totaux segments globaux (affichage UI)
   const segmentTotals = {
     champion:   segments.champion.length,
     fidele:     segments.fidele.length,
@@ -236,8 +448,10 @@ async function generateCampaignPlan(userId, budget, durationDays) {
     max_sms_by_budget: maxSmsByBudget,
     total_sms: totalSms,
     estimated_cost: estimatedCost,
-    sms_remaining: smsRemaining,
+    sms_remaining: maxSmsByBudget - totalSms,
     phases,
+    discounts: DISCOUNTS,
+    adaptive_discounts: adaptive,
     estimated_clients_min: estClientsMin,
     estimated_clients_max: estClientsMax,
     estimated_revenue_min: estRevMin,
@@ -246,7 +460,53 @@ async function generateCampaignPlan(userId, budget, durationDays) {
     balance,
     balance_sufficient: balance >= estimatedCost,
     segment_totals: segmentTotals,
+    merchant: {
+      business_name: merchant.business_name || null,
+      address:       merchant.address || null,
+      phone:         merchant.phone || null,
+      slug:          merchant.slug || null,
+      site_url:      merchant.slug
+        ? (process.env.FRONTEND_URL || 'https://haircoifflille.fr').split(',')[0].replace(/\/$/, '') + '/book/' + merchant.slug
+        : null,
+    },
   };
+}
+
+// ── Construction du SMS personnalisé (≤160 car) ─────────────────────────────
+function buildPersonalizedSms({ firstName, discount, validityDays, personalCode, merchant }) {
+  const name = (firstName || 'Bonjour').trim();
+  const discountStr = `-${discount}%`;
+  const bn   = merchant?.business_name || '';
+  const tel  = merchant?.phone || '';
+  const site = merchant?.site_url || '';
+  const addr = merchant?.address || '';
+
+  // Construction progressive: priorité code + réduction + téléphone + lien site
+  const parts = [];
+  parts.push(`${name}, ${discountStr} avec le code ${personalCode}`);
+  parts.push(`Valable ${validityDays}j sur place & en ligne`);
+  if (bn)   parts.push(bn);
+  if (tel)  parts.push(`Tel: ${tel}`);
+  if (addr) parts.push(addr);
+  if (site) parts.push(site);
+
+  let msg = parts.join('. ');
+  // Si trop long, on tronque l'adresse en priorité
+  if (msg.length > 160 && addr) {
+    const partsNoAddr = parts.filter(p => p !== addr);
+    msg = partsNoAddr.join('. ');
+  }
+  if (msg.length > 160 && bn) {
+    const partsShort = [
+      `${name}, ${discountStr} code ${personalCode}`,
+      `Valable ${validityDays}j`,
+      tel ? `Tel: ${tel}` : '',
+      site,
+    ].filter(Boolean);
+    msg = partsShort.join('. ');
+  }
+  if (msg.length > 160) msg = msg.slice(0, 157) + '...';
+  return msg;
 }
 
 function getTargetCount(targetType, customCount) {
@@ -532,67 +792,129 @@ router.get('/auto-plan', async (req, res) => {
 });
 
 // ── POST /api/campaigns/auto-send ───────────────────────────────────────────
-// Planifie les envois via campaign_queue (traités par cron SMS) et débite le solde
+// Crée ai_campaigns + N promo_codes + N ai_campaign_codes + N campaign_queue
+// avec scheduled_at précis (heure calculée par client).
 router.post('/auto-send', async (req, res) => {
+  const dbClient = await pool.connect();
   try {
     const userId = req.user.userId;
-    const { budget, duration_days } = req.body;
+    const { budget, duration_days, discounts } = req.body;
 
-    const plan = await generateCampaignPlan(userId, budget, duration_days);
+    const plan = await generateCampaignPlan(userId, budget, duration_days, discounts);
     if (!plan.balance_sufficient)
       return res.status(400).json({ error: 'Solde insuffisant.', code: 'INSUFFICIENT_BALANCE' });
     if (plan.total_sms === 0)
       return res.status(400).json({ error: 'Aucun client ciblable pour le moment (exclusion anti-spam 7 jours).' });
 
-    // Créer la campagne
-    const { rows: camp } = await pool.query(
+    await dbClient.query('BEGIN');
+
+    // 1. Créer l'ai_campaign (header)
+    const { rows: aiCamp } = await dbClient.query(
+      `INSERT INTO ai_campaigns (user_id, budget, duration_days, status, phases, estimates, total_sms, total_cost)
+       VALUES ($1, $2, $3, 'scheduled', $4::jsonb, $5::jsonb, $6, $7)
+       RETURNING id`,
+      [userId, plan.budget, plan.duration_days,
+       JSON.stringify({ phases: plan.phases.map(p => ({
+         segment: p.segment, discount: p.discount, sms_count: p.sms_count,
+         start_day: p.start_day, end_day: p.end_day, validity_days: p.validity_days,
+       })) }),
+       JSON.stringify({
+         clients_min: plan.estimated_clients_min, clients_max: plan.estimated_clients_max,
+         revenue_min: plan.estimated_revenue_min, revenue_max: plan.estimated_revenue_max,
+         avg_price: plan.avg_price,
+       }),
+       plan.total_sms, plan.estimated_cost]
+    );
+    const aiCampaignId = aiCamp[0].id;
+
+    // 2. Campagne historique (pour intégration avec le reste du système)
+    const { rows: camp } = await dbClient.query(
       `INSERT INTO campaigns (user_id, channel, target_type, target_count, status)
        VALUES ($1, 'sms', 'ia_auto', $2, 'scheduled') RETURNING id`,
       [userId, plan.total_sms]
     );
     const campaignId = camp[0].id;
 
-    // Planifier chaque client selon sa phase
-    const today = new Date();
+    // 3. Pour chaque client: promo_code + ai_campaign_code + campaign_queue
     for (const phase of plan.phases) {
       if (!phase.clients.length) continue;
+      const validityDays = phase.validity_days;
+
       for (const client of phase.clients) {
-        const firstName = (client.first_name || 'Cher client').trim();
-        const msg = phase.template
-          .replace(/\[prenom\]/gi, firstName)
-          .replace(/\{prenom\}/gi, firstName);
-        const smsMsg = msg.length > 160 ? msg.slice(0, 157) + '...' : msg;
+        // Assurer unicité du code personnel (suffix random réessai si collision)
+        let personalCode = client.personal_code;
+        for (let tries = 0; tries < 5; tries++) {
+          const chk = await dbClient.query(
+            'SELECT 1 FROM promo_codes WHERE user_id=$1 AND code=$2 LIMIT 1',
+            [userId, personalCode]
+          );
+          if (!chk.rowCount) break;
+          personalCode = generatePersonalCode(client.first_name, phase.discount);
+        }
 
-        // scheduled_date = aujourd'hui + (start_day - 1), décalage aléatoire jusqu'à end_day
-        const spread = Math.max(0, phase.end_day - phase.start_day);
-        const offset = (phase.start_day - 1) + Math.floor(Math.random() * (spread + 1));
-        const sd = new Date(today);
-        sd.setDate(sd.getDate() + offset);
+        // 3a. Créer le promo_code (max_uses=1, validité = phase + buffer)
+        const { rows: promoRow } = await dbClient.query(
+          `INSERT INTO promo_codes
+             (user_id, code, type, value, is_active, valid_from, valid_until,
+              max_uses, target_clients)
+           VALUES ($1, $2, 'percent', $3, TRUE, CURRENT_DATE,
+                   CURRENT_DATE + ($4 || ' days')::interval, 1, 'all')
+           RETURNING id`,
+          [userId, personalCode, phase.discount, validityDays]
+        );
+        const promoCodeId = promoRow[0].id;
 
-        await pool.query(
-          `INSERT INTO campaign_queue (user_id, campaign_id, client_id, client_phone, client_name, message, channel, scheduled_date)
-           VALUES ($1,$2,$3,$4,$5,$6,'sms',$7)`,
+        // 3b. Créer l'ai_campaign_code
+        const { rows: aiCode } = await dbClient.query(
+          `INSERT INTO ai_campaign_codes
+             (ai_campaign_id, client_id, promo_code_id, personal_code,
+              segment, discount_percent, scheduled_at, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+           RETURNING id`,
+          [aiCampaignId, client.id, promoCodeId, personalCode,
+           phase.segment, phase.discount, client.scheduled_at]
+        );
+        const aiCodeId = aiCode[0].id;
+
+        // 3c. Construire le SMS personnalisé
+        const smsMsg = buildPersonalizedSms({
+          firstName: client.first_name,
+          discount: phase.discount,
+          validityDays,
+          personalCode,
+          merchant: plan.merchant,
+        });
+
+        // 3d. Enqueue dans campaign_queue avec scheduled_at précis
+        await dbClient.query(
+          `INSERT INTO campaign_queue
+             (user_id, campaign_id, client_id, client_phone, client_name,
+              message, channel, scheduled_date, scheduled_at, ai_code_id)
+           VALUES ($1,$2,$3,$4,$5,$6,'sms',$7::date,$7::timestamptz,$8)`,
           [userId, campaignId, client.id, client.phone,
            [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Client',
-           smsMsg, sd.toISOString().slice(0,10)]
+           smsMsg, client.scheduled_at, aiCodeId]
         );
       }
     }
 
-    // Débit immédiat du solde (le coût estimé correspond aux envois planifiés)
-    await pool.query(
+    // 4. Débit immédiat du solde
+    await dbClient.query(
       `UPDATE users SET sms_balance = sms_balance - $1 WHERE id=$2`,
       [plan.estimated_cost, userId]
     );
-    await pool.query(
+    await dbClient.query(
       `INSERT INTO sms_transactions (user_id, type, amount, sms_count, description, status)
        VALUES ($1,'debit',$2,$3,$4,'completed')`,
-      [userId, plan.estimated_cost, plan.total_sms, `Campagne IA auto — ${duration_days}j`]
+      [userId, plan.estimated_cost, plan.total_sms, `Campagne IA — ${duration_days}j`]
     );
 
-    console.log(`[AUTO SEND] user=${userId} sms=${plan.total_sms} cost=${plan.estimated_cost}€ duration=${duration_days}j`);
+    await dbClient.query('COMMIT');
+    console.log(`[AI SEND] user=${userId} ai_campaign=${aiCampaignId} sms=${plan.total_sms} cost=${plan.estimated_cost}€`);
+
     res.json({
       ok: true,
+      ai_campaign_id: aiCampaignId,
       campaign_id: campaignId,
       total_sms: plan.total_sms,
       estimated_cost: plan.estimated_cost,
@@ -600,7 +922,84 @@ router.post('/auto-send', async (req, res) => {
       new_balance: plan.balance - plan.estimated_cost,
     });
   } catch(e) {
-    console.error('[AUTO SEND]', e.message);
+    await dbClient.query('ROLLBACK').catch(() => {});
+    console.error('[AI SEND]', e.message);
+    res.status(500).json({ error: e.message });
+  } finally { dbClient.release(); }
+});
+
+// ── POST /api/campaigns/auto-recalculate ────────────────────────────────────
+// Recalcule uniquement les estimations ROI selon les nouveaux % (pas de DB).
+router.post('/auto-recalculate', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { budget, duration_days, discounts } = req.body;
+    const plan = await generateCampaignPlan(userId, budget, duration_days, discounts);
+    res.json({
+      total_sms: plan.total_sms,
+      estimated_cost: plan.estimated_cost,
+      estimated_clients_min: plan.estimated_clients_min,
+      estimated_clients_max: plan.estimated_clients_max,
+      estimated_revenue_min: plan.estimated_revenue_min,
+      estimated_revenue_max: plan.estimated_revenue_max,
+      balance: plan.balance,
+      balance_sufficient: plan.balance_sufficient,
+      phases: plan.phases.map(p => ({
+        segment: p.segment, discount: p.discount, sms_count: p.sms_count,
+      })),
+    });
+  } catch(e) {
+    console.error('[AI RECALC]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/campaigns/ai-history ───────────────────────────────────────────
+// Campagnes IA passées avec taux de conversion réel et CA généré.
+router.get('/ai-history', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(`
+      SELECT
+        ac.id, ac.budget, ac.duration_days, ac.status, ac.total_sms, ac.total_cost,
+        ac.created_at, ac.completed_at, ac.phases, ac.estimates,
+        COUNT(acc.id)::int AS codes_total,
+        COUNT(acc.sent_at)::int AS codes_sent,
+        COUNT(acc.used_at)::int AS codes_used,
+        COALESCE(SUM(CASE WHEN acc.used_at IS NOT NULL THEN appt.total_amount ELSE 0 END), 0)::float AS real_revenue
+      FROM ai_campaigns ac
+      LEFT JOIN ai_campaign_codes acc ON acc.ai_campaign_id = ac.id
+      LEFT JOIN appointments appt ON appt.id = acc.used_appointment_id
+      WHERE ac.user_id = $1
+      GROUP BY ac.id
+      ORDER BY ac.created_at DESC
+      LIMIT 20
+    `, [userId]);
+
+    res.json(rows.map(r => ({
+      id: r.id,
+      budget: parseFloat(r.budget),
+      duration_days: r.duration_days,
+      status: r.status,
+      total_sms: r.total_sms,
+      total_cost: parseFloat(r.total_cost),
+      created_at: r.created_at,
+      completed_at: r.completed_at,
+      phases: r.phases,
+      estimates: r.estimates,
+      codes_total: r.codes_total,
+      codes_sent: r.codes_sent,
+      codes_used: r.codes_used,
+      conversion_rate: r.codes_sent > 0
+        ? parseFloat((r.codes_used / r.codes_sent).toFixed(4))
+        : 0,
+      real_revenue: parseFloat(r.real_revenue.toFixed(2)),
+      roi: r.total_cost > 0
+        ? parseFloat((r.real_revenue / parseFloat(r.total_cost)).toFixed(2))
+        : 0,
+    })));
+  } catch(e) {
+    console.error('[AI HISTORY]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
