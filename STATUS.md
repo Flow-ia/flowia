@@ -1,6 +1,30 @@
 # STATUS — FlowIA
 
-## Derniere session : 2026-04-17 (session 10 — diagnostic log production)
+## Derniere session : 2026-04-17 (session 11 — découpage Settings.jsx)
+
+### Refactor : Settings.jsx découpé en composants séparés par onglet
+- `frontend/src/pages/Settings.jsx` : 6788 → 151 lignes (navigation + routing uniquement)
+- Création de `frontend/src/pages/settings/` avec 13 fichiers + `shared.jsx` :
+  - shared.jsx (Card, KpiBox, SectionLabel, fmt, nd, PAY_INFO, PAY_KEYS, ML)
+  - TabStats.jsx (TabStats + TabStatsCaisse + EmpModal + TabProductStats)
+  - TabHistorique.jsx (TabTransactions)
+  - TabEquipe.jsx (TabEmployeesMain + TeamTab + EmployeePinManager + TabEmployees + TabHorairesEmployes + TabAbsences + TabCommissions + Toggle)
+  - TabCategories.jsx (TabCategories + CaisseCategories + BookingServices + SvcFormModal + CatFormModal)
+  - TabImages.jsx (TabProfil)
+  - TabMarketing.jsx (TabMarketing + TabLoyalty + PromoForm + SendPromoEmailModal + TabPromo + SumupCheckoutModal + TabSMS)
+  - TabClients.jsx
+  - TabNotifs.jsx (TabNotifications)
+  - TabExport.jsx
+  - TabPrevisions.jsx (TabForecastStats)
+  - TabHeures.jsx (TabHeatmap)
+  - TabCompte.jsx (TabAccount)
+- Aucune modification de logique métier. Build vérifié (19.43s).
+- Ajout d'un composant `Toggle` local dans TabEquipe.jsx (corrige une référence non définie déjà présente dans Settings.jsx d'origine).
+- Tailles : Settings.jsx 151 lignes, autres tabs 36-1700 lignes (TabMarketing reste le plus gros à 1700, TabEquipe 1266, TabCategories 987 — leur découpage interne supplémentaire dépasserait le scope de l'onboarding).
+
+---
+
+## Session 10 (2026-04-17 précédente — diagnostic log production)
 
 ### Diagnostic des logs fournis
 Les logs Render montrent :
