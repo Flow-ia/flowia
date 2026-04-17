@@ -822,7 +822,7 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                 console.log('[FRONT PROMO] 🏁 Bilan:', parts);
                 if (parts.length) alert(parts.join(' · '));
               } else {
-                console.log('[FRONT PROMO] ℹ️ Aucune campagne (channel=none)');
+                console.log('[FRONT PROMO] ℹ️ Pas de campagne — channel=' + campaignChannel + ' saved.id=' + saved?.id);
               }
               console.log('======================================================');
               onClose();
@@ -1035,24 +1035,18 @@ function TabPromo({ theme, showToast }) {
   };
 
   const handleSave = async (d) => {
-    const { send_email, ...promoData } = d;
+    console.log('[PARENT handleSave] reçu:', d);
     if (edit) {
-      const u = await promoApi.update(edit.id, {...promoData, is_active:edit.is_active});
+      const u = await promoApi.update(edit.id, {...d, is_active:edit.is_active});
       setPromos(p=>p.map(x=>x.id===edit.id?u:x));
       setEdit(null); showToast('Code modifié ✓');
+      console.log('[PARENT handleSave] ← return updated:', u);
+      return u;
     } else {
-      const created = await promoApi.create(promoData);
+      const created = await promoApi.create(d);
       setPromos(p=>[created,...p]);
-      if (send_email && created?.id) {
-        try {
-          const res = await promoApi.sendEmails(created.id, { client_ids: [] });
-          setCreatedConfirm({ code: created.code, sentCount: res.sent || 0 });
-        } catch(e) {
-          setCreatedConfirm({ code: created.code, sentCount: 0, emailError: e.message });
-        }
-      } else {
-        setCreatedConfirm({ code: created.code, sentCount: null });
-      }
+      console.log('[PARENT handleSave] ← return created:', created);
+      return created;
     }
   };
 
