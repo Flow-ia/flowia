@@ -194,104 +194,53 @@ router.get('/stats', async (req, res) => {
 
 // ── POST /api/promo/:id/send-emails ──────────────────────────────────────────
 router.post('/:id/send-emails', async (req, res) => {
-  console.log('========================================================');
-  console.log('[PROMO SEND] ⚡ ROUTE HIT — /api/promo/:id/send-emails');
-  console.log('[PROMO SEND] 📥 userId=' + req.user.userId + ' promoId=' + req.params.id);
-  console.log('[PROMO SEND] 📥 body=' + JSON.stringify(req.body));
   try {
     const { client_ids } = req.body;
-    console.log('[PROMO SEND] 🔍 Étape 1 — Lookup promo en DB...');
     const { rows: promoRows } = await pool.query(
       'SELECT * FROM promo_codes WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]
     );
-    console.log('[PROMO SEND] 🔍 Promo rows trouvés: ' + promoRows.length);
-    if (!promoRows.length) {
-      console.log('[PROMO SEND] ❌ ABORT — promo introuvable');
-      return res.status(404).json({ error: 'Code promo introuvable.' });
-    }
+    if (!promoRows.length) return res.status(404).json({ error: 'Code promo introuvable.' });
     const promo = promoRows[0];
-    console.log('[PROMO SEND] ✅ Promo trouvé: code=' + promo.code + ' type=' + promo.type + ' value=' + promo.value);
 
-    console.log('[PROMO SEND] 🔍 Étape 2 — Lookup commerçant...');
     const { rows: userRows } = await pool.query(
-      'SELECT business_name, email FROM users WHERE id=$1', [req.user.userId]
+      'SELECT business_name, email, phone, address FROM users WHERE id=$1', [req.user.userId]
     );
-    const businessName = userRows[0]?.business_name || userRows[0]?.email || 'Votre prestataire';
-    console.log('[PROMO SEND] ✅ Commerçant: ' + businessName);
-
-    console.log('[PROMO SEND] 🔍 Étape 3 — Compter TOUS les clients du commerçant (sans filtre)...');
-    const { rows: totalClients } = await pool.query(
-      'SELECT COUNT(*)::int AS cnt FROM client_accounts WHERE user_id=$1', [req.user.userId]);
-    console.log('[PROMO SEND] 📊 Total client_accounts pour ce commerçant: ' + totalClients[0].cnt);
-
-    console.log('[PROMO SEND] 🔍 Étape 4 — Compter clients avec email non vide...');
-    const { rows: emailCnt } = await pool.query(
-      `SELECT COUNT(*)::int AS cnt FROM client_accounts
-       WHERE user_id=$1 AND email IS NOT NULL AND email != ''`, [req.user.userId]);
-    console.log('[PROMO SEND] 📊 Clients avec email: ' + emailCnt[0].cnt);
+    const businessName    = userRows[0]?.business_name || userRows[0]?.email || 'Votre prestataire';
+    const businessEmail   = userRows[0]?.email || null;
+    const businessPhone   = userRows[0]?.phone || null;
+    const businessAddress = userRows[0]?.address || null;
 
     let clientQuery, clientParams;
     if (client_ids && client_ids.length > 0) {
-      console.log('[PROMO SEND] 🎯 Mode: ciblage par client_ids (' + client_ids.length + ' IDs)');
       clientQuery = `SELECT id, first_name, last_name, email FROM client_accounts
                      WHERE user_id=$1 AND id=ANY($2::uuid[]) AND email IS NOT NULL AND email != ''`;
       clientParams = [req.user.userId, client_ids];
     } else {
-      console.log('[PROMO SEND] 🎯 Mode: TOUS les clients avec email');
       clientQuery = `SELECT id, first_name, last_name, email FROM client_accounts
                      WHERE user_id=$1 AND email IS NOT NULL AND email != ''`;
       clientParams = [req.user.userId];
     }
-
-    console.log('[PROMO SEND] 🔍 Étape 5 — Query finale des destinataires...');
     const { rows: clients } = await pool.query(clientQuery, clientParams);
-    console.log('[PROMO SEND] 📧 Destinataires récupérés: ' + clients.length);
-    console.log('[PROMO SEND] 📧 LISTE COMPLETE DES EMAILS:');
-    clients.forEach((c, i) => {
-      console.log('[PROMO SEND]   ' + (i+1) + '. ' + c.email + ' | ' + (c.first_name || '') + ' ' + (c.last_name || '') + ' | id=' + c.id);
-    });
-
-    if (!clients.length) {
-      console.log('[PROMO SEND] ⚠️ AUCUN CLIENT → return early avec sent=0');
-      return res.json({ sent:0, failed:0, total:0, message:'Aucun client avec email.' });
-    }
-
-    console.log('[PROMO SEND] 🔐 Config Brevo:');
-    console.log('[PROMO SEND]   BREVO_API_KEY: ' + (process.env.BREVO_API_KEY ? 'OK (longueur=' + process.env.BREVO_API_KEY.length + ')' : '❌ MANQUANTE'));
-    console.log('[PROMO SEND]   SENDER_EMAIL: ' + (process.env.SENDER_EMAIL || '(non défini)'));
-    console.log('[PROMO SEND]   BREVO_FROM: ' + (process.env.BREVO_FROM || '(non défini)'));
-    console.log('[PROMO SEND]   SENDER_NAME: ' + (process.env.SENDER_NAME || '(non défini)'));
+    if (!clients.length) return res.json({ sent:0, failed:0, total:0, message:'Aucun client avec email.' });
 
     const { sendPromoEmail } = require('../utils/email');
-    console.log('[PROMO SEND] 🚀 Étape 6 — Lancement de la boucle d\'envoi...');
+    console.log(`[PROMO SEND] ${promo.code} → ${clients.length} destinataires`);
     let sent = 0, failed = 0;
-    for (let i = 0; i < clients.length; i++) {
-      const client = clients[i];
+    for (const client of clients) {
       const name = [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Client';
-      console.log('[PROMO SEND] → [' + (i+1) + '/' + clients.length + '] Envoi à ' + client.email + ' (' + name + ')...');
       try {
-        const ok = await sendPromoEmail({ to: client.email, clientName: name, businessName, promo });
-        if (ok) {
-          sent++;
-          console.log('[PROMO SEND] ← ✅ OK pour ' + client.email);
-        } else {
-          failed++;
-          console.log('[PROMO SEND] ← ❌ ECHEC pour ' + client.email);
-        }
-      } catch(e) {
-        failed++;
-        console.log('[PROMO SEND] ← 💥 EXCEPTION pour ' + client.email + ': ' + e.message);
-      }
+        const ok = await sendPromoEmail({
+          to: client.email, clientName: name, businessName, promo,
+          businessEmail, businessAddress, businessPhone,
+        });
+        if (ok) sent++; else failed++;
+      } catch(e) { failed++; console.error(`[PROMO SEND ERR] ${client.email}: ${e.message}`); }
     }
-    console.log('[PROMO SEND] 🏁 BILAN FINAL: sent=' + sent + ' failed=' + failed + ' total=' + clients.length);
-    console.log('========================================================');
-    res.json({ sent, failed, total: clients.length,
-      message: sent + ' email' + (sent>1?'s':'') + ' envoy' + (sent>1?'és':'é') + ' avec succès.' });
+    console.log(`[PROMO SEND] ${promo.code} — bilan: sent=${sent} failed=${failed}`);
+    res.json({ sent, failed, total: clients.length });
   } catch(e) {
-    console.error('[PROMO SEND] 💥 ERREUR FATALE:', e);
-    console.error('[PROMO SEND] Stack:', e.stack);
-    console.log('========================================================');
+    console.error('[PROMO SEND] ERREUR:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

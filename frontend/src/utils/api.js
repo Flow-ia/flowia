@@ -25,16 +25,8 @@ async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const method = options.method || 'GET';
-  const isPromoOrCampaign = path.includes('/promo/') || path.includes('/campaigns/');
-  if (isPromoOrCampaign) {
-    console.log('[HTTP →] ' + method + ' ' + BASE + path + (options.body ? ' body=' + options.body.substring(0, 200) : ''));
-  }
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
-  if (isPromoOrCampaign) {
-    console.log('[HTTP ←] ' + method + ' ' + path + ' → ' + res.status + ' | ' + JSON.stringify(data).substring(0, 300));
-  }
   if (!res.ok) throw new Error(data.error || 'Erreur serveur');
   return data;
 }

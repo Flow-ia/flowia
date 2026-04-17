@@ -1,7 +1,20 @@
 require('dotenv').config();
 
 // ── Brevo (ex-Sendinblue) — API HTTPS, jamais bloqué par Render ───────────
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) {
+  const body = {
+    sender: {
+      name: process.env.SENDER_NAME || 'Hair Coiff Lille',
+      email: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@haircoifflille.fr'
+    },
+    to:       [{ email: to, ...(toName ? { name: toName } : {}) }],
+    subject,
+    htmlContent: html,
+  };
+  if (text) body.textContent = text;
+  if (replyTo) body.replyTo = typeof replyTo === 'string' ? { email: replyTo } : replyTo;
+  if (headers) body.headers = headers;
+
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -9,15 +22,7 @@ async function sendEmail({ to, subject, html }) {
       'api-key':      process.env.BREVO_API_KEY,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      sender: {
-        name: process.env.SENDER_NAME || 'Hair Coiff Lille',
-        email: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@haircoifflille.fr'
-      },
-      to:       [{ email: to }],
-      subject,
-      htmlContent: html,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -595,77 +600,113 @@ async function sendPasswordReset({ to, clientName, code }) {
   } catch(err) { console.error(`[MAIL PWD RESET ERR] ${err.message}`); }
 }
 
-// ── Email campagne promo ──────────────────────────────────────────────────────
-async function sendPromoEmail({ to, clientName, businessName, promo }) {
+// ── Email campagne promo ─────────────────────────────────────────────────────
+// Optimisé pour atterrir en boîte principale Gmail (et non "Promotions") :
+// - Sujet personnalisé avec prénom, sans mots marketing
+// - Version texte brut complète
+// - Reply-To vers l'email du commerçant (transactionnel vs bulk)
+// - Header List-Unsubscribe (exigence Gmail 2024)
+// - Design sobre, peu d'images/gradients, ratio texte/image élevé
+async function sendPromoEmail({ to, clientName, businessName, promo, businessEmail, businessAddress, businessPhone }) {
   const { code, type, value, valid_from, valid_until, time_allday, time_from, time_until, min_purchase, max_uses, target_clients } = promo;
-  const subject = `Offre exclusive : ${code} chez ${businessName}`;
+  const firstName = (clientName || '').split(' ')[0] || clientName || '';
+  const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
 
-  const discountLabel = type === 'percent'
-    ? `<strong style="color:#7c6af7;font-size:32px;font-weight:900;">${value}% de réduction</strong>`
-    : `<strong style="color:#7c6af7;font-size:32px;font-weight:900;">${Number(value).toFixed(2)} € de réduction</strong>`;
+  // Sujet personnalisé, ton transactionnel (pas "Offre exclusive" qui trigger Promotions)
+  const subject = firstName
+    ? `${firstName}, votre code ${code} de la part de ${businessName}`
+    : `Votre code ${code} de la part de ${businessName}`;
 
   const conditions = [];
-  if (valid_from)  conditions.push(`📅 Valide à partir du ${new Date(valid_from).toLocaleDateString('fr-FR')}`);
-  if (valid_until) conditions.push(`⏳ Valide jusqu'au ${new Date(valid_until).toLocaleDateString('fr-FR')}`);
+  if (valid_from)  conditions.push(`Valable à partir du ${new Date(valid_from).toLocaleDateString('fr-FR')}`);
+  if (valid_until) conditions.push(`Valable jusqu'au ${new Date(valid_until).toLocaleDateString('fr-FR')}`);
   if (!time_allday && time_from && time_until)
-    conditions.push(`🕐 Uniquement de ${String(time_from).substring(0,5)} à ${String(time_until).substring(0,5)}`);
-  if (min_purchase > 0) conditions.push(`🛒 Achat minimum : ${Number(min_purchase).toFixed(2)} €`);
-  if (max_uses) conditions.push(`🔢 Limité à ${max_uses} utilisation${max_uses > 1 ? 's' : ''}`);
-  if (target_clients === 'new') conditions.push(`🆕 Réservé aux nouveaux clients`);
+    conditions.push(`Uniquement de ${String(time_from).substring(0,5)} à ${String(time_until).substring(0,5)}`);
+  if (min_purchase > 0) conditions.push(`Achat minimum : ${Number(min_purchase).toFixed(2)} €`);
+  if (max_uses) conditions.push(`Limité à ${max_uses} utilisation${max_uses > 1 ? 's' : ''}`);
+  if (target_clients === 'new') conditions.push(`Réservé aux nouveaux clients`);
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f4f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
-  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);">
+  // Version texte brut (indispensable pour Primary Inbox)
+  const textLines = [
+    `Bonjour ${firstName || clientName || ''},`,
+    '',
+    `${businessName} vous remet un code de réduction : ${discountStr}.`,
+    '',
+    `Code : ${code}`,
+    '',
+  ];
+  if (conditions.length) {
+    textLines.push('Conditions :');
+    conditions.forEach(c => textLines.push(`- ${c}`));
+    textLines.push('');
+  }
+  textLines.push('Présentez ce code lors de votre prochain passage ou utilisez-le lors de votre réservation en ligne.');
+  textLines.push('');
+  if (businessAddress) textLines.push(`Adresse : ${businessAddress}`);
+  if (businessPhone)   textLines.push(`Téléphone : ${businessPhone}`);
+  textLines.push('');
+  textLines.push(`À bientôt,`);
+  textLines.push(businessName);
+  textLines.push('');
+  textLines.push('---');
+  textLines.push(`Pour ne plus recevoir ces messages, répondez STOP à cet email.`);
+  const textContent = textLines.join('\n');
 
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,#7c6af7,#4fd8eb);padding:36px 32px;text-align:center;">
-      <p style="margin:0 0 6px;font-size:13px;color:rgba(255,255,255,0.8);letter-spacing:0.06em;text-transform:uppercase;">Offre exclusive de</p>
-      <h1 style="margin:0;font-size:26px;font-weight:900;color:white;letter-spacing:-0.02em;">${businessName}</h1>
-    </div>
+  // HTML sobre, sans gradient, peu d'emojis, ratio texte élevé
+  const condHtml = conditions.length
+    ? `<p style="margin:20px 0 6px;color:#111;font-size:14px;font-weight:600;">Conditions :</p>
+       <ul style="margin:0;padding-left:20px;color:#333;font-size:14px;line-height:1.7;">
+         ${conditions.map(c => `<li>${c}</li>`).join('')}
+       </ul>`
+    : '';
 
-    <!-- Corps -->
-    <div style="padding:32px;text-align:center;">
-      <p style="margin:0 0 6px;font-size:15px;color:#6b7280;">Bonjour ${clientName} 👋</p>
-      <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6;">
-        Nous avons une offre spéciale rien que pour vous !
-      </p>
+  const contactHtml = (businessAddress || businessPhone)
+    ? `<p style="margin:20px 0 4px;color:#666;font-size:13px;">
+         ${businessAddress ? `Adresse : ${businessAddress}<br/>` : ''}
+         ${businessPhone ? `Téléphone : ${businessPhone}` : ''}
+       </p>`
+    : '';
 
-      ${discountLabel}
-
-      <!-- Code promo encadré -->
-      <div style="margin:28px 0;padding:20px;background:#f0edff;border:2px dashed #7c6af7;border-radius:16px;">
-        <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#7c6af7;text-transform:uppercase;letter-spacing:0.1em;">Votre code promo</p>
-        <p style="margin:0;font-size:30px;font-weight:900;color:#4c1d95;letter-spacing:0.2em;font-family:'Courier New',monospace;">${code}</p>
-      </div>
-
-      <!-- Conditions -->
-      ${conditions.length > 0 ? `
-      <div style="text-align:left;background:#f9f9fc;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
-        <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;">Conditions d'utilisation</p>
-        ${conditions.map(c => `<p style="margin:0 0 6px;font-size:13px;color:#374151;">${c}</p>`).join('')}
-      </div>` : ''}
-
-      <p style="font-size:13px;color:#9ca3af;line-height:1.6;margin:0;">
-        Présentez ce code lors de votre prochaine visite ou réservation en ligne.
-      </p>
-    </div>
-
-    <!-- Footer -->
-    <div style="background:#f9f9fc;padding:20px 32px;text-align:center;border-top:1px solid #f0f0f4;">
-      <p style="margin:0;font-size:12px;color:#9ca3af;">
-        Vous recevez cet email car vous êtes client de <strong>${businessName}</strong>.<br/>
-        Pour toute question, contactez directement votre prestataire.
-      </p>
-    </div>
+  const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+<body style="margin:0;padding:24px 16px;background:#f6f6f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#111;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e5e5;border-radius:6px;padding:28px 32px;">
+    <p style="margin:0 0 18px;color:#111;font-size:15px;">Bonjour ${firstName || clientName || ''},</p>
+    <p style="margin:0 0 18px;color:#111;font-size:15px;line-height:1.6;">
+      ${businessName} vous remet un code de réduction de <strong>${discountStr}</strong> utilisable lors de votre prochaine visite.
+    </p>
+    <p style="margin:22px 0 6px;color:#666;font-size:13px;">Votre code :</p>
+    <p style="margin:0 0 18px;font-family:Consolas,Menlo,monospace;font-size:22px;font-weight:700;color:#111;letter-spacing:2px;border:1px solid #ddd;padding:12px 16px;display:inline-block;border-radius:4px;background:#fafafa;">${code}</p>
+    ${condHtml}
+    <p style="margin:22px 0 0;color:#333;font-size:14px;line-height:1.6;">
+      Présentez ce code lors de votre prochain passage ou saisissez-le au moment de votre réservation en ligne.
+    </p>
+    ${contactHtml}
+    <p style="margin:22px 0 0;color:#111;font-size:14px;">À bientôt,<br/>${businessName}</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:24px 0 14px;"/>
+    <p style="margin:0;color:#999;font-size:11px;line-height:1.5;">
+      Vous recevez cet email en tant que client de ${businessName}. Pour ne plus recevoir ces messages, répondez avec "STOP" en objet.
+    </p>
   </div>
-</body>
-</html>`;
+</body></html>`;
+
+  const replyTo = businessEmail
+    ? { email: businessEmail, name: businessName }
+    : undefined;
+
+  // List-Unsubscribe header (exigence Gmail/Yahoo 2024 pour éviter Promotions/Spam)
+  const unsubEmail = businessEmail || process.env.SENDER_EMAIL || 'contact@haircoifflille.fr';
+  const headers = {
+    'List-Unsubscribe': `<mailto:${unsubEmail}?subject=STOP>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    'X-Entity-Ref-ID': String(promo?.id || code),
+  };
 
   try {
-    await sendEmail({ to, subject, html });
+    await sendEmail({
+      to, toName: clientName, subject, html, text: textContent,
+      replyTo, headers,
+    });
     console.log(`[MAIL PROMO OK] ${promo?.code || '?'} -> ${to}`);
     return true;
   } catch(e) {

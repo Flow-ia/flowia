@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
-import { loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
+import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
 
 export default function TabMarketing({ theme, showToast }) {
   const isDark = theme.mode === 'dark';
@@ -569,6 +569,31 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sendingCampaign, setSendingCampaign] = useState(false);
+  const [smsUserEdited, setSmsUserEdited] = useState(false);
+  const [merchant, setMerchant] = useState(null);
+  const [resultModal, setResultModal] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    api.me().then(r => setMerchant(r.user || r)).catch(() => {});
+  }, [open]);
+
+  // Préremplit le SMS automatiquement tant que l'utilisateur n'a pas édité manuellement
+  useEffect(() => {
+    if (smsUserEdited || !open) return;
+    const discount = type === 'percent' ? `-${value || 0}%` : `-${value || 0}€`;
+    const bn   = merchant?.businessName || '';
+    const tel  = merchant?.phone || '';
+    const addr = merchant?.address || '';
+    const parts = [];
+    if (bn) parts.push(bn);
+    parts.push(`${discount} avec le code ${code || 'XXX'}`);
+    if (tel)  parts.push(`Tel: ${tel}`);
+    if (addr) parts.push(addr);
+    let msg = parts.join('. ') + '.';
+    if (msg.length > 160) msg = msg.slice(0, 157) + '...';
+    setSmsMessage(msg);
+  }, [code, value, type, merchant, open, smsUserEdited]);
 
   useEffect(() => {
     if (init) {
@@ -711,10 +736,17 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                   {(campaignChannel === 'sms' || campaignChannel === 'both') && (
                     <div style={{ marginBottom:10 }}>
                       <label style={{ fontSize:11, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 }}>Message SMS (160 car. max)</label>
-                      <textarea value={smsMessage} onChange={e => setSmsMessage(e.target.value.slice(0,160))}
+                      <textarea value={smsMessage}
+                        onChange={e => { setSmsMessage(e.target.value.slice(0,160)); setSmsUserEdited(true); }}
                         placeholder="Profitez de -10% avec le code PROMO10 !"
-                        style={{...inp, height:60, resize:'none', fontSize:12}} />
-                      <p style={{ fontSize:10, color: smsMessage.length > 150 ? '#ef4444' : theme.muted, textAlign:'right' }}>{smsMessage.length}/160</p>
+                        style={{...inp, height:72, resize:'none', fontSize:12}} />
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                        <button type="button" onClick={() => setSmsUserEdited(false)}
+                          style={{ fontSize:10, padding:'3px 8px', borderRadius:6, border:`1px solid ${theme.border}`, background:'transparent', color:theme.muted, cursor:'pointer' }}>
+                          ↻ Remplissage auto
+                        </button>
+                        <p style={{ margin:0, fontSize:10, color: smsMessage.length > 150 ? '#ef4444' : theme.muted }}>{smsMessage.length}/160</p>
+                      </div>
                     </div>
                   )}
                   <button onClick={async () => {
@@ -770,14 +802,9 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
           <button onClick={onClose} style={{ flex:1, padding:'12px', borderRadius:12, background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, cursor:'pointer' }}>Annuler</button>
           <button onClick={async () => {
-            console.log('======================================================');
-            console.log('[FRONT PROMO] 🟢 Bouton "Créer" cliqué');
-            console.log('[FRONT PROMO] code=' + code + ' type=' + type + ' value=' + value);
-            console.log('[FRONT PROMO] campaignChannel=' + campaignChannel + ' campaignTarget=' + campaignTarget);
-            if (!code || !value) { console.log('[FRONT PROMO] ❌ Champs requis manquants'); return; }
+            if (!code || !value) return;
             setSaving(true);
             try {
-              console.log('[FRONT PROMO] 📤 Étape 1 — Création du promo en DB...');
               const saved = await onSave({
                 code, type, value:parseFloat(value),
                 max_uses:maxUses?parseInt(maxUses):null,
@@ -787,48 +814,34 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                 time_from:  timeAllday ? null : timeFrom,
                 time_until: timeAllday ? null : timeUntil,
               });
-              console.log('[FRONT PROMO] ✅ Promo créé:', saved);
               if (campaignChannel !== 'none' && saved?.id) {
-                console.log('[FRONT PROMO] 📤 Étape 2 — Envoi campagne (channel=' + campaignChannel + ')');
                 setSendingCampaign(true);
                 const wantEmail = campaignChannel === 'email' || campaignChannel === 'both';
                 const wantSms   = campaignChannel === 'sms'   || campaignChannel === 'both';
-                let emailResult = null, smsError = null;
+                let emailResult = null, smsResult = null, error = null;
                 try {
                   if (wantEmail) {
-                    console.log('[FRONT PROMO] 📧 → POST /api/promo/' + saved.id + '/send-emails { client_ids: [] }');
                     emailResult = await promoApi.sendEmails(saved.id, { client_ids: [] });
-                    console.log('[FRONT PROMO] 📧 ← Réponse backend:', emailResult);
                   }
                   if (wantSms) {
-                    console.log('[FRONT PROMO] 📱 → POST /api/campaigns/send');
-                    await campaignsApi.sendCampaign({
+                    smsResult = await campaignsApi.sendCampaign({
                       promo_code_id: saved.id,
                       target_type: campaignTarget,
                       custom_count: customCount,
                       channel: 'sms',
-                      message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
+                      message_sms: smsMessage || `${code}: ${type === 'percent' ? `-${value}%` : `-${value}€`}`,
                       promo_code: code,
                     });
-                    console.log('[FRONT PROMO] 📱 ← OK SMS');
                   }
                 } catch(e) {
-                  smsError = e.message;
-                  console.error('[FRONT PROMO] 💥 ERREUR envoi:', e);
+                  error = e.message;
                 } finally { setSendingCampaign(false); }
-                const parts = [];
-                if (wantEmail && emailResult) parts.push(`${emailResult.sent || 0} email${(emailResult.sent||0)>1?'s':''} envoyé${(emailResult.sent||0)>1?'s':''}${emailResult.failed?` (${emailResult.failed} échec${emailResult.failed>1?'s':''})`:''}`);
-                if (smsError) parts.push(`Erreur: ${smsError}`);
-                console.log('[FRONT PROMO] 🏁 Bilan:', parts);
-                if (parts.length) alert(parts.join(' · '));
+                setResultModal({ code, emailResult, smsResult, error, channel: campaignChannel });
               } else {
-                console.log('[FRONT PROMO] ℹ️ Pas de campagne — channel=' + campaignChannel + ' saved.id=' + saved?.id);
+                onClose();
               }
-              console.log('======================================================');
-              onClose();
             } catch(e) {
-              console.error('[FRONT PROMO] 💥 ERREUR création:', e);
-              alert(e.message);
+              setResultModal({ code, error: e.message, channel: campaignChannel });
             } finally { setSaving(false); }
           }} disabled={saving||sendingCampaign||!code||!value||(campaignChannel==='sms'&&preview&&!preview.sms?.sufficient)}
             style={{ flex:2, padding:'13px', borderRadius:12,
@@ -839,6 +852,94 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
             {saving ? 'Enregistrement...' : sendingCampaign ? 'Envoi campagne...' : campaignChannel !== 'none' ? 'Creer + Envoyer' : init ? 'Modifier' : 'Creer le code'}
           </button>
         </div>
+      </div>
+      {resultModal && (
+        <SendResultModal data={resultModal} theme={theme} onClose={() => { setResultModal(null); onClose(); }} />
+      )}
+    </div>
+  );
+}
+
+// ── Modale de confirmation moderne (check vert) ──────────────────────────────
+function SendResultModal({ data, theme, onClose }) {
+  const isDark = theme.mode === 'dark';
+  const emailSent = data.emailResult?.sent || 0;
+  const emailFailed = data.emailResult?.failed || 0;
+  const smsSent = data.smsResult?.sent_sms || 0;
+  const smsFailed = data.smsResult?.failed || 0;
+  const hasError = !!data.error;
+  const totalSent = emailSent + smsSent;
+  const success = !hasError && totalSent > 0;
+  const accent = success ? '#10b981' : hasError ? '#ef4444' : '#f59e0b';
+  const title = success ? 'Envoi réussi' : hasError ? 'Erreur d\'envoi' : 'Aucun destinataire';
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(12px)' }} />
+      <div style={{ position:'relative', width:'100%', maxWidth:420, background: isDark ? '#161622' : '#fff',
+        borderRadius:24, border:`1px solid ${theme.border}`, padding:'32px 28px', textAlign:'center',
+        boxShadow:'0 24px 60px rgba(0,0,0,0.35)' }}>
+        <div style={{ width:72, height:72, borderRadius:'50%', background:`${accent}18`,
+          display:'inline-flex', alignItems:'center', justifyContent:'center', marginBottom:18,
+          border:`2px solid ${accent}33` }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            {success
+              ? <polyline points="20 6 9 17 4 12"/>
+              : hasError
+                ? <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
+                : <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
+            }
+          </svg>
+        </div>
+        <h2 style={{ margin:'0 0 8px', fontSize:22, fontWeight:900, color:theme.text }}>{title}</h2>
+        <p style={{ margin:'0 0 22px', fontSize:13, color:theme.muted }}>
+          Code <strong style={{ color:theme.text, fontFamily:'monospace' }}>{data.code}</strong>
+        </p>
+
+        {hasError ? (
+          <div style={{ padding:'14px 16px', borderRadius:12, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', marginBottom:18, textAlign:'left' }}>
+            <p style={{ margin:0, fontSize:13, color:'#ef4444' }}>{data.error}</p>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:22 }}>
+            {data.emailResult && (
+              <div style={{ padding:'14px 18px', borderRadius:14, background: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
+                border:'1px solid rgba(16,185,129,0.22)', display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
+                <div style={{ width:40, height:40, borderRadius:12, background:'rgba(16,185,129,0.16)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>📧</div>
+                <div style={{ flex:1 }}>
+                  <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>
+                    {emailSent} email{emailSent > 1 ? 's' : ''} envoyé{emailSent > 1 ? 's' : ''}
+                  </p>
+                  {emailFailed > 0 && <p style={{ margin:'2px 0 0', fontSize:11, color:'#ef4444' }}>{emailFailed} échec{emailFailed > 1 ? 's' : ''}</p>}
+                </div>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            )}
+            {data.smsResult && (
+              <div style={{ padding:'14px 18px', borderRadius:14, background: isDark ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)',
+                border:'1px solid rgba(139,92,246,0.22)', display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
+                <div style={{ width:40, height:40, borderRadius:12, background:'rgba(139,92,246,0.16)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>📱</div>
+                <div style={{ flex:1 }}>
+                  <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>
+                    {smsSent} SMS envoyé{smsSent > 1 ? 's' : ''}
+                  </p>
+                  {smsFailed > 0 && <p style={{ margin:'2px 0 0', fontSize:11, color:'#ef4444' }}>{smsFailed} échec{smsFailed > 1 ? 's' : ''}</p>}
+                </div>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            )}
+            {!data.emailResult && !data.smsResult && (
+              <p style={{ margin:0, fontSize:13, color:theme.muted }}>Aucun destinataire trouvé.</p>
+            )}
+          </div>
+        )}
+
+        <button onClick={onClose}
+          style={{ width:'100%', padding:'13px', borderRadius:12, border:'none',
+            background: accent, color:'white', fontWeight:800, fontSize:14, cursor:'pointer',
+            boxShadow:`0 4px 14px ${accent}55` }}>
+          Fermer
+        </button>
       </div>
     </div>
   );
@@ -1035,19 +1136,15 @@ function TabPromo({ theme, showToast }) {
   };
 
   const handleSave = async (d) => {
-    console.log('[PARENT handleSave] reçu:', d);
     if (edit) {
       const u = await promoApi.update(edit.id, {...d, is_active:edit.is_active});
       setPromos(p=>p.map(x=>x.id===edit.id?u:x));
       setEdit(null); showToast('Code modifié ✓');
-      console.log('[PARENT handleSave] ← return updated:', u);
       return u;
-    } else {
-      const created = await promoApi.create(d);
-      setPromos(p=>[created,...p]);
-      console.log('[PARENT handleSave] ← return created:', created);
-      return created;
     }
+    const created = await promoApi.create(d);
+    setPromos(p=>[created,...p]);
+    return created;
   };
 
   const toggleActive = async (promo) => {

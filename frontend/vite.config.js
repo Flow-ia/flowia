@@ -36,7 +36,7 @@ export default defineConfig({
     sourcemap: false,          // désactiver en prod (réduit taille 40%)
     minify: 'terser',          // meilleure compression que esbuild
     terserOptions: {
-      compress: { drop_console: false, drop_debugger: true },
+      compress: { drop_console: true, drop_debugger: true },
     },
   },
 
