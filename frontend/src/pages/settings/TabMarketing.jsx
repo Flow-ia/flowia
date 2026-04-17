@@ -770,9 +770,14 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
           <button onClick={onClose} style={{ flex:1, padding:'12px', borderRadius:12, background:theme.inputBg, border:`1px solid ${theme.border}`, color:theme.muted, fontWeight:700, cursor:'pointer' }}>Annuler</button>
           <button onClick={async () => {
-            if (!code || !value) return;
+            console.log('======================================================');
+            console.log('[FRONT PROMO] 🟢 Bouton "Créer" cliqué');
+            console.log('[FRONT PROMO] code=' + code + ' type=' + type + ' value=' + value);
+            console.log('[FRONT PROMO] campaignChannel=' + campaignChannel + ' campaignTarget=' + campaignTarget);
+            if (!code || !value) { console.log('[FRONT PROMO] ❌ Champs requis manquants'); return; }
             setSaving(true);
             try {
+              console.log('[FRONT PROMO] 📤 Étape 1 — Création du promo en DB...');
               const saved = await onSave({
                 code, type, value:parseFloat(value),
                 max_uses:maxUses?parseInt(maxUses):null,
@@ -782,19 +787,21 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                 time_from:  timeAllday ? null : timeFrom,
                 time_until: timeAllday ? null : timeUntil,
               });
+              console.log('[FRONT PROMO] ✅ Promo créé:', saved);
               if (campaignChannel !== 'none' && saved?.id) {
+                console.log('[FRONT PROMO] 📤 Étape 2 — Envoi campagne (channel=' + campaignChannel + ')');
                 setSendingCampaign(true);
                 const wantEmail = campaignChannel === 'email' || campaignChannel === 'both';
                 const wantSms   = campaignChannel === 'sms'   || campaignChannel === 'both';
                 let emailResult = null, smsError = null;
                 try {
                   if (wantEmail) {
-                    console.log('[PROMO EMAIL] Envoi via /api/promo/:id/send-emails', { promoId: saved.id, code });
+                    console.log('[FRONT PROMO] 📧 → POST /api/promo/' + saved.id + '/send-emails { client_ids: [] }');
                     emailResult = await promoApi.sendEmails(saved.id, { client_ids: [] });
-                    console.log('[PROMO EMAIL] Résultat:', emailResult);
+                    console.log('[FRONT PROMO] 📧 ← Réponse backend:', emailResult);
                   }
                   if (wantSms) {
-                    console.log('[CAMPAIGN SMS] Envoi:', { target: campaignTarget });
+                    console.log('[FRONT PROMO] 📱 → POST /api/campaigns/send');
                     await campaignsApi.sendCampaign({
                       promo_code_id: saved.id,
                       target_type: campaignTarget,
@@ -803,17 +810,26 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
                       message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
                       promo_code: code,
                     });
+                    console.log('[FRONT PROMO] 📱 ← OK SMS');
                   }
-                } catch(e) { smsError = e.message; console.error('[PROMO SEND ERROR]', e); }
-                finally { setSendingCampaign(false); }
+                } catch(e) {
+                  smsError = e.message;
+                  console.error('[FRONT PROMO] 💥 ERREUR envoi:', e);
+                } finally { setSendingCampaign(false); }
                 const parts = [];
                 if (wantEmail && emailResult) parts.push(`${emailResult.sent || 0} email${(emailResult.sent||0)>1?'s':''} envoyé${(emailResult.sent||0)>1?'s':''}${emailResult.failed?` (${emailResult.failed} échec${emailResult.failed>1?'s':''})`:''}`);
-                if (smsError) parts.push(`Erreur SMS: ${smsError}`);
+                if (smsError) parts.push(`Erreur: ${smsError}`);
+                console.log('[FRONT PROMO] 🏁 Bilan:', parts);
                 if (parts.length) alert(parts.join(' · '));
+              } else {
+                console.log('[FRONT PROMO] ℹ️ Aucune campagne (channel=none)');
               }
+              console.log('======================================================');
               onClose();
-            } catch(e) { alert(e.message); }
-            finally { setSaving(false); }
+            } catch(e) {
+              console.error('[FRONT PROMO] 💥 ERREUR création:', e);
+              alert(e.message);
+            } finally { setSaving(false); }
           }} disabled={saving||sendingCampaign||!code||!value||(campaignChannel==='sms'&&preview&&!preview.sms?.sufficient)}
             style={{ flex:2, padding:'13px', borderRadius:12,
               background: (!code||!value) ? theme.inputBg : '#1a73e8',

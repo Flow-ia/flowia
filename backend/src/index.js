@@ -132,6 +132,14 @@ function startServer() {
     standardHeaders: true, legacyHeaders: false,
   });
 
+  // ── Trace ENTRÉE de toute requête /api/promo/* et /api/campaigns/* ──────
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/promo') || req.path.startsWith('/api/campaigns')) {
+      console.log('[TRACE →] ' + req.method + ' ' + req.originalUrl + ' | auth=' + (req.headers.authorization ? 'YES' : 'NO'));
+    }
+    next();
+  });
+
   // ── Routes ───────────────────────────────────────────────────────────────
   // Routes auth avec limiters spécifiques par endpoint
   const authRouter = require('./routes/auth');
