@@ -784,20 +784,32 @@ function PromoForm({ open, onClose, init, onSave, theme }) {
               });
               if (campaignChannel !== 'none' && saved?.id) {
                 setSendingCampaign(true);
+                const wantEmail = campaignChannel === 'email' || campaignChannel === 'both';
+                const wantSms   = campaignChannel === 'sms'   || campaignChannel === 'both';
+                let emailResult = null, smsError = null;
                 try {
-                  const emailHtml = `<div style="font-family:-apple-system,sans-serif;max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);"><div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;"><h1 style="color:white;margin:0;font-size:22px;">Offre speciale !</h1></div><div style="padding:32px 36px;text-align:center;"><p style="font-size:18px;font-weight:700;color:#0f172a;">Code promo : <span style="color:#1a73e8;font-family:monospace;font-size:24px;">${code}</span></p><p style="color:#64748b;font-size:14px;">${type === 'percent' ? `-${value}%` : `-${value}€`} sur votre prochaine prestation</p></div></div>`;
-                  console.log('[CAMPAIGN] Envoi:', { channel: campaignChannel, targetType: campaignTarget, message_email: emailHtml?.substring(0,50) });
-                  await campaignsApi.sendCampaign({
-                    promo_code_id: saved.id,
-                    target_type: campaignTarget,
-                    custom_count: customCount,
-                    channel: campaignChannel,
-                    message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
-                    message_email: emailHtml,
-                    promo_code: code,
-                  });
-                } catch(e) { alert('Campagne: ' + e.message); }
+                  if (wantEmail) {
+                    console.log('[PROMO EMAIL] Envoi via /api/promo/:id/send-emails', { promoId: saved.id, code });
+                    emailResult = await promoApi.sendEmails(saved.id, { client_ids: [] });
+                    console.log('[PROMO EMAIL] Résultat:', emailResult);
+                  }
+                  if (wantSms) {
+                    console.log('[CAMPAIGN SMS] Envoi:', { target: campaignTarget });
+                    await campaignsApi.sendCampaign({
+                      promo_code_id: saved.id,
+                      target_type: campaignTarget,
+                      custom_count: customCount,
+                      channel: 'sms',
+                      message_sms: smsMessage || `Profitez de ${type === 'percent' ? `-${value}%` : `-${value}€`} avec le code ${code} !`,
+                      promo_code: code,
+                    });
+                  }
+                } catch(e) { smsError = e.message; console.error('[PROMO SEND ERROR]', e); }
                 finally { setSendingCampaign(false); }
+                const parts = [];
+                if (wantEmail && emailResult) parts.push(`${emailResult.sent || 0} email${(emailResult.sent||0)>1?'s':''} envoyé${(emailResult.sent||0)>1?'s':''}${emailResult.failed?` (${emailResult.failed} échec${emailResult.failed>1?'s':''})`:''}`);
+                if (smsError) parts.push(`Erreur SMS: ${smsError}`);
+                if (parts.length) alert(parts.join(' · '));
               }
               onClose();
             } catch(e) { alert(e.message); }

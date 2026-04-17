@@ -291,7 +291,7 @@ function startServer() {
           AND a.reminder_24h_sent = FALSE
           AND a.client_email IS NOT NULL AND a.client_email != ''
           AND a.date = CURRENT_DATE + INTERVAL '1 day'
-          AND ABS(EXTRACT(EPOCH FROM (a.start_time::time - CURRENT_TIME)) - 86400) < 1800
+          AND ABS(EXTRACT(EPOCH FROM (a.start_time::time - LOCALTIME)) - 86400) < 1800
       `);
       for (const r of reminders24) {
         try {
@@ -341,7 +341,7 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
           AND a.reminder_2h_sent = FALSE
           AND a.client_email IS NOT NULL AND a.client_email != ''
           AND a.date = CURRENT_DATE
-          AND a.start_time BETWEEN (CURRENT_TIME + INTERVAL '1 hour 45 minutes') AND (CURRENT_TIME + INTERVAL '2 hours 15 minutes')
+          AND a.start_time BETWEEN (LOCALTIME + INTERVAL '1 hour 45 minutes') AND (LOCALTIME + INTERVAL '2 hours 15 minutes')
       `);
       for (const r of reminders2) {
         try {
