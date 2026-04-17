@@ -467,14 +467,55 @@ router.post('/:slug/book', async (req, res) => {
 
     // Vérif compte obligatoire
     let clientId = null;
+    let tokenGlobalClientId = null;
     if (client_token) {
       try {
         const dec = jwt.verify(client_token, process.env.JWT_SECRET);
-        if (dec.scope === 'client' && dec.merchantId === userId) clientId = dec.clientId;
+        if (dec.scope === 'client' && dec.merchantId === userId) {
+          clientId = dec.clientId || null;
+          tokenGlobalClientId = dec.globalClientId || null;
+        }
       } catch {}
     }
     if (require_account && !clientId)
       return res.status(403).json({ error: 'Un compte client est requis.', requireAccount: true });
+
+    // ── Validation FK : le clientId du token pointe-t-il vers un client_accounts existant ?
+    // Le merchant peut avoir supprimé la fiche locale (bouton "Supprimer client"),
+    // auquel cas le token est obsolète. On recrée la fiche via globalClientId si possible,
+    // sinon on passe en booking invité (clientId=null).
+    if (clientId) {
+      const { rows: chkLocal } = await pool.query(
+        'SELECT id FROM client_accounts WHERE id=$1 AND user_id=$2',
+        [clientId, userId]
+      );
+      if (!chkLocal.length) {
+        console.warn('[BOOKING] client_token clientId obsolète:', clientId, '— tentative de re-création locale');
+        clientId = null;
+        // Tenter de recréer la fiche locale à partir du compte global
+        if (tokenGlobalClientId) {
+          try {
+            const { rows: gc } = await pool.query(
+              'SELECT id, email, password_hash, first_name, last_name, phone FROM global_clients WHERE id=$1',
+              [tokenGlobalClientId]
+            );
+            if (gc.length) {
+              const g = gc[0];
+              const { rows: created } = await pool.query(
+                `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, global_client_id, source)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'platform')
+                 ON CONFLICT (user_id, email) DO UPDATE SET global_client_id = EXCLUDED.global_client_id
+                 RETURNING id`,
+                [userId, g.email, g.password_hash, g.first_name, g.last_name, g.phone, g.id]
+              );
+              if (created.length) clientId = created[0].id;
+            }
+          } catch (e) {
+            console.error('[BOOKING] échec re-création locale:', e.message);
+          }
+        }
+      }
+    }
 
     // ── Vérif blocage client ────────────────────────────────────────────────────
     // Vérifie si ce client (identifié par email ou clientId) est bloqué chez ce commerçant
