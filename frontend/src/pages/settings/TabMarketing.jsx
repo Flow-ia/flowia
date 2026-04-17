@@ -103,9 +103,14 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [discounts.risque, discounts.perdu, discounts.fidele, budget, duration]);
 
-  const pricePerSms = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045')
-                    * (1 + parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30') / 100);
-  const previewSms  = Math.floor(budget / pricePerSms);
+  const parseEnvFloat = (v, fallback) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+  const smsCost   = parseEnvFloat(import.meta.env.VITE_SMS_COST_UNIT, 0.045);
+  const smsMargin = parseEnvFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT, 30);
+  const pricePerSms = smsCost * (1 + smsMargin / 100);
+  const previewSms  = pricePerSms > 0 ? Math.floor(budget / pricePerSms) : 0;
   const insufficient = balance != null && budget > balance;
   const thirdDays = Math.max(1, Math.round(duration / 3));
   const phaseBreakdown = [
@@ -203,6 +208,36 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
   // Étape 2 — Plan
   if (step === 2 && plan) {
     const canLaunch = plan.balance_sufficient && plan.total_sms > 0;
+    // ── Cas limite : aucun client ciblable ─────────────────────────────────
+    if (plan.total_sms === 0) {
+      const totalClientsAll = (plan.segment_totals?.champion || 0)
+                            + (plan.segment_totals?.fidele || 0)
+                            + (plan.segment_totals?.prometteur || 0)
+                            + (plan.segment_totals?.risque || 0)
+                            + (plan.segment_totals?.perdu || 0);
+      return (
+        <div className="space-y-4">
+          <StepIndicator step={2} theme={theme} />
+          <div style={{ padding:'28px 22px', borderRadius:18, background:theme.card,
+            border:`1px solid ${theme.border}`, textAlign:'center' }}>
+            <div style={{ fontSize:42, marginBottom:14 }}>🔍</div>
+            <h3 style={{ margin:'0 0 8px', fontSize:18, fontWeight:900, color:theme.text }}>
+              Aucun client ciblable pour l'instant
+            </h3>
+            <p style={{ margin:'0 0 16px', fontSize:13, color:theme.muted, lineHeight:1.6 }}>
+              {totalClientsAll === 0
+                ? 'Votre fichier client ne contient encore aucun contact avec numéro de téléphone. Ajoutez des clients depuis l\'onglet Clients pour utiliser la campagne IA.'
+                : `Vos ${totalClientsAll} client(s) ont déjà reçu un SMS dans les 7 derniers jours (anti-spam). Revenez d'ici quelques jours pour relancer.`}
+            </p>
+            <button onClick={() => setStep(1)}
+              style={{ padding:'10px 20px', borderRadius:10, border:`1px solid ${theme.border}`,
+                background:theme.inputBg, color:theme.text, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+              Retour
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-4">
         <StepIndicator step={2} theme={theme} />

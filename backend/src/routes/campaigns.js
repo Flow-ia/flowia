@@ -369,23 +369,58 @@ async function generateCampaignPlan(userId, budget, durationDays, customDiscount
     fidele: { start_day: third * 2 + 1, end_day: d },
   };
 
+  // ── Fusion des 5 segments RFM vers les 3 phases actionnables ────────────
+  // Petite base : on veut que TOUS les clients soient ciblés. Les champions
+  // et les prometteurs (nouveaux) sont absorbés par la phase fidèle.
+  // Si un client n'a jamais pris RDV il tombe dans 'perdu' (à réactiver).
+  const pools = {
+    risque: [...segments.risque],
+    perdu:  [...segments.perdu],
+    fidele: [...segments.fidele, ...segments.champion, ...segments.prometteur],
+  };
+  const totalAvailable = pools.risque.length + pools.perdu.length + pools.fidele.length;
+
   const order = ['risque', 'perdu', 'fidele'];
-  const phases = [];
-  let totalSms = 0;
   const nowRef = new Date();
 
+  // ── Allocation en 2 passes : proportionnelle puis redistribution ────────
+  const allocations = { risque: 0, perdu: 0, fidele: 0 };
+  let remainingBudget = Math.min(maxSmsByBudget, totalAvailable);
+
+  // Pass 1 : allocation proportionnelle cappée par disponibilité
   for (const segId of order) {
-    const wantedFromBudget = Math.floor(maxSmsByBudget * ALLOC[segId]);
-    const available = segments[segId].length;
-    const allocation = Math.min(wantedFromBudget, available);
-    const clientsInPhase = segments[segId].slice(0, allocation);
+    const wanted = Math.floor(maxSmsByBudget * ALLOC[segId]);
+    const take   = Math.min(wanted, pools[segId].length);
+    allocations[segId] = take;
+    remainingBudget -= take;
+  }
+
+  // Pass 2 : redistribuer le surplus (round-robin) aux segments qui peuvent absorber
+  let guard = totalAvailable + 10;
+  while (remainingBudget > 0 && guard-- > 0) {
+    let placed = 0;
+    for (const segId of order) {
+      if (remainingBudget <= 0) break;
+      if (allocations[segId] < pools[segId].length) {
+        allocations[segId]++;
+        remainingBudget--;
+        placed++;
+      }
+    }
+    if (placed === 0) break;
+  }
+
+  let totalSms = 0;
+  const phases = [];
+  for (const segId of order) {
+    const allocation     = allocations[segId];
+    const clientsInPhase = pools[segId].slice(0, allocation);
     totalSms += allocation;
 
-    const win = PHASE_WINDOWS[segId];
-    const discount = DISCOUNTS[segId];
-    const validityDays = d + 7; // validité = durée campagne + 7 jours tampon
+    const win          = PHASE_WINDOWS[segId];
+    const discount     = DISCOUNTS[segId];
+    const validityDays = d + 7;
 
-    // Pour chaque client: scheduling prédictif + personal_code preview
     const clients = clientsInPhase.map(c => {
       const scheduledAt = computeScheduledAt(c, win.start_day, win.end_day, nowRef);
       const personalCode = generatePersonalCode(c.first_name, discount);
