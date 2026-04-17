@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -19,9 +19,19 @@ function getStripeSingleton() {
 }
 
 // Wrapper qui met Elements autour du form — Elements doit envelopper tout composant qui utilise useStripe/useElements
+// CRITIQUE: options doit avoir une référence STABLE (useMemo). Sinon React-Stripe
+// re-crée les Elements à chaque render → erreur "Element not mounted / ready not emitted".
 export default function SMSRechargeModal({ open, theme, onClose, onSuccess, showToast }) {
-  if (!open) return null;
   const stripe = getStripeSingleton();
+  // Appearance figée — dépend uniquement du mode (dark/light), pas du reste
+  const elementsOptions = useMemo(() => ({
+    appearance: {
+      theme: theme.mode === 'dark' ? 'night' : 'stripe',
+      variables: { colorPrimary: '#6366f1', borderRadius: '10px', fontSizeBase: '15px' },
+    },
+  }), [theme.mode]);
+
+  if (!open) return null;
   if (!stripe) {
     return (
       <ModalShell theme={theme} onClose={onClose}>
@@ -30,10 +40,7 @@ export default function SMSRechargeModal({ open, theme, onClose, onSuccess, show
     );
   }
   return (
-    <Elements stripe={stripe} options={{
-      appearance: { theme: theme.mode === 'dark' ? 'night' : 'stripe',
-        variables: { colorPrimary: '#6366f1', borderRadius: '10px', fontSizeBase: '15px' } },
-    }}>
+    <Elements stripe={stripe} options={elementsOptions}>
       <RechargeInner theme={theme} onClose={onClose} onSuccess={onSuccess} showToast={showToast} />
     </Elements>
   );
@@ -96,6 +103,7 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
   const [loadingPm, setLoadingPm]   = useState(true);
   const [saveCard, setSaveCard]     = useState(true);
   const [cardReady, setCardReady]   = useState({ number:false, expiry:false, cvc:false });
+  const [cardMounted, setCardMounted] = useState({ number:false, expiry:false, cvc:false });
   const [cardError, setCardError]   = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState(null);
@@ -116,11 +124,19 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Reset des états de la carte quand on bascule entre carte existante et nouvelle
+  useEffect(() => {
+    setCardReady({ number:false, expiry:false, cvc:false });
+    setCardMounted({ number:false, expiry:false, cvc:false });
+    setCardError(null);
+  }, [selectedPm]);
+
   const numAmt = parseFloat(amount) || 0;
   const amountOk = numAmt >= 5;
   const isNew  = selectedPm === 'new';
   const cardComplete = cardReady.number && cardReady.expiry && cardReady.cvc;
-  const canPay = amountOk && !!selectedPm && (!isNew || cardComplete) && !submitting;
+  const cardAllMounted = cardMounted.number && cardMounted.expiry && cardMounted.cvc;
+  const canPay = amountOk && !!selectedPm && (!isNew || (cardComplete && cardAllMounted)) && !submitting;
 
   async function handlePay() {
     if (!stripe || !elements) return;
@@ -213,6 +229,7 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
             <CardForm theme={theme}
               cardError={cardError} setCardError={setCardError}
               setCardReady={setCardReady}
+              setCardMounted={setCardMounted}
               saveCard={saveCard} setSaveCard={setSaveCard}
             />
           )}
@@ -232,11 +249,13 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
               boxShadow: canPay ? '0 6px 16px rgba(99,102,241,0.35)' : 'none' }}>
             {submitting
               ? 'Traitement...'
-              : isNew && !cardComplete
-                ? 'Complétez les infos de carte'
-                : !amountOk
-                  ? 'Montant minimum : 5 EUR'
-                  : `Payer ${numAmt.toFixed(2)} EUR`}
+              : !amountOk
+                ? 'Montant minimum : 5 EUR'
+                : isNew && !cardAllMounted
+                  ? 'Chargement du formulaire...'
+                  : isNew && !cardComplete
+                    ? 'Complétez les infos de carte'
+                    : `Payer ${numAmt.toFixed(2)} EUR`}
           </button>
           <p style={{ margin:'10px 0 0', fontSize:10, textAlign:'center', color:theme.muted }}>
             🔒 Paiement sécurisé Stripe · 3D Secure · aucune donnée carte stockée chez nous
@@ -383,9 +402,10 @@ function PaymentMethods({ theme, methods, loadingPm, selectedPm, setSelectedPm, 
   );
 }
 
-function CardForm({ theme, cardError, setCardError, setCardReady, saveCard, setSaveCard }) {
+function CardForm({ theme, cardError, setCardError, setCardReady, setCardMounted, saveCard, setSaveCard }) {
   const isDark = theme.mode === 'dark';
-  const elStyle = {
+  // Options Stripe figées (memoisées) pour éviter les re-montages intempestifs
+  const baseStyle = useMemo(() => ({
     style: {
       base: {
         fontSize: '16px',
@@ -395,7 +415,11 @@ function CardForm({ theme, cardError, setCardError, setCardReady, saveCard, setS
       },
       invalid: { color: '#ef4444' },
     },
-  };
+  }), [isDark]);
+  const numberOpts = useMemo(() => ({ ...baseStyle, showIcon: true, placeholder: '1234 1234 1234 1234' }), [baseStyle]);
+  const expiryOpts = useMemo(() => ({ ...baseStyle, placeholder: 'MM / AA' }), [baseStyle]);
+  const cvcOpts    = useMemo(() => ({ ...baseStyle, placeholder: '123' }), [baseStyle]);
+
   const fieldWrap = {
     padding: '12px 14px',
     borderRadius: 10,
@@ -411,6 +435,9 @@ function CardForm({ theme, cardError, setCardError, setCardReady, saveCard, setS
     setCardReady(prev => ({ ...prev, [field]: e.complete }));
     setCardError(e.error ? e.error.message : null);
   };
+  const handleReady = (field) => () => {
+    setCardMounted(prev => ({ ...prev, [field]: true }));
+  };
 
   return (
     <div style={{ padding:'14px 14px 12px', borderRadius:14, border:`1px solid ${theme.border}`,
@@ -420,23 +447,23 @@ function CardForm({ theme, cardError, setCardError, setCardReady, saveCard, setS
 
       <label style={label}>Numéro de carte</label>
       <div style={{ ...fieldWrap, marginBottom:10 }}>
-        <CardNumberElement options={{ ...elStyle, showIcon: true, placeholder: '1234 1234 1234 1234' }}
-          onChange={handleChange('number')} />
+        <CardNumberElement options={numberOpts}
+          onChange={handleChange('number')} onReady={handleReady('number')} />
       </div>
 
       <div style={{ display:'flex', gap:10 }}>
         <div style={{ flex:1 }}>
           <label style={label}>Expiration</label>
           <div style={fieldWrap}>
-            <CardExpiryElement options={{ ...elStyle, placeholder: 'MM / AA' }}
-              onChange={handleChange('expiry')} />
+            <CardExpiryElement options={expiryOpts}
+              onChange={handleChange('expiry')} onReady={handleReady('expiry')} />
           </div>
         </div>
         <div style={{ flex:1 }}>
           <label style={label}>CVC</label>
           <div style={fieldWrap}>
-            <CardCvcElement options={{ ...elStyle, placeholder: '123' }}
-              onChange={handleChange('cvc')} />
+            <CardCvcElement options={cvcOpts}
+              onChange={handleChange('cvc')} onReady={handleReady('cvc')} />
           </div>
         </div>
       </div>
