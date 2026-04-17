@@ -162,15 +162,19 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
       setStep('loading');
 
       // ── Étape 2 — Création du PaymentIntent côté serveur ─────────────────
+      // new_card=true → user on-session, peut gérer 3DS, save_card autorisé
+      // new_card=false + pm_id → carte enregistrée, confirm off-session 1-clic
       const r = await paymentsApi.createIntent({
         amount: numAmt,
         payment_method_id: paymentMethodId,
         save_card: isNew && saveCard,
+        new_card: isNew,
       });
 
-      // ── Étape 3 — Traitement (gestion SCA si nécessaire) ─────────────────
+      // ── Étape 3 — Traitement (gestion SCA 3DS si nécessaire) ─────────────
       setStep('processing');
       if (r.status === 'requires_action' || r.status === 'requires_confirmation') {
+        // Typiquement 3D Secure — on laisse Stripe afficher sa modale
         const { error: confErr, paymentIntent } = await stripe.confirmCardPayment(r.client_secret);
         if (confErr) throw new Error(confErr.message);
         if (paymentIntent.status !== 'succeeded')

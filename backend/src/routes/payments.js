@@ -33,11 +33,19 @@ async function ensureStripeCustomer(userId) {
 }
 
 // ── POST /api/payments/sms/intent — PaymentIntent embarqué ────────────────────
+// 3 modes possibles:
+//   A) new_card     = true  → carte neuve tokenisée (user on-session)
+//                             → confirm=true, setup_future_usage si save_card
+//   B) saved_card   = true  → carte déjà enregistrée (paiement 1-clic off-session)
+//                             → off_session=true, confirm=true, PAS de setup_future_usage
+//   C) aucun pm_id          → pré-création pour PaymentElement côté client
+//                             → automatic_payment_methods, pas de confirm
+// IMPORTANT: Stripe interdit off_session=true + setup_future_usage simultanément.
 router.post('/sms/intent', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     const amount = parseFloat(req.body.amount);
-    const { payment_method_id, save_card } = req.body; // optionnels
+    const { payment_method_id, save_card, new_card } = req.body;
     if (!amount || amount < 5) return res.status(400).json({ error: 'Montant minimum : 5 EUR' });
 
     const stripe = getStripe();
@@ -50,14 +58,25 @@ router.post('/sms/intent', authMiddleware, async (req, res) => {
       customer: customerId,
       description: `Recharge SMS FlowIA — environ ${estimatedSms} SMS`,
       metadata: { user_id: userId, amount: amount.toString(), sms_count: estimatedSms.toString() },
-      automatic_payment_methods: { enabled: true },
-      setup_future_usage: save_card ? 'off_session' : undefined,
     };
-    if (payment_method_id) {
+
+    if (payment_method_id && new_card) {
+      // A) Carte neuve — user on-session, peut gérer 3DS, option save_card
       intentOpts.payment_method = payment_method_id;
-      intentOpts.off_session   = true;
-      intentOpts.confirm       = true;
-      delete intentOpts.automatic_payment_methods;
+      intentOpts.confirm        = true;
+      // return_url nécessaire pour la redirection éventuelle 3DS
+      intentOpts.return_url     = (process.env.FRONTEND_URL || '').split(',')[0]?.replace(/\/$/, '')
+                                  + '/settings/marketing/solde';
+      if (save_card) intentOpts.setup_future_usage = 'off_session';
+    } else if (payment_method_id) {
+      // B) Carte enregistrée — paiement off-session 1-clic
+      intentOpts.payment_method = payment_method_id;
+      intentOpts.confirm        = true;
+      intentOpts.off_session    = true;
+      // PAS de setup_future_usage (carte déjà enregistrée → interdit par Stripe)
+    } else {
+      // C) Pré-création pour PaymentElement (pas de pm_id encore)
+      intentOpts.automatic_payment_methods = { enabled: true };
     }
 
     const intent = await stripe.paymentIntents.create(intentOpts);
@@ -73,10 +92,15 @@ router.post('/sms/intent', authMiddleware, async (req, res) => {
       client_secret: intent.client_secret,
       intent_id: intent.id,
       status: intent.status,
+      next_action: intent.next_action?.type || null,
       estimated_sms: estimatedSms,
     });
   } catch(e) {
     console.error('[STRIPE INTENT ERR]', e.message);
+    // Erreur de paiement Stripe (carte refusée, fonds insuffisants, etc.)
+    if (e.type === 'StripeCardError' || e.code) {
+      return res.status(400).json({ error: e.message, code: e.code });
+    }
     res.status(500).json({ error: e.message });
   }
 });
