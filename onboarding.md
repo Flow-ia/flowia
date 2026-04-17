@@ -1,103 +1,66 @@
-# FlowIA — Marketing IA barbershop : affichage ROI sobre et pertinent
-# Lire TabMarketing.jsx avant de modifier.
-# À la FIN : git add -A && git commit -m "feat: Marketing IA affichage ROI barbershop" && git push
+# FlowIA — Marketing IA campagne automatique par budget
+# Barbershop homme Lille centre-ville
+# Lire tous les fichiers concernés avant de modifier.
+# À la FIN : git add -A && git commit -m "feat: Marketing IA campagne automatique par budget" && git push
 
 ---
 
-## Contexte
-- Barbershop homme Lille centre-ville
-- avg_price = moyenne réelle des transactions du commerçant en DB
-- Taux retour : 8% pessimiste / 20% optimiste (réaliste barbershop)
-- Affichage sobre, honnête, professionnel — pas de promesses exagérées
-
----
-
-## Fichiers à lire
-- frontend/src/pages/settings/TabMarketing.jsx
+## Fichiers à lire avant tout
 - backend/src/routes/campaigns.js
+- frontend/src/pages/settings/TabMarketing.jsx
+- frontend/src/utils/api.js
 
 ---
 
-# Affichage du plan généré — Ton et style
-
-## Ce qu'il faut afficher après "Générer mon plan"
-
-### Bloc principal (visible, sobre)
-```
-💈 Votre plan de relance
-
-📩  290 SMS  ·  15 jours  ·  3 phases d'envoi
-
-👥  Entre 23 et 58 clients attendus
-    (basé sur votre historique · taux estimé 8-20%)
-
-💰  Entre 690€ et 1 740€ de CA estimé
-    (basé sur votre panier moyen de 29€)
-```
-
-### Phrase d'accroche sous les chiffres
-Une seule phrase simple, adaptée au segment majoritaire ciblé :
-- Si majorité risque/perdu : "Vos clients qui s'éloignent sont les plus faciles à récupérer avec une bonne offre au bon moment."
-- Si majorité fidele : "Fidéliser coûte 5x moins cher que d'acquérir un nouveau client."
-
-### Note de transparence (petite, discrète)
-"Estimation indicative basée sur votre activité réelle.
- Les résultats peuvent varier selon la période et les offres."
+## Contexte technique
+- SMS_PRICE = process.env.SMS_PRICE_UNIT (prix facturé au commerçant avec marge)
+- Le solde débité est sms_balance dans la table users
+- Segments existants : champion / fidele / prometteur / risque / perdu
+- Anti-spam : exclure clients ayant reçu un SMS dans les 7 derniers jours via message_log
+- Le cron existant gère l'envoi depuis campaign_queue
 
 ---
 
-# Ce qu'il ne faut PAS afficher
-- Aucun ratio "X€ investi = Y€ générés"
-- Aucune promesse de résultat garanti
-- Aucun pourcentage de ROI affiché
-- Aucun jargon marketing ou technique
+# BACKEND — campaigns.js
+
+Créer une fonction generateCampaignPlan(userId, budget, duration_days) qui calcule le nombre de SMS disponibles avec le budget en utilisant SMS_PRICE_UNIT, vérifie que le solde sms_balance du commerçant est suffisant, récupère les clients segmentés via getClientSegments existant, exclut les clients ayant reçu un SMS dans les 7 derniers jours, répartit les SMS entre les segments avec 40% pour risque, 35% pour perdu et 25% pour fidele, planifie les envois en 3 phases selon la durée avec la phase 1 sur le premier tiers de la durée pour les clients à risque, la phase 2 sur le deuxième tiers pour les clients perdus et la phase 3 sur le dernier tiers pour les clients fidèles, applique des réductions suggérées de 15% pour risque, 25% pour perdu et 10% pour fidele, calcule le panier moyen réel via AVG(amount) sur les transactions du commerçant en DB avec 29 comme valeur par défaut si aucune transaction, calcule les estimations ROI avec taux de retour 8% pessimiste et 20% optimiste, retourne total_sms, estimated_cost, sms_remaining, phases avec leurs détails, estimated_clients_min, estimated_clients_max, estimated_revenue_min, estimated_revenue_max et avg_price.
+
+Les templates SMS par segment sont les suivants : pour risque "[prenom], ca fait un moment ! -[reduction]% sur ta prochaine coupe. Valable [duree] jours." pour perdu "[prenom], tu nous manques ! -[reduction]% exceptionnel sur ta prochaine coupe." et pour fidele "[prenom], merci pour ta fidelite ! -[reduction]% pour toi ce mois-ci."
+
+Créer une route GET /api/campaigns/auto-plan avec paramètres query budget et duration_days qui valide que le budget est entre 1 et le solde disponible et que la durée est entre 3 et 30 jours puis retourne le plan généré.
+
+Créer une route POST /api/campaigns/auto-send avec body budget et duration_days qui vérifie le solde suffisant, insère tous les envois dans campaign_queue avec scheduled_date calculée selon la phase de chaque client, déduit estimated_cost du sms_balance du commerçant, enregistre dans campaigns avec status scheduled et retourne la confirmation.
 
 ---
 
-# Phases d'envoi — Affichage simple
+# FRONTEND — TabMarketing.jsx
 
-Chaque phase affichée sobrement :
-```
-Phase 1 · Jours 1-5
-⚠️ Clients qui s'éloignent · 116 SMS
-"[prenom], ca fait un moment ! -15% sur ta prochaine coupe."
+Ajouter un quatrième sous-onglet appelé "Marketing IA" à côté des trois sous-onglets existants Fidélité, Promotions et Solde marketing.
 
-Phase 2 · Jours 6-10
-😴 Clients perdus · 101 SMS
-"[prenom], tu nous manques ! -25% sur ta prochaine coupe."
+Ce sous-onglet contient une interface en trois étapes.
 
-Phase 3 · Jours 11-15
-⭐ Clients fidèles · 73 SMS
-"[prenom], merci pour ta fidelite ! -10% pour toi ce mois-ci."
-```
+La première étape est la saisie où le commerçant choisit son budget via un slider de 5 à 100 euros avec pas de 5 et sa durée via un slider de 3 à 30 jours avec pas de 1. Sous le slider budget afficher en temps réel le nombre de SMS estimés et le solde disponible. Sous le slider durée afficher la répartition en 3 phases. Afficher en temps réel un aperçu avec le nombre de SMS et le coût total. Si le budget dépasse le solde disponible bloquer le bouton et afficher un message d'erreur avec lien vers l'onglet Solde marketing. Le bouton principal s'appelle "Générer le plan".
 
-Chaque message SMS est modifiable par le commerçant avant lancement.
+La deuxième étape est l'affichage du plan avec trois KPIs affichés côte à côte : SMS envoyés, clients attendus en fourchette min-max et CA estimé en fourchette min-max. Afficher une note discrète sous les KPIs indiquant que c'est une estimation basée sur l'activité réelle avec taux de retour 8 à 20% et le panier moyen réel. Afficher les trois phases avec pour chacune son nom lisible, les jours d'envoi, le nombre de SMS, la réduction suggérée et le message SMS template. Afficher en bas le montant total débité et le solde restant après campagne. Le bouton principal s'appelle "Lancer la campagne".
+
+La troisième étape est la confirmation sobre indiquant que la campagne est lancée avec le nombre de SMS planifiés, la durée et le montant débité. Ne pas afficher de promesse de résultat dans la confirmation.
+
+Après lancement rafraîchir l'affichage du solde dans le sous-onglet Solde marketing.
 
 ---
 
-# Après lancement — Confirmation
+# API.JS
 
-Afficher :
-```
-✅ Campagne lancée avec succès
-
-290 SMS seront envoyés sur 15 jours
-19.98€ débités de votre solde marketing
-Solde restant : X€
-
-Votre barbershop sera plus visible
-dès les prochains jours.
-```
-
-Pas de promesse chiffrée dans la confirmation — juste les faits.
+Ajouter dans campaignsApi les fonctions getAutoPlan qui appelle GET /campaigns/auto-plan avec les paramètres budget et duration et sendAutoCampaign qui appelle POST /campaigns/auto-send avec le body budget et duration_days.
 
 ---
 
 # Ordre d'exécution
 
-1. Lire TabMarketing.jsx — trouver la section affichage plan
-2. Mettre à jour l'affichage du plan avec ce ton et ces blocs
-3. Mettre à jour la confirmation post-lancement
-4. cd frontend && npx vite build
-5. Si OK : git add -A && git commit -m "feat: Marketing IA affichage ROI sobre barbershop" && git push
-6. Si KO : corriger puis recommencer
+1. Lire campaigns.js, TabMarketing.jsx et api.js
+2. Implémenter generateCampaignPlan et les deux routes backend
+3. Ajouter le sous-onglet Marketing IA dans TabMarketing
+4. Mettre à jour api.js
+5. cd frontend && npx vite build
+6. Si OK : git add -A && git commit -m "feat: Marketing IA campagne automatique par budget" && git push
+7. Si KO : corriger puis recommencer

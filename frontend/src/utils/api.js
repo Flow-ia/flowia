@@ -362,6 +362,10 @@ export const campaignsApi = {
   sendCampaign:       (b) => request('/campaigns/send',   { method:'POST', body:JSON.stringify(b) }),
   getCampaignQuota:   ()  => request('/campaigns/quota'),
   getCampaignHistory: ()  => request('/campaigns/history'),
+  getAutoPlan:        ({ budget, duration_days }) =>
+    request(`/campaigns/auto-plan?${new URLSearchParams({ budget, duration_days })}`),
+  sendAutoCampaign:   ({ budget, duration_days }) =>
+    request('/campaigns/auto-send', { method:'POST', body: JSON.stringify({ budget, duration_days }) }),
 };
 
 // ── Paiements SMS ────────────────────────────────────────────────────────────

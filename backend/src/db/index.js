@@ -851,6 +851,8 @@ async function initDB() {
     )
   `);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_pending ON campaign_queue(status, scheduled_date)`);
+  await runMigration(`ALTER TABLE campaign_queue ADD COLUMN IF NOT EXISTS channel VARCHAR(10) DEFAULT 'email'`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_channel ON campaign_queue(status, channel, scheduled_date)`);
 
   await runMigration(`
     CREATE TABLE IF NOT EXISTS campaigns (

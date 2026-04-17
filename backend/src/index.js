@@ -244,6 +244,7 @@ function startServer() {
       const { rows } = await dbPool.query(`
         SELECT * FROM campaign_queue
         WHERE status='pending' AND scheduled_date <= CURRENT_DATE
+          AND channel = 'email'
         ORDER BY created_at ASC
         LIMIT 30
         FOR UPDATE SKIP LOCKED
@@ -271,6 +272,53 @@ function startServer() {
       console.log(`[CRON queue] ${rows.length} emails traites`);
     } catch (e) {
       console.error('[CRON queue]', e.message);
+    }
+  }
+
+  // ── Traitement file d'attente SMS (toutes les heures, 9h-19h) ──────────────
+  // Les envois sont planifiés par campagne IA avec scheduled_date par phase.
+  // Le coût a déjà été débité du sms_balance lors de la planification.
+  const { sendSMS } = require('./utils/messenger');
+  async function processSmsQueue() {
+    const hour = new Date().getHours();
+    if (hour < 9 || hour > 19) return;
+    try {
+      const { rows } = await dbPool.query(`
+        SELECT * FROM campaign_queue
+        WHERE status='pending' AND scheduled_date <= CURRENT_DATE
+          AND channel = 'sms'
+          AND client_phone IS NOT NULL AND client_phone != ''
+        ORDER BY created_at ASC
+        LIMIT 50
+        FOR UPDATE SKIP LOCKED
+      `);
+      if (!rows.length) return;
+      let sent = 0, failed = 0;
+      for (const item of rows) {
+        try {
+          const r = await sendSMS(item.client_phone, item.message);
+          if (r.success) {
+            sent++;
+            await dbPool.query(`UPDATE campaign_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [item.id]);
+            await dbPool.query(
+              `INSERT INTO message_log (user_id, campaign_id, phone, channel, cost, status)
+               VALUES ($1,$2,$3,'sms',$4,'sent')`,
+              [item.user_id, item.campaign_id, item.client_phone, require('./utils/messenger').SMS_PRICE || 0.045]
+            );
+          } else {
+            failed++;
+            await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`,
+              [item.id, r.reason || 'Echec envoi']);
+          }
+          await cronSleep(200); // respect rate Brevo
+        } catch (e) {
+          failed++;
+          await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`, [item.id, e.message]);
+        }
+      }
+      console.log(`[CRON sms] ${sent} envoyés, ${failed} échecs sur ${rows.length}`);
+    } catch (e) {
+      console.error('[CRON sms]', e.message);
     }
   }
 
@@ -403,6 +451,11 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     setInterval(async () => {
       try { await processCampaignQueue(); } catch (e) { console.error('[CRON queue]', e.message); }
     }, 60 * 60 * 1000);
+
+    // File d'attente SMS — toutes les 30 min (campagnes IA planifiées par phase)
+    setInterval(async () => {
+      try { await processSmsQueue(); } catch (e) { console.error('[CRON sms]', e.message); }
+    }, 30 * 60 * 1000);
 
     // Rappels email RDV — toutes les heures
     setInterval(async () => {

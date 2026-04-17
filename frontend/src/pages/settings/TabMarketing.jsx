@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
 import SMSRechargeModal from '../../components/SMSRechargeModal';
-import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi, marketingApi } from '../../utils/api';
+import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
 
 export default function TabMarketing({ theme, showToast }) {
   const isDark   = theme.mode === 'dark';
@@ -11,16 +11,16 @@ export default function TabMarketing({ theme, showToast }) {
   const location = useLocation();
 
   const MTABS = [
-    { id: 'iaplan',     label: '✨ Plan IA' },
     { id: 'fidelite',   label: 'Fidelite' },
-    { id: 'promotions', label: '% Promotions' },
+    { id: 'promotions', label: '% Promos' },
     { id: 'solde',      label: 'Solde' },
+    { id: 'ia',         label: '✨ Marketing IA' },
   ];
 
   // Extrait le sous-onglet depuis l'URL : /settings/marketing/{sub}
   const parts = location.pathname.replace(/^\/settings\/marketing\/?/, '').split('/').filter(Boolean);
-  const rawSub = parts[0] || 'iaplan';
-  const marketingTab = MTABS.some(t => t.id === rawSub) ? rawSub : 'iaplan';
+  const rawSub = parts[0] || 'ia';
+  const marketingTab = MTABS.some(t => t.id === rawSub) ? rawSub : 'ia';
 
   const setMarketingTab = (id) => {
     // conserve les segments suivants (utile si sous-page imbriquée plus tard)
@@ -43,285 +43,304 @@ export default function TabMarketing({ theme, showToast }) {
         ))}
       </div>
 
-      {marketingTab === 'iaplan'     && <TabIAPlan theme={theme} showToast={showToast} />}
       {marketingTab === 'fidelite'   && <TabLoyalty theme={theme} />}
       {marketingTab === 'promotions' && <TabPromo theme={theme} showToast={showToast} />}
       {marketingTab === 'solde'      && <TabSMS showToast={showToast} theme={theme} />}
+      {marketingTab === 'ia'         && <TabMarketingIA theme={theme} showToast={showToast} onGoToSolde={() => navigate('/settings/marketing/solde')} />}
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ── Plan Marketing IA : génération + lancement campagne SMS segmentée ──────
+// ── Marketing IA — Wizard 3 étapes: Saisie → Plan → Confirmation ───────────
 // ═══════════════════════════════════════════════════════════════════════════
-function TabIAPlan({ theme, showToast }) {
+function TabMarketingIA({ theme, showToast, onGoToSolde }) {
   const isDark = theme.mode === 'dark';
-  const [plan, setPlan]       = useState(null);
+  const [step, setStep] = useState(1);
+  const [budget, setBudget] = useState(20);
+  const [duration, setDuration] = useState(15);
+  const [balance, setBalance] = useState(null);
+  const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [launching, setLaunching] = useState(false);
   const [launched, setLaunched] = useState(null);
-  const [messages, setMessages] = useState({});
-  const [discounts, setDiscounts] = useState({});
-  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    paymentsApi.getSMSBalance().then(b => setBalance(parseFloat(b.balance))).catch(() => {});
+  }, []);
+
+  const pricePerSms = parseFloat(import.meta.env.VITE_SMS_COST_UNIT || '0.045')
+                    * (1 + parseFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT || '30') / 100);
+  const previewSms  = Math.floor(budget / pricePerSms);
+  const insufficient = balance != null && budget > balance;
+  const thirdDays = Math.max(1, Math.round(duration / 3));
+  const phaseBreakdown = [
+    { label: '⚠️ Clients risque',  days: `J1-J${thirdDays}`,             share: 0.40 },
+    { label: '😴 Clients perdus',  days: `J${thirdDays+1}-J${thirdDays*2}`, share: 0.35 },
+    { label: '⭐ Clients fidèles',  days: `J${thirdDays*2+1}-J${duration}`,  share: 0.25 },
+  ];
 
   const generate = async () => {
     setLoading(true);
     try {
-      const p = await marketingApi.getPlan();
+      const p = await campaignsApi.getAutoPlan({ budget, duration_days: duration });
       setPlan(p);
-      const m = {}, d = {};
-      p.segments.forEach(s => { m[s.id] = s.sms; d[s.id] = s.discount; });
-      setMessages(m); setDiscounts(d);
-    } catch(e) { showToast(e.message || 'Erreur', 'error'); }
-    finally { setLoading(false); }
+      setStep(2);
+    } catch(e) {
+      showToast(e.message || 'Erreur génération plan', 'error');
+    } finally { setLoading(false); }
   };
 
   const launch = async () => {
-    setConfirmOpen(false);
-    setLaunching(true);
+    setLoading(true);
     try {
-      const r = await marketingApi.launchPlan({ messages, discounts });
+      const r = await campaignsApi.sendAutoCampaign({ budget, duration_days: duration });
       setLaunched(r);
-    } catch(e) { showToast(e.message || 'Erreur', 'error'); }
-    finally { setLaunching(false); }
+      setStep(3);
+      // Rafraichir solde
+      paymentsApi.getSMSBalance().then(b => setBalance(parseFloat(b.balance))).catch(() => {});
+    } catch(e) {
+      showToast(e.message || 'Erreur lancement', 'error');
+    } finally { setLoading(false); }
   };
 
-  // ─── Écran de confirmation post-lancement ─────────────────────────────────
-  if (launched) {
+  const reset = () => { setPlan(null); setLaunched(null); setStep(1); };
+
+  // Étape 3 — Confirmation sobre
+  if (step === 3 && launched) {
     return (
-      <LaunchSuccessView theme={theme} launched={launched} plan={plan}
-        onDone={() => { setLaunched(null); setPlan(null); }} />
+      <div className="space-y-4">
+        <div style={{ padding:'32px 22px', borderRadius:20, background:theme.card,
+          border:`1px solid ${theme.border}`, textAlign:'center' }}>
+          <div style={{ width:76, height:76, borderRadius:'50%',
+            background:'rgba(16,185,129,0.12)', border:'2px solid rgba(16,185,129,0.25)',
+            display:'inline-flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <h3 style={{ margin:'0 0 8px', fontSize:22, fontWeight:900, color:theme.text }}>
+            Campagne lancée avec succès
+          </h3>
+          <p style={{ margin:'0 0 20px', fontSize:14, color:theme.muted }}>
+            Vos SMS partiront automatiquement selon le planning.
+          </p>
+          <div style={{ textAlign:'left', padding:'14px 16px', borderRadius:12,
+            background:isDark?'rgba(255,255,255,0.04)':'#f8fafc', border:`1px solid ${theme.border}` }}>
+            <MiniRow label="SMS planifiés"    value={launched.total_sms} theme={theme} />
+            <MiniRow label="Durée"            value={`${launched.duration_days} jours`} theme={theme} />
+            <MiniRow label="Montant débité"   value={`${launched.estimated_cost.toFixed(2)} €`} theme={theme} />
+            <MiniRow label="Solde restant"    value={`${(launched.new_balance || 0).toFixed(2)} €`} theme={theme} />
+          </div>
+          <button onClick={reset}
+            style={{ width:'100%', padding:13, marginTop:22, borderRadius:12, border:'none',
+              background:'#10b981', color:'white', fontWeight:800, fontSize:14, cursor:'pointer',
+              boxShadow:'0 6px 16px rgba(16,185,129,0.35)' }}>
+            Retour
+          </button>
+        </div>
+      </div>
     );
   }
 
-  // ─── Écran initial — bouton Générer ──────────────────────────────────────
-  if (!plan) {
+  // Étape 2 — Plan
+  if (step === 2 && plan) {
+    const canLaunch = plan.balance_sufficient && plan.total_sms > 0;
     return (
       <div className="space-y-4">
-        <div style={{ padding:'32px 24px', borderRadius:20, background:theme.card,
-          border:`1px solid ${theme.border}`, textAlign:'center' }}>
-          <div style={{ fontSize:42, marginBottom:14 }}>✨</div>
-          <h3 style={{ margin:'0 0 6px', fontSize:20, fontWeight:900, color:theme.text }}>
-            Plan marketing intelligent
-          </h3>
-          <p style={{ margin:'0 0 22px', fontSize:14, color:theme.muted, lineHeight:1.6 }}>
-            Analyse automatique de votre fichier client et génération d'un plan de relance
-            segmenté pour réactiver les clients dormants et fidéliser les meilleurs.
-          </p>
-          <button onClick={generate} disabled={loading}
-            style={{ padding:'14px 28px', borderRadius:12, border:'none', fontWeight:800, fontSize:14,
-              background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white', cursor:'pointer',
-              boxShadow:'0 6px 18px rgba(99,102,241,0.4)' }}>
-            {loading ? 'Analyse en cours...' : 'Générer mon plan'}
+        <StepIndicator step={2} theme={theme} />
+
+        {/* 3 KPIs */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+          <KpiCard theme={theme} icon="📩" label="SMS envoyés"
+            value={plan.total_sms} accent="#6366f1" />
+          <KpiCard theme={theme} icon="👥" label="Clients attendus"
+            value={`${plan.estimated_clients_min}-${plan.estimated_clients_max}`} accent="#f59e0b" />
+          <KpiCard theme={theme} icon="💰" label="CA estimé"
+            value={`${plan.estimated_revenue_min}-${plan.estimated_revenue_max}€`} accent="#10b981" />
+        </div>
+
+        <p style={{ margin:0, fontSize:11, color:theme.muted, textAlign:'center', padding:'0 8px' }}>
+          Estimation basée sur votre activité réelle — taux retour 8-20%<br/>
+          panier moyen : {plan.avg_price}€ (calculé sur vos transactions)
+        </p>
+
+        {/* Phases */}
+        {plan.phases.map(p => (
+          <div key={p.segment} style={{ padding:'14px 16px', borderRadius:14, background:theme.card,
+            border:`1px solid ${theme.border}`, opacity: p.sms_count===0 ? 0.55 : 1 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+              <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>
+                {p.emoji} {p.label}
+              </p>
+              <span style={{ fontSize:12, fontWeight:700, color:theme.muted }}>
+                J{p.start_day}-J{p.end_day}
+              </span>
+            </div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+              <span style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
+                background:'rgba(99,102,241,0.12)', color:'#6366f1' }}>
+                {p.sms_count} SMS
+              </span>
+              <span style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
+                background:'rgba(239,68,68,0.12)', color:'#ef4444' }}>
+                -{p.discount}%
+              </span>
+            </div>
+            <p style={{ margin:0, fontSize:12, color:theme.muted, fontStyle:'italic',
+              padding:'8px 10px', borderRadius:8, background:isDark?'rgba(255,255,255,0.04)':'#f8fafc',
+              border:`1px dashed ${theme.border}` }}>
+              "{p.template}"
+            </p>
+          </div>
+        ))}
+
+        {/* Récap coût */}
+        <div style={{ padding:'14px 16px', borderRadius:14, background:theme.card, border:`1px solid ${theme.border}` }}>
+          <MiniRow label="Total SMS"             value={plan.total_sms} theme={theme} />
+          <MiniRow label="Montant débité"        value={`${plan.estimated_cost.toFixed(2)} €`} theme={theme} />
+          <MiniRow label="Solde actuel"          value={`${plan.balance.toFixed(2)} €`} theme={theme} />
+          <MiniRow label="Solde après campagne"  value={`${(plan.balance - plan.estimated_cost).toFixed(2)} €`}
+            theme={theme} accent={plan.balance_sufficient ? '#10b981' : '#ef4444'} />
+        </div>
+
+        {/* Actions */}
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={() => setStep(1)}
+            style={{ flex:1, padding:13, borderRadius:12, border:`1px solid ${theme.border}`,
+              background:theme.inputBg, color:theme.muted, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+            Retour
           </button>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:28 }}>
-            {[
-              { e:'⚠️', l:"Clients qui\ns'éloignent" },
-              { e:'😴', l:"Clients\nperdus" },
-              { e:'⭐', l:"Clients\nfidèles" },
-            ].map((s,i) => (
-              <div key={i} style={{ padding:'10px 8px', borderRadius:10,
-                background: isDark?'rgba(255,255,255,0.04)':'#f8fafc', textAlign:'center' }}>
-                <div style={{ fontSize:18, marginBottom:3 }}>{s.e}</div>
-                <p style={{ margin:0, fontSize:10, fontWeight:700, color:theme.muted, whiteSpace:'pre-line' }}>{s.l}</p>
+          <button onClick={launch} disabled={!canLaunch || loading}
+            style={{ flex:2, padding:13, borderRadius:12, border:'none', fontWeight:800, fontSize:14,
+              cursor: canLaunch ? 'pointer' : 'not-allowed',
+              background: canLaunch ? 'linear-gradient(135deg,#10b981,#059669)' : theme.border,
+              color: canLaunch ? 'white' : theme.muted,
+              boxShadow: canLaunch ? '0 6px 16px rgba(16,185,129,0.35)' : 'none' }}>
+            {loading ? 'Lancement...' : 'Lancer la campagne'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Étape 1 — Saisie budget + durée
+  return (
+    <div className="space-y-4">
+      <StepIndicator step={1} theme={theme} />
+
+      <div style={{ padding:'20px 20px 22px', borderRadius:16, background:theme.card, border:`1px solid ${theme.border}` }}>
+        <div style={{ marginBottom:22 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+            <label style={{ fontSize:12, fontWeight:800, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Budget</label>
+            <span style={{ fontSize:28, fontWeight:900, color:theme.text, fontFamily:'monospace' }}>{budget} €</span>
+          </div>
+          <input type="range" min="5" max="100" step="5" value={budget}
+            onChange={e => setBudget(parseInt(e.target.value))}
+            style={{ width:'100%', accentColor:'#6366f1' }} />
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:6 }}>
+            <p style={{ margin:0, fontSize:11, color:theme.muted }}>
+              ≈ <strong style={{ color:theme.text }}>{previewSms} SMS</strong> estimés
+            </p>
+            <p style={{ margin:0, fontSize:11, color: insufficient ? '#ef4444' : theme.muted }}>
+              Solde : <strong>{balance != null ? balance.toFixed(2) : '—'} €</strong>
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
+            <label style={{ fontSize:12, fontWeight:800, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.06em' }}>Durée</label>
+            <span style={{ fontSize:28, fontWeight:900, color:theme.text, fontFamily:'monospace' }}>{duration} jours</span>
+          </div>
+          <input type="range" min="3" max="30" step="1" value={duration}
+            onChange={e => setDuration(parseInt(e.target.value))}
+            style={{ width:'100%', accentColor:'#6366f1' }} />
+          <div style={{ display:'flex', gap:6, marginTop:10 }}>
+            {phaseBreakdown.map((p,i) => (
+              <div key={i} style={{ flex:1, padding:'8px 6px', borderRadius:8,
+                background: isDark?'rgba(255,255,255,0.04)':'#f8fafc',
+                border:`1px solid ${theme.border}`, textAlign:'center' }}>
+                <p style={{ margin:0, fontSize:10, fontWeight:800, color:theme.text, lineHeight:1.3 }}>{p.label}</p>
+                <p style={{ margin:'3px 0 0', fontSize:9, color:theme.muted }}>{p.days}</p>
+                <p style={{ margin:'2px 0 0', fontSize:9, color:'#6366f1', fontWeight:700 }}>{Math.round(p.share*100)}%</p>
               </div>
             ))}
           </div>
         </div>
       </div>
-    );
-  }
 
-  // ─── Plan généré ─────────────────────────────────────────────────────────
-  const est = plan.estimates;
-  const majoritySegment = [...plan.segments].sort((a,b)=>b.count-a.count)[0]?.id;
-  const accroche = majoritySegment === 'loyal'
-    ? "Fidéliser coûte 5x moins cher que d'acquérir un nouveau client."
-    : "Vos clients qui s'éloignent sont les plus faciles à récupérer avec une bonne offre au bon moment.";
-  const canLaunch = plan.balance.sufficient && plan.total_clients > 0;
-
-  return (
-    <div className="space-y-4">
-      {/* Bloc principal ROI sobre */}
-      <div style={{ padding:'24px 22px', borderRadius:20, background:theme.card, border:`1px solid ${theme.border}` }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
-          <span style={{ fontSize:22 }}>💈</span>
-          <h3 style={{ margin:0, fontSize:16, fontWeight:900, color:theme.text }}>Votre plan de relance</h3>
-        </div>
-
-        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-          <StatRow theme={theme} icon="📩" value={`${est.sms_count} SMS`}
-            sub={`${est.duration_days} jours · 3 phases d'envoi`} />
-          <StatRow theme={theme} icon="👥"
-            value={`Entre ${est.expected_clients_min} et ${est.expected_clients_max} clients attendus`}
-            sub={`basé sur votre historique · taux estimé ${Math.round(est.return_rate_min*100)}-${Math.round(est.return_rate_max*100)}%`} />
-          <StatRow theme={theme} icon="💰"
-            value={`Entre ${est.ca_min}€ et ${est.ca_max}€ de CA estimé`}
-            sub={`basé sur votre panier moyen de ${plan.avg_price}€`} />
-        </div>
-
-        <p style={{ margin:'20px 0 0', fontSize:13, color:theme.text, fontStyle:'italic',
-          padding:'12px 14px', borderRadius:10, background:isDark?'rgba(99,102,241,0.08)':'rgba(99,102,241,0.06)',
-          borderLeft:'3px solid #6366f1' }}>
-          {accroche}
-        </p>
-
-        <p style={{ margin:'14px 0 0', fontSize:11, color:theme.muted, textAlign:'center' }}>
-          Estimation indicative basée sur votre activité réelle.<br/>
-          Les résultats peuvent varier selon la période et les offres.
-        </p>
-      </div>
-
-      {/* Phases */}
-      {plan.segments.map(seg => (
-        <PhaseCard key={seg.id} theme={theme} seg={seg}
-          message={messages[seg.id]} onMessageChange={v => setMessages(m => ({...m, [seg.id]: v}))}
-          discount={discounts[seg.id]} onDiscountChange={v => setDiscounts(d => ({...d, [seg.id]: v}))}
-        />
-      ))}
-
-      {/* Coût et solde */}
-      <div style={{ padding:'16px 18px', borderRadius:16, background:theme.card, border:`1px solid ${theme.border}` }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+      {/* Aperçu coût */}
+      <div style={{ padding:'14px 16px', borderRadius:12,
+        background: insufficient ? 'rgba(239,68,68,0.08)' : theme.card,
+        border: `1px solid ${insufficient ? 'rgba(239,68,68,0.3)' : theme.border}` }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
           <span style={{ fontSize:13, color:theme.muted }}>Coût total</span>
-          <span style={{ fontSize:17, fontWeight:900, color:theme.text }}>{est.sms_cost.toFixed(2)}€</span>
-        </div>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span style={{ fontSize:13, color:theme.muted }}>Solde marketing</span>
-          <span style={{ fontSize:14, fontWeight:700,
-            color: plan.balance.sufficient ? '#10b981' : '#ef4444' }}>
-            {plan.balance.amount.toFixed(2)}€
-            {!plan.balance.sufficient && ' — insuffisant'}
+          <span style={{ fontSize:17, fontWeight:900, color: insufficient ? '#ef4444' : theme.text }}>
+            {budget.toFixed(2)} €
           </span>
         </div>
-      </div>
-
-      {/* Actions */}
-      <div style={{ display:'flex', gap:10 }}>
-        <button onClick={() => setPlan(null)}
-          style={{ flex:1, padding:13, borderRadius:12, border:`1px solid ${theme.border}`,
-            background:theme.inputBg, color:theme.muted, fontWeight:700, fontSize:13, cursor:'pointer' }}>
-          Annuler
-        </button>
-        <button onClick={() => setConfirmOpen(true)} disabled={!canLaunch || launching}
-          style={{ flex:2, padding:13, borderRadius:12, border:'none', fontWeight:800, fontSize:14, cursor: canLaunch ? 'pointer' : 'not-allowed',
-            background: canLaunch ? 'linear-gradient(135deg,#10b981,#059669)' : theme.border,
-            color: canLaunch ? 'white' : theme.muted,
-            boxShadow: canLaunch ? '0 6px 16px rgba(16,185,129,0.35)' : 'none' }}>
-          {launching ? 'Lancement...' : `Lancer la campagne (${est.sms_count} SMS)`}
-        </button>
-      </div>
-
-      <Confirm open={confirmOpen} theme={theme} onClose={() => setConfirmOpen(false)}
-        title="Confirmer le lancement ?"
-        message={`${est.sms_count} SMS vont être envoyés. ${est.sms_cost.toFixed(2)}€ seront débités de votre solde marketing.`}
-        danger={false}
-        onConfirm={launch} />
-    </div>
-  );
-}
-
-function StatRow({ theme, icon, value, sub }) {
-  return (
-    <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
-      <span style={{ fontSize:20, minWidth:24 }}>{icon}</span>
-      <div style={{ flex:1 }}>
-        <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>{value}</p>
-        {sub && <p style={{ margin:'2px 0 0', fontSize:12, color:theme.muted }}>{sub}</p>}
-      </div>
-    </div>
-  );
-}
-
-function PhaseCard({ theme, seg, message, onMessageChange, discount, onDiscountChange }) {
-  const isDark = theme.mode === 'dark';
-  const empty = seg.count === 0;
-  return (
-    <div style={{ padding:'16px 18px', borderRadius:16, background:theme.card,
-      border:`1px solid ${theme.border}`, opacity: empty ? 0.5 : 1 }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:12, fontWeight:700, color:theme.muted }}>Phase {seg.phase} · Jours {seg.days}</span>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:13, color:theme.muted }}>SMS envoyés</span>
+          <span style={{ fontSize:13, fontWeight:700, color:theme.text }}>≈ {previewSms}</span>
         </div>
-        <span style={{ fontSize:12, fontWeight:800, color:theme.text }}>{seg.count} SMS</span>
-      </div>
-      <p style={{ margin:'4px 0 12px', fontSize:15, fontWeight:800, color:theme.text, display:'flex', alignItems:'center', gap:8 }}>
-        <span>{seg.emoji}</span>{seg.label}
-      </p>
-      {empty ? (
-        <p style={{ margin:0, fontSize:12, color:theme.muted, fontStyle:'italic' }}>Aucun client dans ce segment actuellement.</p>
-      ) : (
-        <>
-          <div style={{ display:'flex', gap:10, marginBottom:10, alignItems:'center' }}>
-            <label style={{ fontSize:11, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.04em' }}>Remise</label>
-            <div style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 10px',
-              borderRadius:8, border:`1px solid ${theme.border}`,
-              background:isDark?'rgba(255,255,255,0.04)':'#f8fafc' }}>
-              <input type="number" min="0" max="100" value={discount || ''}
-                onChange={e => onDiscountChange(parseInt(e.target.value) || 0)}
-                style={{ width:36, border:'none', background:'transparent', color:theme.text,
-                  fontSize:14, fontWeight:700, outline:'none', textAlign:'right' }} />
-              <span style={{ fontWeight:700, color:theme.muted, fontSize:12 }}>%</span>
-            </div>
+        {insufficient && (
+          <div style={{ marginTop:10, padding:'10px 12px', borderRadius:8,
+            background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)' }}>
+            <p style={{ margin:'0 0 6px', fontSize:12, color:'#ef4444', fontWeight:700 }}>
+              Solde insuffisant ({balance?.toFixed(2)} €)
+            </p>
+            <button onClick={onGoToSolde}
+              style={{ padding:'6px 12px', borderRadius:8, border:'none', fontSize:12, fontWeight:700,
+                background:'#ef4444', color:'white', cursor:'pointer' }}>
+              → Recharger mon solde
+            </button>
           </div>
-          <textarea value={message || ''} onChange={e => onMessageChange(e.target.value.slice(0,160))}
-            style={{ width:'100%', padding:'10px 12px', borderRadius:10,
-              border:`1px solid ${theme.border}`, background:isDark?'rgba(255,255,255,0.04)':'#fff',
-              color:theme.text, fontSize:13, outline:'none', boxSizing:'border-box', resize:'none', height:60, fontFamily:'inherit' }} />
-          <p style={{ margin:'4px 0 0', fontSize:10, color: (message?.length||0) > 150 ? '#ef4444' : theme.muted, textAlign:'right' }}>
-            {message?.length || 0}/160 · [prenom] remplacé automatiquement
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-function LaunchSuccessView({ theme, launched, plan, onDone }) {
-  const isDark = theme.mode === 'dark';
-  const remaining = Math.max(0, (plan?.balance?.amount || 0) - (launched.sms_cost || 0));
-  return (
-    <div className="space-y-4">
-      <div style={{ padding:'32px 22px', borderRadius:20, background:theme.card,
-        border:`1px solid ${theme.border}`, textAlign:'center' }}>
-        <div style={{ width:76, height:76, borderRadius:'50%',
-          background:'rgba(16,185,129,0.12)', border:'2px solid rgba(16,185,129,0.25)',
-          display:'inline-flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        </div>
-        <h3 style={{ margin:'0 0 8px', fontSize:22, fontWeight:900, color:theme.text }}>
-          Campagne lancée avec succès
-        </h3>
-        <p style={{ margin:'0 0 24px', fontSize:14, color:theme.muted }}>
-          {launched.sms_count} SMS en cours d'envoi
-        </p>
-        <div style={{ textAlign:'left', padding:'14px 16px', borderRadius:12,
-          background:isDark?'rgba(255,255,255,0.04)':'#f8fafc', border:`1px solid ${theme.border}` }}>
-          <Row label="SMS envoyés"     value={`${launched.sms_count}`} theme={theme} />
-          <Row label="Coût débité"     value={`${(launched.sms_cost||0).toFixed(2)} €`} theme={theme} />
-          <Row label="Solde restant"   value={`${remaining.toFixed(2)} €`} theme={theme} />
-        </div>
-        <p style={{ margin:'20px 0 0', fontSize:13, color:theme.text, lineHeight:1.5 }}>
-          Votre barbershop sera plus visible<br/>dès les prochains jours.
-        </p>
-        <button onClick={onDone}
-          style={{ width:'100%', padding:13, marginTop:22, borderRadius:12, border:'none',
-            background:'#10b981', color:'white', fontWeight:800, fontSize:14, cursor:'pointer',
-            boxShadow:'0 6px 16px rgba(16,185,129,0.35)' }}>
-          Retour
-        </button>
+        )}
       </div>
+
+      <button onClick={generate} disabled={insufficient || loading || budget < 1}
+        style={{ width:'100%', padding:14, borderRadius:12, border:'none', fontWeight:800, fontSize:15,
+          cursor: (insufficient || loading) ? 'not-allowed' : 'pointer',
+          background: (insufficient || loading) ? theme.border : 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+          color: (insufficient || loading) ? theme.muted : 'white',
+          boxShadow: (insufficient || loading) ? 'none' : '0 6px 18px rgba(99,102,241,0.4)' }}>
+        {loading ? 'Génération...' : 'Générer le plan'}
+      </button>
     </div>
   );
 }
 
-function Row({ label, value, theme }) {
+function StepIndicator({ step, theme }) {
+  return (
+    <div style={{ display:'flex', gap:6, padding:'0 4px 4px' }}>
+      {[1,2,3].map(n => (
+        <div key={n} style={{
+          flex:1, height:4, borderRadius:2,
+          background: n <= step ? '#6366f1' : theme.border,
+          opacity: n <= step ? 1 : 0.5,
+          transition:'background 0.3s',
+        }} />
+      ))}
+    </div>
+  );
+}
+
+function KpiCard({ theme, icon, label, value, accent }) {
+  return (
+    <div style={{ padding:'12px 10px', borderRadius:12, background:theme.card,
+      border:`1px solid ${theme.border}`, textAlign:'center' }}>
+      <div style={{ fontSize:18, marginBottom:4 }}>{icon}</div>
+      <p style={{ margin:0, fontSize:10, fontWeight:800, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</p>
+      <p style={{ margin:'4px 0 0', fontSize:16, fontWeight:900, color: accent || theme.text }}>{value}</p>
+    </div>
+  );
+}
+
+function MiniRow({ label, value, theme, accent }) {
   return (
     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0' }}>
       <span style={{ fontSize:13, color:theme.muted }}>{label}</span>
-      <span style={{ fontSize:14, fontWeight:800, color:theme.text }}>{value}</span>
+      <span style={{ fontSize:14, fontWeight:800, color: accent || theme.text }}>{value}</span>
     </div>
   );
 }

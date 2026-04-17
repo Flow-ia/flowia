@@ -97,6 +97,158 @@ async function checkEmailQuota(userId) {
   };
 }
 
+// ── Segmentation 5 classes (champion/fidele/prometteur/risque/perdu) ─────────
+// Anti-spam: exclut par défaut les clients ayant reçu un SMS dans les 7 derniers jours
+async function getClientSegments(userId, excludeRecentSms = true) {
+  const { rows } = await pool.query(`
+    WITH avg_spent AS (
+      SELECT COALESCE(AVG(total_spent), 0) AS avg_val
+      FROM client_accounts WHERE user_id = $1
+    )
+    SELECT
+      ca.id, ca.first_name, ca.last_name, ca.phone, ca.email,
+      COALESCE(ca.total_visits, 0)::int    AS visits,
+      COALESCE(ca.total_spent, 0)::float   AS spent,
+      stats.last_visit,
+      CASE
+        WHEN stats.last_visit IS NULL OR stats.last_visit < (CURRENT_DATE - INTERVAL '90 days') THEN 'perdu'
+        WHEN stats.last_visit < (CURRENT_DATE - INTERVAL '30 days') THEN 'risque'
+        WHEN COALESCE(ca.total_visits,0) >= 5
+             AND COALESCE(ca.total_spent,0) > (SELECT avg_val*2 FROM avg_spent) THEN 'champion'
+        WHEN COALESCE(ca.total_visits,0) >= 3 THEN 'fidele'
+        ELSE 'prometteur'
+      END AS segment
+    FROM client_accounts ca
+    LEFT JOIN LATERAL (
+      SELECT MAX(a.date) AS last_visit
+      FROM appointments a
+      WHERE a.user_id = ca.user_id
+        AND LOWER(COALESCE(a.client_email,'')) = LOWER(COALESCE(ca.email,''))
+    ) stats ON TRUE
+    WHERE ca.user_id = $1
+      AND ca.phone IS NOT NULL AND ca.phone != ''
+      ${excludeRecentSms ? `AND NOT EXISTS (
+        SELECT 1 FROM message_log ml
+        WHERE ml.user_id = ca.user_id AND ml.phone = ca.phone
+          AND ml.channel = 'sms' AND ml.sent_at > NOW() - INTERVAL '7 days'
+      )` : ''}
+    ORDER BY COALESCE(ca.total_spent,0) DESC, COALESCE(ca.total_visits,0) DESC
+  `, [userId]);
+
+  const bySegment = { champion: [], fidele: [], prometteur: [], risque: [], perdu: [] };
+  rows.forEach(c => { if (bySegment[c.segment]) bySegment[c.segment].push(c); });
+  return bySegment;
+}
+
+// ── Plan de campagne automatique par budget/durée ────────────────────────────
+// Ciblage: 40% risque, 35% perdu, 25% fidele (les 3 segments qui ont besoin de relance)
+// 3 phases selon la durée: 1/3 risque, 1/3 perdu, 1/3 fidele
+async function generateCampaignPlan(userId, budget, durationDays) {
+  const maxSmsByBudget = Math.floor(budget / SMS_PRICE);
+
+  const { rows: avgR } = await pool.query(
+    `SELECT AVG(amount)::float AS avg_price
+     FROM transactions WHERE user_id=$1 AND type='revenue' AND amount > 0`,
+    [userId]
+  );
+  const avgPrice = Math.round(parseFloat(avgR[0]?.avg_price) || 29);
+
+  const { rows: balR } = await pool.query(
+    `SELECT sms_balance FROM users WHERE id=$1`, [userId]
+  );
+  const balance = parseFloat(balR[0]?.sms_balance || 0);
+
+  const segments = await getClientSegments(userId, true);
+
+  const ALLOC = { risque: 0.40, perdu: 0.35, fidele: 0.25 };
+  const DISCOUNTS = { risque: 15, perdu: 25, fidele: 10 };
+  const TEMPLATES = {
+    risque: '[prenom], ca fait un moment ! -[reduction]% sur ta prochaine coupe. Valable [duree] jours.',
+    perdu:  '[prenom], tu nous manques ! -[reduction]% exceptionnel sur ta prochaine coupe.',
+    fidele: '[prenom], merci pour ta fidelite ! -[reduction]% pour toi ce mois-ci.',
+  };
+  const META = {
+    risque: { label: "Clients à risque", emoji: '⚠️' },
+    perdu:  { label: 'Clients perdus',    emoji: '😴' },
+    fidele: { label: 'Clients fidèles',   emoji: '⭐' },
+  };
+
+  // Répartition temporelle en 3 phases de ~ même durée
+  const d = Math.max(3, Math.min(30, parseInt(durationDays) || 15));
+  const third = Math.max(1, Math.round(d / 3));
+  const PHASE_WINDOWS = {
+    risque: { start_day: 1,            end_day: third },
+    perdu:  { start_day: third + 1,    end_day: third * 2 },
+    fidele: { start_day: third * 2 + 1,end_day: d },
+  };
+
+  const order = ['risque', 'perdu', 'fidele'];
+  const phases = [];
+  let totalSms = 0;
+
+  for (const segId of order) {
+    const wantedFromBudget = Math.floor(maxSmsByBudget * ALLOC[segId]);
+    const available = segments[segId].length;
+    const allocation = Math.min(wantedFromBudget, available);
+    const clientsInPhase = segments[segId].slice(0, allocation);
+    totalSms += allocation;
+
+    const win = PHASE_WINDOWS[segId];
+    const tmpl = TEMPLATES[segId]
+      .replace('[reduction]', DISCOUNTS[segId])
+      .replace('[duree]', '30');
+
+    phases.push({
+      segment: segId,
+      label: META[segId].label,
+      emoji: META[segId].emoji,
+      start_day: win.start_day,
+      end_day:   win.end_day,
+      sms_count: allocation,
+      discount:  DISCOUNTS[segId],
+      template:  tmpl,
+      clients:   clientsInPhase.map(c => ({
+        id: c.id, first_name: c.first_name, last_name: c.last_name, phone: c.phone,
+      })),
+    });
+  }
+
+  const estimatedCost = parseFloat((totalSms * SMS_PRICE).toFixed(2));
+  const smsRemaining  = maxSmsByBudget - totalSms;
+
+  const estClientsMin = Math.round(totalSms * 0.08);
+  const estClientsMax = Math.round(totalSms * 0.20);
+  const estRevMin     = Math.round(estClientsMin * avgPrice);
+  const estRevMax     = Math.round(estClientsMax * avgPrice);
+
+  // Totaux segments globaux (affichage UI)
+  const segmentTotals = {
+    champion:   segments.champion.length,
+    fidele:     segments.fidele.length,
+    prometteur: segments.prometteur.length,
+    risque:     segments.risque.length,
+    perdu:      segments.perdu.length,
+  };
+
+  return {
+    budget,
+    duration_days: d,
+    max_sms_by_budget: maxSmsByBudget,
+    total_sms: totalSms,
+    estimated_cost: estimatedCost,
+    sms_remaining: smsRemaining,
+    phases,
+    estimated_clients_min: estClientsMin,
+    estimated_clients_max: estClientsMax,
+    estimated_revenue_min: estRevMin,
+    estimated_revenue_max: estRevMax,
+    avg_price: avgPrice,
+    balance,
+    balance_sufficient: balance >= estimatedCost,
+    segment_totals: segmentTotals,
+  };
+}
+
 function getTargetCount(targetType, customCount) {
   if (targetType === 'top50') return 50;
   if (targetType === 'top100') return 100;
@@ -351,6 +503,105 @@ router.get('/history', async (req, res) => {
   } catch (err) {
     console.error('[CAMPAIGNS history]', err.message);
     res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── GET /api/campaigns/auto-plan ────────────────────────────────────────────
+router.get('/auto-plan', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const budget = parseFloat(req.query.budget);
+    const duration = parseInt(req.query.duration_days);
+
+    const { rows: balR } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
+    const balance = parseFloat(balR[0]?.sms_balance || 0);
+
+    if (!budget || budget < 1)
+      return res.status(400).json({ error: 'Budget doit être supérieur à 1 €.' });
+    if (budget > balance)
+      return res.status(400).json({ error: `Budget (${budget}€) supérieur au solde disponible (${balance.toFixed(2)}€).`, code: 'INSUFFICIENT_BALANCE' });
+    if (!duration || duration < 3 || duration > 30)
+      return res.status(400).json({ error: 'La durée doit être entre 3 et 30 jours.' });
+
+    const plan = await generateCampaignPlan(userId, budget, duration);
+    res.json(plan);
+  } catch(e) {
+    console.error('[AUTO PLAN]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/campaigns/auto-send ───────────────────────────────────────────
+// Planifie les envois via campaign_queue (traités par cron SMS) et débite le solde
+router.post('/auto-send', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { budget, duration_days } = req.body;
+
+    const plan = await generateCampaignPlan(userId, budget, duration_days);
+    if (!plan.balance_sufficient)
+      return res.status(400).json({ error: 'Solde insuffisant.', code: 'INSUFFICIENT_BALANCE' });
+    if (plan.total_sms === 0)
+      return res.status(400).json({ error: 'Aucun client ciblable pour le moment (exclusion anti-spam 7 jours).' });
+
+    // Créer la campagne
+    const { rows: camp } = await pool.query(
+      `INSERT INTO campaigns (user_id, channel, target_type, target_count, status)
+       VALUES ($1, 'sms', 'ia_auto', $2, 'scheduled') RETURNING id`,
+      [userId, plan.total_sms]
+    );
+    const campaignId = camp[0].id;
+
+    // Planifier chaque client selon sa phase
+    const today = new Date();
+    for (const phase of plan.phases) {
+      if (!phase.clients.length) continue;
+      for (const client of phase.clients) {
+        const firstName = (client.first_name || 'Cher client').trim();
+        const msg = phase.template
+          .replace(/\[prenom\]/gi, firstName)
+          .replace(/\{prenom\}/gi, firstName);
+        const smsMsg = msg.length > 160 ? msg.slice(0, 157) + '...' : msg;
+
+        // scheduled_date = aujourd'hui + (start_day - 1), décalage aléatoire jusqu'à end_day
+        const spread = Math.max(0, phase.end_day - phase.start_day);
+        const offset = (phase.start_day - 1) + Math.floor(Math.random() * (spread + 1));
+        const sd = new Date(today);
+        sd.setDate(sd.getDate() + offset);
+
+        await pool.query(
+          `INSERT INTO campaign_queue (user_id, campaign_id, client_id, client_phone, client_name, message, channel, scheduled_date)
+           VALUES ($1,$2,$3,$4,$5,$6,'sms',$7)`,
+          [userId, campaignId, client.id, client.phone,
+           [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Client',
+           smsMsg, sd.toISOString().slice(0,10)]
+        );
+      }
+    }
+
+    // Débit immédiat du solde (le coût estimé correspond aux envois planifiés)
+    await pool.query(
+      `UPDATE users SET sms_balance = sms_balance - $1 WHERE id=$2`,
+      [plan.estimated_cost, userId]
+    );
+    await pool.query(
+      `INSERT INTO sms_transactions (user_id, type, amount, sms_count, description, status)
+       VALUES ($1,'debit',$2,$3,$4,'completed')`,
+      [userId, plan.estimated_cost, plan.total_sms, `Campagne IA auto — ${duration_days}j`]
+    );
+
+    console.log(`[AUTO SEND] user=${userId} sms=${plan.total_sms} cost=${plan.estimated_cost}€ duration=${duration_days}j`);
+    res.json({
+      ok: true,
+      campaign_id: campaignId,
+      total_sms: plan.total_sms,
+      estimated_cost: plan.estimated_cost,
+      duration_days: plan.duration_days,
+      new_balance: plan.balance - plan.estimated_cost,
+    });
+  } catch(e) {
+    console.error('[AUTO SEND]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
