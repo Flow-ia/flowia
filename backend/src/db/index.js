@@ -852,6 +852,9 @@ async function initDB() {
   `);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_pending ON campaign_queue(status, scheduled_date)`);
   await runMigration(`ALTER TABLE campaign_queue ADD COLUMN IF NOT EXISTS channel VARCHAR(10) DEFAULT 'email'`);
+  // Politique d'annulation côté client (en heures avant RDV)
+  // 0 = à tout moment · 1 = 1h avant · 2 = 2h · 6 · 24 · 48 avant RDV
+  await runMigration(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS cancellation_policy_hours INT DEFAULT 2`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_queue_channel ON campaign_queue(status, channel, scheduled_date)`);
 
   await runMigration(`

@@ -497,23 +497,36 @@ router.delete('/me', globalClientAuth, async (req, res) => {
     const { email } = gcRows[0];
 
     // 1. Anonymiser les RDV — garder l'historique commerçant mais effacer identité
+    // appointments.client_id référence client_accounts.id (pas global_clients.id).
+    // Résolution: on matche via les fiches locales liées au compte global + email.
     await pool.query(
       `UPDATE appointments SET
          client_id=NULL,
-         client_name='[Client supprimé]',
+         client_name='Client anonyme',
          client_email=NULL,
          client_phone=NULL
-       WHERE client_id=$1`,
+       WHERE client_id IN (SELECT id FROM client_accounts WHERE global_client_id=$1)`,
       [gid]
     );
     if (email) {
       await pool.query(
         `UPDATE appointments SET
-           client_name='[Client supprimé]',
+           client_id=NULL,
+           client_name='Client anonyme',
            client_email=NULL,
            client_phone=NULL
-         WHERE LOWER(client_email)=LOWER($1) AND client_id IS NULL`,
+         WHERE LOWER(client_email)=LOWER($1)`,
         [email]
+      );
+    }
+    // Annuler les RDV futurs du client anonymisé
+    if (email) {
+      await pool.query(
+        `UPDATE appointments SET status='cancelled',
+           cancel_reason='Compte client supprimé',
+           updated_at=NOW()
+         WHERE client_id IS NULL AND client_name='Client anonyme'
+           AND status IN ('confirmed','pending') AND date >= CURRENT_DATE`
       );
     }
 

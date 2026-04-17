@@ -334,16 +334,21 @@ function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab =
       setAppts(p => p.map(a => a.id === cancelModal.id ? {...a, status:'cancelled'} : a));
       setCancelModal(null);
     } catch(e) {
-      const msg = e.message || '';
+      const payload = e.data || {};
       setCancelModal(null);
-      if (msg.includes('2 heures') || msg.includes('TOO_LATE')) {
+      // Backend renvoie code=TOO_LATE avec policy_hours + coordonnées merchant
+      if (payload.code === 'TOO_LATE' || (e.message || '').includes('TOO_LATE') || (e.message || '').includes('moins de')) {
         setTooLateModal({
           ...cancelModal,
-          _businessPhone:   business?.phone   || null,
-          _businessAddress: business?.address || null,
+          _policyHours:     payload.policy_hours || 2,
+          _businessName:    payload.business_name    || business?.businessName || business?.business_name || null,
+          _businessPhone:   payload.merchant_phone   || business?.phone   || null,
+          _businessAddress: payload.merchant_address || business?.address || null,
           _businessPostal:  business?.postal_code || null,
           _businessCity:    business?.city    || null,
         });
+      } else {
+        alert(e.message || 'Erreur lors de l\'annulation');
       }
     } finally { setCancelLoading(false); }
   };
@@ -761,14 +766,15 @@ function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab =
               </svg>
             </div>
             <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 10px' }}>
-              Annulation impossible
+              Annulation en ligne impossible
             </p>
             <p style={{ fontSize:13, color:th.muted, margin:'0 0 16px', lineHeight:1.6 }}>
-              Ce rendez-vous commence dans moins de 2 heures.
-              Le délai d&apos;annulation est dépassé.
+              {tooLateModal._policyHours > 0
+                ? `Ce rendez-vous commence dans moins de ${tooLateModal._policyHours < 24 ? tooLateModal._policyHours + ' heures' : Math.round(tooLateModal._policyHours/24) + ' jour' + (tooLateModal._policyHours >= 48 ? 's' : '')}. Le délai autorisé par le commerçant est dépassé.`
+                : 'Le délai d\'annulation est dépassé.'}
             </p>
             <p style={{ fontSize:13, fontWeight:700, color:th.text, margin:'0 0 12px' }}>
-              Contactez directement le prestataire :
+              Pour annuler, merci de prendre contact avec {tooLateModal._businessName || 'le commerçant'} :
             </p>
             <div style={{ background:th.cardAlt, border:`1px solid ${th.border}`,
               borderRadius:12, padding:'14px 16px', marginBottom:20,
@@ -802,6 +808,12 @@ function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab =
                     )}
                   </div>
                 </div>
+              )}
+              {/* Fallback si aucun contact connu */}
+              {!tooLateModal._businessPhone && !tooLateModal._businessAddress && !tooLateModal._businessCity && (
+                <p style={{ fontSize:13, color:th.muted, margin:0, textAlign:'center' }}>
+                  Merci de prendre contact directement avec le commerçant.
+                </p>
               )}
             </div>
             <button onClick={()=>setTooLateModal(null)}

@@ -78,7 +78,9 @@ router.get('/settings', async (req, res) => {
 // POST /api/booking/settings
 router.post('/settings', async (req, res) => {
   try {
-    const { is_enabled, slug, business_description, address, phone, timezone, advance_booking_days, min_notice_hours, require_account, google_business_url } = req.body;
+    const { is_enabled, slug, business_description, address, phone, timezone,
+            advance_booking_days, min_notice_hours, cancellation_policy_hours,
+            require_account, google_business_url } = req.body;
     // Vérifier unicité du slug
     if (slug) {
       const { rows: existing } = await pool.query(
@@ -86,18 +88,24 @@ router.post('/settings', async (req, res) => {
       );
       if (existing.length) return res.status(409).json({ error: 'Ce slug est déjà utilisé.' });
     }
+    // Valeurs autorisées pour la politique d'annulation
+    const ALLOWED = [0, 1, 2, 6, 24, 48];
+    const canPol = ALLOWED.includes(parseInt(cancellation_policy_hours))
+      ? parseInt(cancellation_policy_hours) : 2;
+
     const { rows } = await pool.query(
-      `INSERT INTO booking_settings (user_id, is_enabled, slug, business_description, address, phone, timezone, advance_booking_days, min_notice_hours, require_account, google_business_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO booking_settings (user_id, is_enabled, slug, business_description, address, phone, timezone, advance_booking_days, min_notice_hours, cancellation_policy_hours, require_account, google_business_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (user_id) DO UPDATE SET
          is_enabled=$2, slug=$3, business_description=$4, address=$5, phone=$6,
-         timezone=$7, advance_booking_days=$8, min_notice_hours=$9, require_account=$10,
-         google_business_url=$11, updated_at=NOW()
+         timezone=$7, advance_booking_days=$8, min_notice_hours=$9,
+         cancellation_policy_hours=$10, require_account=$11,
+         google_business_url=$12, updated_at=NOW()
        RETURNING *`,
       [req.user.userId, is_enabled ?? false, slug || null, business_description || null,
        address || null, phone || null, timezone || 'Europe/Paris',
-       advance_booking_days ?? 30, min_notice_hours ?? 1, require_account ?? false,
-       google_business_url || null]
+       advance_booking_days ?? 30, min_notice_hours ?? 1, canPol,
+       require_account ?? false, google_business_url || null]
     );
     res.json({ settings: rows[0] });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }

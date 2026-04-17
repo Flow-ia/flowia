@@ -1331,6 +1331,7 @@ function ConfigTab({ settings: initSettings, hours: initHours, onSaved, showToas
     phone:                initSettings?.phone||'',
     advance_booking_days: initSettings?.advance_booking_days??30,
     min_notice_hours:     initSettings?.min_notice_hours??1,
+    cancellation_policy_hours: initSettings?.cancellation_policy_hours??2,
     require_account:      initSettings?.require_account??false,
     google_business_url:  initSettings?.google_business_url||'',
   });
@@ -1626,6 +1627,22 @@ function ConfigTab({ settings: initSettings, hours: initHours, onSaved, showToas
             <label className="text-xs font-bold mb-1 block" style={{ color:t.muted }}>Délai minimum (heures)</label>
             <input type="number" min="0" max="72" value={form.min_notice_hours} onChange={e=>setForm(f=>({...f,min_notice_hours:parseInt(e.target.value)||1}))} className="w-full px-3 py-3 rounded-xl text-sm focus:outline-none" style={inp} />
           </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold mb-1 block" style={{ color:t.muted }}>Annulation en ligne par le client</label>
+          <select value={form.cancellation_policy_hours}
+            onChange={e=>setForm(f=>({...f, cancellation_policy_hours:parseInt(e.target.value)}))}
+            className="w-full px-3 py-3 rounded-xl text-sm focus:outline-none" style={inp}>
+            <option value={0}>À tout moment</option>
+            <option value={1}>Jusqu'à 1 h avant le RDV</option>
+            <option value={2}>Jusqu'à 2 h avant le RDV</option>
+            <option value={6}>Jusqu'à 6 h avant le RDV</option>
+            <option value={24}>Jusqu'à 24 h avant le RDV</option>
+            <option value={48}>Jusqu'à 48 h avant le RDV</option>
+          </select>
+          <p className="text-[11px] mt-1" style={{ color:t.muted }}>
+            Au-delà de ce délai, le client devra vous contacter directement pour annuler.
+          </p>
         </div>
       </div>
 

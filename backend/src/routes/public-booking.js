@@ -1080,11 +1080,41 @@ router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
     catch { return res.status(401).json({ error: 'Token invalide.' }); }
     if (decoded.scope !== 'client') return res.status(403).json({ error: 'Accès refusé.' });
 
-    // Vérifier que le RDV existe et récupérer date/heure pour la règle 2h
+    // ── Résoudre le merchant + politique d'annulation + coordonnées ──────────
+    const { rows: bizRows } = await pool.query(
+      `SELECT u.id AS user_id, u.business_name, u.phone AS merchant_phone, u.address AS merchant_address,
+              COALESCE(bs.cancellation_policy_hours, 2) AS policy_hours
+       FROM users u
+       LEFT JOIN booking_settings bs ON bs.user_id = u.id
+       WHERE (bs.slug = $1 OR u.id = $2)
+       LIMIT 1`,
+      [req.params.slug, decoded.merchantId]
+    );
+    if (!bizRows.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const biz = bizRows[0];
+    const policyHours = parseInt(biz.policy_hours);
+
+    // ── Résoudre l'email du client (robuste aux suppressions de fiches) ─────
+    let clientEmail = null;
+    const { rows: localRows } = await pool.query(
+      'SELECT email FROM client_accounts WHERE id=$1', [decoded.clientId]
+    );
+    if (localRows[0]?.email) clientEmail = localRows[0].email;
+    if (!clientEmail && decoded.globalClientId) {
+      const { rows: gcRows } = await pool.query(
+        'SELECT email FROM global_clients WHERE id=$1', [decoded.globalClientId]
+      );
+      if (gcRows[0]?.email) clientEmail = gcRows[0].email;
+    }
+    if (!clientEmail) return res.status(401).json({ error: 'Session client invalide.' });
+
+    // ── Vérifier que le RDV appartient à ce client (via email, pas client_id) ─
     const { rows: check } = await pool.query(
-      `SELECT id, date, start_time, status, client_id
-       FROM appointments WHERE id=$1 AND client_id=$2`,
-      [req.params.id, decoded.clientId]
+      `SELECT id, date, start_time, status
+       FROM appointments
+       WHERE id=$1 AND user_id=$2
+         AND LOWER(COALESCE(client_email,'')) = LOWER($3)`,
+      [req.params.id, biz.user_id, clientEmail]
     );
     if (!check.length) return res.status(404).json({ error: 'RDV introuvable.' });
     const appt = check[0];
@@ -1092,7 +1122,9 @@ router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
     if (appt.status !== 'confirmed' && appt.status !== 'pending')
       return res.status(400).json({ error: 'Ce RDV ne peut plus être annulé.' });
 
-    // Règle 2h : impossible d'annuler si le RDV commence dans moins de 2 heures
+    // ── Politique d'annulation merchant-driven ──────────────────────────────
+    // policy_hours=0 → annulation possible à tout moment
+    // sinon → doit être plus de N heures avant le RDV
     const dateStr = typeof appt.date === 'string'
       ? appt.date.substring(0, 10)
       : new Date(appt.date).toISOString().substring(0, 10);
@@ -1102,26 +1134,34 @@ router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
     const apptStart = new Date(`${dateStr}T${timeStr}:00`);
     const now       = new Date();
     const diffHours = (apptStart - now) / (1000 * 60 * 60);
-    if (diffHours < 2) {
+    if (policyHours > 0 && diffHours < policyHours) {
+      const labelHours = policyHours < 24 ? `${policyHours}h`
+                                          : `${Math.round(policyHours/24)} jour${policyHours>=48?'s':''}`;
       return res.status(400).json({
-        error: 'Annulation impossible : le rendez-vous commence dans moins de 2 heures.',
-        code:  'TOO_LATE'
+        error: `Annulation en ligne impossible : le rendez-vous commence dans moins de ${labelHours}.`,
+        code: 'TOO_LATE',
+        policy_hours:     policyHours,
+        business_name:    biz.business_name || null,
+        merchant_phone:   biz.merchant_phone || null,
+        merchant_address: biz.merchant_address || null,
       });
     }
 
+    // ── Annulation effective ────────────────────────────────────────────────
     const { rows } = await pool.query(
       `UPDATE appointments SET status='cancelled', cancel_reason=$1, updated_at=NOW()
-       WHERE id=$2 AND client_id=$3
-       RETURNING id, client_id, client_name,
+       WHERE id=$2 AND user_id=$3
+         AND LOWER(COALESCE(client_email,'')) = LOWER($4)
+       RETURNING id, client_name,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
          TO_CHAR(start_time, 'HH24:MI') as start_time,
          TO_CHAR(end_time,   'HH24:MI') as end_time,
          status, cancel_reason, updated_at`,
-      [req.body.reason||'Annulé par le client', req.params.id, decoded.clientId]
+      [req.body.reason || 'Annulé par le client', req.params.id, biz.user_id, clientEmail]
     );
     if (!rows.length) return res.status(404).json({ error: 'RDV introuvable ou déjà annulé.' });
     res.json(rows[0]);
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) { console.error('[CANCEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -1309,5 +1349,104 @@ router.get('/:slug/client/auth/google', (req, res) => {
 });
 
 // NOTE : Callback générique dans backend/src/routes/auth.js → GET /api/auth/google/callback
+
+// ── DELETE /:slug/client/account — suppression définitive avec anonymisation ─
+// Logique métier:
+// 1. Résoudre le client via son token (client_accounts + global_clients)
+// 2. Annuler tous les RDV futurs (confirmed/pending) avec raison "Compte supprimé"
+// 3. Anonymiser les RDV passés: client_name→"Client anonyme", client_email/phone→NULL
+//    Garde le lien avec appointments pour la comptabilité du merchant.
+// 4. Supprimer toutes les fiches client_accounts liées au globalClientId du token
+// 5. Supprimer le global_clients
+// 6. Les transactions restent intactes (elles ne contiennent aucune donnée personnelle)
+router.delete('/:slug/client/account', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+    let decoded;
+    try { decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET); }
+    catch { return res.status(401).json({ error: 'Token invalide.' }); }
+    if (decoded.scope !== 'client') return res.status(403).json({ error: 'Accès refusé.' });
+
+    // Résoudre email + globalClientId (robuste aux fiches locales supprimées)
+    let clientEmail = null;
+    let gcId = decoded.globalClientId || null;
+    {
+      const { rows: loc } = await client.query(
+        'SELECT email, global_client_id FROM client_accounts WHERE id=$1',
+        [decoded.clientId]
+      );
+      if (loc[0]) {
+        clientEmail = loc[0].email || null;
+        if (!gcId) gcId = loc[0].global_client_id;
+      }
+      if (!clientEmail && gcId) {
+        const { rows: gc } = await client.query('SELECT email FROM global_clients WHERE id=$1', [gcId]);
+        clientEmail = gc[0]?.email || null;
+      }
+    }
+    if (!clientEmail) return res.status(400).json({ error: 'Compte introuvable.' });
+
+    const emailLow = clientEmail.toLowerCase();
+
+    await client.query('BEGIN');
+
+    // 1. Annuler RDV futurs
+    const { rowCount: cancelledFuture } = await client.query(
+      `UPDATE appointments SET status='cancelled',
+         cancel_reason='Compte client supprimé',
+         updated_at=NOW()
+       WHERE LOWER(client_email)=$1
+         AND status IN ('confirmed','pending')
+         AND date >= CURRENT_DATE`,
+      [emailLow]
+    );
+
+    // 2. Anonymiser TOUS les appointments du client (passés + futurs annulés)
+    const { rowCount: anonymized } = await client.query(
+      `UPDATE appointments SET
+         client_id    = NULL,
+         client_name  = 'Client anonyme',
+         client_email = NULL,
+         client_phone = NULL
+       WHERE LOWER(client_email)=$1`,
+      [emailLow]
+    );
+
+    // 3. Anonymiser les logs promo associés (traçabilité merchant conservée)
+    await client.query(
+      `UPDATE promo_usage_logs SET client_email=NULL, client_name='Client anonyme'
+       WHERE LOWER(client_email)=$1`,
+      [emailLow]
+    ).catch(() => {});
+
+    // 4. Supprimer toutes les fiches locales liées au compte global
+    if (gcId) {
+      await client.query('DELETE FROM client_accounts WHERE global_client_id=$1', [gcId]);
+      await client.query('DELETE FROM global_clients WHERE id=$1', [gcId]);
+    } else {
+      // Fallback sans globalClientId: suppression fiche unique
+      await client.query('DELETE FROM client_accounts WHERE id=$1', [decoded.clientId]);
+    }
+
+    // 5. Supprimer fiches locales restantes pour sécurité (cas rare de fiches orphelines)
+    await client.query('DELETE FROM client_accounts WHERE LOWER(email)=$1', [emailLow]);
+
+    await client.query('COMMIT');
+    console.log(`[ACCOUNT DELETE] email=${emailLow} cancelledFuture=${cancelledFuture} anonymized=${anonymized}`);
+
+    res.json({
+      ok: true,
+      cancelled_future_appointments: cancelledFuture,
+      anonymized_appointments: anonymized,
+      message: 'Compte supprimé et données anonymisées.',
+    });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[ACCOUNT DELETE ERR]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  } finally { client.release(); }
+});
 
 module.exports = router;

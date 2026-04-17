@@ -231,7 +231,12 @@ async function pubRequest(path, options = {}) {
   if (clientToken) headers['Authorization'] = `Bearer ${clientToken}`;
   const res = await fetch(`${PUB_BASE}/pub${path}`, { ...options, headers });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Erreur serveur');
+    err.data = data;       // préserve code, policy_hours, merchant_phone, etc.
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 export const pubApi = {
@@ -244,6 +249,7 @@ export const pubApi = {
   login:          (slug, b) => pubRequest(`/${slug}/client/login`,     { method: 'POST', body: JSON.stringify(b) }),
   myAppointments: (slug)    => pubRequest(`/${slug}/client/appointments`),
   cancel:         (slug,id,b)=> pubRequest(`/${slug}/client/appointments/${id}/cancel`, { method: 'PUT', body: JSON.stringify(b) }),
+  deleteAccount:  (slug)    => pubRequest(`/${slug}/client/account`, { method: 'DELETE' }),
   getClosedDays:   (slug)    => pubRequest(`/${slug}/closed-days`),
   getMonthStatus:  (slug, q) => pubRequest(`/${slug}/month-status?` + new URLSearchParams(q)),
   checkPromo:     (slug, body) => pubRequest(`/${slug}/check-promo`, { method: 'POST', body: JSON.stringify(body) }),
