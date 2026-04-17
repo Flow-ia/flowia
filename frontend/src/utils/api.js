@@ -383,6 +383,13 @@ export const paymentsApi = {
                        { method: 'POST', body: JSON.stringify({ payment_method_id: id }) }),
 };
 
+// ── Marketing IA (plan relance barbershop/salon) ─────────────────────────────
+export const marketingApi = {
+  getPlan:    () => request('/marketing/plan'),
+  launchPlan: (body) => request('/marketing/plan/launch',
+    { method: 'POST', body: JSON.stringify(body) }),
+};
+
 export const creditsApi = {
   list:       (params={}) => request('/credits?' + new URLSearchParams(params)),
   getClient:  (clientId)  => request('/credits/client/' + clientId),

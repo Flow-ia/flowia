@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
 import SMSRechargeModal from '../../components/SMSRechargeModal';
-import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
+import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi, marketingApi } from '../../utils/api';
 
 export default function TabMarketing({ theme, showToast }) {
   const isDark   = theme.mode === 'dark';
@@ -11,15 +11,16 @@ export default function TabMarketing({ theme, showToast }) {
   const location = useLocation();
 
   const MTABS = [
+    { id: 'iaplan',     label: '✨ Plan IA' },
     { id: 'fidelite',   label: 'Fidelite' },
     { id: 'promotions', label: '% Promotions' },
-    { id: 'solde',      label: 'Solde marketing' },
+    { id: 'solde',      label: 'Solde' },
   ];
 
   // Extrait le sous-onglet depuis l'URL : /settings/marketing/{sub}
   const parts = location.pathname.replace(/^\/settings\/marketing\/?/, '').split('/').filter(Boolean);
-  const rawSub = parts[0] || 'promotions';
-  const marketingTab = MTABS.some(t => t.id === rawSub) ? rawSub : 'promotions';
+  const rawSub = parts[0] || 'iaplan';
+  const marketingTab = MTABS.some(t => t.id === rawSub) ? rawSub : 'iaplan';
 
   const setMarketingTab = (id) => {
     // conserve les segments suivants (utile si sous-page imbriquée plus tard)
@@ -42,9 +43,285 @@ export default function TabMarketing({ theme, showToast }) {
         ))}
       </div>
 
+      {marketingTab === 'iaplan'     && <TabIAPlan theme={theme} showToast={showToast} />}
       {marketingTab === 'fidelite'   && <TabLoyalty theme={theme} />}
       {marketingTab === 'promotions' && <TabPromo theme={theme} showToast={showToast} />}
       {marketingTab === 'solde'      && <TabSMS showToast={showToast} theme={theme} />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Plan Marketing IA : génération + lancement campagne SMS segmentée ──────
+// ═══════════════════════════════════════════════════════════════════════════
+function TabIAPlan({ theme, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const [plan, setPlan]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [launched, setLaunched] = useState(null);
+  const [messages, setMessages] = useState({});
+  const [discounts, setDiscounts] = useState({});
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const p = await marketingApi.getPlan();
+      setPlan(p);
+      const m = {}, d = {};
+      p.segments.forEach(s => { m[s.id] = s.sms; d[s.id] = s.discount; });
+      setMessages(m); setDiscounts(d);
+    } catch(e) { showToast(e.message || 'Erreur', 'error'); }
+    finally { setLoading(false); }
+  };
+
+  const launch = async () => {
+    setConfirmOpen(false);
+    setLaunching(true);
+    try {
+      const r = await marketingApi.launchPlan({ messages, discounts });
+      setLaunched(r);
+    } catch(e) { showToast(e.message || 'Erreur', 'error'); }
+    finally { setLaunching(false); }
+  };
+
+  // ─── Écran de confirmation post-lancement ─────────────────────────────────
+  if (launched) {
+    return (
+      <LaunchSuccessView theme={theme} launched={launched} plan={plan}
+        onDone={() => { setLaunched(null); setPlan(null); }} />
+    );
+  }
+
+  // ─── Écran initial — bouton Générer ──────────────────────────────────────
+  if (!plan) {
+    return (
+      <div className="space-y-4">
+        <div style={{ padding:'32px 24px', borderRadius:20, background:theme.card,
+          border:`1px solid ${theme.border}`, textAlign:'center' }}>
+          <div style={{ fontSize:42, marginBottom:14 }}>✨</div>
+          <h3 style={{ margin:'0 0 6px', fontSize:20, fontWeight:900, color:theme.text }}>
+            Plan marketing intelligent
+          </h3>
+          <p style={{ margin:'0 0 22px', fontSize:14, color:theme.muted, lineHeight:1.6 }}>
+            Analyse automatique de votre fichier client et génération d'un plan de relance
+            segmenté pour réactiver les clients dormants et fidéliser les meilleurs.
+          </p>
+          <button onClick={generate} disabled={loading}
+            style={{ padding:'14px 28px', borderRadius:12, border:'none', fontWeight:800, fontSize:14,
+              background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white', cursor:'pointer',
+              boxShadow:'0 6px 18px rgba(99,102,241,0.4)' }}>
+            {loading ? 'Analyse en cours...' : 'Générer mon plan'}
+          </button>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginTop:28 }}>
+            {[
+              { e:'⚠️', l:"Clients qui\ns'éloignent" },
+              { e:'😴', l:"Clients\nperdus" },
+              { e:'⭐', l:"Clients\nfidèles" },
+            ].map((s,i) => (
+              <div key={i} style={{ padding:'10px 8px', borderRadius:10,
+                background: isDark?'rgba(255,255,255,0.04)':'#f8fafc', textAlign:'center' }}>
+                <div style={{ fontSize:18, marginBottom:3 }}>{s.e}</div>
+                <p style={{ margin:0, fontSize:10, fontWeight:700, color:theme.muted, whiteSpace:'pre-line' }}>{s.l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Plan généré ─────────────────────────────────────────────────────────
+  const est = plan.estimates;
+  const majoritySegment = [...plan.segments].sort((a,b)=>b.count-a.count)[0]?.id;
+  const accroche = majoritySegment === 'loyal'
+    ? "Fidéliser coûte 5x moins cher que d'acquérir un nouveau client."
+    : "Vos clients qui s'éloignent sont les plus faciles à récupérer avec une bonne offre au bon moment.";
+  const canLaunch = plan.balance.sufficient && plan.total_clients > 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Bloc principal ROI sobre */}
+      <div style={{ padding:'24px 22px', borderRadius:20, background:theme.card, border:`1px solid ${theme.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+          <span style={{ fontSize:22 }}>💈</span>
+          <h3 style={{ margin:0, fontSize:16, fontWeight:900, color:theme.text }}>Votre plan de relance</h3>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <StatRow theme={theme} icon="📩" value={`${est.sms_count} SMS`}
+            sub={`${est.duration_days} jours · 3 phases d'envoi`} />
+          <StatRow theme={theme} icon="👥"
+            value={`Entre ${est.expected_clients_min} et ${est.expected_clients_max} clients attendus`}
+            sub={`basé sur votre historique · taux estimé ${Math.round(est.return_rate_min*100)}-${Math.round(est.return_rate_max*100)}%`} />
+          <StatRow theme={theme} icon="💰"
+            value={`Entre ${est.ca_min}€ et ${est.ca_max}€ de CA estimé`}
+            sub={`basé sur votre panier moyen de ${plan.avg_price}€`} />
+        </div>
+
+        <p style={{ margin:'20px 0 0', fontSize:13, color:theme.text, fontStyle:'italic',
+          padding:'12px 14px', borderRadius:10, background:isDark?'rgba(99,102,241,0.08)':'rgba(99,102,241,0.06)',
+          borderLeft:'3px solid #6366f1' }}>
+          {accroche}
+        </p>
+
+        <p style={{ margin:'14px 0 0', fontSize:11, color:theme.muted, textAlign:'center' }}>
+          Estimation indicative basée sur votre activité réelle.<br/>
+          Les résultats peuvent varier selon la période et les offres.
+        </p>
+      </div>
+
+      {/* Phases */}
+      {plan.segments.map(seg => (
+        <PhaseCard key={seg.id} theme={theme} seg={seg}
+          message={messages[seg.id]} onMessageChange={v => setMessages(m => ({...m, [seg.id]: v}))}
+          discount={discounts[seg.id]} onDiscountChange={v => setDiscounts(d => ({...d, [seg.id]: v}))}
+        />
+      ))}
+
+      {/* Coût et solde */}
+      <div style={{ padding:'16px 18px', borderRadius:16, background:theme.card, border:`1px solid ${theme.border}` }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+          <span style={{ fontSize:13, color:theme.muted }}>Coût total</span>
+          <span style={{ fontSize:17, fontWeight:900, color:theme.text }}>{est.sms_cost.toFixed(2)}€</span>
+        </div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:13, color:theme.muted }}>Solde marketing</span>
+          <span style={{ fontSize:14, fontWeight:700,
+            color: plan.balance.sufficient ? '#10b981' : '#ef4444' }}>
+            {plan.balance.amount.toFixed(2)}€
+            {!plan.balance.sufficient && ' — insuffisant'}
+          </span>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ display:'flex', gap:10 }}>
+        <button onClick={() => setPlan(null)}
+          style={{ flex:1, padding:13, borderRadius:12, border:`1px solid ${theme.border}`,
+            background:theme.inputBg, color:theme.muted, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+          Annuler
+        </button>
+        <button onClick={() => setConfirmOpen(true)} disabled={!canLaunch || launching}
+          style={{ flex:2, padding:13, borderRadius:12, border:'none', fontWeight:800, fontSize:14, cursor: canLaunch ? 'pointer' : 'not-allowed',
+            background: canLaunch ? 'linear-gradient(135deg,#10b981,#059669)' : theme.border,
+            color: canLaunch ? 'white' : theme.muted,
+            boxShadow: canLaunch ? '0 6px 16px rgba(16,185,129,0.35)' : 'none' }}>
+          {launching ? 'Lancement...' : `Lancer la campagne (${est.sms_count} SMS)`}
+        </button>
+      </div>
+
+      <Confirm open={confirmOpen} theme={theme} onClose={() => setConfirmOpen(false)}
+        title="Confirmer le lancement ?"
+        message={`${est.sms_count} SMS vont être envoyés. ${est.sms_cost.toFixed(2)}€ seront débités de votre solde marketing.`}
+        danger={false}
+        onConfirm={launch} />
+    </div>
+  );
+}
+
+function StatRow({ theme, icon, value, sub }) {
+  return (
+    <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+      <span style={{ fontSize:20, minWidth:24 }}>{icon}</span>
+      <div style={{ flex:1 }}>
+        <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>{value}</p>
+        {sub && <p style={{ margin:'2px 0 0', fontSize:12, color:theme.muted }}>{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function PhaseCard({ theme, seg, message, onMessageChange, discount, onDiscountChange }) {
+  const isDark = theme.mode === 'dark';
+  const empty = seg.count === 0;
+  return (
+    <div style={{ padding:'16px 18px', borderRadius:16, background:theme.card,
+      border:`1px solid ${theme.border}`, opacity: empty ? 0.5 : 1 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:12, fontWeight:700, color:theme.muted }}>Phase {seg.phase} · Jours {seg.days}</span>
+        </div>
+        <span style={{ fontSize:12, fontWeight:800, color:theme.text }}>{seg.count} SMS</span>
+      </div>
+      <p style={{ margin:'4px 0 12px', fontSize:15, fontWeight:800, color:theme.text, display:'flex', alignItems:'center', gap:8 }}>
+        <span>{seg.emoji}</span>{seg.label}
+      </p>
+      {empty ? (
+        <p style={{ margin:0, fontSize:12, color:theme.muted, fontStyle:'italic' }}>Aucun client dans ce segment actuellement.</p>
+      ) : (
+        <>
+          <div style={{ display:'flex', gap:10, marginBottom:10, alignItems:'center' }}>
+            <label style={{ fontSize:11, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.04em' }}>Remise</label>
+            <div style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 10px',
+              borderRadius:8, border:`1px solid ${theme.border}`,
+              background:isDark?'rgba(255,255,255,0.04)':'#f8fafc' }}>
+              <input type="number" min="0" max="100" value={discount || ''}
+                onChange={e => onDiscountChange(parseInt(e.target.value) || 0)}
+                style={{ width:36, border:'none', background:'transparent', color:theme.text,
+                  fontSize:14, fontWeight:700, outline:'none', textAlign:'right' }} />
+              <span style={{ fontWeight:700, color:theme.muted, fontSize:12 }}>%</span>
+            </div>
+          </div>
+          <textarea value={message || ''} onChange={e => onMessageChange(e.target.value.slice(0,160))}
+            style={{ width:'100%', padding:'10px 12px', borderRadius:10,
+              border:`1px solid ${theme.border}`, background:isDark?'rgba(255,255,255,0.04)':'#fff',
+              color:theme.text, fontSize:13, outline:'none', boxSizing:'border-box', resize:'none', height:60, fontFamily:'inherit' }} />
+          <p style={{ margin:'4px 0 0', fontSize:10, color: (message?.length||0) > 150 ? '#ef4444' : theme.muted, textAlign:'right' }}>
+            {message?.length || 0}/160 · [prenom] remplacé automatiquement
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LaunchSuccessView({ theme, launched, plan, onDone }) {
+  const isDark = theme.mode === 'dark';
+  const remaining = Math.max(0, (plan?.balance?.amount || 0) - (launched.sms_cost || 0));
+  return (
+    <div className="space-y-4">
+      <div style={{ padding:'32px 22px', borderRadius:20, background:theme.card,
+        border:`1px solid ${theme.border}`, textAlign:'center' }}>
+        <div style={{ width:76, height:76, borderRadius:'50%',
+          background:'rgba(16,185,129,0.12)', border:'2px solid rgba(16,185,129,0.25)',
+          display:'inline-flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <h3 style={{ margin:'0 0 8px', fontSize:22, fontWeight:900, color:theme.text }}>
+          Campagne lancée avec succès
+        </h3>
+        <p style={{ margin:'0 0 24px', fontSize:14, color:theme.muted }}>
+          {launched.sms_count} SMS en cours d'envoi
+        </p>
+        <div style={{ textAlign:'left', padding:'14px 16px', borderRadius:12,
+          background:isDark?'rgba(255,255,255,0.04)':'#f8fafc', border:`1px solid ${theme.border}` }}>
+          <Row label="SMS envoyés"     value={`${launched.sms_count}`} theme={theme} />
+          <Row label="Coût débité"     value={`${(launched.sms_cost||0).toFixed(2)} €`} theme={theme} />
+          <Row label="Solde restant"   value={`${remaining.toFixed(2)} €`} theme={theme} />
+        </div>
+        <p style={{ margin:'20px 0 0', fontSize:13, color:theme.text, lineHeight:1.5 }}>
+          Votre barbershop sera plus visible<br/>dès les prochains jours.
+        </p>
+        <button onClick={onDone}
+          style={{ width:'100%', padding:13, marginTop:22, borderRadius:12, border:'none',
+            background:'#10b981', color:'white', fontWeight:800, fontSize:14, cursor:'pointer',
+            boxShadow:'0 6px 16px rgba(16,185,129,0.35)' }}>
+          Retour
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, theme }) {
+  return (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0' }}>
+      <span style={{ fontSize:13, color:theme.muted }}>{label}</span>
+      <span style={{ fontSize:14, fontWeight:800, color:theme.text }}>{value}</span>
     </div>
   );
 }

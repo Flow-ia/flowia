@@ -157,6 +157,7 @@ function startServer() {
   app.use('/api/credits',        apiLimiter,  require('./routes/credits'));
   app.use('/api/employee-pins',  apiLimiter,  require('./routes/employee-pins'));
   app.use('/api/campaigns',     apiLimiter,  require('./routes/campaigns'));
+  app.use('/api/marketing',     apiLimiter,  require('./routes/marketing'));
   app.use('/api/payments',      apiLimiter,  require('./routes/payments'));
 
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
