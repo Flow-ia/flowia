@@ -286,7 +286,7 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
   const initHasImage = !!init?.has_image;
   const showCurrent  = initHasImage && !imgDel && !imgPreview;
   const showPreview  = !!imgPreview;
-  const currentUrl   = init?.id ? mediaApi.employeeUrl(init.id) + (init._imgV ? `?v=${init._imgV}` : '') : null;
+  const currentUrl   = init?.id ? mediaApi.employeeUrl(init.id) + `?v=${init._imgV || init.image_version || 1}` : null;
 
   const onPickFile = (e) => {
     const file = e.target.files?.[0]; if (!file) return;

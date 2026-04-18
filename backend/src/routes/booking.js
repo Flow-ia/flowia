@@ -149,9 +149,15 @@ router.get('/services', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT bs.*, c.name as category_name,
-              EXISTS(SELECT 1 FROM media m WHERE m.ref_id=bs.id AND m.type='service') AS has_image
+              mi.id IS NOT NULL                        AS has_image,
+              EXTRACT(EPOCH FROM mi.created_at)::bigint AS image_version
        FROM booking_services bs
        LEFT JOIN categories c ON c.id = bs.category_id
+       LEFT JOIN LATERAL (
+         SELECT id, created_at FROM media
+          WHERE ref_id=bs.id AND type='service'
+          ORDER BY created_at DESC LIMIT 1
+       ) mi ON TRUE
        WHERE bs.user_id=$1 ORDER BY bs.sort_order, bs.created_at`,
       [req.user.userId]
     );

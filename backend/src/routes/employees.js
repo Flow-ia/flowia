@@ -13,8 +13,15 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT e.*,
-              EXISTS(SELECT 1 FROM media m WHERE m.ref_id=e.id AND m.type='employee') AS has_image
-       FROM employees e WHERE e.user_id=$1 ORDER BY e.created_at ASC`,
+              mi.id   IS NOT NULL                  AS has_image,
+              EXTRACT(EPOCH FROM mi.created_at)::bigint AS image_version
+       FROM employees e
+       LEFT JOIN LATERAL (
+         SELECT id, created_at FROM media
+          WHERE ref_id=e.id AND type='employee'
+          ORDER BY created_at DESC LIMIT 1
+       ) mi ON TRUE
+       WHERE e.user_id=$1 ORDER BY e.created_at ASC`,
       [req.user.userId]
     );
     res.json(rows);

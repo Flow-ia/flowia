@@ -4,7 +4,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { pubApi, globalClientApi, mediaApi } from '../utils/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
-const serviceImgUrl = (id) => `${API_BASE}/media/service/${id}/image`;
+const withV = (url, v) => v ? `${url}?v=${v}` : url;
+const serviceImgUrl  = (id, v) => withV(`${API_BASE}/media/service/${id}/image`, v);
+const employeeImgUrl = (id, v) => withV(`${API_BASE}/media/employee/${id}/image`, v);
 const mediaUrl = (u) => mediaApi.absoluteUrl(u);
 
 const MONTHS_FR = ['Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Decembre'];
@@ -2571,7 +2573,7 @@ export default function BookingPage({ slug }) {
                         display:'flex', alignItems:'center', justifyContent:'center',
                         border: e.has_image ? `1px solid ${th.border}` : 'none' }}>
                         {e.has_image ? (
-                          <img src={`${API_BASE}/media/employee/${e.id}/image`} alt={e.name}
+                          <img src={employeeImgUrl(e.id, e.image_version)} alt={e.name}
                             style={{ width:'100%', height:'100%', objectFit:'cover' }}
                             onError={ev => {
                               ev.currentTarget.style.display = 'none';
@@ -2996,7 +2998,7 @@ export default function BookingPage({ slug }) {
                             fontSize:20, fontWeight:800, color:e.avatar_color||'#374151',
                             border:`2px solid ${e.avatar_color||th.border}30` }}>
                             {e.has_image ? (
-                              <img src={`${API_BASE}/media/employee/${e.id}/image`} alt={e.name}
+                              <img src={employeeImgUrl(e.id, e.image_version)} alt={e.name}
                                 style={{ width:'100%', height:'100%', objectFit:'cover' }}
                                 onError={ev => { ev.currentTarget.style.display = 'none'; }} />
                             ) : (
@@ -3761,7 +3763,7 @@ function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}>
 
                 {/* Image service si disponible */}
-                <ServiceThumb serviceId={s.id} color={s.color} th={th} hasImage={s.has_image !== false} />
+                <ServiceThumb serviceId={s.id} color={s.color} th={th} hasImage={s.has_image !== false} version={s.image_version} />
 
                 {/* Infos */}
                 <div style={{ flex:1, minWidth:0 }}>
@@ -3796,7 +3798,7 @@ function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
 }
 
 // Miniature image du service (se charge silencieusement)
-function ServiceThumb({ serviceId, color, th, hasImage = true }) {
+function ServiceThumb({ serviceId, color, th, hasImage = true, version }) {
   const [ok, setOk] = useState(false);
   const accent = color || '#6366f1';
   const showImg = hasImage !== false;
@@ -3812,7 +3814,7 @@ function ServiceThumb({ serviceId, color, th, hasImage = true }) {
       )}
       {showImg && (
         <img
-          src={serviceImgUrl(serviceId)}
+          src={serviceImgUrl(serviceId, version)}
           alt=""
           style={{ width:'100%', height:'100%', objectFit:'cover', display: ok ? 'block' : 'none' }}
           onLoad={() => setOk(true)}
@@ -3830,7 +3832,7 @@ function ServiceCard({ s, th, onClick, catColor }) {
   const durLabel = dMin >= 60
     ? `${Math.floor(dMin/60)}h${dMin%60 > 0 ? String(dMin%60).padStart(2,'0') : ''}`
     : `${dMin} min`;
-  const svcImgUrl = serviceImgUrl(s.id);
+  const svcImgUrl = serviceImgUrl(s.id, s.image_version);
   const [hasImg, setHasImg] = useState(s.has_image !== false);
 
   return (

@@ -585,7 +585,7 @@ function BookingServices({ theme, showToast }) {
     const showCurrent  = initHasImage && !imgDel && !imgPreview;
     const showPreview  = !!imgPreview;
     const showNone     = !showCurrent && !showPreview;
-    const currentUrl   = init?.id ? mediaApi.serviceUrl(init.id) + (init._imgV ? `?v=${init._imgV}` : '') : null;
+    const currentUrl   = init?.id ? mediaApi.serviceUrl(init.id) + `?v=${init._imgV || init.image_version || 1}` : null;
 
     const onPickFile = (e) => {
       const f = e.target.files?.[0]; if (!f) return;
@@ -969,7 +969,7 @@ function BookingServices({ theme, showToast }) {
                       {svc.has_image ? (
                         <div style={{ width:40,height:40,borderRadius:9,flexShrink:0,overflow:'hidden',
                           background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', border:`1px solid ${theme.border}` }}>
-                          <img src={mediaApi.serviceUrl(svc.id) + (svc._imgV ? `?v=${svc._imgV}` : '')}
+                          <img src={mediaApi.serviceUrl(svc.id) + `?v=${svc._imgV || svc.image_version || 1}`}
                             alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}
                             onError={e => { e.currentTarget.style.display='none'; }} />
                         </div>
@@ -1042,7 +1042,7 @@ function BookingServices({ theme, showToast }) {
                 {svc.has_image ? (
                   <div style={{ width:40,height:40,borderRadius:9,flexShrink:0,overflow:'hidden',
                     background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', border:`1px solid ${theme.border}` }}>
-                    <img src={mediaApi.serviceUrl(svc.id) + (svc._imgV ? `?v=${svc._imgV}` : '')}
+                    <img src={mediaApi.serviceUrl(svc.id) + `?v=${svc._imgV || svc.image_version || 1}`}
                       alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}
                       onError={e => { e.currentTarget.style.display='none'; }} />
                   </div>

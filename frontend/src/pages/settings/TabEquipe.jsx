@@ -664,7 +664,7 @@ function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, onPatchEmp
               {emp.has_image ? (
                 <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden"
                   style={{ border:`1px solid ${theme.border}` }}>
-                  <img src={mediaApi.employeeUrl(emp.id) + (emp._imgV ? `?v=${emp._imgV}` : '')}
+                  <img src={mediaApi.employeeUrl(emp.id) + `?v=${emp._imgV || emp.image_version || 1}`}
                     alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
                     onError={e => { e.currentTarget.style.display='none'; }} />
                 </div>
