@@ -4,6 +4,28 @@ Dernier commit : **`78b3c75`** — `fix: Marketing IA fonctionne avec peu de cli
 
 ---
 
+## 🆕 Session 2026-04-18 : Pagination clients + historique + index BDD
+
+### Frontend
+- `frontend/src/pages/Transactions.jsx` : pagination 10/page (client-side sur `filtered`),
+  navigation `‹ Préc. | Page X / N | Suiv. ›` avant le FAB.
+  Reset auto de la page quand un filtre change (type/paiement/employé/recherche).
+  Stats (`totRev`, `totExp`, CA mois) restent calculées sur **tout** le filtre (pas la page courante).
+- `frontend/src/pages/ClientsPage.jsx` : pagination 10/page **server-side** (offset=page*10, limit=10),
+  chargement automatique au montage (plus besoin de cliquer « Voir tous les clients »),
+  compteur `X clients pour "..."` toujours visible, reset page sur changement de recherche/tri.
+
+### Backend
+- `backend/src/db/index.js` : 3 nouveaux index pour accélérer la pagination
+  - `idx_transactions_user_client_type` sur `transactions(user_id, client_email, type)`
+    → booste les subqueries `tx_count` / `total_spent WHERE type='revenue'` dans GET /clients
+  - `idx_appointments_user_client` sur `appointments(user_id, client_email)`
+    → booste le subquery `apt_count` dans GET /clients
+  - `idx_transactions_user_date_time` sur `transactions(user_id, date DESC, time DESC NULLS LAST)`
+    → matche exactement l'ORDER BY de GET /transactions
+
+---
+
 ## 🟢 Features livrées et testées
 
 ### Stripe embarqué (solde SMS)

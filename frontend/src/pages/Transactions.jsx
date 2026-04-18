@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+
+const PAGE_SIZE = 10;
 import { I, ICON_MAP } from '../utils/icons';
 import { disp, todayStr } from '../utils/dates';
 import { TransactionForm } from '../components/Forms';
@@ -121,6 +123,7 @@ export default function Transactions({ transactions, employees, categories, onAd
   const [typeF, setTypeF]   = useState('all');
   const [payF, setPayF]     = useState('all');
   const [empF, setEmpF]     = useState('all');
+  const [page, setPage]     = useState(0);
 
   const getEmp = id => employees.find(e=>e.id===id);
   const getCat = id => categories.find(c=>c.id===id);
@@ -145,11 +148,20 @@ export default function Transactions({ transactions, employees, categories, onAd
     });
   }, [transactions, typeF, payF, empF, search, todayOnly]);
 
+  // Pagination 10/page — reset à chaque changement de filtre
+  useEffect(() => { setPage(0); }, [typeF, payF, empF, search]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSafe   = Math.min(page, totalPages - 1);
+  const pagedItems = useMemo(
+    () => filtered.slice(pageSafe * PAGE_SIZE, (pageSafe + 1) * PAGE_SIZE),
+    [filtered, pageSafe]
+  );
+
   const groups = useMemo(() => {
     const g = {};
-    filtered.forEach(tx => { const k = nd(tx.date)||'unknown'; (g[k]||(g[k]=[])).push(tx); });
+    pagedItems.forEach(tx => { const k = nd(tx.date)||'unknown'; (g[k]||(g[k]=[])).push(tx); });
     return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
-  }, [filtered]);
+  }, [pagedItems]);
 
   const now = new Date();
   // Stats mensuelles (admin seulement)
@@ -348,6 +360,23 @@ export default function Transactions({ transactions, employees, categories, onAd
           );
         })}
       </div>
+
+      {/* Pagination 10 par page */}
+      {filtered.length > PAGE_SIZE && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'24px 16px 8px' }}>
+          <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={pageSafe===0}
+            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'#161620':'#ffffff', color: pageSafe===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe===0?'default':'pointer', opacity: pageSafe===0?0.5:1 }}>
+            ‹ Préc.
+          </button>
+          <span style={{ fontSize:13, fontWeight:700, color:theme.muted, minWidth:80, textAlign:'center' }}>
+            Page {pageSafe + 1} / {totalPages}
+          </span>
+          <button onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={pageSafe>=totalPages-1}
+            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'#161620':'#ffffff', color: pageSafe>=totalPages-1?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe>=totalPages-1?'default':'pointer', opacity: pageSafe>=totalPages-1?0.5:1 }}>
+            Suiv. ›
+          </button>
+        </div>
+      )}
 
       {/* FAB */}
       <button onClick={()=>{setEdit(null); setModal(true);}} className="pressable"

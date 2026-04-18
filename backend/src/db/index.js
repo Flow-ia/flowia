@@ -952,6 +952,16 @@ async function initDB() {
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_24h_sent BOOLEAN DEFAULT FALSE`);
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_2h_sent BOOLEAN DEFAULT FALSE`);
 
+  // ── Index pagination clients + historique transactions ──────────────────────
+  // Accélère les subqueries tx_count / total_spent / apt_count dans GET /clients
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_client_type
+    ON transactions(user_id, client_email, type)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_user_client
+    ON appointments(user_id, client_email)`);
+  // ORDER BY date DESC, time DESC NULLS LAST dans GET /transactions
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_date_time
+    ON transactions(user_id, date DESC, time DESC NULLS LAST)`);
+
 console.log('[DB] Tables initialisées');
 }
 

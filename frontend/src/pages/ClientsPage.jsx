@@ -85,6 +85,8 @@ function SortDropdown({ value, onChange, theme, isDark }) {
   );
 }
 
+const PAGE_SIZE = 10;
+
 // ─── Composant principal ──────────────────────────────────────────────────────
 export default function ClientsPage() {
   const { theme }          = useTheme();
@@ -112,6 +114,7 @@ export default function ClientsPage() {
   const [confirmBlock, setConfirmBlock] = useState(false); // modal confirmation blocage
   const [blockBusy,    setBlockBusy]    = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [page, setPage] = useState(0);
 
   // ── Crédit ──
   const [creditData,    setCreditData]    = useState(null);
@@ -140,29 +143,38 @@ export default function ClientsPage() {
   const inp  = { width:'100%', padding:'11px 14px', borderRadius:12, outline:'none', boxSizing:'border-box', border:`1px solid ${theme.border}`, fontSize:14, color:theme.text, background:isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.04)' };
   const lbl  = { fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 };
 
-  // Charger uniquement quand une recherche est saisie (ou quand on force le chargement)
-  const loadList = useCallback(async (forceSearch = search) => {
-    if (!forceSearch.trim() && !hasSearched) return;
+  // Charger 10 clients à la fois (pagination server-side)
+  const loadList = useCallback(async (forceSearch = search, forcePage = page) => {
     setLoading(true);
     try {
-      const r = await clientsApi.list({ search: forceSearch, sort, limit: 150 });
+      const r = await clientsApi.list({
+        search: forceSearch,
+        sort,
+        limit:  PAGE_SIZE,
+        offset: forcePage * PAGE_SIZE,
+      });
       setClients(r.clients || []);
       setTotal(r.total || 0);
     } catch { showToast('Impossible de charger les clients', 'error'); }
     finally { setLoading(false); }
-  }, [search, sort, hasSearched]);
+  }, [search, sort, page]);
 
-  // Déclencher la recherche avec debounce
+  // Reset page quand la recherche ou le tri change
+  useEffect(() => { setPage(0); }, [search, sort]);
+
+  // Chargement auto (mount + changement page/tri) + debounce sur recherche
   useEffect(() => {
-    if (!hasSearched && !search.trim()) return;
-    const t = setTimeout(() => loadList(), 350);
+    const t = setTimeout(() => { setHasSearched(true); loadList(); }, search.trim() ? 350 : 0);
     return () => clearTimeout(t);
-  }, [search, sort]);
+  }, [search, sort, page]);
 
   const doSearch = () => {
     setHasSearched(true);
-    loadList(search);
+    setPage(0);
+    loadList(search, 0);
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const openFiche = async (cl) => {
     setFiche(null); setFicheLoad(true); setEditMode(false); setTab('info');
@@ -352,11 +364,9 @@ export default function ClientsPage() {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:11 }}>
           <div>
             <h1 style={{ margin:0, fontFamily:"'Outfit',sans-serif", fontSize:20, fontWeight:800, letterSpacing:'-0.025em', color:theme.text }}>Clients</h1>
-            {hasSearched && (
-              <p style={{ margin:'2px 0 0', fontSize:11.5, color:theme.muted }}>
-                {loading ? '...' : `${total} client${total !== 1 ? 's' : ''}${search.trim() ? ` pour "${search}"` : ''}`}
-              </p>
-            )}
+            <p style={{ margin:'2px 0 0', fontSize:11.5, color:theme.muted }}>
+              {loading ? '...' : `${total} client${total !== 1 ? 's' : ''}${search.trim() ? ` pour "${search}"` : ''}`}
+            </p>
           </div>
           <button onClick={() => { setForm({ first_name:'', last_name:'', email:'', phone:'', notes:'' }); setView('create'); }}
             style={{ display:'flex', alignItems:'center', gap:6, padding:'9px 16px', borderRadius:14, background:'#1a73e8', border:'none', color:'white', boxShadow:'0 4px 14px rgba(17,24,39,0.35)', fontWeight:800, fontSize:13, cursor:'pointer' }}>
@@ -382,30 +392,16 @@ export default function ClientsPage() {
               style={{ ...inp, paddingLeft:36, paddingRight: search ? 36 : 14 }}
             />
             {search && (
-              <button onClick={() => { setSearch(''); setClients([]); setTotal(0); setHasSearched(false); }}
+              <button onClick={() => { setSearch(''); setPage(0); }}
                 style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:theme.muted, fontSize:15, lineHeight:1, padding:0 }}>✕</button>
             )}
           </div>
-          <SortDropdown value={sort} onChange={v => { setSort(v); if (hasSearched) setTimeout(() => loadList(), 50); }} theme={theme} isDark={isDark} />
+          <SortDropdown value={sort} onChange={v => setSort(v)} theme={theme} isDark={isDark} />
         </div>
       </div>
 
       {/* ── Corps ── */}
       <div style={{ padding:'16px 14px 0' }}>
-
-        {/* État initial — pas encore de recherche */}
-        {!hasSearched && !loading && (
-          <div style={{ textAlign:'center', padding:'56px 20px' }}>
-            <div style={{ width:72, height:72, borderRadius:24, background:'rgba(17,24,39,0.1)', border:'2px dashed rgba(17,24,39,0.3)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 18px', fontSize:32 }}>🔍</div>
-            <p style={{ fontSize:17, fontWeight:800, color:theme.text, marginBottom:6 }}>Recherchez un client</p>
-            <p style={{ fontSize:13, color:theme.muted, marginBottom:24, lineHeight:1.5 }}>Tapez un nom, un email ou un téléphone<br/>puis appuyez sur Entrée</p>
-            <button onClick={doSearch}
-              style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'11px 22px', borderRadius:14, background:'black', border:'none', color:'white', fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:'0 4px 16px rgba(17,24,39,0.3)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" style={{ width:15, height:15 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              Voir tous les clients
-            </button>
-          </div>
-        )}
 
         {/* Chargement */}
         {loading && (
@@ -416,7 +412,7 @@ export default function ClientsPage() {
         )}
 
         {/* Aucun résultat */}
-        {hasSearched && !loading && clients.length === 0 && (
+        {!loading && clients.length === 0 && (
           <div style={{ textAlign:'center', padding:'56px 16px' }}>
             <div style={{ fontSize:52, marginBottom:14 }}>🔍</div>
             <p style={{ fontSize:16, fontWeight:700, color:theme.text, marginBottom:6 }}>
@@ -435,7 +431,7 @@ export default function ClientsPage() {
         )}
 
         {/* Liste des clients */}
-        {hasSearched && !loading && clients.length > 0 && (
+        {!loading && clients.length > 0 && (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {clients.map(cl => {
               const visits = cl.total_visits || cl.tx_count || 0;
@@ -483,6 +479,23 @@ export default function ClientsPage() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Pagination 10 par page */}
+        {!loading && total > PAGE_SIZE && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'22px 0 12px' }}>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+              style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'#161620':'#ffffff', color: page===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: page===0?'default':'pointer', opacity: page===0?0.5:1 }}>
+              ‹ Préc.
+            </button>
+            <span style={{ fontSize:13, fontWeight:700, color:theme.muted, minWidth:80, textAlign:'center' }}>
+              Page {page + 1} / {totalPages}
+            </span>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+              style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'#161620':'#ffffff', color: page>=totalPages-1?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: page>=totalPages-1?'default':'pointer', opacity: page>=totalPages-1?0.5:1 }}>
+              Suiv. ›
+            </button>
           </div>
         )}
       </div>
