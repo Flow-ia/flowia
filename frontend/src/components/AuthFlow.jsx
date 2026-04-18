@@ -357,6 +357,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
         email: f.email, password: f.pw, businessName: f.biz,
         phone: fullPhone || undefined,
         address: f.address || undefined, city: f.city || undefined,
+        postalCode: f.postalCode || undefined,
         country: f.country, lat: f.lat, lng: f.lng,
       });
       onSent(f.email);

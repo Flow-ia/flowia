@@ -1,18 +1,25 @@
-Je constate un doublon dans la sous-page **“Config commerce”**. Les informations du commerce apparaissent à la fois dans **“Informations du commerce”** et dans la section **“Config site de réservation” (Informations affichées)**.
-
-Il faut corriger cela en gardant uniquement les champs suivants dans la section **“Informations du commerce”** :
+Les champs suivants doivent être correctement gérés et synchronisés :
 
 * Nom du commerce
 * Téléphone
-* Adresse
+* Adresse (avec recherche et suggestion)
 * Code postal
 * Ville
-* Google Business
+* Lien Google Business (avis)
 
-👉 Ce sont uniquement ces informations qui doivent être utilisées et affichées sur le site de réservation.
+👉 Lorsque ces informations sont modifiées dans la section **“Informations du commerce”**, elles doivent être automatiquement mises à jour sur le site de réservation.
 
-Supprime toute duplication dans les autres sections afin d’éviter les incohérences et les données en double.
+Ces données doivent correspondre exactement à celles fournies par le commerçant lors de l’inscription.
 
-Par ailleurs, pour les champs **adresse, code postal et ville**, utilise le même système d’API de recherche et suggestion d’adresses que lors de l’inscription, afin de garantir la cohérence et la qualité des données.
+⚠️ Contraintes importantes :
 
-⚠️ Assure-toi que tout reste fonctionnel après ces modifications.
+* Aucune duplication de données
+* Une seule source de vérité (source unique des informations)
+* Les informations affichées partout dans l’application doivent toujours être synchronisées
+
+👉 Cela signifie que :
+
+* Les données saisies à l’inscription doivent être retrouvées ici
+* Toute modification doit être répercutée automatiquement sur l’ensemble du système (frontend + site de réservation)
+
+L’objectif est d’assurer cohérence, fiabilité et simplicité pour le commerçant.

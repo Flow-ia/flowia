@@ -50,7 +50,7 @@ function maskEmail(email) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, businessName, phone, address, country, city, lat, lng } = req.body;
+    const { email, password, businessName, phone, address, country, city, postalCode, lat, lng } = req.body;
     if (!email || !password || !businessName)
       return res.status(400).json({ error: 'Tous les champs sont requis.' });
     if (password.length < 6)
@@ -58,7 +58,7 @@ router.post('/register', async (req, res) => {
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
     if (rows.length) return res.status(409).json({ error: 'Cet email est déjà utilisé.' });
     const code = genCode();
-    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, phone: phone||'', address: address||'', country: country||'FR', city: city||'', lat: lat||null, lng: lng||null });
+    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, phone: phone||'', address: address||'', country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
     // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
     res.json({ ok: true });
     setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register').catch(e => console.error('[EMAIL register]', e.message)));
@@ -71,11 +71,11 @@ router.post('/register/confirm', async (req, res) => {
     const rec = await getCode(`reg_${email.toLowerCase()}`);
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
-    const { email: em, password, businessName, phone, address, country, city, lat, lng } = rec.data;
+    const { email: em, password, businessName, phone, address, country, city, postalCode, lat, lng } = rec.data;
     const hash = await bcrypt.hash(password, 12);
     const { rows } = await pool.query(
-      `INSERT INTO users (email,password_hash,business_name,phone,address,country,city,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,email,business_name,phone,address,country,city`,
-      [em, hash, businessName, phone||null, address||null, country||'FR', city||null, lat||null, lng||null]
+      `INSERT INTO users (email,password_hash,business_name,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,email,business_name,phone,address,country,city,postal_code`,
+      [em, hash, businessName, phone||null, address||null, country||'FR', city||null, postalCode||null, lat||null, lng||null]
     );
     const user = rows[0];
     for (const cat of SEED_CATS) {
@@ -511,6 +511,17 @@ router.put('/profile', authMiddleware, async (req, res) => {
        req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    // Invalider le cache du site de réservation public pour que la modification
+    // soit immédiatement visible côté clients (source unique : table users).
+    try {
+      const { rows: bs } = await pool.query(
+        'SELECT slug FROM booking_settings WHERE user_id=$1',
+        [req.user.userId]
+      );
+      for (const r of bs) {
+        if (r.slug) global.memCache?.del(`biz:${r.slug}`);
+      }
+    } catch { /* cache best-effort */ }
     res.json({ ok: true, user: rows[0] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
