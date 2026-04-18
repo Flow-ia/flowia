@@ -1,36 +1,43 @@
-Dans la page **“Compte”**, il faut conserver les champs existants (email et mot de passe uniquement), mais réaliser une **refonte de l’affichage**.
+Corrige un point important concernant la **caisse et la saisie rapide**, ainsi que tous les impacts associés (statistiques, historique, etc.).
 
-Au lieu d’afficher directement les champs en mode édition, ils doivent être présentés en mode lecture simple, avec une icône **“éditer”** à côté de chaque élément.
-
-👉 Lorsque l’utilisateur clique sur l’icône d’édition :
-
-* il peut modifier ses informations de manière sécurisée
+Actuellement, lors d’un encaissement avec une quantité (exemple : 2 coupes), le système affiche incorrectement une seule prestation (ex : 1 coupe à 30€) au lieu de deux coupes distinctes (ex : 2 × 15€). Il faut corriger ce comportement pour que les quantités soient correctement prises en compte dans le calcul et l’affichage.
 
 ---
 
-### 🔐 Gestion du mot de passe :
+### 💳 Gestion des paiements multiples
 
-* modification uniquement après saisie de l’ancien mot de passe
-* possibilité de récupération en cas d’oubli via un code envoyé par email
-* validation obligatoire par code email pour sécuriser le changement
+Lors de l’encaissement, il faut permettre aux employés de répartir un paiement sur plusieurs moyens de paiement.
+
+Exemple :
+
+* Total : 30€
+* 20€ en espèces
+* 10€ par carte
+
+👉 Le système doit accepter cette répartition et l’enregistrer correctement.
 
 ---
 
-### 📧 Gestion de l’email :
+### 📊 Traçabilité et impact système
 
-* changement possible uniquement avec confirmation via l’ancienne adresse email
-* vérification obligatoire par code de sécurité
-* l’email reste unique et utilisé pour l’authentification et toutes les connexions
+Cette logique doit être entièrement prise en compte dans :
+
+* les statistiques
+* l’historique des ventes
+* les rapports administratifs
+* les analyses de revenus
+
+Il est essentiel d’assurer une traçabilité complète de chaque mode de paiement et de chaque encaissement.
 
 ---
 
 ### ⚠️ Contraintes importantes :
 
-* ne pas créer de doublons de données
-* ne pas casser les fonctionnalités existantes
-* sécuriser tous les flux (email / mot de passe)
-* garantir une cohérence totale entre authentification et données utilisateur
+* ne pas fausser les statistiques et ne pas casser ni oubli
+* garantir une cohérence entre caisse, historique et analytics
+* assurer une gestion correcte des quantités et des prix unitaires
+* conserver une traçabilité fiable côté admin
 
 ---
 
-👉 Objectif : simplifier l’interface tout en améliorant l’expérience utilisateur et en renforçant la sécurité, sans duplication ni incohérence de données.
+👉 Objectif : fiabiliser totalement la caisse, les paiements multiples et l’impact sur toutes les données statistiques et historiques du système.

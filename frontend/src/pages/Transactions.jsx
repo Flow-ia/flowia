@@ -16,6 +16,7 @@ const PM = {
   card:     { label:'Carte',    color:'#111827', bg:'rgba(17,24,39,0.14)', Ic: I.CreditCard },
   transfer: { label:'Virement', color:'#374151', bg:'rgba(6,182,212,0.14)',  Ic: I.Bank },
   other:    { label:'Autre',    color:'#f59e0b', bg:'rgba(245,158,11,0.14)', Ic: I.MoreH },
+  multi:    { label:'Mixte',    color:'#7c3aed', bg:'rgba(124,58,237,0.14)', Ic: I.MoreH },
 };
 
 function Av({ emp, size=34 }) {
@@ -59,6 +60,19 @@ function TxRow({ tx, cat, emp, isLast, theme, onEdit, onDelete }) {
             {isRev?'+':'-'}{fmt(tx.amount)} €
           </span>
         </div>
+        {/* Détails items (qty × prix unitaire) — uniquement si >1 item ou qty>1 */}
+        {Array.isArray(tx.items) && tx.items.length > 0 && (tx.items.length > 1 || (tx.items[0].qty||1) > 1) && (
+          <div style={{ display:'flex', flexDirection:'column', gap:2, marginBottom:5, paddingLeft:2 }}>
+            {tx.items.map((it, i) => (
+              <div key={i} style={{ fontSize:11, color:theme.muted, display:'flex', gap:6, alignItems:'baseline' }}>
+                <span style={{ fontWeight:600 }}>{it.qty > 1 ? `${it.qty} × ` : ''}{it.service_name}</span>
+                <span style={{ color:theme.dim, fontFamily:'var(--mono)' }}>
+                  @ {fmt(it.unit_price)} €{it.qty > 1 ? ` = ${fmt(it.qty * it.unit_price)} €` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Ligne 2 : Date · Employé · Paiement — tous sur la même ligne */}
         <div style={{ display:'flex', alignItems:'center', gap:5 }}>
           <span style={{ fontSize:10, color:theme.muted, fontWeight:500, flexShrink:0 }}>
@@ -72,10 +86,26 @@ function TxRow({ tx, cat, emp, isLast, theme, onEdit, onDelete }) {
             </span>
           )}
           {emp && <span style={{ fontSize:10, color:theme.dim, flexShrink:0 }}>·</span>}
-          <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 7px', borderRadius:99, background:pm.bg, color:pm.color, fontSize:11, fontWeight:700, flexShrink:0 }}>
-            <PmIc style={{ width:10, height:10, flexShrink:0 }} />
-            {pm.label}
-          </span>
+          {tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length > 0 ? (
+            <div style={{ display:'inline-flex', flexWrap:'wrap', gap:3, alignItems:'center', minWidth:0 }}>
+              {tx.payments.map((p, i) => {
+                const sub = PM[p.method] || PM.other;
+                const SIc = sub.Ic;
+                return (
+                  <span key={i} title={`${sub.label} : ${fmt(p.amount)} €`}
+                    style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 6px', borderRadius:99, background:sub.bg, color:sub.color, fontSize:10, fontWeight:700, flexShrink:0 }}>
+                    <SIc style={{ width:9, height:9, flexShrink:0 }} />
+                    {fmt(p.amount)} €
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 7px', borderRadius:99, background:pm.bg, color:pm.color, fontSize:11, fontWeight:700, flexShrink:0 }}>
+              <PmIc style={{ width:10, height:10, flexShrink:0 }} />
+              {pm.label}
+            </span>
+          )}
           {tx.source === 'rdv' && (
             <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 7px', borderRadius:99, background:'rgba(17,24,39,0.14)', color:'#a5a0ff', fontSize:11, fontWeight:800, flexShrink:0 }}>
               📅 RDV
@@ -138,7 +168,13 @@ export default function Transactions({ transactions, employees, categories, onAd
         if (ds !== todayStr()) return false;
       }
       if (typeF!=='all' && tx.type!==typeF) return false;
-      if (payF!=='all' && tx.payment_method!==payF) return false;
+      if (payF!=='all') {
+        if (tx.payment_method === 'multi') {
+          // Multi-paiement : match si l'une des méthodes correspond (ou si on filtre "multi")
+          if (payF === 'multi') { /* ok */ }
+          else if (!Array.isArray(tx.payments) || !tx.payments.some(p => p.method === payF)) return false;
+        } else if (tx.payment_method !== payF) return false;
+      }
       if (empF!=='all' && (tx.employee_id||'')!==empF) return false;
       if (!search) return true;
       const q = search.toLowerCase();
@@ -285,7 +321,7 @@ export default function Transactions({ transactions, employees, categories, onAd
         {/* Filtres paiement — admin uniquement */}
         {isAdmin && (
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:6, scrollbarWidth:'none', marginBottom:8 }}>
-            {[['all','Tout',null],['cash','Especes',PM.cash],['card','Carte',PM.card],['transfer','Virement',PM.transfer],['other','Autre',PM.other]].map(([v,l,pm]) => {
+            {[['all','Tout',null],['cash','Especes',PM.cash],['card','Carte',PM.card],['transfer','Virement',PM.transfer],['multi','Mixte',PM.multi],['other','Autre',PM.other]].map(([v,l,pm]) => {
               const PmIc = pm?.Ic;
               return (
                 <button key={v} onClick={()=>setPayF(v)} className="pressable"

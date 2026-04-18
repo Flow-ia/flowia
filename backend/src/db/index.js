@@ -361,6 +361,17 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // Migration : table transaction_payments — multi-paiement (split)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS transaction_payments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      method VARCHAR(20) NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tx_payments_tx ON transaction_payments(transaction_id);
+  `);
   // ── Migrations audit trail ──────────────────────────────────────────────────
   await pool.query(`
     ALTER TABLE transactions ADD COLUMN IF NOT EXISTS locked BOOLEAN NOT NULL DEFAULT TRUE;

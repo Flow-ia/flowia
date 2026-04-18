@@ -1,6 +1,43 @@
 # FlowIA — STATUS (2026-04-18)
 
-Dernier commit : **`78b3c75`** — `fix: Marketing IA fonctionne avec peu de clients (3+)`
+Dernier commit : voir `git log -1`
+
+---
+
+## 🆕 Session 2026-04-18 (partie 5) : Caisse — quantités correctes + paiement mixte
+
+### Problème résolu
+Encaisser 2 coupes à 15€ affichait « 1 coupe à 30€ » au lieu de « 2 × 15€ ».
+Impossible de répartir un paiement sur plusieurs modes (ex : 20€ cash + 10€ carte).
+
+### Backend
+- `backend/src/db/index.js` : nouvelle table `transaction_payments`
+  (transaction_id, method, amount) + index. Migration idempotente.
+- `backend/migrate.js` : création explicite `transaction_items` + `transaction_payments` + index dédiés
+- `backend/src/routes/transactions.js` :
+  - POST accepte `items: [{service_name, qty, unit_price, service_id}]` → insère dans
+    `transaction_items` + calcule `qty_total` (somme des qty)
+  - POST accepte `payments: [{method, amount}]` → si >1, `payment_method='multi'` +
+    insertion dans `transaction_payments`
+  - GET / renvoie désormais `items[]` et `payments[]` (json_agg)
+  - Invalidation cache `txs:${userId}` sur création
+
+### Frontend
+- `frontend/src/App.jsx` (EncaisserSheet) :
+  - **1 seule transaction** par encaissement (fini 1 tx/article) avec `items[]`
+  - Nouveau toggle **« Diviser »** dans l'étape paiement → saisie des montants par mode
+  - Validation live : bouton « Répartition incomplète » si la somme ≠ total
+  - Payload enrichi avec `items` + `payments`
+- `frontend/src/pages/Transactions.jsx` :
+  - Nouveau chip `Mixte` (couleur `#7c3aed`) + filtre paiement `multi`
+  - Filtre `cash/card/...` matche aussi les tx multi qui contiennent cette méthode
+  - Détails items affichés sous le libellé (`2 × Coupe @ 15€ = 30€`)
+  - Breakdown multi-paiement sous forme de mini-chips (ex : `💵 20€  💳 10€`)
+
+### Impact (auto via transaction_items + qty_total)
+- Stats : `stats.js` lit déjà `transaction_items` → produits/qty corrects
+- Commissions : `commissions.js` utilise `qty_total` → corrigé
+- Notifications / recaps : `notifications.js` utilise `qty_total` → corrigé
 
 ---
 

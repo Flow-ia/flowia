@@ -134,6 +134,8 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
   const [step, setStep]       = useState('products');
   const [empId, setEmpId]     = useState('');
   const [payMethod, setPay]   = useState('cash');
+  const [splitMode, setSplitMode] = useState(false);
+  const [splitAmts, setSplitAmts] = useState({ cash:'', card:'', transfer:'', other:'' });
   const [date, setDate]       = useState(todayStr());
   const [time, setTime]       = useState(nowStr());
   const [dtOpen, setDtOpen]   = useState(false);
@@ -156,6 +158,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
     if (!open) {
       setTimeout(() => {
         setCart([]); setStep('products'); setEmpId(''); setPay('cash');
+        setSplitMode(false); setSplitAmts({ cash:'', card:'', transfer:'', other:'' });
         setPromoCode(''); setPromoData(null); setPromoErr('');
         setClientNote(''); setClientEmail(''); setClientName('');
         setClientSearch(''); setClientSuggests([]);
@@ -218,29 +221,49 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
     const next=[...prev]; next[idx]={...next[idx],price:parseFloat(val)||0}; return next;
   });
 
+  // Construire payments[] à partir du mode split ou du mode simple
+  const buildPayments = () => {
+    if (!splitMode) return [{ method: payMethod, amount: finalTotal }];
+    const entries = Object.entries(splitAmts)
+      .map(([method, raw]) => ({ method, amount: parseFloat(raw) || 0 }))
+      .filter(p => p.amount > 0);
+    return entries;
+  };
+  const paymentsPreview = buildPayments();
+  const paymentsSum     = paymentsPreview.reduce((s,p)=>s+p.amount, 0);
+  const paymentsValid   = !splitMode || Math.abs(paymentsSum - finalTotal) < 0.01;
+
   const doConfirm = async () => {
     if (cart.length===0 || busy) return;
+    if (!paymentsValid) return;
     setBusy(true);
     try {
-      if (promoData && discount > 0) {
-        const desc = cart.length===1 ? (cart[0].qty>1?`${cart[0].name} ×${cart[0].qty}`:cart[0].name)
-          : cart.map(i=>i.qty>1?`${i.name} ×${i.qty}`:i.name).join(', ');
-        await onAdd({ type:'revenue', amount:finalTotal, category_id:cart.length===1?cart[0].category_id:null,
-          employee_id:empId||null, payment_method:payMethod, description:desc, date, time,
-          datetime_iso:new Date(`${date}T${time}`).toISOString(),
-          promo_code_id:promoData.promo?.id||null, discount_amount:discount, original_amount:total,
-          client_note:clientNote.trim()||null, client_email:clientEmail.trim()||null, client_name:clientName.trim()||null });
-      } else {
-        for (const item of cart) {
-          const baseAmt = parseFloat((item.price*item.qty).toFixed(2));
-          await onAdd({ type:'revenue', amount:baseAmt, category_id:item.category_id,
-            employee_id:empId||null, payment_method:payMethod,
-            description:item.qty>1?`${item.name} ×${item.qty}`:item.name, date, time,
-            datetime_iso:new Date(`${date}T${time}`).toISOString(),
-            promo_code_id:null, discount_amount:0, original_amount:baseAmt,
-            client_note:clientNote.trim()||null, client_email:clientEmail.trim()||null, client_name:clientName.trim()||null });
-        }
-      }
+      const desc = cart.length===1 ? (cart[0].qty>1?`${cart[0].name} ×${cart[0].qty}`:cart[0].name)
+        : cart.map(i=>i.qty>1?`${i.name} ×${i.qty}`:i.name).join(', ');
+      const items = cart.map(i => ({
+        service_name: i.name,
+        qty: i.qty,
+        unit_price: parseFloat((i.price).toFixed(2)),
+      }));
+      const payments = paymentsPreview;
+      const primaryMethod = payments.length === 1 ? payments[0].method : payMethod;
+      await onAdd({
+        type:'revenue', amount:finalTotal,
+        category_id: cart.length===1 ? cart[0].category_id : null,
+        employee_id: empId || null,
+        payment_method: primaryMethod,
+        payments,
+        items,
+        description: desc,
+        date, time,
+        datetime_iso: new Date(`${date}T${time}`).toISOString(),
+        promo_code_id: promoData?.promo?.id || null,
+        discount_amount: discount || 0,
+        original_amount: total,
+        client_note: clientNote.trim() || null,
+        client_email: clientEmail.trim() || null,
+        client_name: clientName.trim() || null,
+      });
       setStep('ok');
       if (sc.caisse !== false) playSound('caisse', sc.repeat || 2);
       setTimeout(() => { onClose(); setBusy(false); }, 2000);
@@ -584,24 +607,84 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
               </div>
             </div>
 
-            <p className="text-xs font-medium text-center mb-3" style={{ color: isDark?'#768390':'#9CA3AF' }}>Mode de paiement</p>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              {Object.entries(PM_CFG).map(([v,{label,color,bg,Ic}]) => {
-                const active = payMethod===v;
-                return (
-                  <button key={v} onClick={()=>setPay(v)}
-                    className="flex flex-col items-center gap-2 py-3 rounded-xl transition-colors"
-                    style={{ border:`1px solid ${active?color:'rgba(0,0,0,0.08)'}`,
-                      background: active?bg:(isDark?'rgba(255,255,255,0.03)':'#fafafa'), cursor:'pointer' }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                      style={{ background: active?`${color}20`:(isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)') }}>
-                      <Ic style={{ width:16,height:16,color }} />
-                    </div>
-                    <span className="text-xs font-medium" style={{ color: active?color:(isDark?'#adbac7':'#374151') }}>{label}</span>
-                  </button>
-                );
-              })}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium" style={{ color: isDark?'#768390':'#9CA3AF' }}>
+                {splitMode ? 'Paiement mixte (répartir)' : 'Mode de paiement'}
+              </p>
+              <button onClick={()=>setSplitMode(v=>!v)}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg"
+                style={{ background: splitMode?BRAND.primaryBg:(isDark?'rgba(255,255,255,0.06)':'#f3f4f6'),
+                  color: splitMode?BRAND.primary:(isDark?'#adbac7':'#6b7280'),
+                  border:`1px solid ${splitMode?BRAND.primaryBd:'transparent'}`,
+                  cursor:'pointer' }}>
+                {splitMode ? '↩ Simple' : '✂ Diviser'}
+              </button>
             </div>
+
+            {!splitMode && (
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                {Object.entries(PM_CFG).map(([v,{label,color,bg,Ic}]) => {
+                  const active = payMethod===v;
+                  return (
+                    <button key={v} onClick={()=>setPay(v)}
+                      className="flex flex-col items-center gap-2 py-3 rounded-xl transition-colors"
+                      style={{ border:`1px solid ${active?color:'rgba(0,0,0,0.08)'}`,
+                        background: active?bg:(isDark?'rgba(255,255,255,0.03)':'#fafafa'), cursor:'pointer' }}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                        style={{ background: active?`${color}20`:(isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)') }}>
+                        <Ic style={{ width:16,height:16,color }} />
+                      </div>
+                      <span className="text-xs font-medium" style={{ color: active?color:(isDark?'#adbac7':'#374151') }}>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {splitMode && (
+              <div className="mb-4 rounded-xl overflow-hidden"
+                style={{ border:`1px solid ${isDark?'rgba(205,217,229,0.1)':'rgba(0,0,0,0.08)'}`,
+                  background: isDark?'rgba(255,255,255,0.02)':'#fafafa' }}>
+                {Object.entries(PM_CFG).map(([v,{label,color,Ic}], i, arr) => {
+                  const val = splitAmts[v];
+                  const setVal = s => setSplitAmts(prev => ({ ...prev, [v]: s }));
+                  const num = parseFloat(val) || 0;
+                  return (
+                    <div key={v} className="flex items-center gap-3 px-4 py-2.5"
+                      style={{ borderBottom: i<arr.length-1?`1px solid ${isDark?'rgba(205,217,229,0.06)':'rgba(0,0,0,0.05)'}`:'none' }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background:`${color}18` }}>
+                        <Ic style={{ width:14,height:14,color }} />
+                      </div>
+                      <span className="flex-1 text-sm font-medium" style={{ color: isDark?'#e6edf3':'#111827' }}>{label}</span>
+                      <div style={{ position:'relative' }}>
+                        <input type="number" step="0.01" min="0" placeholder="0.00"
+                          value={val}
+                          onChange={e=>setVal(e.target.value)}
+                          style={{ width:90, padding:'6px 22px 6px 10px', borderRadius:9,
+                            border:`1px solid ${num>0?color:(isDark?'rgba(205,217,229,0.12)':'rgba(0,0,0,0.12)')}`,
+                            background: isDark?'rgba(255,255,255,0.05)':'#ffffff',
+                            color: num>0?color:(isDark?'#e6edf3':'#111827'),
+                            fontSize:13, fontWeight:700, fontFamily:'monospace',
+                            textAlign:'right', outline:'none' }} />
+                        <span style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                          fontSize:11, color: isDark?'#768390':'#9ca3af', pointerEvents:'none' }}>€</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="px-4 py-2.5 flex items-center justify-between"
+                  style={{ borderTop:`1px solid ${isDark?'rgba(205,217,229,0.08)':'rgba(0,0,0,0.06)'}`,
+                    background: paymentsValid?(isDark?'rgba(16,185,129,0.08)':'#ecfdf5'):(isDark?'rgba(239,68,68,0.08)':'#fef2f2') }}>
+                  <span className="text-xs font-semibold" style={{ color: paymentsValid?'#10b981':'#ef4444' }}>
+                    {paymentsValid ? '✓ Répartition OK' : `Il manque ${fmtN(finalTotal - paymentsSum)} €`}
+                  </span>
+                  <span className="text-sm font-bold mono" style={{ color: paymentsValid?'#10b981':'#ef4444' }}>
+                    {fmtN(paymentsSum)} / {fmtN(finalTotal)} €
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Code promo */}
             {(empId==='' || employees.find(e=>e.id===empId)?.can_use_promo!==false) && (
@@ -666,10 +749,13 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
                 style={{ ...inpStyle, resize:'vertical', lineHeight:1.5 }} />
             </div>
 
-            <button onClick={confirm} disabled={busy}
+            <button onClick={confirm} disabled={busy || !paymentsValid}
               className="w-full py-3 rounded-xl text-sm font-semibold text-white mb-2"
-              style={{ background:'linear-gradient(135deg,#10b981,#059669)', boxShadow:'0 4px 14px rgba(16,185,129,0.35)', opacity:busy?0.6:1, cursor:busy?'not-allowed':'pointer' }}>
-              {busy ? 'Enregistrement...' : `Valider · ${fmtN(finalTotal)} €`}
+              style={{ background: paymentsValid ? 'linear-gradient(135deg,#10b981,#059669)' : '#d1d5db',
+                boxShadow: paymentsValid ? '0 4px 14px rgba(16,185,129,0.35)' : 'none',
+                opacity: busy ? 0.6 : 1,
+                cursor: (busy || !paymentsValid) ? 'not-allowed' : 'pointer' }}>
+              {busy ? 'Enregistrement...' : !paymentsValid ? `Répartition incomplète` : `Valider · ${fmtN(finalTotal)} €`}
             </button>
             <button onClick={()=>setStep('employee')}
               className="w-full py-2 text-sm" style={{ background:'none',border:'none',color:isDark?'#768390':'#9CA3AF',cursor:'pointer' }}>← Retour</button>

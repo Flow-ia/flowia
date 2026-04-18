@@ -58,7 +58,23 @@ router.get('/', async (req, res) => {
         TO_CHAR(t.time, 'HH24:MI') as time,
         t.datetime_iso, t.appointment_id, t.source, t.created_at,
         c.name as category_name, c.icon as category_icon, c.color as category_color,
-        e.name as employee_name, e.avatar_color as employee_avatar_color
+        e.name as employee_name, e.avatar_color as employee_avatar_color,
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'service_id', ti.service_id,
+            'service_name', ti.service_name,
+            'qty', ti.qty,
+            'unit_price', ti.unit_price
+          ) ORDER BY ti.created_at)
+          FROM transaction_items ti WHERE ti.transaction_id = t.id
+        ), '[]'::json) AS items,
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'method', tp.method,
+            'amount', tp.amount
+          ) ORDER BY tp.created_at)
+          FROM transaction_payments tp WHERE tp.transaction_id = t.id
+        ), '[]'::json) AS payments
        FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id
        LEFT JOIN employees e ON t.employee_id = e.id
@@ -80,28 +96,78 @@ router.post('/', async (req, res) => {
             date, time, datetime_iso, appointment_id, source,
             client_email, client_name,
             promo_code_id, discount_amount, original_amount,
-            client_note } = req.body;
+            client_note, items, payments } = req.body;
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
+
+    // ── Items normalisés → qty_total ──────────────────────────────────────────
+    const itemList = Array.isArray(items) ? items.filter(it => it && it.service_name) : [];
+    const qtyTotal = itemList.length
+      ? itemList.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
+      : 1;
+
+    // ── Paiements normalisés → méthode stockée + breakdown ────────────────────
+    const payList = Array.isArray(payments)
+      ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
+      : [];
+    const pmStored = payList.length > 1
+      ? 'multi'
+      : (payList[0]?.method || payment_method || 'cash');
 
     const { rows } = await pool.query(
       `INSERT INTO transactions
         (user_id, type, amount, description, category_id, employee_id,
          payment_method, date, time, datetime_iso, appointment_id, source, locked,
-         promo_code_id, discount_amount, original_amount, client_email, client_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17)
+         promo_code_id, discount_amount, original_amount, client_email, client_note,
+         qty_total)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18)
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
-         payment_method, locked, client_email, client_note,
+         payment_method, locked, client_email, client_note, qty_total,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
          TO_CHAR(time, 'HH24:MI') as time,
          datetime_iso, appointment_id, source, created_at`,
       [req.user.userId, type, amount, description || null, category_id || null,
-       employee_id || null, payment_method || 'cash', date, time || null,
+       employee_id || null, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
-       client_email || null, client_note || null]
+       client_email || null, client_note || null, qtyTotal]
     );
     const tx = rows[0];
+
+    // ── Insérer transaction_items ─────────────────────────────────────────────
+    if (itemList.length) {
+      for (const it of itemList) {
+        await pool.query(
+          `INSERT INTO transaction_items (transaction_id, service_id, service_name, qty, unit_price)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [tx.id, it.service_id || null, it.service_name,
+           parseInt(it.qty) || 1, parseFloat(it.unit_price) || 0]
+        );
+      }
+      tx.items = itemList.map(it => ({
+        service_id: it.service_id || null,
+        service_name: it.service_name,
+        qty: parseInt(it.qty) || 1,
+        unit_price: parseFloat(it.unit_price) || 0,
+      }));
+    }
+
+    // ── Insérer transaction_payments (si split) ───────────────────────────────
+    if (payList.length > 1) {
+      for (const p of payList) {
+        await pool.query(
+          `INSERT INTO transaction_payments (transaction_id, method, amount)
+           VALUES ($1,$2,$3)`,
+          [tx.id, p.method, parseFloat(p.amount) || 0]
+        );
+      }
+      tx.payments = payList.map(p => ({
+        method: p.method, amount: parseFloat(p.amount) || 0,
+      }));
+    }
+
+    // Invalider le cache liste
+    global.memCache?.del(`txs:${req.user.userId}`);
 
     // Sauvegarder la note client dans client_notes si fournie
     if (client_note && client_note.trim() && (client_email || client_name)) {

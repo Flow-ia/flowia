@@ -365,6 +365,26 @@ async function migrate() {
       UNIQUE(employee_id, day_of_week)
     )`, 'table employee_hours');
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS transaction_items (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      service_id UUID,
+      service_name VARCHAR(255) NOT NULL,
+      qty INT NOT NULL DEFAULT 1,
+      unit_price NUMERIC(10,2) DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`, 'table transaction_items');
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS transaction_payments (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      method VARCHAR(20) NOT NULL,
+      amount NUMERIC(10,2) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`, 'table transaction_payments');
+
   // ── Indexes ─────────────────────────────────────────────────────────────────
   const indexes = [
     `CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)`,
@@ -373,6 +393,8 @@ async function migrate() {
     `CREATE INDEX IF NOT EXISTS idx_business_breaks_user ON business_breaks(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_emp_slots_employee ON employee_time_slots(employee_id)`,
     `CREATE INDEX IF NOT EXISTS idx_emp_slots_user ON employee_time_slots(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tx_items_tx ON transaction_items(transaction_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tx_payments_tx ON transaction_payments(transaction_id)`,
   ];
   for (const sql of indexes) await run(sql);
 
