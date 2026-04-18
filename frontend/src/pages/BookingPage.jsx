@@ -1,7 +1,7 @@
 // src/pages/BookingPage.jsx
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { pubApi, globalClientApi, mediaApi } from '../utils/api';
+import { pubApi, globalClientApi, mediaApi, publicReferralApi } from '../utils/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const withV = (url, v) => v ? `${url}?v=${v}` : url;
@@ -52,9 +52,10 @@ const DARK_THEME = {
 
 
 // ── NavBar persistante — affichée sur toutes les vues du site de réservation ──
-function NavBar({ th, slug, business, clientUser, onToggleTheme, onShowAuth, onMyAppts, onLogout, onNavigateHome }) {
+function NavBar({ th, slug, business, clientUser, refProgram, onToggleTheme, onShowAuth, onMyAppts, onLogout, onNavigateHome, onReferralPage }) {
   const scrollTo = (id) => {
     if (!id) { if (onNavigateHome) onNavigateHome(null); return; }
+    if (id === '__parrain__') { if (onReferralPage) onReferralPage(); return; }
     const el = document.getElementById(id);
     if (el) { el.scrollIntoView({ behavior:'smooth', block:'start' }); return; }
     // Section non visible (autre vue) → retour accueil puis scroll
@@ -96,6 +97,7 @@ function NavBar({ th, slug, business, clientUser, onToggleTheme, onShowAuth, onM
             ['section-equipe','Équipe'],
             ...(business?.google_business_url ? [['section-avis','Commentaires']] : []),
             ...((business?.cover_urls?.length > 0) ? [['section-photos','Photos']] : []),
+            ...(refProgram && refProgram !== 'none' ? [['__parrain__','Parrainer un ami']] : []),
           ].map(([id, label]) => (
             <button key={id}
               onClick={() => scrollTo(id)}
@@ -2074,6 +2076,8 @@ export default function BookingPage({ slug }) {
     } else if (path.includes('/client/rdv')) {
       setView('myAppts');
       setMyApptsInitTab('appts');
+    } else if (path.endsWith('/parrain')) {
+      setView('parrain');
     } else if (hash) {
       // Mapping ancres → IDs de section
       const ANCHOR_MAP = {
@@ -2141,7 +2145,15 @@ export default function BookingPage({ slug }) {
   const [isBlocked, setIsBlocked] = useState(false); // client bloqué par le commerçant
 
   // Flux réservation
-  const [view, setView]          = useState('booking'); // 'booking' | 'myAppts' | 'success'
+  const [view, setView]          = useState('booking'); // 'booking' | 'myAppts' | 'success' | 'parrain'
+
+  // Programme de parrainage : null tant que la requête n'est pas résolue,
+  // objet { is_enabled, parrain_type, parrain_value, ... } si le commerçant a
+  // configuré un programme (même désactivé), 'none' si aucun programme créé.
+  const [refProgram, setRefProgram] = useState(null);
+  const [refMyCode, setRefMyCode]   = useState(null);
+  const [refMyHistory, setRefMyHistory] = useState([]);
+  const [refMyRewards, setRefMyRewards] = useState([]);
   const [step, setStep]          = useState(1);
   const [selSvc, setSelSvc]      = useState(null);
   const [selEmp, setSelEmp]      = useState(null);
@@ -2310,6 +2322,36 @@ export default function BookingPage({ slug }) {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  // Programme parrainage — silent si inexistant (404). La présence dans la DB
+  // (active ou non) conditionne l'affichage du lien de navigation.
+  useEffect(() => {
+    publicReferralApi.getProgram(slug)
+      .then(p => setRefProgram(p))
+      .catch(() => setRefProgram('none'));
+  }, [slug]);
+
+  // Charger code perso + historique + rewards quand on entre sur la vue parrain
+  // (uniquement si le client est connecté en compte global).
+  useEffect(() => {
+    if (view !== 'parrain') return;
+    const gcToken = localStorage.getItem('ff_gc_token');
+    if (!gcToken) { setRefMyCode(null); setRefMyHistory([]); setRefMyRewards([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [c, h] = await Promise.all([
+          globalClientApi.myReferralCode(slug).catch(() => null),
+          globalClientApi.myReferralHistory(slug).catch(() => ({ history:[], rewards:[] })),
+        ]);
+        if (cancelled) return;
+        setRefMyCode(c);
+        setRefMyHistory(h?.history || []);
+        setRefMyRewards(h?.rewards || []);
+      } catch {/* silent */}
+    })();
+    return () => { cancelled = true; };
+  }, [view, slug, clientUser]);
 
   // Load slots
   useEffect(() => {
@@ -2516,10 +2558,11 @@ export default function BookingPage({ slug }) {
 
   if (view === 'myAppts') return (
     <div style={{ minHeight:'100vh', background:th.bg }}>
-      <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
+      <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
         onMyAppts={()=>{navigate(`/book/${slug}/client/rdv`,{replace:false}); setMyApptsInitTab('appts');}}
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); setMyApptsInitTab('appts'); setView('booking'); }}
+        onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); navigate(`/book/${slug}`,{replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
       <MyAppointments slug={slug} th={th} initialTab={myApptsInitTab} business={business}
         onBack={() => { setMyApptsInitTab('appts'); setView(bookedAppt ? 'success' : 'booking'); navigate(bookedAppt ? location.pathname : `/book/${slug}`, {replace:true}); }}
@@ -2531,6 +2574,28 @@ export default function BookingPage({ slug }) {
           setMyApptsInitTab('appts');
           setView('booking');
         }} />
+    </div>
+  );
+
+  // Vue : Page parrainage
+  if (view === 'parrain') return (
+    <div style={{ minHeight:'100vh', background:th.bg,
+      fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+      <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
+        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); }}
+        onMyAppts={()=>{navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
+        onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); setView('booking'); navigate(`/book/${slug}`,{replace:false}); }}
+        onReferralPage={() => { /* déjà sur la page */ }}
+        onNavigateHome={(id)=>{ setView('booking'); navigate(`/book/${slug}`,{replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
+      <ReferralPage
+        th={th} slug={slug} business={business} refProgram={refProgram}
+        gcConnected={!!localStorage.getItem('ff_gc_token')}
+        refMyCode={refMyCode}
+        refMyHistory={refMyHistory}
+        refMyRewards={refMyRewards}
+        onLogin={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
+        onBack={() => { setView('booking'); navigate(`/book/${slug}`, {replace:false}); }}
+      />
     </div>
   );
 
@@ -2655,10 +2720,11 @@ export default function BookingPage({ slug }) {
       `}</style>
 
       {/* ══ NAVBAR — composant partagé ══ */}
-      <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
+      <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); }}
         onMyAppts={()=>setView('myAppts')}
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
+        onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 
       {/* ══ CORPS 2 COLONNES ══ */}
@@ -2722,6 +2788,15 @@ export default function BookingPage({ slug }) {
                     </svg>
                     {business.phone}
                   </a>
+                )}
+                {refProgram && refProgram !== 'none' && (
+                  <button onClick={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
+                    style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
+                      background:'#8b5cf615', border:'1px solid #8b5cf640',
+                      color:'#6d28d9', fontWeight:700, fontSize:12,
+                      display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center' }}>
+                    🤝 Parrainer un ami
+                  </button>
                 )}
               </div>
 
@@ -3809,126 +3884,10 @@ export default function BookingPage({ slug }) {
         </div>
 
         {/* ── SIDEBAR DROITE (desktop) ── */}
-        <div className="bk-do bk-sb"
-          style={{ width:290, flexShrink:0, paddingTop:32,
-            position:'sticky', top:80, alignSelf:'flex-start' }}>
-          <div style={{ background:th.sidebarBg, border:`1px solid ${th.border}`,
-            borderRadius:16, overflow:'hidden' }}>
-
-            {/* Logo + nom */}
-            <div style={{ padding:'24px 20px 20px', textAlign:'center',
-              borderBottom:`1px solid ${th.border}` }}>
-              <div style={{ width:80, height:80, borderRadius:99, margin:'0 auto 12px',
-                overflow:'hidden', background:th.cardAlt,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                border:`3px solid ${th.border}` }}>
-                {business?.profile_url ? (
-                  <img src={mediaUrl(business.profile_url)} alt={business.business_name}
-                    style={{ width:'100%', height:'100%', objectFit:'cover' }}
-                    onError={e=>e.target.style.display='none'}/>
-                ) : null}
-                <span style={{ fontSize:28, fontWeight:900, color:'#374151',
-                  display: business?.profile_url ? 'none' : 'block' }}>
-                  {(business?.business_name||'B').charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <h2 style={{ fontSize:18, fontWeight:800, color:th.text,
-                margin:'0 0 4px', letterSpacing:'-0.02em' }}>
-                {business?.business_name}
-              </h2>
-              {business?.business_description && (
-                <p style={{ fontSize:12, color:th.muted, margin:0, lineHeight:1.5 }}>
-                  {business.business_description}
-                </p>
-              )}
-            </div>
-
-            {/* Bouton Réserver */}
-            <div style={{ padding:'16px 20px', borderBottom:`1px solid ${th.border}` }}>
-              <button
-                onClick={()=>{ if(step>1) goToStep(1);
-                  else { const el=document.getElementById('section-prestations');
-                    if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }}}
-                style={{ width:'100%', padding:'13px', borderRadius:10,
-                  background:th.accent, border:'none', fontWeight:800, fontSize:15,
-                  color:th.accentText, cursor:'pointer',
-                  boxShadow:'0 2px 8px rgba(0,0,0,0.15)' }}>
-                Réserver
-              </button>
-            </div>
-
-            {/* Infos commerçant */}
-            <div style={{ padding:'0 0 8px' }}>
-              {/* Adresse — cliquable → scroll vers section-adresse */}
-              {(business?.address || business?.city || business?.postal_code) && (
-                <button onClick={()=>{ const el=document.getElementById('section-adresse'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }}
-                  style={{ display:'flex', alignItems:'flex-start', gap:10,
-                    padding:'12px 18px', borderTop:`1px solid ${th.border}`,
-                    background:'none', border:'none', cursor:'pointer', width:'100%', textAlign:'left' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                    style={{width:15,height:15,color:th.muted,flexShrink:0,marginTop:2}}>
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                    <circle cx="12" cy="10" r="3"/>
-                  </svg>
-                  <div>
-                    {business?.address && (
-                      <p style={{ fontSize:13, color:th.text, margin:0, lineHeight:1.5 }}>
-                        {business.address}
-                      </p>
-                    )}
-                    {(business?.postal_code || business?.city) && (
-                      <p style={{ fontSize:13, color:th.muted, margin:0, lineHeight:1.5 }}>
-                        {[business.postal_code, business.city].filter(Boolean).join(' ')}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              )}
-              {/* Téléphone */}
-              {business?.phone && (
-                <a href={`tel:${business.phone}`}
-                  style={{ display:'flex', alignItems:'center', gap:10,
-                    padding:'10px 18px', borderTop:`1px solid ${th.border}`,
-                    textDecoration:'none' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                    style={{width:15,height:15,color:th.muted,flexShrink:0}}>
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                  </svg>
-                  <span style={{ fontSize:13, color:th.text }}>{business.phone}</span>
-                </a>
-              )}
-              {/* Lien Google Business */}
-              {business?.google_business_url && (
-                <a href={business.google_business_url} target="_blank" rel="noopener noreferrer"
-                  style={{ display:'flex', alignItems:'center', gap:10,
-                    padding:'10px 18px', borderTop:`1px solid ${th.border}`,
-                    textDecoration:'none' }}>
-                  <svg viewBox="0 0 24 24" width="15" height="15" style={{flexShrink:0}}>
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  <span style={{ fontSize:13, color:'#2563eb', fontWeight:600 }}>
-                    Voir les avis
-                  </span>
-                </a>
-              )}
-              <a href={`/book/${slug}/politique`} target="_blank" rel="noopener noreferrer"
-                style={{ display:'flex', alignItems:'center', gap:8, fontSize:12,
-                  color:'#2563eb', textDecoration:'none' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  style={{width:13,height:13}}>
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                Politique de réservation
-              </a>
-            </div>
-          </div>
-        </div>
+        <SideCard th={th} slug={slug} business={business}
+          onReserve={()=>{ if(step>1) goToStep(1);
+            else { const el=document.getElementById('section-prestations');
+              if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }}} />
       </div>
 
       {/* ── Bouton Réserver fixe mobile ── */}
@@ -3953,6 +3912,449 @@ export default function BookingPage({ slug }) {
   );
 }
 
+
+// ── Page Parrainer un ami (3 états) ─────────────────────────────────────────
+function ReferralPage({ th, slug, business, refProgram, gcConnected, refMyCode, refMyHistory, refMyRewards, onLogin, onBack }) {
+  const [copied, setCopied] = useState(false);
+  const hasProgram = refProgram && refProgram !== 'none';
+  const isActive   = hasProgram && refProgram.is_enabled === true;
+
+  const valueStr = (type, value) => type === 'percent'
+    ? `${value}%` : `${Number(value).toFixed(2)} €`;
+
+  const shareUrl = refMyCode?.code
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/book/${slug}?ref=${refMyCode.code}`
+    : null;
+
+  const copyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {/* ignore */}
+  };
+
+  const share = async () => {
+    if (!shareUrl) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Parrainage ${business?.business_name || ''}`,
+          text: `Utilise mon code ${refMyCode.code} chez ${business?.business_name || 'ce commerce'} !`,
+          url: shareUrl,
+        });
+      } catch {/* user cancelled */}
+    } else {
+      copyLink();
+    }
+  };
+
+  // Réductions déjà gagnées (pour l'état désactivé on affiche uniquement celles-ci)
+  const earnedRewards = (refMyRewards || []).filter(r => r.status === 'available' || r.status === 'used');
+
+  return (
+    <div style={{ maxWidth:680, margin:'0 auto', padding:'32px 20px 80px', animation:'fadeIn .2s ease' }}>
+      <button onClick={onBack}
+        style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px',
+          background:'none', border:'none', cursor:'pointer',
+          fontSize:13, color:th.muted, marginBottom:16 }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          style={{ width:14, height:14 }}><polyline points="15 18 9 12 15 6"/></svg>
+        Retour à l'accueil
+      </button>
+
+      <h1 style={{ fontSize:26, fontWeight:900, color:th.text, margin:'0 0 8px',
+        letterSpacing:'-0.02em' }}>
+        Parrainer un ami
+      </h1>
+      {business?.business_name && (
+        <p style={{ fontSize:14, color:th.muted, margin:'0 0 24px' }}>
+          Programme de parrainage de {business.business_name}
+        </p>
+      )}
+
+      {/* ── État : programme désactivé ─────────────────────────────────── */}
+      {hasProgram && !isActive && (
+        <div style={{ background:th.card, border:`1px solid ${th.border}`,
+          borderRadius:16, padding:24, marginBottom:16 }}>
+          <div style={{ fontSize:40, marginBottom:8 }}>🔒</div>
+          <h2 style={{ fontSize:18, fontWeight:800, color:th.text, margin:'0 0 8px' }}>
+            Programme temporairement fermé
+          </h2>
+          <p style={{ fontSize:14, color:th.muted, margin:0, lineHeight:1.6 }}>
+            Le programme de parrainage est temporairement fermé.
+            {earnedRewards.length > 0 ? ' Vos réductions déjà gagnées restent utilisables jusqu\'à leur date d\'expiration.' : ''}
+          </p>
+        </div>
+      )}
+
+      {/* ── État : programme actif ─────────────────────────────────────── */}
+      {isActive && (
+        <>
+          {/* Conditions du programme */}
+          <div style={{ background:th.card, border:`1px solid ${th.border}`,
+            borderRadius:16, padding:24, marginBottom:16 }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>🤝</div>
+            <h2 style={{ fontSize:18, fontWeight:800, color:th.text, margin:'0 0 10px' }}>
+              Comment ça marche ?
+            </h2>
+            <ol style={{ fontSize:14, color:th.text, margin:0, paddingLeft:20, lineHeight:1.8 }}>
+              <li>Partagez votre code personnel à vos amis.</li>
+              <li>Ils prennent rendez-vous et saisissent votre code.</li>
+              <li>Après leur visite, vous recevez{' '}
+                <strong>{valueStr(refProgram.parrain_type, refProgram.parrain_value)} de réduction</strong>{' '}
+                par email.
+              </li>
+            </ol>
+          </div>
+
+          {/* Non connecté : bouton Voir mon code */}
+          {!gcConnected && (
+            <div style={{ background:th.card, border:`1px solid ${th.border}`,
+              borderRadius:16, padding:24, marginBottom:16, textAlign:'center' }}>
+              <p style={{ fontSize:14, color:th.muted, margin:'0 0 14px' }}>
+                Connectez-vous pour obtenir votre code de parrainage personnel.
+              </p>
+              <button onClick={onLogin}
+                style={{ padding:'12px 24px', borderRadius:11, cursor:'pointer',
+                  background:th.accent, color:th.accentText, border:'none',
+                  fontWeight:800, fontSize:14 }}>
+                Voir mon code
+              </button>
+            </div>
+          )}
+
+          {/* Connecté : code + partage */}
+          {gcConnected && refMyCode?.code && (
+            <div style={{ background:th.card, border:`1px solid ${th.border}`,
+              borderRadius:16, padding:24, marginBottom:16 }}>
+              <p style={{ fontSize:11, fontWeight:700, color:th.muted,
+                textTransform:'uppercase', letterSpacing:'0.05em', margin:'0 0 10px' }}>
+                Votre code
+              </p>
+              <div style={{ background:th.cardAlt, border:'2px dashed #8b5cf6',
+                borderRadius:14, padding:'18px 16px', textAlign:'center', marginBottom:14 }}>
+                <p style={{ fontFamily:'monospace', fontSize:24, fontWeight:900,
+                  color:'#6d28d9', letterSpacing:3, margin:0 }}>{refMyCode.code}</p>
+                <p style={{ fontSize:11, color:th.muted, margin:'6px 0 0' }}>
+                  {refMyCode.uses_count || 0} filleul{(refMyCode.uses_count||0) > 1 ? 's' : ''}
+                </p>
+              </div>
+              <div style={{ display:'flex', gap:10 }}>
+                <button onClick={copyLink}
+                  style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                    background:copied ? '#10b981' : '#8b5cf6', color:'white',
+                    border:'none', fontWeight:800, fontSize:13 }}>
+                  {copied ? '✓ Copié' : 'Copier'}
+                </button>
+                <button onClick={share}
+                  style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                    background:th.cardAlt, color:th.text,
+                    border:`1px solid ${th.border}`, fontWeight:700, fontSize:13 }}>
+                  Partager le lien
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Historique filleuls (connecté) */}
+          {gcConnected && refMyHistory && refMyHistory.length > 0 && (
+            <div style={{ background:th.card, border:`1px solid ${th.border}`,
+              borderRadius:16, padding:20, marginBottom:16 }}>
+              <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 12px' }}>
+                Mes filleuls
+              </p>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {refMyHistory.map(h => {
+                  const name = [h.filleul_first_name, h.filleul_last_name].filter(Boolean).join(' ') || h.filleul_email;
+                  const color = h.status === 'validated' ? '#10b981'
+                              : h.status === 'cancelled' ? '#ef4444' : '#f59e0b';
+                  const label = h.status === 'validated' ? 'Validé ✅'
+                              : h.status === 'cancelled' ? 'Annulé' : 'En attente';
+                  return (
+                    <div key={h.id} style={{ display:'flex', alignItems:'center', gap:12,
+                      padding:'10px 12px', borderRadius:10,
+                      background:th.cardAlt, border:`1px solid ${th.border}` }}>
+                      <div style={{ width:32, height:32, borderRadius:10, background:'#8b5cf620',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:13, fontWeight:900, color:'#6d28d9', flexShrink:0 }}>
+                        {(name.charAt(0) || '?').toUpperCase()}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <p style={{ margin:0, fontSize:13, fontWeight:700, color:th.text,
+                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</p>
+                        <p style={{ margin:0, fontSize:11, color:th.muted }}>
+                          {new Date(h.created_at).toLocaleDateString('fr-FR')}
+                        </p>
+                      </div>
+                      <span style={{ fontSize:11, fontWeight:800,
+                        padding:'3px 10px', borderRadius:99,
+                        background:color + '18', color, flexShrink:0 }}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Réductions gagnées (affichées dans tous les cas si présentes) */}
+      {earnedRewards.length > 0 && (
+        <div style={{ background:th.card, border:`1px solid ${th.border}`,
+          borderRadius:16, padding:20 }}>
+          <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 12px' }}>
+            Mes réductions
+          </p>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {earnedRewards.map(r => {
+              const isBday = r.reward_type === 'birthday';
+              const accent = isBday ? '#ec4899' : '#8b5cf6';
+              const valStr = r.type === 'percent' ? `-${r.value}%` : `-${Number(r.value).toFixed(2)} €`;
+              const isUsed = r.status === 'used';
+              const expStr = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : null;
+              return (
+                <div key={r.id} style={{
+                  padding:'12px 14px', borderRadius:11,
+                  border:`1px solid ${isUsed ? th.border : accent + '40'}`,
+                  background:isUsed ? th.cardAlt : accent + '0f',
+                  opacity:isUsed ? 0.6 : 1,
+                  display:'flex', alignItems:'center', gap:10,
+                }}>
+                  <span style={{ fontSize:22 }}>{isBday ? '🎂' : '🤝'}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ margin:0, fontSize:13, fontWeight:800, color:th.text }}>
+                      {valStr} <span style={{ fontFamily:'monospace', fontSize:11, color:accent }}>· {r.code}</span>
+                    </p>
+                    <p style={{ margin:'2px 0 0', fontSize:11, color:th.muted }}>
+                      {isBday ? 'Anniversaire' : 'Parrainage'}
+                      {isUsed ? ' · utilisée' : expStr ? ` · expire le ${expStr}` : ''}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Carte latérale sticky : logo + avis + statut + 7 jours + adresse + contact ──
+function SideCard({ th, slug, business, onReserve }) {
+  const [contactOpen, setContactOpen] = useState(false);
+
+  // Statut ouvert/fermé calculé dynamiquement depuis business.hours
+  const hours = business?.hours || {};
+  const parseHM = s => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
+  const now = new Date();
+  const curDow = now.getDay();                          // 0=Dim … 6=Sam
+  const curHM  = now.getHours() * 60 + now.getMinutes();
+  const DAY_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  const today = hours[curDow];
+  const openM  = today && today.is_open ? parseHM(today.open_time)  : null;
+  const closeM = today && today.is_open ? parseHM(today.close_time) : null;
+  let status;
+  if (today?.is_open && openM != null && closeM != null && curHM >= openM && curHM < closeM) {
+    status = { label: 'Ouvert', detail: `Ferme à ${today.close_time}`, color: '#10b981' };
+  } else if (today?.is_open && openM != null && curHM < openM) {
+    status = { label: 'Fermé', detail: `Ouvre à ${today.open_time}`, color: '#ef4444' };
+  } else {
+    let next = null;
+    for (let i = 1; i <= 7; i++) {
+      const dow = (curDow + i) % 7;
+      const h = hours[dow];
+      if (h?.is_open && h.open_time) { next = { dow, time: h.open_time, inDays: i }; break; }
+    }
+    if (next) {
+      const whenLbl = next.inDays === 1 ? 'demain' : DAY_SHORT[next.dow];
+      status = { label: 'Fermé', detail: `Ouvre ${next.time} ${whenLbl}`, color: '#ef4444' };
+    } else {
+      status = { label: 'Fermé', detail: null, color: '#ef4444' };
+    }
+  }
+
+  // 7 jours dans l'ordre Lun → Dim
+  const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+  const DAY_FULL = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+  const addressStr = [business?.address, [business?.postal_code, business?.city].filter(Boolean).join(' ')]
+    .filter(Boolean).join(', ');
+  const mapsUrl = addressStr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressStr)}` : null;
+
+  return (
+    <div className="bk-do bk-sb"
+      style={{ width:290, flexShrink:0, paddingTop:32,
+        position:'sticky', top:80, alignSelf:'flex-start' }}>
+      <div style={{ background:th.sidebarBg, border:`1px solid ${th.border}`,
+        borderRadius:16, overflow:'hidden' }}>
+
+        {/* Logo + nom + lien avis Google */}
+        <div style={{ padding:'24px 20px 18px', textAlign:'center',
+          borderBottom:`1px solid ${th.border}` }}>
+          <div style={{ width:80, height:80, borderRadius:99, margin:'0 auto 12px',
+            overflow:'hidden', background:th.cardAlt,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            border:`3px solid ${th.border}` }}>
+            {business?.profile_url ? (
+              <img src={mediaUrl(business.profile_url)} alt={business.business_name}
+                style={{ width:'100%', height:'100%', objectFit:'cover' }}
+                onError={e=>{ e.target.style.display='none'; }}/>
+            ) : null}
+            <span style={{ fontSize:28, fontWeight:900, color:'#374151',
+              display: business?.profile_url ? 'none' : 'block' }}>
+              {(business?.business_name||'B').charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <h2 style={{ fontSize:18, fontWeight:800, color:th.text,
+            margin:'0 0 6px', letterSpacing:'-0.02em',
+            textTransform:'uppercase' }}>
+            {business?.business_name}
+          </h2>
+          {business?.google_business_url && (
+            <a href={business.google_business_url} target="_blank" rel="noopener noreferrer"
+              style={{ display:'inline-flex', alignItems:'center', gap:6,
+                fontSize:12, fontWeight:600, color:'#2563eb',
+                textDecoration:'none' }}>
+              <svg viewBox="0 0 24 24" width="13" height="13" style={{flexShrink:0}}>
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Voir les avis
+            </a>
+          )}
+        </div>
+
+        {/* Bouton Réserver */}
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${th.border}` }}>
+          <button onClick={onReserve}
+            style={{ width:'100%', padding:'13px', borderRadius:10,
+              background:th.accent, border:'none', fontWeight:800, fontSize:15,
+              color:th.accentText, cursor:'pointer',
+              boxShadow:'0 2px 8px rgba(0,0,0,0.15)' }}>
+            Réserver
+          </button>
+        </div>
+
+        {/* Statut ouvert/fermé + Tableau horaires */}
+        {Object.keys(hours).length > 0 && (
+          <div style={{ borderBottom:`1px solid ${th.border}` }}>
+            <div style={{ padding:'12px 18px', display:'flex', alignItems:'center', gap:6,
+              background:th.cardAlt, borderBottom:`1px solid ${th.border}` }}>
+              <span style={{ width:8, height:8, borderRadius:99, background:status.color, flexShrink:0 }} />
+              <span style={{ fontSize:13, fontWeight:700, color:status.color }}>{status.label}</span>
+              {status.detail && (
+                <span style={{ fontSize:12, color:th.muted }}>· {status.detail}</span>
+              )}
+            </div>
+            <div>
+              {WEEK_ORDER.map((dow, i) => {
+                const h = hours[dow];
+                const isToday = dow === curDow;
+                const isLast  = i === WEEK_ORDER.length - 1;
+                return (
+                  <div key={dow} style={{ display:'flex', alignItems:'center',
+                    justifyContent:'space-between', padding:'8px 18px',
+                    borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
+                    <span style={{ fontSize:13, fontWeight: isToday ? 800 : 500,
+                      color: isToday ? th.text : th.muted }}>
+                      {DAY_FULL[dow]}
+                    </span>
+                    <span style={{ fontSize:13, fontWeight: isToday ? 700 : 400,
+                      color: isToday ? th.text : (h?.is_open ? th.text : th.muted),
+                      fontVariantNumeric:'tabular-nums' }}>
+                      {h?.is_open && h.open_time && h.close_time
+                        ? `${h.open_time} – ${h.close_time}`
+                        : 'Fermé'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Adresse + lien Maps */}
+        {(business?.address || business?.city || business?.postal_code) && (
+          <div style={{ padding:'14px 18px', borderBottom:`1px solid ${th.border}` }}>
+            {business?.address && (
+              <p style={{ fontSize:13, color:th.text, margin:'0 0 2px', lineHeight:1.5 }}>
+                {business.address}
+              </p>
+            )}
+            {(business?.postal_code || business?.city) && (
+              <p style={{ fontSize:13, color:th.muted, margin:'0 0 10px', lineHeight:1.5 }}>
+                {[business.postal_code, business.city].filter(Boolean).join(' ')}
+              </p>
+            )}
+            {mapsUrl && (
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                style={{ display:'inline-flex', alignItems:'center', gap:6,
+                  fontSize:13, fontWeight:600, color:'#2563eb', textDecoration:'none' }}>
+                Ouvrir dans Maps
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  style={{width:13,height:13}}>
+                  <path d="M7 17L17 7M17 7H8M17 7V16"/>
+                </svg>
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Accordéon "Nous contacter" — tél + email */}
+        {(business?.phone || business?.email) && (
+          <div>
+            <button onClick={() => setContactOpen(o => !o)}
+              style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'12px 18px', background:'none', border:'none', cursor:'pointer',
+                fontSize:13, fontWeight:700, color:th.text, textAlign:'left' }}>
+              Nous contacter
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                style={{ width:14, height:14, color:th.muted,
+                  transform: contactOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition:'transform .2s' }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {contactOpen && (
+              <div style={{ borderTop:`1px solid ${th.border}` }}>
+                {business?.phone && (
+                  <a href={`tel:${business.phone}`}
+                    style={{ display:'flex', alignItems:'center', gap:10,
+                      padding:'10px 18px', textDecoration:'none',
+                      borderBottom: business?.email ? `1px solid ${th.border}` : 'none' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      style={{width:15,height:15,color:th.muted,flexShrink:0}}>
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                    </svg>
+                    <span style={{ fontSize:13, color:th.text }}>{business.phone}</span>
+                  </a>
+                )}
+                {business?.email && (
+                  <a href={`mailto:${business.email}`}
+                    style={{ display:'flex', alignItems:'center', gap:10,
+                      padding:'10px 18px', textDecoration:'none' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      style={{width:15,height:15,color:th.muted,flexShrink:0}}>
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    <span style={{ fontSize:13, color:th.text, overflow:'hidden',
+                      textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{business.email}</span>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

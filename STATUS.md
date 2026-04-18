@@ -1,6 +1,67 @@
-# FlowIA — STATUS (2026-04-18)
+# FlowIA — STATUS (2026-04-19)
 
 Dernier commit : voir `git log -1`
+
+---
+
+## 🆕 Session 2026-04-19 : Carte latérale sticky + navigation + page parrainage dédiée
+
+### Objectif (onboarding.md)
+Restructurer la colonne de droite en sticky (logo + avis + Réserver + statut
+ouvert/fermé + 7 jours + adresse/Maps + accordéon contact), ajouter "Parrainer
+un ami" à la navigation si programme existe, créer une page parrainage dédiée
+avec 3 états (actif non connecté / actif connecté / désactivé).
+
+### Backend
+- `routes/public-booking.js` GET `/:slug` : ajoute `email: u.email` au business
+  exposé publiquement (utilisé par l'accordéon "Nous contacter" de la sidebar).
+- `routes/global-clients.js` GET `/pub/:slug/referral-program` : renvoie
+  maintenant **200 même si `is_enabled=false`** — 404 uniquement si aucun
+  programme n'a jamais été créé. Permet au frontend de distinguer "programme
+  inexistant" (pas de lien dans la nav) de "programme désactivé" (lien affiché,
+  page montre "fermé").
+
+### Frontend — BookingPage.jsx
+- **NEW composant `SideCard`** : remplace le contenu de la sidebar desktop.
+  - Logo rond + nom en uppercase + lien "Voir les avis" (Google)
+  - Bouton "Réserver" (scroll prestations / retour étape 1)
+  - Statut dynamique **Ouvert / Fermé · détail** calculé depuis `business.hours`
+    (ouvert maintenant / ouvre à HH:MM / ouvre HH:MM demain / ouvre HH:MM dow)
+  - Tableau 7 jours **Lun → Dim**, jour courant en gras
+  - Adresse + "Ouvrir dans Maps ↗" (lien externe)
+  - Accordéon "Nous contacter" avec tél + email cliquables
+- **NEW composant `ReferralPage`** — vue dédiée `/book/:slug/parrain`, 3 états :
+  - Programme inexistant : onglet n'apparaît pas du tout.
+  - Programme désactivé : card "Programme temporairement fermé" + rewards gagnées
+    si présentes (restent utilisables).
+  - Programme actif + non connecté : conditions + bouton "Voir mon code" qui
+    ouvre le panneau de connexion global.
+  - Programme actif + connecté : code perso en grand + boutons Copier / Partager
+    (navigator.share, fallback clipboard) + historique filleuls (En attente /
+    Validé ✅ / Annulé) + réductions gagnées.
+- **NavBar** : ajoute `Parrainer un ami` dans la liste des liens si `refProgram`
+  est chargé (et ≠ 'none'). Position : dernière entrée, après Photos.
+- **Mobile** : ajoute un bouton "🤝 Parrainer un ami" dans le bloc infos
+  commerçant mobile (bk-mo), visible uniquement si programme existe.
+- State + effects : `refProgram` fetch on mount, `refMyCode` / `refMyHistory` /
+  `refMyRewards` fetch on enter view 'parrain' (si gcToken présent).
+- Routing : URL `/book/:slug/parrain` restaurée au montage via useEffect sur
+  `location.pathname`.
+
+### Frontend — utils/api.js
+- Aucun changement (l'API `publicReferralApi.getProgram` était déjà exposée).
+
+### Bénéfices
+- **UX immédiate** : sidebar fixe visible pendant tout le scroll du landing →
+  Réserver toujours accessible, statut d'ouverture toujours visible.
+- **Découvrabilité parrainage** : lien de nav + bouton mobile → les clients
+  découvrent la fonctionnalité sans passer par le dashboard.
+- **Robustesse** : programme désactivé ≠ programme inexistant → UI adaptée aux
+  deux cas sans surprendre l'utilisateur.
+
+### Build
+- `node --check` public-booking.js + global-clients.js : OK
+- `npx vite build` : OK (13.24s, 80 modules)
 
 ---
 

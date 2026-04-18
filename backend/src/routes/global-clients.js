@@ -397,8 +397,11 @@ router.get('/me/referral-history/:slug', globalClientAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /pub/:slug/referral-program — config publique (pour la page parrainage
-// avant connexion) : affiche les conditions et la récompense.
+// GET /pub/:slug/referral-program — config publique du programme parrainage.
+// Retourne 200 si le programme existe (même désactivé → is_enabled:false) pour
+// que le frontend puisse afficher la page "programme fermé". 404 uniquement si
+// aucun programme n'a jamais été créé chez ce commerçant (→ ne pas afficher le
+// lien de navigation du tout).
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/pub/:slug/referral-program', async (req, res) => {
   try {
@@ -411,8 +414,8 @@ router.get('/pub/:slug/referral-program', async (req, res) => {
       `SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value
          FROM referral_programs WHERE user_id=$1`, [biz[0].user_id]
     );
-    if (!prog.length || !prog[0].is_enabled)
-      return res.status(404).json({ error: 'Programme non actif.' });
+    if (!prog.length)
+      return res.status(404).json({ error: 'Programme inexistant.' });
     res.json({
       business_name: biz[0].business_name,
       ...prog[0],

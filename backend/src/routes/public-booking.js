@@ -237,7 +237,7 @@ router.get('/:slug', async (req, res) => {
               bs.google_business_url,
               bs.created_at, bs.updated_at,
               u.business_name, u.city, u.postal_code, u.phone AS user_phone,
-              u.address AS user_address,
+              u.address AS user_address, u.email AS user_email,
               u.google_business_url AS user_google_business_url
        FROM booking_settings bs
        JOIN users u ON u.id = bs.user_id
@@ -286,6 +286,7 @@ router.get('/:slug', async (req, res) => {
       address:             pub.user_address             || null,
       postal_code:         pub.postal_code              || null,
       city:                pub.city                     || null,
+      email:               pub.user_email               || null,
       google_business_url: pub.user_google_business_url || null,
       hours:               hoursByDay,
     };
