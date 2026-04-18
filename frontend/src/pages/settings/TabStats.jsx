@@ -113,11 +113,38 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
   })).filter(p => p.cnt > 0).sort((a,b) => b.total - a.total);
   const maxPay = Math.max(...payStats.map(p => p.total), 1);
 
-  const catStats = categories.filter(c => c.type==='revenue').map(cat => ({
-    ...cat,
-    count: revs.filter(t => t.category_id===cat.id).length,
-    total: revs.filter(t => t.category_id===cat.id).reduce((s,t) => s+(parseFloat(t.amount)||0), 0),
-  })).filter(c => c.count > 0).sort((a,b) => b.total - a.total);
+  // Stats par service/produit agrégées depuis transaction_items (pas category_id)
+  // → chaque unité vendue compte comme une vente réelle
+  const svcMap = {};
+  revs.forEach(t => {
+    const items = Array.isArray(t.items) ? t.items : [];
+    if (items.length > 0) {
+      items.forEach(it => {
+        const key  = it.service_name || 'Sans nom';
+        const qty  = parseInt(it.qty) || 1;
+        const unit = parseFloat(it.unit_price) || 0;
+        if (!svcMap[key]) svcMap[key] = { name: key, count: 0, total: 0, unit };
+        svcMap[key].count += qty;
+        svcMap[key].total += unit * qty;
+        svcMap[key].unit   = unit;
+      });
+    } else {
+      const cat = categories.find(c => c.id === t.category_id);
+      const key = cat?.name || t.description || 'Sans catégorie';
+      const qty = parseInt(t.qty_total) || 1;
+      const amt = parseFloat(t.amount) || 0;
+      if (!svcMap[key]) svcMap[key] = { name: key, count: 0, total: 0, unit: qty>0 ? amt/qty : amt };
+      svcMap[key].count += qty;
+      svcMap[key].total += amt;
+    }
+  });
+  const catStats = Object.values(svcMap)
+    .map(s => {
+      const cat = categories.find(c => c.name === s.name);
+      return { ...s, id: cat?.id || s.name, icon: cat?.icon, color: cat?.color || '#6b7280' };
+    })
+    .filter(c => c.count > 0)
+    .sort((a,b) => b.total - a.total);
 
   const PRES = [{v:'today',l:'Auj.'},{v:'week',l:'Semaine'},{v:'month',l:'Mois'},{v:'custom',l:'Perso.'}];
   const filterTabBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
@@ -279,9 +306,11 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: theme.text }}>{cat.name}</p>
-                    <p className="text-[10px]" style={{ color: theme.muted }}>{cat.count} vente{cat.count!==1?'s':''}</p>
+                    <p className="text-[10px]" style={{ color: theme.muted }}>
+                      {fmt(cat.unit||0)} €{cat.count>1 ? ` · ${fmt(cat.total)} € total` : ''}
+                    </p>
                   </div>
-                  <span className="text-sm font-bold" style={{ color: '#4ade80' }}>{fmt(cat.total)} €</span>
+                  <span className="text-sm font-bold" style={{ color: '#4ade80' }}>{cat.count}×</span>
                 </div>
               );
             })}

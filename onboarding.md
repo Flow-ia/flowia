@@ -1,42 +1,41 @@
-
-
-Non, il ne faut pas gérer cela comme une ligne “Coupe simple ×2” dans une note ou un libellé.
-
-👉 Le comportement attendu est le suivant :
-
-Lorsqu’un employé sélectionne une prestation avec une quantité (exemple : 2 coupes simples), le système doit enregistrer **une seule transaction**, mais comptabiliser **deux ventes réelles de la prestation “coupe simple”**.
+Voici la version corrigée et clarifiée :
 
 ---
 
-### 💡 Logique attendue
+Il y a un problème dans les statistiques du jour, dans la section **“Par service / produit”**.
 
-* Une seule transaction est créée dans la caisse
-* Mais le système doit incrémenter le nombre de prestations vendues individuellement
+Actuellement, l’affichage est incorrect. Par exemple, le système affiche uniquement une ligne du type :
 
-Exemple :
+* Coupe simple — 30,00 € — 1×
 
-* 1 transaction = 2 coupes simples
-* Statistiques = +2 ventes de “coupe simple”
+alors que plusieurs produits différents avec des quantités différentes ont été encaissés.
 
 ---
 
-### 📊 Impact sur les statistiques et l’historique
+### 💡 Comportement attendu
 
-Dans les statistiques et les rapports, cela doit apparaître comme :
+Lorsqu’un encaissement contient plusieurs produits/services avec des quantités différentes, les statistiques doivent les afficher correctement et séparément, par exemple :
 
-* nombre total de ventes de coupe simple augmenté de 2
-* chiffre d’affaires correctement réparti
-* historique cohérent avec la réalité des prestations effectuées
+* Coupe simple — 15,00 € — 3×
+* Coupe + barbe — 10,00 € — 2×
+
+---
+
+### ❌ Problème actuel
+
+Le système regroupe incorrectement toutes les ventes sous une seule ligne :
+
+* “Sans catégorie — 65,00 € — 1×”
 
 ---
 
 ### ⚠️ Contraintes importantes
 
-* Ne pas afficher “Coupe simple ×2” comme une ligne de produit
-* Ne pas casser le système existant de caisse ou d’historique
-* Garder une seule transaction par encaissement
-* Assurer une cohérence totale entre caisse, statistiques et analytics
+* Ne pas regrouper les produits/services différents dans une seule ligne
+* Ne pas perdre les informations de quantité
+* Ne pas casser les calculs existants de statistiques
+* Garantir une cohérence entre caisse, historique et statistiques
 
 ---
 
-👉 Objectif : garder une caisse simple pour l’utilisateur, tout en assurant une comptabilisation précise et fiable des ventes dans les statistiques, sans modifier l’expérience utilisateur ni casser le code existant.
+👉 Objectif : afficher correctement chaque service/produit avec sa quantité réelle vendue, pour avoir des statistiques fiables et exploitables.

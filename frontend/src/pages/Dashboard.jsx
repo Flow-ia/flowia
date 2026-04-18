@@ -373,12 +373,31 @@ function StatsModal({ open, onClose, theme, transactions, employees, categories 
     byPM[pm].count++; byPM[pm].total+=parseFloat(t.amount)||0;
   });
 
+  // ── Par service / produit : agrégation depuis tx.items[] (chaque service séparé) ──
+  // Chaque qty compte comme une vente réelle. Fallback sur category_name si pas d'items.
   const byCat = {};
   todayRevs.forEach(t => {
-    const cat = categories.find(c=>c.id===t.category_id);
-    const key = cat?.name||'Sans categorie';
-    if(!byCat[key]) byCat[key]={count:0,total:0};
-    byCat[key].count++; byCat[key].total+=parseFloat(t.amount)||0;
+    const items = Array.isArray(t.items) ? t.items : [];
+    if (items.length > 0) {
+      items.forEach(it => {
+        const key  = it.service_name || 'Sans nom';
+        const qty  = parseInt(it.qty) || 1;
+        const unit = parseFloat(it.unit_price) || 0;
+        if (!byCat[key]) byCat[key] = { count:0, total:0, unit };
+        byCat[key].count += qty;
+        byCat[key].total += unit * qty;
+        byCat[key].unit   = unit;
+      });
+    } else {
+      // Legacy : transactions sans items → on retombe sur la catégorie
+      const cat = categories.find(c=>c.id===t.category_id);
+      const key = cat?.name || t.description || 'Sans categorie';
+      const qty = parseInt(t.qty_total) || 1;
+      const amt = parseFloat(t.amount) || 0;
+      if (!byCat[key]) byCat[key] = { count:0, total:0, unit: qty>0 ? amt/qty : amt };
+      byCat[key].count += qty;
+      byCat[key].total += amt;
+    }
   });
 
   const section = (title, children) => (
@@ -468,7 +487,9 @@ function StatsModal({ open, onClose, theme, transactions, employees, categories 
         )))}
         
         {Object.keys(byCat).length>0 && section('Par service / produit',
-          Object.entries(byCat).sort(([,a],[,b])=>b.total-a.total).map(([name,v])=>row(name,`${v.count}×`,'#10b981',`${fmtN(v.total)} €`,name))
+          Object.entries(byCat).sort(([,a],[,b])=>b.total-a.total).map(([name,v])=>
+            row(name,`${v.count}×`,'#10b981',`${fmtN(v.unit||0)} €${v.count>1?` · ${fmtN(v.total)} € total`:''}`,name)
+          )
         )}
         {todayAll.length===0&&(
           <div style={{ padding:'32px 16px',textAlign:'center' }}>
