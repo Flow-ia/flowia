@@ -94,9 +94,10 @@ function NavBar({ th, slug, business, clientUser, refProgram, onToggleTheme, onS
             ['section-prestations','Nos prestations'],
             ['section-equipe','Équipe'],
             ...(business?.google_business_url ? [['section-avis','Commentaires']] : []),
+            ...(refProgram && refProgram !== 'none' && refProgram.is_enabled === true
+                ? [['__parrain__','Parrainer un ami']] : []),
             ...((business?.cover_urls?.length > 0) ? [['section-photos','Photos']] : []),
             ['section-adresse','Adresse'],
-            ...(refProgram && refProgram !== 'none' ? [['__parrain__','Parrainer un ami']] : []),
           ].map(([id, label]) => (
             <button key={id}
               onClick={() => scrollTo(id)}
@@ -2789,7 +2790,7 @@ export default function BookingPage({ slug }) {
                 {business?.hours && Object.keys(business.hours).length > 0 && (
                   <MobileHoursBlock th={th} hours={business.hours} />
                 )}
-                {refProgram && refProgram !== 'none' && (
+                {refProgram && refProgram !== 'none' && refProgram.is_enabled === true && (
                   <button onClick={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
                     style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
                       background:'#8b5cf615', border:'1px solid #8b5cf640',

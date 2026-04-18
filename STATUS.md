@@ -4,6 +4,37 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-19 (suite 3) : Nav booking — ordre + condition stricte parrainage
+
+### Demande
+1. Réordonner la nav du site de réservation :
+   `Nos prestations · Équipe · Parrainer un ami · Photos · Adresse`
+2. Le bouton « Parrainer un ami » n'apparaissait pas même quand le commerçant
+   avait basculé le toggle, parce que la ligne `referral_programs` n'existait
+   pas en BDD (toggle activé avant le déploiement du fix auto-save → état UI
+   sans persistence).
+
+### Fix — `frontend/src/pages/BookingPage.jsx`
+- **Nav desktop** (`NavBar`) : ordre revu →
+  `Prestations → Équipe → Commentaires (si Google) → Parrainer (si actif) → Photos (si album) → Adresse`
+- **Condition d'affichage** : passée de `refProgram !== 'none'` à
+  `refProgram?.is_enabled === true`. Le lien apparaît uniquement quand le
+  programme est **actif** (pas seulement existant). Évite un lien qui
+  redirigerait vers la page « Programme temporairement fermé ».
+- **Bouton mobile** (bloc `bk-mo`) : même condition stricte appliquée.
+
+### Conséquence pour le commerçant existant
+Si le toggle était activé avant le fix auto-save (commit 2a42162) sans clic
+sur Enregistrer, **aucune ligne n'a été créée**. Au prochain chargement de
+Settings → Marketing → Parrain., le toggle apparaît OFF (default backend).
+Il suffit de **rebasculer le toggle** (auto-PUT instantané) pour voir le
+lien apparaître sur la page de réservation après reload.
+
+### Build
+- `npx vite build` : OK (29.85s, 80 modules)
+
+---
+
 ## 🆕 Session 2026-04-19 (suite 2) : Email commerçant unique — message d'erreur clair
 
 ### Règle métier
