@@ -211,12 +211,25 @@ router.post('/change-email', authMiddleware, async (req, res) => {
   try {
     const { newEmail } = req.body;
     if (!newEmail) return res.status(400).json({ error: 'Email requis.' });
-    const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [newEmail]);
-    if (rows.length) return res.status(409).json({ error: 'Email déjà utilisé.' });
+    // 1. Vérifier que le nouvel email n'est pas déjà utilisé
+    const { rows: exists } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [newEmail]);
+    if (exists.length) return res.status(409).json({ error: 'Email déjà utilisé.' });
+    // 2. Récupérer l'adresse ACTUELLE du compte (pour sécurité — le code est envoyé à l'ancienne adresse)
+    const { rows: u } = await pool.query('SELECT email FROM users WHERE id=$1', [req.user.userId]);
+    if (!u.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    const currentEmail = u[0].email;
+    if (currentEmail.toLowerCase() === newEmail.toLowerCase()) {
+      return res.status(400).json({ error: 'Le nouvel email doit être différent.' });
+    }
     const code = genCode();
     await saveCode(`chg_email_${req.user.userId}`, code, { newEmail: newEmail.toLowerCase() });
-    res.json({ ok: true });
-    setImmediate(() => sendVerificationEmail(newEmail, code, 'Confirmez votre nouvel email — FlowIA', 'email').catch(e => console.error('[EMAIL change-email]', e.message)));
+    res.json({ ok: true, sentTo: currentEmail });
+    // 3. Envoyer le code à l'ANCIEN email (authentifie le propriétaire du compte)
+    setImmediate(() => sendVerificationEmail(
+      currentEmail, code,
+      'Autorisez le changement de votre email — FlowIA',
+      'email'
+    ).catch(e => console.error('[EMAIL change-email]', e.message)));
   } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
