@@ -30,3 +30,5 @@ Re @ vendor-react-DgxRVB0M.js:1
 Hr @ vendor-react-DgxRVB0M.js:1
 Kt @ vendor-react-DgxRVB0M.js:1
 Qt @ vendor-react-DgxRVB0M.js:1Comprendre cette erreur
+
+fix bugs

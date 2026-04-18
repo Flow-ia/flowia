@@ -405,8 +405,12 @@ router.get('/me/referral-history/:slug', globalClientAuth, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/pub/:slug/referral-program', async (req, res) => {
   try {
+    // business_name vit dans users (pas dans booking_settings) → JOIN
     const { rows: biz } = await pool.query(
-      'SELECT user_id, business_name FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+      `SELECT bs.user_id, u.business_name
+         FROM booking_settings bs
+         JOIN users u ON u.id = bs.user_id
+        WHERE bs.slug=$1 AND bs.is_enabled=TRUE`,
       [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
@@ -420,7 +424,10 @@ router.get('/pub/:slug/referral-program', async (req, res) => {
       business_name: biz[0].business_name,
       ...prog[0],
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[REF PROG PUB]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,43 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-19 (suite 4) : Fix 500 referral-program + warning COOP popup Google
+
+### Bugs (onboarding.md)
+1. `GET /api/global-clients/pub/lille/referral-program` → **500 Internal Server Error**
+2. `Cross-Origin-Opener-Policy policy would block the window.closed call.`
+   (warning console quand l'utilisateur clique sur "Connexion Google" sur la
+   page de réservation)
+
+### Fix 1 — Backend (`routes/global-clients.js`)
+La requête sélectionnait `business_name` depuis `booking_settings`, alors que
+ce champ est dans `users`. Le 500 venait du Postgres `column "business_name"
+does not exist`. Corrigé en faisant un JOIN propre :
+```sql
+SELECT bs.user_id, u.business_name
+  FROM booking_settings bs
+  JOIN users u ON u.id = bs.user_id
+ WHERE bs.slug=$1 AND bs.is_enabled=TRUE
+```
+Ajout d'un `console.error('[REF PROG PUB]', e.message)` pour tracer les
+prochains 500 dans les logs Render.
+
+### Fix 2 — Frontend (`BookingPage.jsx loginWithGoogle`)
+Le polling `setInterval(() => popup.closed)` est **bloqué par la
+Cross-Origin-Opener-Policy** que Google ajoute à ses pages OAuth. Le
+listener `message` n'était jamais supprimé en cas de fermeture sans auth.
+Remplacé par :
+- handler `message` toujours valide, fait son cleanup à réception
+- `setTimeout(cleanup, 5min)` de secours pour libérer le listener si
+  l'utilisateur ferme la popup sans s'authentifier
+- Plus aucun accès à `popup.closed` → plus de warning COOP
+
+### Build
+- `node --check` : OK
+- `npx vite build` : OK (17.59s, 80 modules)
+
+---
+
 ## 🆕 Session 2026-04-19 (suite 3) : Nav booking — ordre + condition stricte parrainage
 
 ### Demande

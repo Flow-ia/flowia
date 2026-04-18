@@ -1075,10 +1075,11 @@ function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '
       'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
       Math.round((window.screen.width - 500) / 2)
     );
+    const cleanup = () => window.removeEventListener('message', handler);
     const handler = (e) => {
       if (e.data?.type !== 'GOOGLE_AUTH_SUCCESS') return;
-      window.removeEventListener('message', handler);
-      if (popup && !popup.closed) popup.close();
+      cleanup();
+      try { popup && popup.close(); } catch {}
       const { token, client } = e.data;
       if (!token || !client) return;
       localStorage.setItem('ff_client_token', token);
@@ -1086,10 +1087,9 @@ function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '
       onAuth(client);
     };
     window.addEventListener('message', handler);
-    // Nettoyage si popup fermée sans auth
-    const checkClosed = setInterval(() => {
-      if (popup?.closed) { clearInterval(checkClosed); window.removeEventListener('message', handler); }
-    }, 500);
+    // Cleanup de secours après 5min — on ne polle plus popup.closed
+    // (bloqué par Cross-Origin-Opener-Policy de la page Google).
+    setTimeout(cleanup, 5 * 60 * 1000);
   };
 
   const submit = async () => {
