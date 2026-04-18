@@ -298,13 +298,12 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
           </div>
         ))}
 
-        {/* Récap coût */}
+        {/* Récap coût — simplifié pour éviter la confusion avec le solde */}
         <div style={{ padding:'14px 16px', borderRadius:14, background:theme.card, border:`1px solid ${theme.border}` }}>
-          <MiniRow label="Total SMS"             value={plan.total_sms} theme={theme} />
-          <MiniRow label="Montant débité"        value={`${plan.estimated_cost.toFixed(2)} €`} theme={theme} />
-          <MiniRow label="Solde actuel"          value={`${plan.balance.toFixed(2)} €`} theme={theme} />
-          <MiniRow label="Solde après campagne"  value={`${(plan.balance - plan.estimated_cost).toFixed(2)} €`}
-            theme={theme} accent={plan.balance_sufficient ? '#10b981' : '#ef4444'} />
+          <MiniRow label="Total SMS"                value={plan.total_sms} theme={theme} />
+          <MiniRow label="Montant débité"           value={`${plan.estimated_cost.toFixed(2)} €`} theme={theme} />
+          <MiniRow label="Chiffre estimé à gagner"  value={`${plan.estimated_revenue_min}-${plan.estimated_revenue_max} €`}
+            theme={theme} accent="#10b981" />
         </div>
 
         {/* Actions */}

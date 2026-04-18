@@ -1,11 +1,9 @@
-Parfait, maintenant fais la même chose pour la page **“Images” (settings/profile)**, comme pour les services.
-
-En plus de cela, déplace cette fonctionnalité dans la section **“Site de réservation”**, afin de gérer :
-
-* le logo
-* la photo de profil
-* les 4 photos du commerce
-
-Ces images doivent être liées au commerçant.
-
-Applique exactement le même fonctionnement que pour les photos des services (ajout, remplacement, suppression, affichage clair).
+icic change u peu 'afffichage car c'es perturbant au commercant comme si i croit qui vas payé 65,57euros donc il faut juste affiché le montant débité et chiffre estimé a gagné avec cela uniquement : 
+Total SMS
+9
+Montant débité
+0.53 €
+Solde actuel
+66.20 €
+Solde après campagne
+65.67 €
