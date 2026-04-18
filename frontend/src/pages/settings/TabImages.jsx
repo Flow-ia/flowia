@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { I } from '../../utils/icons';
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5 Mo
+const withVersion = (url, v) => v ? `${url}?v=${v}` : url;
 
 export default function TabImages({ theme, showToast }) {
   const isDark = theme.mode === 'dark';
@@ -100,7 +101,10 @@ export default function TabImages({ theme, showToast }) {
     </div>
   );
 
-  const coverCount = (meta?.cover_urls || []).length;
+  const coverList  = meta?.cover_list || [];
+  const coverCount = coverList.length;
+  const logoUrl    = meta?.logo_id    ? withVersion(mediaApi.logoUrl(userId),    meta.logo_version)    : null;
+  const profileUrl = meta?.profile_id ? withVersion(mediaApi.profileUrl(userId), meta.profile_version) : null;
 
   return (
     <div style={{ borderRadius:16, overflow:'hidden', background:theme.card, border:`1px solid ${theme.border}` }}>
@@ -141,10 +145,10 @@ export default function TabImages({ theme, showToast }) {
           ) : (
             <>
               <SingleRow title="Logo" hint="Petit carré PNG (fond transparent)"
-                url={meta?.logo_url} mediaId={meta?.logo_id}
+                url={logoUrl} mediaId={meta?.logo_id}
                 onPick={uploadLogo} inputRef={logoInputRef} />
               <SingleRow title="Photo de profil" hint="Carré 400×400 — JPG ou PNG"
-                url={meta?.profile_url} mediaId={meta?.profile_id}
+                url={profileUrl} mediaId={meta?.profile_id}
                 onPick={uploadProfile} inputRef={profileInputRef} />
 
               {/* Photos du salon — grille compacte */}
@@ -174,11 +178,11 @@ export default function TabImages({ theme, showToast }) {
                 ) : (
                   <div style={{ display:'grid',
                     gridTemplateColumns:'repeat(auto-fill, minmax(90px, 1fr))', gap:8 }}>
-                    {meta.cover_urls.map((cover) => (
+                    {coverList.map((cover) => (
                       <div key={cover.id} style={{ position:'relative', borderRadius:10, overflow:'hidden',
                         aspectRatio:'1/1', background:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)',
                         border:`1px solid ${theme.border}` }}>
-                        <img src={cover.url} alt="Galerie"
+                        <img src={withVersion(mediaApi.coverUrl(userId, cover.id), cover.version)} alt="Galerie"
                           style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
                         <button onClick={() => deleteMedia(cover.id)} disabled={busy}
                           style={{ position:'absolute', top:4, right:4, width:22, height:22, borderRadius:99,

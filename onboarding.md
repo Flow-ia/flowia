@@ -1,1 +1,14 @@
-concernat la page de 'catégories ' nonil ne faut pas trop prendre de place et pour affiché la ou il faut mettre le logo et les image de couverture et fait les dans une section ouvrante et fermante et avec une pop up ou modifié cela et pour upload le lgo fait une cadre petite carré et responsive tout cela et avec bouton 'Modifie  comme une icone edit crayon' et un bouton 'supprimer comme un icone corbeille' pour ne pas trop de place pour les bouton et pas de  texte directement c'est compréhensible avec les icons la , et cette section de 'logo/photo de profile eti images couverture' il faut qeulle soit fermé par défault pour bien laisse la plaece a ala gestion des catégoreis et produits service car cela le commercant vas touché bcp plus souvent et aussi fait toujours design responsive 
+Corrige l’affichage des images dans la section **“Images de commerce”**, car elles ne s’affichent pas correctement actuellement. L’affichage doit être dynamique et asynchrone, comme pour les images des services, avec un rendu fluide et fiable.
+
+Ensuite, déplace la section de configuration **/agenda/config** dans la page **“Site de réservation”**, en créant une nouvelle section intitulée **“Config site de réservation”**.
+
+La page actuelle **“config”** doit être renommée en **“Agenda”**, puisque les paramètres généraux seront désormais gérés dans la section “Config”.
+
+Améliore également l’ergonomie de la page de configuration en encapsulant les éléments (sections pliables / accordéons) afin de faciliter la navigation pour le commerçant.
+
+⚠️ Contraintes importantes :
+
+* Ne casser aucune fonctionnalité existante
+* Ne rien oublier dans le déplacement des éléments
+* Garantir une interface claire, cohérente et professionnelle
+* Assurer une expérience utilisateur fluide et bien structurée

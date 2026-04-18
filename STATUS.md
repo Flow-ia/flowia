@@ -4,6 +4,26 @@ Dernier commit : **`78b3c75`** — `fix: Marketing IA fonctionne avec peu de cli
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 4) : Config site intégrée dans booking + fix URLs images
+
+- `backend/src/routes/media.js` : /meta renvoie `logo_version/profile_version/cover_list`
+  (pas d'URLs hardcodées `/api/...` — le frontend construit via `mediaApi`)
+- `frontend/src/utils/api.js` : `mediaApi.absoluteUrl(url)` normalise `/api/...` → `${BASE}/...`
+- `frontend/src/pages/BookingPage.jsx` : `business.profile_url` / `cover_urls[].url`
+  passent par `mediaUrl()` (fix affichage en prod)
+- `frontend/src/pages/settings/TabImages.jsx` : URLs construites via `withVersion` +
+  `mediaApi.logoUrl/profileUrl/coverUrl` → affichage fiable dev + prod
+- `frontend/src/pages/Agenda.jsx` : `ConfigTab` exporté, sous-onglet "Config" retiré
+  (tab bar masqué tant qu'il n'y a qu'un seul onglet)
+- `frontend/src/pages/settings/TabBookingConfig.jsx` (NEW) : wrapper accordéon (fermé par défaut)
+  qui charge settings+hours et rend `<ConfigTab>` à la demande
+- `frontend/src/pages/settings/TabCategories.jsx` : section `booking` ordonne maintenant
+  Config → Images → Services
+- `frontend/src/pages/Settings.jsx` :
+  - Label tab renommé `Config` → `Agenda`
+  - `TAB_TO_URL.agenda` : `/settings/agenda` (plus `/agenda/config`)
+  - Redirect legacy `/settings/agenda/config` → `/settings/categories/booking`
+
 ## 🆕 Session 2026-04-18 (partie 3) : Images merchant intégrées à "Site de réservation"
 
 - `backend/src/routes/media.js` :

@@ -1,10 +1,11 @@
 // src/pages/BookingPage.jsx
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { pubApi, globalClientApi } from '../utils/api';
+import { pubApi, globalClientApi, mediaApi } from '../utils/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const serviceImgUrl = (id) => `${API_BASE}/media/service/${id}/image`;
+const mediaUrl = (u) => mediaApi.absoluteUrl(u);
 
 const MONTHS_FR = ['Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Decembre'];
 const DAYS_MINI = ['L','M','M','J','V','S','D'];
@@ -71,7 +72,7 @@ function NavBar({ th, slug, business, clientUser, onToggleTheme, onShowAuth, onM
           <div style={{ width:36, height:36, borderRadius:8, overflow:'hidden', flexShrink:0,
             background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
             {business?.profile_url
-              ? <img src={business.profile_url} alt={business.business_name}
+              ? <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                   style={{ width:'100%', height:'100%', objectFit:'cover' }}
                   onError={e=>e.target.style.display='none'}/>
               : <span style={{ fontSize:15, fontWeight:900, color:'#374151' }}>
@@ -2460,7 +2461,7 @@ export default function BookingPage({ slug }) {
                   <div style={{ width:56, height:56, borderRadius:12, overflow:'hidden', flexShrink:0,
                     background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
                     {business?.profile_url
-                      ? <img src={business.profile_url} alt={business.business_name}
+                      ? <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                           style={{ width:'100%', height:'100%', objectFit:'cover' }}
                           onError={e=>e.target.style.display='none'}/>
                       : <span style={{ fontSize:22, fontWeight:900, color:'#374151' }}>
@@ -2506,7 +2507,7 @@ export default function BookingPage({ slug }) {
                   {business.cover_urls.slice(0,3).map((c,i) => (
                     <div key={c.id||i} style={{ overflow:'hidden', background:th.cardAlt,
                       gridRow: i===0&&business.cover_urls.length>=3?'1/3':'auto' }}>
-                      <img src={c.url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+                      <img src={mediaUrl(c.url)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
                     </div>
                   ))}
                 </div>
@@ -3515,7 +3516,7 @@ export default function BookingPage({ slug }) {
                 display:'flex', alignItems:'center', justifyContent:'center',
                 border:`3px solid ${th.border}` }}>
                 {business?.profile_url ? (
-                  <img src={business.profile_url} alt={business.business_name}
+                  <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                     style={{ width:'100%', height:'100%', objectFit:'cover' }}
                     onError={e=>e.target.style.display='none'}/>
                 ) : null}

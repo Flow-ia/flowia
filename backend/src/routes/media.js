@@ -126,6 +126,7 @@ router.get('/service/:serviceId/image', async (req, res) => {
 
 // ── Métadonnées (pour le frontend savoir si une image existe) ─────────────────
 // GET /api/media/commercant/:userId/meta
+// Le frontend construit les URLs via mediaApi.logoUrl() etc. + ?v=version
 router.get('/commercant/:userId/meta', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -137,15 +138,11 @@ router.get('/commercant/:userId/meta', async (req, res) => {
     const covers  = rows.filter(r => r.type === 'cover');
     const ver = (r) => r ? new Date(r.created_at).getTime() : 0;
     res.json({
-      logo_id:      logo?.id || null,
-      logo_url:     logo    ? `/api/media/commercant/${req.params.userId}/logo?v=${ver(logo)}` : null,
-      profile_id:   profile?.id || null,
-      profile_url:  profile ? `/api/media/commercant/${req.params.userId}/profile?v=${ver(profile)}` : null,
-      cover_urls:   covers.map(c => ({
-        id: c.id,
-        url: `/api/media/commercant/${req.params.userId}/cover/${c.id}?v=${ver(c)}`,
-        sort_order: c.sort_order,
-      })),
+      logo_id:         logo?.id    || null,
+      logo_version:    ver(logo),
+      profile_id:      profile?.id || null,
+      profile_version: ver(profile),
+      cover_list:      covers.map(c => ({ id: c.id, version: ver(c), sort_order: c.sort_order })),
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -187,6 +187,15 @@ export const mediaApi = {
   coverUrl:    (userId, imageId)   => `${BASE}/media/commercant/${userId}/cover/${imageId}`,
   serviceUrl:  (serviceId)         => `${BASE}/media/service/${serviceId}/image`,
 
+  // Normalise une URL media qui peut venir du backend avec /api/... hardcodé
+  // (ex: business.profile_url, business.cover_urls) → utilise la bonne base en prod
+  absoluteUrl: (url) => {
+    if (!url) return null;
+    if (/^https?:\/\//.test(url)) return url;
+    if (url.startsWith('/api/')) return BASE + url.slice(4);
+    return url;
+  },
+
   // Métadonnées
   getMeta:     (userId)            => request(`/media/commercant/${userId}/meta`),
 

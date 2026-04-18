@@ -1321,7 +1321,7 @@ function TeamTab({ employees, businessHours, bizBreaks, showToast, theme: t }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    ONGLET CONFIG BOOKING
    ═══════════════════════════════════════════════════════════════════════════ */
-function ConfigTab({ settings: initSettings, hours: initHours, onSaved, showToast, theme: t }) {
+export function ConfigTab({ settings: initSettings, hours: initHours, onSaved, showToast, theme: t }) {
   const isDark = t.mode === 'dark';
   const [form, setForm] = useState({
     is_enabled:           initSettings?.is_enabled??false,
@@ -1960,9 +1960,10 @@ export default function Agenda({ employees=[], categories=[], theme: themeProp, 
   const onApptUpdated = useCallback(upd=>{ setAllAppts(p=>p.map(a=>a.id===upd.id?{...a,...upd}:a)); showToast('RDV mis a jour ✓'); },[]);
   const onApptDeleted = useCallback(id =>{ setAllAppts(p=>p.filter(a=>a.id!==id)); showToast('RDV supprime'); },[]);
 
+  // La sous-page "Config" a été déplacée dans /settings/categories/booking
+  // (section "Site de réservation") → on ne garde que l'agenda ici.
   const MAIN_TABS = [
     {id:'calendar',label:'Agenda',  icon:'📅'},
-    {id:'config',  label:'Config',  icon:'⚙️'},
   ];
 
   if (loading) return (
@@ -1975,18 +1976,20 @@ export default function Agenda({ employees=[], categories=[], theme: themeProp, 
     <div className="space-y-0 flex flex-col lg:min-h-screen" style={{ minHeight:'calc(100vh - 80px)', background:t.bg, paddingBottom:0 }}>
       <Toast msg={toast?.msg} type={toast?.type} />
 
-      {/* ── Tabs navigation ── */}
-      <div className="px-4 pt-3 pb-2 flex-shrink-0">
-        <div className="flex gap-1 p-1 rounded-2xl" style={{ background:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)' }}>
-          {MAIN_TABS.map(tb=>(
-            <button key={tb.id} onClick={()=>setMainTab(tb.id)}
-              className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all"
-              style={{ background:mainTab===tb.id?'#111827':'transparent', color:mainTab===tb.id?'white':t.muted }}>
-              <span className="hidden sm:inline">{tb.icon} </span>{tb.label}
-            </button>
-          ))}
+      {/* Tabs navigation — masquée tant qu'il n'y a qu'un seul onglet */}
+      {MAIN_TABS.length > 1 && (
+        <div className="px-4 pt-3 pb-2 flex-shrink-0">
+          <div className="flex gap-1 p-1 rounded-2xl" style={{ background:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)' }}>
+            {MAIN_TABS.map(tb=>(
+              <button key={tb.id} onClick={()=>setMainTab(tb.id)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all"
+                style={{ background:mainTab===tb.id?'#111827':'transparent', color:mainTab===tb.id?'white':t.muted }}>
+                <span className="hidden sm:inline">{tb.icon} </span>{tb.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ══ CALENDRIER ══ */}
       {mainTab === 'calendar' && (

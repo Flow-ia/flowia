@@ -49,7 +49,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
 
   const TAB_TO_URL = {
     'stats':        '/settings',
-    'agenda':       '/settings/agenda/config',
+    'agenda':       '/settings/agenda',
     'transactions': '/settings/historique',
     'employees':    '/settings/equipe',
     'categories':   '/settings/categories',
@@ -68,17 +68,22 @@ export default function Settings({ transactions, employees, categories, onAddCat
   const subSegment = segment === 'profil' ? 'booking' : (pathSegments[1] || '');
   const tab = URL_TO_TAB[segment] ?? 'stats';
 
-  // Redirection URL legacy /settings/profil → /settings/categories/booking
+  // Redirection URL legacy :
+  // /settings/profil           → /settings/categories/booking (Images intégrées)
+  // /settings/agenda/config    → /settings/categories/booking (Config site intégrée)
   useEffect(() => {
     if (segment === 'profil') navigate('/settings/categories/booking', { replace: true });
-  }, [segment, navigate]);
+    if (segment === 'agenda' && pathSegments[1] === 'config') {
+      navigate('/settings/categories/booking', { replace: true });
+    }
+  }, [segment, pathSegments, navigate]);
 
   const setTab = (id) => navigate(TAB_TO_URL[id] || '/settings', { replace: false });
 
   const TABS = [
     { id: 'stats',        label: 'Stats',      icon: I.BarCh },
     { id: 'transactions', label: 'Historique', icon: I.Edit },
-    { id: 'agenda',       label: 'Config',        icon: I.Calendar },
+    { id: 'agenda',       label: 'Agenda',     icon: I.Calendar },
     { id: 'employees',    label: 'Équipe',     icon: I.Users },
     { id: 'categories',   label: 'Categories', icon: I.Tag },
     { id: 'marketing',    label: 'Marketing',  icon: I.Gift },
