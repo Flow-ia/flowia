@@ -750,12 +750,12 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_emp_slots_user ON employee_time_slots(user_id)`);
 
   
-  // ── Table media (images profil, galerie, services) ──────────────────────────
+  // ── Table media (images profil, galerie, services, logo, employés) ─────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS media (
       id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      type        VARCHAR(30) NOT NULL CHECK (type IN ('profile','cover','service')),
+      type        VARCHAR(30) NOT NULL CHECK (type IN ('profile','cover','service','logo','employee')),
       ref_id      UUID,
       path        TEXT NOT NULL,
       provider    VARCHAR(30) NOT NULL DEFAULT 'local',
@@ -763,6 +763,17 @@ async function initDB() {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Migration idempotente : si la table existe deja avec un ancien CHECK sans
+  // 'logo'/'employee', on recree la contrainte pour supporter tous les types.
+  try {
+    await pool.query(`ALTER TABLE media DROP CONSTRAINT IF EXISTS media_type_check`);
+    await pool.query(`
+      ALTER TABLE media ADD CONSTRAINT media_type_check
+      CHECK (type IN ('profile','cover','service','logo','employee'))
+    `);
+  } catch (e) {
+    console.warn('[DB mig media_type_check]', e.message);
+  }
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id, type)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_media_ref  ON media(ref_id, type)`);
 
