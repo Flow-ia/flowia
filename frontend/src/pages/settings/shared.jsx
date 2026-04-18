@@ -9,6 +9,7 @@ export const PAY_INFO = {
   card:     { label: 'Carte',    color: '#1a73e8', bg: 'rgba(26,115,232,0.1)', border: 'rgba(26,115,232,0.2)', Ic: I.CreditCard },
   transfer: { label: 'Virement', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)',  border: 'rgba(139,92,246,0.2)',  Ic: I.Bank },
   other:    { label: 'Autre',    color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.2)',  Ic: I.MoreH },
+  multi:    { label: 'Mixte',    color: '#7c3aed', bg: 'rgba(124,58,237,0.1)',  border: 'rgba(124,58,237,0.25)', Ic: I.MoreH },
 };
 export const PAY_KEYS = ['cash','card','transfer','other'];
 

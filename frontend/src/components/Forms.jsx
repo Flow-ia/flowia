@@ -390,12 +390,41 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
   const { theme } = useTheme();
   const isDark = theme.mode==='dark';
 
-  const blank = { type:'revenue', amount:'', description:'', category_id:'', employee_id:'', payment_method:'cash', date:todayStr(), time:nowStr() };
+  const blank = {
+    type:'revenue', amount:'', description:'',
+    category_id:'', employee_id:'', payment_method:'cash',
+    date:todayStr(), time:nowStr(),
+    client_email:'', client_name:'',
+    items: [],       // [{service_name, qty, unit_price, service_id?}]
+    split: false,    // paiement divisé ?
+    payments: [],    // [{method, amount}]
+  };
   const [f, setF] = useState(blank);
   const [ld, setLd] = useState(false);
 
   useEffect(() => {
-    if (open) setF(init ? { type:init.type||'revenue', amount:String(init.amount||''), description:init.description||'', category_id:init.category_id||'', employee_id:init.employee_id||'', payment_method:init.payment_method||'cash', date:init.date?init.date.substring(0,10):todayStr(), time:init.time||nowStr() } : blank);
+    if (open) setF(init ? {
+      type:init.type||'revenue',
+      amount:String(init.amount||''),
+      description:init.description||'',
+      category_id:init.category_id||'',
+      employee_id:init.employee_id||'',
+      payment_method:init.payment_method||'cash',
+      date:init.date?init.date.substring(0,10):todayStr(),
+      time:init.time||nowStr(),
+      client_email: init.client_email || '',
+      client_name:  init.client_name  || '',
+      items: Array.isArray(init.items) ? init.items.map(it => ({
+        service_name: it.service_name || '',
+        qty: parseInt(it.qty) || 1,
+        unit_price: parseFloat(it.unit_price) || 0,
+        service_id: it.service_id || null,
+      })) : [],
+      split: init.payment_method === 'multi' || (Array.isArray(init.payments) && init.payments.length > 1),
+      payments: Array.isArray(init.payments) && init.payments.length > 0
+        ? init.payments.map(p => ({ method: p.method, amount: String(p.amount||'') }))
+        : [],
+    } : blank);
   }, [open, init?.id]);
 
   // Système catégorie → prestation
@@ -415,11 +444,56 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
     return groups;
   }, [categories, f.type]);
 
+  // Total calculé à partir des items (si présents)
+  const itemsTotal = useMemo(() =>
+    f.items.reduce((s, it) => s + (parseInt(it.qty)||0) * (parseFloat(it.unit_price)||0), 0),
+  [f.items]);
+
+  // Somme des paiements (split)
+  const paymentsSum = useMemo(() =>
+    f.payments.reduce((s, p) => s + (parseFloat(p.amount)||0), 0),
+  [f.payments]);
+
+  // Montant effectif (si items présents → total items, sinon saisi manuellement)
+  const effectiveAmount = f.items.length > 0
+    ? itemsTotal
+    : (parseFloat(f.amount) || 0);
+
+  const splitValid = !f.split || Math.abs(paymentsSum - effectiveAmount) < 0.01;
+
   const sub = async e => {
     e.preventDefault();
-    if (!f.amount || parseFloat(f.amount) <= 0) return;
+    if (effectiveAmount <= 0) return;
+    if (f.split && !splitValid) return;
     setLd(true);
-    await onSubmit({...f, amount:parseFloat(f.amount), datetime_iso:new Date(f.date+'T'+f.time).toISOString()});
+    const payload = {
+      type: f.type,
+      amount: effectiveAmount,
+      description: f.description,
+      category_id: f.category_id || null,
+      employee_id: f.employee_id || null,
+      payment_method: f.split ? 'multi' : f.payment_method,
+      date: f.date,
+      time: f.time,
+      datetime_iso: new Date(f.date+'T'+f.time).toISOString(),
+      client_email: f.client_email.trim() || null,
+      client_name:  f.client_name.trim()  || null,
+      // Toujours envoyer items[] et payments[] — tableau vide = remplacement par vide
+      items: f.items
+        .filter(it => it.service_name && it.service_name.trim())
+        .map(it => ({
+          service_name: it.service_name.trim(),
+          qty: parseInt(it.qty) || 1,
+          unit_price: parseFloat(it.unit_price) || 0,
+          service_id: it.service_id || null,
+        })),
+      payments: f.split
+        ? f.payments
+            .filter(p => p.method && parseFloat(p.amount) > 0)
+            .map(p => ({ method: p.method, amount: parseFloat(p.amount) }))
+        : [],
+    };
+    await onSubmit(payload);
     setLd(false); onClose();
   };
 
@@ -429,6 +503,27 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
     { v:'transfer', l:'Virement', color:'#374151', Ic:I.Bank },
     { v:'other',    l:'Autre',    color:'#f59e0b', Ic:I.MoreH },
   ];
+
+  // Helpers items + payments
+  const addItem = () => setF(prev => ({ ...prev,
+    items: [...prev.items, { service_name:'', qty:1, unit_price:0, service_id:null }] }));
+  const updItem = (i, patch) => setF(prev => ({ ...prev,
+    items: prev.items.map((it, idx) => idx===i ? { ...it, ...patch } : it) }));
+  const rmItem = (i) => setF(prev => ({ ...prev,
+    items: prev.items.filter((_, idx) => idx!==i) }));
+
+  const toggleSplit = () => setF(prev => {
+    if (prev.split) return { ...prev, split:false, payments: [] };
+    // Initialiser la 1re ligne avec le total + méthode courante
+    return { ...prev, split:true,
+      payments: [{ method: prev.payment_method || 'cash', amount: String(effectiveAmount || '') }] };
+  });
+  const addPay = () => setF(prev => ({ ...prev,
+    payments: [...prev.payments, { method:'cash', amount:'' }] }));
+  const updPay = (i, patch) => setF(prev => ({ ...prev,
+    payments: prev.payments.map((p, idx) => idx===i ? { ...p, ...patch } : p) }));
+  const rmPay = (i) => setF(prev => ({ ...prev,
+    payments: prev.payments.filter((_, idx) => idx!==i) }));
   const optBg=isDark?'#1e1e30':'#f8f8ff';
   const optColor=isDark?'rgba(255,255,255,0.9)':'#0c0c10';
 
@@ -442,9 +537,80 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
         ]} />
 
         <div>
-          <FormLabel theme={theme}>Montant (€) *</FormLabel>
-          <FormInput theme={theme} type="number" step="0.01" min="0.01" value={f.amount} onChange={e=>setF({...f,amount:e.target.value})} required placeholder="0.00"
-            style={{ fontSize:24, fontWeight:900, fontFamily:'var(--mono,"DM Mono",monospace)', textAlign:'center' }} />
+          <FormLabel theme={theme}>
+            Montant (€) * {f.items.length > 0 && <span style={{ color:theme.dim, fontWeight:600, textTransform:'none', letterSpacing:0 }}>— calculé depuis les articles</span>}
+          </FormLabel>
+          <FormInput theme={theme} type="number" step="0.01" min="0.01"
+            value={f.items.length > 0 ? itemsTotal.toFixed(2) : f.amount}
+            onChange={e=>setF({...f,amount:e.target.value})}
+            required={f.items.length === 0}
+            readOnly={f.items.length > 0}
+            placeholder="0.00"
+            style={{ fontSize:24, fontWeight:900, fontFamily:'var(--mono,"DM Mono",monospace)', textAlign:'center',
+              opacity: f.items.length > 0 ? 0.75 : 1 }} />
+        </div>
+
+        {/* ── Articles / Prestations (items) ────────────────────────────── */}
+        <div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+            <FormLabel theme={theme}>Articles / Prestations</FormLabel>
+            <button type="button" onClick={addItem}
+              style={{ padding:'4px 10px', borderRadius:10, border:`1px solid ${theme.border}`,
+                background:'transparent', color:theme.text, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+              + Ajouter
+            </button>
+          </div>
+          {f.items.length === 0 ? (
+            <p style={{ fontSize:11, color:theme.dim, margin:0 }}>
+              Aucun article — montant saisi manuellement.
+            </p>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {f.items.map((it, i) => {
+                const lineTotal = (parseInt(it.qty)||0) * (parseFloat(it.unit_price)||0);
+                return (
+                  <div key={i} style={{ padding:10, borderRadius:12,
+                    background: isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)',
+                    border:`1px solid ${theme.border}` }}>
+                    <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:6 }}>
+                      <input value={it.service_name}
+                        onChange={e=>updItem(i,{service_name:e.target.value})}
+                        placeholder="Nom (ex: Coupe)"
+                        style={{ ...inp(theme, { padding:'8px 10px', fontSize:13 }), flex:1 }}/>
+                      <button type="button" onClick={()=>rmItem(i)}
+                        style={{ width:30, height:30, borderRadius:8, border:'none',
+                          background:'rgba(248,113,113,0.12)', color:'#f87171', cursor:'pointer',
+                          display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        <I.Trash style={{ width:12, height:12 }}/>
+                      </button>
+                    </div>
+                    <div style={{ display:'grid', gridTemplateColumns:'80px 1fr auto', gap:6, alignItems:'center' }}>
+                      <input type="number" min="1" step="1" value={it.qty}
+                        onChange={e=>updItem(i,{qty: e.target.value === '' ? '' : parseInt(e.target.value) || 1})}
+                        placeholder="Qté"
+                        style={inp(theme, { padding:'8px 10px', fontSize:13, textAlign:'center' })}/>
+                      <input type="number" min="0" step="0.01" value={it.unit_price}
+                        onChange={e=>updItem(i,{unit_price: e.target.value === '' ? '' : e.target.value})}
+                        placeholder="Prix unit. (€)"
+                        style={inp(theme, { padding:'8px 10px', fontSize:13 })}/>
+                      <span style={{ fontSize:12, fontWeight:800, color:theme.text, fontFamily:'monospace',
+                        minWidth:60, textAlign:'right' }}>
+                        {lineTotal.toFixed(2)} €
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ display:'flex', justifyContent:'space-between',
+                padding:'8px 10px', borderRadius:10,
+                background: isDark?'rgba(17,24,39,0.25)':'rgba(17,24,39,0.05)' }}>
+                <span style={{ fontSize:12, fontWeight:700, color:theme.muted }}>Total articles</span>
+                <span style={{ fontSize:14, fontWeight:900, color:theme.text, fontFamily:'monospace' }}>
+                  {itemsTotal.toFixed(2)} €
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
@@ -507,17 +673,78 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
 
         {/* Paiement */}
         <div>
-          <FormLabel theme={theme}>Mode de paiement</FormLabel>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+            <FormLabel theme={theme}>Mode de paiement</FormLabel>
+            <button type="button" onClick={toggleSplit}
+              style={{ padding:'4px 10px', borderRadius:10, border:`1px solid ${theme.border}`,
+                background: f.split ? '#111827' : 'transparent',
+                color: f.split ? 'white' : theme.text,
+                fontSize:11, fontWeight:700, cursor:'pointer' }}>
+              {f.split ? '✓ Divisé' : 'Diviser'}
+            </button>
+          </div>
+
+          {!f.split ? (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              {PAY.map(({v,l,color,Ic}) => {
+                const active = f.payment_method===v;
+                return (
+                  <button key={v} type="button" onClick={()=>setF({...f,payment_method:v})}
+                    style={{ padding:'13px 8px', borderRadius:16, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7, border:`1.5px solid ${active?color+'90':theme.border}`, background: active?color+'22':(isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'), color: active?color:theme.muted }}>
+                    <Ic style={{ width:14, height:14, flexShrink:0 }} />{l}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {f.payments.map((p, i) => (
+                <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 120px auto', gap:6, alignItems:'center' }}>
+                  <select value={p.method} onChange={e=>updPay(i,{method:e.target.value})}
+                    style={inp(theme, { padding:'10px 12px', fontSize:13, cursor:'pointer' })}>
+                    {PAY.map(({v,l}) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <input type="number" min="0" step="0.01" value={p.amount}
+                    onChange={e=>updPay(i,{amount:e.target.value})}
+                    placeholder="Montant"
+                    style={inp(theme, { padding:'10px 12px', fontSize:13 })}/>
+                  <button type="button" onClick={()=>rmPay(i)}
+                    style={{ width:30, height:30, borderRadius:8, border:'none',
+                      background:'rgba(248,113,113,0.12)', color:'#f87171', cursor:'pointer',
+                      display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <I.Trash style={{ width:12, height:12 }}/>
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={addPay}
+                style={{ padding:'8px', borderRadius:10, border:`1px dashed ${theme.border}`,
+                  background:'transparent', color:theme.muted, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                + Ajouter un mode
+              </button>
+              <div style={{ display:'flex', justifyContent:'space-between', padding:'6px 10px',
+                borderRadius:8, background: splitValid ? 'rgba(16,185,129,0.1)' : 'rgba(248,113,113,0.1)' }}>
+                <span style={{ fontSize:11, fontWeight:700, color:theme.muted }}>
+                  Somme réparation / total
+                </span>
+                <span style={{ fontSize:12, fontWeight:800, fontFamily:'monospace',
+                  color: splitValid ? '#10b981' : '#f87171' }}>
+                  {paymentsSum.toFixed(2)} € / {effectiveAmount.toFixed(2)} €
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Client associé */}
+        <div>
+          <FormLabel theme={theme}>Client (optionnel)</FormLabel>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-            {PAY.map(({v,l,color,Ic}) => {
-              const active = f.payment_method===v;
-              return (
-                <button key={v} type="button" onClick={()=>setF({...f,payment_method:v})}
-                  style={{ padding:'13px 8px', borderRadius:16, fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7, border:`1.5px solid ${active?color+'90':theme.border}`, background: active?color+'22':(isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'), color: active?color:theme.muted }}>
-                  <Ic style={{ width:14, height:14, flexShrink:0 }} />{l}
-                </button>
-              );
-            })}
+            <FormInput theme={theme} type="email" value={f.client_email}
+              onChange={e=>setF({...f,client_email:e.target.value})}
+              placeholder="email@client.com" />
+            <FormInput theme={theme} value={f.client_name}
+              onChange={e=>setF({...f,client_name:e.target.value})}
+              placeholder="Nom du client" />
           </div>
         </div>
 
@@ -529,8 +756,11 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
 
         <div style={{ display:'flex', gap:12, paddingTop:4 }}>
           <CancelBtn onClick={onClose} theme={theme} />
-          <button type="submit" disabled={ld} style={{ flex:1, padding:'14px', borderRadius:20, fontSize:14, fontWeight:800, color:'white', cursor:'pointer', border:'none', background: '#111827', opacity:ld?0.3:1 }}>
-            {ld?'Enregistrement...':'Enregistrer'}
+          <button type="submit" disabled={ld || (f.split && !splitValid) || effectiveAmount <= 0}
+            style={{ flex:1, padding:'14px', borderRadius:20, fontSize:14, fontWeight:800, color:'white', cursor:'pointer', border:'none', background: '#111827', opacity: (ld || (f.split && !splitValid) || effectiveAmount <= 0) ? 0.4 : 1 }}>
+            {ld ? 'Enregistrement...'
+              : (f.split && !splitValid) ? 'Répartition incomplète'
+              : 'Enregistrer'}
           </button>
         </div>
       </form>

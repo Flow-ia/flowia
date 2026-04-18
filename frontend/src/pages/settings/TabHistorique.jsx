@@ -75,6 +75,8 @@ export default function TabHistorique({ transactions, employees, categories, onU
               const isRev = tx.type === 'revenue';
               const pm = PAY_INFO[tx.payment_method] || PAY_INFO.other;
               const PmIc = pm.Ic;
+              const hasItems    = Array.isArray(tx.items) && tx.items.length > 0;
+              const hasPaySplit = Array.isArray(tx.payments) && tx.payments.length > 1;
               return (
                 <div key={tx.id} className="flex items-start gap-3 px-4 py-3"
                   style={{ borderBottom: i < pagedItems.length - 1 ? `1px solid ${theme.border}` : 'none', fontFamily:"'DM Sans', sans-serif" }}>
@@ -89,7 +91,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
                         {isRev?'+':'-'}{fmt(tx.amount)} €
                       </span>
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
                       <span style={{ fontSize:10, color: theme.muted, flexShrink:0 }}>{disp(nd(tx.date),'short')}{tx.time ? ` · ${tx.time}` : ''}</span>
                       {emp && <span style={{ fontSize:10, color:theme.dim }}>·</span>}
                       {emp && (
@@ -110,7 +112,57 @@ export default function TabHistorique({ transactions, employees, categories, onU
                           📅 RDV
                         </span>
                       )}
+                      {tx.client_email && (
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 6px', borderRadius:99,
+                          background:'rgba(59,130,246,0.1)', color:'#3b82f6',
+                          fontSize:10, fontWeight:700, flexShrink:0 }}>
+                          👤 {tx.client_email}
+                        </span>
+                      )}
                     </div>
+
+                    {/* Détails : items + split paiements */}
+                    {(hasItems || hasPaySplit) && (
+                      <div style={{ marginTop:8, padding:'8px 10px', borderRadius:10,
+                        background: isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)',
+                        border:`1px solid ${theme.border}` }}>
+                        {hasItems && (
+                          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                            {tx.items.map((it, idx) => {
+                              const q = parseInt(it.qty)||1;
+                              const up = parseFloat(it.unit_price)||0;
+                              return (
+                                <div key={idx} style={{ display:'flex', justifyContent:'space-between',
+                                  fontSize:11, color:theme.text, fontFamily:'monospace' }}>
+                                  <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                    {q} × {it.service_name} <span style={{ color:theme.dim }}>@ {fmt(up)}€</span>
+                                  </span>
+                                  <span style={{ fontWeight:800, flexShrink:0, marginLeft:8 }}>
+                                    {fmt(q*up)} €
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {hasPaySplit && (
+                          <div style={{ marginTop: hasItems ? 6 : 0, paddingTop: hasItems ? 6 : 0,
+                            borderTop: hasItems ? `1px dashed ${theme.border}` : 'none',
+                            display:'flex', gap:6, flexWrap:'wrap' }}>
+                            {tx.payments.map((p, idx) => {
+                              const pi = PAY_INFO[p.method] || PAY_INFO.other;
+                              return (
+                                <span key={idx} style={{ display:'inline-flex', alignItems:'center', gap:3,
+                                  padding:'2px 7px', borderRadius:99,
+                                  background:pi.bg, color:pi.color, fontSize:10, fontWeight:700 }}>
+                                  {pi.label} {fmt(p.amount)}€
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1 flex-shrink-0 mt-0.5 items-end">
                     <div className="flex gap-1">

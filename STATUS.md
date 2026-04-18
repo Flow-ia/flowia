@@ -4,6 +4,53 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 11) : Édition complète des transactions /settings/historique
+
+### Objectif (onboarding.md)
+Permettre la modification complète d'une transaction depuis Settings → Historique :
+items (nom/qté/prix unit.), répartition paiement mixte, client associé.
+Affichage détaillé par ligne + cohérence stats/commissions/audit.
+
+### Backend — `backend/src/routes/transactions.js`
+- `getSnapshot()` enrichi : inclut désormais `items[]` + `payments[]` (pour l'audit)
+- **PUT /:id** réécrit (admin PIN) :
+  - Accepte `items[], payments[], client_email, client_name, client_note` en plus
+  - Transaction SQL (BEGIN/COMMIT) : UPDATE tx + DELETE/re-INSERT items + payments
+  - `qty_total` recalculé depuis items ; `payment_method='multi'` si split >1
+  - Invalide cache `txs:${userId}`
+  - Audit trail : snapshot_before / snapshot_after contiennent items+payments (diff complet)
+  - Réponse enrichie avec `items[]` + `payments[]` (comme GET)
+- DELETE /:id : ajoute invalidation cache `txs:${userId}` (manquante auparavant)
+
+### Frontend
+- `frontend/src/components/Forms.jsx` (TransactionForm) :
+  - Nouveaux champs : `items[], payments[], split, client_email, client_name`
+  - Éditeur items : add/remove/qté/prix unit. → total items affiché live
+  - Montant auto-calculé depuis items (read-only si items présents) sinon saisie libre
+  - Toggle « Diviser » : liste de paiements par mode + validation live
+    (bouton désactivé et libellé « Répartition incomplète » tant que somme ≠ total)
+  - Champs client (email + nom)
+  - Payload envoie items/payments/client_email/client_name au backend
+- `frontend/src/pages/settings/TabHistorique.jsx` :
+  - Chaque ligne tx affiche un encart détails avec :
+    - Items : `2 × Coupe @ 15€  = 30€`
+    - Mini-chips paiements split (Espèces 20€ / Carte 10€)
+  - Chip client (email) dans la barre de meta
+- `frontend/src/pages/settings/shared.jsx` : `PAY_INFO.multi` (chip violet « Mixte »)
+
+### Cohérence système
+- Stats (`stats.js`) : lit `transaction_items` → automatiquement à jour
+- Commissions (`commissions.js`) : lit `qty_total` → recalculé côté PUT
+- Notifications / recaps : idem (lisent qty_total)
+- Cache `txs:` invalidé sur PUT + DELETE
+- Audit : chaque modification logge snapshot_before et snapshot_after avec items+payments
+
+### Build
+- `cd frontend && npx vite build` → OK (23.04s, 80 modules)
+- `node --check backend/src/routes/transactions.js` → OK
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 10) : Fix CORS — sous-domaine commercant.* bloqué + vérif PIN
 
 ### Bug CORS

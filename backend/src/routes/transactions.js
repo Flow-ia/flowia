@@ -8,10 +8,22 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-// ── Helper : snapshot complet d'une transaction ──────────────────────────────
+// ── Helper : snapshot complet d'une transaction (incl. items + payments) ────
 async function getSnapshot(id) {
   const { rows } = await pool.query('SELECT * FROM transactions WHERE id=$1', [id]);
-  return rows[0] || null;
+  if (!rows.length) return null;
+  const tx = rows[0];
+  const { rows: items } = await pool.query(
+    `SELECT service_id, service_name, qty, unit_price
+       FROM transaction_items WHERE transaction_id=$1 ORDER BY created_at`, [id]
+  );
+  const { rows: payments } = await pool.query(
+    `SELECT method, amount FROM transaction_payments
+       WHERE transaction_id=$1 ORDER BY created_at`, [id]
+  );
+  tx.items    = items;
+  tx.payments = payments;
+  return tx;
 }
 
 // ── Helper : enregistrer dans l'audit log ────────────────────────────────────
@@ -246,35 +258,117 @@ router.post('/', async (req, res) => {
 });
 
 // ── PUT /:id — modifier (admin PIN requis + audit) ────────────────────────────
+//   Mise à jour complète : champs de base + items[] + payments[] + infos client.
+//   Les items et payments sont remplacés intégralement (delete + re-insert) pour
+//   garantir la cohérence avec stats / commissions / recaps (qui lisent
+//   transaction_items et transaction_payments).
 router.put('/:id', pinAdminMiddleware, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { type, amount, description, category_id, employee_id,
-            payment_method, date, time, datetime_iso, reason } = req.body;
+            payment_method, date, time, datetime_iso, reason,
+            client_email, client_name, client_note,
+            items, payments } = req.body;
 
     const before = await getSnapshot(req.params.id);
-    if (!before || before.user_id !== req.user.userId)
+    if (!before || before.user_id !== req.user.userId) {
+      client.release();
       return res.status(404).json({ error: 'Transaction introuvable.' });
+    }
 
-    const { rows } = await pool.query(
+    // Items normalisés → qty_total (fallback 1 si aucun item fourni)
+    const hasItemsPayload = Array.isArray(items);
+    const itemList = hasItemsPayload
+      ? items.filter(it => it && it.service_name)
+      : [];
+    const qtyTotal = hasItemsPayload
+      ? (itemList.length
+          ? itemList.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
+          : 1)
+      : (before.qty_total || 1);
+
+    // Paiements normalisés → pmStored + breakdown
+    const hasPayPayload = Array.isArray(payments);
+    const payList = hasPayPayload
+      ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
+      : [];
+    const pmStored = hasPayPayload
+      ? (payList.length > 1 ? 'multi' : (payList[0]?.method || payment_method || 'cash'))
+      : (payment_method || before.payment_method || 'cash');
+
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
       `UPDATE transactions SET
         type=$1, amount=$2, description=$3, category_id=$4, employee_id=$5,
-        payment_method=$6, date=$7, time=$8, datetime_iso=$9
-       WHERE id=$10 AND user_id=$11
+        payment_method=$6, date=$7, time=$8, datetime_iso=$9,
+        client_email=$10, client_note=$11, qty_total=$12
+       WHERE id=$13 AND user_id=$14
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
-         payment_method, locked,
+         payment_method, locked, client_email, client_note, qty_total,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
          TO_CHAR(time, 'HH24:MI') as time,
-         datetime_iso, created_at`,
+         datetime_iso, appointment_id, source, created_at`,
       [type, amount, description || null, category_id || null, employee_id || null,
-       payment_method || 'cash', date, time || null, datetime_iso || null,
+       pmStored, date, time || null, datetime_iso || null,
+       client_email || null,
+       client_note != null ? client_note : before.client_note,
+       qtyTotal,
        req.params.id, req.user.userId]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Transaction introuvable.' });
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(404).json({ error: 'Transaction introuvable.' });
+    }
 
-    await audit(req.user.userId, req.params.id, 'update', before, rows[0], reason || null);
+    // Remplacer items (si fournis)
+    if (hasItemsPayload) {
+      await client.query('DELETE FROM transaction_items WHERE transaction_id=$1', [req.params.id]);
+      for (const it of itemList) {
+        await client.query(
+          `INSERT INTO transaction_items (transaction_id, service_id, service_name, qty, unit_price)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [req.params.id, it.service_id || null, it.service_name,
+           parseInt(it.qty) || 1, parseFloat(it.unit_price) || 0]
+        );
+      }
+    }
 
-    res.json(rows[0]);
-  } catch(e) { console.error('[TX PUT]', e.message); res.status(500).json({ error: e.message }); }
+    // Remplacer payments (si fournis) — toujours vider la table puis ré-insérer si split
+    if (hasPayPayload) {
+      await client.query('DELETE FROM transaction_payments WHERE transaction_id=$1', [req.params.id]);
+      if (payList.length > 1) {
+        for (const p of payList) {
+          await client.query(
+            `INSERT INTO transaction_payments (transaction_id, method, amount)
+             VALUES ($1,$2,$3)`,
+            [req.params.id, p.method, parseFloat(p.amount) || 0]
+          );
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Invalider le cache liste
+    global.memCache?.del(`txs:${req.user.userId}`);
+
+    const after = await getSnapshot(req.params.id);
+    await audit(req.user.userId, req.params.id, 'update', before, after, reason || null);
+
+    // Enrichir la réponse avec items + payments comme sur le GET
+    const out = rows[0];
+    out.items    = after?.items    || [];
+    out.payments = after?.payments || [];
+    res.json(out);
+  } catch(e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('[TX PUT]', e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
 });
 
 // ── DELETE /:id — supprimer (admin PIN requis + audit) ────────────────────────
@@ -286,6 +380,8 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
 
     await pool.query('DELETE FROM transactions WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
+
+    global.memCache?.del(`txs:${req.user.userId}`);
 
     await audit(req.user.userId, req.params.id, 'delete', before, null,
       req.body?.reason || 'Suppression admin');
