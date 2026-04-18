@@ -1,25 +1,3 @@
-Les champs suivants doivent être correctement gérés et synchronisés :
+Dans la page de réservation, via le lien **Google Business**, peux-tu récupérer la note réelle (nombre d’étoiles) du commerçant et l’afficher sur le site de réservation ?
 
-* Nom du commerce
-* Téléphone
-* Adresse (avec recherche et suggestion)
-* Code postal
-* Ville
-* Lien Google Business (avis)
-
-👉 Lorsque ces informations sont modifiées dans la section **“Informations du commerce”**, elles doivent être automatiquement mises à jour sur le site de réservation.
-
-Ces données doivent correspondre exactement à celles fournies par le commerçant lors de l’inscription.
-
-⚠️ Contraintes importantes :
-
-* Aucune duplication de données
-* Une seule source de vérité (source unique des informations)
-* Les informations affichées partout dans l’application doivent toujours être synchronisées
-
-👉 Cela signifie que :
-
-* Les données saisies à l’inscription doivent être retrouvées ici
-* Toute modification doit être répercutée automatiquement sur l’ensemble du système (frontend + site de réservation)
-
-L’objectif est d’assurer cohérence, fiabilité et simplicité pour le commerçant.
+L’objectif est d’afficher une note authentique et dynamique, au lieu d’une note fixe de 5 étoiles, afin que cela soit réaliste, crédible et cohérent avec le profil réel du commerçant.

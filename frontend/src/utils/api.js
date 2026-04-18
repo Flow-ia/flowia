@@ -292,6 +292,8 @@ export const pubApi = {
     const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
     return `${BASE}/api/pub/${slug}/client/auth/google`;
   },
+  // Note Google Business réelle (Places API) — silent fail si non configuré
+  getGoogleRating: (slug) => pubRequest(`/${slug}/google-rating`),
 };
 
 // ── Notifications (Feature 3 & 7) ────────────────────────────────────────────

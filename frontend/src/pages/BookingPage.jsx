@@ -1916,6 +1916,7 @@ export default function BookingPage({ slug }) {
   };
 
   const [business, setBiz]     = useState(null);
+  const [googleRating, setGoogleRating] = useState(null); // { rating, total_ratings } ou null
   // Compte client global (plateforme)
   const [gcToken,   setGcToken]   = useState(() => localStorage.getItem('ff_gc_token') || null);
   const [gcUser,    setGcUser]    = useState(() => { try { return JSON.parse(localStorage.getItem('ff_gc_user') || 'null'); } catch { return null; } });
@@ -2088,6 +2089,12 @@ export default function BookingPage({ slug }) {
         setEmps(emps);
         setRequire(biz.business?.require_account ?? false);
         setClosed(cd?.closedDays || []);
+        // Récupère la note Google réelle si un lien Google Business est configuré
+        if (biz.business?.google_business_url) {
+          pubApi.getGoogleRating(slug)
+            .then(r => { if (r?.found) setGoogleRating({ rating: r.rating, total: r.total_ratings }); })
+            .catch(() => { /* silent — garde fallback visuel */ });
+        }
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -2649,44 +2656,65 @@ export default function BookingPage({ slug }) {
                       </a>
                     </div>
 
-                    {/* Note & étoiles */}
-                    <div style={{ padding:'20px 18px 16px',
-                      display:'flex', alignItems:'center', gap:20 }}>
-                      {/* Note chiffrée */}
-                      <div style={{ textAlign:'center', flexShrink:0 }}>
-                        <p style={{ fontSize:40, fontWeight:900, color:th.text,
-                          margin:0, lineHeight:1, fontFamily:'monospace' }}>
-                          5.0
-                        </p>
-                        <div style={{ display:'flex', gap:1, justifyContent:'center', margin:'4px 0' }}>
-                          {[1,2,3,4,5].map(n => (
-                            <svg key={n} viewBox="0 0 24 24" fill="#FBBC05" style={{width:14,height:14}}>
-                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                            </svg>
-                          ))}
-                        </div>
-                        <p style={{ fontSize:11, color:th.muted, margin:0 }}>
-                          avis Google
-                        </p>
-                      </div>
-
-                      {/* Barres de distribution (décoratif) */}
-                      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:4 }}>
-                        {[5,4,3,2,1].map((star, i) => (
-                          <div key={star} style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <span style={{ fontSize:11, color:th.muted, width:6 }}>{star}</span>
-                            <svg viewBox="0 0 24 24" fill="#FBBC05" style={{width:10,height:10,flexShrink:0}}>
-                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                            </svg>
-                            <div style={{ flex:1, height:5, borderRadius:99,
-                              background:th.cardAlt, overflow:'hidden' }}>
-                              <div style={{ height:'100%', borderRadius:99, background:'#FBBC05',
-                                width: i===0?'100%':i===1?'0%':i===2?'0%':i===3?'0%':'0%' }}/>
-                            </div>
+                    {/* Note réelle Google (via Places API) — affichée seulement si dispo */}
+                    {googleRating ? (
+                      <div style={{ padding:'20px 18px 16px',
+                        display:'flex', alignItems:'center', gap:20 }}>
+                        <div style={{ textAlign:'center', flexShrink:0 }}>
+                          <p style={{ fontSize:40, fontWeight:900, color:th.text,
+                            margin:0, lineHeight:1, fontFamily:'monospace' }}>
+                            {googleRating.rating.toFixed(1)}
+                          </p>
+                          <div style={{ display:'flex', gap:1, justifyContent:'center', margin:'4px 0' }}>
+                            {[1,2,3,4,5].map(n => {
+                              const r = googleRating.rating;
+                              const fill = n <= Math.floor(r) ? 1 : (n - 1 < r ? (r - (n-1)) : 0);
+                              return (
+                                <svg key={n} viewBox="0 0 24 24" style={{ width:14, height:14 }}>
+                                  <defs>
+                                    <linearGradient id={`gr-${n}`} x1="0" x2="1" y1="0" y2="0">
+                                      <stop offset={`${fill * 100}%`} stopColor="#FBBC05"/>
+                                      <stop offset={`${fill * 100}%`} stopColor={th.mode==='dark'?'#3f3f46':'#e5e7eb'}/>
+                                    </linearGradient>
+                                  </defs>
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                                    fill={`url(#gr-${n})`} />
+                                </svg>
+                              );
+                            })}
                           </div>
-                        ))}
+                          <p style={{ fontSize:11, color:th.muted, margin:0 }}>
+                            {googleRating.total > 0
+                              ? `${googleRating.total} avis Google`
+                              : 'avis Google'}
+                          </p>
+                        </div>
+                        <a href={business.google_business_url} target="_blank" rel="noopener noreferrer"
+                          style={{ flex:1, display:'flex', alignItems:'center', gap:10,
+                            padding:'14px 16px', borderRadius:12, textDecoration:'none',
+                            background:th.cardAlt, border:`1px solid ${th.border}`,
+                            color:th.text }}>
+                          <span style={{ fontSize:13, fontWeight:700, flex:1 }}>
+                            Consulter les avis détaillés sur Google
+                          </span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                            style={{width:14,height:14,flexShrink:0}}>
+                            <polyline points="9 18 15 12 9 6"/>
+                          </svg>
+                        </a>
                       </div>
-                    </div>
+                    ) : (
+                      <div style={{ padding:'16px 18px',
+                        display:'flex', alignItems:'center', gap:10,
+                        borderBottom:`1px solid ${th.border}` }}>
+                        <svg viewBox="0 0 24 24" fill="#FBBC05" style={{width:16,height:16,flexShrink:0}}>
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        <p style={{ fontSize:13, color:th.muted, margin:0, lineHeight:1.4 }}>
+                          Retrouvez la note et les avis de ce commerce directement sur Google.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Boutons CTA */}
                     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8,
