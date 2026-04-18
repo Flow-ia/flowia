@@ -91,12 +91,11 @@ function NavBar({ th, slug, business, clientUser, refProgram, onToggleTheme, onS
         <div style={{ display:'flex', alignItems:'center', gap:2 }}
           className="bk-do">
           {[
-            ...(business?.hours && Object.keys(business.hours).length > 0 ? [['section-horaires','Horaires']] : []),
-            ['section-adresse','Adresse'],
             ['section-prestations','Nos prestations'],
             ['section-equipe','Équipe'],
             ...(business?.google_business_url ? [['section-avis','Commentaires']] : []),
             ...((business?.cover_urls?.length > 0) ? [['section-photos','Photos']] : []),
+            ['section-adresse','Adresse'],
             ...(refProgram && refProgram !== 'none' ? [['__parrain__','Parrainer un ami']] : []),
           ].map(([id, label]) => (
             <button key={id}
@@ -2094,9 +2093,6 @@ export default function BookingPage({ slug }) {
         '#images':        'section-photos',
         '#photos':        'section-photos',
         '#album':         'section-photos',
-        '#horaires':      'section-horaires',
-        '#horaire':       'section-horaires',
-        '#hours':         'section-horaires',
       };
       const targetId = ANCHOR_MAP[hash.toLowerCase()] || hash.replace('#','section-');
       // Scroller après chargement de la page
@@ -2789,6 +2785,10 @@ export default function BookingPage({ slug }) {
                     {business.phone}
                   </a>
                 )}
+                {/* Horaires compacts (meme format que la sidebar desktop) */}
+                {business?.hours && Object.keys(business.hours).length > 0 && (
+                  <MobileHoursBlock th={th} hours={business.hours} />
+                )}
                 {refProgram && refProgram !== 'none' && (
                   <button onClick={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
                     style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
@@ -3020,45 +3020,6 @@ export default function BookingPage({ slug }) {
                           style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
                       </div>
                     ))}
-                  </div>
-                </section>
-              )}
-
-              {/* ── SECTION HORAIRES (deplacee en bas : prestations + equipe prioritaires) ── */}
-              {business?.hours && Object.keys(business.hours).length > 0 && (
-                <section id="section-horaires" style={{ marginBottom:32 }}>
-                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
-                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Horaires d'ouverture</h2>
-                  <div style={{ background:th.card, border:`1px solid ${th.border}`,
-                    borderRadius:12, overflow:'hidden' }}>
-                    {(() => {
-                      const dayNames = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-                      const today = new Date().getDay();
-                      const order = Array.from({length:7}, (_,i) => (today + i) % 7);
-                      return order.map((dow, i) => {
-                        const h = business.hours[dow];
-                        const isToday = i === 0;
-                        const isLast  = i === 6;
-                        return (
-                          <div key={dow} style={{ display:'flex', alignItems:'center',
-                            justifyContent:'space-between', padding:'12px 18px',
-                            borderBottom: isLast ? 'none' : `1px solid ${th.border}`,
-                            background: isToday ? th.cardAlt : 'transparent' }}>
-                            <span style={{ fontSize:14, fontWeight: isToday ? 700 : 500,
-                              color:th.text }}>
-                              {dayNames[dow]}{isToday ? " (aujourd'hui)" : ''}
-                            </span>
-                            <span style={{ fontSize:13,
-                              color: h?.is_open ? th.text : th.muted,
-                              fontVariantNumeric:'tabular-nums' }}>
-                              {h?.is_open && h.open_time && h.close_time
-                                ? `${h.open_time} – ${h.close_time}`
-                                : 'Fermé'}
-                            </span>
-                          </div>
-                        );
-                      });
-                    })()}
                   </div>
                 </section>
               )}
@@ -3912,6 +3873,85 @@ export default function BookingPage({ slug }) {
   );
 }
 
+
+// ── Bloc horaires compact pour la card commerçant mobile ─────────────────────
+function MobileHoursBlock({ th, hours }) {
+  const parseHM = s => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
+  const now = new Date();
+  const curDow = now.getDay();
+  const curHM  = now.getHours() * 60 + now.getMinutes();
+  const DAY_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const today = hours[curDow];
+  const openM  = today && today.is_open ? parseHM(today.open_time)  : null;
+  const closeM = today && today.is_open ? parseHM(today.close_time) : null;
+  let status;
+  if (today?.is_open && openM != null && closeM != null && curHM >= openM && curHM < closeM) {
+    status = { label:'Ouvert', detail:`Ferme à ${today.close_time}`, color:'#10b981' };
+  } else if (today?.is_open && openM != null && curHM < openM) {
+    status = { label:'Fermé', detail:`Ouvre à ${today.open_time}`, color:'#ef4444' };
+  } else {
+    let next = null;
+    for (let i = 1; i <= 7; i++) {
+      const dow = (curDow + i) % 7;
+      const h = hours[dow];
+      if (h?.is_open && h.open_time) { next = { dow, time:h.open_time, inDays:i }; break; }
+    }
+    status = next
+      ? { label:'Fermé', detail:`Ouvre ${next.time} ${next.inDays === 1 ? 'demain' : DAY_SHORT[next.dow]}`, color:'#ef4444' }
+      : { label:'Fermé', detail:null, color:'#ef4444' };
+  }
+
+  const WEEK_ORDER = [1,2,3,4,5,6,0];
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ marginTop:10, border:`1px solid ${th.border}`, borderRadius:10,
+      background:th.cardAlt, overflow:'hidden' }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width:'100%', display:'flex', alignItems:'center', gap:6,
+          padding:'9px 12px', background:'none', border:'none', cursor:'pointer',
+          textAlign:'left' }}>
+        <span style={{ width:8, height:8, borderRadius:99, background:status.color, flexShrink:0 }} />
+        <span style={{ fontSize:12, fontWeight:700, color:status.color }}>{status.label}</span>
+        {status.detail && (
+          <span style={{ fontSize:12, color:th.muted }}>· {status.detail}</span>
+        )}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          style={{ width:13, height:13, color:th.muted, marginLeft:'auto',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition:'transform .2s' }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{ borderTop:`1px solid ${th.border}`, background:th.card }}>
+          {WEEK_ORDER.map((dow, i) => {
+            const h = hours[dow];
+            const isToday = dow === curDow;
+            const isLast  = i === WEEK_ORDER.length - 1;
+            return (
+              <div key={dow} style={{ display:'flex', alignItems:'center',
+                justifyContent:'space-between', padding:'7px 12px',
+                borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
+                <span style={{ fontSize:12, fontWeight: isToday ? 800 : 500,
+                  color: isToday ? th.text : th.muted }}>
+                  {DAY_SHORT[dow]}
+                </span>
+                <span style={{ fontSize:12, fontWeight: isToday ? 700 : 400,
+                  color: isToday ? th.text : (h?.is_open ? th.text : th.muted),
+                  fontVariantNumeric:'tabular-nums' }}>
+                  {h?.is_open && h.open_time && h.close_time
+                    ? `${h.open_time} – ${h.close_time}`
+                    : 'Fermé'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Page Parrainer un ami (3 états) ─────────────────────────────────────────
 function ReferralPage({ th, slug, business, refProgram, gcConnected, refMyCode, refMyHistory, refMyRewards, onLogin, onBack }) {
