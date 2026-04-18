@@ -1601,18 +1601,28 @@ export function ConfigTab({ settings: initSettings, hours: initHours, onSaved, s
         <Toggle on={form.require_account} onChange={()=>setForm(f=>({...f,require_account:!f.require_account}))} colorOn="linear-gradient(90deg,#f59e0b,#f97316)" />
       </div>
 
-      {/* ── INFORMATIONS AFFICHÉES ── */}
+      {/* ── DESCRIPTION DE L'ACTIVITÉ ──
+          Adresse, téléphone et Google Business sont gérés dans « Informations du commerce »
+          pour éviter les doublons et garantir une seule source de vérité. */}
       <div className="rounded-2xl p-4 space-y-3" style={{ background:isDark?'rgba(255,255,255,0.04)':'white', border:`1px solid ${t.border}` }}>
-        <p className="font-bold text-sm" style={{ color:t.text }}>Informations affichées</p>
-        {[['Description','business_description','textarea','Description de votre activite...'],['Adresse','address','text','12 rue de la Paix, Paris'],['Télephone','phone','tel','+33 6 00 00 00 00'],['Lien Google Business (optionnel)','google_business_url','url','https://g.page/votre-salon']].map(([label,key,type,ph])=>(
-          <div key={key}>
-            <label className="text-xs font-bold mb-1 block" style={{ color:t.muted }}>{label}</label>
-            {type==='textarea'
-              ?<textarea value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} rows={2} placeholder={ph} className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none resize-none" style={inp} />
-              :<input type={type} value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} placeholder={ph} className="w-full px-3 py-3 rounded-xl text-sm focus:outline-none" style={inp} />
-            }
-          </div>
-        ))}
+        <div>
+          <p className="font-bold text-sm" style={{ color:t.text }}>Description de l'activité</p>
+          <p className="text-xs mt-0.5" style={{ color:t.muted }}>
+            Texte présenté aux clients sur la page de réservation.
+          </p>
+        </div>
+        <textarea value={form.business_description||''}
+          onChange={e=>setForm(f=>({...f,business_description:e.target.value}))}
+          rows={3} placeholder="Décrivez votre activité, vos spécialités…"
+          className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none resize-none" style={inp} />
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl" style={{ background:'rgba(99,102,241,0.08)', border:'1px solid rgba(99,102,241,0.18)' }}>
+          <span className="text-sm flex-shrink-0 mt-0.5">💡</span>
+          <p className="text-[11px]" style={{ color:t.muted, lineHeight:1.5 }}>
+            <strong style={{ color:t.text }}>Adresse</strong>, <strong style={{ color:t.text }}>téléphone</strong>
+            {' '}et <strong style={{ color:t.text }}>lien Google Business</strong> sont gérés dans la section
+            <strong style={{ color:t.text }}> Informations du commerce</strong>. Ce sont ces valeurs qui sont affichées sur le site de réservation.
+          </p>
+        </div>
       </div>
 
       {/* ── RÈGLES DE RÉSERVATION ── */}

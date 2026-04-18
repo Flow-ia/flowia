@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 import { I } from '../../utils/icons';
+import AddressAutocomplete from '../../components/AddressAutocomplete';
 
 // Carte "Informations du commerce" (nom, téléphone, adresse, code postal, ville, Google Business)
 // Déplacée depuis TabCompte → centralisée dans Config commerce.
@@ -132,10 +133,25 @@ export default function MerchantInfoCard({ theme, showToast }) {
                   placeholder="06 00 00 00 00" style={inp}/>
               </div>
               <div>
-                <p style={label}>Adresse (numéro + rue)</p>
-                <input value={form.address}
-                  onChange={e=>setForm(f=>({...f,address:e.target.value}))}
-                  placeholder="12 rue de la Paix" style={inp}/>
+                <p style={label}>Adresse (tapez pour rechercher)</p>
+                <AddressAutocomplete
+                  value={form.address}
+                  onChange={(v) => setForm(f => ({ ...f, address: v }))}
+                  onSelect={({ address, city, postalCode }) =>
+                    setForm(f => ({
+                      ...f,
+                      address:    address    || f.address,
+                      city:       city       || f.city,
+                      postalCode: postalCode || f.postalCode,
+                    }))
+                  }
+                  placeholder="12 rue de la Paix, Paris"
+                  theme={theme}
+                  inputStyle={inp}
+                />
+                <p style={{ fontSize:11, color:theme.dim, margin:'4px 0 0' }}>
+                  Sélectionnez une suggestion pour remplir automatiquement code postal et ville.
+                </p>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', gap:10 }}>
                 <div>

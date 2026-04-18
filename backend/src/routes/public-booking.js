@@ -262,16 +262,17 @@ router.get('/:slug', async (req, res) => {
         sort_order: m.sort_order,
       })),
     };
-    // Fusionner les données booking_settings + users
-    // Si phone dans booking_settings est null → utiliser user_phone
+    // Source de vérité unique : table users (section "Informations du commerce")
+    // booking_settings ne sert qu'à stocker business_description et la config site
+    // (slug, horaires, délai annulation...). Pas de duplication.
     const mergedBiz = {
       ...pub,
       ...mediaInfo,
-      phone:              pub.phone              || pub.user_phone              || null,
-      address:            pub.address            || pub.user_address            || null,
-      postal_code:        pub.postal_code        || null,
-      city:               pub.city               || null,
-      google_business_url: pub.google_business_url || pub.user_google_business_url || null,
+      phone:               pub.user_phone               || null,
+      address:             pub.user_address             || null,
+      postal_code:         pub.postal_code              || null,
+      city:                pub.city                     || null,
+      google_business_url: pub.user_google_business_url || null,
     };
     const _resp = { business: mergedBiz, userId: user_id };
     global.memCache?.set(_cKey, _resp, 5 * 60 * 1000);
