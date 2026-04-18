@@ -1,9 +1,1 @@
-icic change u peu 'afffichage car c'es perturbant au commercant comme si i croit qui vas payé 65,57euros donc il faut juste affiché le montant débité et chiffre estimé a gagné avec cela uniquement : 
-Total SMS
-9
-Montant débité
-0.53 €
-Solde actuel
-66.20 €
-Solde après campagne
-65.67 €
+concernat la page de 'catégories ' nonil ne faut pas trop prendre de place et pour affiché la ou il faut mettre le logo et les image de couverture et fait les dans une section ouvrante et fermante et avec une pop up ou modifié cela et pour upload le lgo fait une cadre petite carré et responsive tout cela et avec bouton 'Modifie  comme une icone edit crayon' et un bouton 'supprimer comme un icone corbeille' pour ne pas trop de place pour les bouton et pas de  texte directement c'est compréhensible avec les icons la , et cette section de 'logo/photo de profile eti images couverture' il faut qeulle soit fermé par défault pour bien laisse la plaece a ala gestion des catégoreis et produits service car cela le commercant vas touché bcp plus souvent et aussi fait toujours design responsive 
