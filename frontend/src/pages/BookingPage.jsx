@@ -3,6 +3,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { pubApi, globalClientApi } from '../utils/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const serviceImgUrl = (id) => `${API_BASE}/media/service/${id}/image`;
+
 const MONTHS_FR = ['Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Decembre'];
 const DAYS_MINI = ['L','M','M','J','V','S','D'];
 
@@ -3689,7 +3692,7 @@ function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}>
 
                 {/* Image service si disponible */}
-                <ServiceThumb serviceId={s.id} color={s.color} th={th} />
+                <ServiceThumb serviceId={s.id} color={s.color} th={th} hasImage={s.has_image !== false} />
 
                 {/* Infos */}
                 <div style={{ flex:1, minWidth:0 }}>
@@ -3724,9 +3727,10 @@ function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
 }
 
 // Miniature image du service (se charge silencieusement)
-function ServiceThumb({ serviceId, color, th }) {
+function ServiceThumb({ serviceId, color, th, hasImage = true }) {
   const [ok, setOk] = useState(false);
   const accent = color || '#6366f1';
+  const showImg = hasImage !== false;
   return (
     <div style={{ width:48, height:48, borderRadius:10, flexShrink:0, overflow:'hidden',
       background: ok ? 'transparent' : `${accent}15`,
@@ -3737,13 +3741,15 @@ function ServiceThumb({ serviceId, color, th }) {
           <path d="M6 3h12M6 8h12M6 13l3.5 5L12 13l2.5 5L18 13"/>
         </svg>
       )}
-      <img
-        src={`/api/media/service/${serviceId}/image`}
-        alt=""
-        style={{ width:'100%', height:'100%', objectFit:'cover', display: ok ? 'block' : 'none' }}
-        onLoad={() => setOk(true)}
-        onError={() => setOk(false)}
-      />
+      {showImg && (
+        <img
+          src={serviceImgUrl(serviceId)}
+          alt=""
+          style={{ width:'100%', height:'100%', objectFit:'cover', display: ok ? 'block' : 'none' }}
+          onLoad={() => setOk(true)}
+          onError={() => setOk(false)}
+        />
+      )}
     </div>
   );
 }
@@ -3755,8 +3761,8 @@ function ServiceCard({ s, th, onClick, catColor }) {
   const durLabel = dMin >= 60
     ? `${Math.floor(dMin/60)}h${dMin%60 > 0 ? String(dMin%60).padStart(2,'0') : ''}`
     : `${dMin} min`;
-  const svcImgUrl = `/api/media/service/${s.id}/image`;
-  const [hasImg, setHasImg] = useState(true);
+  const svcImgUrl = serviceImgUrl(s.id);
+  const [hasImg, setHasImg] = useState(s.has_image !== false);
 
   return (
     <button onClick={onClick}

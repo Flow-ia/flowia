@@ -293,7 +293,8 @@ router.get('/:slug/services', async (req, res) => {
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const { rows } = await pool.query(
       `SELECT bs.*, c.name as category_name,
-              bsc.name as booking_category_name, bsc.color as booking_category_color, bsc.icon as booking_category_icon
+              bsc.name as booking_category_name, bsc.color as booking_category_color, bsc.icon as booking_category_icon,
+              EXISTS(SELECT 1 FROM media m WHERE m.ref_id=bs.id AND m.type='service') AS has_image
        FROM booking_services bs
        LEFT JOIN categories c ON c.id = bs.category_id
        LEFT JOIN booking_service_categories bsc ON bsc.id = bs.booking_category_id

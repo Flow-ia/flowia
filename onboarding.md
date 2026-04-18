@@ -1,30 +1,23 @@
-Concernant les produits et services dans la page de réservation, le commerçant doit pouvoir ajouter une photo pour représenter chaque produit ou service sur son site de réservation.
+sorrige les bugs liés à la gestion des images des services dans le site de réservation.
 
-Chaque produit ou service peut avoir **une seule image principale** servant de visuel de présentation.
+Actuellement, les images sont bien sauvegardées sur Cloudinary, mais elles ne s’affichent pas dans la page de gestion des services ni sur le site de réservation. Il faut corriger l’affichage pour que chaque service affiche correctement son image, aussi bien côté admin que côté site de réservation.
 
-Dans chaque pop-up d’ajout ou de modification d’un produit ou d’un service, le commerçant doit avoir la possibilité :
+Lorsqu’un commerçant remplace ou supprime une image :
 
-* d’ajouter une photo
-* de remplacer la photo existante
-* de supprimer la photo
+* l’ancienne image doit être supprimée de Cloudinary
+* la nouvelle image doit écraser proprement l’ancienne référence
+* aucune image inutile ne doit rester stockée (éviter la saturation)
 
-L’interface doit être simple, claire et rapide à utiliser, avec un aperçu de l’image sélectionnée.
+Mettre en place une architecture propre, scalable et évolutive pour la gestion des images :
 
----
+* organisation claire des dossiers (par commerçant / service)
+* schéma de nommage cohérent
+* stockage des références (URL, public_id) pour faciliter suppression, remplacement et récupération
 
-Ces fonctionnalités doivent être accessibles depuis la page :
-**settings/categories**
+Assurer que :
 
----
+* les images sont facilement récupérables pour affichage sur le site de réservation
+* les images s’affichent correctement dans l’interface admin
+* chaque service a une image visible pour que le commerçant comprenne clairement l’association
 
-Par ailleurs, il est nécessaire d’ajouter des **URLs pour les sous-pages** des sections suivantes :
-
-* Caisse
-* Site de réservation
-
-👉 Objectif :
-
-* permettre l’actualisation de la page sans perte de contexte
-* revenir automatiquement sur la section où l’utilisateur se trouvait
-
-Cela garantit une navigation plus fluide, fiable et professionnelle.
+L’interface doit être visuelle et explicite, afin que le commerçant identifie facilement chaque service grâce à son image, sans confusion ni oubli.

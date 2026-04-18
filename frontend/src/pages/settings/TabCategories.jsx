@@ -572,7 +572,7 @@ function BookingServices({ theme, showToast }) {
     const showCurrent  = initHasImage && !imgDel && !imgPreview;
     const showPreview  = !!imgPreview;
     const showNone     = !showCurrent && !showPreview;
-    const currentUrl   = init?.id ? mediaApi.serviceUrl(init.id) : null;
+    const currentUrl   = init?.id ? mediaApi.serviceUrl(init.id) + (init._imgV ? `?v=${init._imgV}` : '') : null;
 
     const onPickFile = (e) => {
       const f = e.target.files?.[0]; if (!f) return;
@@ -953,11 +953,20 @@ function BookingServices({ theme, showToast }) {
                       borderTop:`1px solid ${theme.border}` }}>
                       <div style={{ width:3,height:22,borderRadius:99,flexShrink:0,
                         background:svc.color||cat.color||'#111827',opacity:0.6 }}/>
-                      <div style={{ width:32,height:32,borderRadius:9,flexShrink:0,
-                        background:svc.color||cat.color||'#111827',
-                        display:'flex',alignItems:'center',justifyContent:'center' }}>
-                        <I.Scissors style={{ width:13,height:13,color:'white' }}/>
-                      </div>
+                      {svc.has_image ? (
+                        <div style={{ width:40,height:40,borderRadius:9,flexShrink:0,overflow:'hidden',
+                          background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', border:`1px solid ${theme.border}` }}>
+                          <img src={mediaApi.serviceUrl(svc.id) + (svc._imgV ? `?v=${svc._imgV}` : '')}
+                            alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}
+                            onError={e => { e.currentTarget.style.display='none'; }} />
+                        </div>
+                      ) : (
+                        <div style={{ width:32,height:32,borderRadius:9,flexShrink:0,
+                          background:svc.color||cat.color||'#111827',
+                          display:'flex',alignItems:'center',justifyContent:'center' }}>
+                          <I.Scissors style={{ width:13,height:13,color:'white' }}/>
+                        </div>
+                      )}
                       <div style={{ flex:1,minWidth:0 }}>
                         <div style={{ display:'flex',alignItems:'center',gap:5 }}>
                           <p style={{ fontWeight:600,fontSize:13,color:theme.text,margin:0,
@@ -1017,11 +1026,20 @@ function BookingServices({ theme, showToast }) {
             return (
               <div key={svc.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',
                 borderTop:idx>0?`1px solid ${theme.border}`:'none' }}>
-                <div style={{ width:32,height:32,borderRadius:9,flexShrink:0,
-                  background:svc.color||'#111827',
-                  display:'flex',alignItems:'center',justifyContent:'center' }}>
-                  <I.Scissors style={{ width:13,height:13,color:'white' }}/>
-                </div>
+                {svc.has_image ? (
+                  <div style={{ width:40,height:40,borderRadius:9,flexShrink:0,overflow:'hidden',
+                    background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', border:`1px solid ${theme.border}` }}>
+                    <img src={mediaApi.serviceUrl(svc.id) + (svc._imgV ? `?v=${svc._imgV}` : '')}
+                      alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}
+                      onError={e => { e.currentTarget.style.display='none'; }} />
+                  </div>
+                ) : (
+                  <div style={{ width:32,height:32,borderRadius:9,flexShrink:0,
+                    background:svc.color||'#111827',
+                    display:'flex',alignItems:'center',justifyContent:'center' }}>
+                    <I.Scissors style={{ width:13,height:13,color:'white' }}/>
+                  </div>
+                )}
                 <div style={{ flex:1,minWidth:0 }}>
                   <p style={{ fontWeight:600,fontSize:13,color:theme.text,margin:0,
                     overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{svc.name}</p>

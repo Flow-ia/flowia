@@ -169,6 +169,22 @@ async function uploadToProvider(filePath, folder) {
   return path.basename(filePath);
 }
 
+// Supprimer une ressource chez le provider (cloudinary destroy OU unlink local)
+async function deleteFromProvider(resourcePath, provider) {
+  if (!resourcePath) return;
+  try {
+    if (provider === 'cloudinary') {
+      const cld = getCloudinary();
+      await cld.uploader.destroy(resourcePath, { resource_type: 'image', invalidate: true });
+    } else if (provider === 'local') {
+      const fPath = path.join(uploadDir, resourcePath);
+      if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
+    }
+  } catch (e) {
+    console.warn('[deleteFromProvider]', provider, resourcePath, e.message);
+  }
+}
+
 // Pour local : multer diskStorage. Pour cloudinary : memoryStorage puis upload stream
 const storage = PROVIDER === 'cloudinary'
   ? multer.memoryStorage()
@@ -208,9 +224,17 @@ async function persistUpload(req, folder) {
 router.post('/commercant/profile', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    // 1. Récupérer l'ancien profil (pour cleanup provider)
+    const { rows: old } = await pool.query(
+      'SELECT path, provider FROM media WHERE user_id=$1 AND type=$2',
+      [req.user.userId, 'profile']
+    );
+    // 2. Upload nouveau
     const filePath = await persistUpload(req, `commercant_${req.user.userId}`);
-    // Supprimer l'ancien profil
+    // 3. Cleanup ancien (provider + DB)
+    for (const m of old) await deleteFromProvider(m.path, m.provider);
     await pool.query('DELETE FROM media WHERE user_id=$1 AND type=$2', [req.user.userId, 'profile']);
+    // 4. Insert nouvelle référence
     const { rows } = await pool.query(
       'INSERT INTO media (user_id, type, path, provider) VALUES ($1,$2,$3,$4) RETURNING id',
       [req.user.userId, 'profile', filePath, PROVIDER]
@@ -244,29 +268,38 @@ router.delete('/:id', async (req, res) => {
       [req.params.id, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Image introuvable' });
-    // Supprimer le fichier local si provider=local
-    if (rows[0].provider === 'local') {
-      const fPath = path.join(uploadDir, rows[0].path);
-      if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
-    }
+    await deleteFromProvider(rows[0].path, rows[0].provider);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/media/service/:serviceId/image — Image d'un service
+// Architecture : flowia/commercant_${userId}/services/${serviceId} (1 image par service)
 router.post('/service/:serviceId/image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
-    const { rows: svc } = await pool.query('SELECT id FROM booking_services WHERE id=$1 AND user_id=$2', [req.params.serviceId, req.user.userId]);
+    const { rows: svc } = await pool.query(
+      'SELECT id FROM booking_services WHERE id=$1 AND user_id=$2',
+      [req.params.serviceId, req.user.userId]
+    );
     if (!svc.length) return res.status(403).json({ error: 'Service introuvable' });
-    const filePath = await persistUpload(req, `services`);
+    // 1. Anciennes images (pour cleanup provider)
+    const { rows: old } = await pool.query(
+      'SELECT path, provider FROM media WHERE ref_id=$1 AND type=$2',
+      [req.params.serviceId, 'service']
+    );
+    // 2. Upload nouveau (folder isolé par commerçant+service)
+    const filePath = await persistUpload(req, `commercant_${req.user.userId}/services/${req.params.serviceId}`);
+    // 3. Cleanup ancien (provider + DB) — évite les orphelins Cloudinary
+    for (const m of old) await deleteFromProvider(m.path, m.provider);
     await pool.query('DELETE FROM media WHERE ref_id=$1 AND type=$2', [req.params.serviceId, 'service']);
+    // 4. Insert nouvelle référence
     const { rows } = await pool.query(
       'INSERT INTO media (user_id, type, ref_id, path, provider) VALUES ($1,$2,$3,$4,$5) RETURNING id',
       [req.user.userId, 'service', req.params.serviceId, filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/service/${req.params.serviceId}/image` });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[POST service/image]', e); res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /api/media/service/:serviceId/image — Supprimer l'image d'un service
@@ -281,12 +314,7 @@ router.delete('/service/:serviceId/image', async (req, res) => {
       'DELETE FROM media WHERE ref_id=$1 AND type=$2 AND user_id=$3 RETURNING path, provider',
       [req.params.serviceId, 'service', req.user.userId]
     );
-    for (const m of rows) {
-      if (m.provider === 'local') {
-        const fPath = path.join(uploadDir, m.path);
-        if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
-      }
-    }
+    for (const m of rows) await deleteFromProvider(m.path, m.provider);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
