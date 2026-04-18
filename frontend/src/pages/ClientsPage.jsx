@@ -85,7 +85,7 @@ function SortDropdown({ value, onChange, theme, isDark }) {
   );
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 export default function ClientsPage() {
