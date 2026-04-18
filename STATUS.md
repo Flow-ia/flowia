@@ -4,6 +4,37 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 6) : Paiements mixtes — traçabilité correcte (plus de "Autres")
+
+### Bug corrigé
+Un encaissement divisé (ex : 20€ cash + 25€ carte + 5€ virement) était regroupé
+dans les stats sous `multi` / `Autre`, rendant impossible la lecture par moyen.
+
+### Backend — `backend/src/routes/export.js`
+- CSV + PDF : colonne `mode_paiement` affiche désormais un libellé détaillé pour
+  les tx multi (ex : `Espèces 20.00€ + Carte bancaire 25.00€ + Virement 5.00€`)
+  construit via `LEFT JOIN LATERAL` sur `transaction_payments`
+- `CA par moyen de paiement` (CSV + PDF) : CTE `pm_split` qui fait `UNION ALL`
+  entre :
+  - `transaction_payments` pour les tx `payment_method='multi'`
+  - `transactions` elles-mêmes sinon
+  → chaque moyen reçoit sa part réelle, aucun regroupement "Mixte" / "Autre"
+
+### Frontend
+- `frontend/src/pages/Dashboard.jsx` (StatsModal) : `byPM` éclate désormais les
+  tx multi via `tx.payments[]` (helper `addPm`). Chaque moyen compte son propre
+  montant + tx count.
+- `frontend/src/pages/settings/TabStats.jsx` (EmpModal) : détail par employé par
+  moyen utilise `amtFor(tx)` qui lit `tx.payments[].amount` pour les tx multi
+  au lieu de filtrer par `payment_method===k` (qui ignorait les multi).
+
+### Impact
+- Stats du jour (Dashboard) : breakdown par moyen exact
+- Performance employé (Settings → Stats → clic employé) : répartition correcte
+- Exports CSV/PDF : ligne tx lisible + agrégat par moyen fidèle
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 5) : Caisse — quantités correctes + paiement mixte
 
 ### Problème résolu

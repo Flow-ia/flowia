@@ -1,41 +1,75 @@
-Voici la version corrigée et clarifiée :
+Voici la version corrigée avec l’ajout demandé :
 
 ---
 
-Il y a un problème dans les statistiques du jour, dans la section **“Par service / produit”**.
+### ❌ Problème à corriger
 
-Actuellement, l’affichage est incorrect. Par exemple, le système affiche uniquement une ligne du type :
+Lors de la **saisie rapide en caisse**, quand un employé divise un paiement en plusieurs moyens de paiement, le système enregistre mal les données.
 
-* Coupe simple — 30,00 € — 1×
+Actuellement, tout est regroupé dans les statistiques du jour (et tout ce qui en découle) comme :
 
-alors que plusieurs produits différents avec des quantités différentes ont été encaissés.
+* “Autres”
+
+👉 Ce comportement est incorrect.
 
 ---
 
 ### 💡 Comportement attendu
 
-Lorsqu’un encaissement contient plusieurs produits/services avec des quantités différentes, les statistiques doivent les afficher correctement et séparément, par exemple :
-
-* Coupe simple — 15,00 € — 3×
-* Coupe + barbe — 10,00 € — 2×
+Lorsque le paiement est divisé, chaque moyen de paiement doit être **traçé séparément et correctement catégorisé**, sans aucune perte d’information.
 
 ---
 
-### ❌ Problème actuel
+### 💳 Exemple concret
 
-Le système regroupe incorrectement toutes les ventes sous une seule ligne :
+Montant total : **50€**
 
-* “Sans catégorie — 65,00 € — 1×”
+Répartition effectuée par l’employé :
+
+* 20€ en espèces
+* 25€ par carte
+* 5€ en virement
+
+---
+
+### 📊 Résultat attendu dans les statistiques
+
+Au lieu d’un regroupement incorrect type :
+
+* “Autres : 50€”
+
+Le système doit afficher :
+
+* Espèces : 20€
+* Carte : 25€
+* Virement : 5€
+
+---
+
+### 👤 Traçabilité par employé
+
+Il faut également tracer **chaque employé individuellement**, en enregistrant :
+
+* ce qu’il a encaissé
+* par quel moyen de paiement (espèces, carte, virement, etc.)
+* et les montants correspondants
+
+👉 Cela permet de suivre précisément la performance et les encaissements de chaque employé.
 
 ---
 
 ### ⚠️ Contraintes importantes
 
-* Ne pas regrouper les produits/services différents dans une seule ligne
-* Ne pas perdre les informations de quantité
-* Ne pas casser les calculs existants de statistiques
-* Garantir une cohérence entre caisse, historique et statistiques
+* Ne jamais regrouper les paiements dans “Autres”
+* Chaque moyen de paiement doit être comptabilisé indépendamment
+* La traçabilité doit être conservée dans :
+
+  * statistiques du jour
+  * historique des ventes
+  * rapports financiers
+  * performance des employés
+* **Ne rien casser et ne rien oublier dans le système existant de caisse, statistiques et analytics**
 
 ---
 
-👉 Objectif : afficher correctement chaque service/produit avec sa quantité réelle vendue, pour avoir des statistiques fiables et exploitables.
+👉 Objectif : assurer une comptabilité précise, fiable et professionnelle, avec une séparation claire des paiements et une traçabilité complète par employé.

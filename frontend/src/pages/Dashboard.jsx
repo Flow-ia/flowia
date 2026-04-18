@@ -366,11 +366,23 @@ function StatsModal({ open, onClose, theme, transactions, employees, categories 
     return {...emp,count:r.length,ca:r.reduce((s,t)=>s+(parseFloat(t.amount)||0),0)};
   }).filter(e=>e.count>0);
 
+  // byPM : éclate les paiements mixtes (`payment_method='multi'`) via tx.payments[]
+  // pour que chaque moyen (especes/carte/virement/…) soit tracé independamment.
   const byPM = {};
+  const addPm = (pm, amount) => {
+    const key = pm || 'other';
+    if (!byPM[key]) byPM[key] = { count: 0, total: 0 };
+    byPM[key].count++;
+    byPM[key].total += parseFloat(amount) || 0;
+  };
   todayRevs.forEach(t => {
-    const pm = t.payment_method||'other';
-    if(!byPM[pm]) byPM[pm]={count:0,total:0};
-    byPM[pm].count++; byPM[pm].total+=parseFloat(t.amount)||0;
+    if (t.payment_method === 'multi' && Array.isArray(t.payments) && t.payments.length) {
+      t.payments.forEach(p => {
+        if (parseFloat(p.amount) > 0) addPm(p.method, p.amount);
+      });
+    } else {
+      addPm(t.payment_method, t.amount);
+    }
   });
 
   // ── Par service / produit : agrégation depuis tx.items[] (chaque service séparé) ──

@@ -363,9 +363,19 @@ function EmpModal({ emp, cats, onClose, theme }) {
         <div className="grid grid-cols-2 gap-2">
           {PAY_KEYS.map(k => {
             const p = PAY_INFO[k]; const PmIc = p.Ic;
-            const allRevs = emp.allTx.filter(t=>t.type==='revenue'&&t.payment_method===k);
-            const val    = allRevs.reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
-            const rdvVal = allRevs.filter(t=>t.source==='rdv').reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+            // Montant par moyen : part réelle dans payments[] pour les tx multi,
+            // sinon montant complet si payment_method === k.
+            const amtFor = (t) => {
+              if (t.payment_method === 'multi' && Array.isArray(t.payments)) {
+                return t.payments
+                  .filter(pp => pp.method === k)
+                  .reduce((s, pp) => s + (parseFloat(pp.amount) || 0), 0);
+              }
+              return t.payment_method === k ? (parseFloat(t.amount) || 0) : 0;
+            };
+            const revs   = emp.allTx.filter(t => t.type === 'revenue');
+            const val    = revs.reduce((s, t) => s + amtFor(t), 0);
+            const rdvVal = revs.filter(t => t.source === 'rdv').reduce((s, t) => s + amtFor(t), 0);
             if (!val) return null;
             return (
               <div key={k} className="rounded-xl p-3" style={{ background: p.bg, border: `1px solid ${p.border}` }}>

@@ -26,6 +26,8 @@ router.get('/csv', async (req, res) => {
       'SELECT business_name FROM users WHERE id=$1', [req.user.userId]);
     const businessName = biz[0]?.business_name || 'FlowIA';
 
+    // Pour les transactions multi-paiement, on construit un libellé détaillé
+    // (ex : "Especes 20€ + Carte 25€ + Virement 5€") à partir de transaction_payments.
     let q = `SELECT
         t.id,
         TO_CHAR(t.date,'DD/MM/YYYY') as date,
@@ -34,7 +36,13 @@ router.get('/csv', async (req, res) => {
         t.amount,
         COALESCE(t.discount_amount,0) as remise,
         COALESCE(t.original_amount,t.amount) as montant_brut,
-        COALESCE(pm_label.label,'Autre') as mode_paiement,
+        CASE
+          WHEN t.payment_method = 'multi' THEN COALESCE(pm_multi.label,'Mixte')
+          WHEN t.payment_method = 'cash' THEN 'Espèces'
+          WHEN t.payment_method = 'card' THEN 'Carte bancaire'
+          WHEN t.payment_method = 'transfer' THEN 'Virement'
+          ELSE 'Autre'
+        END as mode_paiement,
         COALESCE(c.name,'—') as categorie,
         COALESCE(e.name,'—') as employe,
         COALESCE(t.description,'') as description,
@@ -44,10 +52,16 @@ router.get('/csv', async (req, res) => {
       LEFT JOIN categories c ON c.id=t.category_id
       LEFT JOIN employees e ON e.id=t.employee_id
       LEFT JOIN LATERAL (
-        SELECT CASE t.payment_method
-          WHEN 'cash' THEN 'Espèces' WHEN 'card' THEN 'Carte bancaire'
-          WHEN 'transfer' THEN 'Virement' ELSE 'Autre' END as label
-      ) pm_label ON TRUE
+        SELECT string_agg(
+          (CASE tp.method
+            WHEN 'cash' THEN 'Espèces'
+            WHEN 'card' THEN 'Carte bancaire'
+            WHEN 'transfer' THEN 'Virement'
+            ELSE 'Autre' END) || ' ' || TO_CHAR(tp.amount,'FM999999999.00') || '€',
+          ' + ' ORDER BY tp.amount DESC
+        ) as label
+        FROM transaction_payments tp WHERE tp.transaction_id = t.id
+      ) pm_multi ON t.payment_method = 'multi'
       WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
 
@@ -90,14 +104,32 @@ router.get('/csv', async (req, res) => {
     csv += `${sep}${sep}SOLDE NET${sep}${String((totalRev-totalExp).toFixed(2)).replace('.', ',')}${sep}${sep}${sep}${sep}${sep}${sep}${sep}${sep}\r\n`;
 
     // ── CA par moyen de paiement ────────────────────────────────────────────
+    // Eclate les tx multi via transaction_payments : chaque moyen est compté
+    // séparément avec son montant réel. Aucun regroupement en "Autre" / "Mixte".
     if (withPayment) {
       const { rows: pmRows } = await pool.query(
-        `SELECT COALESCE(
-            CASE payment_method WHEN 'cash' THEN 'Espèces' WHEN 'card' THEN 'Carte bancaire'
-              WHEN 'transfer' THEN 'Virement' ELSE 'Autre' END, 'Autre') as mode,
-          SUM(amount) as total, COUNT(*) as nb
-         FROM transactions WHERE user_id=$1 AND type='revenue' AND date BETWEEN $2 AND $3
-         GROUP BY mode ORDER BY total DESC`,
+        `WITH pm_split AS (
+           SELECT tp.method, tp.amount, t.id AS tx_id
+           FROM transactions t
+           JOIN transaction_payments tp ON tp.transaction_id = t.id
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+             AND t.payment_method='multi'
+           UNION ALL
+           SELECT t.payment_method AS method, t.amount, t.id AS tx_id
+           FROM transactions t
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+             AND t.payment_method IS DISTINCT FROM 'multi'
+         )
+         SELECT CASE method
+             WHEN 'cash' THEN 'Espèces'
+             WHEN 'card' THEN 'Carte bancaire'
+             WHEN 'transfer' THEN 'Virement'
+             ELSE 'Autre' END as mode,
+           SUM(amount) as total,
+           COUNT(DISTINCT tx_id) as nb
+         FROM pm_split
+         GROUP BY method
+         ORDER BY total DESC`,
         [req.user.userId, fromD, toD]
       );
       csv += '\r\n';
@@ -179,15 +211,30 @@ router.get('/pdf', async (req, res) => {
         CASE t.type WHEN 'revenue' THEN 'Recette' WHEN 'expense' THEN 'Depense' ELSE t.type END as type_label,
         t.type,
         t.amount,
-        CASE t.payment_method
-          WHEN 'cash' THEN 'Especes' WHEN 'card' THEN 'CB'
-          WHEN 'transfer' THEN 'Virement' ELSE 'Autre' END as mode_paiement,
+        CASE
+          WHEN t.payment_method = 'multi' THEN COALESCE(pm_multi.label,'Mixte')
+          WHEN t.payment_method = 'cash' THEN 'Especes'
+          WHEN t.payment_method = 'card' THEN 'CB'
+          WHEN t.payment_method = 'transfer' THEN 'Virement'
+          ELSE 'Autre'
+        END as mode_paiement,
         COALESCE(c.name,'-') as categorie,
         COALESCE(e.name,'-') as employe,
         COALESCE(t.description,'') as description
       FROM transactions t
       LEFT JOIN categories c ON c.id=t.category_id
       LEFT JOIN employees e ON e.id=t.employee_id
+      LEFT JOIN LATERAL (
+        SELECT string_agg(
+          (CASE tp.method
+            WHEN 'cash' THEN 'Especes'
+            WHEN 'card' THEN 'CB'
+            WHEN 'transfer' THEN 'Virement'
+            ELSE 'Autre' END) || ' ' || TO_CHAR(tp.amount,'FM999999999.00') || 'E',
+          ' + ' ORDER BY tp.amount DESC
+        ) as label
+        FROM transaction_payments tp WHERE tp.transaction_id = t.id
+      ) pm_multi ON t.payment_method = 'multi'
       WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
 
@@ -209,13 +256,31 @@ router.get('/pdf', async (req, res) => {
     // ── Requêtes analytiques (avant de créer le PDF) ─────────────────────────
     let pmRows = [], empRows = [];
     if (withPayment) {
+      // Eclate les paiements mixtes via transaction_payments
+      // pour ne jamais regrouper un paiement divisé sous "Mixte" / "Autre".
       const res2 = await pool.query(
-        `SELECT COALESCE(
-            CASE payment_method WHEN 'cash' THEN 'Especes' WHEN 'card' THEN 'CB'
-              WHEN 'transfer' THEN 'Virement' ELSE 'Autre' END,'Autre') as mode,
-          SUM(amount) as total, COUNT(*) as nb
-         FROM transactions WHERE user_id=$1 AND type='revenue' AND date BETWEEN $2 AND $3
-         GROUP BY mode ORDER BY total DESC`,
+        `WITH pm_split AS (
+           SELECT tp.method, tp.amount, t.id AS tx_id
+           FROM transactions t
+           JOIN transaction_payments tp ON tp.transaction_id = t.id
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+             AND t.payment_method='multi'
+           UNION ALL
+           SELECT t.payment_method AS method, t.amount, t.id AS tx_id
+           FROM transactions t
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+             AND t.payment_method IS DISTINCT FROM 'multi'
+         )
+         SELECT CASE method
+             WHEN 'cash' THEN 'Especes'
+             WHEN 'card' THEN 'CB'
+             WHEN 'transfer' THEN 'Virement'
+             ELSE 'Autre' END as mode,
+           SUM(amount) as total,
+           COUNT(DISTINCT tx_id) as nb
+         FROM pm_split
+         GROUP BY method
+         ORDER BY total DESC`,
         [req.user.userId, fromD, toD]);
       pmRows = res2.rows;
     }
