@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { clientsApi } from '../../utils/api';
 
+const PAGE_SIZE = 10;
+
 export default function TabClients({ theme, showToast }) {
   const isDark = theme.mode === 'dark';
 
@@ -9,6 +11,7 @@ export default function TabClients({ theme, showToast }) {
   const [loading,    setLoading]    = useState(false);
   const [search,     setSearch]     = useState('');
   const [sort,       setSort]       = useState('name');
+  const [page,       setPage]       = useState(0);
   const [selected,   setSelected]   = useState(null);
   const [fiche,      setFiche]      = useState(null);
   const [ficheLoad,  setFicheLoad]  = useState(false);
@@ -23,14 +26,23 @@ export default function TabClients({ theme, showToast }) {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await clientsApi.list({ search, sort, limit: 100 });
+      const r = await clientsApi.list({
+        search,
+        sort,
+        limit:  PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
       setClients(r.clients || []);
       setTotal(r.total || 0);
     } catch { showToast('Erreur chargement clients', 'error'); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [search, sort]);
+  // Reset page quand filtres changent
+  useEffect(() => { setPage(0); }, [search, sort]);
+  useEffect(() => { load(); }, [search, sort, page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const openFiche = async (cl) => {
     setSelected(cl);
@@ -403,6 +415,23 @@ export default function TabClients({ theme, showToast }) {
           </div>
         ))}
       </div>
+
+      {/* Pagination 10 par page */}
+      {!loading && total > 0 && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'20px 0 8px' }}>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'rgba(255,255,255,0.04)':'white', color: page===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: page===0?'default':'pointer', opacity: page===0?0.5:1 }}>
+            ‹ Préc.
+          </button>
+          <span style={{ fontSize:13, fontWeight:700, color:theme.muted, minWidth:80, textAlign:'center' }}>
+            Page {page + 1} / {totalPages}
+          </span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'rgba(255,255,255,0.04)':'white', color: page>=totalPages-1?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: page>=totalPages-1?'default':'pointer', opacity: page>=totalPages-1?0.5:1 }}>
+            Suiv. ›
+          </button>
+        </div>
+      )}
     </div>
   );
 }

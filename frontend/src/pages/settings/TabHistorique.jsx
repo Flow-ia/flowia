@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
 import { TransactionForm } from '../../components/Forms';
 import { disp } from '../../utils/dates';
 import { Card, nd, fmt, PAY_INFO } from './shared';
+
+const PAGE_SIZE = 10;
 
 export default function TabHistorique({ transactions, employees, categories, onUpdate, onDelete, showToast, theme }) {
   const isDark = theme.mode === 'dark';
@@ -12,18 +14,25 @@ export default function TabHistorique({ transactions, employees, categories, onU
   const [delId, setDelId] = useState(null);
   const [search, setSearch] = useState('');
   const [typeF, setTypeF] = useState('all');
+  const [page, setPage] = useState(0);
 
   const getEmp = id => employees.find(e=>e.id===id);
   const getCat = id => categories.find(c=>c.id===id);
 
-  const filtered = transactions.filter(tx => {
+  const filtered = useMemo(() => transactions.filter(tx => {
     if (typeF !== 'all' && tx.type !== typeF) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return getCat(tx.category_id)?.name?.toLowerCase().includes(q)
       || getEmp(tx.employee_id)?.name?.toLowerCase().includes(q)
       || tx.description?.toLowerCase().includes(q);
-  });
+  }), [transactions, typeF, search, employees, categories]);
+
+  // Pagination 10/page — reset quand filtre change
+  useEffect(() => { setPage(0); }, [typeF, search]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSafe   = Math.min(page, totalPages - 1);
+  const pagedItems = filtered.slice(pageSafe * PAGE_SIZE, (pageSafe + 1) * PAGE_SIZE);
 
   return (
     <div className="space-y-3">
@@ -60,7 +69,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
           </div>
         ) : (
           <div>
-            {filtered.slice(0,100).map((tx, i) => {
+            {pagedItems.map((tx, i) => {
               const cat = getCat(tx.category_id);
               const emp = getEmp(tx.employee_id);
               const isRev = tx.type === 'revenue';
@@ -68,7 +77,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
               const PmIc = pm.Ic;
               return (
                 <div key={tx.id} className="flex items-start gap-3 px-4 py-3"
-                  style={{ borderBottom: i < Math.min(filtered.length,100)-1 ? `1px solid ${theme.border}` : 'none', fontFamily:"'DM Sans', sans-serif" }}>
+                  style={{ borderBottom: i < pagedItems.length - 1 ? `1px solid ${theme.border}` : 'none', fontFamily:"'DM Sans', sans-serif" }}>
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
                     style={{ background: isRev ? (tx.source==='rdv'?'rgba(17,24,39,0.15)':'rgba(17,24,39,0.12)') : 'rgba(248,113,113,0.1)' }}>
                     {tx.source==='rdv' ? <span style={{ fontSize:16 }}>📅</span> : isRev ? <I.ArrowUp className="w-4 h-4" style={{ color:'#a5a0ff' }} /> : <I.ArrowDown className="w-4 h-4" style={{ color: '#f87171' }} />}
@@ -122,6 +131,23 @@ export default function TabHistorique({ transactions, employees, categories, onU
           </div>
         )}
       </Card>
+
+      {/* Pagination 10 par page */}
+      {filtered.length > 0 && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'8px 0 4px' }}>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageSafe === 0}
+            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: theme.card, color: pageSafe===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe===0?'default':'pointer', opacity: pageSafe===0?0.5:1 }}>
+            ‹ Préc.
+          </button>
+          <span style={{ fontSize:13, fontWeight:700, color:theme.muted, minWidth:80, textAlign:'center' }}>
+            Page {pageSafe + 1} / {totalPages}
+          </span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={pageSafe >= totalPages - 1}
+            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: theme.card, color: pageSafe>=totalPages-1?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe>=totalPages-1?'default':'pointer', opacity: pageSafe>=totalPages-1?0.5:1 }}>
+            Suiv. ›
+          </button>
+        </div>
+      )}
 
       <TransactionForm open={modal} onClose={() => { setModal(false); setEdit(null); }}
         onSubmit={async d => {
