@@ -56,7 +56,7 @@ router.post('/register', async (req, res) => {
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
-    if (rows.length) return res.status(409).json({ error: 'Cet email est déjà utilisé.' });
+    if (rows.length) return res.status(409).json({ error: 'Email déjà existant, merci de changer de mail et réessayer !' });
     const code = genCode();
     await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, phone: phone||'', address: address||'', country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
     // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
@@ -73,10 +73,19 @@ router.post('/register/confirm', async (req, res) => {
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
     const { email: em, password, businessName, phone, address, country, city, postalCode, lat, lng } = rec.data;
     const hash = await bcrypt.hash(password, 12);
-    const { rows } = await pool.query(
-      `INSERT INTO users (email,password_hash,business_name,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,email,business_name,phone,address,country,city,postal_code`,
-      [em, hash, businessName, phone||null, address||null, country||'FR', city||null, postalCode||null, lat||null, lng||null]
-    );
+    let rows;
+    try {
+      ({ rows } = await pool.query(
+        `INSERT INTO users (email,password_hash,business_name,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,email,business_name,phone,address,country,city,postal_code`,
+        [em, hash, businessName, phone||null, address||null, country||'FR', city||null, postalCode||null, lat||null, lng||null]
+      ));
+    } catch (e) {
+      if (e.code === '23505') {
+        await deleteCode(`reg_${email.toLowerCase()}`);
+        return res.status(409).json({ error: 'Email déjà existant, merci de changer de mail et réessayer !' });
+      }
+      throw e;
+    }
     const user = rows[0];
     for (const cat of SEED_CATS) {
       await pool.query('INSERT INTO categories (user_id,name,type,icon,color) VALUES ($1,$2,$3,$4,$5)',
@@ -232,22 +241,28 @@ router.post('/forgot/reset', async (req, res) => {
 
 // ═══════════════════ CHANGEMENT EMAIL ════════════════════════════════════════
 
+// Message d'unicité d'email — un compte = un email unique côté commerçant.
+const EMAIL_TAKEN_MSG = 'Email déjà existant, merci de changer de mail et réessayer !';
+
 router.post('/change-email', authMiddleware, async (req, res) => {
   try {
-    const { newEmail } = req.body;
-    if (!newEmail) return res.status(400).json({ error: 'Email requis.' });
-    // 1. Vérifier que le nouvel email n'est pas déjà utilisé
-    const { rows: exists } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [newEmail]);
-    if (exists.length) return res.status(409).json({ error: 'Email déjà utilisé.' });
+    const raw = (req.body?.newEmail || '').trim().toLowerCase();
+    if (!raw || !raw.includes('@')) return res.status(400).json({ error: 'Email invalide.' });
+    // 1. Vérifier que le nouvel email n'est pas déjà utilisé par un autre compte
+    const { rows: exists } = await pool.query(
+      'SELECT id FROM users WHERE email=$1 AND id<>$2',
+      [raw, req.user.userId]
+    );
+    if (exists.length) return res.status(409).json({ error: EMAIL_TAKEN_MSG });
     // 2. Récupérer l'adresse ACTUELLE du compte (pour sécurité — le code est envoyé à l'ancienne adresse)
     const { rows: u } = await pool.query('SELECT email FROM users WHERE id=$1', [req.user.userId]);
     if (!u.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const currentEmail = u[0].email;
-    if (currentEmail.toLowerCase() === newEmail.toLowerCase()) {
+    if (currentEmail.toLowerCase() === raw) {
       return res.status(400).json({ error: 'Le nouvel email doit être différent.' });
     }
     const code = genCode();
-    await saveCode(`chg_email_${req.user.userId}`, code, { newEmail: newEmail.toLowerCase() });
+    await saveCode(`chg_email_${req.user.userId}`, code, { newEmail: raw });
     res.json({ ok: true, sentTo: currentEmail });
     // 3. Envoyer le code à l'ANCIEN email (authentifie le propriétaire du compte)
     setImmediate(() => sendVerificationEmail(
@@ -265,7 +280,23 @@ router.post('/change-email/confirm', authMiddleware, async (req, res) => {
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
     const { newEmail } = rec.data;
-    await pool.query('UPDATE users SET email=$1 WHERE id=$2', [newEmail, req.user.userId]);
+    // Re-vérif anti-race : un autre commerçant a pu s'inscrire avec ce mail
+    // entre la demande et la confirmation. La contrainte UNIQUE de users.email
+    // est la garantie ultime, mais on renvoie un message friendly avant.
+    const { rows: dup } = await pool.query(
+      'SELECT id FROM users WHERE email=$1 AND id<>$2',
+      [newEmail, req.user.userId]
+    );
+    if (dup.length) {
+      await deleteCode(`chg_email_${req.user.userId}`);
+      return res.status(409).json({ error: EMAIL_TAKEN_MSG });
+    }
+    try {
+      await pool.query('UPDATE users SET email=$1 WHERE id=$2', [newEmail, req.user.userId]);
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: EMAIL_TAKEN_MSG });
+      throw e;
+    }
     await deleteCode(`chg_email_${req.user.userId}`);
     const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.user.userId]);
     const user = rows[0];

@@ -4,6 +4,42 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-19 (suite 2) : Email commerçant unique — message d'erreur clair
+
+### Règle métier
+Un commerçant = **un seul compte = un seul email unique**. Quand il change son
+email depuis Settings → Compte, le nouvel email ne doit **jamais** correspondre
+à un compte commerçant existant. Idem à l'inscription.
+
+### Fix — `backend/src/routes/auth.js`
+- Constante `EMAIL_TAKEN_MSG` réutilisée :
+  « Email déjà existant, merci de changer de mail et réessayer ! »
+- `POST /change-email` :
+  - Trim + lowercase systématique de `newEmail`
+  - SELECT exclut `id=req.user.userId` (autoriser re-saisir son propre email
+    sans erreur 409, géré par la branche « doit être différent »)
+  - Message 409 → `EMAIL_TAKEN_MSG`
+- `POST /change-email/confirm` :
+  - **NEW** Re-vérification d'unicité juste avant l'UPDATE (race condition
+    possible : un autre commerçant peut s'inscrire entre la demande et la
+    confirmation OTP).
+  - **NEW** try/catch sur l'UPDATE : si `e.code === '23505'` (unique_violation)
+    → 409 + `EMAIL_TAKEN_MSG` au lieu d'une 500 cryptique.
+- `POST /register` : message aligné `EMAIL_TAKEN_MSG`.
+- `POST /register/confirm` : try/catch sur l'INSERT users → si 23505 (qqn s'est
+  inscrit avec ce mail entre /register et /confirm), on supprime le code OTP et
+  on retourne le message friendly.
+
+### Frontend
+- `TabCompte.jsx EmailCard` affichait déjà `e.message` du backend — aucun
+  changement nécessaire, le nouveau message s'affiche tel quel dans le bandeau
+  rouge sous le formulaire.
+
+### Build
+- `node --check auth.js` : OK
+
+---
+
 ## 🆕 Session 2026-04-19 (suite) : Toggles parrainage + anniversaire auto-persistants
 
 ### Bug
