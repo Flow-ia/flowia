@@ -78,11 +78,27 @@ function startServer() {
 
   // ── CORS ─────────────────────────────────────────────────────────────────
   // Accepte plusieurs origines — FRONTEND_URL peut être une liste séparée par virgule
-  const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
-    .split(',').map(o => o.trim());
+  // Pour chaque domaine de base (ex: haircoifflille.fr), on accepte aussi
+  // automatiquement les sous-domaines `www.*` et `commercant.*`
+  const rawOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',').map(o => o.trim()).filter(Boolean);
+  const allowedOrigins = new Set();
+  for (const o of rawOrigins) {
+    allowedOrigins.add(o);
+    try {
+      const u = new URL(o);
+      const host = u.hostname;
+      // Si c'est un domaine principal (pas déjà un sous-domaine www/commercant),
+      // ajouter automatiquement les variantes www. et commercant.
+      if (!host.startsWith('www.') && !host.startsWith('commercant.')) {
+        allowedOrigins.add(`${u.protocol}//www.${host}`);
+        allowedOrigins.add(`${u.protocol}//commercant.${host}`);
+      }
+    } catch { /* origine non-URL (ex: localhost:3000) — ignorer */ }
+  }
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
       callback(new Error('CORS not allowed: ' + origin));
     },
     credentials: true,

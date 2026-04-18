@@ -4,6 +4,40 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 10) : Fix CORS — sous-domaine commercant.* bloqué + vérif PIN
+
+### Bug CORS
+Console frontend `commercant.haircoifflille.fr` :
+```
+Access to fetch at 'https://flowia-backend.onrender.com/api/transactions'
+from origin 'https://commercant.haircoifflille.fr'
+has been blocked by CORS policy
+```
+Appels bloqués : `/api/transactions`, `/api/booking/appointments`, `/api/auth/pin/verify`,
+`/api/notifications/inapp`. Le backend exige que l'origine figure dans `FRONTEND_URL`
+(whitelist), et `commercant.haircoifflille.fr` n'y était pas → preflight KO.
+
+### Fix — `backend/src/index.js`
+- CORS : pour chaque domaine de base dans `FRONTEND_URL`, on accepte aussi
+  automatiquement `www.*` et `commercant.*` (via `new URL()` + `hostname`).
+- Plus besoin de mettre à jour l'env var à chaque nouveau sous-domaine applicatif.
+
+### Vérification PIN (demande utilisateur) — OK, pas de bug
+Les PIN admin et employés sont bien **indépendants par commerçant** :
+
+- **Admin PIN** (`user_pins`) : clé primaire `user_id`, requête de vérification
+  `SELECT pin_hash FROM user_pins WHERE user_id=$1` (routes/auth.js:302). Le token
+  de session PIN est signé avec `userId` + `scope:pin_session` (middleware pinAdmin
+  vérifie que `payload.userId === req.user.userId`).
+- **Employé PIN** (`employee_pins`) : clé `employee_id` + FK `user_id`.
+  Vérification : `WHERE ep.employee_id=$1 AND e.user_id=$2` (routes/employee-pins.js:130).
+  Le token est signé avec `{ employeeId, userId, scope:'employee_pin_session' }`.
+
+Donc aucune fuite possible entre commerçants. Les erreurs observées étaient dues au
+blocage CORS (le `/pin/verify` ne recevait jamais de réponse).
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 9) : Fix inscription — infos commerçant persistées dans user context
 
 ### Bug
