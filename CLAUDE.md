@@ -104,4 +104,4 @@ Après chaque session de travail, mets à jour STATUS.md avec :
 - Les bugs corrigés
 - L'état actuel du projet
 - Les bugs restants à corriger
-- Affiché le numéro de id de git commit que tu as fait a la fin de affichage de ton travail sur le terminal vs code
+- Affiché le numéro de id de git commit +'    '+ le nom de commit que tu as fait a la fin de affichage de ton travail sur le terminal vs code

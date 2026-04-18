@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { I } from '../utils/icons';
 import { Toast, useToast } from '../components/UI';
@@ -9,7 +10,6 @@ import TabStats from './settings/TabStats';
 import TabHistorique from './settings/TabHistorique';
 import TabEquipe from './settings/TabEquipe';
 import TabCategories from './settings/TabCategories';
-import TabImages from './settings/TabImages';
 import TabMarketing from './settings/TabMarketing';
 import TabClients from './settings/TabClients';
 import TabNotifs from './settings/TabNotifs';
@@ -34,7 +34,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
     'historique':   'transactions',
     'equipe':       'employees',
     'categories':   'categories',
-    'profil':       'profil',
+    'profil':       'categories',   // legacy → redirigé vers /settings/categories/booking (Site de réservation)
     'marketing':    'marketing',
     'clients':      'clients',
     'export':       'export',
@@ -53,7 +53,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
     'transactions': '/settings/historique',
     'employees':    '/settings/equipe',
     'categories':   '/settings/categories',
-    'profil':       '/settings/profil',
     'marketing':    '/settings/marketing',
     'clients':      '/settings/clients',
     'export':       '/settings/export',
@@ -65,8 +64,14 @@ export default function Settings({ transactions, employees, categories, onAddCat
 
   const pathSegments = location.pathname.replace(/^\/settings\/?/, '').split('/').filter(Boolean);
   const segment    = pathSegments[0] || '';
-  const subSegment = pathSegments[1] || '';
+  // legacy : /settings/profil → /settings/categories/booking (Images intégrées dans Site de réservation)
+  const subSegment = segment === 'profil' ? 'booking' : (pathSegments[1] || '');
   const tab = URL_TO_TAB[segment] ?? 'stats';
+
+  // Redirection URL legacy /settings/profil → /settings/categories/booking
+  useEffect(() => {
+    if (segment === 'profil') navigate('/settings/categories/booking', { replace: true });
+  }, [segment, navigate]);
 
   const setTab = (id) => navigate(TAB_TO_URL[id] || '/settings', { replace: false });
 
@@ -76,7 +81,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
     { id: 'agenda',       label: 'Config',        icon: I.Calendar },
     { id: 'employees',    label: 'Équipe',     icon: I.Users },
     { id: 'categories',   label: 'Categories', icon: I.Tag },
-    { id: 'profil',       label: 'Images',     icon: I.Camera },
     { id: 'marketing',    label: 'Marketing',  icon: I.Gift },
     { id: 'clients',      label: 'Clients',    icon: I.UserCheck },
     { id: 'notifications',label: 'Notifs',     icon: I.Bell },
@@ -138,7 +142,6 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'transactions' && <TabHistorique transactions={transactions} employees={employees} categories={categories} onUpdate={onUpdTx} onDelete={onDelTx} showToast={show} theme={theme} />}
         {tab === 'employees'    && <TabEquipe employees={employees} transactions={transactions} onAdd={onAddEmp} onUpd={onUpdEmp} onDel={onDelEmp} showToast={show} theme={theme} />}
         {tab === 'categories'   && <TabCategories categories={categories} transactions={transactions} onAdd={onAddCat} onUpd={onUpdCat} onDel={onDelCat} onReorder={onReorderCat} showToast={show} theme={theme} subSegment={subSegment} />}
-        {tab === 'profil'       && <TabImages theme={theme} showToast={show} />}
         {tab === 'clients'      && <TabClients theme={theme} showToast={show} />}
         {tab === 'marketing'    && <TabMarketing theme={theme} showToast={show} />}
         {tab === 'export'       && <TabExport employees={employees} categories={categories} theme={theme} />}

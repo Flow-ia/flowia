@@ -5,6 +5,7 @@ import { Confirm } from '../../components/UI';
 import { CategoryForm } from '../../components/Forms';
 import { api, bookingApi, mediaApi } from '../../utils/api';
 import { Card, fmt } from './shared';
+import TabImages from './TabImages';
 
 export default function TabCategories({ categories, transactions, onAdd, onUpd, onDel, onReorder, showToast, theme, subSegment }) {
   const isDark = theme.mode === 'dark';
@@ -52,7 +53,10 @@ export default function TabCategories({ categories, transactions, onAdd, onUpd, 
         />
       )}
       {section === 'booking' && (
-        <BookingServices theme={theme} showToast={showToast} />
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <TabImages theme={theme} showToast={showToast} />
+          <BookingServices theme={theme} showToast={showToast} />
+        </div>
       )}
     </div>
   );

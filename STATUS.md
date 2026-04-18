@@ -4,6 +4,31 @@ Dernier commit : **`78b3c75`** — `fix: Marketing IA fonctionne avec peu de cli
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 3) : Images merchant intégrées à "Site de réservation"
+
+- `backend/src/routes/media.js` :
+  - Nouveau type `logo` (GET public + POST auth avec cleanup provider)
+  - `/meta` retourne `logo_id/url`, `profile_id/url`, `cover_urls[]` avec cache-buster `?v=created_at`
+- `frontend/src/utils/api.js` : `mediaApi.logoUrl`, `mediaApi.uploadLogo`
+- `frontend/src/pages/settings/TabImages.jsx` : réécrit (pattern services — preview 160px + boutons
+  Remplacer/Supprimer, empty-state dashed). 3 sections : Logo, Photo de profil, Photos (4 max).
+  Fix du bouton Supprimer profil (utilise `meta.profile_id` désormais exposé par /meta)
+- `frontend/src/pages/settings/TabCategories.jsx` : TabImages rendu dans section `booking` (en plus des services)
+- `frontend/src/pages/Settings.jsx` :
+  - Tab "Images" (profil) retiré du menu
+  - Redirect legacy `/settings/profil` → `/settings/categories/booking`
+
+## 🆕 Session 2026-04-18 (partie 2) : Fix affichage images services + cleanup Cloudinary
+
+- `backend/src/routes/media.js` :
+  - Helper `deleteFromProvider` (Cloudinary destroy OU fs.unlink)
+  - POST service/profile/cover : suppression ancienne image du provider avant nouvelle
+  - DELETE /:id et /service/:id/image : cleanup provider
+  - Architecture `flowia/commercant_\${userId}/services/\${serviceId}`
+- `backend/src/routes/public-booking.js` : `has_image` sur GET /pub/:slug/services
+- `frontend/src/pages/BookingPage.jsx` : URLs corrigées via `VITE_API_URL` (bug SPA rewrite Vercel)
+- `frontend/src/pages/settings/TabCategories.jsx` : vignettes 40×40 + cache-bust `?v=_imgV`
+
 ## 🆕 Session 2026-04-18 : Pagination clients + historique + index BDD
 
 ### Frontend

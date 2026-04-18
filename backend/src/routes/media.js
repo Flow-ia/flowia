@@ -76,6 +76,22 @@ router.get('/commercant/:userId/profile', async (req, res) => {
   } catch (e) { res.status(404).json({ error: e.message }); }
 });
 
+// ── GET /api/media/commercant/:userId/logo ───────────────────────────────────
+// Logo du commerçant (accessible publiquement)
+router.get('/commercant/:userId/logo', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT path, provider FROM media WHERE user_id=$1 AND type=$2 ORDER BY created_at DESC LIMIT 1',
+      [req.params.userId, 'logo']
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Aucune image' });
+    const { buf, ct } = await fetchImageBuffer(rows[0].path, rows[0].provider);
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buf);
+  } catch (e) { res.status(404).json({ error: e.message }); }
+});
+
 // ── GET /api/media/commercant/:userId/cover/:imageId ─────────────────────────
 // Photo de galerie du commerçant
 router.get('/commercant/:userId/cover/:imageId', async (req, res) => {
@@ -116,11 +132,20 @@ router.get('/commercant/:userId/meta', async (req, res) => {
       `SELECT id, type, ref_id, sort_order, created_at FROM media WHERE user_id=$1 ORDER BY type, sort_order ASC`,
       [req.params.userId]
     );
+    const logo    = rows.find(r => r.type === 'logo');
     const profile = rows.find(r => r.type === 'profile');
     const covers  = rows.filter(r => r.type === 'cover');
+    const ver = (r) => r ? new Date(r.created_at).getTime() : 0;
     res.json({
-      profile_url:  profile ? `/api/media/commercant/${req.params.userId}/profile` : null,
-      cover_urls:   covers.map(c => ({ id:c.id, url:`/api/media/commercant/${req.params.userId}/cover/${c.id}`, sort_order:c.sort_order })),
+      logo_id:      logo?.id || null,
+      logo_url:     logo    ? `/api/media/commercant/${req.params.userId}/logo?v=${ver(logo)}` : null,
+      profile_id:   profile?.id || null,
+      profile_url:  profile ? `/api/media/commercant/${req.params.userId}/profile?v=${ver(profile)}` : null,
+      cover_urls:   covers.map(c => ({
+        id: c.id,
+        url: `/api/media/commercant/${req.params.userId}/cover/${c.id}?v=${ver(c)}`,
+        sort_order: c.sort_order,
+      })),
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -241,6 +266,25 @@ router.post('/commercant/profile', upload.single('image'), async (req, res) => {
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/profile` });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/media/commercant/logo — Upload logo commerçant (remplace l'ancien)
+router.post('/commercant/logo', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    const { rows: old } = await pool.query(
+      'SELECT path, provider FROM media WHERE user_id=$1 AND type=$2',
+      [req.user.userId, 'logo']
+    );
+    const filePath = await persistUpload(req, `commercant_${req.user.userId}/logo`);
+    for (const m of old) await deleteFromProvider(m.path, m.provider);
+    await pool.query('DELETE FROM media WHERE user_id=$1 AND type=$2', [req.user.userId, 'logo']);
+    const { rows } = await pool.query(
+      'INSERT INTO media (user_id, type, path, provider) VALUES ($1,$2,$3,$4) RETURNING id',
+      [req.user.userId, 'logo', filePath, PROVIDER]
+    );
+    res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/logo` });
+  } catch (e) { console.error('[POST logo]', e); res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/media/commercant/cover — Ajouter une photo galerie (max 4)
