@@ -10,7 +10,7 @@ import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
-import { api, loyaltyApi, promoApi, notifApi } from './utils/api';
+import { api, loyaltyApi, promoApi, notifApi, referralsApi } from './utils/api';
 import EmployeeAgenda from './pages/EmployeeAgenda';
 import ClientsPage from './pages/ClientsPage';
 import Agenda from './pages/Agenda';
@@ -152,6 +152,10 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
   const [busy, setBusy]         = useState(false);
   const [editPrice, setEditPrice] = useState(null);
   const [openCat, setOpenCat]   = useState(null);
+  const [pendingRefs, setPendingRefs]     = useState([]); // parrainages en attente
+  const [clientRewards, setClientRewards] = useState([]); // réductions dispo (anniv + parrainage)
+  const [selectedRewardId, setSelectedRewardId] = useState(null); // ligne client_rewards appliquée
+  const [refValidating, setRefValidating] = useState(null);       // id referral_use en cours de validation
   const { requestPin, PinModalNode } = useEmployeePinGate();
 
   useEffect(() => {
@@ -164,9 +168,57 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
         setClientSearch(''); setClientSuggests([]);
         setDate(todayStr()); setTime(nowStr());
         setDtOpen(false); setEditPrice(null); setOpenCat(null);
+        setPendingRefs([]); setClientRewards([]); setSelectedRewardId(null); setRefValidating(null);
       }, 300);
     }
   }, [open]);
+
+  // Quand un client est identifié → récupérer parrainages en attente + réductions disponibles
+  const refreshClientContext = async (email) => {
+    const low = (email || '').trim().toLowerCase();
+    if (!low) { setPendingRefs([]); setClientRewards([]); return; }
+    try {
+      const r = await referralsApi.getClientRewards(low);
+      setPendingRefs(r.pending || []);
+      setClientRewards(r.rewards || []);
+    } catch (e) {
+      setPendingRefs([]); setClientRewards([]);
+    }
+  };
+  useEffect(() => {
+    if (!open) return;
+    if (clientEmail) refreshClientContext(clientEmail);
+    else { setPendingRefs([]); setClientRewards([]); setSelectedRewardId(null); }
+  }, [clientEmail, open]);
+
+  const applyReward = (reward) => {
+    // Sélectionner cette réduction → charger le code et valider via promoApi.check
+    setSelectedRewardId(reward.id);
+    setPromoCode(reward.code || '');
+    // Déclencher checkPromo après mise à jour du code (via setTimeout pour state async)
+    setTimeout(() => { checkPromoWith(reward.code); }, 0);
+  };
+
+  const checkPromoWith = async (code) => {
+    if (!code) return;
+    setPromoLoad(true); setPromoErr('');
+    try {
+      const res = await promoApi.check({ code, amount: total, client_email: clientEmail.trim() || undefined });
+      if (res.valid) { setPromoData(res); setPromoErr(''); }
+      else { setPromoData(null); setPromoErr(res.error || 'Code invalide'); setSelectedRewardId(null); }
+    } catch(e) { setPromoErr(e.message || 'Impossible de verifier le code'); setSelectedRewardId(null); }
+    finally { setPromoLoad(false); }
+  };
+
+  const validateReferral = async (useId) => {
+    setRefValidating(useId);
+    try {
+      await referralsApi.validateUse(useId);
+      await refreshClientContext(clientEmail);
+    } catch (e) {
+      alert(e.message || 'Erreur validation parrainage');
+    } finally { setRefValidating(null); }
+  };
 
   const revCats   = categories.filter(c => c.type === 'revenue');
   const catGroups = revCats.filter(c => !c.parent_id);
@@ -267,6 +319,10 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
         client_email: clientEmail.trim() || null,
         client_name: clientName.trim() || null,
       });
+      // Si une réduction client_rewards a été appliquée → la marquer comme utilisée
+      if (selectedRewardId) {
+        try { await referralsApi.useReward(selectedRewardId); } catch {/* non-bloquant */}
+      }
       setStep('ok');
       if (sc.caisse !== false) playSound('caisse', sc.repeat || 2);
       setTimeout(() => { onClose(); setBusy(false); }, 2000);
@@ -689,12 +745,77 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
               </div>
             )}
 
+            {/* Parrainage en attente — à valider par l'employé */}
+            {pendingRefs.length > 0 && (
+              <div className="mb-4 rounded-xl p-3" style={{
+                background: isDark ? 'rgba(139,92,246,0.1)' : '#f5f3ff',
+                border: `1px solid ${isDark ? 'rgba(139,92,246,0.3)' : '#ddd6fe'}`,
+              }}>
+                {pendingRefs.map(p => {
+                  const parrainName = [p.parrain_first_name, p.parrain_last_name].filter(Boolean).join(' ') || p.parrain_email;
+                  return (
+                    <div key={p.id} className="flex items-center gap-2 mb-1 last:mb-0">
+                      <span style={{ fontSize:16 }}>🤝</span>
+                      <div className="flex-1 min-w-0">
+                        <p style={{ fontSize:12, fontWeight:700, color:'#7c3aed', margin:0 }}>Filleul de {parrainName}</p>
+                        <p style={{ fontSize:11, color:isDark?'#adbac7':'#6b7280', margin:0 }}>Valider pour récompenser le parrain ({p.referral_code})</p>
+                      </div>
+                      <button onClick={() => validateReferral(p.id)} disabled={refValidating===p.id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                        style={{ background:'#7c3aed', color:'#fff', border:'none', cursor:'pointer', flexShrink:0,
+                          opacity: refValidating===p.id ? 0.6 : 1 }}>
+                        {refValidating===p.id ? '...' : 'Valider'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Réductions disponibles — sélection par l'employé (une seule appliquée) */}
+            {clientRewards.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-medium mb-2" style={{ color: isDark?'#adbac7':'#6B7280' }}>
+                  🎁 Réductions disponibles ({clientRewards.length})
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {clientRewards.map((r, i) => {
+                    const expStr = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : null;
+                    const valStr = r.type === 'percent' ? `-${r.value}%` : `-${fmtN(r.value)} €`;
+                    const selected = selectedRewardId === r.id;
+                    const isBday   = r.reward_type === 'birthday';
+                    const accent   = isBday ? '#ec4899' : '#7c3aed';
+                    return (
+                      <button key={r.id} onClick={() => applyReward(r)}
+                        style={{
+                          display:'flex', alignItems:'center', gap:10, padding:'10px 12px',
+                          borderRadius:10, border:`1px solid ${selected ? accent : (isDark?'rgba(205,217,229,0.12)':'rgba(0,0,0,0.08)')}`,
+                          background: selected ? (isBday?'#fff1f2':'#f5f3ff') : (isDark?'rgba(255,255,255,0.03)':'#fafafa'),
+                          cursor:'pointer', textAlign:'left', width:'100%',
+                        }}>
+                        <span style={{ fontSize:18 }}>{isBday ? '🎂' : '🤝'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p style={{ fontSize:12, fontWeight:700, color:isDark?'#e6edf3':'#111827', margin:0 }}>
+                            {valStr} <span style={{ color:accent, fontFamily:'monospace', fontSize:11 }}>· {r.code}</span>
+                          </p>
+                          <p style={{ fontSize:10, color:isDark?'#768390':'#9CA3AF', margin:0 }}>
+                            {isBday ? 'Anniversaire' : 'Parrainage'}{expStr ? ` · expire le ${expStr}` : ''}
+                          </p>
+                        </div>
+                        {selected && <span style={{ fontSize:12, fontWeight:700, color:accent }}>✓ appliquée</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Code promo */}
             {(empId==='' || employees.find(e=>e.id===empId)?.can_use_promo!==false) && (
               <div className="mb-4">
                 <div className="flex gap-2">
                   <input placeholder="Code promo (optionnel)" value={promoCode}
-                    onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');}}
+                    onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');setSelectedRewardId(null);}}
                     onKeyDown={e=>e.key==='Enter'&&checkPromo()}
                     style={{ ...inpStyle, flex:1, textTransform:'uppercase', letterSpacing:'0.05em',
                       borderColor: promoData?'#10b981':promoErr?'#ef4444':undefined }} />

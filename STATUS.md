@@ -4,6 +4,98 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 13) : Parrainage validé en caisse + cron anniversaire + page client
+
+### Objectif (onboarding.md)
+Aligner le flow parrainage / anniversaire sur la spec complète :
+- **Parrainage** : validation OBLIGATOIRE en caisse (fini l'auto-création à la
+  réservation). Le filleul saisit un code au booking → `referral_uses.status='pending'`.
+  Le jour de sa venue, l'employé identifie le client en caisse, voit une bannière
+  « Filleul de X — Valider ? », clique → promo parrain émise + email envoyé.
+- **Anniversaire** : cron quotidien 09h émet automatiquement une promo + email.
+- **Caisse unifiée** : affichage de toutes les réductions disponibles (anniv +
+  parrainage), l'employé choisit laquelle appliquer (une seule par encaissement,
+  celle qui expire le plus tôt suggérée en premier).
+- **Page client** : onglet « Parrainage » avec code perso + lien copiable +
+  historique filleuls + réductions dispo.
+
+### Backend — Schéma
+- `ALTER TABLE referral_uses ADD COLUMN status VARCHAR(16) DEFAULT 'pending'`
+  + `validated_at TIMESTAMPTZ` (index `(user_id, LOWER(filleul_email), status)`)
+- Migration non-destructive : les anciens `referral_uses` avec `parrain_promo_id`
+  déjà émis → marqués `validated` (préserve le flow d'avant).
+- **NEW** `client_rewards(id, user_id, client_email, reward_type, status,
+  promo_code_id, expires_at, used_at)` — unifie anniv + parrainage, permet à la
+  caisse de lister en un seul SELECT toutes les réductions dispo d'un client.
+
+### Backend — Routes
+- `public-booking.js` POST `/:slug/book` — **refactor** : si `referral_code` présent,
+  on NE CRÉE PLUS de `promo_codes` / `FILLEUL-*`. On insère juste `referral_uses`
+  avec `status='pending'` (+ garde-fou : le filleul doit être un nouveau client,
+  et ne pas avoir déjà un parrainage en cours).
+- `referrals.js` :
+  - **NEW** GET `/api/referrals/rewards?email=…` : pour la caisse, renvoie
+    `{ pending:[], rewards:[] }` (parrainages en attente + réductions dispo).
+  - **NEW** POST `/api/referrals/uses/:id/validate` : transactionnel, valide le
+    parrainage, crée `promo_codes` PARRAIN-XXX + `client_rewards` + email parrain.
+  - **NEW** POST `/api/referrals/rewards/:id/use` : marque `client_rewards.status='used'`
+    après encaissement.
+- `global-clients.js` :
+  - **NEW** GET `/me/referral-history/:slug` : filleuls + statuts + réductions.
+  - **NEW** GET `/pub/:slug/referral-program` : config publique (pour page parrainage).
+
+### Backend — Cron (index.js)
+- **NEW** `runBirthdayPromos()` déclenché chaque heure, guard 09h→09h59 uniquement.
+  Pour chaque `birthday_campaigns.is_enabled=TRUE`, détecte `client_accounts` dont
+  `EXTRACT(MONTH/DAY FROM birth_date)` = today, anti-doublon annuel via
+  `client_rewards(year)`. Crée promo + ligne client_rewards + email.
+
+### Backend — Emails (utils/email.js)
+- **NEW** `sendReferralReward({ parrainName, filleulName, businessName, code, …})`
+  — template violet/indigo, avec nom du filleul dans le sujet.
+- **NEW** `sendBirthdayPromo({ clientName, businessName, code, validUntil, …})`
+  — template rose/orange, sujet personnalisé avec prénom, message custom en italique.
+
+### Frontend
+- `utils/api.js` :
+  - `referralsApi.getClientRewards(email)` / `.validateUse(id)` / `.useReward(id)`
+  - `globalClientApi.myReferralHistory(slug)`
+  - **NEW** `publicReferralApi.getProgram(slug)`
+- `App.jsx` (EncaisserSheet) :
+  - Quand un client est identifié (email) → fetch `referralsApi.getClientRewards`
+  - Bannière violette si filleul pending avec bouton « Valider » (appelle validateUse)
+  - Liste « 🎁 Réductions disponibles » avec carte par reward (🎂 anniv / 🤝 parrainage)
+  - Clic sur une reward → auto-check du code promo + marque `selectedRewardId`
+  - Après encaissement OK → `referralsApi.useReward(selectedRewardId)` non-bloquant
+- `BookingPage.jsx` (MyAppointments) :
+  - Nouveau onglet **Parrainage** (affiché uniquement si programme actif +
+    compte global connecté)
+  - Card code perso + bouton « Copier mon lien de parrainage » (clipboard)
+  - Liste « Mes réductions disponibles » (badges Disponible/Utilisée)
+  - Liste « Mes filleuls » avec statut (En attente / Récompensé / Annulé)
+
+### Règles respectées (onboarding.md)
+- Une seule réduction applicable par encaissement ✓
+- La plus proche de l'expiration est proposée en premier (ORDER BY expires_at ASC) ✓
+- Validation obligatoire sur place via la caisse, jamais auto ✓
+- Réductions non utilisées restent dispo même si programme désactivé (statut
+  `available` est persistant) ✓
+- Un client ne peut pas se parrainer lui-même (garde-fou à la réservation) ✓
+- Un filleul doit être un nouveau client (vérification `appointments` précédents) ✓
+- Programme désactivé bloque nouveaux parrainages mais pas les validations en cours ✓
+
+### Build
+- `node --check` backend × 6 fichiers : OK
+- `npx vite build` frontend : OK (34s, 80 modules)
+
+### Restant (itérations futures)
+- Page parrainage publique (non connecté) : actuellement l'onglet s'affiche
+  uniquement si `ff_gc_token` présent. Scenario 5 onboarding (connexion rapide
+  email/tél depuis la page parrainage) reporté.
+- Annulation de parrainage si le RDV filleul est annulé (marquer `cancelled`).
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 12) : Anniversaires clients + programme de parrainage
 
 ### Scope (onboarding.md)

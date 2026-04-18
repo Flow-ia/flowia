@@ -343,6 +343,84 @@ router.get('/me/referral-code/:slug', globalClientAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /me/referral-history/:slug — liste des filleuls + statut + réductions
+// disponibles pour ce client chez ce commerçant (page parrainage client).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/me/referral-history/:slug', globalClientAuth, async (req, res) => {
+  try {
+    const { rows: biz } = await pool.query(
+      'SELECT user_id, business_name FROM booking_settings bs WHERE slug=$1 AND is_enabled=TRUE',
+      [req.params.slug]
+    );
+    if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const userId = biz[0].user_id;
+    const { rows: gc } = await pool.query(
+      'SELECT email FROM global_clients WHERE id=$1',
+      [req.globalClient.globalClientId]
+    );
+    if (!gc.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    const ownerEmail = gc[0].email.toLowerCase();
+
+    // Historique des filleuls
+    const { rows: history } = await pool.query(
+      `SELECT ru.id, ru.filleul_email, ru.status, ru.created_at, ru.validated_at,
+              ca.first_name AS filleul_first_name,
+              ca.last_name  AS filleul_last_name
+         FROM referral_uses ru
+         JOIN referral_codes rc ON rc.id = ru.referral_code_id
+         LEFT JOIN client_accounts ca
+           ON ca.user_id = ru.user_id
+          AND LOWER(ca.email) = LOWER(ru.filleul_email)
+        WHERE ru.user_id=$1 AND LOWER(rc.owner_client_email)=$2
+        ORDER BY ru.created_at DESC
+        LIMIT 100`,
+      [userId, ownerEmail]
+    );
+
+    // Réductions disponibles pour ce client
+    const { rows: rewards } = await pool.query(
+      `SELECT cr.id, cr.reward_type, cr.status, cr.expires_at, cr.created_at, cr.used_at,
+              p.code, p.type, p.value
+         FROM client_rewards cr
+         LEFT JOIN promo_codes p ON p.id = cr.promo_code_id
+        WHERE cr.user_id=$1 AND LOWER(cr.client_email)=$2
+        ORDER BY
+          CASE cr.status WHEN 'available' THEN 0 WHEN 'used' THEN 1 ELSE 2 END,
+          cr.expires_at ASC NULLS LAST,
+          cr.created_at DESC
+        LIMIT 50`,
+      [userId, ownerEmail]
+    );
+
+    res.json({ history, rewards });
+  } catch(e) { console.error('[REF HISTORY]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /pub/:slug/referral-program — config publique (pour la page parrainage
+// avant connexion) : affiche les conditions et la récompense.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/pub/:slug/referral-program', async (req, res) => {
+  try {
+    const { rows: biz } = await pool.query(
+      'SELECT user_id, business_name FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+      [req.params.slug]
+    );
+    if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const { rows: prog } = await pool.query(
+      `SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value
+         FROM referral_programs WHERE user_id=$1`, [biz[0].user_id]
+    );
+    if (!prog.length || !prog[0].is_enabled)
+      return res.status(404).json({ error: 'Programme non actif.' });
+    res.json({
+      business_name: biz[0].business_name,
+      ...prog[0],
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/global-clients/appointments — tous les RDV multi-commerces
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/appointments', globalClientAuth, async (req, res) => {

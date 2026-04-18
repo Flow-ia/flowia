@@ -715,6 +715,132 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
   }
 }
 
+// ── Email récompense parrain (après validation en caisse) ─────────────────
+async function sendReferralReward({ to, parrainName, filleulName, businessName, code, type, value, validUntil, businessEmail, businessPhone, businessAddress }) {
+  const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
+  const firstName = (parrainName || '').split(' ')[0] || 'vous';
+  const subject = `${firstName}, votre réduction ${discountStr} chez ${businessName}`;
+  const validStr = validUntil ? new Date(validUntil).toLocaleDateString('fr-FR') : null;
+
+  const text = [
+    `Bonjour ${firstName},`,
+    '',
+    `${filleulName || 'Votre filleul'} est venu chez ${businessName} grâce à vous. Merci !`,
+    '',
+    `Voici votre code de réduction : ${code}  (${discountStr})`,
+    validStr ? `Valable jusqu'au ${validStr}.` : '',
+    '',
+    'Utilisable lors de votre prochaine visite, présentez ce code à l\'encaissement ou saisissez-le lors de votre prochaine réservation en ligne.',
+    '',
+    businessAddress ? `Adresse : ${businessAddress}` : '',
+    businessPhone   ? `Téléphone : ${businessPhone}` : '',
+    '',
+    'À bientôt,',
+    businessName,
+  ].filter(Boolean).join('\n');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f3ff;margin:0;padding:32px 16px;">
+  <div style="max-width:520px;margin:0 auto;">
+    <div style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
+      <div style="font-size:56px;margin-bottom:12px;">🤝</div>
+      <h1 style="color:white;margin:0;font-size:26px;font-weight:900;">Merci pour votre parrainage !</h1>
+      <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:15px;">${filleulName || 'Votre filleul'} est venu chez ${businessName} grâce à vous.</p>
+    </div>
+    <div style="background:white;padding:32px 36px;border-left:1px solid #e0e7ff;border-right:1px solid #e0e7ff;">
+      <div style="background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.06));border:2px solid rgba(139,92,246,0.3);border-radius:20px;padding:24px;text-align:center;margin-bottom:24px;">
+        <p style="color:#4c1d95;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Votre récompense</p>
+        <p style="color:#8b5cf6;font-size:44px;font-weight:900;margin:0;font-family:monospace;">${discountStr}</p>
+      </div>
+      <p style="color:#6d28d9;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;text-align:center;">Votre code</p>
+      <div style="background:#faf5ff;border:2px dashed #8b5cf6;border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
+        <p style="font-family:monospace;font-size:26px;font-weight:900;color:#4c1d95;letter-spacing:3px;margin:0;">${code}</p>
+        ${validStr ? `<p style="color:#6d28d9;font-size:12px;margin:8px 0 0;">Valable jusqu'au ${validStr}</p>` : ''}
+      </div>
+      <p style="color:#4b5563;font-size:14px;line-height:1.6;margin:0 0 16px;">Présentez ce code lors de votre prochaine visite ou saisissez-le au moment de votre réservation en ligne.</p>
+      ${(businessAddress || businessPhone) ? `<p style="color:#6b7280;font-size:13px;margin:16px 0 0;">${businessAddress ? `📍 ${businessAddress}<br/>` : ''}${businessPhone ? `☎ ${businessPhone}` : ''}</p>` : ''}
+    </div>
+    <div style="background:#f5f3ff;border:1px solid #e0e7ff;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">Programme parrainage <strong style="color:#8b5cf6;">${businessName}</strong></p>
+    </div>
+  </div>
+</body></html>`;
+
+  const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
+  try {
+    await sendEmail({ to, subject, html, text, replyTo });
+    console.log(`[MAIL REFERRAL OK] ${code} -> ${to}`);
+    return true;
+  } catch(e) {
+    console.error(`[MAIL REFERRAL ERR] ${e.message}`);
+    return false;
+  }
+}
+
+// ── Email anniversaire client ─────────────────────────────────────────────
+async function sendBirthdayPromo({ to, clientName, businessName, code, type, value, validUntil, customMessage, businessEmail, businessPhone, businessAddress }) {
+  const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
+  const firstName = (clientName || '').split(' ')[0] || '';
+  const subject = `Joyeux anniversaire ${firstName ? firstName + ' ' : ''}— ${discountStr} offert par ${businessName}`;
+  const validStr = validUntil ? new Date(validUntil).toLocaleDateString('fr-FR') : null;
+
+  const text = [
+    `Bon anniversaire ${firstName || 'cher client'} ! 🎂`,
+    '',
+    customMessage || `${businessName} vous offre ${discountStr} sur votre prochaine visite.`,
+    '',
+    `Code : ${code}`,
+    validStr ? `Valable jusqu'au ${validStr}.` : '',
+    '',
+    businessAddress ? `Adresse : ${businessAddress}` : '',
+    businessPhone   ? `Téléphone : ${businessPhone}` : '',
+    '',
+    'À bientôt,',
+    businessName,
+  ].filter(Boolean).join('\n');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff1f2;margin:0;padding:32px 16px;">
+  <div style="max-width:520px;margin:0 auto;">
+    <div style="background:linear-gradient(135deg,#ec4899,#f97316);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
+      <div style="font-size:64px;margin-bottom:12px;">🎂</div>
+      <h1 style="color:white;margin:0;font-size:28px;font-weight:900;">Joyeux anniversaire !</h1>
+      <p style="color:rgba(255,255,255,0.95);margin:10px 0 0;font-size:16px;">${firstName ? firstName + ', ' : ''}${businessName} pense à vous aujourd'hui.</p>
+    </div>
+    <div style="background:white;padding:32px 36px;border-left:1px solid #fecdd3;border-right:1px solid #fecdd3;">
+      ${customMessage ? `<p style="color:#831843;font-size:15px;line-height:1.7;margin:0 0 20px;font-style:italic;text-align:center;">"${customMessage}"</p>` : ''}
+      <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(249,115,22,0.08));border:2px solid rgba(236,72,153,0.3);border-radius:20px;padding:24px;text-align:center;margin-bottom:24px;">
+        <p style="color:#9f1239;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Votre cadeau</p>
+        <p style="color:#ec4899;font-size:48px;font-weight:900;margin:0;font-family:monospace;">${discountStr}</p>
+        <p style="color:#831843;font-size:13px;margin:8px 0 0;">Sur votre prochaine visite</p>
+      </div>
+      <p style="color:#9f1239;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;text-align:center;">Votre code</p>
+      <div style="background:#fff1f2;border:2px dashed #ec4899;border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
+        <p style="font-family:monospace;font-size:26px;font-weight:900;color:#831843;letter-spacing:3px;margin:0;">${code}</p>
+        ${validStr ? `<p style="color:#be185d;font-size:12px;margin:8px 0 0;">Valable jusqu'au ${validStr}</p>` : ''}
+      </div>
+      <p style="color:#4b5563;font-size:14px;line-height:1.6;margin:0 0 16px;">Présentez ce code lors de votre prochaine visite ou saisissez-le au moment de votre réservation en ligne.</p>
+      ${(businessAddress || businessPhone) ? `<p style="color:#6b7280;font-size:13px;margin:16px 0 0;">${businessAddress ? `📍 ${businessAddress}<br/>` : ''}${businessPhone ? `☎ ${businessPhone}` : ''}</p>` : ''}
+    </div>
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
+      <p style="color:#94a3b8;font-size:11px;margin:0;">Offre anniversaire <strong style="color:#ec4899;">${businessName}</strong></p>
+    </div>
+  </div>
+</body></html>`;
+
+  const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
+  try {
+    await sendEmail({ to, subject, html, text, replyTo });
+    console.log(`[MAIL BIRTHDAY OK] ${code} -> ${to}`);
+    return true;
+  } catch(e) {
+    console.error(`[MAIL BIRTHDAY ERR] ${e.message}`);
+    return false;
+  }
+}
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -727,4 +853,6 @@ module.exports = {
   sendEmployeeReminder,
   sendPasswordReset,
   sendPromoEmail,
+  sendReferralReward,
+  sendBirthdayPromo,
 };

@@ -425,6 +425,15 @@ export const referralsApi = {
   getProgram:    ()  => request('/referrals/program'),
   updateProgram: (b) => request('/referrals/program', { method:'PUT', body: JSON.stringify(b) }),
   listCodes:     ()  => request('/referrals/codes'),
+  // Caisse (commerçant) : récupère pending + rewards pour un client
+  getClientRewards: (email) =>
+    request('/referrals/rewards?email=' + encodeURIComponent(email)),
+  // Employé valide un parrainage en caisse → émet la promo parrain + email
+  validateUse:   (id) => request('/referrals/uses/' + id + '/validate',
+                          { method:'POST' }),
+  // Caisse : marquer une réduction comme utilisée après encaissement
+  useReward:     (id) => request('/referrals/rewards/' + id + '/use',
+                          { method:'POST' }),
 };
 
 // ── Paiements SMS ────────────────────────────────────────────────────────────
@@ -484,4 +493,17 @@ export const globalClientApi = {
   // RGPD
   exportData:     ()            => gcRequest('/global-clients/me/export'),
   deleteAccount:  ()            => gcRequest('/global-clients/me',              { method:'DELETE' }),
+  // Parrainage (page client)
+  myReferralCode:    (slug)     => gcRequest('/global-clients/me/referral-code/'    + encodeURIComponent(slug)),
+  myReferralHistory: (slug)     => gcRequest('/global-clients/me/referral-history/' + encodeURIComponent(slug)),
+};
+
+// Config publique du programme parrainage (page parrainage avant connexion)
+export const publicReferralApi = {
+  getProgram: (slug) => fetch(`${BASE}/global-clients/pub/${encodeURIComponent(slug)}/referral-program`)
+    .then(async r => {
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Erreur');
+      return d;
+    }),
 };

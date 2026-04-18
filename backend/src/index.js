@@ -514,7 +514,119 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       }
     }, 2 * 60 * 60 * 1000);
 
+    // Anniversaires clients — une tentative par heure, ne déclenche l'envoi
+    // qu'entre 09:00 et 10:00 (guard interne au handler), pour éviter de spammer
+    // si le worker redémarre plusieurs fois. Protégé par client_rewards unique
+    // sur (user_id, client_email, reward_type, année) — voir runBirthdayPromos.
+    setInterval(async () => {
+      try { await runBirthdayPromos(); } catch (e) { console.error('[CRON birthday]', e.message); }
+    }, 60 * 60 * 1000);
+
     console.log('⏰ Cron démarré (worker', process.pid, ')');
+  }
+
+  // ── Cron anniversaire : génère promos + envoie emails ─────────────────────
+  // Exécuté une fois par jour (09:00). Pour chaque commerçant avec
+  // birthday_campaigns.is_enabled = TRUE, détecte les client_accounts dont le
+  // (mois, jour) de birth_date correspond à aujourd'hui et qui n'ont pas déjà
+  // reçu de réduction anniversaire cette année → crée un promo_code unique
+  // BDAY-... + une ligne client_rewards + envoie l'email.
+  async function runBirthdayPromos() {
+    const now = new Date();
+    if (now.getHours() !== 9) return; // guard : 09:xx uniquement
+    try {
+      const { rows: campaigns } = await dbPool.query(
+        `SELECT bc.user_id, bc.discount_type, bc.discount_value, bc.validity_days,
+                bc.message, u.business_name, u.email AS biz_email, u.phone AS biz_phone,
+                u.address AS biz_address
+           FROM birthday_campaigns bc
+           JOIN users u ON u.id = bc.user_id
+          WHERE bc.is_enabled = TRUE`
+      );
+      if (!campaigns.length) return;
+
+      const { sendBirthdayPromo } = require('./utils/email');
+      let totalSent = 0;
+
+      for (const camp of campaigns) {
+        // Clients de ce commerçant dont c'est l'anniversaire aujourd'hui
+        const { rows: clients } = await dbPool.query(
+          `SELECT DISTINCT ca.email, ca.first_name, ca.last_name
+             FROM client_accounts ca
+            WHERE ca.user_id = $1
+              AND ca.birth_date IS NOT NULL
+              AND EXTRACT(MONTH FROM ca.birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
+              AND EXTRACT(DAY   FROM ca.birth_date) = EXTRACT(DAY   FROM CURRENT_DATE)
+              AND ca.email IS NOT NULL AND ca.email <> ''`,
+          [camp.user_id]
+        );
+        if (!clients.length) continue;
+
+        const validity = parseInt(camp.validity_days) || 30;
+        const year = now.getFullYear();
+
+        for (const c of clients) {
+          const emailLow = c.email.toLowerCase();
+          try {
+            // Anti-doublon annuel : si un reward anniversaire a déjà été créé
+            // cette année pour ce client chez ce commerçant → skip.
+            const { rows: already } = await dbPool.query(
+              `SELECT 1 FROM client_rewards
+                WHERE user_id=$1 AND LOWER(client_email)=$2
+                  AND reward_type='birthday'
+                  AND EXTRACT(YEAR FROM created_at) = $3
+                LIMIT 1`,
+              [camp.user_id, emailLow, year]
+            );
+            if (already.length) continue;
+            if (global.emailsToday >= 300) { console.log('[CRON birthday] limite email atteinte'); return; }
+
+            const initials = [c.first_name, c.last_name]
+              .filter(Boolean).map(s => s.charAt(0).toUpperCase()).join('') || 'C';
+            const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+            const code = `BDAY-${initials}-${rand}`;
+
+            const { rows: promo } = await dbPool.query(
+              `INSERT INTO promo_codes
+                 (user_id, code, type, value, max_uses, valid_from, valid_until,
+                  is_active, target_clients, owner_client_email)
+               VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + ($5 || ' days')::INTERVAL,
+                       TRUE,'specific',$6)
+               RETURNING id, valid_until`,
+              [camp.user_id, code, camp.discount_type, camp.discount_value,
+               String(validity), emailLow]
+            );
+            await dbPool.query(
+              `INSERT INTO client_rewards
+                 (user_id, client_email, reward_type, status, promo_code_id, expires_at)
+               VALUES ($1,$2,'birthday','available',$3,(CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
+              [camp.user_id, emailLow, promo[0].id, String(validity)]
+            );
+
+            const clientName = [c.first_name, c.last_name].filter(Boolean).join(' ');
+            await sendBirthdayPromo({
+              to: c.email,
+              clientName,
+              businessName: camp.business_name || 'Votre commerçant',
+              code,
+              type: camp.discount_type,
+              value: camp.discount_value,
+              validUntil: promo[0].valid_until,
+              customMessage: camp.message,
+              businessEmail: camp.biz_email,
+              businessPhone: camp.biz_phone,
+              businessAddress: camp.biz_address,
+            });
+            global.emailsToday++;
+            totalSent++;
+            await cronSleep(300);
+          } catch (e) {
+            console.error('[CRON birthday client]', emailLow, e.message);
+          }
+        }
+      }
+      if (totalSent) console.log(`[CRON birthday] ${totalSent} anniversaires traités`);
+    } catch (e) { console.error('[CRON birthday]', e.message); }
   }
 
   const PORT = process.env.PORT || 5000;

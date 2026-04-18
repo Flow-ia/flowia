@@ -1028,6 +1028,9 @@ async function initDB() {
     )
   `);
   // Trace de chaque conversion : qui a été parrainé + transactions liées.
+  // status: 'pending' (RDV pris, en attente validation en caisse)
+  //       | 'validated' (employé a validé en caisse → promo parrain émise)
+  //       | 'cancelled' (RDV annulé, parrainage invalidé)
   await runMigration(`
     CREATE TABLE IF NOT EXISTS referral_uses (
       id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1037,11 +1040,40 @@ async function initDB() {
       parrain_promo_id     UUID REFERENCES promo_codes(id) ON DELETE SET NULL,
       filleul_promo_id     UUID REFERENCES promo_codes(id) ON DELETE SET NULL,
       appointment_id       UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      status               VARCHAR(16) NOT NULL DEFAULT 'pending',
+      validated_at         TIMESTAMPTZ,
       created_at           TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await runMigration(`ALTER TABLE referral_uses ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'pending'`);
+  await runMigration(`ALTER TABLE referral_uses ADD COLUMN IF NOT EXISTS validated_at TIMESTAMPTZ`);
+  // Les parrainages créés avant ce refactor ont déjà émis les promos → marquer validés.
+  await runMigration(`UPDATE referral_uses SET status='validated', validated_at=COALESCE(validated_at, created_at)
+    WHERE parrain_promo_id IS NOT NULL AND status='pending'`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_referral_codes_user ON referral_codes(user_id)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_referral_uses_user  ON referral_uses(user_id)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_referral_uses_filleul ON referral_uses(user_id, LOWER(filleul_email), status)`);
+
+  // ── Réductions client unifiées (anniv + parrainage) ─────────────────────────
+  // Une ligne par réduction disponible/utilisée pour un client chez un commerçant.
+  // Permet à la caisse d'afficher d'un coup toutes les réductions utilisables.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS client_rewards (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_email   VARCHAR(255) NOT NULL,
+      reward_type    VARCHAR(20) NOT NULL,
+      status         VARCHAR(16) NOT NULL DEFAULT 'available',
+      promo_code_id  UUID REFERENCES promo_codes(id) ON DELETE CASCADE,
+      expires_at     TIMESTAMPTZ,
+      used_at        TIMESTAMPTZ,
+      created_at     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_rewards_lookup
+    ON client_rewards(user_id, LOWER(client_email), status)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_rewards_promo
+    ON client_rewards(promo_code_id)`);
 
 console.log('[DB] Tables initialisées');
 }

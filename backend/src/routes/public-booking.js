@@ -842,14 +842,15 @@ router.post('/:slug/book', async (req, res) => {
       }
     }
 
-    // ── Parrainage : appliquer les codes parrain + filleul ───────────────────
-    // Non bloquant : si le programme n'est pas actif ou code invalide, on ignore.
+    // ── Parrainage : enregistrer le lien filleul → code en attente ───────────
+    // Aucune réduction émise ici. Validation obligatoire en caisse par l'employé
+    // le jour du RDV (scénario onboarding.md). Le filleul doit être un NOUVEAU
+    // client (jamais eu de RDV antérieur chez ce commerçant).
     const incomingRef = (req.body.referral_code || '').trim();
     if (incomingRef && client_email) {
       try {
         const { rows: prog } = await pool.query(
-          `SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value
-             FROM referral_programs WHERE user_id=$1`, [userId]
+          `SELECT is_enabled FROM referral_programs WHERE user_id=$1`, [userId]
         );
         if (prog.length && prog[0].is_enabled) {
           const { rows: rc } = await pool.query(
@@ -857,40 +858,30 @@ router.post('/:slug/book', async (req, res) => {
                WHERE user_id=$1 AND code=$2`, [userId, incomingRef.toUpperCase()]
           );
           const filleulEmail = client_email.toLowerCase();
-          if (rc.length && rc[0].owner_client_email !== filleulEmail) {
-            const p = prog[0];
-            // Générer codes promo uniques pour parrain + filleul
-            const rand = () => Math.random().toString(36).slice(2,8).toUpperCase();
-            const { rows: filleulPromo } = await pool.query(
-              `INSERT INTO promo_codes
-                 (user_id, code, type, value, max_uses, valid_from, valid_until,
-                  is_active, target_clients, owner_client_email)
-               VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + INTERVAL '60 days',
-                       TRUE,'specific',$5)
-               RETURNING id`,
-              [userId, `FILLEUL-${rand()}`, p.filleul_type, p.filleul_value, filleulEmail]
+          // Un client ne peut pas utiliser son propre code.
+          if (rc.length && rc[0].owner_client_email.toLowerCase() !== filleulEmail) {
+            // Vérifier que le filleul est bien un NOUVEAU client (pas de RDV passé).
+            const { rows: prev } = await pool.query(
+              `SELECT 1 FROM appointments
+                 WHERE user_id=$1 AND LOWER(client_email)=$2 AND id <> $3 LIMIT 1`,
+              [userId, filleulEmail, appt.id]
             );
-            const { rows: parrainPromo } = await pool.query(
-              `INSERT INTO promo_codes
-                 (user_id, code, type, value, max_uses, valid_from, valid_until,
-                  is_active, target_clients, owner_client_email)
-               VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + INTERVAL '60 days',
-                       TRUE,'specific',$5)
-               RETURNING id`,
-              [userId, `PARRAIN-${rand()}`, p.parrain_type, p.parrain_value, rc[0].owner_client_email]
+            // Et qu'il n'a pas déjà un parrainage en cours/validé chez ce commerçant.
+            const { rows: existing } = await pool.query(
+              `SELECT id FROM referral_uses
+                 WHERE user_id=$1 AND LOWER(filleul_email)=$2
+                   AND status IN ('pending','validated') LIMIT 1`,
+              [userId, filleulEmail]
             );
-            await pool.query(
-              `UPDATE referral_codes SET uses_count = uses_count + 1 WHERE id=$1`,
-              [rc[0].id]
-            );
-            await pool.query(
-              `INSERT INTO referral_uses
-                 (user_id, referral_code_id, filleul_email,
-                  parrain_promo_id, filleul_promo_id, appointment_id)
-               VALUES ($1,$2,$3,$4,$5,$6)`,
-              [userId, rc[0].id, filleulEmail,
-               parrainPromo[0].id, filleulPromo[0].id, appt.id]
-            );
+            if (!prev.length && !existing.length) {
+              await pool.query(
+                `INSERT INTO referral_uses
+                   (user_id, referral_code_id, filleul_email,
+                    appointment_id, status)
+                 VALUES ($1,$2,$3,$4,'pending')`,
+                [userId, rc[0].id, filleulEmail, appt.id]
+              );
+            }
           }
         }
       } catch (refErr) {
