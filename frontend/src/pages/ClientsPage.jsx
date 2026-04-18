@@ -483,7 +483,7 @@ export default function ClientsPage() {
         )}
 
         {/* Pagination 10 par page */}
-        {!loading && total > PAGE_SIZE && (
+        {!loading && total > 0 && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'22px 0 12px' }}>
             <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
               style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'#161620':'#ffffff', color: page===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: page===0?'default':'pointer', opacity: page===0?0.5:1 }}>

@@ -362,7 +362,7 @@ export default function Transactions({ transactions, employees, categories, onAd
       </div>
 
       {/* Pagination 10 par page */}
-      {filtered.length > PAGE_SIZE && (
+      {filtered.length > 0 && (
         <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'24px 16px 8px' }}>
           <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={pageSafe===0}
             style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: isDark?'#161620':'#ffffff', color: pageSafe===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe===0?'default':'pointer', opacity: pageSafe===0?0.5:1 }}>
