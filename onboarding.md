@@ -1,43 +1,42 @@
-Corrige un point important concernant la **caisse et la saisie rapide**, ainsi que tous les impacts associés (statistiques, historique, etc.).
 
-Actuellement, lors d’un encaissement avec une quantité (exemple : 2 coupes), le système affiche incorrectement une seule prestation (ex : 1 coupe à 30€) au lieu de deux coupes distinctes (ex : 2 × 15€). Il faut corriger ce comportement pour que les quantités soient correctement prises en compte dans le calcul et l’affichage.
+
+Non, il ne faut pas gérer cela comme une ligne “Coupe simple ×2” dans une note ou un libellé.
+
+👉 Le comportement attendu est le suivant :
+
+Lorsqu’un employé sélectionne une prestation avec une quantité (exemple : 2 coupes simples), le système doit enregistrer **une seule transaction**, mais comptabiliser **deux ventes réelles de la prestation “coupe simple”**.
 
 ---
 
-### 💳 Gestion des paiements multiples
+### 💡 Logique attendue
 
-Lors de l’encaissement, il faut permettre aux employés de répartir un paiement sur plusieurs moyens de paiement.
+* Une seule transaction est créée dans la caisse
+* Mais le système doit incrémenter le nombre de prestations vendues individuellement
 
 Exemple :
 
-* Total : 30€
-* 20€ en espèces
-* 10€ par carte
-
-👉 Le système doit accepter cette répartition et l’enregistrer correctement.
+* 1 transaction = 2 coupes simples
+* Statistiques = +2 ventes de “coupe simple”
 
 ---
 
-### 📊 Traçabilité et impact système
+### 📊 Impact sur les statistiques et l’historique
 
-Cette logique doit être entièrement prise en compte dans :
+Dans les statistiques et les rapports, cela doit apparaître comme :
 
-* les statistiques
-* l’historique des ventes
-* les rapports administratifs
-* les analyses de revenus
-
-Il est essentiel d’assurer une traçabilité complète de chaque mode de paiement et de chaque encaissement.
+* nombre total de ventes de coupe simple augmenté de 2
+* chiffre d’affaires correctement réparti
+* historique cohérent avec la réalité des prestations effectuées
 
 ---
 
-### ⚠️ Contraintes importantes :
+### ⚠️ Contraintes importantes
 
-* ne pas fausser les statistiques et ne pas casser ni oubli
-* garantir une cohérence entre caisse, historique et analytics
-* assurer une gestion correcte des quantités et des prix unitaires
-* conserver une traçabilité fiable côté admin
+* Ne pas afficher “Coupe simple ×2” comme une ligne de produit
+* Ne pas casser le système existant de caisse ou d’historique
+* Garder une seule transaction par encaissement
+* Assurer une cohérence totale entre caisse, statistiques et analytics
 
 ---
 
-👉 Objectif : fiabiliser totalement la caisse, les paiements multiples et l’impact sur toutes les données statistiques et historiques du système.
+👉 Objectif : garder une caisse simple pour l’utilisateur, tout en assurant une comptabilisation précise et fiable des ventes dans les statistiques, sans modifier l’expérience utilisateur ni casser le code existant.

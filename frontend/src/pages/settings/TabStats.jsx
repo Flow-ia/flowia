@@ -73,13 +73,31 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
   const totE = exps.reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
   const solde = totR - totE;
 
+  // Répartit le montant d'une transaction par mode de paiement
+  // (gère les transactions multi-paiement via tx.payments[])
+  const amountByMethod = (tx, method) => {
+    if (tx.payment_method === 'multi' && Array.isArray(tx.payments)) {
+      return tx.payments
+        .filter(p => p.method === method)
+        .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+    }
+    return tx.payment_method === method ? (parseFloat(tx.amount) || 0) : 0;
+  };
+  // Compte 1 tx si elle contient cette méthode (même partiellement)
+  const hasMethod = (tx, method) => {
+    if (tx.payment_method === 'multi' && Array.isArray(tx.payments)) {
+      return tx.payments.some(p => p.method === method && parseFloat(p.amount) > 0);
+    }
+    return tx.payment_method === method;
+  };
+
   const empStats = employees.map(emp => {
     const er    = revs.filter(t => t.employee_id === emp.id);
     const rdvTx = er.filter(t => t.source === 'rdv');
     const tot   = er.reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
     const caRdv = rdvTx.reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
     const byPay = {};
-    PAY_KEYS.forEach(k => { byPay[k] = er.filter(t => t.payment_method===k).reduce((s,t) => s+(parseFloat(t.amount)||0), 0); });
+    PAY_KEYS.forEach(k => { byPay[k] = er.reduce((s,t) => s + amountByMethod(t, k), 0); });
     return { ...emp, tot, cnt: er.length, byPay, caRdv, rdvCnt: rdvTx.length, allTx: filt.filter(t => t.employee_id===emp.id) };
   }).sort((a,b) => b.tot - a.tot);
   const maxEmp = Math.max(...empStats.map(e => e.tot), 1);
@@ -88,10 +106,10 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
   const caRdvTot = rdvRevs.reduce((s,t) => s+(parseFloat(t.amount)||0), 0);
   const payStats = PAY_KEYS.map(pm => ({
     pm,
-    total:    revs.filter(r => r.payment_method===pm).reduce((s,x) => s+(parseFloat(x.amount)||0), 0),
-    cnt:      revs.filter(r => r.payment_method===pm).length,
-    rdvTotal: rdvRevs.filter(r => r.payment_method===pm).reduce((s,x) => s+(parseFloat(x.amount)||0), 0),
-    rdvCnt:   rdvRevs.filter(r => r.payment_method===pm).length,
+    total:    revs.reduce((s,x) => s + amountByMethod(x, pm), 0),
+    cnt:      revs.filter(r => hasMethod(r, pm)).length,
+    rdvTotal: rdvRevs.reduce((s,x) => s + amountByMethod(x, pm), 0),
+    rdvCnt:   rdvRevs.filter(r => hasMethod(r, pm)).length,
   })).filter(p => p.cnt > 0).sort((a,b) => b.total - a.total);
   const maxPay = Math.max(...payStats.map(p => p.total), 1);
 

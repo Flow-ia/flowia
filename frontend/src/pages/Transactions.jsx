@@ -60,17 +60,18 @@ function TxRow({ tx, cat, emp, isLast, theme, onEdit, onDelete }) {
             {isRev?'+':'-'}{fmt(tx.amount)} €
           </span>
         </div>
-        {/* Détails items (qty × prix unitaire) — uniquement si >1 item ou qty>1 */}
+        {/* Détails ventes — chaque unité = une vente distincte (pas de "Coupe ×2") */}
         {Array.isArray(tx.items) && tx.items.length > 0 && (tx.items.length > 1 || (tx.items[0].qty||1) > 1) && (
           <div style={{ display:'flex', flexDirection:'column', gap:2, marginBottom:5, paddingLeft:2 }}>
-            {tx.items.map((it, i) => (
-              <div key={i} style={{ fontSize:11, color:theme.muted, display:'flex', gap:6, alignItems:'baseline' }}>
-                <span style={{ fontWeight:600 }}>{it.qty > 1 ? `${it.qty} × ` : ''}{it.service_name}</span>
-                <span style={{ color:theme.dim, fontFamily:'var(--mono)' }}>
-                  @ {fmt(it.unit_price)} €{it.qty > 1 ? ` = ${fmt(it.qty * it.unit_price)} €` : ''}
-                </span>
-              </div>
-            ))}
+            {tx.items.flatMap((it, i) =>
+              Array.from({ length: Math.max(1, parseInt(it.qty) || 1) }, (_, k) => (
+                <div key={`${i}-${k}`} style={{ fontSize:11, color:theme.muted, display:'flex', gap:6, alignItems:'baseline' }}>
+                  <span style={{ color:theme.dim }}>•</span>
+                  <span style={{ fontWeight:600 }}>{it.service_name}</span>
+                  <span style={{ color:theme.dim, fontFamily:'var(--mono)' }}>— {fmt(it.unit_price)} €</span>
+                </div>
+              ))
+            )}
           </div>
         )}
         {/* Ligne 2 : Date · Employé · Paiement — tous sur la même ligne */}

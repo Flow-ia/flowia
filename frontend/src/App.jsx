@@ -238,8 +238,11 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
     if (!paymentsValid) return;
     setBusy(true);
     try {
-      const desc = cart.length===1 ? (cart[0].qty>1?`${cart[0].name} ×${cart[0].qty}`:cart[0].name)
-        : cart.map(i=>i.qty>1?`${i.name} ×${i.qty}`:i.name).join(', ');
+      // Description = juste les noms (la qty est portée par items[])
+      // → Les stats comptent N ventes réelles du service, pas une fausse ligne "Coupe ×N"
+      const desc = cart.length===1
+        ? cart[0].name
+        : cart.map(i=>i.name).join(', ');
       const items = cart.map(i => ({
         service_name: i.name,
         qty: i.qty,
