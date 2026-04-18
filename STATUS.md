@@ -4,6 +4,37 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 8) : Onboarding — landing booking revu (horaires + réordonnancement)
+
+### Spec (onboarding.md)
+- Catégories fermées par défaut (seul le nom visible, ouverture au clic)
+- Horaires d'ouverture affichés, 7 jours ordonnés à partir du jour actuel
+- Sous horaires : adresse puis téléphone
+- Puis « Nos prestations » (catégories fermées)
+- Photos de couverture déplacées **en bas de la section avis**
+- Inspiration : haircoifflille.setmore.com
+
+### Backend — `backend/src/routes/public-booking.js`
+- `GET /api/pub/:slug` : ajoute `hours` (objet keyé 0=dimanche…6=samedi)
+  `{ is_open, open_time: "HH:MM", close_time: "HH:MM" }` lu depuis `business_hours`
+
+### Frontend — `frontend/src/pages/BookingPage.jsx`
+- **AccordionGroup** (l. 3723) : `useState(false)` → catégories fermées par défaut
+- **Landing réordonné** (étape 1) :
+  - Suppression : galerie cover au-dessus de Prestations + section "Images" (album)
+  - **Nouveau** : section `#section-horaires` — 7 lignes, jour courant en tête avec badge "(aujourd'hui)", fond `cardAlt` ; affiche `Fermé` sinon `HH:MM – HH:MM`
+  - Adresse remontée juste après Horaires (carte Maps + card adresse + téléphone)
+  - Prestations (catégories fermées)
+  - Équipe
+  - Avis Google
+  - **Nouveau** : section `#section-photos` (album) placée en bas, juste après Avis
+- **Navigation desktop** (top nav + ancres) mise à jour : Horaires / Adresse / Prestations / Équipe / Commentaires / Photos ; mapping `#images/#photos/#album` → `section-photos`, ajout `#horaires`
+
+### Build
+- `cd frontend && npx vite build` → OK (12.51s, 80 modules)
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 7) : Routing par domaine — booking vs commerçant
 
 ### Objectif

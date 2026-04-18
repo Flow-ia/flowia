@@ -90,11 +90,12 @@ function NavBar({ th, slug, business, clientUser, onToggleTheme, onShowAuth, onM
         <div style={{ display:'flex', alignItems:'center', gap:2 }}
           className="bk-do">
           {[
+            ...(business?.hours && Object.keys(business.hours).length > 0 ? [['section-horaires','Horaires']] : []),
+            ['section-adresse','Adresse'],
             ['section-prestations','Nos prestations'],
             ['section-equipe','Équipe'],
-            ...((business?.cover_urls?.length > 0) ? [['section-images','Images']] : []),
             ...(business?.google_business_url ? [['section-avis','Commentaires']] : []),
-            ['section-adresse','Adresse'],
+            ...((business?.cover_urls?.length > 0) ? [['section-photos','Photos']] : []),
           ].map(([id, label]) => (
             <button key={id}
               onClick={() => scrollTo(id)}
@@ -1881,9 +1882,12 @@ export default function BookingPage({ slug }) {
         '#prestations':   'section-prestations',
         '#prestation':    'section-prestations',
         '#services':      'section-prestations',
-        '#images':        'section-images',
-        '#photos':        'section-images',
-        '#album':         'section-images',
+        '#images':        'section-photos',
+        '#photos':        'section-photos',
+        '#album':         'section-photos',
+        '#horaires':      'section-horaires',
+        '#horaire':       'section-horaires',
+        '#hours':         'section-horaires',
       };
       const targetId = ANCHOR_MAP[hash.toLowerCase()] || hash.replace('#','section-');
       // Scroller après chargement de la page
@@ -2510,21 +2514,128 @@ export default function BookingPage({ slug }) {
                 )}
               </div>
 
-              {/* Galerie photos */}
-              {business?.cover_urls?.length > 0 && (
-                <div style={{ marginBottom:32, borderRadius:12, overflow:'hidden',
-                  display:'grid', gap:3,
-                  gridTemplateColumns: business.cover_urls.length === 1 ? '1fr'
-                    : business.cover_urls.length === 2 ? '1fr 1fr' : '2fr 1fr',
-                  maxHeight:220 }}>
-                  {business.cover_urls.slice(0,3).map((c,i) => (
-                    <div key={c.id||i} style={{ overflow:'hidden', background:th.cardAlt,
-                      gridRow: i===0&&business.cover_urls.length>=3?'1/3':'auto' }}>
-                      <img src={mediaUrl(c.url)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
-                    </div>
-                  ))}
-                </div>
+              {/* ── SECTION HORAIRES ── */}
+              {business?.hours && Object.keys(business.hours).length > 0 && (
+                <section id="section-horaires" style={{ marginBottom:32 }}>
+                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
+                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Horaires d'ouverture</h2>
+                  <div style={{ background:th.card, border:`1px solid ${th.border}`,
+                    borderRadius:12, overflow:'hidden' }}>
+                    {(() => {
+                      const dayNames = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+                      const today = new Date().getDay();
+                      const order = Array.from({length:7}, (_,i) => (today + i) % 7);
+                      return order.map((dow, i) => {
+                        const h = business.hours[dow];
+                        const isToday = i === 0;
+                        const isLast  = i === 6;
+                        return (
+                          <div key={dow} style={{ display:'flex', alignItems:'center',
+                            justifyContent:'space-between', padding:'12px 18px',
+                            borderBottom: isLast ? 'none' : `1px solid ${th.border}`,
+                            background: isToday ? th.cardAlt : 'transparent' }}>
+                            <span style={{ fontSize:14, fontWeight: isToday ? 700 : 500,
+                              color:th.text }}>
+                              {dayNames[dow]}{isToday ? " (aujourd'hui)" : ''}
+                            </span>
+                            <span style={{ fontSize:13,
+                              color: h?.is_open ? th.text : th.muted,
+                              fontVariantNumeric:'tabular-nums' }}>
+                              {h?.is_open && h.open_time && h.close_time
+                                ? `${h.open_time} – ${h.close_time}`
+                                : 'Fermé'}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </section>
               )}
+
+              {/* ── SECTION ADRESSE — adresse complète + carte Maps ── */}
+              <section id="section-adresse" style={{ marginBottom:40 }}>
+                <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
+                  margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
+
+                {/* Carte Google Maps embed — si adresse disponible */}
+                {(business?.address || business?.city) && (() => {
+                  const addrQ = encodeURIComponent(
+                    [business.address, business.postal_code, business.city]
+                    .filter(Boolean).join(' ')
+                  );
+                  const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
+                  const embedUrl = `https://maps.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
+                  return (
+                    <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
+                      border:`1px solid ${th.border}` }}>
+                      <iframe
+                        src={embedUrl}
+                        width="100%"
+                        height="240"
+                        style={{ border:'none', display:'block' }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        title="Localisation du commerce"
+                      />
+                      {/* Lien "Ouvrir dans Maps" */}
+                      <a href={mapsLink} target="_blank" rel="noopener noreferrer"
+                        style={{ display:'flex', alignItems:'center', gap:8,
+                          padding:'10px 14px', background:th.card,
+                          borderTop:`1px solid ${th.border}`,
+                          fontSize:13, fontWeight:600, color:'#2563eb', textDecoration:'none' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                          style={{width:13,height:13}}>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          <polyline points="15 3 21 3 21 9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        {[business.address, business.postal_code, business.city].filter(Boolean).join(' ')}
+                      </a>
+                    </div>
+                  );
+                })()}
+
+                {/* Card infos : adresse textuelle + téléphone */}
+                <div style={{ background:th.card, border:`1px solid ${th.border}`,
+                  borderRadius:12, overflow:'hidden' }}>
+                  {(business?.address || business?.city || business?.postal_code) && (
+                    <div style={{ display:'flex', alignItems:'flex-start', gap:12,
+                      padding:'14px 18px',
+                      borderBottom: business?.phone ? `1px solid ${th.border}` : 'none' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        style={{width:16,height:16,flexShrink:0,marginTop:2,color:th.muted}}>
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      <div>
+                        {business?.address && (
+                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6, fontWeight:500 }}>
+                            {business.address}
+                          </p>
+                        )}
+                        {(business?.postal_code || business?.city) && (
+                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6 }}>
+                            {[business.postal_code, business.city].filter(Boolean).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {business?.phone && (
+                    <a href={`tel:${business.phone}`}
+                      style={{ display:'flex', alignItems:'center', gap:12,
+                        padding:'14px 18px', fontSize:14, color:th.text,
+                        textDecoration:'none' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        style={{width:16,height:16,flexShrink:0,color:th.muted}}>
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                      </svg>
+                      <span style={{ fontWeight:500 }}>{business.phone}</span>
+                    </a>
+                  )}
+                </div>
+              </section>
 
               {/* ── SECTION PRESTATIONS ── */}
               <section id="section-prestations" style={{ marginBottom:40 }}>
@@ -2601,27 +2712,6 @@ export default function BookingPage({ slug }) {
                 </div>
               </section>
 
-              {/* ── SECTION IMAGES — album des photos du commerce ── */}
-              {business?.cover_urls?.length > 0 && (
-                <section id="section-images" style={{ marginBottom:40 }}>
-                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
-                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Images</h2>
-                  <div style={{ display:'grid',
-                    gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
-                    {business.cover_urls.map((c, i) => (
-                      <div key={c.id||i} style={{ aspectRatio:'4/3',
-                        borderRadius:14, overflow:'hidden',
-                        background:th.cardAlt, border:`1px solid ${th.border}` }}>
-                        <img src={mediaUrl(c.url)} alt={`Photo ${i+1}`}
-                          loading="lazy"
-                          style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* ── SECTION AVIS ── */}
               {/* ── SECTION COMMENTAIRES Google ── */}
               {business?.google_business_url && (
                 <section id="section-avis" style={{ marginBottom:40 }}>
@@ -2751,89 +2841,25 @@ export default function BookingPage({ slug }) {
                 </section>
               )}
 
-              {/* ── SECTION ADRESSE — adresse complète + carte Maps ── */}
-              <section id="section-adresse" style={{ marginBottom:32 }}>
-                <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
-                  margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
-
-                {/* Carte Google Maps embed — si adresse disponible */}
-                {(business?.address || business?.city) && (() => {
-                  const addrQ = encodeURIComponent(
-                    [business.address, business.postal_code, business.city]
-                    .filter(Boolean).join(' ')
-                  );
-                  const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
-                  const embedUrl = `https://maps.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
-                  return (
-                    <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
-                      border:`1px solid ${th.border}` }}>
-                      <iframe
-                        src={embedUrl}
-                        width="100%"
-                        height="240"
-                        style={{ border:'none', display:'block' }}
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                        title="Localisation du commerce"
-                      />
-                      {/* Lien "Ouvrir dans Maps" */}
-                      <a href={mapsLink} target="_blank" rel="noopener noreferrer"
-                        style={{ display:'flex', alignItems:'center', gap:8,
-                          padding:'10px 14px', background:th.card,
-                          borderTop:`1px solid ${th.border}`,
-                          fontSize:13, fontWeight:600, color:'#2563eb', textDecoration:'none' }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          style={{width:13,height:13}}>
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                          <polyline points="15 3 21 3 21 9"/>
-                          <line x1="10" y1="14" x2="21" y2="3"/>
-                        </svg>
-                        {[business.address, business.postal_code, business.city].filter(Boolean).join(' ')}
-                      </a>
-                    </div>
-                  );
-                })()}
-
-                {/* Card infos : adresse textuelle + téléphone */}
-                <div style={{ background:th.card, border:`1px solid ${th.border}`,
-                  borderRadius:12, overflow:'hidden' }}>
-                  {(business?.address || business?.city || business?.postal_code) && (
-                    <div style={{ display:'flex', alignItems:'flex-start', gap:12,
-                      padding:'14px 18px',
-                      borderBottom: business?.phone ? `1px solid ${th.border}` : 'none' }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        style={{width:16,height:16,flexShrink:0,marginTop:2,color:th.muted}}>
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                        <circle cx="12" cy="10" r="3"/>
-                      </svg>
-                      <div>
-                        {business?.address && (
-                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6, fontWeight:500 }}>
-                            {business.address}
-                          </p>
-                        )}
-                        {(business?.postal_code || business?.city) && (
-                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6 }}>
-                            {[business.postal_code, business.city].filter(Boolean).join(' ')}
-                          </p>
-                        )}
+              {/* ── SECTION PHOTOS (en bas de la section avis) ── */}
+              {business?.cover_urls?.length > 0 && (
+                <section id="section-photos" style={{ marginBottom:40 }}>
+                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
+                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Photos</h2>
+                  <div style={{ display:'grid',
+                    gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
+                    {business.cover_urls.map((c, i) => (
+                      <div key={c.id||i} style={{ aspectRatio:'4/3',
+                        borderRadius:14, overflow:'hidden',
+                        background:th.cardAlt, border:`1px solid ${th.border}` }}>
+                        <img src={mediaUrl(c.url)} alt={`Photo ${i+1}`}
+                          loading="lazy"
+                          style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
                       </div>
-                    </div>
-                  )}
-                  {business?.phone && (
-                    <a href={`tel:${business.phone}`}
-                      style={{ display:'flex', alignItems:'center', gap:12,
-                        padding:'14px 18px', fontSize:14, color:th.text,
-                        textDecoration:'none' }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        style={{width:16,height:16,flexShrink:0,color:th.muted}}>
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                      </svg>
-                      <span style={{ fontWeight:500 }}>{business.phone}</span>
-                    </a>
-                  )}
-                </div>
-              </section>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* ── FOOTER ── */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
@@ -3721,7 +3747,7 @@ export default function BookingPage({ slug }) {
 
 // Groupe accordéon style Setmore : titre cliquable + liste de services
 function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
-  const [open, setOpen] = useState(true); // ouvert par défaut
+  const [open, setOpen] = useState(false); // fermé par défaut
 
   return (
     <div style={{ borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>

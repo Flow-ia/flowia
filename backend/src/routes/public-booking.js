@@ -262,6 +262,20 @@ router.get('/:slug', async (req, res) => {
         sort_order: m.sort_order,
       })),
     };
+    // Horaires d'ouverture (7 jours, 0=dimanche … 6=samedi)
+    const { rows: hoursRows } = await pool.query(
+      `SELECT day_of_week, open_time, close_time, is_open
+         FROM business_hours WHERE user_id=$1 ORDER BY day_of_week`,
+      [user_id]
+    );
+    const hoursByDay = {};
+    hoursRows.forEach(h => {
+      hoursByDay[h.day_of_week] = {
+        is_open: h.is_open,
+        open_time:  h.open_time  ? String(h.open_time).slice(0,5)  : null,
+        close_time: h.close_time ? String(h.close_time).slice(0,5) : null,
+      };
+    });
     // Source de vérité unique : table users (section "Informations du commerce")
     // booking_settings ne sert qu'à stocker business_description et la config site
     // (slug, horaires, délai annulation...). Pas de duplication.
@@ -273,6 +287,7 @@ router.get('/:slug', async (req, res) => {
       postal_code:         pub.postal_code              || null,
       city:                pub.city                     || null,
       google_business_url: pub.user_google_business_url || null,
+      hours:               hoursByDay,
     };
     const _resp = { business: mergedBiz, userId: user_id };
     global.memCache?.set(_cKey, _resp, 5 * 60 * 1000);
