@@ -1,75 +1,92 @@
-Voici la version corrigée avec l’ajout demandé :
+# FlowIA — Séparation domaines booking / commerçant
+# Lire les fichiers avant de modifier. Chirurgical uniquement.
+# À la FIN : git add -A && git commit -m "feat: routing par domaine booking vs commercant" && git push
 
 ---
 
-### ❌ Problème à corriger
-
-Lors de la **saisie rapide en caisse**, quand un employé divise un paiement en plusieurs moyens de paiement, le système enregistre mal les données.
-
-Actuellement, tout est regroupé dans les statistiques du jour (et tout ce qui en découle) comme :
-
-* “Autres”
-
-👉 Ce comportement est incorrect.
+## Fichiers à lire
+- frontend/src/index.jsx
+- frontend/src/App.jsx
+- frontend/vercel.json
 
 ---
 
-### 💡 Comportement attendu
+## Objectif
 
-Lorsque le paiement est divisé, chaque moyen de paiement doit être **traçé séparément et correctement catégorisé**, sans aucune perte d’information.
+Actuellement :
+- haircoifflille.fr/book/lille → page réservation clients
+- haircoifflille.fr/* → app admin commerçant
 
----
+Cible :
+- haircoifflille.fr → affiche directement BookingPage avec slug=lille
+- commercant.haircoifflille.fr → affiche l'app commerçant
 
-### 💳 Exemple concret
-
-Montant total : **50€**
-
-Répartition effectuée par l’employé :
-
-* 20€ en espèces
-* 25€ par carte
-* 5€ en virement
+Le domaine superadmin sera ajouté plus tard — ne pas l'implémenter maintenant.
 
 ---
 
-### 📊 Résultat attendu dans les statistiques
+## Variables d'environnement à ajouter sur Vercel
 
-Au lieu d’un regroupement incorrect type :
-
-* “Autres : 50€”
-
-Le système doit afficher :
-
-* Espèces : 20€
-* Carte : 25€
-* Virement : 5€
+```
+VITE_BOOKING_SLUG=lille
+VITE_BOOKING_DOMAIN=haircoifflille.fr
+VITE_COMMERCANT_DOMAIN=commercant.haircoifflille.fr
+```
 
 ---
 
-### 👤 Traçabilité par employé
+## Ce qu'il faut faire
 
-Il faut également tracer **chaque employé individuellement**, en enregistrant :
+### Dans frontend/src/index.jsx
 
-* ce qu’il a encaissé
-* par quel moyen de paiement (espèces, carte, virement, etc.)
-* et les montants correspondants
+Détecter le domaine via window.location.hostname au montage.
 
-👉 Cela permet de suivre précisément la performance et les encaissements de chaque employé.
+Si le hostname correspond à VITE_BOOKING_DOMAIN ou www + VITE_BOOKING_DOMAIN
+afficher directement BookingPage avec slug VITE_BOOKING_SLUG.
+Garder les routes /book/:slug pour compatibilité avec anciens liens.
 
----
+Si le hostname correspond à VITE_COMMERCANT_DOMAIN ou localhost
+afficher l'app commerçant comme actuellement.
 
-### ⚠️ Contraintes importantes
+### Dans frontend/vercel.json
 
-* Ne jamais regrouper les paiements dans “Autres”
-* Chaque moyen de paiement doit être comptabilisé indépendamment
-* La traçabilité doit être conservée dans :
-
-  * statistiques du jour
-  * historique des ventes
-  * rapports financiers
-  * performance des employés
-* **Ne rien casser et ne rien oublier dans le système existant de caisse, statistiques et analytics**
+S'assurer que le rewrite existant fonctionne pour les deux domaines.
 
 ---
 
-👉 Objectif : assurer une comptabilité précise, fiable et professionnelle, avec une séparation claire des paiements et une traçabilité complète par employé.
+## Ce qu'il ne faut PAS faire
+- Ne pas implémenter le domaine superadmin (prévu plus tard)
+- Ne pas casser les routes /book/:slug existantes
+- Ne pas toucher au backend
+
+---
+
+## Ordre d'exécution
+
+1. Lire index.jsx pour comprendre le routing actuel
+2. Modifier index.jsx avec la détection de domaine
+3. Mettre à jour vercel.json si nécessaire
+4. cd frontend && npx vite build
+5. Si OK : git add -A && git commit -m "feat: haircoifflille.fr booking + commercant.haircoifflille.fr admin" && git push
+6. Si KO : corriger puis recommencer
+
+## Actions manuelles après le push
+1. Vercel → Settings → Domains → ajouter commercant.haircoifflille.fr
+2. Registrar DNS → CNAME : commercant → cname.vercel-dns.com
+3. Vercel → Environment Variables → ajouter les 3 variables ci-dessus
+
+---
+
+## Mise à jour STATUS.md obligatoire en fin de session
+
+Après le push, mettre à jour STATUS.md avec :
+- Les fichiers modifiés et ce qui a changé
+- Ce que l'utilisateur doit faire manuellement et dans quel ordre :
+  1. Aller sur Vercel → Settings → Domains → ajouter commercant.haircoifflille.fr
+  2. Aller sur le registrar DNS → ajouter CNAME commercant → cname.vercel-dns.com
+  3. Aller sur Vercel → Environment Variables → ajouter les 3 variables
+  4. Attendre la propagation DNS (jusqu'à 24h)
+  5. Tester haircoifflille.fr → doit afficher la page réservation
+  6. Tester commercant.haircoifflille.fr → doit afficher le dashboard
+- Les bugs éventuels identifiés
+- Ce qui reste à faire dans la prochaine session

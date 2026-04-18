@@ -4,6 +4,48 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 7) : Routing par domaine — booking vs commerçant
+
+### Objectif
+- `haircoifflille.fr` (+ `www.`) → affiche directement la page de réservation (slug `lille`)
+- `commercant.haircoifflille.fr` → app commerçant (admin)
+- Domaine superadmin : reporté.
+
+### Fichier modifié — `frontend/src/index.jsx`
+- Imports : ajout `Navigate`, `useLocation`
+- 3 constantes lues depuis `import.meta.env` :
+  - `VITE_BOOKING_DOMAIN` (ex : `haircoifflille.fr`)
+  - `VITE_COMMERCANT_DOMAIN` (ex : `commercant.haircoifflille.fr`)
+  - `VITE_BOOKING_SLUG` (ex : `lille`)
+- Helper `isBookingHost()` : match `BOOKING_DOMAIN` ou `www.BOOKING_DOMAIN`
+- Nouveau composant `RootSwitch` rendu par la route `/*` :
+  - si booking host + slug défini → `<Navigate to={'/book/<slug>'+search} replace />`
+  - sinon → `<App />` (commerçant, comportement actuel)
+- Les routes `/book/:slug/*` existantes restent intactes (rétro-compat).
+- Pas de changement `vercel.json` (le rewrite SPA `/(.*)` couvre déjà les deux domaines).
+
+### Build
+- `cd frontend && npx vite build` → OK (17.15s, 80 modules)
+
+### Actions manuelles à faire (ordre)
+1. **Vercel → Settings → Domains** : ajouter `commercant.haircoifflille.fr`
+2. **Registrar DNS** : CNAME `commercant` → `cname.vercel-dns.com`
+3. **Vercel → Environment Variables** (Production) :
+   ```
+   VITE_BOOKING_SLUG=lille
+   VITE_BOOKING_DOMAIN=haircoifflille.fr
+   VITE_COMMERCANT_DOMAIN=commercant.haircoifflille.fr
+   ```
+   Redeploy nécessaire (Vite injecte les variables au build).
+4. Attendre propagation DNS (jusqu'à 24h).
+5. Tester `haircoifflille.fr` → doit rediriger vers `/book/lille`.
+6. Tester `commercant.haircoifflille.fr` → dashboard commerçant.
+
+### Restant
+- Domaine superadmin (non implémenté cette session, prévu plus tard).
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 6) : Paiements mixtes — traçabilité correcte (plus de "Autres")
 
 ### Bug corrigé

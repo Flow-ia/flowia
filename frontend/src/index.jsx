@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom';
 import App from './App';
 import BookingPage from './pages/BookingPage';
 import BookingPolitique from './pages/BookingPolitique';
@@ -8,6 +8,20 @@ import { AuthProvider } from './hooks/useAuth';
 import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
 import './index.css';
+
+// ── Détection du domaine au montage ──────────────────────────────────────────
+// haircoifflille.fr (+ www.) → page réservation publique avec slug par défaut
+// commercant.haircoifflille.fr / localhost / autres → app commerçant (admin)
+// Les routes /book/:slug/* restent actives sur les deux domaines (rétro-compat).
+const BOOKING_DOMAIN    = (import.meta.env.VITE_BOOKING_DOMAIN    || '').toLowerCase();
+const COMMERCANT_DOMAIN = (import.meta.env.VITE_COMMERCANT_DOMAIN || '').toLowerCase();
+const BOOKING_SLUG      = import.meta.env.VITE_BOOKING_SLUG || '';
+
+function isBookingHost() {
+  if (!BOOKING_DOMAIN) return false;
+  const h = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase();
+  return h === BOOKING_DOMAIN || h === `www.${BOOKING_DOMAIN}`;
+}
 
 // Wrappers — useParams() doit être dans le contexte <Route>
 function BookingPageWrapper() {
@@ -18,6 +32,18 @@ function BookingPageWrapper() {
 function BookingPolitiqueWrapper() {
   const { slug } = useParams();
   return <BookingPolitique slug={slug} />;
+}
+
+// Racine catch-all : sur booking domain, redirige vers /book/<slug> (garde
+// toutes les URLs internes `/book/lille/...` générées par BookingPage stables).
+// Sinon, rend l'app commerçant comme avant.
+function RootSwitch() {
+  const location = useLocation();
+  if (isBookingHost() && BOOKING_SLUG) {
+    const target = `/book/${BOOKING_SLUG}${location.search || ''}`;
+    return <Navigate to={target} replace />;
+  }
+  return <App />;
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -42,8 +68,8 @@ root.render(
               <Route path="/book/:slug/client/profil"                                                                        element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/rdv"                                                                           element={<BookingPageWrapper />} />
               <Route path="/book/:slug"                                                                                  element={<BookingPageWrapper />} />
-              {/* ── Routes privées (app commerçant) ── */}
-              <Route path="/*" element={<App />} />
+              {/* ── Racine : BookingPage sur domaine public, app commerçant ailleurs ── */}
+              <Route path="/*" element={<RootSwitch />} />
             </Routes>
           </AdminProvider>
         </AuthProvider>
