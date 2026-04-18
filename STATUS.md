@@ -4,6 +4,69 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 12) : Anniversaires clients + programme de parrainage
+
+### Scope (onboarding.md)
+1. Date d'anniversaire optionnelle côté client + offre anniversaire configurable.
+2. Parrainage : chaque client dispose d'un code unique par commerçant ; un
+   filleul qui réserve via `?ref=CODE` déclenche l'émission de promos parrain+filleul.
+3. Tout est **par commerçant** (user_id scoped).
+
+### Backend — Schéma (`backend/src/db/index.js`)
+- `ALTER TABLE global_clients  ADD birth_date DATE`
+- `ALTER TABLE client_accounts ADD birth_date DATE`
+- Nouvelles tables (user_id scoped) :
+  - `birthday_campaigns` (1 ligne/commerçant : is_enabled, discount_type, discount_value, validity_days, message)
+  - `referral_programs` (is_enabled, parrain_type/value, filleul_type/value)
+  - `referral_codes` (UNIQUE user_id+code, UNIQUE user_id+owner_client_email, uses_count)
+  - `referral_uses` (trace : code → filleul_email + promo_ids + appointment_id)
+
+### Backend — Routes
+- **NEW** `backend/src/routes/birthday.js` : GET/PUT `/api/birthday-campaign`
+- **NEW** `backend/src/routes/referrals.js` : GET/PUT `/api/referrals/program`, GET `/api/referrals/codes`
+  + export `genReferralCode()` (`REF-XXXXXX`)
+- `global-clients.js` :
+  - POST `/register` accepte `birth_date` (YYYY-MM-DD, optionnel)
+  - GET `/me` renvoie désormais `birth_date`
+  - **NEW** PATCH `/me` (birth_date, phone, first_name, last_name)
+  - **NEW** GET `/me/referral-code/:slug` : retourne (ou crée) le code du client au commerçant
+- `public-booking.js` :
+  - **NEW** GET `/:slug/referral/:code` : validation publique d'un code
+  - POST `/:slug/book` : si `referral_code` présent et programme actif →
+    crée 2 `promo_codes` (PARRAIN-XXX + FILLEUL-XXX, 60j, 1 usage, target `specific`)
+    + log dans `referral_uses` + incrémente `uses_count` (non bloquant)
+- `index.js` : route les 2 nouveaux routers.
+
+### Frontend
+- `utils/api.js` : `birthdayApi` (get/update) + `referralsApi` (getProgram/update/listCodes)
+- `pages/settings/TabMarketing.jsx` :
+  - 2 nouveaux sous-onglets **🎂 Anniv.** + **🤝 Parrain.**
+  - `TabBirthday` : toggle actif/inactif, type %/€, valeur, validité, message
+  - `TabReferral` : toggle, récompenses parrain + filleul séparées, liste des
+    parrains actifs (email + code + compteur filleuls)
+- `pages/BookingPage.jsx` :
+  - Formulaire inscription client : champ 🎂 **Date de naissance** (optionnel)
+  - Capture `?ref=CODE` → persisté dans localStorage `ff_booking_ref_<slug>`,
+    envoyé sur POST `/book` puis nettoyé après usage
+
+### Cohérence / indépendance
+- Toutes les tables scoped par `user_id` → chaque commerçant totalement indépendant
+- Codes promo générés utilisent l'infrastructure `promo_codes` existante (stats,
+  historique, target_clients=specific) → pas de régression
+- Champ `birth_date` nullable partout → aucun impact sur inscriptions existantes
+- Parrainage = non bloquant : une erreur n'empêche pas la création du RDV
+
+### Build
+- `cd frontend && npx vite build` → OK (21.21s, 80 modules)
+- Syntax check backend : OK (5 fichiers)
+
+### Restant (itération suivante)
+- Cron quotidien pour émettre automatiquement les promos anniversaire + email/SMS
+- Interface côté compte client pour copier son lien de parrainage personnel
+- Auto-appliquer le code promo filleul dès la création du RDV (réduction visible)
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 11) : Édition complète des transactions /settings/historique
 
 ### Objectif (onboarding.md)

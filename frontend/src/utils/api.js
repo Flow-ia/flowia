@@ -414,6 +414,19 @@ export const campaignsApi = {
   getAiHistory:       () => request('/campaigns/ai-history'),
 };
 
+// ── Anniversaires clients ────────────────────────────────────────────────────
+export const birthdayApi = {
+  get:    ()  => request('/birthday-campaign'),
+  update: (b) => request('/birthday-campaign', { method:'PUT', body: JSON.stringify(b) }),
+};
+
+// ── Parrainage clients ───────────────────────────────────────────────────────
+export const referralsApi = {
+  getProgram:    ()  => request('/referrals/program'),
+  updateProgram: (b) => request('/referrals/program', { method:'PUT', body: JSON.stringify(b) }),
+  listCodes:     ()  => request('/referrals/codes'),
+};
+
 // ── Paiements SMS ────────────────────────────────────────────────────────────
 export const paymentsApi = {
   getSMSBalance:      ()  => request('/payments/sms/balance'),

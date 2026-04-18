@@ -479,6 +479,33 @@ router.get('/:slug/month-status', async (req, res) => {
   } catch(e) { console.error('[MONTH-STATUS]', e); res.status(500).json({ error: e.message }); }
 });
 
+// ── GET /api/pub/:slug/referral/:code — valider un code parrainage ──────────
+router.get('/:slug/referral/:code', async (req, res) => {
+  try {
+    const { rows: biz } = await pool.query(
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+      [req.params.slug]
+    );
+    if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const { rows: prog } = await pool.query(
+      `SELECT is_enabled, filleul_type, filleul_value FROM referral_programs WHERE user_id=$1`,
+      [biz[0].user_id]
+    );
+    if (!prog.length || !prog[0].is_enabled)
+      return res.status(404).json({ error: "Programme non actif." });
+    const { rows: rc } = await pool.query(
+      'SELECT id FROM referral_codes WHERE user_id=$1 AND code=$2',
+      [biz[0].user_id, req.params.code.toUpperCase()]
+    );
+    if (!rc.length) return res.status(404).json({ error: 'Code invalide.' });
+    res.json({
+      valid: true,
+      discount_type: prog[0].filleul_type,
+      discount_value: prog[0].filleul_value,
+    });
+  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
 // ── POST /api/pub/:slug/book ──────────────────────────────────────────────────
 router.post('/:slug/book', async (req, res) => {
   try {
@@ -812,6 +839,62 @@ router.post('/:slug/book', async (req, res) => {
       } catch (upsertErr) {
         // Non bloquant : le RDV est créé, on log juste l'erreur
         console.warn('[book upsert client]', upsertErr.message);
+      }
+    }
+
+    // ── Parrainage : appliquer les codes parrain + filleul ───────────────────
+    // Non bloquant : si le programme n'est pas actif ou code invalide, on ignore.
+    const incomingRef = (req.body.referral_code || '').trim();
+    if (incomingRef && client_email) {
+      try {
+        const { rows: prog } = await pool.query(
+          `SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value
+             FROM referral_programs WHERE user_id=$1`, [userId]
+        );
+        if (prog.length && prog[0].is_enabled) {
+          const { rows: rc } = await pool.query(
+            `SELECT id, owner_client_email FROM referral_codes
+               WHERE user_id=$1 AND code=$2`, [userId, incomingRef.toUpperCase()]
+          );
+          const filleulEmail = client_email.toLowerCase();
+          if (rc.length && rc[0].owner_client_email !== filleulEmail) {
+            const p = prog[0];
+            // Générer codes promo uniques pour parrain + filleul
+            const rand = () => Math.random().toString(36).slice(2,8).toUpperCase();
+            const { rows: filleulPromo } = await pool.query(
+              `INSERT INTO promo_codes
+                 (user_id, code, type, value, max_uses, valid_from, valid_until,
+                  is_active, target_clients, owner_client_email)
+               VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + INTERVAL '60 days',
+                       TRUE,'specific',$5)
+               RETURNING id`,
+              [userId, `FILLEUL-${rand()}`, p.filleul_type, p.filleul_value, filleulEmail]
+            );
+            const { rows: parrainPromo } = await pool.query(
+              `INSERT INTO promo_codes
+                 (user_id, code, type, value, max_uses, valid_from, valid_until,
+                  is_active, target_clients, owner_client_email)
+               VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + INTERVAL '60 days',
+                       TRUE,'specific',$5)
+               RETURNING id`,
+              [userId, `PARRAIN-${rand()}`, p.parrain_type, p.parrain_value, rc[0].owner_client_email]
+            );
+            await pool.query(
+              `UPDATE referral_codes SET uses_count = uses_count + 1 WHERE id=$1`,
+              [rc[0].id]
+            );
+            await pool.query(
+              `INSERT INTO referral_uses
+                 (user_id, referral_code_id, filleul_email,
+                  parrain_promo_id, filleul_promo_id, appointment_id)
+               VALUES ($1,$2,$3,$4,$5,$6)`,
+              [userId, rc[0].id, filleulEmail,
+               parrainPromo[0].id, filleulPromo[0].id, appt.id]
+            );
+          }
+        }
+      } catch (refErr) {
+        console.warn('[book referral]', refErr.message);
       }
     }
 

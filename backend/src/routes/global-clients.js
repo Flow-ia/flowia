@@ -28,13 +28,14 @@ function globalClientAuth(req, res, next) {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, first_name, last_name, phone, invite_token } = req.body;
+    const { email, password, first_name, last_name, phone, invite_token, birth_date } = req.body;
     if (!email || !password || !first_name)
       return res.status(400).json({ error: 'Email, mot de passe et prénom requis.' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
 
     const emailLow = email.toLowerCase().trim();
+    const bd = (birth_date && /^\d{4}-\d{2}-\d{2}$/.test(birth_date)) ? birth_date : null;
 
     // Vérifier si email déjà pris
     const { rows: ex } = await pool.query(
@@ -52,17 +53,18 @@ router.post('/register', async (req, res) => {
       const { rows } = await pool.query(
         `UPDATE global_clients SET
            first_name=$2, last_name=$3, phone=$4, password_hash=$5,
+           birth_date=COALESCE($6, birth_date),
            is_verified=TRUE, invite_token=NULL, updated_at=NOW()
          WHERE LOWER(email)=$1 RETURNING *`,
-        [emailLow, first_name, last_name || '', phone || null, hash]
+        [emailLow, first_name, last_name || '', phone || null, hash, bd]
       );
       gc = rows[0];
     } else {
       // Nouveau compte global (s'inscrit sans invitation)
       const { rows } = await pool.query(
-        `INSERT INTO global_clients (email, password_hash, first_name, last_name, phone, is_verified)
-         VALUES ($1,$2,$3,$4,$5,TRUE) RETURNING *`,
-        [emailLow, hash, first_name, last_name || '', phone || null]
+        `INSERT INTO global_clients (email, password_hash, first_name, last_name, phone, birth_date, is_verified)
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE) RETURNING *`,
+        [emailLow, hash, first_name, last_name || '', phone || null, bd]
       );
       gc = rows[0];
     }
@@ -226,7 +228,8 @@ router.post('/activate', async (req, res) => {
 router.get('/me', globalClientAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, first_name, last_name, phone, is_verified, created_at FROM global_clients WHERE id=$1',
+      `SELECT id, email, first_name, last_name, phone, birth_date, is_verified, created_at
+         FROM global_clients WHERE id=$1`,
       [req.globalClient.globalClientId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
@@ -246,6 +249,97 @@ router.get('/me', globalClientAuth, async (req, res) => {
 
     res.json({ ...rows[0], merchants: locals });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /me — mise à jour partielle du profil (birth_date, phone…)
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch('/me', globalClientAuth, async (req, res) => {
+  try {
+    const { birth_date, phone, first_name, last_name } = req.body;
+    const bd = birth_date === '' || birth_date === null
+      ? null
+      : (birth_date && /^\d{4}-\d{2}-\d{2}$/.test(birth_date) ? birth_date : undefined);
+    const fields = [];
+    const vals   = [];
+    let i = 1;
+    if (bd !== undefined) { fields.push(`birth_date=$${i++}`);  vals.push(bd); }
+    if (phone     != null) { fields.push(`phone=$${i++}`);      vals.push(phone || null); }
+    if (first_name!= null && first_name.trim()) { fields.push(`first_name=$${i++}`); vals.push(first_name.trim()); }
+    if (last_name != null) { fields.push(`last_name=$${i++}`);  vals.push(last_name || ''); }
+    if (!fields.length) return res.json({ ok: true, unchanged: true });
+    fields.push(`updated_at=NOW()`);
+    vals.push(req.globalClient.globalClientId);
+    const { rows } = await pool.query(
+      `UPDATE global_clients SET ${fields.join(', ')} WHERE id=$${i}
+         RETURNING id, email, first_name, last_name, phone, birth_date`,
+      vals
+    );
+    res.json(rows[0]);
+  } catch(e) { console.error('[GC PATCH /me]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /me/referral-code/:slug — récupère (ou génère) le code parrainage
+// pour ce client chez ce commerçant.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/me/referral-code/:slug', globalClientAuth, async (req, res) => {
+  try {
+    const { rows: biz } = await pool.query(
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+      [req.params.slug]
+    );
+    if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const userId = biz[0].user_id;
+
+    const { rows: gc } = await pool.query(
+      'SELECT email FROM global_clients WHERE id=$1',
+      [req.globalClient.globalClientId]
+    );
+    if (!gc.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    const ownerEmail = gc[0].email;
+
+    // Vérifier que le programme est actif
+    const { rows: prog } = await pool.query(
+      'SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value FROM referral_programs WHERE user_id=$1',
+      [userId]
+    );
+    if (!prog.length || !prog[0].is_enabled)
+      return res.status(404).json({ error: "Programme de parrainage non activé chez ce commerçant." });
+
+    // Récupérer ou créer le code
+    let { rows: rc } = await pool.query(
+      'SELECT id, code, uses_count FROM referral_codes WHERE user_id=$1 AND owner_client_email=$2',
+      [userId, ownerEmail.toLowerCase()]
+    );
+    if (!rc.length) {
+      const { genReferralCode } = require('./referrals');
+      let attempt = 0;
+      let created = null;
+      while (!created && attempt < 5) {
+        const code = genReferralCode();
+        try {
+          const { rows } = await pool.query(
+            `INSERT INTO referral_codes (user_id, owner_client_email, code)
+             VALUES ($1,$2,$3) RETURNING id, code, uses_count`,
+            [userId, ownerEmail.toLowerCase(), code]
+          );
+          created = rows[0];
+        } catch (e) {
+          if (!String(e.message).includes('duplicate')) throw e;
+          attempt++;
+        }
+      }
+      if (!created) return res.status(500).json({ error: 'Impossible de générer un code unique.' });
+      rc = [created];
+    }
+
+    res.json({
+      code: rc[0].code,
+      uses_count: rc[0].uses_count,
+      program: prog[0],
+    });
+  } catch(e) { console.error('[REF MY-CODE]', e.message); res.status(500).json({ error: e.message }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

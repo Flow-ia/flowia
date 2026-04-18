@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
 import SMSRechargeModal from '../../components/SMSRechargeModal';
-import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi } from '../../utils/api';
+import { api, loyaltyApi, promoApi, clientsApi, campaignsApi, paymentsApi, birthdayApi, referralsApi } from '../../utils/api';
 
 export default function TabMarketing({ theme, showToast }) {
   const isDark   = theme.mode === 'dark';
@@ -11,10 +11,12 @@ export default function TabMarketing({ theme, showToast }) {
   const location = useLocation();
 
   const MTABS = [
-    { id: 'fidelite',   label: 'Fidelite' },
-    { id: 'promotions', label: '% Promos' },
-    { id: 'solde',      label: 'Solde' },
-    { id: 'ia',         label: '✨ Marketing IA' },
+    { id: 'fidelite',    label: 'Fidelite' },
+    { id: 'promotions',  label: '% Promos' },
+    { id: 'anniversaire',label: '🎂 Anniv.' },
+    { id: 'parrainage',  label: '🤝 Parrain.' },
+    { id: 'solde',       label: 'Solde' },
+    { id: 'ia',          label: '✨ IA' },
   ];
 
   // Extrait le sous-onglet depuis l'URL : /settings/marketing/{sub}
@@ -43,10 +45,221 @@ export default function TabMarketing({ theme, showToast }) {
         ))}
       </div>
 
-      {marketingTab === 'fidelite'   && <TabLoyalty theme={theme} />}
-      {marketingTab === 'promotions' && <TabPromo theme={theme} showToast={showToast} />}
-      {marketingTab === 'solde'      && <TabSMS showToast={showToast} theme={theme} />}
-      {marketingTab === 'ia'         && <TabMarketingIA theme={theme} showToast={showToast} onGoToSolde={() => navigate('/settings/marketing/solde')} />}
+      {marketingTab === 'fidelite'    && <TabLoyalty theme={theme} />}
+      {marketingTab === 'promotions'  && <TabPromo theme={theme} showToast={showToast} />}
+      {marketingTab === 'anniversaire'&& <TabBirthday theme={theme} showToast={showToast} />}
+      {marketingTab === 'parrainage'  && <TabReferral theme={theme} showToast={showToast} />}
+      {marketingTab === 'solde'       && <TabSMS showToast={showToast} theme={theme} />}
+      {marketingTab === 'ia'          && <TabMarketingIA theme={theme} showToast={showToast} onGoToSolde={() => navigate('/settings/marketing/solde')} />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Anniversaires clients ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function TabBirthday({ theme, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const [cfg, setCfg] = useState({ is_enabled:false, discount_type:'percent', discount_value:20, validity_days:30, message:'' });
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+
+  useEffect(() => {
+    birthdayApi.get().then(d => {
+      setCfg({
+        is_enabled: !!d.is_enabled,
+        discount_type: d.discount_type || 'percent',
+        discount_value: Number(d.discount_value || 0),
+        validity_days: Number(d.validity_days || 30),
+        message: d.message || '',
+      });
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await birthdayApi.update(cfg);
+      showToast('Offre anniversaire enregistrée ✓');
+    } catch(e) { showToast(e.message || 'Erreur', 'err'); }
+    finally { setSaving(false); }
+  };
+
+  const inp = { padding:'12px 14px', borderRadius:12, background: isDark?'rgba(255,255,255,0.06)':'#f1f5f9',
+    border:`1px solid ${theme.border}`, color:theme.text, fontSize:14, width:'100%', outline:'none', boxSizing:'border-box' };
+
+  if (loading) return <p className="text-sm" style={{ color:theme.muted }}>Chargement…</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-4" style={{ background:theme.card, border:`1px solid ${theme.border}` }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="font-bold text-sm" style={{ color:theme.text }}>Offre anniversaire activée</p>
+            <p className="text-xs mt-0.5" style={{ color:theme.muted }}>Les clients avec date de naissance reçoivent une réduction le jour J.</p>
+          </div>
+          <button onClick={()=>setCfg(c=>({...c,is_enabled:!c.is_enabled}))}
+            style={{ width:50, height:28, borderRadius:14, border:'none', cursor:'pointer', position:'relative',
+              background: cfg.is_enabled ? 'linear-gradient(90deg,#f472b6,#ec4899)' : (isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)') }}>
+            <div style={{ position:'absolute', top:3, left: cfg.is_enabled ? 25 : 3, width:22, height:22, borderRadius:11, background:'white', transition:'left .2s' }}/>
+          </button>
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+          <div>
+            <label className="text-xs font-bold mb-1 block" style={{ color:theme.muted }}>Type</label>
+            <select value={cfg.discount_type} onChange={e=>setCfg(c=>({...c,discount_type:e.target.value}))} style={inp}>
+              <option value="percent">Pourcentage (%)</option>
+              <option value="fixed">Montant fixe (€)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold mb-1 block" style={{ color:theme.muted }}>
+              Valeur {cfg.discount_type==='percent'?'(%)':'(€)'}
+            </label>
+            <input type="number" min="0" step="0.01" value={cfg.discount_value}
+              onChange={e=>setCfg(c=>({...c,discount_value:e.target.value}))} style={inp}/>
+          </div>
+        </div>
+        <div style={{ marginBottom:10 }}>
+          <label className="text-xs font-bold mb-1 block" style={{ color:theme.muted }}>Validité (jours)</label>
+          <input type="number" min="1" max="365" value={cfg.validity_days}
+            onChange={e=>setCfg(c=>({...c,validity_days:e.target.value}))} style={inp}/>
+        </div>
+        <div style={{ marginBottom:10 }}>
+          <label className="text-xs font-bold mb-1 block" style={{ color:theme.muted }}>Message (optionnel)</label>
+          <textarea rows={2} value={cfg.message}
+            onChange={e=>setCfg(c=>({...c,message:e.target.value}))}
+            placeholder="Joyeux anniversaire ! Profitez de -20% sur votre prochain RDV." style={{...inp, resize:'none'}}/>
+        </div>
+
+        <button onClick={save} disabled={saving}
+          style={{ width:'100%', padding:'12px', borderRadius:14, border:'none', cursor:'pointer',
+            background:'linear-gradient(90deg,#f472b6,#ec4899)', color:'white', fontWeight:800, fontSize:14, opacity:saving?0.5:1 }}>
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
+
+      <div className="rounded-2xl p-3.5 flex items-start gap-2.5" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+        <span style={{ fontSize:16, flexShrink:0 }}>ℹ️</span>
+        <p className="text-xs" style={{ color: theme.muted, lineHeight:1.5 }}>
+          La date de naissance est renseignée par les clients lors de leur inscription (optionnel).
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Parrainage clients ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+function TabReferral({ theme, showToast }) {
+  const isDark = theme.mode === 'dark';
+  const [cfg, setCfg] = useState({ is_enabled:false, parrain_type:'percent', parrain_value:10, filleul_type:'percent', filleul_value:10 });
+  const [codes, setCodes]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+
+  useEffect(() => {
+    Promise.all([referralsApi.getProgram(), referralsApi.listCodes().catch(()=>[])])
+      .then(([prog, cs]) => {
+        setCfg({
+          is_enabled: !!prog.is_enabled,
+          parrain_type: prog.parrain_type || 'percent',
+          parrain_value: Number(prog.parrain_value || 0),
+          filleul_type: prog.filleul_type || 'percent',
+          filleul_value: Number(prog.filleul_value || 0),
+        });
+        setCodes(Array.isArray(cs) ? cs : []);
+      }).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await referralsApi.updateProgram(cfg);
+      showToast('Programme de parrainage enregistré ✓');
+    } catch(e) { showToast(e.message || 'Erreur', 'err'); }
+    finally { setSaving(false); }
+  };
+
+  const inp = { padding:'12px 14px', borderRadius:12, background: isDark?'rgba(255,255,255,0.06)':'#f1f5f9',
+    border:`1px solid ${theme.border}`, color:theme.text, fontSize:14, width:'100%', outline:'none', boxSizing:'border-box' };
+
+  if (loading) return <p className="text-sm" style={{ color:theme.muted }}>Chargement…</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl p-4" style={{ background:theme.card, border:`1px solid ${theme.border}` }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="font-bold text-sm" style={{ color:theme.text }}>Programme de parrainage activé</p>
+            <p className="text-xs mt-0.5" style={{ color:theme.muted }}>Chaque client connecté dispose d'un lien unique à partager.</p>
+          </div>
+          <button onClick={()=>setCfg(c=>({...c,is_enabled:!c.is_enabled}))}
+            style={{ width:50, height:28, borderRadius:14, border:'none', cursor:'pointer', position:'relative',
+              background: cfg.is_enabled ? 'linear-gradient(90deg,#818cf8,#6366f1)' : (isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)') }}>
+            <div style={{ position:'absolute', top:3, left: cfg.is_enabled ? 25 : 3, width:22, height:22, borderRadius:11, background:'white', transition:'left .2s' }}/>
+          </button>
+        </div>
+
+        <p className="text-xs font-bold uppercase mb-2" style={{ color:theme.muted, letterSpacing:'0.08em' }}>Récompense parrain</p>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+          <select value={cfg.parrain_type} onChange={e=>setCfg(c=>({...c,parrain_type:e.target.value}))} style={inp}>
+            <option value="percent">%</option>
+            <option value="fixed">Montant fixe (€)</option>
+          </select>
+          <input type="number" min="0" step="0.01" value={cfg.parrain_value}
+            onChange={e=>setCfg(c=>({...c,parrain_value:e.target.value}))} style={inp}/>
+        </div>
+
+        <p className="text-xs font-bold uppercase mb-2" style={{ color:theme.muted, letterSpacing:'0.08em' }}>Récompense filleul</p>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+          <select value={cfg.filleul_type} onChange={e=>setCfg(c=>({...c,filleul_type:e.target.value}))} style={inp}>
+            <option value="percent">%</option>
+            <option value="fixed">Montant fixe (€)</option>
+          </select>
+          <input type="number" min="0" step="0.01" value={cfg.filleul_value}
+            onChange={e=>setCfg(c=>({...c,filleul_value:e.target.value}))} style={inp}/>
+        </div>
+
+        <button onClick={save} disabled={saving}
+          style={{ width:'100%', padding:'12px', borderRadius:14, border:'none', cursor:'pointer',
+            background:'linear-gradient(90deg,#818cf8,#6366f1)', color:'white', fontWeight:800, fontSize:14, opacity:saving?0.5:1 }}>
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
+      </div>
+
+      {codes.length > 0 && (
+        <div className="rounded-2xl p-4" style={{ background:theme.card, border:`1px solid ${theme.border}` }}>
+          <p className="font-bold text-sm mb-2" style={{ color:theme.text }}>Parrains actifs ({codes.length})</p>
+          <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:260, overflowY:'auto' }}>
+            {codes.map(c => (
+              <div key={c.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                padding:'8px 10px', borderRadius:10, background: isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)' }}>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <p style={{ fontSize:12, fontWeight:700, color:theme.text, margin:0,
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {c.owner_client_email}
+                  </p>
+                  <p style={{ fontSize:10, color:theme.muted, margin:0, fontFamily:'monospace' }}>{c.code}</p>
+                </div>
+                <span style={{ fontSize:11, fontWeight:800, color:'#6366f1',
+                  padding:'2px 8px', borderRadius:99, background:'rgba(99,102,241,0.12)' }}>
+                  {c.uses_count} filleul{c.uses_count>1?'s':''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl p-3.5 flex items-start gap-2.5" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+        <span style={{ fontSize:16, flexShrink:0 }}>ℹ️</span>
+        <p className="text-xs" style={{ color: theme.muted, lineHeight:1.5 }}>
+          Quand un filleul réserve via <code>?ref=CODE</code>, un code promo est créé automatiquement pour le parrain et le filleul (valable 60 jours).
+        </p>
+      </div>
     </div>
   );
 }

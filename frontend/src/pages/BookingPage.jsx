@@ -1291,6 +1291,7 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
   const [first,   setFirst]   = useState('');
   const [last,    setLast]    = useState('');
   const [phone,   setPhone]   = useState('');
+  const [birthDate, setBirthDate] = useState(''); // YYYY-MM-DD, optionnel
   const [err,     setErr]     = useState('');
   const [loading, setLoading] = useState(false);
   const [apts,    setApts]    = useState([]);
@@ -1423,7 +1424,7 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
   const handleRegister = async () => {
     setLoading(true); setErr('');
     try {
-      const r = await globalClientApi.register({ email, password: pwd, first_name: first, last_name: last, phone });
+      const r = await globalClientApi.register({ email, password: pwd, first_name: first, last_name: last, phone, birth_date: birthDate || null });
       onLogin(r.token, r.client);
       setMode('dashboard');
       setTimeout(loadData, 100);
@@ -1539,6 +1540,19 @@ function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
             {mode==='register' && (
               <div style={{ marginBottom:10 }}>
                 <input placeholder="Téléphone (optionnel)" value={phone} onChange={e=>setPhone(e.target.value)} style={inp} />
+              </div>
+            )}
+            {mode==='register' && (
+              <div style={{ marginBottom:10 }}>
+                <label style={{ display:'block', fontSize:11, fontWeight:700, color:th.muted,
+                  marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                  🎂 Date de naissance (optionnel)
+                </label>
+                <input type="date" value={birthDate} onChange={e=>setBirthDate(e.target.value)}
+                  max={new Date().toISOString().slice(0,10)} style={inp} />
+                <p style={{ fontSize:11, color:th.dim, margin:'4px 0 0' }}>
+                  Recevez une offre spéciale le jour de votre anniversaire.
+                </p>
               </div>
             )}
             <div style={{ marginBottom:16 }}>
@@ -1832,6 +1846,19 @@ export default function BookingPage({ slug }) {
   // ── Routing — synchronisation URL ↔ état réservation ──────────────────
   const navigate  = useNavigate();
   const location  = useLocation();
+
+  // Code de parrainage capturé depuis ?ref=CODE (persistant dans localStorage
+  // pour survivre au flow auth qui peut rediriger). Envoyé au POST /book.
+  const [referralCode, setReferralCode] = useState(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('ref');
+      if (fromUrl) {
+        localStorage.setItem('ff_booking_ref_' + slug, fromUrl.toUpperCase());
+        return fromUrl.toUpperCase();
+      }
+      return localStorage.getItem('ff_booking_ref_' + slug) || '';
+    } catch { return ''; }
+  });
 
   // Gérer le retour Google OAuth (URL directe sans popup)
   useEffect(() => {
@@ -2205,7 +2232,13 @@ export default function BookingPage({ slug }) {
         promo_code_id:   finalPromoId,
         discount_amount: finalDiscount,
         promo_code:      finalPromoCode,
+        referral_code:   referralCode || undefined,
       });
+      // Code parrainage consommé → on le retire pour éviter une seconde utilisation
+      if (referralCode) {
+        try { localStorage.removeItem('ff_booking_ref_' + slug); } catch {}
+        setReferralCode('');
+      }
       setBooked(result);
       setView('success');
     } catch (e) {

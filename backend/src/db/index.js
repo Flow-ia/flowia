@@ -984,6 +984,65 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_date_time
     ON transactions(user_id, date DESC, time DESC NULLS LAST)`);
 
+  // ── Anniversaires clients (onboarding.md) ───────────────────────────────────
+  // Date de naissance optionnelle sur les deux tables clients.
+  await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS birth_date DATE`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS birth_date DATE`);
+  // Config offre anniversaire par commerçant (1 ligne par user_id).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS birthday_campaigns (
+      user_id        UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      is_enabled     BOOLEAN NOT NULL DEFAULT FALSE,
+      discount_type  VARCHAR(10) NOT NULL DEFAULT 'percent' CHECK (discount_type IN ('percent','fixed')),
+      discount_value NUMERIC(10,2) NOT NULL DEFAULT 20,
+      validity_days  INT NOT NULL DEFAULT 30,
+      message        TEXT,
+      updated_at     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ── Parrainage clients (onboarding.md) ──────────────────────────────────────
+  // Config programme par commerçant (réductions parrain + filleul).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS referral_programs (
+      user_id             UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      is_enabled          BOOLEAN NOT NULL DEFAULT FALSE,
+      parrain_type        VARCHAR(10) NOT NULL DEFAULT 'percent' CHECK (parrain_type IN ('percent','fixed')),
+      parrain_value       NUMERIC(10,2) NOT NULL DEFAULT 10,
+      filleul_type        VARCHAR(10) NOT NULL DEFAULT 'percent' CHECK (filleul_type IN ('percent','fixed')),
+      filleul_value       NUMERIC(10,2) NOT NULL DEFAULT 10,
+      updated_at          TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // Code unique par couple (commerçant, client parrain).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS referral_codes (
+      id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_client_email VARCHAR(255) NOT NULL,
+      code               VARCHAR(32)  NOT NULL,
+      uses_count         INT NOT NULL DEFAULT 0,
+      created_at         TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, code),
+      UNIQUE(user_id, owner_client_email)
+    )
+  `);
+  // Trace de chaque conversion : qui a été parrainé + transactions liées.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS referral_uses (
+      id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id              UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      referral_code_id     UUID NOT NULL REFERENCES referral_codes(id) ON DELETE CASCADE,
+      filleul_email        VARCHAR(255) NOT NULL,
+      parrain_promo_id     UUID REFERENCES promo_codes(id) ON DELETE SET NULL,
+      filleul_promo_id     UUID REFERENCES promo_codes(id) ON DELETE SET NULL,
+      appointment_id       UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      created_at           TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_referral_codes_user ON referral_codes(user_id)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_referral_uses_user  ON referral_uses(user_id)`);
+
 console.log('[DB] Tables initialisées');
 }
 
