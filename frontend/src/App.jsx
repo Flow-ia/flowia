@@ -1144,9 +1144,10 @@ export default function App() {
       return [...reordered.map(r => ({...prev.find(c=>c.id===r.id)||r, sort_order:r.sort_order})), ...others];
     });
   }, []);
-  const addEmp = useCallback(async d => { const e = await api.createEmployee(d); setEmps(p=>[...p,e]); }, []);
-  const updEmp = useCallback(async (id,d) => { const e = await api.updateEmployee(id,d); setEmps(p=>p.map(x=>x.id===id?e:x)); }, []);
+  const addEmp = useCallback(async d => { const e = await api.createEmployee(d); setEmps(p=>[...p,e]); return e; }, []);
+  const updEmp = useCallback(async (id,d) => { const e = await api.updateEmployee(id,d); setEmps(p=>p.map(x=>x.id===id?{...e,has_image:x.has_image}:x)); return e; }, []);
   const delEmp = useCallback(async id => { await api.deleteEmployee(id); setEmps(p=>p.filter(x=>x.id!==id)); }, []);
+  const patchEmp = useCallback((id, changes) => setEmps(p=>p.map(x=>x.id===id?{...x,...changes}:x)), []);
 
   const handleTab = useCallback((id) => {
     if (id === 'settings') {
@@ -1193,7 +1194,7 @@ export default function App() {
     if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')} />;
     return <Settings transactions={transactions} employees={employees} categories={categories}
       onAddCat={addCat} onUpdCat={updCat} onDelCat={delCat} onReorderCat={reorderCat}
-      onAddEmp={addEmp} onUpdEmp={updEmp} onDelEmp={delEmp}
+      onAddEmp={addEmp} onUpdEmp={updEmp} onDelEmp={delEmp} onPatchEmp={patchEmp}
       onUpdTx={updTx} onDelTx={delTx} onLock={handleLock} />;
   };
 

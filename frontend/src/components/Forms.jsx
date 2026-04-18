@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { I, ICON_MAP, ICON_NAMES, PAL } from '../utils/icons';
 import { todayStr, nowStr } from '../utils/dates';
 import { Modal } from './UI';
 import { useTheme, BRAND } from '../hooks/useTheme';
+import { mediaApi } from '../utils/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function inp(theme, extra={}) {
@@ -264,25 +265,100 @@ export function CategoryForm({ open, onClose, onSubmit, init, allCategories=[], 
 // ─── EmployeeForm ─────────────────────────────────────────────────────────────
 export function EmployeeForm({ open, onClose, onSubmit, init }) {
   const { theme } = useTheme();
+  const isDark = theme.mode === 'dark';
   const COLORS = ['#111827','#374151','#10b981','#f87171','#f59e0b','#f97316','#ec4899','#8b5cf6'];
   const blank = { name:'', role:'', phone:'', email:'', avatar_color:COLORS[0] };
-  const [f, setF] = useState(blank);
+  const [f, setF]   = useState(blank);
   const [ld, setLd] = useState(false);
+  // Image : preview locale + action différée (upload/delete au submit)
+  const [imgFile,    setImgFile]    = useState(null);
+  const [imgPreview, setImgPreview] = useState(null);
+  const [imgDel,     setImgDel]     = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (open) setF(init ? { name:init.name||'', role:init.role||'', phone:init.phone||'', email:init.email||'', avatar_color:init.avatar_color||COLORS[0] } : blank);
+    if (open) {
+      setF(init ? { name:init.name||'', role:init.role||'', phone:init.phone||'', email:init.email||'', avatar_color:init.avatar_color||COLORS[0] } : blank);
+      setImgFile(null); setImgPreview(null); setImgDel(false);
+    }
   }, [open, init?.id]);
 
-  const sub = async e => { e.preventDefault(); setLd(true); await onSubmit({...f}); setLd(false); onClose(); };
+  const initHasImage = !!init?.has_image;
+  const showCurrent  = initHasImage && !imgDel && !imgPreview;
+  const showPreview  = !!imgPreview;
+  const currentUrl   = init?.id ? mediaApi.employeeUrl(init.id) + (init._imgV ? `?v=${init._imgV}` : '') : null;
+
+  const onPickFile = (e) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    if (!file.type?.startsWith('image/')) return;
+    if (file.size > 5 * 1024 * 1024) return;
+    setImgFile(file);
+    setImgPreview(URL.createObjectURL(file));
+    setImgDel(false);
+  };
+
+  const onRemoveImage = () => {
+    if (imgPreview) URL.revokeObjectURL(imgPreview);
+    setImgFile(null); setImgPreview(null);
+    if (initHasImage) setImgDel(true);
+  };
+
+  const sub = async e => {
+    e.preventDefault(); setLd(true);
+    let _imageAction = null;
+    if (imgFile) _imageAction = 'upload';
+    else if (imgDel && initHasImage) _imageAction = 'delete';
+    await onSubmit({ ...f, _imageAction, _imageFile: imgFile });
+    setLd(false); onClose();
+  };
 
   return (
     <Modal open={open} onClose={onClose} title={init?"Modifier l'employe":'Nouvel employé'} theme={theme}>
       <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        {/* Preview : photo si dispo, sinon avatar couleur */}
         <div style={{ textAlign:'center', marginBottom:4 }}>
-          <div style={{ width:64, height:64, borderRadius:20, backgroundColor:f.avatar_color, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:28, fontWeight:900 }}>
-            {f.name?.charAt(0)?.toUpperCase()||'?'}
-          </div>
+          {(showCurrent || showPreview) ? (
+            <div style={{ position:'relative', display:'inline-block' }}>
+              <img src={showPreview ? imgPreview : currentUrl}
+                alt="" style={{ width:88, height:88, borderRadius:24, objectFit:'cover',
+                  border:`2px solid ${theme.border}`, display:'block' }} />
+            </div>
+          ) : (
+            <div style={{ width:88, height:88, borderRadius:24, backgroundColor:f.avatar_color, display:'inline-flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:36, fontWeight:900 }}>
+              {f.name?.charAt(0)?.toUpperCase()||'?'}
+            </div>
+          )}
         </div>
+
+        {/* Image : upload / remplacer / supprimer (pattern services) */}
+        <div>
+          <FormLabel theme={theme}>Photo de l'employé</FormLabel>
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickFile} style={{ display:'none' }} />
+          {(showCurrent || showPreview) ? (
+            <div style={{ display:'flex', gap:6 }}>
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                style={{ flex:1, padding:'9px 10px', borderRadius:10, border:'none', cursor:'pointer',
+                  background:'#1a73e8', color:'white', fontWeight:700, fontSize:12 }}>
+                Remplacer
+              </button>
+              <button type="button" onClick={onRemoveImage}
+                style={{ flex:1, padding:'9px 10px', borderRadius:10, border:'none', cursor:'pointer',
+                  background:'rgba(239,68,68,0.12)', color:'#ef4444', fontWeight:700, fontSize:12 }}>
+                Supprimer
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              style={{ width:'100%', padding:'14px 10px', borderRadius:10,
+                border:`2px dashed ${theme.border}`, cursor:'pointer',
+                background: isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                color:theme.muted, fontSize:12, fontWeight:700 }}>
+              📷 Ajouter une photo
+            </button>
+          )}
+        </div>
+
         {[{k:'name',l:'Nom *',ph:'Prenom Nom',req:true},{k:'role',l:'Poste',ph:'Ex: Manager, Vendeur, Technicien'},{k:'phone',l:'Télephone',ph:'06 00 00 00 00'},{k:'email',l:'Email (rappels)',ph:'employe@email.com',type:'email'}].map(({k,l,ph,req,type})=>(
           <div key={k}>
             <FormLabel theme={theme}>{l}</FormLabel>
@@ -290,7 +366,7 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
           </div>
         ))}
         <div>
-          <FormLabel theme={theme}>Couleur avatar</FormLabel>
+          <FormLabel theme={theme}>Couleur avatar (fallback si pas de photo)</FormLabel>
           <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
             {COLORS.map(c => (
               <button key={c} type="button" onClick={()=>setF({...f,avatar_color:c})}

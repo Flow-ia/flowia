@@ -12,7 +12,9 @@ router.get('/', async (req, res) => {
     if (_eh) return res.json(_eh);
 
     const { rows } = await pool.query(
-      'SELECT * FROM employees WHERE user_id=$1 ORDER BY created_at ASC',
+      `SELECT e.*,
+              EXISTS(SELECT 1 FROM media m WHERE m.ref_id=e.id AND m.type='employee') AS has_image
+       FROM employees e WHERE e.user_id=$1 ORDER BY e.created_at ASC`,
       [req.user.userId]
     );
     res.json(rows);

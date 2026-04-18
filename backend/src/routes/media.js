@@ -124,6 +124,22 @@ router.get('/service/:serviceId/image', async (req, res) => {
   } catch (e) { res.status(404).json({ error: e.message }); }
 });
 
+// ── GET /api/media/employee/:employeeId/image ────────────────────────────────
+// Photo d'un employé (accessible publiquement sur le site de réservation)
+router.get('/employee/:employeeId/image', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT path, provider FROM media WHERE ref_id=$1 AND type=$2 ORDER BY created_at DESC LIMIT 1',
+      [req.params.employeeId, 'employee']
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Aucune image' });
+    const { buf, ct } = await fetchImageBuffer(rows[0].path, rows[0].provider);
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buf);
+  } catch (e) { res.status(404).json({ error: e.message }); }
+});
+
 // ── Métadonnées (pour le frontend savoir si une image existe) ─────────────────
 // GET /api/media/commercant/:userId/meta
 // Le frontend construit les URLs via mediaApi.logoUrl() etc. + ?v=version
@@ -341,6 +357,52 @@ router.post('/service/:serviceId/image', upload.single('image'), async (req, res
     );
     res.json({ id: rows[0].id, url: `/api/media/service/${req.params.serviceId}/image` });
   } catch (e) { console.error('[POST service/image]', e); res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/media/employee/:employeeId/image — Image d'un employé
+// Architecture : flowia/commercant_${userId}/employees/${employeeId}
+router.post('/employee/:employeeId/image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    const { rows: emp } = await pool.query(
+      'SELECT id FROM employees WHERE id=$1 AND user_id=$2',
+      [req.params.employeeId, req.user.userId]
+    );
+    if (!emp.length) return res.status(403).json({ error: 'Employé introuvable' });
+    // 1. Anciennes images (pour cleanup provider)
+    const { rows: old } = await pool.query(
+      'SELECT path, provider FROM media WHERE ref_id=$1 AND type=$2',
+      [req.params.employeeId, 'employee']
+    );
+    // 2. Upload nouveau (folder isolé par commerçant+employé)
+    const filePath = await persistUpload(req, `commercant_${req.user.userId}/employees/${req.params.employeeId}`);
+    // 3. Cleanup ancien (provider + DB)
+    for (const m of old) await deleteFromProvider(m.path, m.provider);
+    await pool.query('DELETE FROM media WHERE ref_id=$1 AND type=$2', [req.params.employeeId, 'employee']);
+    // 4. Insert nouvelle référence
+    const { rows } = await pool.query(
+      'INSERT INTO media (user_id, type, ref_id, path, provider) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [req.user.userId, 'employee', req.params.employeeId, filePath, PROVIDER]
+    );
+    res.json({ id: rows[0].id, url: `/api/media/employee/${req.params.employeeId}/image` });
+  } catch (e) { console.error('[POST employee/image]', e); res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/media/employee/:employeeId/image — Supprimer l'image d'un employé
+router.delete('/employee/:employeeId/image', async (req, res) => {
+  try {
+    const { rows: emp } = await pool.query(
+      'SELECT id FROM employees WHERE id=$1 AND user_id=$2',
+      [req.params.employeeId, req.user.userId]
+    );
+    if (!emp.length) return res.status(403).json({ error: 'Employé introuvable' });
+    const { rows } = await pool.query(
+      'DELETE FROM media WHERE ref_id=$1 AND type=$2 AND user_id=$3 RETURNING path, provider',
+      [req.params.employeeId, 'employee', req.user.userId]
+    );
+    for (const m of rows) await deleteFromProvider(m.path, m.provider);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // DELETE /api/media/service/:serviceId/image — Supprimer l'image d'un service

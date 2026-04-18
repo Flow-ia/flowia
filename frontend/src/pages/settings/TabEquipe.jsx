@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { I } from '../../utils/icons';
-import { api, bookingApi, absencesApi, commissionsApi } from '../../utils/api';
+import { api, bookingApi, absencesApi, commissionsApi, mediaApi } from '../../utils/api';
 import { EmployeeForm } from '../../components/Forms';
 import { Card, fmt, PAY_KEYS, PAY_INFO } from './shared';
 
@@ -35,7 +35,7 @@ function isSlotInBizRanges(slotStart, slotEnd, bizHours, bizBreaks, dayOfWeek) {
   return true;
 }
 
-export default function TabEquipe({ employees, transactions, onAdd, onUpd, onDel, showToast, theme }) {
+export default function TabEquipe({ employees, transactions, onAdd, onUpd, onDel, onPatchEmp, showToast, theme }) {
   const isDark = theme.mode === 'dark';
   const navigate = useNavigate();
   const location = useLocation();
@@ -81,7 +81,7 @@ export default function TabEquipe({ employees, transactions, onAdd, onUpd, onDel
         })}
       </div>
 
-      {sub === 'team'        && <TabEmployees employees={employees} transactions={transactions} onAdd={onAdd} onUpd={onUpd} onDel={onDel} showToast={showToast} theme={theme} />}
+      {sub === 'team'        && <TabEmployees employees={employees} transactions={transactions} onAdd={onAdd} onUpd={onUpd} onDel={onDel} onPatchEmp={onPatchEmp} showToast={showToast} theme={theme} />}
       {sub === 'horaires'    && <TabHorairesEmployes employees={employees} theme={theme} showToast={showToast} />}
       {sub === 'absences'    && <TabAbsences employees={employees} theme={theme} />}
       {sub === 'commissions' && <TabCommissions employees={employees} theme={theme} />}
@@ -607,7 +607,7 @@ function EmployeePinManager({ emp, onClose, showToast, theme }) {
   );
 }
 
-function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, showToast, theme }) {
+function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, onPatchEmp, showToast, theme }) {
   const isDark = theme.mode === 'dark';
   const [form, setForm] = useState({ open: false, init: null });
   const [delId, setDelId] = useState(null);
@@ -661,10 +661,19 @@ function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, showToast,
         return (
           <Card key={emp.id} theme={theme}>
             <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: `1px solid ${theme.border}` }}>
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold flex-shrink-0"
-                style={{ backgroundColor: emp.avatar_color || '#111827' }}>
-                {emp.name?.charAt(0).toUpperCase()}
-              </div>
+              {emp.has_image ? (
+                <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden"
+                  style={{ border:`1px solid ${theme.border}` }}>
+                  <img src={mediaApi.employeeUrl(emp.id) + (emp._imgV ? `?v=${emp._imgV}` : '')}
+                    alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                    onError={e => { e.currentTarget.style.display='none'; }} />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl font-bold flex-shrink-0"
+                  style={{ backgroundColor: emp.avatar_color || '#111827' }}>
+                  {emp.name?.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="font-bold" style={{ color: theme.text }}>{emp.name}</p>
                 {emp.role && <p className="text-xs" style={{ color: theme.muted }}>{emp.role}</p>}
@@ -825,7 +834,22 @@ function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, showToast,
       })}
 
       <EmployeeForm open={form.open} onClose={() => setForm({ open: false, init: null })}
-        onSubmit={async d => { form.init ? await onUpd(form.init.id, d) : await onAdd(d); showToast(form.init ? 'Modifie !' : 'Ajoute !'); }}
+        onSubmit={async d => {
+          const { _imageAction, _imageFile, ...payload } = d;
+          const saved = form.init ? await onUpd(form.init.id, payload) : await onAdd(payload);
+          if (_imageAction === 'upload' && _imageFile && saved?.id) {
+            try {
+              await mediaApi.uploadEmployeeImage(saved.id, _imageFile);
+              onPatchEmp?.(saved.id, { has_image: true, _imgV: Date.now() });
+            } catch { showToast('Erreur upload image', 'error'); }
+          } else if (_imageAction === 'delete' && saved?.id) {
+            try {
+              await mediaApi.deleteEmployeeImage(saved.id);
+              onPatchEmp?.(saved.id, { has_image: false });
+            } catch { showToast('Erreur suppression image', 'error'); }
+          }
+          showToast(form.init ? 'Modifie !' : 'Ajoute !');
+        }}
         init={form.init} />
       {smartDelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"

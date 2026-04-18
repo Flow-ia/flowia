@@ -315,7 +315,10 @@ router.get('/:slug/employees', async (req, res) => {
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const { rows } = await pool.query(
-      'SELECT id, name, role, avatar_color FROM employees WHERE user_id=$1 AND is_active=TRUE AND show_on_booking=TRUE ORDER BY name',
+      `SELECT e.id, e.name, e.role, e.avatar_color,
+              EXISTS(SELECT 1 FROM media m WHERE m.ref_id=e.id AND m.type='employee') AS has_image
+       FROM employees e
+       WHERE e.user_id=$1 AND e.is_active=TRUE AND e.show_on_booking=TRUE ORDER BY e.name`,
       [biz[0].user_id]
     );
     res.json(rows);

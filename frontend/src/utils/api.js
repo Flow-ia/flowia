@@ -186,6 +186,7 @@ export const mediaApi = {
   logoUrl:     (userId)            => `${BASE}/media/commercant/${userId}/logo`,
   coverUrl:    (userId, imageId)   => `${BASE}/media/commercant/${userId}/cover/${imageId}`,
   serviceUrl:  (serviceId)         => `${BASE}/media/service/${serviceId}/image`,
+  employeeUrl: (employeeId)        => `${BASE}/media/employee/${employeeId}/image`,
 
   // Normalise une URL media qui peut venir du backend avec /api/... hardcodé
   // (ex: business.profile_url, business.cover_urls) → utilise la bonne base en prod
@@ -241,6 +242,17 @@ export const mediaApi = {
     return data;
   },
   deleteServiceImage: (serviceId) => request(`/media/service/${serviceId}/image`, { method: 'DELETE' }),
+  uploadEmployeeImage: async (employeeId, file) => {
+    const token = localStorage.getItem('ff_token');
+    const fd = new FormData(); fd.append('image', file);
+    const res = await fetch(`${BASE}/media/employee/${employeeId}/image`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur upload');
+    return data;
+  },
+  deleteEmployeeImage: (employeeId) => request(`/media/employee/${employeeId}/image`, { method: 'DELETE' }),
   deleteMedia: (id) => request(`/media/${id}`, { method: 'DELETE' }),
 };
 

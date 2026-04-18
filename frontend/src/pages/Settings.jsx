@@ -18,7 +18,7 @@ import TabPrevisions from './settings/TabPrevisions';
 import TabHeures from './settings/TabHeures';
 import TabCompte from './settings/TabCompte';
 
-export default function Settings({ transactions, employees, categories, onAddCat, onUpdCat, onDelCat, onReorderCat, onAddEmp, onUpdEmp, onDelEmp, onUpdTx, onDelTx, onLock }) {
+export default function Settings({ transactions, employees, categories, onAddCat, onUpdCat, onDelCat, onReorderCat, onAddEmp, onUpdEmp, onDelEmp, onPatchEmp, onUpdTx, onDelTx, onLock }) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme.mode === 'dark';
@@ -145,7 +145,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'stats'        && <TabStats transactions={transactions} employees={employees} categories={categories} theme={theme} />}
         {tab === 'agenda'       && <Agenda employees={employees} categories={categories} theme={theme} />}
         {tab === 'transactions' && <TabHistorique transactions={transactions} employees={employees} categories={categories} onUpdate={onUpdTx} onDelete={onDelTx} showToast={show} theme={theme} />}
-        {tab === 'employees'    && <TabEquipe employees={employees} transactions={transactions} onAdd={onAddEmp} onUpd={onUpdEmp} onDel={onDelEmp} showToast={show} theme={theme} />}
+        {tab === 'employees'    && <TabEquipe employees={employees} transactions={transactions} onAdd={onAddEmp} onUpd={onUpdEmp} onDel={onDelEmp} onPatchEmp={onPatchEmp} showToast={show} theme={theme} />}
         {tab === 'categories'   && <TabCategories categories={categories} transactions={transactions} onAdd={onAddCat} onUpd={onUpdCat} onDel={onDelCat} onReorder={onReorderCat} showToast={show} theme={theme} subSegment={subSegment} />}
         {tab === 'clients'      && <TabClients theme={theme} showToast={show} />}
         {tab === 'marketing'    && <TabMarketing theme={theme} showToast={show} />}

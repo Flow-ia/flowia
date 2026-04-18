@@ -2560,12 +2560,22 @@ export default function BookingPage({ slug }) {
                       onMouseEnter={ev=>ev.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'}
                       onMouseLeave={ev=>ev.currentTarget.style.boxShadow='none'}>
                       <div style={{ width:48, height:48, borderRadius:99, flexShrink:0,
-                        background:th.cardAlt, overflow:'hidden',
-                        display:'flex', alignItems:'center', justifyContent:'center' }}>
-                        <span style={{ fontSize:20, fontWeight:800,
-                          color:e.avatar_color||'#374151' }}>
-                          {e.name.charAt(0)}
-                        </span>
+                        background: e.has_image ? 'transparent' : th.cardAlt, overflow:'hidden',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        border: e.has_image ? `1px solid ${th.border}` : 'none' }}>
+                        {e.has_image ? (
+                          <img src={`${API_BASE}/media/employee/${e.id}/image`} alt={e.name}
+                            style={{ width:'100%', height:'100%', objectFit:'cover' }}
+                            onError={ev => {
+                              ev.currentTarget.style.display = 'none';
+                              if (ev.currentTarget.nextSibling) ev.currentTarget.nextSibling.style.display = 'block';
+                            }} />
+                        ) : (
+                          <span style={{ fontSize:20, fontWeight:800,
+                            color:e.avatar_color||'#374151' }}>
+                            {e.name.charAt(0)}
+                          </span>
+                        )}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <p style={{ fontSize:14, fontWeight:700, color:th.text,
@@ -2952,12 +2962,18 @@ export default function BookingPage({ slug }) {
                             transition:'box-shadow 0.15s, transform 0.1s' }}
                           onMouseEnter={ev=>{ev.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';ev.currentTarget.style.transform='translateY(-1px)';}}
                           onMouseLeave={ev=>{ev.currentTarget.style.boxShadow='none';ev.currentTarget.style.transform='none';}}>
-                          <div style={{ width:56, height:56, borderRadius:99, flexShrink:0,
-                            background:e.avatar_color ? `${e.avatar_color}20` : th.cardAlt,
+                          <div style={{ width:56, height:56, borderRadius:99, flexShrink:0, overflow:'hidden',
+                            background: e.has_image ? th.cardAlt : (e.avatar_color ? `${e.avatar_color}20` : th.cardAlt),
                             display:'flex', alignItems:'center', justifyContent:'center',
                             fontSize:20, fontWeight:800, color:e.avatar_color||'#374151',
                             border:`2px solid ${e.avatar_color||th.border}30` }}>
-                            {e.name.charAt(0)}
+                            {e.has_image ? (
+                              <img src={`${API_BASE}/media/employee/${e.id}/image`} alt={e.name}
+                                style={{ width:'100%', height:'100%', objectFit:'cover' }}
+                                onError={ev => { ev.currentTarget.style.display = 'none'; }} />
+                            ) : (
+                              e.name.charAt(0)
+                            )}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <p style={{fontSize:14,fontWeight:700,color:th.text,margin:'0 0 2px',
