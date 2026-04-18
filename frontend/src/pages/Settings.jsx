@@ -64,17 +64,17 @@ export default function Settings({ transactions, employees, categories, onAddCat
 
   const pathSegments = location.pathname.replace(/^\/settings\/?/, '').split('/').filter(Boolean);
   const segment    = pathSegments[0] || '';
-  // legacy : /settings/profil → /settings/categories/booking (Images intégrées dans Site de réservation)
-  const subSegment = segment === 'profil' ? 'booking' : (pathSegments[1] || '');
+  // legacy : /settings/profil → /settings/categories/config (Images dans Config commerce)
+  const subSegment = segment === 'profil' ? 'config' : (pathSegments[1] || '');
   const tab = URL_TO_TAB[segment] ?? 'stats';
 
   // Redirection URL legacy :
-  // /settings/profil           → /settings/categories/booking (Images intégrées)
-  // /settings/agenda/config    → /settings/categories/booking (Config site intégrée)
+  // /settings/profil           → /settings/categories/config   (Images)
+  // /settings/agenda/config    → /settings/categories/config   (Config site)
   useEffect(() => {
-    if (segment === 'profil') navigate('/settings/categories/booking', { replace: true });
+    if (segment === 'profil') navigate('/settings/categories/config', { replace: true });
     if (segment === 'agenda' && pathSegments[1] === 'config') {
-      navigate('/settings/categories/booking', { replace: true });
+      navigate('/settings/categories/config', { replace: true });
     }
   }, [segment, pathSegments, navigate]);
 
