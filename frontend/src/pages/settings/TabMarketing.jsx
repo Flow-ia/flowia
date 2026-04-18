@@ -85,6 +85,19 @@ function TabBirthday({ theme, showToast }) {
     finally { setSaving(false); }
   };
 
+  // Toggle auto-persistant : crée la ligne en BDD au premier clic.
+  const toggleEnabled = async () => {
+    const next = { ...cfg, is_enabled: !cfg.is_enabled };
+    setCfg(next);
+    try {
+      await birthdayApi.update(next);
+      showToast(next.is_enabled ? 'Offre anniversaire activée ✓' : 'Offre anniversaire désactivée');
+    } catch(e) {
+      setCfg(cfg);
+      showToast(e.message || 'Erreur', 'err');
+    }
+  };
+
   const inp = { padding:'12px 14px', borderRadius:12, background: isDark?'rgba(255,255,255,0.06)':'#f1f5f9',
     border:`1px solid ${theme.border}`, color:theme.text, fontSize:14, width:'100%', outline:'none', boxSizing:'border-box' };
 
@@ -98,7 +111,7 @@ function TabBirthday({ theme, showToast }) {
             <p className="font-bold text-sm" style={{ color:theme.text }}>Offre anniversaire activée</p>
             <p className="text-xs mt-0.5" style={{ color:theme.muted }}>Les clients avec date de naissance reçoivent une réduction le jour J.</p>
           </div>
-          <button onClick={()=>setCfg(c=>({...c,is_enabled:!c.is_enabled}))}
+          <button onClick={toggleEnabled}
             style={{ width:50, height:28, borderRadius:14, border:'none', cursor:'pointer', position:'relative',
               background: cfg.is_enabled ? 'linear-gradient(90deg,#f472b6,#ec4899)' : (isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)') }}>
             <div style={{ position:'absolute', top:3, left: cfg.is_enabled ? 25 : 3, width:22, height:22, borderRadius:11, background:'white', transition:'left .2s' }}/>
@@ -183,6 +196,21 @@ function TabReferral({ theme, showToast }) {
     finally { setSaving(false); }
   };
 
+  // Toggle auto-persistant : crée/active immédiatement la ligne en BDD pour que
+  // le lien "Parrainer un ami" apparaisse sur la page de réservation sans avoir
+  // à cliquer Enregistrer.
+  const toggleEnabled = async () => {
+    const next = { ...cfg, is_enabled: !cfg.is_enabled };
+    setCfg(next);
+    try {
+      await referralsApi.updateProgram(next);
+      showToast(next.is_enabled ? 'Programme activé ✓' : 'Programme désactivé');
+    } catch(e) {
+      setCfg(cfg); // rollback
+      showToast(e.message || 'Erreur', 'err');
+    }
+  };
+
   const inp = { padding:'12px 14px', borderRadius:12, background: isDark?'rgba(255,255,255,0.06)':'#f1f5f9',
     border:`1px solid ${theme.border}`, color:theme.text, fontSize:14, width:'100%', outline:'none', boxSizing:'border-box' };
 
@@ -196,7 +224,7 @@ function TabReferral({ theme, showToast }) {
             <p className="font-bold text-sm" style={{ color:theme.text }}>Programme de parrainage activé</p>
             <p className="text-xs mt-0.5" style={{ color:theme.muted }}>Chaque client connecté dispose d'un lien unique à partager.</p>
           </div>
-          <button onClick={()=>setCfg(c=>({...c,is_enabled:!c.is_enabled}))}
+          <button onClick={toggleEnabled}
             style={{ width:50, height:28, borderRadius:14, border:'none', cursor:'pointer', position:'relative',
               background: cfg.is_enabled ? 'linear-gradient(90deg,#818cf8,#6366f1)' : (isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)') }}>
             <div style={{ position:'absolute', top:3, left: cfg.is_enabled ? 25 : 3, width:22, height:22, borderRadius:11, background:'white', transition:'left .2s' }}/>

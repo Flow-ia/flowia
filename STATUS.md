@@ -4,6 +4,31 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-19 (suite) : Toggles parrainage + anniversaire auto-persistants
+
+### Bug
+Quand le commerçant activait son programme de parrainage (toggle ON dans
+Settings → Marketing → Parrain.) sans cliquer sur **Enregistrer**, aucune ligne
+n'était insérée dans `referral_programs`. La route publique
+`GET /api/global-clients/pub/:slug/referral-program` renvoyait alors **404**
+(« Programme inexistant. »), donc la page de réservation ne montrait pas le
+lien « Parrainer un ami » dans la nav et le bouton mobile restait masqué.
+
+### Fix — `frontend/src/pages/settings/TabMarketing.jsx`
+- `TabReferral` : nouvelle fonction `toggleEnabled()` qui PUT
+  `referralsApi.updateProgram(next)` immédiatement au clic sur le toggle
+  (rollback du state si échec). Le bouton « Enregistrer » reste pour les
+  changements de récompenses (% / €).
+- `TabBirthday` : même traitement avec `birthdayApi.update(next)` pour éviter
+  le même piège côté offre anniversaire.
+- Toast « Programme activé ✓ » / « Offre anniversaire activée ✓ » au lieu
+  d'attendre un clic Enregistrer additionnel.
+
+### Build
+- `npx vite build` : OK (15.84s, 80 modules)
+
+---
+
 ## 🆕 Session 2026-04-19 : Carte latérale sticky + navigation + page parrainage dédiée
 
 ### Objectif (onboarding.md)
