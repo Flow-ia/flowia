@@ -1,7 +1,18 @@
-Tu as cassé une partie du code : la section **Config du site de réservation** n’affiche plus les données côté front. Vérifie que toutes les données sont bien récupérées depuis le backend et correctement affichées.
+Dans la page **“Compte” (/settings/compte)**, déplace uniquement la section contenant les informations du commerce :
 
-Ensuite, sur le site de réservation côté client, affiche les **images de couverture du commerce** en bas de la section **Équipe**.
+* Nom du commerce
+* Téléphone
+* Adresse
+* Code postal
+* Ville
+* Google Business
 
-Ajoute également un bouton dans le header du site de réservation intitulé **“Images”**, qui redirige directement vers la section **album des images de couverture du commerce**, comme c’est déjà le cas pour **“Nos prestations”** ou **“Adresse”**.
+Vers la sous-page **“Config commerce”**, comme cela a déjà été fait pour la section **“Informations affichées”**.
 
-⚠️ Assure-toi que tout fonctionne correctement sans casser les fonctionnalités existantes.
+👉 Objectifs :
+
+* éviter les doublons d’affichage et de données
+* centraliser toutes les informations du commerce au même endroit
+* améliorer la compréhension et la navigation pour le commerçant
+
+⚠️ Veille à ne rien casser et à conserver le bon fonctionnement des données après le déplacement.

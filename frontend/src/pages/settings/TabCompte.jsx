@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { I } from '../../utils/icons';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
@@ -7,35 +7,10 @@ export default function TabCompte({ showToast, theme, onLock }) {
   const isDark = theme.mode === 'dark';
   const { user, updateUser, logout } = useAuth();
 
-  const [editing,  setEditing]  = useState(false);
-  const [profLoad, setProfLoad] = useState(false);
-  const [profErr,  setProfErr]  = useState('');
-  const [profOk,   setProfOk]   = useState('');
   const [delAccConfirm, setDelAccConfirm] = useState('');
   const [delAccLoad,    setDelAccLoad]    = useState(false);
   const [delAccErr,     setDelAccErr]     = useState('');
   const [showDelAcc,    setShowDelAcc]    = useState(false);
-  const [form, setForm] = useState({
-    businessName:      user?.businessName      || '',
-    address:           user?.address           || '',
-    city:              user?.city              || '',
-    postalCode:        user?.postalCode        || '',
-    phone:             user?.phone             || '',
-    googleBusinessUrl: user?.googleBusinessUrl || '',
-  });
-
-  useEffect(() => {
-    if (!editing) {
-      setForm({
-        businessName:      user?.businessName      || '',
-        address:           user?.address           || '',
-        city:              user?.city              || '',
-        postalCode:        user?.postalCode        || '',
-        phone:             user?.phone             || '',
-        googleBusinessUrl: user?.googleBusinessUrl || '',
-      });
-    }
-  }, [user, editing]);
 
   const deleteAccount = async () => {
     if (delAccConfirm !== 'SUPPRIMER') { setDelAccErr('Tapez SUPPRIMER pour confirmer.'); return; }
@@ -45,34 +20,6 @@ export default function TabCompte({ showToast, theme, onLock }) {
       logout();
     } catch(e) { setDelAccErr(e.message || 'Erreur lors de la suppression.'); }
     finally { setDelAccLoad(false); }
-  };
-
-  const saveProfile = async () => {
-    if (!form.businessName.trim()) { setProfErr('Le nom du commerce est requis.'); return; }
-    setProfLoad(true); setProfErr(''); setProfOk('');
-    try {
-      const r = await api.updateProfile({
-        businessName:      form.businessName.trim(),
-        phone:             form.phone.trim()             || undefined,
-        address:           form.address.trim()           || undefined,
-        city:              form.city.trim()              || undefined,
-        postalCode:        form.postalCode.trim()        || undefined,
-        googleBusinessUrl: form.googleBusinessUrl.trim() || undefined,
-      });
-      updateUser({
-        businessName:      form.businessName.trim(),
-        phone:             form.phone.trim(),
-        address:           form.address.trim(),
-        city:              form.city.trim(),
-        postalCode:        form.postalCode.trim(),
-        googleBusinessUrl: form.googleBusinessUrl.trim(),
-      });
-      setEditing(false);
-      setProfOk('Informations mises a jour ✓');
-      setTimeout(() => setProfOk(''), 3500);
-      showToast('Informations mises a jour ✓');
-    } catch(e) { setProfErr(e.message || 'Erreur lors de la sauvegarde'); }
-    finally { setProfLoad(false); }
   };
 
   const [pwdForm, setPwdForm] = useState({ old:'', new1:'', new2:'' });
@@ -141,6 +88,7 @@ export default function TabCompte({ showToast, theme, onLock }) {
   return (
     <div>
 
+      {/* Identité du compte (email + nom d'enseigne pour contexte — non modifiable ici) */}
       <div style={cardS}>
         <div style={sectionHead}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -157,108 +105,16 @@ export default function TabCompte({ showToast, theme, onLock }) {
               <p style={{ fontSize:12, color:theme.muted, margin:0 }}>{user?.email}</p>
             </div>
           </div>
-          {!editing && (
-            <button onClick={()=>setEditing(true)}
-              style={{ padding:'7px 14px', borderRadius:9, cursor:'pointer',
-                background:'transparent', border:`1px solid ${theme.border}`,
-                color:theme.muted, fontWeight:700, fontSize:12,
-                display:'flex', alignItems:'center', gap:5 }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                style={{width:12,height:12}}>
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-              Modifier
-            </button>
-          )}
         </div>
-
-        {editing ? (
-          <div style={{ padding:18, display:'flex', flexDirection:'column', gap:12 }}>
-            <div>
-              <p style={label}>Nom du commerce *</p>
-              <input value={form.businessName}
-                onChange={e=>setForm(f=>({...f,businessName:e.target.value}))}
-                placeholder="Nom de votre salon" style={inp}/>
-            </div>
-            <div>
-              <p style={label}>Téléphone</p>
-              <input type="tel" value={form.phone}
-                onChange={e=>setForm(f=>({...f,phone:e.target.value}))}
-                placeholder="06 00 00 00 00" style={inp}/>
-            </div>
-            <div>
-              <p style={label}>Adresse (numéro + rue)</p>
-              <input value={form.address}
-                onChange={e=>setForm(f=>({...f,address:e.target.value}))}
-                placeholder="12 rue de la Paix" style={inp}/>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr', gap:10 }}>
-              <div>
-                <p style={label}>Code postal</p>
-                <input value={form.postalCode}
-                  onChange={e=>setForm(f=>({...f,postalCode:e.target.value}))}
-                  placeholder="75001" style={inp}/>
-              </div>
-              <div>
-                <p style={label}>Ville</p>
-                <input value={form.city}
-                  onChange={e=>setForm(f=>({...f,city:e.target.value}))}
-                  placeholder="Paris" style={inp}/>
-              </div>
-            </div>
-            <div>
-              <p style={label}>Lien Google Business (avis)</p>
-              <input type="url" value={form.googleBusinessUrl}
-                onChange={e=>setForm(f=>({...f,googleBusinessUrl:e.target.value}))}
-                placeholder="https://g.page/votre-salon" style={inp}/>
-              <p style={{ fontSize:11, color:theme.dim, margin:'4px 0 0' }}>
-                Affiché sur votre page de réservation pour rediriger vers vos avis Google.
-              </p>
-            </div>
-            {profErr && <p style={{ fontSize:12, color:'#f87171', fontWeight:600, margin:0 }}>{profErr}</p>}
-            <div style={{ display:'flex', gap:10, marginTop:4 }}>
-              <button onClick={()=>{ setEditing(false); setProfErr(''); }}
-                style={{ flex:1, padding:'11px', borderRadius:10, cursor:'pointer',
-                  background:'transparent', border:`1px solid ${theme.border}`,
-                  color:theme.muted, fontWeight:700, fontSize:13 }}>
-                Annuler
-              </button>
-              <button onClick={saveProfile} disabled={profLoad}
-                style={{ flex:2, padding:'11px', borderRadius:10, cursor:'pointer',
-                  background:'#1a73e8',
-                  color:'white', fontWeight:800, fontSize:13,
-                  border:'none', opacity:profLoad?0.7:1 }}>
-                {profLoad ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div>
-            {profOk && (
-              <div style={{ margin:'12px 18px 0', padding:'10px 14px', borderRadius:9,
-                background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.2)',
-                color:'#16a34a', fontSize:13, fontWeight:700 }}>✓ {profOk}</div>
-            )}
-            {[
-              ['Nom du commerce', user?.businessName || '-'],
-              ['Télephone',       user?.phone        || '-'],
-              ['Adresse',         user?.address      || '-'],
-              ['Code postal',     user?.postalCode   || '-'],
-              ['Ville',           user?.city         || '-'],
-              ['Google Business', user?.googleBusinessUrl || '-'],
-            ].map(([lbl, val], i) => (
-              <div key={lbl} style={{ display:'flex', justifyContent:'space-between',
-                alignItems:'center', padding:'11px 18px',
-                borderTop:`1px solid ${theme.border}` }}>
-                <span style={{ fontSize:12, color:theme.muted, fontWeight:600 }}>{lbl}</span>
-                <span style={{ fontSize:13, fontWeight:700, color:theme.text,
-                  maxWidth:200, overflow:'hidden', textOverflow:'ellipsis',
-                  whiteSpace:'nowrap', textAlign:'right' }}>{val}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <div style={{ padding:'10px 18px', display:'flex', alignItems:'center', gap:8,
+          background: isDark?'rgba(99,102,241,0.08)':'rgba(99,102,241,0.06)',
+          borderTop:`1px solid ${theme.border}` }}>
+          <span style={{ fontSize:14 }}>💡</span>
+          <p style={{ margin:0, fontSize:12, color:theme.muted, lineHeight:1.5 }}>
+            Les <strong style={{ color:theme.text }}>informations du commerce</strong> (nom, téléphone, adresse, ville, Google Business)
+            sont désormais gérées dans <strong style={{ color:theme.text }}>Catégories → Config commerce</strong>.
+          </p>
+        </div>
       </div>
 
       <div style={cardS}>
