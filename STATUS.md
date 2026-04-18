@@ -4,6 +4,29 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-18 (partie 9) : Fix inscription — infos commerçant persistées dans user context
+
+### Bug
+Après inscription (register/confirm) ou login, la carte "Informations du commerce"
+(Settings → Config) affichait `-` pour téléphone, adresse, code postal, ville, Google Business
+tant que la page n'était pas rechargée. `GET /auth/me` renvoyait bien les données, mais
+`/register/confirm` et `/login` retournaient un `user` partiel `{ id, email, businessName }` →
+`useAuth.login(token, userData)` alimentait le contexte avec ces seuls 3 champs.
+
+### Fix — `backend/src/routes/auth.js`
+- `POST /auth/register/confirm` : retourne désormais `{ phone, address, country, city,
+  postalCode, googleBusinessUrl:null }` en plus de l'existant
+- `POST /auth/login` : retourne le user complet (`phone, address, country, city, postalCode,
+  googleBusinessUrl, firstName, lastName, avatarUrl, onboardingCompleted, hasGoogle`)
+- Contrat aligné avec `GET /auth/me`
+
+### Impact
+- Après inscription, la section "Informations du commerce" est pré-remplie avec les
+  infos saisies dans le formulaire d'inscription (nom, téléphone, adresse, CP, ville)
+- Même comportement après login classique (plus besoin de reload)
+
+---
+
 ## 🆕 Session 2026-04-18 (partie 8) : Onboarding — landing booking revu (horaires + réordonnancement)
 
 ### Spec (onboarding.md)

@@ -114,7 +114,17 @@ router.post('/register/confirm', async (req, res) => {
       { userId: user.id, email: user.email, businessName: user.business_name },
       process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
-    res.json({ ok: true, token, user: { id: user.id, email: user.email, businessName: user.business_name } });
+    res.json({ ok: true, token, user: {
+      id:                user.id,
+      email:             user.email,
+      businessName:      user.business_name,
+      phone:             user.phone,
+      address:           user.address,
+      country:           user.country,
+      city:              user.city,
+      postalCode:        user.postal_code,
+      googleBusinessUrl: null,
+    }});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -162,7 +172,22 @@ router.post('/login', async (req, res) => {
       { userId: user.id, email: user.email, businessName: user.business_name },
       process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
-    res.json({ ok: true, token, user: { id: user.id, email: user.email, businessName: user.business_name } });
+    res.json({ ok: true, token, user: {
+      id:                user.id,
+      email:             user.email,
+      businessName:      user.business_name,
+      phone:             user.phone,
+      address:           user.address,
+      country:           user.country,
+      city:              user.city,
+      postalCode:        user.postal_code,
+      googleBusinessUrl: user.google_business_url,
+      firstName:         user.first_name,
+      lastName:          user.last_name,
+      avatarUrl:         user.avatar_url,
+      onboardingCompleted: user.onboarding_completed,
+      hasGoogle:         !!user.google_id,
+    }});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
