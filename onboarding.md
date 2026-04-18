@@ -1,11 +1,7 @@
-Place la section **“Images du commerce”** ainsi que **“Config du site de réservation”** dans une nouvelle sous-page intitulée **“Config commerce”**.
+Tu as cassé une partie du code : la section **Config du site de réservation** n’affiche plus les données côté front. Vérifie que toutes les données sont bien récupérées depuis le backend et correctement affichées.
 
-Cette sous-page regroupera donc ces deux fonctionnalités.
+Ensuite, sur le site de réservation côté client, affiche les **images de couverture du commerce** en bas de la section **Équipe**.
 
-Au final, il y aura 3 sous-pages :
+Ajoute également un bouton dans le header du site de réservation intitulé **“Images”**, qui redirige directement vers la section **album des images de couverture du commerce**, comme c’est déjà le cas pour **“Nos prestations”** ou **“Adresse”**.
 
-* Caisse
-* Site de réservation
-* Config commerce
-
-⚠️ Ne rien oublier et ne casser aucune fonctionnalité existante.
+⚠️ Assure-toi que tout fonctionne correctement sans casser les fonctionnalités existantes.

@@ -16,7 +16,8 @@ export default function TabBookingConfig({ theme, showToast }) {
     if (!open || loaded) return;
     Promise.all([bookingApi.getSettings(), bookingApi.getHours()])
       .then(([s, h]) => {
-        setSettings(s);
+        // getSettings retourne { settings: {...} } — cf. Agenda.jsx:1840
+        setSettings(s?.settings || null);
         setHours(Array.isArray(h) ? h : []);
         setLoaded(true);
       })

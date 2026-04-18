@@ -90,6 +90,7 @@ function NavBar({ th, slug, business, clientUser, onToggleTheme, onShowAuth, onM
           {[
             ['section-prestations','Nos prestations'],
             ['section-equipe','Équipe'],
+            ...((business?.cover_urls?.length > 0) ? [['section-images','Images']] : []),
             ...(business?.google_business_url ? [['section-avis','Commentaires']] : []),
             ['section-adresse','Adresse'],
           ].map(([id, label]) => (
@@ -1878,6 +1879,9 @@ export default function BookingPage({ slug }) {
         '#prestations':   'section-prestations',
         '#prestation':    'section-prestations',
         '#services':      'section-prestations',
+        '#images':        'section-images',
+        '#photos':        'section-images',
+        '#album':         'section-images',
       };
       const targetId = ANCHOR_MAP[hash.toLowerCase()] || hash.replace('#','section-');
       // Scroller après chargement de la page
@@ -2577,6 +2581,26 @@ export default function BookingPage({ slug }) {
                   ))}
                 </div>
               </section>
+
+              {/* ── SECTION IMAGES — album des photos du commerce ── */}
+              {business?.cover_urls?.length > 0 && (
+                <section id="section-images" style={{ marginBottom:40 }}>
+                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
+                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Images</h2>
+                  <div style={{ display:'grid',
+                    gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
+                    {business.cover_urls.map((c, i) => (
+                      <div key={c.id||i} style={{ aspectRatio:'4/3',
+                        borderRadius:14, overflow:'hidden',
+                        background:th.cardAlt, border:`1px solid ${th.border}` }}>
+                        <img src={mediaUrl(c.url)} alt={`Photo ${i+1}`}
+                          loading="lazy"
+                          style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* ── SECTION AVIS ── */}
               {/* ── SECTION COMMENTAIRES Google ── */}
