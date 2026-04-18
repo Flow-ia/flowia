@@ -1,27 +1,30 @@
-Pour les pages **clients** et **historique**, il faut éviter de charger toutes les données d’un coup afin de ne pas effectuer des requêtes trop lourdes.
+Concernant les produits et services dans la page de réservation, le commerçant doit pouvoir ajouter une photo pour représenter chaque produit ou service sur son site de réservation.
 
-Mettre en place une pagination en récupérant uniquement **10 éléments par requête**, avec une navigation par pages (10 par 10). Cela permet de charger uniquement les données réellement utiles pour le commerçant.
+Chaque produit ou service peut avoir **une seule image principale** servant de visuel de présentation.
 
-Par exemple, dans l’historique :
+Dans chaque pop-up d’ajout ou de modification d’un produit ou d’un service, le commerçant doit avoir la possibilité :
 
-* afficher uniquement les **10 dernières transactions**
-* ajouter en bas une navigation pour accéder aux transactions suivantes (pages suivantes)
+* d’ajouter une photo
+* de remplacer la photo existante
+* de supprimer la photo
 
-Cette approche doit également être appliquée à la page clients.
-
----
-
-Il est aussi important de :
-
-* mettre en place une **indexation adaptée en base de données**
-* optimiser les requêtes pour éviter toute surcharge
+L’interface doit être simple, claire et rapide à utiliser, avec un aperçu de l’image sélectionnée.
 
 ---
 
-Objectif :
-
-* améliorer les performances
-* réduire la charge sur le backend et la base de données
-* offrir une expérience utilisateur plus fluide et rapide
+Ces fonctionnalités doivent être accessibles depuis la page :
+**settings/categories**
 
 ---
+
+Par ailleurs, il est nécessaire d’ajouter des **URLs pour les sous-pages** des sections suivantes :
+
+* Caisse
+* Site de réservation
+
+👉 Objectif :
+
+* permettre l’actualisation de la page sans perte de contexte
+* revenir automatiquement sur la section où l’utilisateur se trouvait
+
+Cela garantit une navigation plus fluide, fiable et professionnelle.

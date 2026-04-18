@@ -269,4 +269,26 @@ router.post('/service/:serviceId/image', upload.single('image'), async (req, res
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// DELETE /api/media/service/:serviceId/image — Supprimer l'image d'un service
+router.delete('/service/:serviceId/image', async (req, res) => {
+  try {
+    const { rows: svc } = await pool.query(
+      'SELECT id FROM booking_services WHERE id=$1 AND user_id=$2',
+      [req.params.serviceId, req.user.userId]
+    );
+    if (!svc.length) return res.status(403).json({ error: 'Service introuvable' });
+    const { rows } = await pool.query(
+      'DELETE FROM media WHERE ref_id=$1 AND type=$2 AND user_id=$3 RETURNING path, provider',
+      [req.params.serviceId, 'service', req.user.userId]
+    );
+    for (const m of rows) {
+      if (m.provider === 'local') {
+        const fPath = path.join(uploadDir, m.path);
+        if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

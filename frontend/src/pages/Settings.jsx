@@ -64,7 +64,8 @@ export default function Settings({ transactions, employees, categories, onAddCat
   };
 
   const pathSegments = location.pathname.replace(/^\/settings\/?/, '').split('/').filter(Boolean);
-  const segment = pathSegments[0] || '';
+  const segment    = pathSegments[0] || '';
+  const subSegment = pathSegments[1] || '';
   const tab = URL_TO_TAB[segment] ?? 'stats';
 
   const setTab = (id) => navigate(TAB_TO_URL[id] || '/settings', { replace: false });
@@ -136,7 +137,7 @@ export default function Settings({ transactions, employees, categories, onAddCat
         {tab === 'agenda'       && <Agenda employees={employees} categories={categories} theme={theme} />}
         {tab === 'transactions' && <TabHistorique transactions={transactions} employees={employees} categories={categories} onUpdate={onUpdTx} onDelete={onDelTx} showToast={show} theme={theme} />}
         {tab === 'employees'    && <TabEquipe employees={employees} transactions={transactions} onAdd={onAddEmp} onUpd={onUpdEmp} onDel={onDelEmp} showToast={show} theme={theme} />}
-        {tab === 'categories'   && <TabCategories categories={categories} transactions={transactions} onAdd={onAddCat} onUpd={onUpdCat} onDel={onDelCat} onReorder={onReorderCat} showToast={show} theme={theme} />}
+        {tab === 'categories'   && <TabCategories categories={categories} transactions={transactions} onAdd={onAddCat} onUpd={onUpdCat} onDel={onDelCat} onReorder={onReorderCat} showToast={show} theme={theme} subSegment={subSegment} />}
         {tab === 'profil'       && <TabImages theme={theme} showToast={show} />}
         {tab === 'clients'      && <TabClients theme={theme} showToast={show} />}
         {tab === 'marketing'    && <TabMarketing theme={theme} showToast={show} />}

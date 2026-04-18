@@ -148,7 +148,9 @@ router.post('/hours', async (req, res) => {
 router.get('/services', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT bs.*, c.name as category_name FROM booking_services bs
+      `SELECT bs.*, c.name as category_name,
+              EXISTS(SELECT 1 FROM media m WHERE m.ref_id=bs.id AND m.type='service') AS has_image
+       FROM booking_services bs
        LEFT JOIN categories c ON c.id = bs.category_id
        WHERE bs.user_id=$1 ORDER BY bs.sort_order, bs.created_at`,
       [req.user.userId]

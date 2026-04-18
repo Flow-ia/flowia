@@ -220,6 +220,7 @@ export const mediaApi = {
     if (!res.ok) throw new Error(data.error || 'Erreur upload');
     return data;
   },
+  deleteServiceImage: (serviceId) => request(`/media/service/${serviceId}/image`, { method: 'DELETE' }),
   deleteMedia: (id) => request(`/media/${id}`, { method: 'DELETE' }),
 };
 
