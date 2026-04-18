@@ -2800,129 +2800,6 @@ export default function BookingPage({ slug }) {
                 )}
               </div>
 
-              {/* ── SECTION HORAIRES ── */}
-              {business?.hours && Object.keys(business.hours).length > 0 && (
-                <section id="section-horaires" style={{ marginBottom:32 }}>
-                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
-                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Horaires d'ouverture</h2>
-                  <div style={{ background:th.card, border:`1px solid ${th.border}`,
-                    borderRadius:12, overflow:'hidden' }}>
-                    {(() => {
-                      const dayNames = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-                      const today = new Date().getDay();
-                      const order = Array.from({length:7}, (_,i) => (today + i) % 7);
-                      return order.map((dow, i) => {
-                        const h = business.hours[dow];
-                        const isToday = i === 0;
-                        const isLast  = i === 6;
-                        return (
-                          <div key={dow} style={{ display:'flex', alignItems:'center',
-                            justifyContent:'space-between', padding:'12px 18px',
-                            borderBottom: isLast ? 'none' : `1px solid ${th.border}`,
-                            background: isToday ? th.cardAlt : 'transparent' }}>
-                            <span style={{ fontSize:14, fontWeight: isToday ? 700 : 500,
-                              color:th.text }}>
-                              {dayNames[dow]}{isToday ? " (aujourd'hui)" : ''}
-                            </span>
-                            <span style={{ fontSize:13,
-                              color: h?.is_open ? th.text : th.muted,
-                              fontVariantNumeric:'tabular-nums' }}>
-                              {h?.is_open && h.open_time && h.close_time
-                                ? `${h.open_time} – ${h.close_time}`
-                                : 'Fermé'}
-                            </span>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                </section>
-              )}
-
-              {/* ── SECTION ADRESSE — adresse complète + carte Maps ── */}
-              <section id="section-adresse" style={{ marginBottom:40 }}>
-                <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
-                  margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
-
-                {/* Carte Google Maps embed — si adresse disponible */}
-                {(business?.address || business?.city) && (() => {
-                  const addrQ = encodeURIComponent(
-                    [business.address, business.postal_code, business.city]
-                    .filter(Boolean).join(' ')
-                  );
-                  const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
-                  const embedUrl = `https://maps.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
-                  return (
-                    <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
-                      border:`1px solid ${th.border}` }}>
-                      <iframe
-                        src={embedUrl}
-                        width="100%"
-                        height="240"
-                        style={{ border:'none', display:'block' }}
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                        title="Localisation du commerce"
-                      />
-                      {/* Lien "Ouvrir dans Maps" */}
-                      <a href={mapsLink} target="_blank" rel="noopener noreferrer"
-                        style={{ display:'flex', alignItems:'center', gap:8,
-                          padding:'10px 14px', background:th.card,
-                          borderTop:`1px solid ${th.border}`,
-                          fontSize:13, fontWeight:600, color:'#2563eb', textDecoration:'none' }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          style={{width:13,height:13}}>
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                          <polyline points="15 3 21 3 21 9"/>
-                          <line x1="10" y1="14" x2="21" y2="3"/>
-                        </svg>
-                        {[business.address, business.postal_code, business.city].filter(Boolean).join(' ')}
-                      </a>
-                    </div>
-                  );
-                })()}
-
-                {/* Card infos : adresse textuelle + téléphone */}
-                <div style={{ background:th.card, border:`1px solid ${th.border}`,
-                  borderRadius:12, overflow:'hidden' }}>
-                  {(business?.address || business?.city || business?.postal_code) && (
-                    <div style={{ display:'flex', alignItems:'flex-start', gap:12,
-                      padding:'14px 18px',
-                      borderBottom: business?.phone ? `1px solid ${th.border}` : 'none' }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        style={{width:16,height:16,flexShrink:0,marginTop:2,color:th.muted}}>
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                        <circle cx="12" cy="10" r="3"/>
-                      </svg>
-                      <div>
-                        {business?.address && (
-                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6, fontWeight:500 }}>
-                            {business.address}
-                          </p>
-                        )}
-                        {(business?.postal_code || business?.city) && (
-                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6 }}>
-                            {[business.postal_code, business.city].filter(Boolean).join(' ')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  {business?.phone && (
-                    <a href={`tel:${business.phone}`}
-                      style={{ display:'flex', alignItems:'center', gap:12,
-                        padding:'14px 18px', fontSize:14, color:th.text,
-                        textDecoration:'none' }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                        style={{width:16,height:16,flexShrink:0,color:th.muted}}>
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-                      </svg>
-                      <span style={{ fontWeight:500 }}>{business.phone}</span>
-                    </a>
-                  )}
-                </div>
-              </section>
-
               {/* ── SECTION PRESTATIONS ── */}
               <section id="section-prestations" style={{ marginBottom:40 }}>
                 <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
@@ -3146,6 +3023,129 @@ export default function BookingPage({ slug }) {
                   </div>
                 </section>
               )}
+
+              {/* ── SECTION HORAIRES (deplacee en bas : prestations + equipe prioritaires) ── */}
+              {business?.hours && Object.keys(business.hours).length > 0 && (
+                <section id="section-horaires" style={{ marginBottom:32 }}>
+                  <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
+                    margin:'0 0 16px', letterSpacing:'-0.02em' }}>Horaires d'ouverture</h2>
+                  <div style={{ background:th.card, border:`1px solid ${th.border}`,
+                    borderRadius:12, overflow:'hidden' }}>
+                    {(() => {
+                      const dayNames = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+                      const today = new Date().getDay();
+                      const order = Array.from({length:7}, (_,i) => (today + i) % 7);
+                      return order.map((dow, i) => {
+                        const h = business.hours[dow];
+                        const isToday = i === 0;
+                        const isLast  = i === 6;
+                        return (
+                          <div key={dow} style={{ display:'flex', alignItems:'center',
+                            justifyContent:'space-between', padding:'12px 18px',
+                            borderBottom: isLast ? 'none' : `1px solid ${th.border}`,
+                            background: isToday ? th.cardAlt : 'transparent' }}>
+                            <span style={{ fontSize:14, fontWeight: isToday ? 700 : 500,
+                              color:th.text }}>
+                              {dayNames[dow]}{isToday ? " (aujourd'hui)" : ''}
+                            </span>
+                            <span style={{ fontSize:13,
+                              color: h?.is_open ? th.text : th.muted,
+                              fontVariantNumeric:'tabular-nums' }}>
+                              {h?.is_open && h.open_time && h.close_time
+                                ? `${h.open_time} – ${h.close_time}`
+                                : 'Fermé'}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </section>
+              )}
+
+              {/* ── SECTION ADRESSE (deplacee en bas : prestations + equipe prioritaires) ── */}
+              <section id="section-adresse" style={{ marginBottom:40 }}>
+                <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
+                  margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
+
+                {/* Carte Google Maps embed — si adresse disponible */}
+                {(business?.address || business?.city) && (() => {
+                  const addrQ = encodeURIComponent(
+                    [business.address, business.postal_code, business.city]
+                    .filter(Boolean).join(' ')
+                  );
+                  const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
+                  const embedUrl = `https://maps.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
+                  return (
+                    <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
+                      border:`1px solid ${th.border}` }}>
+                      <iframe
+                        src={embedUrl}
+                        width="100%"
+                        height="240"
+                        style={{ border:'none', display:'block' }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        title="Localisation du commerce"
+                      />
+                      {/* Lien "Ouvrir dans Maps" */}
+                      <a href={mapsLink} target="_blank" rel="noopener noreferrer"
+                        style={{ display:'flex', alignItems:'center', gap:8,
+                          padding:'10px 14px', background:th.card,
+                          borderTop:`1px solid ${th.border}`,
+                          fontSize:13, fontWeight:600, color:'#2563eb', textDecoration:'none' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                          style={{width:13,height:13}}>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          <polyline points="15 3 21 3 21 9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        {[business.address, business.postal_code, business.city].filter(Boolean).join(' ')}
+                      </a>
+                    </div>
+                  );
+                })()}
+
+                {/* Card infos : adresse textuelle + téléphone */}
+                <div style={{ background:th.card, border:`1px solid ${th.border}`,
+                  borderRadius:12, overflow:'hidden' }}>
+                  {(business?.address || business?.city || business?.postal_code) && (
+                    <div style={{ display:'flex', alignItems:'flex-start', gap:12,
+                      padding:'14px 18px',
+                      borderBottom: business?.phone ? `1px solid ${th.border}` : 'none' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        style={{width:16,height:16,flexShrink:0,marginTop:2,color:th.muted}}>
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                      <div>
+                        {business?.address && (
+                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6, fontWeight:500 }}>
+                            {business.address}
+                          </p>
+                        )}
+                        {(business?.postal_code || business?.city) && (
+                          <p style={{ fontSize:14, color:th.text, margin:0, lineHeight:1.6 }}>
+                            {[business.postal_code, business.city].filter(Boolean).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {business?.phone && (
+                    <a href={`tel:${business.phone}`}
+                      style={{ display:'flex', alignItems:'center', gap:12,
+                        padding:'14px 18px', fontSize:14, color:th.text,
+                        textDecoration:'none' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                        style={{width:16,height:16,flexShrink:0,color:th.muted}}>
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                      </svg>
+                      <span style={{ fontWeight:500 }}>{business.phone}</span>
+                    </a>
+                  )}
+                </div>
+              </section>
 
               {/* ── FOOTER ── */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
