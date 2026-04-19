@@ -5,7 +5,53 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 19) : Fix 401 suppression compte + code "supprimer" insensible casse
+## 🆕 Session 2026-04-19 (suite 20) : Modal suppression épurée + politique de confidentialité étoffée
+
+### Demande (onboarding.md)
+Retirer le gros paragraphe explicatif de la modal de suppression (« Vos
+données personnelles… / Les transactions restent conservées de façon
+anonyme… ») et déplacer cette explication dans la politique de
+confidentialité — plus approprié et lisible.
+
+### Frontend — `pages/booking/MyAppointments.jsx`
+Paragraphe détaillé remplacé par une mention courte :
+`Cette action est irréversible. Voir la politique de confidentialité.`
+Le lien ouvre `/book/:slug/politique` dans un nouvel onglet (`target="_blank"`)
+pour ne pas perdre le contexte de la modal.
+
+### Frontend — `pages/BookingPolitique.jsx`
+Nouvelle section **🗑️ Suppression de compte** ajoutée dans `SECTIONS` :
+- Procédure : onglet Mon profil → « Supprimer mon compte » → confirmation
+  saisie du mot « supprimer ».
+- Effet sur données personnelles : nom/prénom/email/téléphone effacés
+  définitivement + RDV futurs annulés automatiquement.
+- Justification conservation transactions anonymisées :
+  - Obligations comptables et fiscales du commerçant.
+  - Seuls montants / dates / prestations conservés, sans lien avec l'identité.
+  - Conformité RGPD (droit à l'effacement) ET respect des obligations légales
+    de tenue des livres comptables.
+
+La section s'insère juste après « 🔒 Données personnelles » (continuité
+logique) et utilise le même format accordéon que les autres sections.
+
+### Build
+- `npx vite build` : OK (16.37s, 87 modules).
+- `page-booking` : 164.07 kB (-0.02 kB, texte plus court dans la modal).
+- `index` (qui contient BookingPolitique) : 191.26 kB (+~1 kB pour la
+  nouvelle section).
+
+### Compatibilité préservée
+- Aucun changement d'API. La modal fonctionne toujours exactement pareil,
+  juste avec un texte plus court et un lien sortant.
+- Le lien vers `/book/:slug/politique` ouvre dans un nouvel onglet → la
+  saisie en cours dans la modal n'est pas perdue si l'utilisateur consulte
+  la politique.
+- La section accordéon reste fermée par défaut → la longueur totale de la
+  page de politique n'augmente pas visuellement à l'ouverture.
+
+---
+
+## Session 2026-04-19 (suite 19) : Fix 401 suppression compte + code "supprimer" insensible casse
 
 ### Bugs rapportés (onboarding.md)
 1. `DELETE /api/global-clients/me` → 401 « Token invalide » quand le client

@@ -68,6 +68,11 @@ export default function BookingPolitique({ slug }) {
       content: `Les informations que vous renseignez lors de votre reservation (nom, email, telephone) sont utilisees exclusivement pour la gestion de vos rendez-vous et ne sont jamais transmises a des tiers.\n\nConformement au RGPD, vous disposez d'un droit d'acces, de rectification et de suppression de vos donnees. Pour exercer ces droits, contactez-nous directement.`,
     },
     {
+      icon: '🗑️',
+      title: 'Suppression de compte',
+      content: `Vous pouvez supprimer votre compte a tout moment depuis l'onglet "Mon profil" > "Supprimer mon compte". Une confirmation vous sera demandee (saisie du mot "supprimer") pour eviter toute suppression accidentelle.\n\nLors de la suppression, vos donnees personnelles (nom, prenom, email, telephone) sont effacees definitivement et vos rendez-vous futurs sont automatiquement annules.\n\nEn revanche, les transactions deja effectuees chez les commercants (encaissements en caisse, paiements de RDV passes) sont conservees de facon anonyme. Cette conservation est indispensable a la comptabilite et aux obligations fiscales du commercant : seuls les montants, dates et prestations sont conserves, sans aucun lien avec votre identite.\n\nCette anonymisation garantit la conformite RGPD (droit a l'effacement) tout en respectant les obligations legales de tenue des livres comptables.`,
+    },
+    {
       icon: '📞',
       title: 'Contact',
       content: `Pour toute question relative a votre reservation, n'hesitez pas a nous contacter${phone ? ` au ${phone}` : ' directement'}${address ? ` ou en nous rendant visite au ${address}` : ''}.`,

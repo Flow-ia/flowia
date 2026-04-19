@@ -1039,13 +1039,15 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
             <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 8px' }}>
               Supprimer mon compte ?
             </p>
-            <p style={{ fontSize:13, color:th.muted, margin:'0 0 14px', lineHeight:1.6 }}>
-              Cette action est <strong style={{color:th.text}}>irréversible</strong>. Vos données personnelles
-              (nom, prénom, email, téléphone) seront supprimées. Les transactions déjà effectuées
-              chez les commerçants restent conservées de façon anonyme pour leur comptabilité.
+            <p style={{ fontSize:13, color:th.muted, margin:'0 0 10px', lineHeight:1.6 }}>
+              Cette action est <strong style={{color:th.text}}>irréversible</strong>.{' '}
+              <a href={`/book/${slug}/politique`} target="_blank" rel="noreferrer"
+                style={{ color:th.text, fontWeight:700, textDecoration:'underline' }}>
+                Voir la politique de confidentialité
+              </a>.
             </p>
             <p style={{ fontSize:13, color:th.muted, margin:'0 0 8px', lineHeight:1.5 }}>
-              Pour confirmer, saisissez exactement&nbsp;:
+              Pour confirmer, saisissez&nbsp;:
             </p>
             <p style={{ fontSize:15, fontWeight:900, color:'#ef4444', margin:'0 0 10px',
               fontFamily:'monospace', letterSpacing:1 }}>
