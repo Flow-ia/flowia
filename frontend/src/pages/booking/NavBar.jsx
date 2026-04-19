@@ -50,6 +50,56 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
     <nav style={{ position:'sticky', top:0, zIndex:50, background:th.navBg,
       borderBottom:`1px solid ${th.navBorder}`, boxShadow:'0 1px 3px rgba(0,0,0,0.06)',
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+      {/* Styles autoporteurs — inclus à chaque montage de NavBar pour que les
+          règles responsive s'appliquent sur toutes les vues (booking, myAppts,
+          parrain, success), pas uniquement sur la vue avec la style-sheet
+          principale de BookingPage. */}
+      <style>{`
+        .bk-do-right{ display:flex }
+        .bk-mo-quick{ display:none }
+        .bk-mo-hamb{ display:none }
+        @media(min-width:768px){ .bk-mo{ display:none!important } }
+        @media(max-width:767px){
+          .bk-do{ display:none!important }
+          .bk-do-right{ display:none!important }
+          .bk-mo-quick{ display:flex!important }
+          .bk-mo-hamb{ display:flex!important }
+          .bk-nav-title{ max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+        }
+        @media(max-width:480px){
+          .bk-nav-pad{ padding:0 12px!important }
+          .bk-mo-quick{ display:none!important }
+          .bk-nav-title{ max-width:110px }
+        }
+        @media(max-width:360px){
+          .bk-nav-title{ display:none }
+        }
+        /* Drawer mobile */
+        .bk-drawer{ position:fixed; inset:0; z-index:200; pointer-events:none }
+        .bk-drawer.open{ pointer-events:auto }
+        .bk-drawer-backdrop{
+          position:absolute; inset:0;
+          background:rgba(0,0,0,0.5);
+          backdrop-filter:blur(2px);
+          -webkit-backdrop-filter:blur(2px);
+          opacity:0;
+          transition:opacity .22s ease;
+        }
+        .bk-drawer.open .bk-drawer-backdrop{ opacity:1 }
+        .bk-drawer-panel{
+          position:absolute; top:0; right:0;
+          height:100vh; height:100dvh;
+          width:min(86vw, 340px);
+          display:flex; flex-direction:column;
+          overflow-y:auto;
+          box-shadow:-8px 0 32px rgba(0,0,0,0.2);
+          transform:translateX(100%);
+          transition:transform .28s cubic-bezier(0.16, 1, 0.3, 1);
+          will-change:transform;
+        }
+        .bk-drawer.open .bk-drawer-panel{ transform:translateX(0) }
+        @media(min-width:768px){ .bk-drawer{ display:none } }
+      `}</style>
       <div className="bk-nav-pad" style={{ maxWidth:1100, margin:'0 auto', padding:'0 24px', height:60,
         display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
 

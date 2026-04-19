@@ -749,21 +749,12 @@ export default function BookingPage({ slug }) {
         @keyframes spin  { to { transform:rotate(360deg); } }
         @keyframes fadeIn{ from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         *{ box-sizing:border-box }
-
-        /* Desktop par défaut : zone droite visible en flex, liens rapides mobile + hamburger masqués */
-        .bk-do-right{ display:flex }
-        .bk-mo-quick{ display:none }
-        .bk-mo-hamb{ display:none }
-
-        @media(min-width:768px){ .bk-mo{ display:none!important } }
+        /* Règles layout spécifiques à la vue booking (sidebar, grid services,
+           footer, étapes). Les styles NavBar/drawer sont auto-inclus par le
+           composant NavBar pour fonctionner sur toutes les vues. */
         @media(max-width:767px){
-          .bk-do{ display:none!important }
-          .bk-do-right{ display:none!important }
-          .bk-mo-quick{ display:flex!important }
-          .bk-mo-hamb{ display:flex!important }
           .bk-2c{ flex-direction:column!important }
           .bk-sb{ order:-1!important; width:100%!important; position:static!important; padding-top:12px!important }
-          .bk-nav-title{ max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
           .bk-footer-grid{ grid-template-columns:1fr!important; gap:16px!important }
           .bk-iframe{ height:180px!important }
           .bk-slots{ grid-template-columns:repeat(2,1fr)!important }
@@ -772,51 +763,21 @@ export default function BookingPage({ slug }) {
           .bk-ref-code{ font-size:16px!important; letter-spacing:1px!important }
           .bk-side-logo{ width:64px!important; height:64px!important }
           .bk-emp-grid{ grid-template-columns:1fr!important }
-          .bk-tabs button{ padding:10px 8px!important; font-size:12px!important }
+          .bk-tabs{ overflow-x:auto }
+          .bk-tabs button{ padding:12px 14px!important; font-size:13px!important; flex-shrink:0 }
         }
         @media(max-width:480px){
           .bk-steps{ padding:0 4px!important }
           .bk-slots{ grid-template-columns:repeat(2,1fr)!important; gap:8px!important }
           .bk-hours-row{ padding:7px 12px!important }
-          .bk-nav-pad{ padding:0 12px!important }
-          .bk-mo-quick{ display:none!important }
-          .bk-nav-title{ max-width:110px }
+          .bk-tabs button{ padding:10px 10px!important; font-size:12px!important }
         }
         @media(max-width:360px){
           .bk-slots{ grid-template-columns:1fr!important }
           .bk-share-btns button{ flex:1 1 100%!important }
-          .bk-nav-title{ display:none }
         }
         .bk-modal-inner{ max-height:90vh; overflow-y:auto }
         .bk-touch{ min-height:44px }
-
-        /* ── Drawer mobile (menu hamburger glissant depuis la droite) ───── */
-        .bk-drawer{
-          position:fixed; inset:0; z-index:200; pointer-events:none;
-        }
-        .bk-drawer.open{ pointer-events:auto }
-        .bk-drawer-backdrop{
-          position:absolute; inset:0;
-          background:rgba(0,0,0,0.5);
-          backdrop-filter:blur(2px);
-          -webkit-backdrop-filter:blur(2px);
-          opacity:0;
-          transition:opacity .22s ease;
-        }
-        .bk-drawer.open .bk-drawer-backdrop{ opacity:1 }
-        .bk-drawer-panel{
-          position:absolute; top:0; right:0;
-          height:100vh; height:100dvh;
-          width:min(86vw, 340px);
-          display:flex; flex-direction:column;
-          overflow-y:auto;
-          box-shadow:-8px 0 32px rgba(0,0,0,0.2);
-          transform:translateX(100%);
-          transition:transform .28s cubic-bezier(0.16, 1, 0.3, 1);
-          will-change:transform;
-        }
-        .bk-drawer.open .bk-drawer-panel{ transform:translateX(0) }
-        @media(min-width:768px){ .bk-drawer{ display:none } }
       `}</style>
 
       {/* ══ NAVBAR — composant partagé ══ */}

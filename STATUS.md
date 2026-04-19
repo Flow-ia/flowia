@@ -5,7 +5,70 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 15) : Fix double navbar Mes RDV + URL + cleanup drawer
+## 🆕 Session 2026-04-19 (suite 16) : Fix styles NavBar cassés sur Mes RDV + tabs scrollables
+
+### Bug rapporté
+Click sur la card « Mes rendez-vous » du drawer → la page s'ouvre mais le
+design est cassé : le bouton hamburger disparaît, les 3 liens rapides aussi,
+et on ne voit plus que les tabs « Profil » et « Mes RDV ».
+
+### Cause racine
+La balise `<style>` globale de BookingPage contenait les règles CSS
+responsive de la NavBar (`.bk-do`, `.bk-do-right`, `.bk-mo-quick`,
+`.bk-mo-hamb`, `.bk-drawer*`, `.bk-nav-title`, etc.) ET cette balise n'est
+rendue QUE dans la vue 'booking'. Sur la vue 'myAppts', 'parrain' ou
+'success', la balise `<style>` n'était pas injectée → les règles responsive
+NavBar ne s'appliquaient PAS → la NavBar revenait à son comportement
+« desktop » forcé avec zone droite `display:flex` invisible (car contenu
+trop large), pas de hamburger (`display:none` par défaut), pas de liens
+rapides (`display:none` par défaut).
+
+### Fix — auto-porteur des styles NavBar
+Les règles CSS responsive de la NavBar et du drawer sont déplacées de
+`BookingPage.jsx` vers une balise `<style>` **à l'intérieur du composant
+`NavBar` lui-même**. Ainsi :
+- Chaque fois que `NavBar` est monté (toute vue de la page réservation),
+  ses styles sont injectés dans le DOM.
+- Plus de dépendance entre la vue active et les styles NavBar.
+- React de-duplique naturellement via son render tree (même balise
+  `<style>` répétée = même effet CSS, pas de problème).
+
+### Règles déplacées vers NavBar.jsx
+- `.bk-do-right`, `.bk-do`, `.bk-mo`, `.bk-mo-quick`, `.bk-mo-hamb`
+- `.bk-nav-pad`, `.bk-nav-title`
+- `.bk-drawer`, `.bk-drawer-backdrop`, `.bk-drawer-panel`
+
+### Règles conservées dans BookingPage.jsx
+Purement layout booking (sidebar, grid services, iframe, footer, étapes,
+modals, tabs internes MyAppointments) : `bk-2c`, `bk-sb`, `bk-steps`,
+`bk-slots`, `bk-emp-grid`, `bk-iframe`, `bk-footer-grid`, `bk-grid2`,
+`bk-modal-inner`, `bk-touch`, `bk-ref-code`, `bk-share-btns`, `bk-side-logo`,
+`bk-hours-row`, `bk-tabs`.
+
+### Amélioration bonus — tabs MyAppointments scrollables
+Les tabs `Mes RDV / Mon profil / Parrainage` peuvent déborder sur iPhone SE
+(375px) quand Parrainage est actif. Ajout de `overflow-x:auto` sur le
+container + `flex-shrink:0` sur les boutons → scroll horizontal fluide si
+trop de tabs. Padding réduit à 12px 14px (mobile) et 10px 10px (< 480px).
+
+### Build
+- `npx vite build` : OK (13.30s, 87 modules).
+- `page-booking` : 155.82 kB (+0.34 kB pour la `<style>` dupliquée dans
+  NavBar, négligeable).
+
+### Compatibilité préservée
+- Desktop (> 767px) : comportement rigoureusement identique — les règles
+  `@media(min-width:768px)` activent les mêmes `display:none`/flex qu'avant.
+- La balise `<style>` dans NavBar est render à chaque montage ; comme la
+  NavBar est montée 1 seule fois par vue, pas de duplication inutile dans
+  le DOM.
+- Les règles dans BookingPage.jsx restent actives sur la vue booking
+  (sidebar, slots, grid employés, etc.).
+- Aucune prop modifiée sur NavBar, MyAppointments ou ReferralPage.
+
+---
+
+## Session 2026-04-19 (suite 15) : Fix double navbar Mes RDV + URL + cleanup drawer
 
 ### Bug rapporté
 Depuis le drawer mobile, click sur « Mes rendez-vous » :
