@@ -86,6 +86,9 @@ export default function BookingPage({ slug }) {
     } else if (path.includes('/client/profil')) {
       setView('myAppts');
       setMyApptsInitTab('profile');
+    } else if (path.includes('/client/passages')) {
+      setView('myAppts');
+      setMyApptsInitTab('visits');
     } else if (path.includes('/client/rdv')) {
       setView('myAppts');
       setMyApptsInitTab('appts');

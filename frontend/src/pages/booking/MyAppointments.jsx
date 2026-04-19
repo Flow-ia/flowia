@@ -4,10 +4,26 @@ import { useState, useEffect } from 'react';
 import { pubApi, globalClientApi } from '../../utils/api';
 import { Spinner } from './shared';
 
+// URL par onglet — permet à chaque client de rafraîchir la page sur son
+// sous-onglet actif (RDV, passages sur place, profil, parrainage).
+const TAB_URL = {
+  appts:   (slug) => `/book/${slug}/client/rdv`,
+  visits:  (slug) => `/book/${slug}/client/passages`,
+  profile: (slug) => `/book/${slug}/client/profil`,
+  parrain: (slug) => `/book/${slug}/client/rdv`, // parrainage partage l'URL RDV
+};
+
 export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab = 'appts', business = null }) {
   const [appts, setAppts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(initialTab); // 'appts' | 'visits' | 'profile' | 'parrain'
+  const [activeTab, setActiveTabRaw] = useState(initialTab); // 'appts' | 'visits' | 'profile' | 'parrain'
+  const setActiveTab = (tab) => {
+    setActiveTabRaw(tab);
+    const nextUrl = TAB_URL[tab]?.(slug);
+    if (nextUrl && window.location.pathname !== nextUrl) {
+      try { window.history.replaceState({}, '', nextUrl); } catch { /* ignore */ }
+    }
+  };
 
   // Passages "sur place" — transactions encaissées en caisse sans RDV préalable
   const [visits, setVisits] = useState([]);
@@ -65,6 +81,10 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     } catch(e) { setProfErr(e.message || 'Erreur'); }
     finally { setProfLoad(false); }
   };
+
+  // Resync l'onglet actif si la prop initialTab change (navigation
+  // externe depuis la NavBar alors que MyAppointments est déjà monté).
+  useEffect(() => { setActiveTabRaw(initialTab); }, [initialTab]);
 
   useEffect(() => {
     pubApi.myAppointments(slug)

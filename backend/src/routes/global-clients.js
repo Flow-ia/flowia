@@ -513,12 +513,12 @@ router.get('/me/visits', clientOrGlobalClientAuth, async (req, res) => {
          TO_CHAR(t.date, 'YYYY-MM-DD') as date,
          TO_CHAR(t.time, 'HH24:MI')     as time,
          t.datetime_iso, t.created_at, t.qty_total,
-         biz.business_name, biz.slug,
-         u.phone AS business_phone, u.address AS business_address,
+         u.business_name, biz.slug,
+         biz.phone AS business_phone, biz.address AS business_address,
          e.name AS employee_name
        FROM transactions t
-       LEFT JOIN booking_settings biz ON biz.user_id = t.user_id
        LEFT JOIN users u              ON u.id        = t.user_id
+       LEFT JOIN booking_settings biz ON biz.user_id = t.user_id
        LEFT JOIN employees e          ON e.id        = t.employee_id
        WHERE t.type IN ('income','revenue')
          AND t.appointment_id IS NULL
