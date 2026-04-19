@@ -502,7 +502,6 @@ export const globalClientApi = {
   resetPassword:  (data)        => gcRequest('/global-clients/reset-password',  { method:'POST', body: JSON.stringify(data) }),
   // RGPD
   exportData:     ()            => gcRequest('/global-clients/me/export'),
-  deleteAccount:  ()            => gcRequest('/global-clients/me',              { method:'DELETE' }),
   // Parrainage (page client)
   myReferralCode:    (slug)     => gcRequest('/global-clients/me/referral-code/'    + encodeURIComponent(slug)),
   myReferralHistory: (slug)     => gcRequest('/global-clients/me/referral-history/' + encodeURIComponent(slug)),

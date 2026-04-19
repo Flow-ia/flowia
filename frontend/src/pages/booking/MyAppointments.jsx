@@ -196,6 +196,42 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   const [tooLateModal, setTooLateModal] = useState(null); // appt dont délai dépassé
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  // Modal suppression de compte (RGPD)
+  const [deleteModal, setDeleteModal]       = useState(false);
+  const [deleteConfirm, setDeleteConfirm]   = useState('');
+  const [deleteLoading, setDeleteLoading]   = useState(false);
+  const [deleteErr, setDeleteErr]           = useState('');
+  const DELETE_PHRASE = 'SUPPRIMER4';
+
+  const openDeleteModal = () => {
+    setDeleteConfirm('');
+    setDeleteErr('');
+    setDeleteModal(true);
+  };
+  const closeDeleteModal = () => {
+    if (deleteLoading) return;
+    setDeleteModal(false);
+    setDeleteConfirm('');
+    setDeleteErr('');
+  };
+  const doDeleteAccount = async () => {
+    if (deleteConfirm !== DELETE_PHRASE) {
+      setDeleteErr(`Veuillez saisir exactement ${DELETE_PHRASE} pour confirmer.`);
+      return;
+    }
+    setDeleteLoading(true); setDeleteErr('');
+    try {
+      await globalClientApi.deleteAccount();
+      localStorage.removeItem('ff_gc_token');
+      localStorage.removeItem('ff_client_token');
+      localStorage.removeItem('ff_client_info');
+      if (onLogout) onLogout(); else onBack();
+    } catch (e) {
+      setDeleteErr(e.message || 'Erreur lors de la suppression.');
+      setDeleteLoading(false);
+    }
+  };
+
   const doCancel = async () => {
     if (!cancelModal) return;
     setCancelLoading(true);
@@ -710,6 +746,22 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
               color:'#ef4444', fontWeight:700, fontSize:13 }}>
               Se déconnecter
             </button>
+
+            {/* Supprimer mon compte (RGPD) */}
+            <button onClick={openDeleteModal}
+              style={{ width:'100%', padding:'13px', borderRadius:12, cursor:'pointer',
+                background:'transparent', border:`1px solid ${th.border}`,
+                color:th.muted, fontWeight:700, fontSize:13,
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                style={{width:14,height:14}}>
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/><path d="M14 11v6"/>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+              Supprimer mon compte
+            </button>
           </div>
         )}
 
@@ -962,6 +1014,71 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                 color:th.accentText, fontWeight:800, fontSize:14 }}>
               Compris
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal suppression de compte (RGPD) ── */}
+      {deleteModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
+          alignItems:'center', justifyContent:'center', padding:16,
+          background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
+          <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+            borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
+            boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
+            <div style={{ width:52, height:52, borderRadius:14, background:'rgba(239,68,68,0.1)',
+              display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"
+                style={{width:26,height:26}}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 8px' }}>
+              Supprimer mon compte ?
+            </p>
+            <p style={{ fontSize:13, color:th.muted, margin:'0 0 14px', lineHeight:1.6 }}>
+              Cette action est <strong style={{color:th.text}}>irréversible</strong>. Vos données personnelles
+              (nom, prénom, email, téléphone) seront supprimées. Les transactions déjà effectuées
+              chez les commerçants restent conservées de façon anonyme pour leur comptabilité.
+            </p>
+            <p style={{ fontSize:13, color:th.muted, margin:'0 0 8px', lineHeight:1.5 }}>
+              Pour confirmer, saisissez exactement&nbsp;:
+            </p>
+            <p style={{ fontSize:15, fontWeight:900, color:'#ef4444', margin:'0 0 10px',
+              fontFamily:'monospace', letterSpacing:1 }}>
+              {DELETE_PHRASE}
+            </p>
+            <input type="text" value={deleteConfirm}
+              onChange={e => { setDeleteConfirm(e.target.value); if (deleteErr) setDeleteErr(''); }}
+              placeholder={DELETE_PHRASE}
+              autoComplete="off" autoCapitalize="characters" spellCheck={false}
+              disabled={deleteLoading}
+              style={{ ...inpStyle, marginBottom:10, fontFamily:'monospace', letterSpacing:1,
+                borderColor: deleteErr ? '#ef4444' : th.inputBorder }}/>
+            {deleteErr && (
+              <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+                {deleteErr}
+              </p>
+            )}
+            <div style={{ display:'flex', gap:10, marginTop:6 }}>
+              <button onClick={closeDeleteModal} disabled={deleteLoading}
+                style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                  background:th.cardAlt, border:`1px solid ${th.border}`,
+                  color:th.muted, fontWeight:700, fontSize:13 }}>
+                Annuler
+              </button>
+              <button onClick={doDeleteAccount}
+                disabled={deleteLoading || deleteConfirm !== DELETE_PHRASE}
+                style={{ flex:1, padding:'12px', borderRadius:11,
+                  cursor: (deleteLoading || deleteConfirm !== DELETE_PHRASE) ? 'not-allowed' : 'pointer',
+                  background:'#ef4444', border:'none',
+                  color:'white', fontWeight:800, fontSize:13,
+                  opacity: (deleteLoading || deleteConfirm !== DELETE_PHRASE) ? 0.5 : 1 }}>
+                {deleteLoading ? '...' : 'Supprimer définitivement'}
+              </button>
+            </div>
           </div>
         </div>
       )}

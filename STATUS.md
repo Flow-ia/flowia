@@ -5,7 +5,76 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 17) : Traçabilité passages sur place cross-commerçant
+## 🆕 Session 2026-04-19 (suite 18) : Suppression compte client RGPD + confirmation "SUPPRIMER4"
+
+### Demande (onboarding.md)
+Ajouter bouton « Supprimer mon compte » sur la page profil client, sous
+« Déconnexion ». Confirmation sécurisée : le client doit saisir exactement
+`SUPPRIMER4` pour valider. Données personnelles supprimées (nom, prénom,
+téléphone, email). Transactions conservées côté commerçant mais anonymisées.
+
+### Backend (rien à ajouter)
+L'endpoint `DELETE /api/global-clients/me` existait déjà (global-clients.js
+lignes 766-858) avec la logique RGPD complète :
+- Anonymise `appointments` (client_id=NULL, client_name='Client anonyme',
+  client_email=NULL, client_phone=NULL) pour toutes les fiches liées ET
+  toutes les lignes matchées par email.
+- Annule les RDV futurs du compte supprimé (status='cancelled').
+- Anonymise `transactions.client_email` et `client_note` (montant conservé
+  pour la compta du commerçant).
+- DELETE `client_accounts`, `client_loyalty`, anonymise `client_notes` et
+  `client_credits`.
+- DELETE `global_clients`.
+
+### Frontend — `utils/api.js`
+- Doublon supprimé : il y avait 2 définitions de `globalClientApi.deleteAccount`
+  (une signature `(token)` et une sans argument qui écrasait la première).
+  Conservé uniquement `deleteAccount: (token) => gcRequest('/global-clients/me',
+  { method:'DELETE' }, token)`. Le fallback `gcRequest` utilise
+  `ff_gc_token` puis `ff_client_token`, donc l'appel sans token fonctionne.
+
+### Frontend — `pages/booking/MyAppointments.jsx`
+- Nouveau state `deleteModal` / `deleteConfirm` / `deleteLoading` / `deleteErr`
+  + constante `DELETE_PHRASE = 'SUPPRIMER4'`.
+- Handlers `openDeleteModal` / `closeDeleteModal` / `doDeleteAccount`.
+  `doDeleteAccount` vérifie l'égalité stricte avec `SUPPRIMER4`, appelle
+  `globalClientApi.deleteAccount()`, purge localStorage (ff_gc_token,
+  ff_client_token, ff_client_info), puis appelle `onLogout()` ou `onBack()`.
+- Bouton « Supprimer mon compte » rendu sous « Se déconnecter » dans l'onglet
+  Profil (activeTab === 'profile'). Style discret : border neutre, texte gris,
+  icône corbeille — pour ne pas encourager la suppression mais rester découvrable.
+- Modal RGPD : icône triangle alerte rouge, message d'avertissement
+  (« irréversible » + explication sur la conservation anonyme des
+  transactions), label `SUPPRIMER4` affiché en rouge gras monospace, input
+  dédié avec `autoCapitalize='characters'` + `spellCheck=false`, bouton rouge
+  « Supprimer définitivement » désactivé tant que le texte saisi ≠ `SUPPRIMER4`.
+
+### Parcours utilisateur
+1. Client connecté ouvre « Mes RDV » → onglet « Mon profil ».
+2. Scroll en bas → boutons « Se déconnecter » puis « Supprimer mon compte ».
+3. Clic → modal avec champ de saisie. Tant que `SUPPRIMER4` n'est pas saisi
+   à l'identique, le bouton « Supprimer définitivement » reste gris/disabled.
+4. Validation → DELETE /me exécuté → localStorage nettoyé → retour à l'accueil
+   du site de réservation (onLogout/onBack).
+
+### Build
+- `npx vite build` : OK (13.30s, 87 modules).
+- `page-booking` : 164.09 kB (+~3.8 kB pour le nouveau modal + handlers).
+
+### Compatibilité préservée
+- Zéro migration DB (endpoint backend déjà déployé depuis longtemps).
+- Bouton visible uniquement dans l'onglet 'profile' (activeTab === 'profile')
+  → aucun impact sur les autres vues (booking / visits / parrain).
+- Le modal est rendu conditionnellement en fin de return, comme `cancelModal`
+  et `tooLateModal` existants → même stack d'overlays, zIndex 200.
+- Input avec `autoCapitalize='characters'` : sur mobile iOS/Android, le
+  clavier propose directement les majuscules (réduit les erreurs de saisie).
+- La vérification `!== DELETE_PHRASE` est stricte (sensible à la casse et aux
+  espaces) — conforme à la demande « exactement SUPPRIMER4 ».
+
+---
+
+## Session 2026-04-19 (suite 17) : Traçabilité passages sur place cross-commerçant
 
 ### Demande (onboarding.md)
 Tracer les passages « sur place » des clients : quand un employé d'un
