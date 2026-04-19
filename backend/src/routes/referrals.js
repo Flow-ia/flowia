@@ -275,6 +275,29 @@ async function validateReferralUse(useId, userId) {
   } finally { client.release(); }
 }
 
+// ── POST /api/referrals/check — pré-validation côté caisse commerçant ────
+// Utilisé par la caisse pour afficher la remise parrainage AVANT de valider
+// la transaction. Body: { code, filleul_email, amount }.
+merchantRouter.post('/check', async (req, res) => {
+  try {
+    const { code, filleul_email, amount } = req.body || {};
+    const out = await resolveReferralForFilleul(
+      req.user.userId, code, filleul_email, amount || 0
+    );
+    if (!out.ok) return res.status(200).json({ valid: false, reason: out.reason });
+    res.json({
+      valid:          true,
+      discount_type:  out.filleul_type,
+      discount_value: out.filleul_value,
+      discount:       out.discount,
+      parrain_email:  out.parrainEmail,
+    });
+  } catch (e) {
+    console.error('[REF CHECK]', e.message);
+    res.status(500).json({ valid: false, error: e.message });
+  }
+});
+
 // ── POST /api/referrals/uses/:id/validate — validation en caisse ───────────
 // L'employé confirme que le filleul est bien venu → on émet la promo parrain
 // + on envoie l'email au parrain + on enregistre une ligne client_rewards.
@@ -327,6 +350,90 @@ merchantRouter.post('/rewards/:id/use', async (req, res) => {
   } catch (e) { console.error('[REF REWARD USE]', e.message); res.status(500).json({ error: e.message }); }
 });
 
+// ── Helper interne : résout un code parrainage pour un filleul donné ─────
+// Vérifie programme activé, code existant, filleul ≠ parrain, filleul nouveau
+// (jamais eu de RDV ni transaction chez ce commerçant), quota parrain OK.
+// Renvoie { ok, reason?, refCodeId, parrainEmail, filleulEmail, filleul_type,
+//   filleul_value, discount } — discount calculé sur baseAmount.
+async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseAmount) {
+  const out = { ok: false };
+  if (!rawCode || !filleulEmailRaw) { out.reason = 'missing_params'; return out; }
+  const code    = String(rawCode).trim().toUpperCase();
+  const filEmail = String(filleulEmailRaw).trim().toLowerCase();
+  if (!code || !filEmail.includes('@')) { out.reason = 'bad_input'; return out; }
+
+  const { rows: prog } = await pool.query(
+    `SELECT is_enabled, filleul_type, filleul_value, limit_count, limit_period
+       FROM referral_programs WHERE user_id=$1`, [userId]
+  );
+  if (!prog.length || !prog[0].is_enabled) { out.reason = 'program_disabled'; return out; }
+
+  const { rows: rc } = await pool.query(
+    `SELECT id, owner_client_email FROM referral_codes
+      WHERE user_id=$1 AND code=$2`, [userId, code]
+  );
+  if (!rc.length) { out.reason = 'code_not_found'; return out; }
+  if (rc[0].owner_client_email.toLowerCase() === filEmail) { out.reason = 'self_referral'; return out; }
+
+  // Filleul ne doit jamais être venu — ni RDV ni transaction payée
+  const { rows: prevAppt } = await pool.query(
+    `SELECT 1 FROM appointments WHERE user_id=$1 AND LOWER(client_email)=$2 LIMIT 1`,
+    [userId, filEmail]
+  );
+  const { rows: prevTx } = await pool.query(
+    `SELECT 1 FROM transactions
+      WHERE user_id=$1 AND LOWER(client_email)=$2 AND type IN ('income','revenue')
+      LIMIT 1`,
+    [userId, filEmail]
+  );
+  if (prevAppt.length || prevTx.length) { out.reason = 'filleul_not_new'; return out; }
+
+  const { rows: existing } = await pool.query(
+    `SELECT 1 FROM referral_uses
+      WHERE user_id=$1 AND LOWER(filleul_email)=$2
+        AND status IN ('pending','validated') LIMIT 1`,
+    [userId, filEmail]
+  );
+  if (existing.length) { out.reason = 'already_parraine'; return out; }
+
+  // Quota parrain
+  const lp = prog[0].limit_period || 'unlimited';
+  const lc = prog[0].limit_count;
+  if (lp !== 'unlimited' && lc != null && lc > 0) {
+    const ownerEmail = rc[0].owner_client_email.toLowerCase();
+    let dateClause = '';
+    if (lp === 'month')        dateClause = "AND ru.created_at >= date_trunc('month', NOW())";
+    else if (lp === '3months') dateClause = "AND ru.created_at >= NOW() - INTERVAL '90 days'";
+    else if (lp === 'year')    dateClause = "AND ru.created_at >= date_trunc('year', NOW())";
+    const { rows: cnt } = await pool.query(
+      `SELECT COUNT(*)::int AS n
+         FROM referral_uses ru
+         JOIN referral_codes rcc ON rcc.id = ru.referral_code_id
+        WHERE ru.user_id=$1 AND LOWER(rcc.owner_client_email)=$2
+          AND ru.status IN ('pending','validated') ${dateClause}`,
+      [userId, ownerEmail]
+    );
+    if (cnt[0].n >= lc) { out.reason = 'quota_exceeded'; return out; }
+  }
+
+  const ft = prog[0].filleul_type;
+  const fv = parseFloat(prog[0].filleul_value);
+  const base = parseFloat(baseAmount) || 0;
+  const discount = ft === 'percent'
+    ? Math.min(base, base * fv / 100)
+    : Math.min(base, fv);
+
+  out.ok            = true;
+  out.refCodeId     = rc[0].id;
+  out.parrainEmail  = rc[0].owner_client_email;
+  out.filleulEmail  = filEmail;
+  out.filleul_type  = ft;
+  out.filleul_value = fv;
+  out.discount      = Math.round(discount * 100) / 100;
+  return out;
+}
+
 module.exports = merchantRouter;
-module.exports.genReferralCode     = genReferralCode;
-module.exports.validateReferralUse = validateReferralUse;
+module.exports.genReferralCode           = genReferralCode;
+module.exports.validateReferralUse       = validateReferralUse;
+module.exports.resolveReferralForFilleul = resolveReferralForFilleul;

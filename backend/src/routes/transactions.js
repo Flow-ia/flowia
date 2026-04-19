@@ -4,6 +4,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const { upsertLocalClient } = require('./clients');
+const { resolveReferralForFilleul, validateReferralUse } = require('./referrals');
 const router = express.Router();
 
 router.use(authMiddleware);
@@ -108,9 +109,40 @@ router.post('/', async (req, res) => {
             date, time, datetime_iso, appointment_id, source,
             client_email, client_name,
             promo_code_id, discount_amount, original_amount,
-            client_note, items, payments } = req.body;
+            client_note, items, payments, referral_code } = req.body;
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
+
+    // ── Parrainage (encaissement caisse d'un filleul) ───────────────────────
+    // Si referral_code fourni, on le valide côté serveur AVANT insert pour
+    // empêcher la création d'une transaction trompeuse (fraude prix).
+    // Priorité au code promo classique si les deux sont fournis (non-cumul).
+    let referralCtx = null;
+    const incomingRef = String(referral_code || '').trim().toUpperCase();
+    if (!promo_code_id && incomingRef && client_email && type === 'revenue') {
+      try {
+        const baseAmt = parseFloat(original_amount || amount) || 0;
+        const resolved = await resolveReferralForFilleul(
+          req.user.userId, incomingRef, client_email, baseAmt
+        );
+        if (!resolved.ok) {
+          // Raisons claires pour le frontend (quota dépassé, filleul non
+          // nouveau, self-referral…). 400 bloque la transaction.
+          const msg = {
+            program_disabled: "Programme parrainage désactivé.",
+            code_not_found:   'Code parrainage invalide.',
+            self_referral:    'Le parrain ne peut pas être son propre filleul.',
+            filleul_not_new:  'Ce client a déjà été servi — le parrainage ne peut plus s\'appliquer.',
+            already_parraine:'Ce client a déjà bénéficié d\'un parrainage.',
+            quota_exceeded:   'Limite de parrainages atteinte pour ce parrain.',
+          }[resolved.reason] || 'Parrainage non applicable.';
+          return res.status(400).json({ error: msg, reason: resolved.reason });
+        }
+        referralCtx = resolved;
+      } catch (e) {
+        console.warn('[TX referral pre-check]', e.message);
+      }
+    }
 
     // ── Items normalisés → qty_total ──────────────────────────────────────────
     const itemList = Array.isArray(items) ? items.filter(it => it && it.service_name) : [];
@@ -231,6 +263,30 @@ router.post('/', async (req, res) => {
         [req.user.userId, promo_code_id, logEmail, logName, tx.id,
          discount_amount||0, original_amount||amount||0]
       ).catch(e => console.error('[PROMO LOG ERR]', e.message));
+    }
+
+    // ── Parrainage : créer referral_uses + auto-valider (caisse = payé immédiat)
+    if (referralCtx?.ok) {
+      try {
+        const { rows: ru } = await pool.query(
+          `INSERT INTO referral_uses
+             (user_id, referral_code_id, filleul_email, transaction_id, status)
+           VALUES ($1,$2,$3,$4,'pending') RETURNING id`,
+          [req.user.userId, referralCtx.refCodeId, referralCtx.filleulEmail, tx.id]
+        );
+        try {
+          const vres = await validateReferralUse(ru[0].id, req.user.userId);
+          tx.referral_validated = !!vres?.ok;
+          tx.referral_code      = incomingRef;
+          tx.referral_parrain_email = referralCtx.parrainEmail;
+        } catch (vErr) {
+          console.warn('[TX referral auto-validate]', vErr.message);
+          tx.referral_validated = false;
+          tx.referral_code      = incomingRef;
+        }
+      } catch (rErr) {
+        console.warn('[TX referral insert]', rErr.message);
+      }
     }
 
     // Audit : création

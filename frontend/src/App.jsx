@@ -255,9 +255,29 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
     if (!promoCode.trim()) return;
     setPromoLoad(true); setPromoErr('');
     try {
-      const res = await promoApi.check({ code: promoCode.trim(), amount: total, client_email: clientEmail.trim() || undefined });
-      if (res.valid) { setPromoData(res); setPromoErr(''); }
-      else { setPromoData(null); setPromoErr(res.error || 'Code invalide'); }
+      const codeUp = promoCode.trim().toUpperCase();
+      // 1. Code promo classique
+      const res = await promoApi.check({ code: codeUp, amount: total, client_email: clientEmail.trim() || undefined });
+      if (res.valid) { setPromoData({ ...res, source:'promo' }); setPromoErr(''); return; }
+      // 2. Fallback : code parrainage (filleul encaissé en caisse)
+      if (clientEmail.trim()) {
+        try {
+          const ref = await referralsApi.checkCode({
+            code: codeUp, filleul_email: clientEmail.trim(), amount: total,
+          });
+          if (ref?.valid) {
+            setPromoData({
+              source:   'referral',
+              discount: ref.discount,
+              promo:    { type: ref.discount_type, value: ref.discount_value },
+            });
+            setPromoErr('');
+            return;
+          }
+          // reason déjà bavard si utile (quota, filleul_not_new…) — reste silencieux ici
+        } catch { /* silencieux */ }
+      }
+      setPromoData(null); setPromoErr(res.error || 'Code invalide');
     } catch(e) { setPromoErr(e.message || 'Impossible de verifier le code'); }
     finally { setPromoLoad(false); }
   };
@@ -323,7 +343,11 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
         description: desc,
         date, time,
         datetime_iso: new Date(`${date}T${time}`).toISOString(),
-        promo_code_id: promoData?.promo?.id || null,
+        // Parrainage exclusif : si source='referral', on n'envoie PAS
+        // promo_code_id et on passe referral_code à la place. Le back
+        // re-vérifie conditions + quota avant de créer la transaction.
+        promo_code_id:   promoData?.source === 'referral' ? null : (promoData?.promo?.id || null),
+        referral_code:   promoData?.source === 'referral' ? promoCode.trim().toUpperCase() : undefined,
         discount_amount: discount || 0,
         original_amount: total,
         client_note: clientNote.trim() || null,
@@ -842,7 +866,15 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
                     {promoLoad?'...':'✓'}
                   </button>
                 </div>
-                {promoData && <p className="text-xs font-medium mt-2" style={{ color:'#10b981' }}>🎉 Remise de {promoData.promo.type==='percent'?`${promoData.promo.value}%`:`${fmtN(promoData.discount)} €`}</p>}
+                {promoData && (
+                  <p className="text-xs font-medium mt-2"
+                    style={{ color: promoData.source === 'referral' ? '#7c3aed' : '#10b981' }}>
+                    {promoData.source === 'referral' ? '🤝 Parrainage' : '🎉 Remise'} de{' '}
+                    {promoData.promo?.type === 'percent'
+                      ? `${promoData.promo.value}%`
+                      : `${fmtN(promoData.discount)} €`}
+                  </p>
+                )}
                 {promoErr && <p className="text-xs mt-2" style={{ color:'#ef4444' }}>❌ {promoErr}</p>}
               </div>
             )}

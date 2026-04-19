@@ -1071,6 +1071,10 @@ async function initDB() {
   `);
   await runMigration(`ALTER TABLE referral_uses ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'pending'`);
   await runMigration(`ALTER TABLE referral_uses ADD COLUMN IF NOT EXISTS validated_at TIMESTAMPTZ`);
+  // Support encaissement caisse (transaction directe sans RDV préalable) —
+  // le parrainage s'attache à la transaction au lieu de appointment_id.
+  await runMigration(`ALTER TABLE referral_uses ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_referral_uses_tx ON referral_uses(transaction_id) WHERE transaction_id IS NOT NULL`);
   // Les parrainages créés avant ce refactor ont déjà émis les promos → marquer validés.
   await runMigration(`UPDATE referral_uses SET status='validated', validated_at=COALESCE(validated_at, created_at)
     WHERE parrain_promo_id IS NOT NULL AND status='pending'`);
