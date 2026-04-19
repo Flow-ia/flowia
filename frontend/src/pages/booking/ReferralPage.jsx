@@ -72,6 +72,12 @@ export function ReferralPage({
     r => (r.reward_type === "referral" || r.reward_type === "referral_parrain")
       && r.status === "available"
   );
+  // Historique des récompenses déjà consommées — pour donner une visibilité
+  // complète de l'usage du programme au client. Triées plus récente d'abord.
+  const usedRewards = (refMyRewards || [])
+    .filter(r => (r.reward_type === "referral" || r.reward_type === "referral_parrain")
+              && r.status === "used")
+    .sort((a, b) => new Date(b.used_at || 0) - new Date(a.used_at || 0));
   const availableSum = availableRewards.reduce((acc, r) => {
     if (r.type === "percent") return acc; // ignorer les % dans la somme €
     return acc + Number(r.value || 0);
@@ -582,6 +588,55 @@ export function ReferralPage({
                     ? `Quota atteint. Recharge le ${windowEndLabel} à minuit.`
                     : "Quota atteint.")}
             </p>
+          </div>
+        )}
+
+        {/* Historique des récompenses utilisées — visibilité sur l'usage
+            passé du programme (codes consommés, date d'utilisation). */}
+        {usedRewards.length > 0 && (
+          <div style={{ marginBottom: "1.5rem" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 500, color: th.text,
+              margin: "0 0 12px" }}>
+              Historique de vos récompenses utilisées
+            </h2>
+            <div style={{ border: hairBorder, borderRadius: 8, overflow: "hidden" }}>
+              {usedRewards.map((r, i) => {
+                const valStr = r.type === "percent"
+                  ? `-${r.value}%`
+                  : `-${Number(r.value).toFixed(2).replace(/\.00$/, "")} €`;
+                const usedStr = r.used_at
+                  ? new Date(r.used_at).toLocaleDateString("fr-FR",
+                      { day:"numeric", month:"short", year:"numeric" })
+                  : "—";
+                return (
+                  <div key={r.id} style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 14px",
+                    borderBottom: i === usedRewards.length - 1 ? "none" : hairBorder,
+                    opacity: 0.75,
+                  }}>
+                    <span style={{ fontSize: 18, filter: "grayscale(0.3)" }}>🤝</span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: th.text }}>
+                        {valStr}{" "}
+                        {r.code && (
+                          <span style={{ fontFamily: "monospace", fontSize: 11,
+                            color: th.muted, marginLeft: 4 }}>· {r.code}</span>
+                        )}
+                      </p>
+                      <p style={{ margin: "2px 0 0", fontSize: 11, color: th.muted }}>
+                        Utilisée le {usedStr}
+                      </p>
+                    </div>
+                    <span style={{
+                      fontSize: 10, fontWeight: 500, padding: "3px 9px", borderRadius: 99,
+                      background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                      color: th.muted, flexShrink: 0,
+                    }}>Utilisée</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
