@@ -5,7 +5,132 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 11) : Programme anniversaire — anti-fraude + birth_date optionnelle + popup
+## 🆕 Session 2026-04-19 (suite 12) : Parrainage — fix réduction filleul + traçabilité agenda + refus caisse
+
+### Demande (onboarding.md)
+Programme parrainage cassé. Fix complet à faire :
+1. Parcours utilisateur + validation parrainages + suivi côté client
+2. Réduction prix sur site de réservation ET en caisse
+3. Traçabilité agenda : « ce client est parrainé par … · réduction parrainage -…€ »
+4. Possibilité pour l'employé d'annuler un parrainage à la caisse
+5. Accréditer le parrain et voir cela sur sa page parrainage
+6. Tous côtés : commerçant, site de réservation, client
+
+### Bugs identifiés avant correction
+- **BUG 1 (CRITIQUE)** : La réduction filleul n'était **jamais appliquée** au RDV.
+  Le code acceptait `referral_code` mais créait seulement `referral_uses` status=pending,
+  sans jamais modifier `discount_amount`/`total_amount`. Le filleul pensait bénéficier
+  d'une réduction mais payait plein prix.
+- **BUG 2** : Aucun affichage « Parrainé par X » sur l'agenda commerçant/employé.
+  Impossible de savoir en un coup d'œil qu'un RDV est issu d'un parrainage.
+- **BUG 4** : Aucun bouton « Refuser » en caisse. L'employé pouvait seulement valider.
+  Si parrainage suspect (ex : filleul déjà connu), seule option = ignorer → reste « pending ».
+
+### Backend — `routes/public-booking.js` (POST /:slug/book)
+- **Bloc parrainage déplacé AVANT l'INSERT appointment** (nouveau bloc lignes ~711-781).
+  Le bloc ancien (après INSERT, lignes ~846-922) est remplacé par un simple INSERT
+  `referral_uses` qui utilise le contexte `referralCtx` calculé en amont.
+- Ajout var `let referralCtx = null` à côté de `discountAmt`/`finalPrice` pour
+  remonter le contexte sans dupliquer la requête code parrainage.
+- Nouveau bloc : vérifie `!promoCodeId && incomingRef && client_email` (priorité au
+  code promo classique si les deux sont fournis).
+- Vérifie programme actif + code valide + parrain ≠ filleul + filleul nouveau
+  (pas de RDV antérieur) + pas de parrainage pending/validated existant + quota
+  parrain OK (réutilise la logique `limit_period`/`limit_count`).
+- Si tout OK : calcule la réduction filleul (`percent` ou `fixed` depuis
+  `referral_programs.filleul_type`/`filleul_value`) et l'applique à `discountAmt`
+  + `finalPrice` avant l'INSERT. Le RDV est créé avec les bonnes valeurs
+  `original_amount`/`discount_amount`/`total_amount`.
+- Après INSERT : `INSERT INTO referral_uses` avec appt.id, status='pending'.
+  La validation en caisse reste nécessaire pour émettre la récompense parrain.
+
+### Backend — `routes/referrals.js`
+- Nouveau endpoint **POST /api/referrals/uses/:id/cancel** (commerçant) :
+  - UPDATE status='pending' → 'cancelled'
+  - Aucune récompense émise
+  - La réduction filleul déjà appliquée au RDV n'est PAS restituée (le filleul
+    garde son prix réduit, le parrain ne reçoit rien). Cohérent avec le fait que
+    le filleul est venu.
+  - 404 si parrainage introuvable ou déjà traité (validated/cancelled).
+
+### Backend — `routes/booking.js` (listing agenda commerçant + agenda employé)
+- GET `/api/booking/appointments` : LEFT JOIN `referral_uses` + `referral_codes`
+  + `client_accounts` (parrain). Colonnes exposées :
+  `referral_use_id`, `referral_status`, `referral_code`, `referral_parrain_email`,
+  `referral_parrain_first_name`, `referral_parrain_last_name`.
+- GET `/api/booking/employee-agenda` : mêmes jointures, mêmes colonnes exposées.
+- LEFT JOIN → zéro impact sur les RDV sans parrainage (colonnes NULL).
+
+### Frontend — `utils/api.js`
+- `referralsApi.cancelUse(id)` : POST `/referrals/uses/:id/cancel`.
+
+### Frontend — `App.jsx` (caisse commerçant)
+- Nouvelle fonction `cancelReferral(useId)` : confirme via `window.confirm`,
+  appelle `referralsApi.cancelUse`, rafraîchit le contexte.
+- Bloc `pendingRefs.map` : ajout d'un **bouton « Refuser »** (rouge, outlined)
+  à côté de « Valider ». Même état `refValidating` pour désactiver les deux
+  pendant l'appel.
+
+### Frontend — `pages/Agenda.jsx` (modal détail RDV)
+- Nouveau bloc **« Parrainage »** rendu conditionnellement si `appt.referral_use_id`
+  existe. Affiche :
+  - Badge statut coloré (Validé=vert / Refusé=rouge / À valider en caisse=orange).
+  - « Parrainé par {prénom nom|email} » en titre.
+  - Code parrainage + montant de la réduction si > 0.
+- Label du total dynamique : `Total après parrainage` si `referral_use_id` présent,
+  sinon `Total après remise` pour les promos classiques (fallback `Total`).
+
+### Frontend — `pages/EmployeeAgenda.jsx` (modal détail côté employé)
+- Section « Code promo » devient dynamique : si `referral_use_id`, affiche
+  « 🤝 Réduction parrainage » avec le code parrainage au lieu de « 🎉 Code promo ».
+- Nouveau bloc « Parrainage » identique à Agenda.jsx (badge statut + parrain + code).
+
+### Parcours utilisateur corrigé (scénarios validés)
+
+**Scénario A — Filleul réserve avec code parrainage valide :**
+1. Site réservation : client saisit code `REF-XXXXXX` à l'étape 5.
+2. POST `/book` valide le code, applique la réduction filleul au RDV.
+3. RDV créé avec `discount_amount` > 0, `total_amount` = prix réduit, + ligne
+   `referral_uses` status='pending' liée à appt.id.
+4. Email de confirmation envoie déjà `finalPrice`/`discountAmount` (code promo
+   existant → non modifié, mais la réduction parrainage n'apparaît pas encore
+   dans l'email. Acceptable à la v1, à suivre).
+
+**Scénario B — Commerçant consulte l'agenda :**
+- Modal RDV affiche « 🤝 Parrainage · À valider en caisse · Parrainé par X · Code REF-… · Réduction -Y€ ».
+- Total affiche prix barré + prix réduit, label « Total après parrainage ».
+
+**Scénario C — Employé encaisse le filleul en caisse :**
+- Bloc « Filleul de X — Valider · Refuser » s'affiche dès que l'email client est renseigné.
+- Clic « Valider » → code promo parrain généré (PARRAIN-XXXXXX) + client_rewards
+  créé pour le parrain + email envoyé au parrain. Le parrainage passe en 'validated'.
+- Clic « Refuser » → status='cancelled', aucun code parrain émis. La réduction
+  filleul reste acquise (déjà appliquée au RDV).
+
+**Scénario D — Parrain consulte sa page /parrain :**
+- Historique filleuls : affiche 4 états (En attente / Validé / Utilisée / Refusé).
+  Déjà fonctionnel depuis suite 9 (référence `reward_status`).
+- Récompenses disponibles : codes PARRAIN-XXXXXX apparaissent dès validation en caisse.
+
+### Build
+- `node --check` × 3 backend : OK
+- `npx vite build` : OK (14.82s, 87 modules)
+
+### Compatibilité préservée
+- Priorité au `promo_code_id` si présent → les clients qui utilisent un code promo
+  classique voient ce code appliqué, pas la réduction parrainage (comportement
+  attendu, on ne cumule pas).
+- RDV existants sans parrainage : LEFT JOIN renvoie NULL partout → aucun changement
+  d'affichage.
+- Parrainages déjà `pending` avant cette session : la réduction filleul n'est
+  pas rétroactive (RDV existant garde son prix d'origine). Seuls les nouveaux
+  RDV bénéficient de la réduction automatique.
+- Endpoint `/cancel` rejette les parrainages non-pending → aucun risque de
+  casser un parrainage déjà validé.
+
+---
+
+## Session 2026-04-19 (suite 11) : Programme anniversaire — anti-fraude + birth_date optionnelle + popup
 
 ### Demande (onboarding.md)
 1. Birth_date obligatoire pour bénéficier du programme anniversaire (sinon

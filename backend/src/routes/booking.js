@@ -219,10 +219,19 @@ router.get('/appointments', async (req, res) => {
       a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
       a.created_at, a.updated_at,
       bs.name as service_name, bs.color as service_color, bs.price as service_price, bs.duration_minutes as svc_duration,
-      e.name as employee_name, e.avatar_color as employee_color, e.can_cancel, e.can_modify, e.can_encash
+      e.name as employee_name, e.avatar_color as employee_color, e.can_cancel, e.can_modify, e.can_encash,
+      ru.id as referral_use_id, ru.status as referral_status,
+      rc.code as referral_code, rc.owner_client_email as referral_parrain_email,
+      pca.first_name as referral_parrain_first_name,
+      pca.last_name  as referral_parrain_last_name
       FROM appointments a
       LEFT JOIN booking_services bs ON bs.id = a.service_id
       LEFT JOIN employees e ON e.id = a.employee_id
+      LEFT JOIN referral_uses ru ON ru.appointment_id = a.id
+      LEFT JOIN referral_codes rc ON rc.id = ru.referral_code_id
+      LEFT JOIN client_accounts pca
+        ON pca.user_id = a.user_id
+       AND LOWER(pca.email) = LOWER(rc.owner_client_email)
       WHERE a.user_id=$1`;
     const params = [req.user.userId];
     if (date)        { params.push(date);        q += ` AND a.date=$${params.length}`; }
@@ -598,9 +607,18 @@ router.get('/employee-agenda', async (req, res) => {
       a.client_name, a.client_email, a.client_phone, a.status, a.notes, a.cancel_reason,
       a.duration_minutes, a.total_duration, a.total_amount, a.service_id, a.employee_id, a.paid, a.paid_method,
       a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
-      bs.name as service_name, bs.color as service_color, bs.price as service_price
+      bs.name as service_name, bs.color as service_color, bs.price as service_price,
+      ru.id as referral_use_id, ru.status as referral_status,
+      rc.code as referral_code, rc.owner_client_email as referral_parrain_email,
+      pca.first_name as referral_parrain_first_name,
+      pca.last_name  as referral_parrain_last_name
       FROM appointments a
       LEFT JOIN booking_services bs ON bs.id=a.service_id
+      LEFT JOIN referral_uses ru ON ru.appointment_id = a.id
+      LEFT JOIN referral_codes rc ON rc.id = ru.referral_code_id
+      LEFT JOIN client_accounts pca
+        ON pca.user_id = a.user_id
+       AND LOWER(pca.email) = LOWER(rc.owner_client_email)
       WHERE a.user_id=$1 AND a.employee_id=$2`;
     const p = [req.user.userId, employee_id];
     if (from) { p.push(from); q += ` AND a.date>=$${p.length}`; }

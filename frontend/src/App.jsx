@@ -220,6 +220,17 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
     } finally { setRefValidating(null); }
   };
 
+  const cancelReferral = async (useId) => {
+    if (!window.confirm('Refuser ce parrainage ? Le parrain ne sera pas récompensé. La réduction déjà appliquée au RDV reste acquise au filleul.')) return;
+    setRefValidating(useId);
+    try {
+      await referralsApi.cancelUse(useId);
+      await refreshClientContext(clientEmail);
+    } catch (e) {
+      alert(e.message || 'Erreur refus parrainage');
+    } finally { setRefValidating(null); }
+  };
+
   const revCats   = categories.filter(c => c.type === 'revenue');
   const catGroups = revCats.filter(c => !c.parent_id);
   const products  = revCats.filter(c => c.parent_id);
@@ -765,6 +776,12 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
                         style={{ background:'#7c3aed', color:'#fff', border:'none', cursor:'pointer', flexShrink:0,
                           opacity: refValidating===p.id ? 0.6 : 1 }}>
                         {refValidating===p.id ? '...' : 'Valider'}
+                      </button>
+                      <button onClick={() => cancelReferral(p.id)} disabled={refValidating===p.id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                        style={{ background:'transparent', color:'#ef4444', border:'1px solid #ef4444', cursor:'pointer', flexShrink:0,
+                          opacity: refValidating===p.id ? 0.6 : 1 }}>
+                        Refuser
                       </button>
                     </div>
                   );

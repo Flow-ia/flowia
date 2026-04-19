@@ -431,6 +431,9 @@ export const referralsApi = {
   // Employé valide un parrainage en caisse → émet la promo parrain + email
   validateUse:   (id) => request('/referrals/uses/' + id + '/validate',
                           { method:'POST' }),
+  // Employé refuse un parrainage (fraude/erreur) → status='cancelled', aucune récompense
+  cancelUse:     (id) => request('/referrals/uses/' + id + '/cancel',
+                          { method:'POST' }),
   // Caisse : marquer une réduction comme utilisée après encaissement
   useReward:     (id) => request('/referrals/rewards/' + id + '/use',
                           { method:'POST' }),

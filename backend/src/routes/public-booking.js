@@ -659,6 +659,9 @@ router.post('/:slug/book', async (req, res) => {
     const originalAmt  = parseFloat(price || 0);
     let discountAmt    = 0;
     let finalPrice     = originalAmt;
+    // Contexte parrainage (rempli si réduction filleul appliquée ci-dessous)
+    // Permet d'INSERT referral_uses après la création du RDV.
+    let referralCtx = null;
 
     if (promoCodeId) {
       // Revalider le code en base : est-il encore actif, non expiré, non épuisé ?
@@ -706,6 +709,77 @@ router.post('/:slug/book', async (req, res) => {
         : Math.min(originalAmt, parseFloat(promo.value));
       discountAmt = Math.round(discountAmt * 100) / 100;
       finalPrice  = Math.max(0, originalAmt - discountAmt);
+    }
+
+    // ── Parrainage : appliquer réduction filleul si applicable ───────────────
+    // Priorité au code promo classique si les deux sont fournis. Le filleul doit
+    // être un NOUVEAU client (jamais eu de RDV antérieur) et le parrain doit
+    // respecter le quota configuré (limit_period/limit_count).
+    const incomingRef = (req.body.referral_code || '').trim();
+    if (!promoCodeId && incomingRef && client_email) {
+      try {
+        const { rows: prog } = await pool.query(
+          `SELECT is_enabled, filleul_type, filleul_value, limit_count, limit_period
+             FROM referral_programs WHERE user_id=$1`, [userId]
+        );
+        if (prog.length && prog[0].is_enabled) {
+          const { rows: rc } = await pool.query(
+            `SELECT id, owner_client_email FROM referral_codes
+               WHERE user_id=$1 AND code=$2`, [userId, incomingRef.toUpperCase()]
+          );
+          const filleulEmail = client_email.toLowerCase().trim();
+          if (rc.length && rc[0].owner_client_email.toLowerCase() !== filleulEmail) {
+            const { rows: prev } = await pool.query(
+              `SELECT 1 FROM appointments
+                 WHERE user_id=$1 AND LOWER(client_email)=$2 LIMIT 1`,
+              [userId, filleulEmail]
+            );
+            const { rows: existing } = await pool.query(
+              `SELECT id FROM referral_uses
+                 WHERE user_id=$1 AND LOWER(filleul_email)=$2
+                   AND status IN ('pending','validated') LIMIT 1`,
+              [userId, filleulEmail]
+            );
+            let quotaOk = true;
+            const lp = prog[0].limit_period || 'unlimited';
+            const lc = prog[0].limit_count;
+            if (lp !== 'unlimited' && lc != null && lc > 0) {
+              const ownerEmail = rc[0].owner_client_email.toLowerCase();
+              let dateClause = '';
+              if (lp === 'month')    dateClause = "AND ru.created_at >= date_trunc('month', NOW())";
+              else if (lp === '3months') dateClause = "AND ru.created_at >= NOW() - INTERVAL '90 days'";
+              else if (lp === 'year')    dateClause = "AND ru.created_at >= date_trunc('year', NOW())";
+              const { rows: cnt } = await pool.query(
+                `SELECT COUNT(*)::int AS n
+                   FROM referral_uses ru
+                   JOIN referral_codes rcc ON rcc.id = ru.referral_code_id
+                  WHERE ru.user_id=$1
+                    AND LOWER(rcc.owner_client_email)=$2
+                    AND ru.status IN ('pending','validated')
+                    ${dateClause}`,
+                [userId, ownerEmail]
+              );
+              if (cnt[0].n >= lc) quotaOk = false;
+            }
+            if (!prev.length && !existing.length && quotaOk) {
+              const ft = prog[0].filleul_type;
+              const fv = parseFloat(prog[0].filleul_value);
+              const refDiscount = ft === 'percent'
+                ? Math.min(originalAmt, originalAmt * fv / 100)
+                : Math.min(originalAmt, fv);
+              discountAmt = Math.round(refDiscount * 100) / 100;
+              finalPrice  = Math.max(0, originalAmt - discountAmt);
+              referralCtx = {
+                refCodeId: rc[0].id,
+                filleulEmail,
+                parrainEmail: rc[0].owner_client_email,
+              };
+            }
+          }
+        }
+      } catch (refErr) {
+        console.warn('[book referral pre]', refErr.message);
+      }
     }
 
     // Insertion
@@ -844,80 +918,18 @@ router.post('/:slug/book', async (req, res) => {
     }
 
     // ── Parrainage : enregistrer le lien filleul → code en attente ───────────
-    // Aucune réduction émise ici. Validation obligatoire en caisse par l'employé
-    // le jour du RDV (scénario onboarding.md). Le filleul doit être un NOUVEAU
-    // client (jamais eu de RDV antérieur chez ce commerçant).
-    const incomingRef = (req.body.referral_code || '').trim();
-    if (incomingRef && client_email) {
+    // La réduction filleul a déjà été appliquée au RDV en amont. On INSERT
+    // referral_uses en 'pending' pour que la caisse valide le jour du RDV.
+    if (referralCtx) {
       try {
-        const { rows: prog } = await pool.query(
-          `SELECT is_enabled, limit_count, limit_period
-             FROM referral_programs WHERE user_id=$1`, [userId]
+        await pool.query(
+          `INSERT INTO referral_uses
+             (user_id, referral_code_id, filleul_email, appointment_id, status)
+           VALUES ($1,$2,$3,$4,'pending')`,
+          [userId, referralCtx.refCodeId, referralCtx.filleulEmail, appt.id]
         );
-        if (prog.length && prog[0].is_enabled) {
-          const { rows: rc } = await pool.query(
-            `SELECT id, owner_client_email FROM referral_codes
-               WHERE user_id=$1 AND code=$2`, [userId, incomingRef.toUpperCase()]
-          );
-          const filleulEmail = client_email.toLowerCase();
-          // Un client ne peut pas utiliser son propre code.
-          if (rc.length && rc[0].owner_client_email.toLowerCase() !== filleulEmail) {
-            // Vérifier que le filleul est bien un NOUVEAU client (pas de RDV passé).
-            const { rows: prev } = await pool.query(
-              `SELECT 1 FROM appointments
-                 WHERE user_id=$1 AND LOWER(client_email)=$2 AND id <> $3 LIMIT 1`,
-              [userId, filleulEmail, appt.id]
-            );
-            // Et qu'il n'a pas déjà un parrainage en cours/validé chez ce commerçant.
-            const { rows: existing } = await pool.query(
-              `SELECT id FROM referral_uses
-                 WHERE user_id=$1 AND LOWER(filleul_email)=$2
-                   AND status IN ('pending','validated') LIMIT 1`,
-              [userId, filleulEmail]
-            );
-            // Garde anti-abus : limite côté PARRAIN selon limit_period.
-            // On compte les parrainages pending+validated du parrain sur la
-            // fenêtre concernée (lifetime / mois calendaire / 90j / année).
-            let quotaOk = true;
-            const lp = prog[0].limit_period || 'unlimited';
-            const lc = prog[0].limit_count;
-            if (lp !== 'unlimited' && lc != null && lc > 0) {
-              const ownerEmail = rc[0].owner_client_email.toLowerCase();
-              let dateClause = '';
-              if (lp === 'lifetime') {
-                dateClause = '';
-              } else if (lp === 'month') {
-                dateClause = "AND ru.created_at >= date_trunc('month', NOW())";
-              } else if (lp === '3months') {
-                dateClause = "AND ru.created_at >= NOW() - INTERVAL '90 days'";
-              } else if (lp === 'year') {
-                dateClause = "AND ru.created_at >= date_trunc('year', NOW())";
-              }
-              const { rows: cnt } = await pool.query(
-                `SELECT COUNT(*)::int AS n
-                   FROM referral_uses ru
-                   JOIN referral_codes rcc ON rcc.id = ru.referral_code_id
-                  WHERE ru.user_id=$1
-                    AND LOWER(rcc.owner_client_email)=$2
-                    AND ru.status IN ('pending','validated')
-                    ${dateClause}`,
-                [userId, ownerEmail]
-              );
-              if (cnt[0].n >= lc) quotaOk = false;
-            }
-            if (!prev.length && !existing.length && quotaOk) {
-              await pool.query(
-                `INSERT INTO referral_uses
-                   (user_id, referral_code_id, filleul_email,
-                    appointment_id, status)
-                 VALUES ($1,$2,$3,$4,'pending')`,
-                [userId, rc[0].id, filleulEmail, appt.id]
-              );
-            }
-          }
-        }
-      } catch (refErr) {
-        console.warn('[book referral]', refErr.message);
+      } catch (refInsertErr) {
+        console.warn('[book referral insert]', refInsertErr.message);
       }
     }
 

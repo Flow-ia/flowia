@@ -253,7 +253,7 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
                 ))}
                 <div className="flex items-center justify-between px-4 py-2.5"
                   style={{ borderTop:`1px solid ${t.border}`, background:isDark?'rgba(16,185,129,0.06)':'rgba(16,185,129,0.03)' }}>
-                  <p className="text-xs font-black uppercase" style={{ color:'#10b981' }}>{appt.discount_amount>0?'Total apres remise':'Total'}</p>
+                  <p className="text-xs font-black uppercase" style={{ color:'#10b981' }}>{appt.discount_amount>0?(appt.referral_use_id?'Total apres parrainage':'Total apres remise'):'Total'}</p>
                   <div className="text-right">
                     {appt.discount_amount>0&&<p className="text-xs" style={{ color:'#94a3b8',textDecoration:'line-through',fontFamily:'monospace' }}>{parseFloat(appt.original_amount||0).toFixed(2)} €</p>}
                     <p className="font-black text-base" style={{ color:'#10b981',fontFamily:'monospace' }}>
@@ -277,6 +277,29 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
             {appt.client_phone&&<InfoRow icon="📞" label="Téléphone" value={appt.client_phone} t={t} border />}
             {appt.client_email&&<InfoRow icon="✉️" label="Email" value={appt.client_email} t={t} border />}
           </div>
+
+          {/* Parrainage : traçabilité parrain + statut (pending/validated/cancelled) */}
+          {appt.referral_use_id&&(()=>{
+            const parrainName = [appt.referral_parrain_first_name, appt.referral_parrain_last_name].filter(Boolean).join(' ') || appt.referral_parrain_email || 'Parrain';
+            const st = appt.referral_status || 'pending';
+            const stLabel = st==='validated' ? 'Validé' : st==='cancelled' ? 'Refusé' : 'À valider en caisse';
+            const stColor = st==='validated' ? '#10b981' : st==='cancelled' ? '#ef4444' : '#f59e0b';
+            const discount = parseFloat(appt.discount_amount||0);
+            return (
+              <div className="rounded-xl p-3" style={{ background:isDark?'rgba(139,92,246,0.08)':'rgba(139,92,246,0.05)', border:'1px solid rgba(139,92,246,0.25)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span style={{ fontSize:18 }}>🤝</span>
+                  <p className="text-[10px] font-bold uppercase" style={{ color:'#7c3aed' }}>Parrainage</p>
+                  <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background:stColor, color:'#fff' }}>{stLabel}</span>
+                </div>
+                <p className="text-sm font-semibold" style={{ color:t.text }}>Parrainé par {parrainName}</p>
+                <p className="text-xs" style={{ color:t.muted }}>
+                  Code <span style={{ fontFamily:'monospace', color:'#7c3aed' }}>{appt.referral_code}</span>
+                  {discount>0 && <> · Réduction parrainage <span style={{ fontWeight:700, color:'#10b981' }}>-{discount.toFixed(2)} €</span></>}
+                </p>
+              </div>
+            );
+          })()}
 
           {appt.notes&&(
             <div className="rounded-xl p-3" style={{ background:'rgba(251,191,36,0.07)', border:'1px solid rgba(251,191,36,0.2)' }}>

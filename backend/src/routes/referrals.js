@@ -277,6 +277,24 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
   } finally { client.release(); }
 });
 
+// ── POST /api/referrals/uses/:id/cancel — refuser un parrainage en attente ─
+// L'employé peut refuser un parrainage suspect (ex : filleul déjà connu,
+// fraude). Passe status='cancelled', aucune récompense émise, la réduction
+// filleul déjà appliquée au RDV n'est pas restituée (le RDV reste tel quel).
+merchantRouter.post('/uses/:id/cancel', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE referral_uses
+          SET status='cancelled'
+        WHERE id=$1 AND user_id=$2 AND status='pending'
+        RETURNING id`,
+      [req.params.id, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Parrainage introuvable ou déjà traité.' });
+    res.json({ ok: true });
+  } catch (e) { console.error('[REF CANCEL]', e.message); res.status(500).json({ error: e.message }); }
+});
+
 // ── POST /api/referrals/rewards/:id/use — marquer reward comme utilisée ────
 // Appelé par la caisse après l'encaissement pour tracer l'utilisation d'une
 // réduction (status → 'used'). N'affecte pas le promo_code lui-même (déjà géré

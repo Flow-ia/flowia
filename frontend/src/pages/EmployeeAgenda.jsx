@@ -300,10 +300,12 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
                 {appt.discount_amount>0 && (
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px', borderTop:`1px solid rgba(16,185,129,0.12)`, background:'rgba(16,185,129,0.04)' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:14 }}>🎉</span>
+                      <span style={{ fontSize:14 }}>{appt.referral_use_id?'🤝':'🎉'}</span>
                       <div>
-                        <p style={{ margin:0, fontSize:11, fontWeight:700, color:'#10b981' }}>Code promo</p>
-                        {appt.promo_code && <p style={{ margin:0, fontSize:10, color:t.muted, fontFamily:'monospace' }}>{appt.promo_code}</p>}
+                        <p style={{ margin:0, fontSize:11, fontWeight:700, color: appt.referral_use_id?'#7c3aed':'#10b981' }}>{appt.referral_use_id?'Réduction parrainage':'Code promo'}</p>
+                        {appt.referral_use_id
+                          ? <p style={{ margin:0, fontSize:10, color:t.muted, fontFamily:'monospace' }}>{appt.referral_code}</p>
+                          : (appt.promo_code && <p style={{ margin:0, fontSize:10, color:t.muted, fontFamily:'monospace' }}>{appt.promo_code}</p>)}
                       </div>
                     </div>
                     <span style={{ fontSize:12, fontWeight:800, color:'#ef4444', background:'rgba(239,68,68,0.08)', padding:'3px 10px', borderRadius:99 }}>-{parseFloat(appt.discount_amount).toFixed(2)} €</span>
@@ -321,6 +323,25 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
             {appt.client_phone && <InfoRow icon="📞" label="Téléphone" value={appt.client_phone} t={t} border />}
             {appt.client_email && <InfoRow icon="✉️" label="Email"     value={appt.client_email} t={t} border />}
           </div>
+
+          {/* Parrainage : traçabilité parrain + statut */}
+          {appt.referral_use_id&&(()=>{
+            const parrainName = [appt.referral_parrain_first_name, appt.referral_parrain_last_name].filter(Boolean).join(' ') || appt.referral_parrain_email || 'Parrain';
+            const st = appt.referral_status || 'pending';
+            const stLabel = st==='validated' ? 'Validé' : st==='cancelled' ? 'Refusé' : 'À valider en caisse';
+            const stColor = st==='validated' ? '#10b981' : st==='cancelled' ? '#ef4444' : '#f59e0b';
+            return (
+              <div style={{ padding:'12px 16px', borderRadius:12, background:'rgba(139,92,246,0.06)', border:'1px solid rgba(139,92,246,0.25)' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                  <span style={{ fontSize:16 }}>🤝</span>
+                  <p style={{ margin:0, fontSize:10, fontWeight:800, textTransform:'uppercase', color:'#7c3aed' }}>Parrainage</p>
+                  <span style={{ marginLeft:'auto', fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:99, background:stColor, color:'#fff' }}>{stLabel}</span>
+                </div>
+                <p style={{ margin:0, fontSize:13, fontWeight:600, color:t.text }}>Parrainé par {parrainName}</p>
+                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>Code <span style={{ fontFamily:'monospace', color:'#7c3aed' }}>{appt.referral_code}</span></p>
+              </div>
+            );
+          })()}
 
           {appt.notes && (
             <div style={{ padding:'12px 16px', borderRadius:12, background:'rgba(245,158,11,0.06)', border:'1px solid rgba(245,158,11,0.15)' }}>
