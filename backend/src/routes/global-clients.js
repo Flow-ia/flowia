@@ -494,7 +494,10 @@ router.get('/appointments', globalClientAuth, async (req, res) => {
 // OR appointment_id IS NULL). Filtrées soit via global_client_id, soit via
 // l'email du client si le lien n'a pas été établi (anciennes transactions).
 // Inclut les items/prestations, le commerçant, date/heure et montant total.
-router.get('/me/visits', globalClientAuth, async (req, res) => {
+// Auth : accepte ff_client_token (scope='client' avec globalClientId) OU
+// ff_gc_token (scope='global_client'). ff_gc_token n'est jamais écrit côté
+// front, seul ff_client_token existe après login sur un site réservation.
+router.get('/me/visits', clientOrGlobalClientAuth, async (req, res) => {
   try {
     const gcId = req.globalClient.globalClientId;
     const { rows: gc } = await pool.query(

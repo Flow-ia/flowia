@@ -1,1 +1,1 @@
-il faut que la version mobile soit bien responsive pour toute la page de réservation et donc rends la bien responsive san casser ni fonctionnalités et rien oublier et juste rends la bien responsive pour toutes type d'écrans
+il faut affiché le bouton de supprimer mon compte et avec une confirmation 'SUPPRIMER4 il faut que le client ecrive ca pour valider la suppression de son compte et aussi 
