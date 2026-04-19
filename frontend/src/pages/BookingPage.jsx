@@ -345,8 +345,10 @@ export default function BookingPage({ slug }) {
   // (uniquement si le client est connecté en compte global).
   useEffect(() => {
     if (view !== 'parrain') return;
-    const gcToken = localStorage.getItem('ff_gc_token');
-    if (!gcToken) { setRefMyCode(null); setRefMyHistory([]); setRefMyRewards([]); return; }
+    // Accepte les 2 jetons : ff_gc_token (compte global) OU ff_client_token
+    // (login commerçant avec globalClientId). gcRequest relaie automatiquement.
+    const tok = localStorage.getItem('ff_gc_token') || localStorage.getItem('ff_client_token');
+    if (!tok) { setRefMyCode(null); setRefMyHistory([]); setRefMyRewards([]); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -599,13 +601,14 @@ export default function BookingPage({ slug }) {
         onNavigateHome={(id)=>{ setView('booking'); navigate(`/book/${slug}`,{replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
       <ReferralPage
         th={th} slug={slug} business={business} refProgram={refProgram}
-        gcConnected={!!localStorage.getItem('ff_gc_token')}
+        gcConnected={!!clientUser}
         gcUser={clientUser}
         refMyCode={refMyCode}
         refMyHistory={refMyHistory}
         refMyRewards={refMyRewards}
         onLogin={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
         onRegister={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
+        onAuthSuccess={(client) => { handleAuth(client); /* reste sur /parrain → useEffect recharge code+historique */ }}
         onBack={() => { setView('booking'); navigate(`/book/${slug}`, {replace:false}); }}
       />
     </div>

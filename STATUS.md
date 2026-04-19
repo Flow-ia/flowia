@@ -5,7 +5,75 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 9) : Page parrainage connectée — statut "Utilisée" + maquette stricte
+## 🆕 Session 2026-04-19 (suite 10) : Fix parrainage — détection client connecté + bloc auth unifié
+
+### Bug rapporté (onboarding.md)
+1. Client **authentifié** sur le site du commerçant → la page `/parrain`
+   affichait quand même la vue "Non connecté" (Les conditions chez … + Se
+   connecter / Créer un compte).
+2. Le bloc d'auth non connecté (simple bannière bleue avec 2 boutons) n'était
+   pas cohérent avec celui de l'étape 5 `/info` (Déjà un compte ? + 3 boutons
+   + Continuer avec Google).
+
+### Cause racine
+- `gcConnected={!!localStorage.getItem('ff_gc_token')}` dans `BookingPage.jsx`
+  référençait une clé (`ff_gc_token`) qui n'est **jamais écrite** côté front
+  (grep confirme : seulement lue, jamais `setItem`).
+- Le vrai jeton après login commerçant est `ff_client_token` (scope='client'
+  avec `globalClientId`). Résultat : `gcConnected` toujours `false`, vue
+  "Non connecté" affichée même pour un client authentifié.
+- Les endpoints `/me/referral-code/:slug` et `/me/referral-history/:slug`
+  exigeaient `scope='global_client'` → impossible d'y accéder avec le jeton
+  commerçant.
+
+### Backend — `routes/global-clients.js`
+- Nouveau middleware `clientOrGlobalClientAuth` qui accepte les deux scopes :
+  - `scope='global_client'` avec `globalClientId` → `req.globalClient = dec`
+  - `scope='client'` avec `globalClientId`        → `req.globalClient = { globalClientId, email }`
+- Appliqué à `/me/referral-code/:slug` et `/me/referral-history/:slug`
+  (remplace `globalClientAuth`). `globalClientAuth` reste intact pour les
+  routes compte plateforme (`/me`, `/appointments`, `/loyalty`, etc.).
+
+### Frontend — `utils/api.js`
+- `gcRequest` fait désormais un fallback automatique :
+  `token` paramétré → `ff_gc_token` → `ff_client_token`. Permet aux méthodes
+  `myReferralCode` / `myReferralHistory` (sans token explicite) de fonctionner
+  avec le jeton commerçant.
+
+### Frontend — `BookingPage.jsx`
+- `gcConnected={!!clientUser}` (état React réactif, mis à jour par handleAuth
+  après login/register/Google OAuth).
+- Le useEffect de chargement parrainage accepte `ff_client_token` OU
+  `ff_gc_token` comme déclencheur.
+- Nouveau prop `onAuthSuccess={handleAuth}` passé à `ReferralPage` → le
+  client reste sur /parrain après Google OAuth, le useEffect recharge
+  automatiquement code + historique.
+
+### Frontend — `pages/booking/ReferralPage.jsx`
+- Import `pubApi` pour le Google OAuth inline.
+- Nouveau prop `onAuthSuccess(client)`.
+- Bloc "CTA connexion" (bannière bleue) remplacé par un bloc cohérent avec
+  `/info` :
+  - Titre **"Déjà un compte ? Connectez-vous"** + sous-titre explicatif
+  - Grille 2 colonnes : **Se connecter** (accent) / **Créer un compte**
+  - Bouton **Continuer avec Google** pleine largeur (popup OAuth → handler
+    postMessage → écrit `ff_client_token` + `ff_client_info` → appelle
+    `onAuthSuccess(client)` → retour direct sur la vue connectée du parrain).
+
+### Build
+- `node --check` backend global-clients.js : OK
+- `npx vite build` : OK (12.67s, 87 modules, page-booking stable)
+
+### Compatibilité préservée
+- Les clients avec un `ff_gc_token` existant (ancien flow) continuent de
+  fonctionner via le fallback dans `gcRequest`.
+- Les routes compte plateforme (`/me`, `/appointments`, `/loyalty`)
+  continuent à exiger strictement `scope='global_client'`.
+- Aucune migration DB nécessaire (pure logique auth/frontend).
+
+---
+
+## Session 2026-04-19 (suite 9) : Page parrainage connectée — statut "Utilisée" + maquette stricte
 
 ### Demande (onboarding.md)
 Reproduire **exactement** la maquette client connecté de `/parrainage` avec

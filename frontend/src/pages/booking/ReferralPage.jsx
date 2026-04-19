@@ -1,15 +1,17 @@
 // src/pages/booking/ReferralPage.jsx
 // Page "Parrainer un ami" — vue dédiée /book/:slug/parrain.
 // 2 états visuels (cf. onboarding.md) :
-//  • Non connecté : hero + "Comment ça marche" + Conditions + CTA login/register
+//  • Non connecté : hero + "Comment ça marche" + Conditions + bloc auth
+//                   (Se connecter / Créer un compte / Continuer avec Google)
 //  • Connecté    : code perso + 3 stats + (quota si limite) + suivi filleuls
 //                  (Validé / Utilisée / En attente / Refusé)
 import { useState } from 'react';
+import { pubApi } from '../../utils/api';
 
 export function ReferralPage({
   th, slug, business, refProgram, gcConnected, gcUser,
   refMyCode, refMyHistory, refMyRewards,
-  onLogin, onRegister, onBack,
+  onLogin, onRegister, onBack, onAuthSuccess,
 }) {
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -253,37 +255,71 @@ export function ReferralPage({
             </div>
           </div>
 
-          {/* CTA connexion */}
+          {/* Bloc auth — même UX que /info : suggestion + 3 boutons */}
           <div style={{
-            background: COL.blueBg, border: `0.5px solid ${COL.blueBd}`,
-            borderRadius: 12, padding: 20, textAlign: "center",
+            background: th.card, border: `1px solid ${th.border || dashedBorder}`,
+            borderRadius: 12, padding: 16,
           }}>
-            <p style={{ fontSize: 14, color: COL.blueText, margin: "0 0 12px",
-              fontWeight: 500 }}>
-              Connectez-vous pour récupérer votre code de parrainage
+            <p style={{ fontSize: 13, fontWeight: 700, color: th.text, margin: "0 0 3px" }}>
+              Déjà un compte ? Connectez-vous
             </p>
-            <p style={{ fontSize: 13, color: COL.blueText, margin: "0 0 16px",
-              opacity: 0.85 }}>
-              Seuls les clients déjà venus peuvent parrainer
+            <p style={{ fontSize: 11, color: th.muted, margin: "0 0 12px", lineHeight: 1.5 }}>
+              Récupérez votre code de parrainage et suivez vos filleuls.
+              Seuls les clients déjà venus peuvent parrainer.
             </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10,
+            }}>
               <button onClick={onLogin}
                 style={{
-                  background: COL.blueText, color: "#fff", border: "none",
-                  padding: "10px 20px", borderRadius: 8, fontSize: 13,
-                  fontWeight: 500, cursor: "pointer",
+                  padding: "11px", borderRadius: 10, background: th.accent,
+                  border: "none", fontWeight: 700, fontSize: 13,
+                  color: th.accentText, cursor: "pointer",
                 }}>
                 Se connecter
               </button>
               <button onClick={onRegister || onLogin}
                 style={{
-                  background: "transparent", color: COL.blueText,
-                  border: `0.5px solid ${COL.blueBd}`,
-                  padding: "10px 20px", borderRadius: 8, fontSize: 13, cursor: "pointer",
+                  padding: "11px", borderRadius: 10, background: th.card,
+                  border: `1px solid ${th.border || dashedBorder}`,
+                  fontWeight: 700, fontSize: 13, color: th.text, cursor: "pointer",
                 }}>
                 Créer un compte
               </button>
             </div>
+            {/* Google OAuth — popup, puis handleAuth côté parent */}
+            <button onClick={() => {
+              const url = pubApi.googleAuthUrl(slug);
+              const popup = window.open(url, "google_auth",
+                "width=500,height=600,scrollbars=yes,top=100,left=" +
+                Math.round((window.screen.width - 500) / 2));
+              const handler = (e) => {
+                if (e.data?.type !== "GOOGLE_AUTH_SUCCESS") return;
+                window.removeEventListener("message", handler);
+                try { popup && popup.close(); } catch {}
+                const { token, client } = e.data;
+                if (!token || !client) return;
+                localStorage.setItem("ff_client_token", token);
+                localStorage.setItem("ff_client_info", JSON.stringify(client));
+                if (onAuthSuccess) onAuthSuccess(client);
+              };
+              window.addEventListener("message", handler);
+              setTimeout(() => window.removeEventListener("message", handler), 5 * 60 * 1000);
+            }}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 8, padding: "11px", borderRadius: 10, background: th.card,
+                border: `1px solid ${th.border || dashedBorder}`,
+                cursor: "pointer", fontWeight: 700, fontSize: 13, color: th.text,
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continuer avec Google
+            </button>
           </div>
 
           {/* Mention légale */}

@@ -471,7 +471,13 @@ export const creditsApi = {
 };
 async function gcRequest(path, options = {}, token = null) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Fallback auto : ff_gc_token (compte global) puis ff_client_token (login
+  // commerçant, scope='client' avec globalClientId). Le back accepte les 2
+  // via clientOrGlobalClientAuth.
+  const auth = token
+    || localStorage.getItem('ff_gc_token')
+    || localStorage.getItem('ff_client_token');
+  if (auth) headers['Authorization'] = `Bearer ${auth}`;
   const res  = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erreur reseau');

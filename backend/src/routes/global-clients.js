@@ -23,6 +23,27 @@ function globalClientAuth(req, res, next) {
   } catch { res.status(401).json({ error: 'Session expirée.' }); }
 }
 
+// Auth unifié : accepte scope='global_client' OU scope='client' lié à un
+// global_client (globalClientId présent). Les endpoints parrainage utilisent
+// ce middleware car le client s'authentifie via ff_client_token (login
+// commerçant) — ff_gc_token n'est jamais écrit côté front.
+function clientOrGlobalClientAuth(req, res, next) {
+  const h = req.headers.authorization;
+  if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non authentifié.' });
+  try {
+    const dec = jwt.verify(h.slice(7), process.env.JWT_SECRET);
+    if (dec.scope === 'global_client' && dec.globalClientId) {
+      req.globalClient = dec;
+      return next();
+    }
+    if (dec.scope === 'client' && dec.globalClientId) {
+      req.globalClient = { globalClientId: dec.globalClientId, email: dec.email };
+      return next();
+    }
+    return res.status(401).json({ error: 'Token invalide.' });
+  } catch { res.status(401).json({ error: 'Session expirée.' }); }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/global-clients/register
 // ─────────────────────────────────────────────────────────────────────────────
@@ -283,7 +304,7 @@ router.patch('/me', globalClientAuth, async (req, res) => {
 // GET /me/referral-code/:slug — récupère (ou génère) le code parrainage
 // pour ce client chez ce commerçant.
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/me/referral-code/:slug', globalClientAuth, async (req, res) => {
+router.get('/me/referral-code/:slug', clientOrGlobalClientAuth, async (req, res) => {
   try {
     const { rows: biz } = await pool.query(
       'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
@@ -346,7 +367,7 @@ router.get('/me/referral-code/:slug', globalClientAuth, async (req, res) => {
 // GET /me/referral-history/:slug — liste des filleuls + statut + réductions
 // disponibles pour ce client chez ce commerçant (page parrainage client).
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/me/referral-history/:slug', globalClientAuth, async (req, res) => {
+router.get('/me/referral-history/:slug', clientOrGlobalClientAuth, async (req, res) => {
   try {
     const { rows: biz } = await pool.query(
       'SELECT user_id, business_name FROM booking_settings bs WHERE slug=$1 AND is_enabled=TRUE',
