@@ -5,7 +5,53 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 18) : Suppression compte client RGPD + confirmation "SUPPRIMER4"
+## 🆕 Session 2026-04-19 (suite 19) : Fix 401 suppression compte + code "supprimer" insensible casse
+
+### Bugs rapportés (onboarding.md)
+1. `DELETE /api/global-clients/me` → 401 « Token invalide » quand le client
+   est connecté via le site réservation commerçant.
+2. Le mot de confirmation doit être « supprimer » (pas « SUPPRIMER4 »),
+   **insensible à la casse** — majuscules ou minuscules acceptées.
+
+### Cause racine bug 1
+L'endpoint utilisait `globalClientAuth` qui n'accepte QUE `scope='global_client'`
+(ff_gc_token). Or, après login sur un site commerçant, le front écrit
+uniquement `ff_client_token` avec `scope='client'` + `globalClientId`.
+Le fallback `gcRequest` envoyait bien le bon token, mais le middleware le
+rejetait.
+
+### Fix backend — `routes/global-clients.js`
+Endpoint DELETE /me passe de `globalClientAuth` à `clientOrGlobalClientAuth`
+(middleware déjà existant qui accepte les deux scopes, comme `/me/visits`
+et les routes parrainage).
+
+### Fix frontend — `pages/booking/MyAppointments.jsx`
+- Constante `DELETE_PHRASE = 'supprimer'`.
+- Nouveau helper `deleteConfirmOk = deleteConfirm.trim().toLowerCase() === DELETE_PHRASE`
+  → comparaison insensible à la casse + trim auto des espaces.
+- Bouton et handler utilisent `deleteConfirmOk` (plus de `!==` strict).
+- Input `autoCapitalize='none'` (au lieu de 'characters') — n'impose plus
+  les majuscules au clavier mobile.
+- Message d'erreur : « Veuillez saisir « supprimer » pour confirmer. »
+- Label affiché dans la modal : `supprimer` (minuscule) en rouge monospace.
+
+### Build
+- `node --check backend/src/routes/global-clients.js` : OK.
+- `npx vite build` : OK (16.29s, 87 modules, page-booking stable 164.09 kB).
+
+### Compatibilité préservée
+- Le middleware `clientOrGlobalClientAuth` exige toujours un `globalClientId`
+  valide dans le JWT → zéro risque d'accès non autorisé.
+- Clients avec `ff_gc_token` (scope='global_client', ancien flow) continuent
+  de fonctionner — le middleware accepte les deux scopes.
+- Le test côté front était strict (`!== 'SUPPRIMER4'`) mais la sécurité
+  réelle est côté backend (JWT) — assouplir la saisie n'introduit aucune
+  faille : un attaquant devrait déjà avoir le token de session pour atteindre
+  l'étape de confirmation.
+
+---
+
+## Session 2026-04-19 (suite 18) : Suppression compte client RGPD + confirmation "SUPPRIMER4"
 
 ### Demande (onboarding.md)
 Ajouter bouton « Supprimer mon compte » sur la page profil client, sous

@@ -762,8 +762,11 @@ router.post('/reset-password', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/global-clients/me — Suppression RGPD complète
+// Accepte les deux scopes : ff_gc_token (scope='global_client') ET
+// ff_client_token (scope='client' lié à un globalClientId). Le front écrit
+// principalement ff_client_token après login sur un site réservation.
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete('/me', globalClientAuth, async (req, res) => {
+router.delete('/me', clientOrGlobalClientAuth, async (req, res) => {
   try {
     const gid = req.globalClient.globalClientId;
 

@@ -201,7 +201,8 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   const [deleteConfirm, setDeleteConfirm]   = useState('');
   const [deleteLoading, setDeleteLoading]   = useState(false);
   const [deleteErr, setDeleteErr]           = useState('');
-  const DELETE_PHRASE = 'SUPPRIMER4';
+  const DELETE_PHRASE = 'supprimer';
+  const deleteConfirmOk = deleteConfirm.trim().toLowerCase() === DELETE_PHRASE;
 
   const openDeleteModal = () => {
     setDeleteConfirm('');
@@ -215,8 +216,8 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     setDeleteErr('');
   };
   const doDeleteAccount = async () => {
-    if (deleteConfirm !== DELETE_PHRASE) {
-      setDeleteErr(`Veuillez saisir exactement ${DELETE_PHRASE} pour confirmer.`);
+    if (!deleteConfirmOk) {
+      setDeleteErr(`Veuillez saisir « ${DELETE_PHRASE} » pour confirmer.`);
       return;
     }
     setDeleteLoading(true); setDeleteErr('');
@@ -1053,7 +1054,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
             <input type="text" value={deleteConfirm}
               onChange={e => { setDeleteConfirm(e.target.value); if (deleteErr) setDeleteErr(''); }}
               placeholder={DELETE_PHRASE}
-              autoComplete="off" autoCapitalize="characters" spellCheck={false}
+              autoComplete="off" autoCapitalize="none" spellCheck={false}
               disabled={deleteLoading}
               style={{ ...inpStyle, marginBottom:10, fontFamily:'monospace', letterSpacing:1,
                 borderColor: deleteErr ? '#ef4444' : th.inputBorder }}/>
@@ -1070,12 +1071,12 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                 Annuler
               </button>
               <button onClick={doDeleteAccount}
-                disabled={deleteLoading || deleteConfirm !== DELETE_PHRASE}
+                disabled={deleteLoading || !deleteConfirmOk}
                 style={{ flex:1, padding:'12px', borderRadius:11,
-                  cursor: (deleteLoading || deleteConfirm !== DELETE_PHRASE) ? 'not-allowed' : 'pointer',
+                  cursor: (deleteLoading || !deleteConfirmOk) ? 'not-allowed' : 'pointer',
                   background:'#ef4444', border:'none',
                   color:'white', fontWeight:800, fontSize:13,
-                  opacity: (deleteLoading || deleteConfirm !== DELETE_PHRASE) ? 0.5 : 1 }}>
+                  opacity: (deleteLoading || !deleteConfirmOk) ? 0.5 : 1 }}>
                 {deleteLoading ? '...' : 'Supprimer définitivement'}
               </button>
             </div>
