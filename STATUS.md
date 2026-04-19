@@ -5,7 +5,119 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 13) : Réservation publique — responsivité mobile complète
+## 🆕 Session 2026-04-19 (suite 14) : NavBar mobile — menu hamburger drawer glissant
+
+### Demande (onboarding.md)
+La NavBar publique n'était pas responsive : l'utilisateur devait dézoomer pour
+voir tous les boutons. Faire un menu latéral mobile qui glisse depuis la droite
+(type application pro) avec les liens dedans, et garder les 3 boutons clés
+visibles hors du menu : **Prestations, Équipe, Adresse**.
+
+### Approche
+Refonte complète de `booking/NavBar.jsx` avec **3 zones** adaptatives :
+1. **Logo + nom business** (toujours visible, nom ellipsis/masqué sur très petit).
+2. **Liens** :
+   - Desktop (> 767px) : tous les liens horizontaux (comportement avant).
+   - Tablette étroite (481-767px) : 3 liens rapides (Prestations / Équipe / Adresse).
+   - Mobile (≤ 480px) : aucun lien visible, tout dans le drawer.
+3. **Zone droite** :
+   - Desktop : tel + thème + avatar/auth (comportement avant).
+   - Mobile : uniquement bouton hamburger.
+
+### Nouveau : Drawer mobile glissant
+Panneau latéral droite animé via CSS transform + transition (cubic-bezier
+iOS-like), overlay `rgba(0,0,0,0.5)` avec `backdrop-filter:blur(2px)`.
+
+- Largeur : `min(86vw, 340px)`.
+- Hauteur : `100dvh` (avec fallback `100vh`) pour éviter le bug de la barre
+  d'URL mobile Safari qui mange la hauteur.
+- `z-index:200` (au-dessus des modals 100, sous les toasts).
+- Transform `translateX(100%)` → `translateX(0)` sur `.open`, transition 280ms
+  cubic-bezier(0.16, 1, 0.3, 1) (ease-out iOS natif).
+- Fermeture : backdrop click, bouton ✕, touche Escape, click sur un lien.
+- Scroll body bloqué (`document.body.style.overflow='hidden'`) pendant ouverture,
+  restauré au démontage.
+
+### Contenu du drawer
+1. **Header** : logo + nom business + bouton ✕ (fermer).
+2. **Bloc auth** :
+   - Si connecté : avatar + prénom → Mes RDV (avec chevron) + bouton
+     "Se déconnecter" rouge.
+   - Sinon : gros bouton "Connexion / Créer un compte".
+3. **Liens de navigation** : tous les liens disponibles (Prestations, Équipe,
+   Commentaires, Parrainage, Photos, Adresse) avec chevron ›.
+4. **Footer** : tel clickable + toggle thème avec label "Mode clair/sombre".
+
+### Règles CSS ajoutées (feuille globale BookingPage.jsx)
+```css
+.bk-do-right{ display:flex }       /* zone droite desktop */
+.bk-mo-quick{ display:none }       /* liens rapides tablet */
+.bk-mo-hamb{ display:none }        /* bouton hamburger mobile */
+
+@media(max-width:767px){
+  .bk-do, .bk-do-right{ display:none!important }
+  .bk-mo-quick, .bk-mo-hamb{ display:flex!important }
+}
+@media(max-width:480px){
+  .bk-mo-quick{ display:none!important }
+  .bk-nav-title{ max-width:110px }
+}
+@media(max-width:360px){
+  .bk-nav-title{ display:none }   /* plus que logo + hamburger */
+}
+
+.bk-drawer{ position:fixed; inset:0; z-index:200; pointer-events:none }
+.bk-drawer.open{ pointer-events:auto }
+.bk-drawer-backdrop{ /* overlay flouté avec fade */ }
+.bk-drawer-panel{ /* panneau droite, transform translateX(100%) initial */ }
+.bk-drawer.open .bk-drawer-panel{ transform:translateX(0) }
+@media(min-width:768px){ .bk-drawer{ display:none } }
+```
+
+### NavBar.jsx — logique ajoutée
+- Hook `useState(menuOpen)`.
+- Hook `useEffect` : écoute Escape + lock scroll body pendant ouverture.
+- Fonction `scrollTo(id)` mise à jour : ferme le drawer avant de scroller.
+- Liste `allLinks` factorisée : utilisée **desktop** ET **drawer mobile**
+  (pas de duplication des conditions Commentaires/Parrainage/Photos).
+
+### Accessibilité
+- `aria-label="Ouvrir le menu"` / `"Fermer"` sur les boutons hamburger/close.
+- `aria-hidden={!menuOpen}` sur le drawer.
+- Fermeture via Escape (keyboard navigation).
+- Zone tactile des boutons ≥ 40px (hamburger + close à 40×40).
+- Focus visible préservé (aucun outline retiré).
+
+### Build
+- `npx vite build` : OK (23.01s, 87 modules).
+- `page-booking` : +8.79 kB (146.73 → 155.52) pour NavBar refactorée + drawer.
+
+### Compatibilité préservée
+- **Desktop (> 767px)** : comportement **rigoureusement identique** avant refonte.
+  Les liens horizontaux, tel, thème, avatar/auth sont exactement aux mêmes
+  positions avec les mêmes styles.
+- **Les 3 breakpoints progressifs** (767 / 480 / 360) évitent les sauts.
+- `bk-do` classe existante respectée : en desktop elle reste visible, en mobile
+  elle disparaît. Les nouveaux `bk-do-right`, `bk-mo-quick`, `bk-mo-hamb`
+  complètent le système sans modifier les règles existantes.
+- Aucun prop ajouté/retiré au composant `NavBar` (rétrocompatible avec
+  `BookingPage.jsx` et toutes les vues qui l'utilisent).
+- Le drawer est rendu dans le DOM même fermé (avec `pointer-events:none`) pour
+  permettre les transitions ; sur desktop il est `display:none` via media query.
+
+### Test visuel recommandé
+- Desktop 1440px, 1280px, 1024px → liens horizontaux visibles, zéro dézoom.
+- Tablette 768px (portrait iPad) : liens classiques (dernier breakpoint desktop).
+- Mobile landscape 820px : liens classiques.
+- Mobile 667px, 568px (iPhone SE landscape) : 3 liens rapides + hamburger.
+- Mobile 414px, 390px, 375px (iPhone SE, 13, 14) : logo + hamburger seul,
+  drawer fonctionnel.
+- Mobile 320px (très petit) : nom business masqué, logo + hamburger uniquement.
+- Drawer : click backdrop, click ✕, Escape → ferme. Click sur lien → scroll + ferme.
+
+---
+
+## Session 2026-04-19 (suite 13) : Réservation publique — responsivité mobile complète
 
 ### Demande (onboarding.md)
 Rendre le site de réservation **parfaitement responsive** sur tous types d'écrans
