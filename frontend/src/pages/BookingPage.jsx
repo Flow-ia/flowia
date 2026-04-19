@@ -586,6 +586,25 @@ export default function BookingPage({ slug }) {
         try { localStorage.removeItem('ff_booking_ref_' + slug); } catch {}
         setReferralCode('');
       }
+      // Si un code parrainage a été saisi mais que le backend l'a refusé
+      // (filleul déjà connu, quota parrain, self-referral…), on prévient
+      // l'utilisateur via une alerte — sinon il ne voit pas pourquoi aucune
+      // remise n'apparaît sur le récap.
+      if (result?.referral_skip_reason && referralCode) {
+        const REF_ERR = {
+          self_referral:    "Vous ne pouvez pas utiliser votre propre code de parrainage.",
+          filleul_not_new:  "Vous avez déjà été servi par ce commerçant — le parrainage ne s'applique qu'aux nouveaux clients.",
+          already_parraine: "Un parrainage a déjà été utilisé avec votre email chez ce commerçant.",
+          quota_exceeded:   "Limite de parrainages atteinte pour ce parrain.",
+          program_disabled: "Le programme de parrainage n'est plus actif chez ce commerçant.",
+          code_not_found:   "Code parrainage inconnu.",
+          promo_used:       "Un code promo a été appliqué à la place du parrainage (non cumulable).",
+          server_error:     "Erreur serveur lors de la vérification du parrainage.",
+        };
+        const msg = REF_ERR[result.referral_skip_reason] || 'Parrainage non applicable — remise non appliquée.';
+        // Alerte visible mais non bloquante : RDV bien créé
+        setTimeout(() => window.alert(msg), 100);
+      }
       setBooked(result);
       setView('success');
     } catch (e) {
