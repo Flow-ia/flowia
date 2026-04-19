@@ -11,10 +11,8 @@ export default function TabMarketing({ theme, showToast }) {
   const location = useLocation();
 
   const MTABS = [
-    { id: 'fidelite',    label: 'Fidelite' },
+    { id: 'fidelite',    label: '💎 Fidelite' },
     { id: 'promotions',  label: '% Promos' },
-    { id: 'anniversaire',label: '🎂 Anniv.' },
-    { id: 'parrainage',  label: '🤝 Parrain.' },
     { id: 'solde',       label: 'Solde' },
     { id: 'ia',          label: '✨ IA' },
   ];
@@ -22,7 +20,18 @@ export default function TabMarketing({ theme, showToast }) {
   // Extrait le sous-onglet depuis l'URL : /settings/marketing/{sub}
   const parts = location.pathname.replace(/^\/settings\/marketing\/?/, '').split('/').filter(Boolean);
   const rawSub = parts[0] || 'ia';
-  const marketingTab = MTABS.some(t => t.id === rawSub) ? rawSub : 'ia';
+  // Legacy : /anniversaire et /parrainage sont fusionnés dans /fidelite
+  const LEGACY_TO_FIDELITE = ['anniversaire', 'parrainage'];
+  const marketingTab = LEGACY_TO_FIDELITE.includes(rawSub)
+    ? 'fidelite'
+    : (MTABS.some(t => t.id === rawSub) ? rawSub : 'ia');
+
+  // Redirection silencieuse vers /fidelite si URL legacy
+  useEffect(() => {
+    if (LEGACY_TO_FIDELITE.includes(rawSub)) {
+      navigate('/settings/marketing/fidelite', { replace: true });
+    }
+  }, [rawSub]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setMarketingTab = (id) => {
     // conserve les segments suivants (utile si sous-page imbriquée plus tard)
@@ -45,10 +54,8 @@ export default function TabMarketing({ theme, showToast }) {
         ))}
       </div>
 
-      {marketingTab === 'fidelite'    && <TabLoyalty theme={theme} />}
+      {marketingTab === 'fidelite'    && <TabFidelite theme={theme} showToast={showToast} />}
       {marketingTab === 'promotions'  && <TabPromo theme={theme} showToast={showToast} />}
-      {marketingTab === 'anniversaire'&& <TabBirthday theme={theme} showToast={showToast} />}
-      {marketingTab === 'parrainage'  && <TabReferral theme={theme} showToast={showToast} />}
       {marketingTab === 'solde'       && <TabSMS showToast={showToast} theme={theme} />}
       {marketingTab === 'ia'          && <TabMarketingIA theme={theme} showToast={showToast} onGoToSolde={() => navigate('/settings/marketing/solde')} />}
     </div>
@@ -168,7 +175,12 @@ function TabBirthday({ theme, showToast }) {
 // ═══════════════════════════════════════════════════════════════════════════
 function TabReferral({ theme, showToast }) {
   const isDark = theme.mode === 'dark';
-  const [cfg, setCfg] = useState({ is_enabled:false, parrain_type:'percent', parrain_value:10, filleul_type:'percent', filleul_value:10 });
+  const [cfg, setCfg] = useState({
+    is_enabled:false,
+    parrain_type:'percent', parrain_value:10,
+    filleul_type:'percent', filleul_value:10,
+    limit_count: null, limit_period: 'unlimited',
+  });
   const [codes, setCodes]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
@@ -182,6 +194,8 @@ function TabReferral({ theme, showToast }) {
           parrain_value: Number(prog.parrain_value || 0),
           filleul_type: prog.filleul_type || 'percent',
           filleul_value: Number(prog.filleul_value || 0),
+          limit_period: prog.limit_period || 'unlimited',
+          limit_count:  prog.limit_count != null ? Number(prog.limit_count) : null,
         });
         setCodes(Array.isArray(cs) ? cs : []);
       }).catch(()=>{}).finally(()=>setLoading(false));
@@ -251,6 +265,40 @@ function TabReferral({ theme, showToast }) {
             onChange={e=>setCfg(c=>({...c,filleul_value:e.target.value}))} style={inp}/>
         </div>
 
+        {/* Limite anti-abus : par client parrain */}
+        <p className="text-xs font-bold uppercase mb-2" style={{ color:theme.muted, letterSpacing:'0.08em' }}>
+          Limite par parrain
+        </p>
+        <div style={{
+          display:'grid',
+          gridTemplateColumns: (cfg.limit_period === 'unlimited' || cfg.limit_period === 'lifetime') ? '1fr' : '1fr 1fr',
+          gap:10, marginBottom:14,
+        }}>
+          <select value={cfg.limit_period}
+            onChange={e=>{
+              const lp = e.target.value;
+              setCfg(c => ({
+                ...c,
+                limit_period: lp,
+                // Réinitialise limit_count selon la nouvelle période
+                limit_count: lp === 'lifetime' ? 1
+                          : lp === 'unlimited' ? null
+                          : (c.limit_count || 3),
+              }));
+            }} style={inp}>
+            <option value="unlimited">Illimité</option>
+            <option value="lifetime">Une seule fois à vie</option>
+            <option value="month">X fois par mois</option>
+            <option value="3months">X fois sur 3 mois</option>
+            <option value="year">X fois par an</option>
+          </select>
+          {(cfg.limit_period !== 'unlimited' && cfg.limit_period !== 'lifetime') && (
+            <input type="number" min="1" step="1" value={cfg.limit_count ?? ''}
+              onChange={e=>setCfg(c=>({...c, limit_count: e.target.value ? Number(e.target.value) : null}))}
+              placeholder="Nombre" style={inp}/>
+          )}
+        </div>
+
         <button onClick={save} disabled={saving}
           style={{ width:'100%', padding:'12px', borderRadius:14, border:'none', cursor:'pointer',
             background:'linear-gradient(90deg,#818cf8,#6366f1)', color:'white', fontWeight:800, fontSize:14, opacity:saving?0.5:1 }}>
@@ -288,6 +336,63 @@ function TabReferral({ theme, showToast }) {
           Quand un filleul réserve via <code>?ref=CODE</code>, un code promo est créé automatiquement pour le parrain et le filleul (valable 60 jours).
         </p>
       </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── TabFidelite : agrège Programme fidélité + Anniv + Parrainage ──────────
+// (onboarding.md : page unique avec accordéons fermés par défaut)
+// ═══════════════════════════════════════════════════════════════════════════
+function FideliteAccordion({ theme, title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const isDark = theme.mode === 'dark';
+  return (
+    <div style={{
+      background: theme.card, border: `1px solid ${theme.border}`,
+      borderRadius: 14, overflow: 'hidden',
+    }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer',
+          textAlign: 'left',
+        }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: theme.text }}>{title}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          style={{
+            width: 16, height: 16, color: theme.muted,
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform .2s',
+          }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          borderTop: `1px solid ${theme.border}`,
+          padding: 16,
+          background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+        }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TabFidelite({ theme, showToast }) {
+  return (
+    <div className="space-y-4">
+      <FideliteAccordion theme={theme} title="💎 Programme de fidélité (tampons / points)">
+        <TabLoyalty theme={theme} />
+      </FideliteAccordion>
+      <FideliteAccordion theme={theme} title="🎂 Offres anniversaire">
+        <TabBirthday theme={theme} showToast={showToast} />
+      </FideliteAccordion>
+      <FideliteAccordion theme={theme} title="🤝 Programme de parrainage">
+        <TabReferral theme={theme} showToast={showToast} />
+      </FideliteAccordion>
     </div>
   );
 }

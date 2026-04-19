@@ -415,7 +415,8 @@ router.get('/pub/:slug/referral-program', async (req, res) => {
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const { rows: prog } = await pool.query(
-      `SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value
+      `SELECT is_enabled, parrain_type, parrain_value, filleul_type, filleul_value,
+              limit_count, limit_period
          FROM referral_programs WHERE user_id=$1`, [biz[0].user_id]
     );
     if (!prog.length)

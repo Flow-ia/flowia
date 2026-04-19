@@ -878,6 +878,15 @@ async function initDB() {
   // 0 = à tout moment · 1 = 1h avant · 2 = 2h · 6 · 24 · 48 avant RDV
   await runMigration(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS cancellation_policy_hours INT DEFAULT 2`);
 
+  // ── Limite anti-abus parrainage ───────────────────────────────────────────
+  // limit_count  : nombre max de parrainages autorisés sur la période
+  //                (NULL = illimité, 1 pour le mode "lifetime", entier sinon)
+  // limit_period : 'unlimited' | 'lifetime' | 'month' | '3months' | 'year'
+  //                (lifetime = une seule fois à vie ; month = par mois calendaire ;
+  //                 3months = sur les 90 derniers jours ; year = par année calendaire)
+  await runMigration(`ALTER TABLE referral_programs ADD COLUMN IF NOT EXISTS limit_count INT`);
+  await runMigration(`ALTER TABLE referral_programs ADD COLUMN IF NOT EXISTS limit_period VARCHAR(16) DEFAULT 'unlimited'`);
+
   // ── Marketing IA : envoi prédictif avec codes personnels ──────────────────
   await runMigration(`
     CREATE TABLE IF NOT EXISTS ai_campaigns (

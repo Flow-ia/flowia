@@ -15,12 +15,15 @@ function genReferralCode() {
 const merchantRouter = express.Router();
 merchantRouter.use(authMiddleware);
 
+// Périodes valides pour la limite anti-abus.
+const VALID_LIMIT_PERIODS = ['unlimited', 'lifetime', 'month', '3months', 'year'];
+
 // ── GET /api/referrals/program — config (commerçant) ────────────────────────
 merchantRouter.get('/program', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT user_id, is_enabled, parrain_type, parrain_value,
-              filleul_type, filleul_value, updated_at
+              filleul_type, filleul_value, limit_count, limit_period, updated_at
          FROM referral_programs WHERE user_id=$1`,
       [req.user.userId]
     );
@@ -29,6 +32,7 @@ merchantRouter.get('/program', async (req, res) => {
         is_enabled: false,
         parrain_type: 'percent', parrain_value: 10,
         filleul_type: 'percent', filleul_value: 10,
+        limit_count: null, limit_period: 'unlimited',
       });
     }
     res.json(rows[0]);
@@ -38,7 +42,10 @@ merchantRouter.get('/program', async (req, res) => {
 // ── PUT /api/referrals/program — upsert config ──────────────────────────────
 merchantRouter.put('/program', async (req, res) => {
   try {
-    const { is_enabled, parrain_type, parrain_value, filleul_type, filleul_value } = req.body;
+    const {
+      is_enabled, parrain_type, parrain_value, filleul_type, filleul_value,
+      limit_count, limit_period,
+    } = req.body;
     for (const t of [parrain_type, filleul_type]) {
       if (t && !['percent','fixed'].includes(t))
         return res.status(400).json({ error: 'type invalide.' });
@@ -48,21 +55,38 @@ merchantRouter.put('/program', async (req, res) => {
     if (isNaN(pv) || pv < 0 || isNaN(fv) || fv < 0)
       return res.status(400).json({ error: 'valeurs invalides.' });
 
+    // Limite anti-abus : période + nombre. Période 'unlimited' ou 'lifetime'
+    // n'utilise pas limit_count (lifetime = 1 implicite, unlimited = pas de limite).
+    let lp = (limit_period || 'unlimited').toString();
+    if (!VALID_LIMIT_PERIODS.includes(lp)) lp = 'unlimited';
+    let lc = null;
+    if (lp === 'lifetime') {
+      lc = 1; // une seule fois à vie
+    } else if (lp !== 'unlimited') {
+      const n = parseInt(limit_count, 10);
+      if (isNaN(n) || n < 1) return res.status(400).json({ error: 'Nombre de parrainages invalide (min 1).' });
+      lc = n;
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO referral_programs
-         (user_id, is_enabled, parrain_type, parrain_value, filleul_type, filleul_value, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+         (user_id, is_enabled, parrain_type, parrain_value, filleul_type, filleul_value,
+          limit_count, limit_period, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          is_enabled    = EXCLUDED.is_enabled,
          parrain_type  = EXCLUDED.parrain_type,
          parrain_value = EXCLUDED.parrain_value,
          filleul_type  = EXCLUDED.filleul_type,
          filleul_value = EXCLUDED.filleul_value,
+         limit_count   = EXCLUDED.limit_count,
+         limit_period  = EXCLUDED.limit_period,
          updated_at    = NOW()
        RETURNING *`,
       [req.user.userId, !!is_enabled,
        parrain_type || 'percent', pv,
-       filleul_type || 'percent', fv]
+       filleul_type || 'percent', fv,
+       lc, lp]
     );
     res.json(rows[0]);
   } catch (e) { console.error('[REF PROG PUT]', e.message); res.status(500).json({ error: e.message }); }

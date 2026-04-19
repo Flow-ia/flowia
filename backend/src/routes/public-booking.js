@@ -851,7 +851,8 @@ router.post('/:slug/book', async (req, res) => {
     if (incomingRef && client_email) {
       try {
         const { rows: prog } = await pool.query(
-          `SELECT is_enabled FROM referral_programs WHERE user_id=$1`, [userId]
+          `SELECT is_enabled, limit_count, limit_period
+             FROM referral_programs WHERE user_id=$1`, [userId]
         );
         if (prog.length && prog[0].is_enabled) {
           const { rows: rc } = await pool.query(
@@ -874,7 +875,37 @@ router.post('/:slug/book', async (req, res) => {
                    AND status IN ('pending','validated') LIMIT 1`,
               [userId, filleulEmail]
             );
-            if (!prev.length && !existing.length) {
+            // Garde anti-abus : limite côté PARRAIN selon limit_period.
+            // On compte les parrainages pending+validated du parrain sur la
+            // fenêtre concernée (lifetime / mois calendaire / 90j / année).
+            let quotaOk = true;
+            const lp = prog[0].limit_period || 'unlimited';
+            const lc = prog[0].limit_count;
+            if (lp !== 'unlimited' && lc != null && lc > 0) {
+              const ownerEmail = rc[0].owner_client_email.toLowerCase();
+              let dateClause = '';
+              if (lp === 'lifetime') {
+                dateClause = '';
+              } else if (lp === 'month') {
+                dateClause = "AND ru.created_at >= date_trunc('month', NOW())";
+              } else if (lp === '3months') {
+                dateClause = "AND ru.created_at >= NOW() - INTERVAL '90 days'";
+              } else if (lp === 'year') {
+                dateClause = "AND ru.created_at >= date_trunc('year', NOW())";
+              }
+              const { rows: cnt } = await pool.query(
+                `SELECT COUNT(*)::int AS n
+                   FROM referral_uses ru
+                   JOIN referral_codes rcc ON rcc.id = ru.referral_code_id
+                  WHERE ru.user_id=$1
+                    AND LOWER(rcc.owner_client_email)=$2
+                    AND ru.status IN ('pending','validated')
+                    ${dateClause}`,
+                [userId, ownerEmail]
+              );
+              if (cnt[0].n >= lc) quotaOk = false;
+            }
+            if (!prev.length && !existing.length && quotaOk) {
               await pool.query(
                 `INSERT INTO referral_uses
                    (user_id, referral_code_id, filleul_email,

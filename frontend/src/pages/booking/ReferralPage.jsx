@@ -173,9 +173,7 @@ export function ReferralPage({
   // ─────────────────────────────────────────────────────────────────────────
   if (!gcConnected) {
     // Lecture sécurisée des conditions (avec fallbacks lisibles)
-    const limitLabel = refProgram.monthly_limit
-      ? `${refProgram.monthly_limit} parrainages par mois`
-      : "Illimité";
+    const limitLabel = limitPeriodLabel(refProgram);
     const validityLabel = refProgram.validity_days
       ? `${refProgram.validity_days} jours après validation`
       : "60 jours après validation";
@@ -298,23 +296,54 @@ export function ReferralPage({
   // ÉTAT 3 — Programme actif + CONNECTÉ (Maquette 2)
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Quota mensuel (affiché uniquement si une limite est configurée)
-  const monthlyLimit = refProgram.monthly_limit; // null/undefined = illimité
-  const usedThisMonth = (() => {
-    if (!monthlyLimit) return 0;
-    const now = new Date();
+  // Quota anti-abus (affiché uniquement si une limite est configurée).
+  // Compte les parrainages pending+validated du parrain sur la fenêtre
+  // courante (lifetime / mois calendaire / 90 derniers jours / année calendaire).
+  const lp = refProgram.limit_period || "unlimited";
+  const limitMax = (lp !== "unlimited" && refProgram.limit_count)
+    ? Number(refProgram.limit_count) : null;
+  const usedInWindow = (() => {
+    if (!limitMax) return 0;
     return (refMyHistory || []).filter(h => {
+      if (h.status !== "pending" && h.status !== "validated") return false;
       if (!h.created_at) return false;
       const d = new Date(h.created_at);
-      return d.getFullYear() === now.getFullYear()
-          && d.getMonth() === now.getMonth();
+      const now = new Date();
+      if (lp === "lifetime") return true;
+      if (lp === "month") {
+        return d.getFullYear() === now.getFullYear()
+            && d.getMonth()    === now.getMonth();
+      }
+      if (lp === "3months") {
+        const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        return d >= cutoff;
+      }
+      if (lp === "year") {
+        return d.getFullYear() === now.getFullYear();
+      }
+      return false;
     }).length;
   })();
-  const remaining = monthlyLimit ? Math.max(0, monthlyLimit - usedThisMonth) : null;
-  const endOfMonth = (() => {
+  const remaining = limitMax ? Math.max(0, limitMax - usedInWindow) : null;
+  const windowEndLabel = (() => {
     const d = new Date();
-    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    return last.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+    if (lp === "month") {
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return last.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+    }
+    if (lp === "year") return `31 décembre ${d.getFullYear()}`;
+    if (lp === "3months") {
+      const next = new Date(d.getTime() + 90 * 24 * 60 * 60 * 1000);
+      return next.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+    }
+    return null; // lifetime → pas de "jusqu'au"
+  })();
+  const quotaUnitLabel = (() => {
+    if (lp === "lifetime") return "à vie";
+    if (lp === "month")    return "ce mois-ci";
+    if (lp === "3months")  return "sur 3 mois";
+    if (lp === "year")     return "cette année";
+    return "";
   })();
 
   const fmtDate = (s) => {
@@ -464,19 +493,23 @@ export function ReferralPage({
         </div>
 
         {/* Bandeau quota — uniquement si une limite est configurée */}
-        {monthlyLimit && (
+        {limitMax && (
           <div style={{
             background: COL.amberBg, border: `0.5px solid ${COL.amberBd}`,
             borderRadius: 8, padding: "12px 14px", marginBottom: "1.5rem",
           }}>
             <p style={{ fontSize: 13, color: COL.amberText, margin: 0, fontWeight: 500 }}>
-              Quota du mois : {usedThisMonth} sur {monthlyLimit} utilisé{usedThisMonth > 1 ? "s" : ""}
+              Quota {quotaUnitLabel} : {usedInWindow} sur {limitMax} utilisé{usedInWindow > 1 ? "s" : ""}
             </p>
             <p style={{ fontSize: 12, color: COL.amberText, margin: "2px 0 0",
               opacity: 0.85 }}>
               {remaining > 0
-                ? `Il vous reste ${remaining} parrainage${remaining > 1 ? "s" : ""} jusqu'au ${endOfMonth}`
-                : `Quota atteint. Recharge le ${endOfMonth} à minuit.`}
+                ? (windowEndLabel
+                    ? `Il vous reste ${remaining} parrainage${remaining > 1 ? "s" : ""} jusqu'au ${windowEndLabel}`
+                    : `Il vous reste ${remaining} parrainage${remaining > 1 ? "s" : ""}`)
+                : (windowEndLabel
+                    ? `Quota atteint. Recharge le ${windowEndLabel} à minuit.`
+                    : "Quota atteint.")}
             </p>
           </div>
         )}
@@ -558,6 +591,19 @@ function StatCard({ th, surfaceAlt, label, value, valueColor }) {
         color: valueColor || th.text }}>{value}</p>
     </div>
   );
+}
+
+// Libellé humain de la limite anti-abus pour la section Conditions
+function limitPeriodLabel(refProgram) {
+  const lp = refProgram?.limit_period || "unlimited";
+  const lc = refProgram?.limit_count;
+  if (lp === "unlimited") return "Illimité";
+  if (lp === "lifetime")  return "Une seule fois à vie";
+  if (!lc) return "Illimité";
+  if (lp === "month")    return `${lc} fois par mois`;
+  if (lp === "3months")  return `${lc} fois sur 3 mois`;
+  if (lp === "year")     return `${lc} fois par an`;
+  return "Illimité";
 }
 
 function shareBtn(th, dashedBorder) {
