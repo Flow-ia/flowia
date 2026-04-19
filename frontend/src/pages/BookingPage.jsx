@@ -52,6 +52,14 @@ export default function BookingPage({ slug }) {
       return localStorage.getItem('ff_booking_ref_' + slug) || '';
     } catch { return ''; }
   });
+  // Info programme parrainage (type/valeur remise) fetchée dès qu'un code
+  // est connu (via ?ref= OU saisie manuelle dans le champ code promo).
+  // Sert à afficher la bannière "Parrainage actif" + pré-remplir le champ
+  // code promo en étape récap.
+  const [referralInfo, setReferralInfo] = useState(null); // { valid, discount_type, discount_value }
+  // Flag pour afficher une bannière ponctuelle juste après inscription
+  // quand un code parrainage était en cours (message "promo appliquée").
+  const [justRegisteredRef, setJustRegisteredRef] = useState(false);
 
   // Gérer le retour Google OAuth (URL directe sans popup)
   useEffect(() => {
@@ -121,6 +129,32 @@ export default function BookingPage({ slug }) {
       }, 600);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Flow parrainage — redirect vers inscription si ?ref=CODE + pas connecté
+  // Au montage, si on arrive sur la page avec un code parrainage (URL ou
+  // localStorage) et sans session client, on ouvre l'AuthPanel en mode
+  // 'register' pour que le filleul crée son compte en priorité (la promo
+  // filleul ne peut s'appliquer qu'à un client avec un compte).
+  useEffect(() => {
+    if (!referralCode) return;
+    const token = localStorage.getItem('ff_client_token');
+    if (!token) {
+      setAuthInitMode('register');
+      setShowAuthPanel(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Flow parrainage — fetch info programme (type/valeur) ────────────────
+  // Permet d'afficher la bannière "Parrainage actif: -X%" + de pré-remplir
+  // le champ code promo à l'étape récap. Silencieux si code invalide.
+  useEffect(() => {
+    if (!referralCode) { setReferralInfo(null); return; }
+    let cancelled = false;
+    pubApi.checkReferral(slug, referralCode)
+      .then(res => { if (!cancelled) setReferralInfo(res?.valid ? res : null); })
+      .catch(() => { if (!cancelled) setReferralInfo(null); });
+    return () => { cancelled = true; };
+  }, [referralCode, slug]);
 
   // Construire l'URL pour chaque étape
   const stepToPath = (s, svcId, empId, dateStr, slot) => {
@@ -262,6 +296,10 @@ export default function BookingPage({ slug }) {
   // showAuthPanel = true → AuthPanel flottant (navbar, hors flow)
   const [showAuthPanel, setShowAuthPanel]  = useState(false);
   const [authInitEmail, setAuthInitEmail]  = useState('');
+  // Mode par défaut de AuthPanel ('login' | 'register'). Passé en 'register'
+  // quand le visiteur arrive via un lien ?ref=CODE pour le rediriger
+  // directement vers la création de compte.
+  const [authInitMode,  setAuthInitMode]   = useState('login');
   const [requireAccount, setRequire]  = useState(false);
   const [pendingBook,   setPendingBook]   = useState(false);
   const [myApptsInitTab, setMyApptsInitTab] = useState('appts');
@@ -282,15 +320,67 @@ export default function BookingPage({ slug }) {
     if (!promoCode.trim()) return;
     setPromoLoading(true); setPromoErr('');
     try {
+      const codeRaw = promoCode.trim();
+      // 1. Essai code promo classique
       const res = await pubApi.checkPromo(slug, {
-        code: promoCode.trim(),
-        amount: selSvc?.price || 0,
+        code:         codeRaw,
+        amount:       selSvc?.price || 0,
+        client_email: clientEmail || undefined,
       });
-      if (res.valid) { setPromoData(res); setPromoErr(''); }
-      else { setPromoData(null); setPromoErr(res.error || 'Code invalide'); }
+      if (res.valid) {
+        setPromoData({ ...res, source: 'promo' });
+        setPromoErr('');
+        return;
+      }
+      // 2. Fallback : code parrainage (même input pour saisie manuelle)
+      try {
+        const ref = await pubApi.checkReferral(slug, codeRaw.toUpperCase());
+        if (ref?.valid) {
+          const baseAmt  = selSvc?.price || 0;
+          const discount = ref.discount_type === 'percent'
+            ? Math.min(baseAmt, baseAmt * parseFloat(ref.discount_value) / 100)
+            : Math.min(baseAmt, parseFloat(ref.discount_value));
+          setPromoData({
+            source:   'referral',
+            type:     ref.discount_type,
+            value:    parseFloat(ref.discount_value),
+            discount: Math.round(discount * 100) / 100,
+          });
+          // Synchroniser referralCode → sera envoyé au POST /book en
+          // tant que referral_code (non pas promo_code_id)
+          const up = codeRaw.toUpperCase();
+          setReferralCode(up);
+          try { localStorage.setItem('ff_booking_ref_' + slug, up); } catch {}
+          setPromoErr('');
+          return;
+        }
+      } catch { /* silencieux : on retombe sur l'erreur promo */ }
+      setPromoData(null);
+      setPromoErr(res.error || 'Code invalide');
     } catch { setPromoErr('Erreur reseau'); }
     finally { setPromoLoading(false); }
   };
+
+  // Pré-remplir le champ code promo avec le code parrainage dès qu'il est
+  // validé côté back ET qu'aucun autre code promo n'a été saisi à la main.
+  // Traçabilité visuelle : le filleul voit son code (venu du lien) apparaître.
+  useEffect(() => {
+    if (!referralInfo || !referralCode) return;
+    if (promoData?.source === 'promo') return; // priorité code promo manuel
+    if (promoCode && promoCode.toUpperCase() !== referralCode.toUpperCase()) return;
+    const baseAmt  = selSvc?.price || 0;
+    const discount = referralInfo.discount_type === 'percent'
+      ? Math.min(baseAmt, baseAmt * parseFloat(referralInfo.discount_value) / 100)
+      : Math.min(baseAmt, parseFloat(referralInfo.discount_value));
+    setPromoCode(referralCode);
+    setPromoData({
+      source:   'referral',
+      type:     referralInfo.discount_type,
+      value:    parseFloat(referralInfo.discount_value),
+      discount: Math.round(discount * 100) / 100,
+    });
+    setPromoErr('');
+  }, [referralInfo, referralCode, selSvc]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore client session
   useEffect(() => {
@@ -452,7 +542,11 @@ export default function BookingPage({ slug }) {
       let finalDiscount = 0;
       let finalPromoCode = null;
 
-      if (promoData && promoCode.trim()) {
+      if (promoData?.source === 'referral') {
+        // Parrainage : la remise est recalculée côté backend via
+        // referral_code dans le body (POST /book, secure). Ne pas recheck
+        // /promo/check — le code n'est pas dans la table promo_codes.
+      } else if (promoData && promoCode.trim()) {
         const recheck = await pubApi.checkPromo(slug, {
           code:         promoCode.trim(),
           amount:       selSvc?.price || 0,
@@ -796,6 +890,39 @@ export default function BookingPage({ slug }) {
         onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 
+      {/* ══ Bandeau "promotion parrainage appliquée" ══
+           Affiché (a) juste après une inscription déclenchée par ?ref=CODE,
+           et (b) tant qu'un parrainage actif est en cours mais pas encore
+           consommé (client connecté, avant confirmation de réservation).
+           L'utilisateur peut fermer — le code reste appliqué dans le back. */}
+      {!showAuthPanel && referralCode && referralInfo && clientUser && view === 'booking' && (
+        <div style={{ maxWidth:1100, margin:'0 auto 16px', padding:'0 16px' }}>
+          <div style={{ padding:'12px 16px', borderRadius:14,
+            background:'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(99,102,241,0.12))',
+            border:'1px solid rgba(16,185,129,0.32)',
+            display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <span style={{ fontSize:20 }}>🎁</span>
+            <p style={{ fontSize:13, color:th.text, margin:0, flex:1, minWidth:0, lineHeight:1.5 }}>
+              {justRegisteredRef
+                ? <>Compte créé avec succès ! Votre code parrainage <strong style={{color:'#6d28d9',fontFamily:'monospace'}}>{referralCode}</strong> sera appliqué au récap — remise de{' '}
+                    <strong>{referralInfo.discount_type === 'percent' ? `${referralInfo.discount_value}%` : `${Number(referralInfo.discount_value).toFixed(2)} €`}</strong>{' '}
+                    selon les conditions du commerçant.</>
+                : <>Parrainage actif — code <strong style={{color:'#6d28d9',fontFamily:'monospace'}}>{referralCode}</strong>, remise de{' '}
+                    <strong>{referralInfo.discount_type === 'percent' ? `${referralInfo.discount_value}%` : `${Number(referralInfo.discount_value).toFixed(2)} €`}</strong>{' '}
+                    appliquée au récap selon les conditions du commerçant.</>
+              }
+            </p>
+            <button onClick={() => setJustRegisteredRef(false)} aria-label="Fermer"
+              style={{ width:26, height:26, borderRadius:8, border:'none',
+                background:'rgba(0,0,0,0.06)', cursor:'pointer', color:th.muted,
+                display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                style={{width:12,height:12}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ══ CORPS 2 COLONNES ══ */}
       <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 16px 80px',
         display:'flex', gap:32, alignItems:'flex-start' }} className="bk-2c">
@@ -806,10 +933,41 @@ export default function BookingPage({ slug }) {
           {/* Panneau auth */}
           {showAuthPanel && (
             <div style={{ marginBottom:24, animation:'fadeIn .2s ease' }}>
+              {/* Bandeau contexte parrainage — filleul incité à créer un compte */}
+              {referralCode && referralInfo && !clientUser && (
+                <div style={{ marginBottom:16, padding:'14px 18px',
+                  background:'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(99,102,241,0.14))',
+                  border:'1px solid rgba(139,92,246,0.35)', borderRadius:14,
+                  display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                  <span style={{ fontSize:22 }}>🎁</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 2px' }}>
+                      Vous êtes invité par un ami — créez votre compte pour en profiter
+                    </p>
+                    <p style={{ fontSize:12, color:th.muted, margin:0, lineHeight:1.5 }}>
+                      Code <strong style={{color:'#6d28d9',fontFamily:'monospace'}}>{referralCode}</strong> — remise de{' '}
+                      <strong style={{color:th.text}}>
+                        {referralInfo.discount_type === 'percent'
+                          ? `${referralInfo.discount_value}%`
+                          : `${Number(referralInfo.discount_value).toFixed(2)} €`}
+                      </strong>{' '}
+                      appliquée selon les conditions du commerçant.
+                    </p>
+                  </div>
+                </div>
+              )}
               <AuthPanel slug={slug} th={th} requireAccount={requireAccount}
                 initialEmail={authInitEmail}
-                onAuth={(u, meta) => { handleAuth(u, meta); setAuthInitEmail(''); }}
-                onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); navigate(`/book/${slug}`, {replace:true}); }} />
+                initialMode={authInitMode}
+                onAuth={(u, meta) => {
+                  // Si filleul avec code de parrainage → flag pour afficher
+                  // la confirmation "promotion appliquée" sur la page d'accueil
+                  if (meta?.justRegistered && referralCode) setJustRegisteredRef(true);
+                  handleAuth(u, meta);
+                  setAuthInitEmail('');
+                  setAuthInitMode('login');
+                }}
+                onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); setAuthInitMode('login'); navigate(`/book/${slug}`, {replace:true}); }} />
             </div>
           )}
 
@@ -1857,15 +2015,15 @@ export default function BookingPage({ slug }) {
                   {selSvc?.price > 0 && (
                     <div style={{marginBottom:20}}>
                       <label style={{fontSize:12,fontWeight:600,color:th.muted,display:'block',marginBottom:8}}>
-                        Code promo (optionnel)
+                        Code promo ou parrainage (optionnel)
                       </label>
                       <div style={{display:'flex',gap:8}}>
                         <input value={promoCode}
                           onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');}}
                           onKeyDown={e=>e.key==='Enter'&&checkPromo()}
-                          placeholder="PROMO10 ou FIDEL-ABC"
+                          placeholder="PROMO10 ou code parrainage"
                           style={{flex:1,padding:'11px 14px',borderRadius:9,outline:'none',
-                            background:th.inputBg,border:`1px solid ${promoData?'#22c55e':promoErr?'#ef4444':th.inputBorder}`,
+                            background:th.inputBg,border:`1px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
                             color:th.text,fontSize:13,fontFamily:'monospace',
                             letterSpacing:'0.05em',textTransform:'uppercase'}}/>
                         <button onClick={checkPromo} disabled={promoLoading||!promoCode.trim()}
@@ -1876,13 +2034,21 @@ export default function BookingPage({ slug }) {
                         </button>
                       </div>
                       {promoData && (
-                        <div style={{marginTop:8,display:'flex',justifyContent:'space-between',
+                        <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,
                           padding:'10px 14px',borderRadius:9,
-                          background:'rgba(34,197,94,0.07)',border:'1px solid rgba(34,197,94,0.2)'}}>
-                          <span style={{fontSize:12,fontWeight:700,color:'#16a34a'}}>
-                            {promoData.type==='percent'?`-${promoData.value}%`:`-${promoData.discount.toFixed(2)} €`} appliqué !
-                          </span>
-                          <span style={{fontSize:13,fontWeight:900,color:'#166534',fontFamily:'monospace'}}>
+                          background: promoData.source === 'referral' ? 'rgba(139,92,246,0.08)' : 'rgba(34,197,94,0.07)',
+                          border: promoData.source === 'referral' ? '1px solid rgba(139,92,246,0.28)' : '1px solid rgba(34,197,94,0.2)'}}>
+                          <div style={{display:'flex',flexDirection:'column',gap:2,minWidth:0}}>
+                            {promoData.source === 'referral' && (
+                              <span style={{fontSize:10,fontWeight:800,color:'#6d28d9',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                                🎁 Parrainage appliqué
+                              </span>
+                            )}
+                            <span style={{fontSize:12,fontWeight:700,color: promoData.source === 'referral' ? '#5b21b6' : '#16a34a'}}>
+                              {promoData.type==='percent'?`-${promoData.value}%`:`-${promoData.discount.toFixed(2)} €`} appliqué !
+                            </span>
+                          </div>
+                          <span style={{fontSize:13,fontWeight:900,color: promoData.source === 'referral' ? '#4c1d95' : '#166534',fontFamily:'monospace',flexShrink:0}}>
                             {((selSvc?.price||0)-promoData.discount).toFixed(2)} €
                           </span>
                         </div>
