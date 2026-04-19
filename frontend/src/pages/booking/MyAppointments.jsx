@@ -158,9 +158,14 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     finally { setEmailLoading(false); }
   };
 
-  // ── Modal changement de mot de passe (2 étapes : current+new → code) ───
+  // ── Modal changement de mot de passe ────────────────────────────────────
+  // 2 modes :
+  //  - 'current' : nécessite le mot de passe actuel + code OTP à l'email
+  //  - 'forgot'  : bypass du current_password, code OTP à l'email (route
+  //                forgot-password / reset-password — OBLIGATOIRE)
   const [pwdModal,     setPwdModal]     = useState(false);
   const [pwdStep,      setPwdStep]      = useState(1);
+  const [pwdMode,      setPwdMode]      = useState('current'); // 'current' | 'forgot'
   const [pwdCurrent,   setPwdCurrent]   = useState('');
   const [pwdNew,       setPwdNew]       = useState('');
   const [pwdNew2,      setPwdNew2]      = useState('');
@@ -169,33 +174,68 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   const [pwdLoading,   setPwdLoading]   = useState(false);
   const [pwdErr,       setPwdErr]       = useState('');
 
-  const openPwdModal = () => {
-    setPwdModal(true); setPwdStep(1);
+  const resetPwdState = () => {
+    setPwdStep(1);
     setPwdCurrent(''); setPwdNew(''); setPwdNew2('');
     setPwdCode(''); setPwdSentTo(''); setPwdErr('');
   };
+  const openPwdModal = () => {
+    setPwdModal(true);
+    setPwdMode('current');
+    resetPwdState();
+  };
+  const switchToForgot = () => {
+    setPwdMode('forgot');
+    resetPwdState();
+  };
+  const switchToCurrent = () => {
+    setPwdMode('current');
+    resetPwdState();
+  };
   const closePwdModal = () => { if (!pwdLoading) setPwdModal(false); };
+
   const submitPwdInit = async () => {
-    if (!pwdCurrent || !pwdNew) { setPwdErr('Tous les champs sont requis.'); return; }
+    // Validation des nouveaux mots de passe (commune aux 2 modes)
+    if (!pwdNew) { setPwdErr('Nouveau mot de passe requis.'); return; }
     if (pwdNew.length < 6) { setPwdErr('Le nouveau mot de passe doit faire 6 caractères min.'); return; }
     if (pwdNew !== pwdNew2) { setPwdErr('Les deux mots de passe ne correspondent pas.'); return; }
+    if (pwdMode === 'current' && !pwdCurrent) { setPwdErr('Mot de passe actuel requis.'); return; }
+
     setPwdLoading(true); setPwdErr('');
     try {
-      const res = await globalClientApi.changePwdInit({
-        current_password: pwdCurrent,
-        new_password:     pwdNew,
-      });
-      setPwdSentTo(res?.sent_to || clientInfo?.email || '');
+      if (pwdMode === 'current') {
+        const res = await globalClientApi.changePwdInit({
+          current_password: pwdCurrent,
+          new_password:     pwdNew,
+        });
+        setPwdSentTo(res?.sent_to || clientInfo?.email || '');
+      } else {
+        // Mode 'forgot' : envoyer le code via forgot-password (email obligatoire)
+        const email = clientInfo?.email;
+        if (!email) { setPwdErr('Aucun email associé au compte.'); setPwdLoading(false); return; }
+        await globalClientApi.forgotPassword({ email });
+        setPwdSentTo(email);
+      }
       setPwdStep(2); setPwdCode('');
     } catch (e) { setPwdErr(e.message || 'Erreur'); }
     finally { setPwdLoading(false); }
   };
+
   const submitPwdConfirm = async () => {
     const c = pwdCode.trim();
     if (!/^\d{6}$/.test(c)) { setPwdErr('Code à 6 chiffres requis.'); return; }
     setPwdLoading(true); setPwdErr('');
     try {
-      await globalClientApi.changePwdConfirm({ code: c });
+      if (pwdMode === 'current') {
+        await globalClientApi.changePwdConfirm({ code: c });
+      } else {
+        // Mode 'forgot' : reset-password avec email + code + nouveau mdp
+        await globalClientApi.resetPassword({
+          email:        clientInfo?.email,
+          code:         c,
+          new_password: pwdNew,
+        });
+      }
       setPwdModal(false);
       setProfOk('Mot de passe mis à jour ✓');
       setTimeout(() => setProfOk(''), 3000);
@@ -1469,20 +1509,46 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
             {pwdStep === 1 ? (
               <>
                 <p style={{ fontSize:13, color:th.muted, margin:'0 0 16px', lineHeight:1.5 }}>
-                  Un code à 6 chiffres sera envoyé à <strong style={{color:th.text}}>{clientInfo?.email || '—'}</strong>
-                  {' '}pour confirmer le changement.
+                  {pwdMode === 'forgot'
+                    ? <>Un code à 6 chiffres va être envoyé à <strong style={{color:th.text}}>{clientInfo?.email || '—'}</strong> pour réinitialiser votre mot de passe.</>
+                    : <>Un code à 6 chiffres sera envoyé à <strong style={{color:th.text}}>{clientInfo?.email || '—'}</strong> pour confirmer le changement.</>
+                  }
                 </p>
                 <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                  <div>
-                    <label style={{ display:'block', fontSize:11, fontWeight:700,
-                      color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                      Mot de passe actuel
-                    </label>
-                    <input type="password" value={pwdCurrent}
-                      onChange={e => { setPwdCurrent(e.target.value); if (pwdErr) setPwdErr(''); }}
-                      autoComplete="current-password" disabled={pwdLoading}
-                      style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
-                  </div>
+                  {pwdMode === 'current' && (
+                    <div>
+                      <label style={{ display:'block', fontSize:11, fontWeight:700,
+                        color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                        Mot de passe actuel
+                      </label>
+                      <input type="password" value={pwdCurrent}
+                        onChange={e => { setPwdCurrent(e.target.value); if (pwdErr) setPwdErr(''); }}
+                        autoComplete="current-password" disabled={pwdLoading}
+                        style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                      <button type="button" onClick={switchToForgot} disabled={pwdLoading}
+                        style={{ marginTop:6, background:'none', border:'none', padding:0,
+                          cursor:'pointer', color:th.accent, fontSize:12, fontWeight:700,
+                          textDecoration:'underline' }}>
+                        Mot de passe oublié ?
+                      </button>
+                    </div>
+                  )}
+                  {pwdMode === 'forgot' && (
+                    <div style={{ padding:'10px 12px', borderRadius:10,
+                      background:'rgba(99,102,241,0.08)', border:`1px solid rgba(99,102,241,0.25)` }}>
+                      <p style={{ fontSize:12, color:th.text, margin:0, fontWeight:700 }}>
+                        🔐 Mode mot de passe oublié
+                      </p>
+                      <p style={{ fontSize:11, color:th.muted, margin:'4px 0 0', lineHeight:1.5 }}>
+                        Le changement sera validé par code envoyé par email — obligatoire.{' '}
+                        <button type="button" onClick={switchToCurrent} disabled={pwdLoading}
+                          style={{ background:'none', border:'none', padding:0, cursor:'pointer',
+                            color:th.accent, fontSize:11, fontWeight:700, textDecoration:'underline' }}>
+                          Revenir
+                        </button>
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <label style={{ display:'block', fontSize:11, fontWeight:700,
                       color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
