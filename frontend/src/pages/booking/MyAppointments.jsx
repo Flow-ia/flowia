@@ -1,8 +1,10 @@
 // src/pages/booking/MyAppointments.jsx
 // Écran "Mes RDV" + onglets Profil et Parrainage du compte client.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { pubApi, globalClientApi } from '../../utils/api';
 import { Spinner } from './shared';
+
+const VISITS_PAGE_SIZE = 10;
 
 // URL par onglet — permet à chaque client de rafraîchir la page sur son
 // sous-onglet actif (RDV, passages sur place, profil, parrainage).
@@ -13,7 +15,7 @@ const TAB_URL = {
   parrain: (slug) => `/book/${slug}/client/rdv`, // parrainage partage l'URL RDV
 };
 
-export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab = 'appts', business = null }) {
+export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab = 'appts', initialVisitId = null, business = null }) {
   const [appts, setAppts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTabRaw] = useState(initialTab); // 'appts' | 'visits' | 'profile' | 'parrain'
@@ -25,10 +27,40 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     }
   };
 
-  // Passages "sur place" — transactions encaissées en caisse sans RDV préalable
-  const [visits, setVisits] = useState([]);
-  const [visitsLoading, setVisitsLoading] = useState(false);
-  const [visitsLoaded, setVisitsLoaded] = useState(false);
+  // Passages "sur place" — pagination 10/page + recherche (commerçant, date)
+  const [visits,         setVisits]         = useState([]);   // page courante
+  const [visitsLoading,  setVisitsLoading]  = useState(false);
+  const [visitsPage,     setVisitsPage]     = useState(1);
+  const [visitsTotal,    setVisitsTotal]    = useState(0);
+  const [visitsQuery,    setVisitsQuery]    = useState('');     // input recherche live
+  const [visitsDebounced,setVisitsDebounced]= useState('');     // pour fetch (debounced)
+  const [visitsDate,     setVisitsDate]     = useState('');     // YYYY-MM-DD
+  const [visitsErr,      setVisitsErr]      = useState('');
+
+  // Vue détail d'un passage (cliqué dans la liste ou via URL /passages/:id)
+  const [selectedVisit,   setSelectedVisit]   = useState(null);
+  const [visitDetailLoad, setVisitDetailLoad] = useState(false);
+  const visitDetailFetched = useRef(false);
+
+  // Updater d'URL spécifique au tab visits : garde /client/passages OU
+  // /client/passages/:id selon la vue active.
+  const setVisitUrl = (visitId = null) => {
+    const next = visitId
+      ? `/book/${slug}/client/passages/${visitId}`
+      : `/book/${slug}/client/passages`;
+    if (window.location.pathname !== next) {
+      try { window.history.replaceState({}, '', next); } catch { /* ignore */ }
+    }
+  };
+
+  const openVisit = (v) => {
+    setSelectedVisit(v);
+    setVisitUrl(v.id);
+  };
+  const closeVisit = () => {
+    setSelectedVisit(null);
+    setVisitUrl(null);
+  };
 
   // Parrainage : code perso + historique + réductions (uniquement si compte global connecté + programme actif)
   const [refInfo,    setRefInfo]    = useState(null);   // { code, uses_count, program }
@@ -91,16 +123,56 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       .then(setAppts).catch(() => {}).finally(() => setLoading(false));
   }, [slug]);
 
-  // Charger les passages sur place à la première ouverture du tab (lazy).
-  // Utilise le compte global (ff_gc_token ou ff_client_token via fallback gcRequest).
+  // Debounce de la recherche (300ms) pour éviter de spammer l'API.
   useEffect(() => {
-    if (activeTab !== 'visits' || visitsLoaded) return;
-    setVisitsLoading(true);
-    globalClientApi.myVisits()
-      .then(rows => { setVisits(Array.isArray(rows) ? rows : []); setVisitsLoaded(true); })
-      .catch(() => { setVisits([]); setVisitsLoaded(true); })
-      .finally(() => setVisitsLoading(false));
-  }, [activeTab, visitsLoaded]);
+    const t = setTimeout(() => setVisitsDebounced(visitsQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [visitsQuery]);
+
+  // Reset à la page 1 dès qu'un filtre change (sinon on resterait sur une
+  // page orpheline quand le total rétrécit).
+  useEffect(() => { setVisitsPage(1); }, [visitsDebounced, visitsDate]);
+
+  // Charger la page courante quand on est sur l'onglet visits, en vue liste
+  // (pas dans la vue détail). Appelle GET /me/visits?page=&limit=&q=&date=.
+  useEffect(() => {
+    if (activeTab !== 'visits' || selectedVisit) return;
+    let cancelled = false;
+    setVisitsLoading(true); setVisitsErr('');
+    globalClientApi.myVisits({
+      page:  visitsPage,
+      limit: VISITS_PAGE_SIZE,
+      q:     visitsDebounced,
+      date:  visitsDate,
+    })
+      .then(res => {
+        if (cancelled) return;
+        // Compat : backend renvoie { items, total, ... } depuis ce fix.
+        const items = Array.isArray(res) ? res : (res?.items || []);
+        const total = Array.isArray(res) ? res.length : (res?.total || 0);
+        setVisits(items);
+        setVisitsTotal(total);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setVisits([]); setVisitsTotal(0);
+        setVisitsErr(e?.message || 'Impossible de charger les passages.');
+      })
+      .finally(() => { if (!cancelled) setVisitsLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, selectedVisit, visitsPage, visitsDebounced, visitsDate]);
+
+  // Ouverture directe d'un passage via URL /passages/:id — fetch ciblé
+  // (utile en bookmark ou refresh de la vue détail).
+  useEffect(() => {
+    if (!initialVisitId || visitDetailFetched.current) return;
+    visitDetailFetched.current = true;
+    setVisitDetailLoad(true);
+    globalClientApi.myVisit(initialVisitId)
+      .then(v => { setSelectedVisit(v); })
+      .catch(() => { setVisitUrl(null); /* fallback liste */ })
+      .finally(() => setVisitDetailLoad(false));
+  }, [initialVisitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tenter de charger le programme parrainage (si compte global connecté et programme actif)
   useEffect(() => {
@@ -523,123 +595,163 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
         {/* ── ONGLET PASSAGES SUR PLACE ── */}
         {/* Transactions encaissées en caisse sans RDV préalable (cross-commerçant).
-            Chaque passage détaille : commerçant, date/heure, prestations, montant. */}
+            Liste compacte (commerçant + montant) paginée 10/page avec recherche
+            par nom de commerçant et filtre par date. Clic sur un passage →
+            vue détail (URL /client/passages/:id) avec toutes les infos. */}
         {activeTab === 'visits' && (
           <div style={{ animation:'fadeIn .2s ease' }}>
-            {visitsLoading ? (
+            {selectedVisit ? (
+              /* ── VUE DÉTAIL d'un passage ── */
+              <VisitDetailCard visit={selectedVisit} th={th} onBack={closeVisit}/>
+            ) : visitDetailLoad ? (
+              /* Chargement direct via URL /passages/:id */
               <div style={{paddingTop:40}}><Spinner color="#6366f1"/></div>
-            ) : visits.length === 0 ? (
-              <div style={{ textAlign:'center', paddingTop:40 }}>
-                <div style={{ marginBottom:14, display:'flex', justifyContent:'center' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-                    style={{width:48,height:48,color:'#d1d5db'}}>
-                    <path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 0 1 16 0z"/>
-                    <circle cx="12" cy="10" r="3"/>
-                  </svg>
-                </div>
-                <p style={{ fontWeight:600, color:th.muted, marginBottom:6 }}>
-                  Aucun passage sur place
-                </p>
-                <p style={{ fontSize:12, color:th.dim, maxWidth:320, margin:'0 auto' }}>
-                  Quand un commerçant vous encaisse en caisse sans rendez-vous
-                  préalable, la trace apparaît ici avec le détail des prestations.
-                </p>
-              </div>
             ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {visits.map(v => {
-                  const total   = parseFloat(v.amount || 0);
-                  const orig    = parseFloat(v.original_amount || 0);
-                  const disc    = parseFloat(v.discount_amount || 0);
-                  const hasDisc = disc > 0 && orig > 0;
-                  const dateObj = new Date(`${v.date}T${v.time || '00:00'}`);
-                  const dateStr = isNaN(dateObj)
-                    ? v.date
-                    : dateObj.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
-                  const timeStr = v.time || '';
-                  const payLabel = ({
-                    cash:'Espèces', card:'Carte', transfer:'Virement',
-                    check:'Chèque', other:'Autre', multi:'Multiple',
-                  })[v.payment_method] || v.payment_method || '-';
-                  return (
-                    <div key={v.id} style={{
-                      background: th.card, border:`1px solid ${th.border}`,
-                      borderRadius:18, padding:16,
-                    }}>
-                      {/* Header : commerçant + date */}
-                      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
-                            <span style={{
-                              fontSize:10, padding:'3px 8px', borderRadius:99, fontWeight:700,
-                              background:'rgba(99,102,241,0.10)', color:'#6366f1',
-                              display:'inline-flex', alignItems:'center', gap:4,
-                            }}>
-                              <span style={{ fontSize:9 }}>📍</span>
-                              Passage sur place
-                            </span>
-                          </div>
-                          <p style={{ fontSize:15, fontWeight:800, color:th.text, margin:'0 0 2px',
-                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                            {v.business_name || 'Commerçant'}
-                          </p>
-                          <p style={{ fontSize:12, color:th.muted, margin:0 }}>
-                            {dateStr}{timeStr ? ` · ${timeStr}` : ''}
-                          </p>
-                        </div>
-                        <div style={{ textAlign:'right', flexShrink:0 }}>
-                          {hasDisc && (
-                            <p style={{ fontSize:11, color:th.dim, margin:'0 0 2px',
-                              textDecoration:'line-through', fontFamily:'monospace' }}>
-                              {orig.toFixed(2)} €
-                            </p>
-                          )}
-                          <p style={{ fontSize:16, fontWeight:900, color:'#10b981', margin:0, fontFamily:'monospace' }}>
-                            {total.toFixed(2)} €
-                          </p>
-                        </div>
-                      </div>
+              /* ── VUE LISTE paginée avec recherche ── */
+              <>
+                {/* Filtres : recherche commerçant + date */}
+                <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+                  <div style={{ flex:'1 1 220px', minWidth:0, position:'relative' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                      style={{ width:14, height:14, position:'absolute', left:12, top:'50%',
+                        transform:'translateY(-50%)', color:th.muted, pointerEvents:'none' }}>
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" value={visitsQuery}
+                      onChange={e => setVisitsQuery(e.target.value)}
+                      placeholder="Rechercher un commerçant"
+                      style={{ ...inpStyle, paddingLeft:34 }}/>
+                  </div>
+                  <input type="date" value={visitsDate}
+                    onChange={e => setVisitsDate(e.target.value)}
+                    style={{ ...inpStyle, flex:'0 1 170px', minWidth:0 }}/>
+                  {(visitsQuery || visitsDate) && (
+                    <button onClick={() => { setVisitsQuery(''); setVisitsDate(''); }}
+                      style={{ padding:'0 14px', borderRadius:12, cursor:'pointer',
+                        background:th.cardAlt, border:`1px solid ${th.border}`,
+                        color:th.muted, fontWeight:700, fontSize:12 }}>
+                      Réinitialiser
+                    </button>
+                  )}
+                </div>
 
-                      {/* Prestations */}
-                      {Array.isArray(v.items) && v.items.length > 0 && (
-                        <div style={{ borderTop:`1px solid ${th.border}`, paddingTop:10, marginBottom:10 }}>
-                          {v.items.map((it, i) => (
-                            <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:4 }}>
-                              <p style={{ fontSize:13, color:th.text, margin:0, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                                {it.service_name}
-                                {(it.qty||1) > 1 && (
-                                  <span style={{ marginLeft:6, fontSize:11, fontWeight:700, padding:'1px 6px', borderRadius:99, background:th.cardAlt, color:th.muted }}>
-                                    ×{it.qty}
-                                  </span>
-                                )}
-                              </p>
-                              {(it.unit_price || 0) > 0 && (
-                                <p style={{ fontSize:12, color:th.muted, margin:0, fontFamily:'monospace', flexShrink:0 }}>
-                                  {(parseFloat(it.unit_price) * (it.qty||1)).toFixed(2)} €
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Footer : employé + paiement */}
-                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                        gap:10, paddingTop:10, borderTop:`1px solid ${th.border}`, flexWrap:'wrap' }}>
-                        {v.employee_name && (
-                          <p style={{ fontSize:11, color:th.muted, margin:0 }}>
-                            Avec <span style={{ fontWeight:700, color:th.text }}>{v.employee_name}</span>
-                          </p>
-                        )}
-                        <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:99,
-                          background:th.cardAlt, color:th.muted, marginLeft:'auto' }}>
-                          {payLabel}
-                        </span>
-                      </div>
+                {visitsLoading ? (
+                  <div style={{paddingTop:40}}><Spinner color="#6366f1"/></div>
+                ) : visitsErr ? (
+                  <div style={{ textAlign:'center', paddingTop:40 }}>
+                    <p style={{ color:'#ef4444', fontWeight:700, fontSize:13, margin:'0 0 12px' }}>
+                      {visitsErr}
+                    </p>
+                    <button onClick={() => { setVisitsPage(p => p); setVisitsErr(''); }}
+                      style={{ padding:'10px 20px', borderRadius:10, cursor:'pointer',
+                        background:th.accent, border:'none', color:th.accentText,
+                        fontWeight:800, fontSize:12 }}>Réessayer</button>
+                  </div>
+                ) : visits.length === 0 ? (
+                  <div style={{ textAlign:'center', paddingTop:40 }}>
+                    <div style={{ marginBottom:14, display:'flex', justifyContent:'center' }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+                        style={{width:48,height:48,color:'#d1d5db'}}>
+                        <path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 0 1 16 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
                     </div>
-                  );
-                })}
-              </div>
+                    <p style={{ fontWeight:600, color:th.muted, marginBottom:6 }}>
+                      {(visitsDebounced || visitsDate)
+                        ? 'Aucun passage ne correspond aux filtres'
+                        : 'Aucun passage sur place'}
+                    </p>
+                    {!(visitsDebounced || visitsDate) && (
+                      <p style={{ fontSize:12, color:th.dim, maxWidth:320, margin:'0 auto' }}>
+                        Quand un commerçant vous encaisse en caisse sans rendez-vous
+                        préalable, la trace apparaît ici avec le détail des prestations.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Liste compacte : commerçant + montant */}
+                    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                      {visits.map(v => {
+                        const total   = parseFloat(v.amount || 0);
+                        const dateObj = v.date ? new Date(`${v.date}T12:00:00`) : null;
+                        const dateStr = (dateObj && !isNaN(dateObj))
+                          ? dateObj.toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' })
+                          : (v.date || '');
+                        return (
+                          <button key={v.id} onClick={() => openVisit(v)}
+                            style={{ width:'100%', textAlign:'left', cursor:'pointer',
+                              background:th.card, border:`1px solid ${th.border}`,
+                              borderRadius:14, padding:'14px 16px',
+                              display:'flex', alignItems:'center', justifyContent:'space-between',
+                              gap:12, transition:'transform .08s, border-color .12s' }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = th.accent}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = th.border}>
+                            <div style={{ flex:1, minWidth:0 }}>
+                              <p style={{ fontSize:14, fontWeight:800, color:th.text, margin:'0 0 2px',
+                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                {v.business_name || 'Commerçant'}
+                              </p>
+                              <p style={{ fontSize:11, color:th.muted, margin:0 }}>
+                                {dateStr}{v.time ? ` · ${v.time}` : ''}
+                              </p>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+                              <p style={{ fontSize:15, fontWeight:900, color:'#10b981',
+                                margin:0, fontFamily:'monospace' }}>
+                                {total.toFixed(2)} €
+                              </p>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                strokeWidth="2.5" style={{width:14,height:14,color:th.muted}}>
+                                <polyline points="9 18 15 12 9 6"/>
+                              </svg>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Pagination 10 par page */}
+                    {visitsTotal > VISITS_PAGE_SIZE && (() => {
+                      const totalPages = Math.max(1, Math.ceil(visitsTotal / VISITS_PAGE_SIZE));
+                      const pageSafe   = Math.min(visitsPage, totalPages);
+                      const from       = (pageSafe - 1) * VISITS_PAGE_SIZE + 1;
+                      const to         = Math.min(pageSafe * VISITS_PAGE_SIZE, visitsTotal);
+                      return (
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                          gap:10, marginTop:16, flexWrap:'wrap' }}>
+                          <p style={{ fontSize:12, color:th.muted, margin:0 }}>
+                            {from}–{to} sur {visitsTotal}
+                          </p>
+                          <div style={{ display:'flex', gap:6 }}>
+                            <button onClick={() => setVisitsPage(p => Math.max(1, p-1))}
+                              disabled={pageSafe <= 1}
+                              style={{ padding:'8px 12px', borderRadius:10,
+                                cursor: pageSafe<=1 ? 'not-allowed' : 'pointer',
+                                background:th.cardAlt, border:`1px solid ${th.border}`,
+                                color:th.text, fontWeight:700, fontSize:12,
+                                opacity: pageSafe<=1 ? 0.4 : 1 }}>
+                              ← Précédent
+                            </button>
+                            <span style={{ padding:'8px 12px', fontSize:12, fontWeight:700, color:th.muted }}>
+                              {pageSafe} / {totalPages}
+                            </span>
+                            <button onClick={() => setVisitsPage(p => Math.min(totalPages, p+1))}
+                              disabled={pageSafe >= totalPages}
+                              style={{ padding:'8px 12px', borderRadius:10,
+                                cursor: pageSafe>=totalPages ? 'not-allowed' : 'pointer',
+                                background:th.cardAlt, border:`1px solid ${th.border}`,
+                                color:th.text, fontWeight:700, fontSize:12,
+                                opacity: pageSafe>=totalPages ? 0.4 : 1 }}>
+                              Suivant →
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1105,6 +1217,150 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VisitDetailCard — vue détail d'un passage (ouverte par clic dans la liste
+// ou via URL directe /book/:slug/client/passages/:id). Responsive : flex
+// wrap sur la ligne commerçant/montant, champs qui s'empilent sur mobile.
+// ─────────────────────────────────────────────────────────────────────────────
+function VisitDetailCard({ visit: v, th, onBack }) {
+  const total   = parseFloat(v.amount || 0);
+  const orig    = parseFloat(v.original_amount || 0);
+  const disc    = parseFloat(v.discount_amount || 0);
+  const hasDisc = disc > 0 && orig > 0;
+  const dateObj = v.date ? new Date(`${v.date}T12:00:00`) : null;
+  const dateStr = (dateObj && !isNaN(dateObj))
+    ? dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+    : (v.date || '');
+  const payLabel = ({
+    cash:'Espèces', card:'Carte', transfer:'Virement',
+    check:'Chèque', other:'Autre', multi:'Multiple',
+  })[v.payment_method] || v.payment_method || '-';
+
+  return (
+    <div style={{ animation:'fadeIn .2s ease' }}>
+      <button onClick={onBack}
+        style={{ display:'flex', alignItems:'center', gap:6,
+          padding:'8px 12px', borderRadius:10, marginBottom:14, cursor:'pointer',
+          background:th.cardAlt, border:`1px solid ${th.border}`,
+          color:th.text, fontWeight:700, fontSize:12 }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          style={{width:14,height:14}}>
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Retour aux passages
+      </button>
+
+      <div style={{ background:th.card, border:`1px solid ${th.border}`,
+        borderRadius:18, padding:20, display:'flex', flexDirection:'column', gap:14 }}>
+        {/* Header : commerçant + total (wrap sur mobile) */}
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
+          gap:12, flexWrap:'wrap' }}>
+          <div style={{ minWidth:0, flex:'1 1 200px' }}>
+            <span style={{ fontSize:10, padding:'3px 8px', borderRadius:99, fontWeight:700,
+              background:'rgba(99,102,241,0.10)', color:'#6366f1',
+              display:'inline-flex', alignItems:'center', gap:4, marginBottom:8 }}>
+              <span style={{ fontSize:9 }}>📍</span>Passage sur place
+            </span>
+            <p style={{ fontSize:18, fontWeight:900, color:th.text, margin:'0 0 4px',
+              wordBreak:'break-word' }}>
+              {v.business_name || 'Commerçant'}
+            </p>
+            <p style={{ fontSize:12, color:th.muted, margin:0, textTransform:'capitalize' }}>
+              {dateStr}{v.time ? ` · ${v.time}` : ''}
+            </p>
+          </div>
+          <div style={{ textAlign:'right', flexShrink:0 }}>
+            {hasDisc && (
+              <p style={{ fontSize:12, color:th.dim, margin:'0 0 2px',
+                textDecoration:'line-through', fontFamily:'monospace' }}>
+                {orig.toFixed(2)} €
+              </p>
+            )}
+            <p style={{ fontSize:22, fontWeight:900, color:'#10b981',
+              margin:0, fontFamily:'monospace' }}>
+              {total.toFixed(2)} €
+            </p>
+            {hasDisc && (
+              <p style={{ fontSize:10, fontWeight:700, color:'#10b981',
+                margin:'2px 0 0' }}>
+                − {disc.toFixed(2)} € remise
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Adresse commerçant */}
+        {v.business_address && (
+          <div style={{ background:th.cardAlt, border:`1px solid ${th.border}`,
+            borderRadius:12, padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{width:14,height:14,color:th.muted,flexShrink:0,marginTop:2}}>
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+              <circle cx="12" cy="10" r="3"/>
+            </svg>
+            <p style={{ fontSize:12, color:th.muted, margin:0, wordBreak:'break-word' }}>
+              {v.business_address}
+              {v.business_phone ? <><br/><a href={`tel:${v.business_phone}`}
+                style={{color:th.text,fontWeight:700,textDecoration:'none'}}>{v.business_phone}</a></> : null}
+            </p>
+          </div>
+        )}
+
+        {/* Prestations */}
+        {Array.isArray(v.items) && v.items.length > 0 && (
+          <div>
+            <p style={{ fontSize:11, fontWeight:700, color:th.muted, margin:'0 0 8px',
+              textTransform:'uppercase', letterSpacing:'0.05em' }}>Prestations</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {v.items.map((it, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center',
+                  justifyContent:'space-between', gap:10, padding:'8px 0',
+                  borderBottom: i === v.items.length - 1 ? 'none' : `1px solid ${th.border}` }}>
+                  <p style={{ fontSize:13, color:th.text, margin:0, minWidth:0,
+                    flex:1, wordBreak:'break-word' }}>
+                    {it.service_name}
+                    {(it.qty||1) > 1 && (
+                      <span style={{ marginLeft:6, fontSize:11, fontWeight:700,
+                        padding:'1px 6px', borderRadius:99,
+                        background:th.cardAlt, color:th.muted }}>×{it.qty}</span>
+                    )}
+                  </p>
+                  {(it.unit_price || 0) > 0 && (
+                    <p style={{ fontSize:12, color:th.muted, margin:0,
+                      fontFamily:'monospace', flexShrink:0 }}>
+                      {(parseFloat(it.unit_price) * (it.qty||1)).toFixed(2)} €
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer : employé + paiement (wrap sur mobile) */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+          gap:10, paddingTop:12, borderTop:`1px solid ${th.border}`, flexWrap:'wrap' }}>
+          {v.employee_name && (
+            <p style={{ fontSize:12, color:th.muted, margin:0 }}>
+              Avec <span style={{ fontWeight:700, color:th.text }}>{v.employee_name}</span>
+            </p>
+          )}
+          <span style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:99,
+            background:th.cardAlt, color:th.muted, marginLeft:'auto' }}>
+            {payLabel}
+          </span>
+        </div>
+
+        {/* ID transaction pour support */}
+        <p style={{ fontSize:10, color:th.dim, margin:0, fontFamily:'monospace',
+          textAlign:'center', letterSpacing:'0.05em' }}>
+          Référence #{String(v.id).substring(0,8).toUpperCase()}
+        </p>
+      </div>
     </div>
   );
 }

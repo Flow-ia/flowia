@@ -89,6 +89,8 @@ export default function BookingPage({ slug }) {
     } else if (path.includes('/client/passages')) {
       setView('myAppts');
       setMyApptsInitTab('visits');
+      const m = path.match(/\/client\/passages\/([a-zA-Z0-9-]+)/);
+      if (m && m[1]) setMyApptsInitVisitId(m[1]);
     } else if (path.includes('/client/rdv')) {
       setView('myAppts');
       setMyApptsInitTab('appts');
@@ -263,6 +265,9 @@ export default function BookingPage({ slug }) {
   const [requireAccount, setRequire]  = useState(false);
   const [pendingBook,   setPendingBook]   = useState(false);
   const [myApptsInitTab, setMyApptsInitTab] = useState('appts');
+  // Si l'URL cible un passage précis (/client/passages/:id), on propage
+  // l'id à MyAppointments pour ouvrir directement la vue détail.
+  const [myApptsInitVisitId, setMyApptsInitVisitId] = useState(null);
   // Auth inline dans l'étape 5 — remplace le formulaire sans compte quand cliqué
   // 'none' | 'login' | 'register'
   const [inlineAuthMode, setInlineAuthMode] = useState('none');
@@ -599,7 +604,7 @@ export default function BookingPage({ slug }) {
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); setMyApptsInitTab('appts'); setView('booking'); }}
         onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); navigate(`/book/${slug}`,{replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
-      <MyAppointments slug={slug} th={th} initialTab={myApptsInitTab} business={business}
+      <MyAppointments slug={slug} th={th} initialTab={myApptsInitTab} initialVisitId={myApptsInitVisitId} business={business}
         onBack={() => { setMyApptsInitTab('appts'); setView(bookedAppt ? 'success' : 'booking'); navigate(bookedAppt ? location.pathname : `/book/${slug}`, {replace:true}); }}
         onNewBooking={resetBooking}
         onLogout={() => {

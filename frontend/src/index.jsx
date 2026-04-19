@@ -68,6 +68,7 @@ root.render(
               <Route path="/book/:slug/client/profil"                                                                        element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/rdv"                                                                           element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/passages"                                                                      element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/client/passages/:visitId"                                                             element={<BookingPageWrapper />} />
               <Route path="/book/:slug/parrain"                                                                              element={<BookingPageWrapper />} />
               <Route path="/book/:slug"                                                                                  element={<BookingPageWrapper />} />
               {/* ── Racine : BookingPage sur domaine public, app commerçant ailleurs ── */}
