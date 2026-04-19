@@ -4,6 +4,47 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-19 (suite 5) : Refactor BookingPage.jsx (4571 → 1888 lignes)
+
+### Demande (onboarding.md)
+> BookingPage.jsx est trop grand et ralentit tes modifications.
+> Découpe-le en fichiers séparés dans un dossier frontend/src/pages/booking/
+> comme tu as fait pour Settings.jsx.
+> Ne modifier aucune logique ni fonctionnalité. Uniquement déplacer le code.
+> Vérifier le build après chaque fichier extrait.
+
+### Découpage
+- `pages/booking/shared.jsx` (77 l.) — constantes (themes, MONTHS_FR, DAYS_MINI),
+  helpers (mediaUrl, serviceImgUrl, employeeImgUrl, withV), petits composants
+  partagés (Spinner, ThemeToggle, BackBtn).
+- `pages/booking/NavBar.jsx` (132 l.) — barre de navigation persistante.
+- `pages/booking/SideCard.jsx` (296 l.) — carte latérale sticky desktop +
+  MobileHoursBlock (bloc horaires compact mobile).
+- `pages/booking/Services.jsx` (167 l.) — AccordionGroup, ServiceThumb,
+  ServiceCard (composants prestations).
+- `pages/booking/MyAppointments.jsx` (822 l.) — écran "Mes RDV" + onglets
+  Profil et Parrainage du compte client.
+- `pages/booking/Account.jsx` (989 l.) — AuthPanel (login/register au
+  commerce) + GlobalAccountView (espace client multi-commerces).
+- `pages/booking/ReferralPage.jsx` (233 l.) — page dédiée /book/:slug/parrain
+  avec ses 3 états.
+- `pages/BookingPage.jsx` (4571 → **1888 lignes**) — composant principal qui
+  garde toute la logique flow (state, routing, étapes 1-6, vue success/blocked)
+  et importe les 7 composants extraits.
+
+### Aucune modification de logique
+Tout le code est strictement déplacé tel quel. Les sections "équipe", "agenda
+date/créneau", "confirmation" qui sont rendues *inline* dans BookingPage avec
+beaucoup de state local restent au même endroit (extraction nécessiterait du
+prop drilling massif et risquait des bugs subtils).
+
+### Build
+- `npx vite build` : OK (12.54s, **87 modules** vs 80 avant = +7 fichiers)
+- Bundle `page-booking` : 131.26 kB (vs 131.29 kB avant — quasi identique,
+  preuve que le code est intégralement transféré sans duplication).
+
+---
+
 ## 🆕 Session 2026-04-19 (suite 4) : Fix 500 referral-program + warning COOP popup Google
 
 ### Bugs (onboarding.md)
