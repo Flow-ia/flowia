@@ -600,10 +600,12 @@ export default function BookingPage({ slug }) {
       <ReferralPage
         th={th} slug={slug} business={business} refProgram={refProgram}
         gcConnected={!!localStorage.getItem('ff_gc_token')}
+        gcUser={clientUser}
         refMyCode={refMyCode}
         refMyHistory={refMyHistory}
         refMyRewards={refMyRewards}
         onLogin={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
+        onRegister={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
         onBack={() => { setView('booking'); navigate(`/book/${slug}`, {replace:false}); }}
       />
     </div>

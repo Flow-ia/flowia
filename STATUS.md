@@ -4,6 +4,53 @@ Dernier commit : voir `git log -1`
 
 ---
 
+## 🆕 Session 2026-04-19 (suite 6) : Refonte page Parrainage côté client (2 maquettes)
+
+### Demande (onboarding.md)
+Reproduire exactement les 2 maquettes HTML fournies pour `/parrain` :
+- **Maquette 1 — non connecté** : hero + "Comment ça marche" (3 étapes
+  numérotées) + Conditions (récompense / utilisable / limite / validité) +
+  CTA bleu (Se connecter / Créer un compte) + mention légale.
+- **Maquette 2 — connecté** : salutation prénom + Code personnel monospace
+  + boutons Copier / SMS / WhatsApp / Lien + 3 stats (Filleuls validés /
+  En attente / Récompense disponible) + bandeau quota orange (si limite) +
+  Suivi filleuls (avatars colorés selon statut Validé / En attente / Refusé).
+
+### Fix — `frontend/src/pages/booking/ReferralPage.jsx` (réécriture complète)
+- 3 états visuels : programme inexistant (placeholder neutre), programme
+  désactivé (placeholder "fermé"), programme actif (Maquette 1 ou 2 selon
+  `gcConnected`).
+- Theme tokens utilisés partout (`th.card`, `th.text`, `th.muted`, `th.accent`)
+  → support natif dark mode. Couleurs sémantiques (bleu / vert / orange /
+  rouge) recalculées pour contraste dark.
+- Apostrophes françaises échappées via `&apos;` (Hair JSX).
+- Stats calculées depuis `refMyHistory` + `refMyRewards` :
+  - Validés = `history.filter(status='validated').length`
+  - En attente = `history.filter(status='pending').length`
+  - Récompense dispo = somme des `rewards` (referral, available)
+- Quota mensuel **affiché uniquement si `refProgram.monthly_limit`** est
+  défini (= illimité par défaut, comme demandé).
+- Boutons partage : SMS via `sms:?body=…`, WhatsApp via `https://wa.me/?text=…`,
+  Copier le lien via `navigator.clipboard`.
+- Statut filleul mappé : `validated` → "Validé" + `+5€` vert ;
+  `pending` → "En attente" orange ; `cancelled` → "Refusé" rouge + nom
+  anonymisé "Code utilisé, code invalide".
+- Responsive mobile : grilles 3 colonnes → stack vertical (CSS injecté
+  via `<style>` interne `@media (max-width:600px)`).
+
+### Frontend — `BookingPage.jsx`
+- Passe `gcUser={clientUser}` à `<ReferralPage>` (pour le prénom dans la
+  salutation + initiales).
+- Nouveau prop `onRegister` (clic "Créer un compte" = même que login pour
+  l'instant, l'AuthPanel gère register en interne).
+
+### Build
+- `npx vite build` : OK (15.75s, 87 modules).
+- Bundle `page-booking` : 137.39 kB (vs 131.26 kB avant) = +6 kB pour la
+  refonte du composant.
+
+---
+
 ## 🆕 Session 2026-04-19 (suite 5) : Refactor BookingPage.jsx (4571 → 1888 lignes)
 
 ### Demande (onboarding.md)
