@@ -482,6 +482,9 @@ router.get('/:slug/month-status', async (req, res) => {
 });
 
 // ── GET /api/pub/:slug/referral/:code — valider un code parrainage ──────────
+// Query param optionnel ?email=<filleul> — si fourni, vérifie aussi
+// l'éligibilité complète (filleul nouveau, pas self-referral, quota parrain
+// OK). Sans email, retourne seulement { valid, discount_type, discount_value }.
 router.get('/:slug/referral/:code', async (req, res) => {
   try {
     const { rows: biz } = await pool.query(
@@ -489,22 +492,39 @@ router.get('/:slug/referral/:code', async (req, res) => {
       [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const userId = biz[0].user_id;
     const { rows: prog } = await pool.query(
       `SELECT is_enabled, filleul_type, filleul_value FROM referral_programs WHERE user_id=$1`,
-      [biz[0].user_id]
+      [userId]
     );
     if (!prog.length || !prog[0].is_enabled)
       return res.status(404).json({ error: "Programme non actif." });
     const { rows: rc } = await pool.query(
       'SELECT id FROM referral_codes WHERE user_id=$1 AND code=$2',
-      [biz[0].user_id, req.params.code.toUpperCase()]
+      [userId, req.params.code.toUpperCase()]
     );
     if (!rc.length) return res.status(404).json({ error: 'Code invalide.' });
-    res.json({
-      valid: true,
-      discount_type: prog[0].filleul_type,
+
+    const response = {
+      valid:          true,
+      discount_type:  prog[0].filleul_type,
       discount_value: prog[0].filleul_value,
-    });
+    };
+
+    // Si l'email du filleul est fourni, on fait le check complet d'éligibilité
+    // pour afficher un feedback IN ADVANCE (avant que l'utilisateur ne clique
+    // sur Réserver). Évite le faux espoir "parrainage appliqué" quand ça va
+    // être refusé au POST /book.
+    const email = String(req.query.email || '').trim();
+    if (email && email.includes('@')) {
+      const resolved = await resolveReferralForFilleul(
+        userId, req.params.code, email, 0
+      );
+      response.eligible = resolved.ok;
+      if (!resolved.ok) response.reason = resolved.reason;
+    }
+
+    res.json(response);
   } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 

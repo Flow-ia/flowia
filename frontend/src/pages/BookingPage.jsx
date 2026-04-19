@@ -144,17 +144,26 @@ export default function BookingPage({ slug }) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Flow parrainage — fetch info programme (type/valeur) ────────────────
-  // Permet d'afficher la bannière "Parrainage actif: -X%" + de pré-remplir
-  // le champ code promo à l'étape récap. Silencieux si code invalide.
+  // ── Flow parrainage — fetch info programme + éligibilité filleul ─────────
+  // 2 passes :
+  //   1) sans email → valide le code + récupère type/valeur (pour le bandeau
+  //      "inscrivez-vous pour bénéficier").
+  //   2) avec email filleul connu (clientUser.email) → check complet :
+  //      éligibilité (nouveau client, quota, pas self-referral) — permet de
+  //      PRÉVENIR l'utilisateur AVANT qu'il ne valide sa réservation si les
+  //      conditions ne sont pas remplies. Évite le faux espoir.
   useEffect(() => {
     if (!referralCode) { setReferralInfo(null); return; }
     let cancelled = false;
-    pubApi.checkReferral(slug, referralCode)
-      .then(res => { if (!cancelled) setReferralInfo(res?.valid ? res : null); })
+    const email = clientUser?.email || '';
+    pubApi.checkReferral(slug, referralCode, email)
+      .then(res => {
+        if (cancelled) return;
+        setReferralInfo(res?.valid ? res : null);
+      })
       .catch(() => { if (!cancelled) setReferralInfo(null); });
     return () => { cancelled = true; };
-  }, [referralCode, slug]);
+  }, [referralCode, slug, clientUser?.email]);
 
   // Construire l'URL pour chaque étape
   const stepToPath = (s, svcId, empId, dateStr, slot) => {
@@ -332,10 +341,13 @@ export default function BookingPage({ slug }) {
         setPromoErr('');
         return;
       }
-      // 2. Fallback : code parrainage (même input pour saisie manuelle)
+      // 2. Fallback : code parrainage (même input pour saisie manuelle).
+      //    On transmet l'email du filleul (si connu) pour un check d'éligibilité
+      //    complet — évite de faire miroiter une remise qui sera refusée.
       try {
-        const ref = await pubApi.checkReferral(slug, codeRaw.toUpperCase());
-        if (ref?.valid) {
+        const email = clientUser?.email || clientEmail || '';
+        const ref = await pubApi.checkReferral(slug, codeRaw.toUpperCase(), email);
+        if (ref?.valid && ref.eligible !== false) {
           const baseAmt  = selSvc?.price || 0;
           const discount = ref.discount_type === 'percent'
             ? Math.min(baseAmt, baseAmt * parseFloat(ref.discount_value) / 100)
@@ -354,6 +366,12 @@ export default function BookingPage({ slug }) {
           setPromoErr('');
           return;
         }
+        // Code connu mais conditions non remplies → message pédagogique
+        if (ref?.valid && ref.eligible === false) {
+          setPromoData(null);
+          setPromoErr("Vous ne pouvez pas bénéficier de ce programme de parrainage car vous ne répondez pas aux conditions définies par le commerçant.");
+          return;
+        }
       } catch { /* silencieux : on retombe sur l'erreur promo */ }
       setPromoData(null);
       setPromoErr(res.error || 'Code invalide');
@@ -361,11 +379,20 @@ export default function BookingPage({ slug }) {
     finally { setPromoLoading(false); }
   };
 
-  // Pré-remplir le champ code promo avec le code parrainage dès qu'il est
-  // validé côté back ET qu'aucun autre code promo n'a été saisi à la main.
-  // Traçabilité visuelle : le filleul voit son code (venu du lien) apparaître.
+  // Pré-remplir le champ code promo avec le code parrainage seulement si
+  // l'éligibilité est CONFIRMÉE (ou pas encore testée, ex: pas connecté).
+  // Si le filleul est connecté et qu'on sait qu'il ne répond pas aux
+  // conditions (referralInfo.eligible === false), on NE pré-remplit PAS —
+  // le bandeau "vous ne pouvez pas bénéficier" prend le relais.
   useEffect(() => {
     if (!referralInfo || !referralCode) return;
+    if (referralInfo.eligible === false) {
+      // Client non éligible : vider toute trace pré-remplie
+      if (promoData?.source === 'referral') {
+        setPromoCode(''); setPromoData(null);
+      }
+      return;
+    }
     if (promoData?.source === 'promo') return; // priorité code promo manuel
     if (promoCode && promoCode.toUpperCase() !== referralCode.toUpperCase()) return;
     const baseAmt  = selSvc?.price || 0;
@@ -586,23 +613,17 @@ export default function BookingPage({ slug }) {
         try { localStorage.removeItem('ff_booking_ref_' + slug); } catch {}
         setReferralCode('');
       }
-      // Si un code parrainage a été saisi mais que le backend l'a refusé
-      // (filleul déjà connu, quota parrain, self-referral…), on prévient
-      // l'utilisateur via une alerte — sinon il ne voit pas pourquoi aucune
-      // remise n'apparaît sur le récap.
+      // Si un code parrainage a été saisi mais le backend ne l'a pas appliqué,
+      // message pédagogique unifié (meilleure UX qu'une liste de raisons
+      // techniques). Cas spécial 'promo_used' → on précise qu'un promo a pris
+      // la place (choix volontaire du client, non une condition non remplie).
       if (result?.referral_skip_reason && referralCode) {
-        const REF_ERR = {
-          self_referral:    "Vous ne pouvez pas utiliser votre propre code de parrainage.",
-          filleul_not_new:  "Vous avez déjà été servi par ce commerçant — le parrainage ne s'applique qu'aux nouveaux clients.",
-          already_parraine: "Un parrainage a déjà été utilisé avec votre email chez ce commerçant.",
-          quota_exceeded:   "Limite de parrainages atteinte pour ce parrain.",
-          program_disabled: "Le programme de parrainage n'est plus actif chez ce commerçant.",
-          code_not_found:   "Code parrainage inconnu.",
-          promo_used:       "Un code promo a été appliqué à la place du parrainage (non cumulable).",
-          server_error:     "Erreur serveur lors de la vérification du parrainage.",
-        };
-        const msg = REF_ERR[result.referral_skip_reason] || 'Parrainage non applicable — remise non appliquée.';
-        // Alerte visible mais non bloquante : RDV bien créé
+        const reason = result.referral_skip_reason;
+        const msg = reason === 'promo_used'
+          ? "Votre code promo a été appliqué à la place du parrainage (non cumulable)."
+          : reason === 'code_not_found'
+          ? "Le code de parrainage saisi n'existe pas chez ce commerçant."
+          : "Vous ne pouvez pas bénéficier de ce programme de parrainage car vous ne répondez pas aux conditions définies par le commerçant.";
         setTimeout(() => window.alert(msg), 100);
       }
       setBooked(result);
@@ -909,13 +930,28 @@ export default function BookingPage({ slug }) {
         onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 
-      {/* ══ Bandeau "promotion parrainage appliquée" ══
-           Affiché (a) juste après une inscription déclenchée par ?ref=CODE,
-           et (b) tant qu'un parrainage actif est en cours mais pas encore
-           consommé (client connecté, avant confirmation de réservation).
-           L'utilisateur peut fermer — le code reste appliqué dans le back. */}
+      {/* ══ Bandeau parrainage ══
+           3 états :
+           (1) Éligible (ou éligibilité non vérifiée) → vert : remise annoncée
+           (2) NON éligible (clientUser présent mais ne remplit pas les
+               conditions) → orange : message pédagogique unifié
+           (3) Pas de bandeau si pas de code parrainage */}
       {!showAuthPanel && referralCode && referralInfo && clientUser && view === 'booking' && (
         <div style={{ maxWidth:1100, margin:'0 auto 16px', padding:'0 16px' }}>
+          {referralInfo.eligible === false ? (
+            <div style={{ padding:'12px 16px', borderRadius:14,
+              background:'rgba(245,158,11,0.1)',
+              border:'1px solid rgba(245,158,11,0.35)',
+              display:'flex', alignItems:'flex-start', gap:12, flexWrap:'wrap' }}>
+              <span style={{ fontSize:20 }}>ℹ️</span>
+              <p style={{ fontSize:13, color:th.text, margin:0, flex:1, minWidth:0, lineHeight:1.5 }}>
+                <strong>Vous ne pouvez pas bénéficier de ce programme de parrainage</strong>
+                {' '}car vous ne répondez pas aux conditions définies par le commerçant
+                (programme réservé aux nouveaux clients, quota parrain atteint, ou règles spécifiques).
+                Vous pouvez continuer votre réservation au prix normal.
+              </p>
+            </div>
+          ) : (
           <div style={{ padding:'12px 16px', borderRadius:14,
             background:'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(99,102,241,0.12))',
             border:'1px solid rgba(16,185,129,0.32)',
@@ -939,6 +975,7 @@ export default function BookingPage({ slug }) {
                 style={{width:12,height:12}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
+          )}
         </div>
       )}
 

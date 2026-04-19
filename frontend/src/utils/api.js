@@ -286,7 +286,10 @@ export const pubApi = {
   getClosedDays:   (slug)    => pubRequest(`/${slug}/closed-days`),
   getMonthStatus:  (slug, q) => pubRequest(`/${slug}/month-status?` + new URLSearchParams(q)),
   checkPromo:     (slug, body) => pubRequest(`/${slug}/check-promo`, { method: 'POST', body: JSON.stringify(body) }),
-  checkReferral:  (slug, code) => pubRequest(`/${slug}/referral/${encodeURIComponent(code)}`),
+  checkReferral:  (slug, code, email) => {
+    const q = email ? ('?email=' + encodeURIComponent(email)) : '';
+    return pubRequest(`/${slug}/referral/${encodeURIComponent(code)}${q}`);
+  },
   updateClientProfile: (slug, body) => pubRequest(`/${slug}/client/profile`, { method: 'PUT', body: JSON.stringify(body) }),
   checkEmail:     (slug, email) => pubRequest(`/${slug}/client/check-email?email=${encodeURIComponent(email)}`),
   googleAuthUrl:  (slug) => {

@@ -137,16 +137,15 @@ router.post('/', async (req, res) => {
           req.user.userId, incomingRef, client_email, baseAmt
         );
         if (!resolved.ok) {
-          // Raisons claires pour le frontend (quota dépassé, filleul non
-          // nouveau, self-referral…). 400 bloque la transaction.
-          const msg = {
-            program_disabled: "Programme parrainage désactivé.",
-            code_not_found:   'Code parrainage invalide.',
-            self_referral:    'Le parrain ne peut pas être son propre filleul.',
-            filleul_not_new:  'Ce client a déjà été servi — le parrainage ne peut plus s\'appliquer.',
-            already_parraine:'Ce client a déjà bénéficié d\'un parrainage.',
-            quota_exceeded:   'Limite de parrainages atteinte pour ce parrain.',
-          }[resolved.reason] || 'Parrainage non applicable.';
+          // Message pédagogique unifié côté client (meilleure UX). Cas
+          // spécifiques gardés séparés quand l'info est utile au cashier :
+          //  - code_not_found : probablement une faute de frappe
+          //  - program_disabled : côté commerçant, pas le filleul
+          const msg = resolved.reason === 'code_not_found'
+            ? 'Code parrainage inconnu — vérifiez la saisie.'
+            : resolved.reason === 'program_disabled'
+            ? 'Programme parrainage désactivé.'
+            : 'Ce client ne peut pas bénéficier de ce programme de parrainage car il ne répond pas aux conditions définies par le commerçant.';
           return res.status(400).json({ error: msg, reason: resolved.reason });
         }
         referralCtx = resolved;

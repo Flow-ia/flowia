@@ -274,7 +274,14 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
             setPromoErr('');
             return;
           }
-          // reason déjà bavard si utile (quota, filleul_not_new…) — reste silencieux ici
+          // Code existe mais conditions non remplies → message pédagogique
+          if (ref?.reason && ref.reason !== 'code_not_found') {
+            setPromoData(null);
+            setPromoErr(ref.reason === 'program_disabled'
+              ? 'Programme parrainage désactivé.'
+              : 'Ce client ne peut pas bénéficier de ce parrainage (conditions non remplies).');
+            return;
+          }
         } catch { /* silencieux */ }
       }
       setPromoData(null); setPromoErr(res.error || 'Code invalide');
