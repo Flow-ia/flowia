@@ -256,12 +256,14 @@ router.get('/me', globalClientAuth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
 
     // Fiches locales liées (commerces fréquentés)
+    // business_name vit sur users (pas booking_settings) → JOIN users.
     const { rows: locals } = await pool.query(
       `SELECT ca.id, ca.user_id, ca.email, ca.first_name, ca.last_name,
-              bs.slug, bs.business_name,
+              bs.slug, u.business_name,
               cl.stamps, cl.points, cl.last_visit
        FROM client_accounts ca
        LEFT JOIN booking_settings bs ON bs.user_id=ca.user_id
+       LEFT JOIN users u              ON u.id        =ca.user_id
        LEFT JOIN client_loyalty cl ON cl.user_id=ca.user_id AND cl.client_email=ca.email
        WHERE ca.global_client_id=$1
        ORDER BY cl.last_visit DESC NULLS LAST`,
@@ -370,7 +372,7 @@ router.get('/me/referral-code/:slug', clientOrGlobalClientAuth, async (req, res)
 router.get('/me/referral-history/:slug', clientOrGlobalClientAuth, async (req, res) => {
   try {
     const { rows: biz } = await pool.query(
-      'SELECT user_id, business_name FROM booking_settings bs WHERE slug=$1 AND is_enabled=TRUE',
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
       [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
@@ -877,16 +879,18 @@ router.get('/loyalty', globalClientAuth, async (req, res) => {
     const { rows: gc } = await pool.query('SELECT email FROM global_clients WHERE id=$1', [req.globalClient.globalClientId]);
     if (!gc.length) return res.status(404).json({ error: 'Compte introuvable.' });
 
+    // business_name vit sur users (pas booking_settings) → JOIN users.
     const { rows } = await pool.query(
       `SELECT
          cl.stamps, cl.points, cl.total_stamps_ever, cl.total_points_ever,
          cl.rewards_earned, cl.last_visit,
          lp.stamps_required, lp.loyalty_mode, lp.points_per_euro,
          lp.reward_label, lp.reward_type, lp.reward_value,
-         bs.business_name, bs.slug
+         u.business_name, bs.slug
        FROM client_loyalty cl
        LEFT JOIN loyalty_programs lp ON lp.user_id=cl.user_id
        LEFT JOIN booking_settings bs ON bs.user_id=cl.user_id
+       LEFT JOIN users u              ON u.id       =cl.user_id
        WHERE LOWER(cl.client_email)=LOWER($1) AND lp.enabled=TRUE
        ORDER BY cl.last_visit DESC NULLS LAST`,
       [gc[0].email]
