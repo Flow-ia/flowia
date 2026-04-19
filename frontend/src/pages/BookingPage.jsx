@@ -11,7 +11,7 @@ import { NavBar } from './booking/NavBar';
 import { SideCard, MobileHoursBlock } from './booking/SideCard';
 import { AccordionGroup, ServiceThumb, ServiceCard } from './booking/Services';
 import { MyAppointments } from './booking/MyAppointments';
-import { AuthPanel, GlobalAccountView } from './booking/Account';
+import { AuthPanel, GlobalAccountView, PostRegisterPopup } from './booking/Account';
 import { ReferralPage } from './booking/ReferralPage';
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -250,6 +250,10 @@ export default function BookingPage({ slug }) {
 
   // Auth client
   const [clientUser, setClientUser]   = useState(null);
+  // Popup post-inscription : mois/année de naissance + tél. (optionnels).
+  // Déclenché par handleAuth(client, { justRegistered: true }). Stocke aussi
+  // un flag localStorage pour ne jamais re-afficher à ce même client.
+  const [showPostRegister, setShowPostRegister] = useState(false);
   // showAuthPanel = true → AuthPanel flottant (navbar, hors flow)
   const [showAuthPanel, setShowAuthPanel]  = useState(false);
   const [authInitEmail, setAuthInitEmail]  = useState('');
@@ -397,7 +401,7 @@ export default function BookingPage({ slug }) {
       .catch(() => {});
   }, [selSvc, selEmp, calMonth, slug, monthKey]);
 
-  const handleAuth = (client) => {
+  const handleAuth = (client, meta = {}) => {
     setClientUser(client);
     setCN(`${client.first_name} ${client.last_name}`);
     setCE(client.email);
@@ -408,6 +412,15 @@ export default function BookingPage({ slug }) {
     setPhoneErr('');
     setShowAuthPanel(false);
     setInlineAuthMode('none');
+    // Popup post-inscription : 1re fois seulement, si birth_date manquante.
+    // Flag localStorage par email pour ne plus jamais l'afficher à ce client.
+    if (meta.justRegistered && client?.email) {
+      const key = `ff_post_register_shown_${client.email.toLowerCase()}`;
+      if (!localStorage.getItem(key) && !client.birth_date) {
+        setShowPostRegister(true);
+        localStorage.setItem(key, '1');
+      }
+    }
     // Si connecté à l'étape 5 → avancer à 6 seulement si le téléphone est renseigné
     if (step === 5 && client.phone) {
       setTimeout(() => setStep(6), 50);
@@ -568,8 +581,15 @@ export default function BookingPage({ slug }) {
 
   // Vue : Mes RDV
 
+  // Overlay popup post-inscription (réutilisé dans toutes les vues).
+  const postRegOverlay = showPostRegister && clientUser ? (
+    <PostRegisterPopup slug={slug} th={th} client={clientUser}
+      onClose={() => setShowPostRegister(false)}
+      onSaved={(c) => { setClientUser(c); localStorage.setItem('ff_client_info', JSON.stringify(c)); }} />
+  ) : null;
+
   if (view === 'myAppts') return (
-    <div style={{ minHeight:'100vh', background:th.bg }}>
+    <><div style={{ minHeight:'100vh', background:th.bg }}>
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
         onMyAppts={()=>{navigate(`/book/${slug}/client/rdv`,{replace:false}); setMyApptsInitTab('appts');}}
@@ -586,12 +606,12 @@ export default function BookingPage({ slug }) {
           setMyApptsInitTab('appts');
           setView('booking');
         }} />
-    </div>
+    </div>{postRegOverlay}</>
   );
 
   // Vue : Page parrainage
   if (view === 'parrain') return (
-    <div style={{ minHeight:'100vh', background:th.bg,
+    <><div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); }}
@@ -608,15 +628,15 @@ export default function BookingPage({ slug }) {
         refMyRewards={refMyRewards}
         onLogin={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
         onRegister={() => { setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); setView('booking'); }}
-        onAuthSuccess={(client) => { handleAuth(client); /* reste sur /parrain → useEffect recharge code+historique */ }}
+        onAuthSuccess={(client, meta) => { handleAuth(client, meta); /* reste sur /parrain → useEffect recharge code+historique */ }}
         onBack={() => { setView('booking'); navigate(`/book/${slug}`, {replace:false}); }}
       />
-    </div>
+    </div>{postRegOverlay}</>
   );
 
   // Vue : Confirmation
   if (view === 'success' && bookedAppt) return (
-    <div style={{ minHeight:'100vh', background:th.bg,
+    <><div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       {/* Navbar persistante */}
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
@@ -713,7 +733,7 @@ export default function BookingPage({ slug }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>{postRegOverlay}</>
   );
 
   // ── Vue : Réservation — Layout Setmore exact ────────────────────────────────
@@ -723,7 +743,7 @@ export default function BookingPage({ slug }) {
   // Employés = vrais employees chargés depuis pubApi
   // Adresse/tel = business.address / business.phone
   return (
-    <div style={{ minHeight:'100vh', background:th.bg,
+    <><div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       <style>{`
         @keyframes spin  { to { transform:rotate(360deg); } }
@@ -754,7 +774,7 @@ export default function BookingPage({ slug }) {
             <div style={{ marginBottom:24, animation:'fadeIn .2s ease' }}>
               <AuthPanel slug={slug} th={th} requireAccount={requireAccount}
                 initialEmail={authInitEmail}
-                onAuth={u => { handleAuth(u); setAuthInitEmail(''); }}
+                onAuth={(u, meta) => { handleAuth(u, meta); setAuthInitEmail(''); }}
                 onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); navigate(`/book/${slug}`, {replace:true}); }} />
             </div>
           )}
@@ -1889,6 +1909,6 @@ export default function BookingPage({ slug }) {
           </button>
         </div>
       )}
-    </div>
+    </div>{postRegOverlay}</>
   );
 }

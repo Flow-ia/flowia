@@ -1003,6 +1003,12 @@ async function initDB() {
   // Date de naissance optionnelle sur les deux tables clients.
   await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS birth_date DATE`);
   await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS birth_date DATE`);
+  // Anti-fraude : date/heure du dernier reward anniversaire émis pour ce client.
+  // Empêche qu'un client qui change sa date de naissance après avoir reçu une
+  // offre ne puisse en recevoir une seconde avant ~330 jours (rolling window
+  // robuste face au changement de date côté profil).
+  await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS last_birthday_reward_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS last_birthday_reward_at TIMESTAMPTZ`);
   // Config offre anniversaire par commerçant (1 ligne par user_id).
   await runMigration(`
     CREATE TABLE IF NOT EXISTS birthday_campaigns (

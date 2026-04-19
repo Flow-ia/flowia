@@ -549,15 +549,24 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       let totalSent = 0;
 
       for (const camp of campaigns) {
-        // Clients de ce commerçant dont c'est l'anniversaire aujourd'hui
+        // Clients de ce commerçant dont c'est l'anniversaire aujourd'hui.
+        // Anti-fraude : exclus les clients ayant déjà reçu un reward dans les
+        // 330 derniers jours (rolling window) — robuste face au changement
+        // de birth_date après bénéfice. Le match se fait aussi via le
+        // global_client lié pour suivre les clients à travers les commerces.
         const { rows: clients } = await dbPool.query(
           `SELECT DISTINCT ca.email, ca.first_name, ca.last_name
              FROM client_accounts ca
+             LEFT JOIN global_clients gc ON gc.id = ca.global_client_id
             WHERE ca.user_id = $1
               AND ca.birth_date IS NOT NULL
               AND EXTRACT(MONTH FROM ca.birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
               AND EXTRACT(DAY   FROM ca.birth_date) = EXTRACT(DAY   FROM CURRENT_DATE)
-              AND ca.email IS NOT NULL AND ca.email <> ''`,
+              AND ca.email IS NOT NULL AND ca.email <> ''
+              AND (ca.last_birthday_reward_at IS NULL
+                   OR ca.last_birthday_reward_at < NOW() - INTERVAL '330 days')
+              AND (gc.last_birthday_reward_at IS NULL
+                   OR gc.last_birthday_reward_at < NOW() - INTERVAL '330 days')`,
           [camp.user_id]
         );
         if (!clients.length) continue;
@@ -601,6 +610,18 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                  (user_id, client_email, reward_type, status, promo_code_id, expires_at)
                VALUES ($1,$2,'birthday','available',$3,(CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
               [camp.user_id, emailLow, promo[0].id, String(validity)]
+            );
+            // Anti-fraude : tag le dernier reward anniversaire sur les 2 tables.
+            // Empêche un second reward avant 330j même si la birth_date change.
+            await dbPool.query(
+              `UPDATE client_accounts SET last_birthday_reward_at = NOW()
+                WHERE user_id=$1 AND LOWER(email)=$2`,
+              [camp.user_id, emailLow]
+            );
+            await dbPool.query(
+              `UPDATE global_clients SET last_birthday_reward_at = NOW()
+                WHERE LOWER(email)=$1`,
+              [emailLow]
             );
 
             const clientName = [c.first_name, c.last_name].filter(Boolean).join(' ');

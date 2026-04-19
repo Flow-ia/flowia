@@ -5,7 +5,97 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 10) : Fix parrainage — détection client connecté + bloc auth unifié
+## 🆕 Session 2026-04-19 (suite 11) : Programme anniversaire — anti-fraude + birth_date optionnelle + popup
+
+### Demande (onboarding.md)
+1. Birth_date obligatoire pour bénéficier du programme anniversaire (sinon
+   client exclu).
+2. Inscription : **phone + mois/année de naissance optionnels**. Popup
+   post-1re-inscription pour demander ces champs.
+3. Programme anniversaire : **1 seule fois par an** par client.
+4. Anti-fraude : si le client a déjà bénéficié puis change sa birth_date,
+   il ne doit pas pouvoir recevoir un second cadeau avant son prochain
+   anniversaire (année suivante).
+
+### Backend — `db/index.js`
+- 2 nouvelles colonnes idempotentes (ADD COLUMN IF NOT EXISTS) :
+  - `global_clients.last_birthday_reward_at  TIMESTAMPTZ`
+  - `client_accounts.last_birthday_reward_at TIMESTAMPTZ`
+- Sert à bloquer un second reward dans les 330 jours même si birth_date change.
+
+### Backend — `index.js` (cron `runBirthdayPromos`)
+- Requête des candidats étendue : rejette les clients dont
+  `last_birthday_reward_at IS NULL OR last_birthday_reward_at < NOW() -
+  INTERVAL '330 days'` (jointure `global_clients` ajoutée pour vérifier
+  les deux tables en parallèle).
+- Après création du reward : UPDATE `last_birthday_reward_at = NOW()` sur
+  `client_accounts` (user_id+email) ET `global_clients` (email).
+- Le garde-fou existant `EXTRACT(YEAR FROM created_at) = currentYear` sur
+  `client_rewards` reste en place (double protection année calendaire).
+
+### Backend — `routes/public-booking.js`
+- POST `/:slug/client/register` : accepte `birth_date` optionnel au format
+  `YYYY-MM-DD` ou `YYYY-MM` (→ `YYYY-MM-01`). Saved sur `global_clients` +
+  `client_accounts` (INSERT ou ON CONFLICT update via COALESCE).
+- PUT `/:slug/client/profile` : accepte `birth_date` optionnel (même format).
+  SET dynamique : si le champ n'est pas présent dans le body, pas de modif.
+  Si `birth_date === ''` ou `null`, reset à NULL. Sync global_clients.
+
+### Frontend — `pages/booking/Account.jsx`
+- `AuthPanel.submit()` : après register/login réussi, appelle
+  `onAuth(client, { justRegistered: mode === 'register' })` pour que le
+  parent sache si c'est la 1re inscription.
+- Nouveau composant `PostRegisterPopup` (overlay modal 3000 z-index) :
+  - Champs **Mois** (select 1→12) + **Année** (input 4 chiffres).
+  - Champ **Téléphone** optionnel si manquant.
+  - Boutons **Plus tard** (skip) / **Enregistrer** (appel updateClientProfile
+    avec body `{ birth_date: 'YYYY-MM' }` → backend convertit en YYYY-MM-01).
+  - Mention "Sans date de naissance, vous ne participerez pas au programme
+    anniversaire." pour informer du trade-off.
+  - Validation : si l'un des 2 champs (mois/année) est rempli, l'autre est
+    requis ; année entre 1900 et année courante.
+
+### Frontend — `pages/BookingPage.jsx`
+- Import `PostRegisterPopup`.
+- Nouveau state `showPostRegister`.
+- `handleAuth(client, meta)` :
+  - Ouvre le popup uniquement si `meta.justRegistered` ET `client.birth_date`
+    vide ET aucun flag `ff_post_register_shown_<email>` en localStorage.
+  - Flag persistant par email (écrit au premier affichage, même si skip)
+    pour ne jamais ré-afficher le popup à ce même client.
+- `onAuth={(u, meta) => handleAuth(u, meta)}` propagé dans AuthPanel wrapper +
+  `onAuthSuccess` (ReferralPage).
+- Overlay rendu via variable locale `postRegOverlay` inclus en Fragment à
+  la fin de chaque branche de retour (myAppts / parrain / success / default).
+
+### Anti-fraude — démonstration
+Scenario : Marie reçoit un reward le 15/03/2026 (DOB = 15/03).
+- Elle change sa DOB en 10/06 le 20/03/2026.
+- 10/06/2026 : cron check → `last_birthday_reward_at = 15/03/2026`, NOW() -
+  last = 87 jours < 330 → **skip**. Pas de reward.
+- 05/03/2027 (prochain vrai anniversaire) : cron → last = 15/03/2026,
+  NOW() - last = 355 jours > 330 → reward autorisé.
+- Résultat : 1 reward/an garanti, même si le client manipule birth_date.
+
+### Build
+- `node --check` × 4 backend : OK
+- `npx vite build` : OK (14.22s, 87 modules, page-booking +4.7 kB pour le
+  popup + wrapping fragments).
+
+### Compatibilité préservée
+- Colonnes ajoutées avec `IF NOT EXISTS` → idempotent.
+- `last_birthday_reward_at` NULL pour les clients existants → aucun blocage
+  rétroactif (ils bénéficient du prochain anniversaire normalement).
+- Route register : `birth_date` ignoré si absent/invalide (pas d'erreur 400).
+- Route PUT profile : `birth_date === undefined` = pas de modification (les
+  anciens clients qui update sans envoyer ce champ ne perdent pas leur DOB).
+- Popup : localStorage flag évite l'affichage répété ; bouton "Plus tard"
+  ferme sans sauver (le flag reste écrit, car la 1re occasion de proposer
+  la saisie a eu lieu).
+
+---
+
+## Session 2026-04-19 (suite 10) : Fix parrainage — détection client connecté + bloc auth unifié
 
 ### Bug rapporté (onboarding.md)
 1. Client **authentifié** sur le site du commerçant → la page `/parrain`

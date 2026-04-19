@@ -1,32 +1,56 @@
-j'ai remarqué que malgré que le clietn est authentifié sur lesite de réservation du commercnat mais on affiche toujors la page e :Les conditions chez Gaci Noufel
-Récompense pour le parrain
-2.00 €
-Utilisable
-En caisse, sur prestation
-Limite par parrain
-3 fois par mois
-Validité de la récompense
-60 jours après validation
-Connectez-vous pour récupérer votre code de parrainage
+### ❌ Problème critique
 
-Seuls les clients déjà venus peuvent parrainer
+Le **code promo de parrainage ne fonctionne pas** correctement.
 
-Se connecter
-Créer un compte
+De plus :
 
---->  au lieu de affiché mla page de suivi des parrainage et tout cela donc vérifié bien et fix bugs
+* le **code de parrainage n’est pas tracé**
+* le **lien de parrainage n’est pas suivi**
+* aucune **traçabilité fiable** de son utilisation
 
-aprés cela , quand que le lcient ni pas authentifié affiche la section de authentification comme cella de authentification pour réserver et comme ca pour eviter le doblon de : 
+👉 Cela empêche le bon fonctionnement du programme de parrainage.
 
-Se connecter
-Créer un compte  que tua s fait la donc intégre directemnet le meme que de ce que tua as faire dans la page de /info (https://www.haircoifflille.fr/book/lille/service/bd166f62-e3a0-4eb0-b608-08c9eb8a2e45/employe/any/date/2026-04-23/creneau/12:00/infos) : 
-Vos informations
-Récapitulatif
-''
-Déjà un compte ? Connectez-vous
+---
 
-Vos coordonnées sont renseignées automatiquement.
+### ✅ Corrections attendues
 
-Se connecter
-Créer un compte
-Continuer avec Google''
+* Corriger le fonctionnement du **code promo de parrainage**
+* Assurer la **génération d’un code unique par client**
+* Garantir l’unicité et l’identification du code dans tout le système
+
+---
+
+### 🔗 Traçabilité complète
+
+Mettre en place une traçabilité claire et fiable :
+
+* suivi du **lien de parrainage** (qui a invité qui)
+* suivi de l’**utilisation du code**
+* association entre :
+
+  * parrain
+  * filleul
+  * transaction réalisée
+
+---
+
+### 📊 Suivi et exploitation
+
+Le système doit permettre :
+
+* de savoir combien de fois un code a été utilisé
+* de voir quels clients ont été parrainés
+* de suivre les récompenses générées
+
+---
+
+### ⚠️ Contraintes importantes
+
+* garantir l’unicité des codes
+* éviter toute duplication ou conflit
+* ne rien casser dans le système existant (caisse, marketing, historique, stats)
+* assurer une cohérence globale des données
+
+---
+
+👉 Objectif : avoir un programme de parrainage **fiable, traçable, fonctionnel et exploitable**, avec une logique claire et professionnelle sur toute la plateforme.

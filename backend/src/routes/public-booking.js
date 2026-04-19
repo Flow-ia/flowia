@@ -970,13 +970,20 @@ router.post('/:slug/client/register', async (req, res) => {
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const userId   = biz[0].user_id;
-    const { email, password, first_name, last_name, phone } = req.body;
+    const { email, password, first_name, last_name, phone, birth_date } = req.body;
     if (!email || !password || !first_name || !last_name)
       return res.status(400).json({ error: 'Champs requis.' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
 
     const emailLow = email.toLowerCase().trim();
+    // birth_date optionnelle : accepte YYYY-MM-DD OU YYYY-MM (= 1er du mois)
+    let bd = null;
+    if (typeof birth_date === 'string' && birth_date.trim()) {
+      const s = birth_date.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bd = s;
+      else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
+    }
 
     // 1. Vérifier si compte global existe déjà avec cet email
     const { rows: gcEx } = await pool.query(
@@ -1007,9 +1014,11 @@ router.post('/:slug/client/register', async (req, res) => {
            password_hash=$2, is_verified=TRUE, invite_token=NULL,
            first_name=COALESCE(NULLIF($3,''), first_name),
            last_name=COALESCE(NULLIF($4,''), last_name),
-           phone=COALESCE(NULLIF($5,''), phone), updated_at=NOW()
+           phone=COALESCE(NULLIF($5,''), phone),
+           birth_date=COALESCE($6, birth_date),
+           updated_at=NOW()
          WHERE LOWER(email)=$1 RETURNING id`,
-        [emailLow, hash, first_name, last_name||'', phone||'']
+        [emailLow, hash, first_name, last_name||'', phone||'', bd]
       );
       gcId = updated[0].id;
     } else {
@@ -1017,22 +1026,23 @@ router.post('/:slug/client/register', async (req, res) => {
       const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
       const { rows: newGc } = await pool.query(
         `INSERT INTO global_clients
-           (email, password_hash, first_name, last_name, phone, is_verified, consent_at, consent_ip)
-         VALUES ($1,$2,$3,$4,$5,TRUE,NOW(),$6) RETURNING id`,
-        [emailLow, hash, first_name, last_name||'', phone||null, consentIp]
+           (email, password_hash, first_name, last_name, phone, birth_date, is_verified, consent_at, consent_ip)
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW(),$7) RETURNING id`,
+        [emailLow, hash, first_name, last_name||'', phone||null, bd, consentIp]
       );
       gcId = newGc[0].id;
     }
 
     // 4. Créer la fiche locale liée au compte global
     const { rows } = await pool.query(
-      `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, global_client_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+      `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, birth_date, global_client_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        ON CONFLICT (user_id, email) DO UPDATE SET
          global_client_id = EXCLUDED.global_client_id,
-         password_hash    = EXCLUDED.password_hash
-       RETURNING id, email, first_name, last_name, phone, global_client_id`,
-      [userId, emailLow, hash, first_name, last_name||'', phone||null, gcId]
+         password_hash    = EXCLUDED.password_hash,
+         birth_date       = COALESCE(EXCLUDED.birth_date, client_accounts.birth_date)
+       RETURNING id, email, first_name, last_name, phone, birth_date, global_client_id`,
+      [userId, emailLow, hash, first_name, last_name||'', phone||null, bd, gcId]
     );
     const client = rows[0];
 
@@ -1324,20 +1334,33 @@ router.put('/:slug/client/profile', async (req, res) => {
     catch { return res.status(401).json({ error: 'Token invalide.' }); }
 
     const { slug } = req.params;
-    const { first_name, last_name, email, phone } = req.body;
+    const { first_name, last_name, email, phone, birth_date } = req.body;
     if (!first_name?.trim() || !last_name?.trim() || !email?.trim()) {
       return res.status(400).json({ error: 'Prénom, nom et email sont requis.' });
     }
 
+    // birth_date : accepte YYYY-MM-DD ou YYYY-MM (= 1er du mois), vide = null,
+    // undefined = ne pas modifier. L'anti-fraude cron check 'last_birthday_reward_at'
+    // (330 jours rolling) se charge d'empêcher la triche par changement de date.
+    let bdParam; // undefined = pas de modif
+    if (birth_date === '' || birth_date === null) bdParam = null;
+    else if (typeof birth_date === 'string') {
+      const s = birth_date.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bdParam = s;
+      else if (/^\d{4}-\d{2}$/.test(s))       bdParam = s + '-01';
+    }
+
     // Le token client contient clientId (= client_accounts.id)
     // Mettre à jour directement client_accounts
+    const sets = ['first_name = $1', 'last_name = $2', 'email = LOWER($3)', 'phone = $4'];
+    const vals = [first_name.trim(), last_name.trim(), email.trim(), phone?.trim() || null];
+    let idx = 5;
+    if (bdParam !== undefined) { sets.push(`birth_date = $${idx++}`); vals.push(bdParam); }
+    vals.push(decoded.clientId);
     const updated = await pool.query(
-      `UPDATE client_accounts
-       SET first_name = $1, last_name = $2, email = LOWER($3), phone = $4
-       WHERE id = $5
-       RETURNING id, first_name, last_name, email, phone`,
-      [first_name.trim(), last_name.trim(), email.trim(), phone?.trim() || null,
-       decoded.clientId]
+      `UPDATE client_accounts SET ${sets.join(', ')} WHERE id = $${idx}
+       RETURNING id, first_name, last_name, email, phone, birth_date`,
+      vals
     );
     if (!updated.rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
 
@@ -1347,9 +1370,14 @@ router.put('/:slug/client/profile', async (req, res) => {
         'SELECT global_client_id FROM client_accounts WHERE id=$1', [decoded.clientId]
       );
       if (gc[0]?.global_client_id) {
+        const gcSets = ['first_name=$1', 'last_name=$2', 'email=LOWER($3)', 'phone=$4'];
+        const gcVals = [first_name.trim(), last_name.trim(), email.trim(), phone?.trim()||null];
+        let gi = 5;
+        if (bdParam !== undefined) { gcSets.push(`birth_date=$${gi++}`); gcVals.push(bdParam); }
+        gcVals.push(gc[0].global_client_id);
         await pool.query(
-          `UPDATE global_clients SET first_name=$1,last_name=$2,email=LOWER($3),phone=$4 WHERE id=$5`,
-          [first_name.trim(), last_name.trim(), email.trim(), phone?.trim()||null, gc[0].global_client_id]
+          `UPDATE global_clients SET ${gcSets.join(', ')} WHERE id=$${gi}`,
+          gcVals
         );
       }
     } catch(_) {}
