@@ -822,7 +822,7 @@ export default function BookingPage({ slug }) {
       {/* ══ NAVBAR — composant partagé ══ */}
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); }}
-        onMyAppts={()=>setView('myAppts')}
+        onMyAppts={()=>{ navigate(`/book/${slug}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
         onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />

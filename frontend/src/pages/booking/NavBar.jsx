@@ -10,16 +10,18 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
   const [menuOpen, setMenuOpen] = useState(false);
   const close = () => setMenuOpen(false);
 
-  // Fermer avec Esc + bloquer le scroll body tant que le drawer est ouvert
+  // Fermer avec Esc + bloquer le scroll body tant que le drawer est ouvert.
+  // Au cleanup on remet toujours overflow='' pour garantir que le scroll reste
+  // disponible même si la NavBar est démontée pendant que le menu est ouvert
+  // (ex : click sur un lien qui change de view pendant la transition).
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', onKey);
-    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = '';
     };
   }, [menuOpen]);
 

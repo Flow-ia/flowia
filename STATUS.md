@@ -5,7 +5,80 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 14) : NavBar mobile — menu hamburger drawer glissant
+## 🆕 Session 2026-04-19 (suite 15) : Fix double navbar Mes RDV + URL + cleanup drawer
+
+### Bug rapporté
+Depuis le drawer mobile, click sur « Mes rendez-vous » :
+- Page affichée en double (deux barres de navigation empilées).
+- « Page de réservation » visible derrière au lieu de la vue Mes RDV.
+- Le header doit rester fix (sticky) au scroll.
+
+### Cause racine
+1. **Double navbar** : `MyAppointments.jsx` rendait sa PROPRE `<nav>` avec
+   `position:sticky; top:0; zIndex:50` (ligne 216). La vue 'myAppts' dans
+   `BookingPage.jsx` rend déjà la NavBar principale avec logo + hamburger +
+   drawer (depuis la session 14). Résultat : 2 navbars sticky empilées, d'où
+   l'impression de page « en double » + la navbar du salon visible au-dessus
+   de MyAppointments donnait l'illusion d'être resté sur la réservation.
+
+2. **URL non synchronisée** : Sur la vue booking (ligne 825), le handler
+   `onMyAppts={()=>setView('myAppts')}` ne faisait PAS de `navigate()`. L'URL
+   restait `/book/:slug` alors que le state passait en 'myAppts'. Incohérent
+   avec toutes les autres vues (myAppts / parrain / success) qui font bien
+   `navigate('/client/rdv')`.
+
+3. **Risque scroll bloqué** : `useEffect` du drawer restaurait
+   `document.body.style.overflow = prevOverflow`. Si la NavBar était démontée
+   pendant que `menuOpen=true` (ex : click sur un lien qui change de view
+   avant la fin de la transition), le cleanup tournait mais restaurait
+   éventuellement une valeur 'hidden' si `prevOverflow` avait été capturé
+   avant l'ouverture.
+
+### Fix — `booking/MyAppointments.jsx`
+La `<nav sticky>` interne est remplacée par un **sub-header non-sticky**
+(même contenu : bouton retour + avatar + nom/email client, même style visuel)
+qui s'intègre au flux normal du document. La NavBar principale (du composant
+`NavBar`) reste l'unique header sticky de la page.
+
+### Fix — `BookingPage.jsx` vue booking
+Le handler `onMyAppts` fait désormais :
+```js
+navigate(`/book/${slug}/client/rdv`, {replace:false});
+setMyApptsInitTab('appts');
+setView('myAppts');
+```
+Cohérent avec les handlers des autres vues (ligne 618, 644, 721, 1549).
+Avantage : le bouton retour du navigateur fonctionne, l'URL reflète l'état.
+
+### Fix — `booking/NavBar.jsx` cleanup useEffect
+Le cleanup remet désormais `document.body.style.overflow = ''` (sans
+capturer de valeur précédente). Garantit que le scroll body est toujours
+libéré au démontage du composant, même si la NavBar est démontée pendant
+que `menuOpen=true`.
+
+### Header sticky préservé
+La NavBar principale conserve `position:sticky; top:0; zIndex:50` dans
+`booking/NavBar.jsx` (inchangé depuis la session 14). Le header reste donc
+parfaitement fixe pendant le scroll sur toutes les vues (booking, myAppts,
+parrain, success).
+
+### Build
+- `npx vite build` : OK (14.20s, 87 modules).
+- `page-booking` stable (~155.48 kB, -0.04 kB grâce au retrait de la nav
+  sticky dupliquée).
+
+### Compatibilité préservée
+- Sub-header MyAppointments : mêmes classes, mêmes icônes, mêmes props.
+  Le bouton retour continue d'appeler `onBack` comme avant.
+- Pas de changement d'API côté composant `NavBar`.
+- Le lien `/book/:slug/client/rdv` est déjà géré par le useEffect d'URL
+  (ligne 89 de BookingPage) → aucune route à ajouter dans `index.jsx`.
+- Les vues 'parrain' et 'success' qui avaient déjà le bon navigate() restent
+  inchangées.
+
+---
+
+## Session 2026-04-19 (suite 14) : NavBar mobile — menu hamburger drawer glissant
 
 ### Demande (onboarding.md)
 La NavBar publique n'était pas responsive : l'utilisateur devait dézoomer pour

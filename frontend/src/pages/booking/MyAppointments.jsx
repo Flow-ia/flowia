@@ -212,12 +212,13 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} *{box-sizing:border-box}`}</style>
 
-      {/* ── Navbar ── */}
-      <nav style={{ position:'sticky', top:0, zIndex:50, background:th.navBg,
-        borderBottom:`1px solid ${th.navBorder}`, boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
-        <div style={{ maxWidth:720, margin:'0 auto', padding:'0 24px', height:60,
+      {/* ── Sub-header (non-sticky) : bouton retour + identité client ──
+          La NavBar principale (avec logo + hamburger) est rendue par
+          BookingPage et reste le seul header sticky de la page. */}
+      <div style={{ background:th.navBg, borderBottom:`1px solid ${th.navBorder}` }}>
+        <div style={{ maxWidth:720, margin:'0 auto', padding:'12px 24px',
           display:'flex', alignItems:'center', gap:16 }}>
-          <button onClick={onBack}
+          <button onClick={onBack} aria-label="Retour"
             style={{ width:34, height:34, borderRadius:8, border:`1px solid ${th.border}`,
               background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
               cursor:'pointer', flexShrink:0 }}>
@@ -241,7 +242,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
             </div>
           </div>
         </div>
-      </nav>
+      </div>
 
       {/* ── Tabs ── */}
       <div style={{ background:th.navBg, borderBottom:`1px solid ${th.border}` }}>
