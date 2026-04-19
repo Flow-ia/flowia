@@ -810,8 +810,9 @@ export default function BookingPage({ slug }) {
                     style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
                       background:'#8b5cf615', border:'1px solid #8b5cf640',
                       color:'#6d28d9', fontWeight:700, fontSize:12,
-                      display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center' }}>
-                    🤝 Parrainer un ami
+                      display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center',
+                      whiteSpace:'nowrap' }}>
+                    🤝 Programme parrainage
                   </button>
                 )}
               </div>

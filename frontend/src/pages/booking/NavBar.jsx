@@ -45,14 +45,15 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
             ['section-equipe','Équipe'],
             ...(business?.google_business_url ? [['section-avis','Commentaires']] : []),
             ...(refProgram && refProgram !== 'none' && refProgram.is_enabled === true
-                ? [['__parrain__','Parrainer un ami']] : []),
+                ? [['__parrain__','Programme parrainage']] : []),
             ...((business?.cover_urls?.length > 0) ? [['section-photos','Photos']] : []),
             ['section-adresse','Adresse'],
           ].map(([id, label]) => (
             <button key={id}
               onClick={() => scrollTo(id)}
               style={{ padding:'8px 14px', borderRadius:8, fontSize:13, fontWeight:600,
-                color:th.muted, background:'none', border:'none', cursor:'pointer' }}
+                color:th.muted, background:'none', border:'none', cursor:'pointer',
+                whiteSpace:'nowrap' }}
               onMouseEnter={e=>e.currentTarget.style.color=th.text}
               onMouseLeave={e=>e.currentTarget.style.color=th.muted}>
               {label}
