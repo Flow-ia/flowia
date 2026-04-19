@@ -3,7 +3,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const { pool } = require('../db');
 const { notifyNewAppointment } = require('../utils/push');
-const { sendAppointmentConfirmation } = require('../utils/email');
+const { sendAppointmentConfirmation, sendReferralWelcome } = require('../utils/email');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const { resolveReferralForFilleul } = require('./referrals');
 const router  = express.Router();
@@ -1042,6 +1042,38 @@ router.post('/:slug/client/register', async (req, res) => {
       { clientId: client.id, merchantId: userId, globalClientId: gcId, scope: 'client' },
       process.env.JWT_SECRET, { expiresIn: '30d' }
     );
+
+    // Email de bienvenue filleul si inscription via lien de parrainage
+    // Non-bloquant : on répond immédiatement, l'envoi se fait en background.
+    const incomingRef = String(req.body?.referral_code || '').trim().toUpperCase();
+    if (incomingRef) {
+      setImmediate(async () => {
+        try {
+          const { rows: prog } = await pool.query(
+            `SELECT is_enabled, filleul_type, filleul_value
+               FROM referral_programs WHERE user_id=$1`, [userId]
+          );
+          if (!prog.length || !prog[0].is_enabled) return;
+          const { rows: rc } = await pool.query(
+            `SELECT 1 FROM referral_codes WHERE user_id=$1 AND code=$2 LIMIT 1`,
+            [userId, incomingRef]
+          );
+          if (!rc.length) return;
+          const { rows: biz } = await pool.query(
+            'SELECT business_name FROM users WHERE id=$1', [userId]
+          );
+          await sendReferralWelcome({
+            to:           emailLow,
+            filleulName:  first_name,
+            businessName: biz[0]?.business_name || 'votre commerçant',
+            code:         incomingRef,
+            type:         prog[0].filleul_type,
+            value:        prog[0].filleul_value,
+          });
+        } catch (e) { console.warn('[referral welcome mail]', e.message); }
+      });
+    }
+
     res.json({ ok: true, token, client: { ...client, has_global_account: true } });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
@@ -1302,6 +1334,14 @@ router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
          status, cancel_reason, updated_at`,
       [req.body.reason || 'Annulé par le client', req.params.id, biz.user_id, clientEmail]
     );
+    // Cascade parrainage : referral_use pending → cancelled
+    if (rows.length) {
+      await pool.query(
+        `UPDATE referral_uses SET status='cancelled'
+          WHERE user_id=$1 AND appointment_id=$2 AND status='pending'`,
+        [biz.user_id, req.params.id]
+      ).catch(() => {});
+    }
     if (!rows.length) return res.status(404).json({ error: 'RDV introuvable ou déjà annulé.' });
     res.json(rows[0]);
   } catch (e) { console.error('[CANCEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -1566,6 +1606,12 @@ router.delete('/:slug/client/account', async (req, res) => {
          AND date >= CURRENT_DATE`,
       [emailLow]
     );
+    // Cascade parrainage : annuler les referral_uses pending du filleul
+    await client.query(
+      `UPDATE referral_uses SET status='cancelled'
+        WHERE LOWER(filleul_email)=$1 AND status='pending'`,
+      [emailLow]
+    ).catch(() => {});
 
     // 2. Anonymiser TOUS les appointments du client (passés + futurs annulés)
     const { rowCount: anonymized } = await client.query(

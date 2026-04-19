@@ -1063,6 +1063,14 @@ router.delete('/me', clientOrGlobalClientAuth, async (req, res) => {
          WHERE client_id IS NULL AND client_name='Client anonyme'
            AND status IN ('confirmed','pending') AND date >= CURRENT_DATE`
       );
+      // Cascade parrainage : marquer referral_uses pending de ce filleul
+      // comme annulés (RGPD — le compte disparaît donc aucune validation
+      // future n'aura lieu).
+      await pool.query(
+        `UPDATE referral_uses SET status='cancelled'
+          WHERE LOWER(filleul_email)=LOWER($1) AND status='pending'`,
+        [email]
+      ).catch(() => {});
     }
 
     // 2. Anonymiser les transactions (garder le montant pour la comptabilité)

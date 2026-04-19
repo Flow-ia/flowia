@@ -59,7 +59,7 @@ router.use(authMiddleware);
 
 const { sendAppointmentConfirmation, sendAppointmentCancellation, sendLoyaltyReward } = require('../utils/email');
 const { incrementStamps } = require('../utils/loyalty-utils');
-const { validateReferralUse } = require('./referrals');
+const { validateReferralUse, cancelReferralUseByAppt } = require('./referrals');
 
 // ══════════════════════════════════════════════════════════
 // PARAMÈTRES RÉSERVATION
@@ -823,6 +823,8 @@ router.put('/employee-agenda/appointments/:id', async (req, res) => {
         [cancel_reason||"Annulé par l'employé", req.params.id]
       );
       const upd = rows[0];
+      // Cascade parrainage : referral_use pending → cancelled
+      cancelReferralUseByAppt(req.user.userId, req.params.id);
       if (appt.client_email) {
         try {
           const [sR, uR] = await Promise.all([

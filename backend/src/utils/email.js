@@ -841,6 +841,43 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// sendReferralWelcome — email au filleul juste après son inscription via un
+// lien de parrainage. Rappelle le code, le montant de la remise, et précise
+// que la promo s'applique au premier RDV ou encaissement selon les conditions
+// du commerçant.
+// ─────────────────────────────────────────────────────────────────────────────
+async function sendReferralWelcome({ to, filleulName, businessName, code, type, value }) {
+  const valStr = type === 'percent' ? `${value}%` : `${Number(value).toFixed(2)} €`;
+  const subject = `Bienvenue chez ${businessName || 'votre commerçant'} — parrainage appliqué`;
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06)">
+  <div style="padding:28px 28px 10px;text-align:center">
+    <p style="font-size:42px;margin:0">🎁</p>
+    <h1 style="font-size:20px;font-weight:800;color:#111;margin:14px 0 8px">Bienvenue${filleulName ? ' ' + filleulName : ''} !</h1>
+    <p style="font-size:14px;color:#555;line-height:1.5;margin:0">
+      Vous avez créé votre compte via un lien de parrainage chez <strong>${businessName || 'votre commerçant'}</strong>.
+    </p>
+  </div>
+  <div style="padding:20px 28px">
+    <div style="background:#f5f3ff;border:2px dashed #8b5cf6;border-radius:14px;padding:18px;text-align:center">
+      <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:#7c3aed;margin:0 0 6px;letter-spacing:0.05em">Parrainage actif</p>
+      <p style="font-family:monospace;font-size:22px;font-weight:900;color:#6d28d9;margin:0;letter-spacing:2px">${code}</p>
+      <p style="font-size:14px;color:#111;margin:10px 0 0"><strong>Remise de ${valStr}</strong> sur votre première visite</p>
+    </div>
+    <p style="font-size:13px;color:#555;line-height:1.6;margin:16px 0 0">
+      La remise s'applique automatiquement lors de votre premier rendez-vous ou encaissement,
+      selon les conditions du commerçant (nouveaux clients uniquement, quota parrain, non cumulable avec d'autres promotions).
+    </p>
+  </div>
+  <div style="padding:16px 28px;background:#fafafa;border-top:1px solid #eee;text-align:center">
+    <p style="font-size:11px;color:#888;margin:0">FlowIA — email automatique, ne pas répondre</p>
+  </div>
+</div></body></html>`;
+  return sendEmail({ to, subject, html });
+}
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -854,5 +891,6 @@ module.exports = {
   sendPasswordReset,
   sendPromoEmail,
   sendReferralReward,
+  sendReferralWelcome,
   sendBirthdayPromo,
 };

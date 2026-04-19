@@ -182,23 +182,28 @@ function TabReferral({ theme, showToast }) {
     limit_count: null, limit_period: 'unlimited',
   });
   const [codes, setCodes]   = useState([]);
+  const [stats, setStats]   = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
 
   useEffect(() => {
-    Promise.all([referralsApi.getProgram(), referralsApi.listCodes().catch(()=>[])])
-      .then(([prog, cs]) => {
-        setCfg({
-          is_enabled: !!prog.is_enabled,
-          parrain_type: prog.parrain_type || 'percent',
-          parrain_value: Number(prog.parrain_value || 0),
-          filleul_type: prog.filleul_type || 'percent',
-          filleul_value: Number(prog.filleul_value || 0),
-          limit_period: prog.limit_period || 'unlimited',
-          limit_count:  prog.limit_count != null ? Number(prog.limit_count) : null,
-        });
-        setCodes(Array.isArray(cs) ? cs : []);
-      }).catch(()=>{}).finally(()=>setLoading(false));
+    Promise.all([
+      referralsApi.getProgram(),
+      referralsApi.listCodes().catch(()=>[]),
+      referralsApi.getStats().catch(()=>null),
+    ]).then(([prog, cs, st]) => {
+      setCfg({
+        is_enabled: !!prog.is_enabled,
+        parrain_type: prog.parrain_type || 'percent',
+        parrain_value: Number(prog.parrain_value || 0),
+        filleul_type: prog.filleul_type || 'percent',
+        filleul_value: Number(prog.filleul_value || 0),
+        limit_period: prog.limit_period || 'unlimited',
+        limit_count:  prog.limit_count != null ? Number(prog.limit_count) : null,
+      });
+      setCodes(Array.isArray(cs) ? cs : []);
+      setStats(st);
+    }).catch(()=>{}).finally(()=>setLoading(false));
   }, []);
 
   const save = async () => {
@@ -232,6 +237,72 @@ function TabReferral({ theme, showToast }) {
 
   return (
     <div className="space-y-4">
+      {/* Stats agrégées — visible si au moins 1 parrainage initié */}
+      {stats && (stats.uses_pending + stats.uses_validated + stats.uses_cancelled) > 0 && (
+        <div className="rounded-2xl p-4" style={{ background:theme.card, border:`1px solid ${theme.border}` }}>
+          <p className="text-xs font-bold uppercase mb-3" style={{ color:theme.muted, letterSpacing:'0.08em' }}>
+            📊 Stats parrainage
+          </p>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:10, marginBottom:14 }}>
+            {[
+              ['Codes actifs',  stats.total_codes, '#8b5cf6'],
+              ['En attente',    stats.uses_pending, '#f59e0b'],
+              ['Validés',       stats.uses_validated, '#10b981'],
+              ['Refusés',       stats.uses_cancelled, '#ef4444'],
+            ].map(([lbl, val, col]) => (
+              <div key={lbl} style={{ padding:'10px 12px', borderRadius:12,
+                background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+                border:`1px solid ${theme.border}` }}>
+                <p style={{ fontSize:10, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.05em', margin:0 }}>{lbl}</p>
+                <p style={{ fontSize:20, fontWeight:900, color: col, margin:'4px 0 0', fontFamily:'var(--mono)' }}>{val}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding:'10px 12px', borderRadius:12,
+            background:'rgba(99,102,241,0.08)', border:'1px solid rgba(99,102,241,0.2)', marginBottom:14 }}>
+            <p style={{ fontSize:11, color:theme.muted, margin:0 }}>
+              Total des remises filleul accordées :{' '}
+              <strong style={{ color:'#4f46e5', fontFamily:'var(--mono)' }}>
+                {stats.filleul_discount_total.toFixed(2)} €
+              </strong>
+            </p>
+          </div>
+          {stats.top_parrains && stats.top_parrains.length > 0 && (
+            <>
+              <p style={{ fontSize:10, fontWeight:700, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.05em', margin:'0 0 8px' }}>
+                Top parrains
+              </p>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {stats.top_parrains.map((p, i) => {
+                  const name = [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email;
+                  return (
+                    <div key={p.email} style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                      padding:'8px 12px', borderRadius:10,
+                      background: isDark ? 'rgba(255,255,255,0.03)' : '#fafafa',
+                      border:`1px solid ${theme.border}` }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+                        <span style={{ fontSize:12, fontWeight:900, color:theme.muted, width:18 }}>#{i+1}</span>
+                        <span style={{ fontSize:13, fontWeight:700, color:theme.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {name}
+                        </span>
+                      </div>
+                      <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                        <span style={{ fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:99,
+                          background:'rgba(16,185,129,0.12)', color:'#10b981' }}>{p.validated} ✓</span>
+                        {p.pending > 0 && (
+                          <span style={{ fontSize:10, fontWeight:800, padding:'2px 8px', borderRadius:99,
+                            background:'rgba(245,158,11,0.12)', color:'#f59e0b' }}>{p.pending} ⏳</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="rounded-2xl p-4" style={{ background:theme.card, border:`1px solid ${theme.border}` }}>
         <div className="flex items-center justify-between mb-3">
           <div>

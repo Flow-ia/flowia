@@ -1,6 +1,6 @@
 // src/pages/EmployeeAgenda.jsx — Redesign Stripe/Linear — toutes fonctionnalités préservées
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { bookingApi, clientNotesApi, clientsApi } from '../utils/api';
+import { bookingApi, clientNotesApi, clientsApi, referralsApi } from '../utils/api';
 import { playSound } from '../hooks/useNotifications';
 import { useTheme } from '../hooks/useTheme';
 import { Modal, Toast, useToast } from '../components/UI';
@@ -331,6 +331,14 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
             const st = appt.referral_status || 'pending';
             const stLabel = st==='validated' ? 'Validé' : st==='cancelled' ? 'Refusé' : 'À valider en caisse';
             const stColor = st==='validated' ? '#10b981' : st==='cancelled' ? '#ef4444' : '#f59e0b';
+            const refuseParrainage = async () => {
+              if (!window.confirm('Refuser ce parrainage ? Le parrain ne sera pas récompensé.')) return;
+              try {
+                await referralsApi.cancelUse(appt.referral_use_id);
+                const next = { ...appt, referral_status: 'cancelled' };
+                setAppt(next); onUpdated(next);
+              } catch(e) { alert(e.message || 'Erreur'); }
+            };
             return (
               <div style={{ padding:'12px 16px', borderRadius:12, background:'rgba(139,92,246,0.06)', border:'1px solid rgba(139,92,246,0.25)' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
@@ -340,6 +348,14 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
                 </div>
                 <p style={{ margin:0, fontSize:13, fontWeight:600, color:t.text }}>Parrainé par {parrainName}</p>
                 <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>Code <span style={{ fontFamily:'monospace', color:'#7c3aed' }}>{appt.referral_code}</span></p>
+                {st === 'pending' && (
+                  <button onClick={refuseParrainage}
+                    style={{ marginTop:8, padding:'6px 12px', borderRadius:8, fontSize:11, fontWeight:700,
+                      background:'rgba(239,68,68,0.08)', color:'#ef4444',
+                      border:'1px solid rgba(239,68,68,0.25)', cursor:'pointer' }}>
+                    Refuser le parrainage
+                  </button>
+                )}
               </div>
             );
           })()}

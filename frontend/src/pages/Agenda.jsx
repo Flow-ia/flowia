@@ -1,7 +1,7 @@
 // src/pages/Agenda.jsx — Agenda unifié complet
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { bookingApi, clientNotesApi, clientsApi } from '../utils/api';
+import { bookingApi, clientNotesApi, clientsApi, referralsApi } from '../utils/api';
 import { useTheme } from '../hooks/useTheme';
 import { Modal, Toast, useToast } from '../components/UI';
 import { useEmployeePinGate } from '../components/EmployeePinModal';
@@ -289,6 +289,14 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
             const stLabel = st==='validated' ? 'Validé' : st==='cancelled' ? 'Refusé' : 'À valider en caisse';
             const stColor = st==='validated' ? '#10b981' : st==='cancelled' ? '#ef4444' : '#f59e0b';
             const discount = parseFloat(appt.discount_amount||0);
+            const refuseParrainage = async () => {
+              if (!window.confirm('Refuser ce parrainage ? Le parrain ne sera pas récompensé. La réduction déjà appliquée au RDV reste acquise au filleul.')) return;
+              try {
+                await referralsApi.cancelUse(appt.referral_use_id);
+                const next = { ...appt, referral_status: 'cancelled' };
+                setAppt(next); onUpdated(next);
+              } catch(e) { alert(e.message || 'Erreur'); }
+            };
             return (
               <div className="rounded-xl p-3" style={{ background:isDark?'rgba(139,92,246,0.08)':'rgba(139,92,246,0.05)', border:'1px solid rgba(139,92,246,0.25)' }}>
                 <div className="flex items-center gap-2 mb-1">
@@ -301,6 +309,14 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
                   Code <span style={{ fontFamily:'monospace', color:'#7c3aed' }}>{appt.referral_code}</span>
                   {discount>0 && <> · Réduction parrainage <span style={{ fontWeight:700, color:'#10b981' }}>-{discount.toFixed(2)} €</span></>}
                 </p>
+                {st === 'pending' && (
+                  <button onClick={refuseParrainage}
+                    className="mt-2 text-[11px] font-bold px-3 py-1.5 rounded-lg"
+                    style={{ background:'rgba(239,68,68,0.08)', color:'#ef4444',
+                      border:'1px solid rgba(239,68,68,0.25)', cursor:'pointer' }}>
+                    Refuser le parrainage
+                  </button>
+                )}
               </div>
             );
           })()}

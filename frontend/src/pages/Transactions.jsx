@@ -112,6 +112,18 @@ function TxRow({ tx, cat, emp, isLast, theme, onEdit, onDelete }) {
               📅 RDV
             </span>
           )}
+          {tx.referral_use_id && (() => {
+            const parrain = [tx.referral_parrain_first_name, tx.referral_parrain_last_name].filter(Boolean).join(' ') || tx.referral_parrain_email || 'parrain';
+            const st = tx.referral_status || 'pending';
+            const bg = st === 'validated' ? 'rgba(16,185,129,0.14)' : st === 'cancelled' ? 'rgba(239,68,68,0.14)' : 'rgba(139,92,246,0.14)';
+            const fg = st === 'validated' ? '#10b981' : st === 'cancelled' ? '#ef4444' : '#7c3aed';
+            return (
+              <span title={`Parrainage par ${parrain}`}
+                style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 7px', borderRadius:99, background:bg, color:fg, fontSize:11, fontWeight:800, flexShrink:0 }}>
+                🤝 Parrainage · {parrain}
+              </span>
+            );
+          })()}
         </div>
       </div>
 

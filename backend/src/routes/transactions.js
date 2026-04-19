@@ -66,12 +66,16 @@ router.get('/', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT t.id, t.user_id, t.type, t.amount, t.description,
         t.category_id, t.employee_id, t.payment_method, t.qty_total,
-        t.locked,
+        t.locked, t.discount_amount, t.original_amount, t.promo_code_id,
         TO_CHAR(t.date, 'YYYY-MM-DD') as date,
         TO_CHAR(t.time, 'HH24:MI') as time,
         t.datetime_iso, t.appointment_id, t.source, t.created_at,
         c.name as category_name, c.icon as category_icon, c.color as category_color,
         e.name as employee_name, e.avatar_color as employee_avatar_color,
+        ru.id as referral_use_id, ru.status as referral_status,
+        rc.code as referral_code, rc.owner_client_email as referral_parrain_email,
+        pca.first_name as referral_parrain_first_name,
+        pca.last_name  as referral_parrain_last_name,
         COALESCE((
           SELECT json_agg(json_build_object(
             'service_id', ti.service_id,
@@ -90,7 +94,14 @@ router.get('/', async (req, res) => {
         ), '[]'::json) AS payments
        FROM transactions t
        LEFT JOIN categories c ON t.category_id = c.id
-       LEFT JOIN employees e ON t.employee_id = e.id
+       LEFT JOIN employees e  ON t.employee_id = e.id
+       LEFT JOIN referral_uses ru
+              ON (ru.transaction_id = t.id OR ru.appointment_id = t.appointment_id)
+             AND ru.user_id = t.user_id
+       LEFT JOIN referral_codes rc ON rc.id = ru.referral_code_id
+       LEFT JOIN client_accounts pca
+              ON pca.user_id = t.user_id
+             AND LOWER(pca.email) = LOWER(rc.owner_client_email)
        WHERE ${filters.join(' AND ')}
        ORDER BY t.date DESC, t.time DESC NULLS LAST, t.created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,

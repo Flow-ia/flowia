@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { pubApi, globalClientApi } from '../../utils/api';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
-export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login' }) {
+export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '' }) {
   const [mode, setMode]         = useState(initialMode);
   const [email, setEmail]       = useState(initialEmail);
   const [pwd, setPwd]           = useState('');
@@ -88,7 +88,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       } else {
         if (!first.trim() || !last.trim()) { setErr('Prenom et nom requis.'); setLoading(false); return; }
         if (pwd.length < 6) { setErr('Mot de passe minimum 6 caracteres.'); setLoading(false); return; }
-        r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim() });
+        r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), referral_code: referralCode || undefined });
       }
       localStorage.setItem('ff_client_token', r.token);
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));

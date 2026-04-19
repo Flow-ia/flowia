@@ -275,6 +275,80 @@ async function validateReferralUse(useId, userId) {
   } finally { client.release(); }
 }
 
+// ── GET /api/referrals/stats — stats agrégées parrainage (commerçant) ────
+// Retourne : codes générés, uses par statut, remise filleul totale, récompenses
+// parrain totales, top 5 parrains actifs.
+merchantRouter.get('/stats', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const [codesR, usesR, discountR, topR] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*)::int AS total_codes,
+                COALESCE(SUM(uses_count),0)::int AS total_uses_all
+           FROM referral_codes WHERE user_id=$1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT status, COUNT(*)::int AS n
+           FROM referral_uses WHERE user_id=$1
+          GROUP BY status`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT
+           COALESCE(SUM(
+             CASE WHEN ru.appointment_id IS NOT NULL
+                  THEN a.discount_amount ELSE 0 END
+           ),0)::numeric
+           + COALESCE(SUM(
+             CASE WHEN ru.transaction_id IS NOT NULL
+                  THEN t.discount_amount ELSE 0 END
+           ),0)::numeric AS filleul_discount_total
+         FROM referral_uses ru
+         LEFT JOIN appointments a ON a.id = ru.appointment_id
+         LEFT JOIN transactions t ON t.id = ru.transaction_id
+         WHERE ru.user_id=$1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT rc.owner_client_email, pca.first_name, pca.last_name,
+                COUNT(ru.id) FILTER (WHERE ru.status='validated')::int AS validated,
+                COUNT(ru.id) FILTER (WHERE ru.status='pending')::int   AS pending
+           FROM referral_codes rc
+           LEFT JOIN referral_uses ru ON ru.referral_code_id = rc.id
+           LEFT JOIN client_accounts pca
+                  ON pca.user_id = rc.user_id
+                 AND LOWER(pca.email) = LOWER(rc.owner_client_email)
+          WHERE rc.user_id=$1
+          GROUP BY rc.owner_client_email, pca.first_name, pca.last_name
+          HAVING COUNT(ru.id) > 0
+          ORDER BY validated DESC, pending DESC
+          LIMIT 5`,
+        [userId]
+      ),
+    ]);
+    const byStatus = { pending: 0, validated: 0, cancelled: 0 };
+    for (const r of usesR.rows) byStatus[r.status] = r.n;
+    res.json({
+      total_codes:            codesR.rows[0]?.total_codes || 0,
+      uses_pending:           byStatus.pending,
+      uses_validated:         byStatus.validated,
+      uses_cancelled:         byStatus.cancelled,
+      filleul_discount_total: parseFloat(discountR.rows[0]?.filleul_discount_total || 0),
+      top_parrains: topR.rows.map(r => ({
+        email:      r.owner_client_email,
+        first_name: r.first_name,
+        last_name:  r.last_name,
+        validated:  r.validated,
+        pending:    r.pending,
+      })),
+    });
+  } catch (e) {
+    console.error('[REF STATS]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── POST /api/referrals/check — pré-validation côté caisse commerçant ────
 // Utilisé par la caisse pour afficher la remise parrainage AVANT de valider
 // la transaction. Body: { code, filleul_email, amount }.
@@ -433,7 +507,24 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
   return out;
 }
 
+// ── Helper interne : cascade d'annulation d'un RDV vers son referral_use
+// Appelé par toutes les routes qui passent un appointment en status='cancelled'
+// (merchant, employé, client, public). Ne touche que les pending — les parrainages
+// déjà validés (promo parrain émise) ne doivent pas être annulés retroactivement.
+async function cancelReferralUseByAppt(userId, appointmentId) {
+  try {
+    await pool.query(
+      `UPDATE referral_uses SET status='cancelled'
+        WHERE user_id=$1 AND appointment_id=$2 AND status='pending'`,
+      [userId, appointmentId]
+    );
+  } catch (e) {
+    console.warn('[REF cascade cancel]', e.message);
+  }
+}
+
 module.exports = merchantRouter;
 module.exports.genReferralCode           = genReferralCode;
 module.exports.validateReferralUse       = validateReferralUse;
 module.exports.resolveReferralForFilleul = resolveReferralForFilleul;
+module.exports.cancelReferralUseByAppt   = cancelReferralUseByAppt;

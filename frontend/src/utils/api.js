@@ -427,6 +427,7 @@ export const referralsApi = {
   updateProgram: (b) => request('/referrals/program', { method:'PUT', body: JSON.stringify(b) }),
   listCodes:     ()  => request('/referrals/codes'),
   checkCode:     (b) => request('/referrals/check', { method:'POST', body: JSON.stringify(b) }),
+  getStats:      ()  => request('/referrals/stats'),
   // Caisse (commerçant) : récupère pending + rewards pour un client
   getClientRewards: (email) =>
     request('/referrals/rewards?email=' + encodeURIComponent(email)),

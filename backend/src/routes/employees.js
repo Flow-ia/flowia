@@ -168,6 +168,12 @@ router.post('/:id/smart-delete', async (req, res) => {
            WHERE id=$1 AND user_id=$2`,
           [appt.id, userId]
         );
+        // Cascade parrainage : referral_use pending → cancelled
+        await client.query(
+          `UPDATE referral_uses SET status='cancelled'
+            WHERE user_id=$1 AND appointment_id=$2 AND status='pending'`,
+          [userId, appt.id]
+        ).catch(() => {});
         // Tentative d'envoi email si client a un email
         if (appt.client_email) {
           try {

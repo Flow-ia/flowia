@@ -978,6 +978,7 @@ export default function BookingPage({ slug }) {
               <AuthPanel slug={slug} th={th} requireAccount={requireAccount}
                 initialEmail={authInitEmail}
                 initialMode={authInitMode}
+                referralCode={referralCode}
                 onAuth={(u, meta) => {
                   // Si filleul avec code de parrainage → flag pour afficher
                   // la confirmation "promotion appliquée" sur la page d'accueil
@@ -1804,6 +1805,7 @@ export default function BookingPage({ slug }) {
                             requireAccount={requireAccount}
                             initialMode={inlineAuthMode === 'none' ? 'login' : inlineAuthMode}
                             initialEmail={clientEmail||''}
+                            referralCode={referralCode}
                             onAuth={handleAuth}
                             onClose={requireAccount ? null : ()=>setInlineAuthMode('none')}
                           />
