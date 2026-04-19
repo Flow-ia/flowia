@@ -144,27 +144,6 @@ export default function BookingPage({ slug }) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Flow parrainage — fetch info programme + éligibilité filleul ─────────
-  // 2 passes :
-  //   1) sans email → valide le code + récupère type/valeur (pour le bandeau
-  //      "inscrivez-vous pour bénéficier").
-  //   2) avec email filleul connu (clientUser.email) → check complet :
-  //      éligibilité (nouveau client, quota, pas self-referral) — permet de
-  //      PRÉVENIR l'utilisateur AVANT qu'il ne valide sa réservation si les
-  //      conditions ne sont pas remplies. Évite le faux espoir.
-  useEffect(() => {
-    if (!referralCode) { setReferralInfo(null); return; }
-    let cancelled = false;
-    const email = clientUser?.email || '';
-    pubApi.checkReferral(slug, referralCode, email)
-      .then(res => {
-        if (cancelled) return;
-        setReferralInfo(res?.valid ? res : null);
-      })
-      .catch(() => { if (!cancelled) setReferralInfo(null); });
-    return () => { cancelled = true; };
-  }, [referralCode, slug, clientUser?.email]);
-
   // Construire l'URL pour chaque étape
   const stepToPath = (s, svcId, empId, dateStr, slot) => {
     const base = `/book/${slug}`;
@@ -298,6 +277,28 @@ export default function BookingPage({ slug }) {
 
   // Auth client
   const [clientUser, setClientUser]   = useState(null);
+
+  // ── Flow parrainage — fetch info programme + éligibilité filleul ─────────
+  // 2 passes :
+  //   1) sans email → valide le code + récupère type/valeur (pour le bandeau
+  //      "inscrivez-vous pour bénéficier").
+  //   2) avec email filleul connu (clientUser.email) → check complet :
+  //      éligibilité (nouveau client, quota, pas self-referral) — permet de
+  //      PRÉVENIR l'utilisateur AVANT qu'il ne valide sa réservation si les
+  //      conditions ne sont pas remplies. Évite le faux espoir.
+  // ⚠ Déclaré APRÈS clientUser : références dans la deps-array sinon TDZ.
+  useEffect(() => {
+    if (!referralCode) { setReferralInfo(null); return; }
+    let cancelled = false;
+    const email = clientUser?.email || '';
+    pubApi.checkReferral(slug, referralCode, email)
+      .then(res => {
+        if (cancelled) return;
+        setReferralInfo(res?.valid ? res : null);
+      })
+      .catch(() => { if (!cancelled) setReferralInfo(null); });
+    return () => { cancelled = true; };
+  }, [referralCode, slug, clientUser?.email]);
   // Popup post-inscription : mois/année de naissance + tél. (optionnels).
   // Déclenché par handleAuth(client, { justRegistered: true }). Stocke aussi
   // un flag localStorage pour ne jamais re-afficher à ce même client.
