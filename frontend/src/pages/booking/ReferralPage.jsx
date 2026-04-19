@@ -60,10 +60,15 @@ export function ReferralPage({
   };
 
   // ── Stats calculées depuis l'historique + rewards ─────────────────────────
+  // Stat "Filleuls validés" = validated dont la récompense a été utilisée OU
+  // est encore disponible (= toute validation effective). On ne compte donc
+  // pas séparément les "Utilisée".
   const validatedCount = (refMyHistory || []).filter(h => h.status === "validated").length;
   const pendingCount   = (refMyHistory || []).filter(h => h.status === "pending").length;
+  // Filtre rewards parrain (compatibilité legacy : 'referral' OU 'referral_parrain')
   const availableRewards = (refMyRewards || []).filter(
-    r => r.reward_type === "referral" && r.status === "available"
+    r => (r.reward_type === "referral" || r.reward_type === "referral_parrain")
+      && r.status === "available"
   );
   const availableSum = availableRewards.reduce((acc, r) => {
     if (r.type === "percent") return acc; // ignorer les % dans la somme €
@@ -351,9 +356,24 @@ export function ReferralPage({
     return new Date(s).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  // Statut visuel d'un filleul
+  // 4 états visuels filleul (cf. maquette) :
+  //  • Validé      : status='validated' + reward_status='available'  → vert + amount
+  //  • Utilisée    : status='validated' + reward_status='used'       → gris + amount barré
+  //  • En attente  : status='pending'                                → orange
+  //  • Refusé      : status='cancelled'                              → rouge anonymisé
+  const filleulVisualState = (h) => {
+    if (h.status === "validated" && h.reward_status === "used") return "used";
+    if (h.status === "validated") return "validated";
+    if (h.status === "cancelled") return "cancelled";
+    return "pending";
+  };
+
+  // Surface "neutre" pour le badge "Utilisée"
+  const neutralBg = isDark ? "rgba(255,255,255,0.06)" : "#f5f5f4";
+
   const renderFilleulStatus = (h) => {
-    if (h.status === "validated") {
+    const v = filleulVisualState(h);
+    if (v === "validated") {
       return (
         <>
           <span style={{
@@ -366,7 +386,20 @@ export function ReferralPage({
         </>
       );
     }
-    if (h.status === "cancelled") {
+    if (v === "used") {
+      return (
+        <>
+          <span style={{
+            background: neutralBg, color: th.muted, fontSize: 11,
+            padding: "3px 8px", borderRadius: 8,
+          }}>Utilisée</span>
+          <span style={{ fontSize: 13, color: th.muted, textDecoration: "line-through" }}>
+            {parrainRewardStr}
+          </span>
+        </>
+      );
+    }
+    if (v === "cancelled") {
       return (
         <>
           <span style={{
@@ -390,8 +423,10 @@ export function ReferralPage({
   };
 
   const filleulAvatarColor = (h) => {
-    if (h.status === "validated") return { bg: COL.greenBg, color: COL.greenText };
-    if (h.status === "cancelled") return { bg: COL.redBg,   color: COL.redText };
+    const v = filleulVisualState(h);
+    if (v === "validated") return { bg: COL.greenBg, color: COL.greenText };
+    if (v === "used")      return { bg: COL.greenBg, color: COL.greenText };
+    if (v === "cancelled") return { bg: COL.redBg,   color: COL.redText };
     return { bg: COL.amberBg, color: COL.amberText };
   };
 
@@ -412,7 +447,7 @@ export function ReferralPage({
   const filleulSubtitle = (h) => {
     if (h.status === "cancelled") return "Client déjà connu du commerçant";
     if (h.status === "validated" && h.validated_at) return `Passage du ${fmtDate(h.validated_at)}`;
-    if (h.status === "pending"   && h.created_at)   return `Code utilisé le ${fmtDate(h.created_at)}`;
+    if (h.status === "pending"   && h.created_at)   return "RDV prévu le " + fmtDate(h.created_at);
     return fmtDate(h.created_at);
   };
 

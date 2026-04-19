@@ -224,12 +224,15 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
       [use.referral_code_id]
     );
 
-    // Ligne client_rewards pour le parrain (affichée en caisse la prochaine fois)
+    // Ligne client_rewards pour le parrain (affichée en caisse la prochaine fois).
+    // referral_use_id lie la récompense au filleul d'origine → permet à la page
+    // parrainage publique de marquer la fiche filleul "Utilisée" quand le
+    // parrain consomme sa récompense.
     await client.query(
       `INSERT INTO client_rewards
-         (user_id, client_email, reward_type, status, promo_code_id, expires_at)
-       VALUES ($1,$2,'referral_parrain','available',$3, (CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
-      [req.user.userId, use.parrain_email, promo[0].id, String(validityDays)]
+         (user_id, client_email, reward_type, status, promo_code_id, expires_at, referral_use_id)
+       VALUES ($1,$2,'referral_parrain','available',$3, (CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz, $5)`,
+      [req.user.userId, use.parrain_email, promo[0].id, String(validityDays), use.id]
     );
 
     await client.query('COMMIT');

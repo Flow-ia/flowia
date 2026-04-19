@@ -5,6 +5,51 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
+## 🆕 Session 2026-04-19 (suite 9) : Page parrainage connectée — statut "Utilisée" + maquette stricte
+
+### Demande (onboarding.md)
+Reproduire **exactement** la maquette client connecté de `/parrainage` avec
+les **4 statuts filleul** : Validé / Utilisée / En attente / Refusé.
+
+### Backend
+- `db/index.js` : nouvelle colonne `client_rewards.referral_use_id UUID` avec
+  FK douce vers `referral_uses(id) ON DELETE SET NULL` + index partiel
+  `idx_client_rewards_ref_use WHERE referral_use_id IS NOT NULL`. Migration
+  idempotente.
+- `routes/referrals.js validate` : INSERT client_rewards passe maintenant
+  `use.id` dans `referral_use_id` → lien direct entre le filleul validé
+  et la récompense parrain émise.
+- `routes/global-clients.js` GET `/me/referral-history/:slug` : LEFT JOIN
+  sur `client_rewards` via `referral_use_id`. Chaque ligne `history`
+  expose désormais `reward_status` ('available'|'used'|null) et
+  `reward_used_at`.
+
+### Frontend — `pages/booking/ReferralPage.jsx`
+- **Helper `filleulVisualState(h)`** : retourne `validated|used|pending|cancelled`.
+  - `validated + reward_status='used'`  → "used"      → badge gris + montant barré
+  - `validated + reward_status='available'` → "validated" → badge vert + +montant
+  - `pending`   → "pending"  → badge orange + tiret
+  - `cancelled` → "cancelled" → badge rouge anonymisé
+- `renderFilleulStatus()` retravaillé : 4 branches, surface neutre `neutralBg`
+  pour le badge "Utilisée".
+- `filleulAvatarColor()` : la pastille reste verte pour "used" (contexte
+  positif : parrainage validé qui a porté ses fruits).
+- `filleulSubtitle()` : pending affiche "RDV prévu le …" (cohérent maquette).
+- Filtre rewards harmonisé : `reward_type IN ('referral', 'referral_parrain')`
+  pour compat legacy (la route validate insère 'referral_parrain').
+
+### Build
+- `node --check` × 3 backend : OK
+- `npx vite build` : OK (14.84s, 87 modules, page-booking +0.5 kB)
+
+### Préservation
+- Anciennes lignes `client_rewards` sans `referral_use_id` restent affichées
+  comme "Validé" (LEFT JOIN renvoie NULL → tombe dans le cas par défaut).
+- Aucune migration de données nécessaire ; les futures validations utilisent
+  la nouvelle colonne automatiquement.
+
+---
+
 ## 🆕 Session 2026-04-19 (suite 8) : Page Fidélité unifiée + limite anti-abus parrainage
 
 ### Demande (onboarding.md)

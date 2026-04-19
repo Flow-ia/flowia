@@ -361,16 +361,22 @@ router.get('/me/referral-history/:slug', globalClientAuth, async (req, res) => {
     if (!gc.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const ownerEmail = gc[0].email.toLowerCase();
 
-    // Historique des filleuls
+    // Historique des filleuls + statut de la récompense parrain associée
+    // (LEFT JOIN sur client_rewards via referral_use_id : permet d'afficher
+    // "Utilisée" / "Disponible" sur la fiche filleul côté page parrainage).
     const { rows: history } = await pool.query(
       `SELECT ru.id, ru.filleul_email, ru.status, ru.created_at, ru.validated_at,
               ca.first_name AS filleul_first_name,
-              ca.last_name  AS filleul_last_name
+              ca.last_name  AS filleul_last_name,
+              cr.status AS reward_status,
+              cr.used_at AS reward_used_at
          FROM referral_uses ru
          JOIN referral_codes rc ON rc.id = ru.referral_code_id
          LEFT JOIN client_accounts ca
            ON ca.user_id = ru.user_id
           AND LOWER(ca.email) = LOWER(ru.filleul_email)
+         LEFT JOIN client_rewards cr
+           ON cr.referral_use_id = ru.id
         WHERE ru.user_id=$1 AND LOWER(rc.owner_client_email)=$2
         ORDER BY ru.created_at DESC
         LIMIT 100`,

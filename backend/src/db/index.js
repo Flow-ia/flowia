@@ -887,6 +887,12 @@ async function initDB() {
   await runMigration(`ALTER TABLE referral_programs ADD COLUMN IF NOT EXISTS limit_count INT`);
   await runMigration(`ALTER TABLE referral_programs ADD COLUMN IF NOT EXISTS limit_period VARCHAR(16) DEFAULT 'unlimited'`);
 
+  // FK douce client_rewards → referral_uses : permet d'afficher le statut
+  // « Utilisée » sur la fiche filleul du parrain quand sa récompense a été
+  // consommée en caisse. NULLABLE car les rewards anniv n'ont pas de filleul.
+  await runMigration(`ALTER TABLE client_rewards ADD COLUMN IF NOT EXISTS referral_use_id UUID REFERENCES referral_uses(id) ON DELETE SET NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_rewards_ref_use ON client_rewards(referral_use_id) WHERE referral_use_id IS NOT NULL`);
+
   // ── Marketing IA : envoi prédictif avec codes personnels ──────────────────
   await runMigration(`
     CREATE TABLE IF NOT EXISTS ai_campaigns (
