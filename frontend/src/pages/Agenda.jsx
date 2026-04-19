@@ -167,7 +167,11 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
           const payload = { payment_method:payMethod, amount:finalAmt };
           if (employee) payload.employee_id = employee.id;
           const res = await bookingApi.checkoutAppt(appt.id, payload);
-          const merged = {...appt, status:'completed', paid:true, paid_method:payMethod};
+          // Si le back a auto-validé un parrainage lié au RDV, remonter le
+          // nouveau statut dans le state local pour que le badge agenda
+          // passe de "À valider" à "Validé" immédiatement.
+          const refPatch = res?.referral_validated ? { referral_status: 'validated' } : {};
+          const merged = {...appt, status:'completed', paid:true, paid_method:payMethod, ...refPatch};
           setAppt(merged); onUpdated(merged);
           if (res.transaction) onTxCreated(res.transaction);
           setTab('detail');

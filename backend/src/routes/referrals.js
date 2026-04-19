@@ -158,10 +158,13 @@ merchantRouter.get('/rewards', async (req, res) => {
   } catch (e) { console.error('[REF REWARDS GET]', e.message); res.status(500).json({ error: e.message }); }
 });
 
-// ── POST /api/referrals/uses/:id/validate — validation en caisse ───────────
-// L'employé confirme que le filleul est bien venu → on émet la promo parrain
-// + on envoie l'email au parrain + on enregistre une ligne client_rewards.
-merchantRouter.post('/uses/:id/validate', async (req, res) => {
+// ── Helper interne : valide un referral_use (émet promo parrain + reward)
+// Utilisé par la route manuelle /uses/:id/validate ET par le hook automatique
+// déclenché à l'encaissement d'un RDV filleul (booking.js checkout).
+// Opens its own transaction — ne PAS appeler dans un pool.query déjà en cours.
+// Renvoie { ok, code, promo_id } ou lance une Error typée (.code in
+// 'NOT_FOUND' | 'ALREADY_HANDLED' | 'NO_PROGRAM').
+async function validateReferralUse(useId, userId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -172,23 +175,26 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
          JOIN referral_codes rc ON rc.id = ru.referral_code_id
         WHERE ru.id=$1 AND ru.user_id=$2
         FOR UPDATE`,
-      [req.params.id, req.user.userId]
+      [useId, userId]
     );
-    if (!useRows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Parrainage introuvable.' }); }
+    if (!useRows.length) {
+      await client.query('ROLLBACK');
+      const err = new Error('Parrainage introuvable.'); err.code = 'NOT_FOUND'; throw err;
+    }
     const use = useRows[0];
     if (use.status !== 'pending') {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Parrainage déjà traité.' });
+      const err = new Error('Parrainage déjà traité.'); err.code = 'ALREADY_HANDLED'; throw err;
     }
 
     const { rows: progRows } = await client.query(
       `SELECT is_enabled, parrain_type, parrain_value
          FROM referral_programs WHERE user_id=$1`,
-      [req.user.userId]
+      [userId]
     );
     if (!progRows.length) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Programme parrainage absent.' });
+      const err = new Error('Programme parrainage absent.'); err.code = 'NO_PROGRAM'; throw err;
     }
     const prog = progRows[0];
     // Un programme désactivé n'empêche pas de valider un parrainage initié
@@ -207,54 +213,47 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
        VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + ($5 || ' days')::INTERVAL,
                TRUE,'specific',$6)
        RETURNING id, valid_until`,
-      [req.user.userId, code, prog.parrain_type, prog.parrain_value,
+      [userId, code, prog.parrain_type, prog.parrain_value,
        String(validityDays), use.parrain_email]
     );
 
-    // Marquer le parrainage validé
     await client.query(
       `UPDATE referral_uses
           SET status='validated', validated_at=NOW(), parrain_promo_id=$2
         WHERE id=$1`,
       [use.id, promo[0].id]
     );
-    // Incrémenter compteur d'utilisation du code de parrainage
     await client.query(
       `UPDATE referral_codes SET uses_count = uses_count + 1 WHERE id=$1`,
       [use.referral_code_id]
     );
-
-    // Ligne client_rewards pour le parrain (affichée en caisse la prochaine fois).
-    // referral_use_id lie la récompense au filleul d'origine → permet à la page
-    // parrainage publique de marquer la fiche filleul "Utilisée" quand le
-    // parrain consomme sa récompense.
     await client.query(
       `INSERT INTO client_rewards
          (user_id, client_email, reward_type, status, promo_code_id, expires_at, referral_use_id)
        VALUES ($1,$2,'referral_parrain','available',$3, (CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz, $5)`,
-      [req.user.userId, use.parrain_email, promo[0].id, String(validityDays), use.id]
+      [userId, use.parrain_email, promo[0].id, String(validityDays), use.id]
     );
 
     await client.query('COMMIT');
 
-    // Email parrain (non bloquant)
+    // Email parrain (non bloquant, hors transaction)
     try {
       const { rows: bizRows } = await pool.query(
         `SELECT business_name, email, phone, address FROM users WHERE id=$1`,
-        [req.user.userId]
+        [userId]
       );
       const { rows: parrainRows } = await pool.query(
         `SELECT first_name, last_name FROM client_accounts
           WHERE user_id=$1 AND LOWER(email)=LOWER($2)`,
-        [req.user.userId, use.parrain_email]
+        [userId, use.parrain_email]
       );
       const { rows: filleulRows } = await pool.query(
         `SELECT first_name, last_name FROM client_accounts
           WHERE user_id=$1 AND LOWER(email)=LOWER($2)`,
-        [req.user.userId, use.filleul_email]
+        [userId, use.filleul_email]
       );
-      const parrainName  = parrainRows[0] ? [parrainRows[0].first_name, parrainRows[0].last_name].filter(Boolean).join(' ') : null;
-      const filleulName  = filleulRows[0] ? [filleulRows[0].first_name, filleulRows[0].last_name].filter(Boolean).join(' ') : null;
+      const parrainName = parrainRows[0] ? [parrainRows[0].first_name, parrainRows[0].last_name].filter(Boolean).join(' ') : null;
+      const filleulName = filleulRows[0] ? [filleulRows[0].first_name, filleulRows[0].last_name].filter(Boolean).join(' ') : null;
       const biz = bizRows[0] || {};
       const { sendReferralReward } = require('../utils/email');
       await sendReferralReward({
@@ -269,12 +268,27 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
       console.warn('[referral validate mail]', mailErr.message);
     }
 
-    res.json({ ok: true, code, promo_id: promo[0].id });
+    return { ok: true, code, promo_id: promo[0].id };
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch(_) {}
+    throw e;
+  } finally { client.release(); }
+}
+
+// ── POST /api/referrals/uses/:id/validate — validation en caisse ───────────
+// L'employé confirme que le filleul est bien venu → on émet la promo parrain
+// + on envoie l'email au parrain + on enregistre une ligne client_rewards.
+merchantRouter.post('/uses/:id/validate', async (req, res) => {
+  try {
+    const out = await validateReferralUse(req.params.id, req.user.userId);
+    res.json(out);
+  } catch (e) {
+    if (e.code === 'NOT_FOUND')       return res.status(404).json({ error: e.message });
+    if (e.code === 'ALREADY_HANDLED') return res.status(409).json({ error: e.message });
+    if (e.code === 'NO_PROGRAM')      return res.status(409).json({ error: e.message });
     console.error('[REF VALIDATE]', e.message);
     res.status(500).json({ error: e.message });
-  } finally { client.release(); }
+  }
 });
 
 // ── POST /api/referrals/uses/:id/cancel — refuser un parrainage en attente ─
@@ -314,4 +328,5 @@ merchantRouter.post('/rewards/:id/use', async (req, res) => {
 });
 
 module.exports = merchantRouter;
-module.exports.genReferralCode = genReferralCode;
+module.exports.genReferralCode     = genReferralCode;
+module.exports.validateReferralUse = validateReferralUse;

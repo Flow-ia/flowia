@@ -229,7 +229,8 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
           const payload = { payment_method:payMethod, amount:finalAmt };
           if (employee) payload.employee_id = employee.id;
           const res = await bookingApi.checkoutAppt(appt.id, payload);
-          const merged = {...appt, status:'completed', paid:true, paid_method:payMethod};
+          const refPatch = res?.referral_validated ? { referral_status: 'validated' } : {};
+          const merged = {...appt, status:'completed', paid:true, paid_method:payMethod, ...refPatch};
           setAppt(merged); onUpdated(merged);
           if (res.transaction) onTxCreated(res.transaction);
           setTab('detail');

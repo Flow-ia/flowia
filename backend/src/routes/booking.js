@@ -59,6 +59,7 @@ router.use(authMiddleware);
 
 const { sendAppointmentConfirmation, sendAppointmentCancellation, sendLoyaltyReward } = require('../utils/email');
 const { incrementStamps } = require('../utils/loyalty-utils');
+const { validateReferralUse } = require('./referrals');
 
 // ══════════════════════════════════════════════════════════
 // PARAMÈTRES RÉSERVATION
@@ -999,6 +1000,24 @@ router.post('/appointments/:id/checkout', async (req, res) => {
       [payment_method || 'cash', tx.id, req.params.id]
     );
 
+    // ── Hook parrainage : valider automatiquement le referral_use lié au RDV
+    // si le filleul est encaissé. Émet la promo parrain + reward + email.
+    // Non bloquant : une erreur ici n'empêche pas l'encaissement.
+    let referralValidated = null;
+    try {
+      const { rows: ref } = await pool.query(
+        `SELECT id FROM referral_uses
+          WHERE appointment_id=$1 AND user_id=$2 AND status='pending'
+          LIMIT 1`,
+        [req.params.id, req.user.userId]
+      );
+      if (ref.length) {
+        referralValidated = await validateReferralUse(ref[0].id, req.user.userId);
+      }
+    } catch (refErr) {
+      console.warn('[CHECKOUT auto-validate referral]', refErr.message);
+    }
+
     //// ── Fidélité : incrémenter (source=physical) ────────────────────────────────
     let loyaltyResult = null;
     if (appt.client_email) {
@@ -1052,6 +1071,7 @@ router.post('/appointments/:id/checkout', async (req, res) => {
       amount,
       qty_total: qtyTotal,
       loyalty: loyaltyResult,
+      referral_validated: referralValidated,
     });
   } catch(e){ console.error('[CHECKOUT ERROR]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }
 });
