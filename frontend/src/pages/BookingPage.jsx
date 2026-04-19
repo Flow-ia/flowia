@@ -750,8 +750,33 @@ export default function BookingPage({ slug }) {
         @keyframes fadeIn{ from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         *{ box-sizing:border-box }
         @media(min-width:768px){ .bk-mo{ display:none!important } }
-        @media(max-width:767px){ .bk-do{ display:none!important } .bk-2c{ flex-direction:column!important } .bk-sb{ order:-1!important } }
-        @media(max-width:480px){ .bk-steps{ padding:0 4px!important } }
+        @media(max-width:767px){
+          .bk-do{ display:none!important }
+          .bk-2c{ flex-direction:column!important }
+          .bk-sb{ order:-1!important; width:100%!important; position:static!important; padding-top:12px!important }
+          .bk-nav-title{ max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+          .bk-footer-grid{ grid-template-columns:1fr!important; gap:16px!important }
+          .bk-iframe{ height:180px!important }
+          .bk-slots{ grid-template-columns:repeat(2,1fr)!important }
+          .bk-grid2{ grid-template-columns:1fr!important }
+          .bk-share-btns{ row-gap:8px!important }
+          .bk-ref-code{ font-size:16px!important; letter-spacing:1px!important }
+          .bk-side-logo{ width:64px!important; height:64px!important }
+          .bk-emp-grid{ grid-template-columns:1fr!important }
+          .bk-tabs button{ padding:10px 8px!important; font-size:12px!important }
+        }
+        @media(max-width:480px){
+          .bk-steps{ padding:0 4px!important }
+          .bk-slots{ grid-template-columns:repeat(2,1fr)!important; gap:8px!important }
+          .bk-hours-row{ padding:7px 12px!important }
+          .bk-nav-pad{ padding:0 12px!important }
+        }
+        @media(max-width:360px){
+          .bk-slots{ grid-template-columns:1fr!important }
+          .bk-share-btns button{ flex:1 1 100%!important }
+        }
+        .bk-modal-inner{ max-height:90vh; overflow-y:auto }
+        .bk-touch{ min-height:44px }
       `}</style>
 
       {/* ══ NAVBAR — composant partagé ══ */}
@@ -867,7 +892,7 @@ export default function BookingPage({ slug }) {
               <section id="section-equipe" style={{ marginBottom:40 }}>
                 <h2 style={{ fontSize:20, fontWeight:800, color:th.text,
                   margin:'0 0 16px', letterSpacing:'-0.02em' }}>Équipe</h2>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
+                <div className="bk-emp-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
                   {employees.map(e => (
                     <div key={e.id}
                       onClick={() => {
@@ -1081,6 +1106,7 @@ export default function BookingPage({ slug }) {
                     <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
                       border:`1px solid ${th.border}` }}>
                       <iframe
+                        className="bk-iframe"
                         src={embedUrl}
                         width="100%"
                         height="240"
@@ -1149,7 +1175,7 @@ export default function BookingPage({ slug }) {
               </section>
 
               {/* ── FOOTER ── */}
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
+              <div className="bk-footer-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
                 paddingTop:24, borderTop:`1px solid ${th.border}` }}>
                 <div>
                   <p style={{ fontSize:14, fontWeight:700, color:th.text, margin:'0 0 10px' }}>
@@ -1423,10 +1449,11 @@ export default function BookingPage({ slug }) {
                       </button>
                     </div>
                   ) : (
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
+                    <div className="bk-slots" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
                       {visibleSlots.map(s=>(
                         <button key={s} onClick={()=>{setSelSlot(s);goToStep(5,null,null,null,s);}}
                           style={{ padding:'18px 8px', borderRadius:16, fontSize:16, fontWeight:800,
+                            minHeight:48,
                             border:selSlot===s?`2px solid ${th.accent}`:`1px solid ${th.border}`,
                             background:selSlot===s?th.accent:th.card,
                             color:selSlot===s?th.accentText:th.text, cursor:'pointer' }}>

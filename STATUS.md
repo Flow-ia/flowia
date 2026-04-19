@@ -5,7 +5,98 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 12) : Parrainage — fix réduction filleul + traçabilité agenda + refus caisse
+## 🆕 Session 2026-04-19 (suite 13) : Réservation publique — responsivité mobile complète
+
+### Demande (onboarding.md)
+Rendre le site de réservation **parfaitement responsive** sur tous types d'écrans
+sans casser aucune fonctionnalité.
+
+### Approche
+Plutôt que d'injecter des inline styles avec des `isMobile` partout (risque de
+régression desktop, diffs lourds), extension **chirurgicale** de la feuille
+`<style>` globale déjà présente dans `BookingPage.jsx` (ligne 748) avec des
+règles `@media` ciblées + ajout de `className` aux éléments problématiques.
+
+Breakpoints utilisés : `767px` (mobile+tablet portrait), `480px` (smartphones),
+`360px` (très petits écrans type iPhone SE).
+
+### BookingPage.jsx — Feuille styles étendue
+Nouvelles règles ajoutées :
+- `@media(max-width:767px)` :
+  - `.bk-sb` passe en `width:100%`, `position:static`, `padding-top:12px`
+    (sidebar full-width au lieu d'être sticky 290px).
+  - `.bk-nav-title` ellipsis 160px max (business name long ne déborde plus).
+  - `.bk-footer-grid` → 1 colonne + gap réduit 16px.
+  - `.bk-iframe` height 180px (au lieu de 240px).
+  - `.bk-slots` 2 colonnes (au lieu de 3) pour créneaux.
+  - `.bk-grid2` → 1 colonne pour prénom/nom et mois/année.
+  - `.bk-share-btns` row-gap 8px (boutons partage parrainage).
+  - `.bk-ref-code` font-size 16px + letter-spacing 1px.
+  - `.bk-side-logo` 64×64 (au lieu de 80×80).
+  - `.bk-emp-grid` 1 colonne (au lieu de auto-fill 200px).
+  - `.bk-tabs button` padding + font réduits.
+- `@media(max-width:480px)` :
+  - `.bk-steps` padding 0 4px (existait déjà).
+  - `.bk-slots` gap 8px.
+  - `.bk-hours-row` padding 7px 12px (horaires plus compacts).
+  - `.bk-nav-pad` padding 0 12px (navbar plus étroite).
+- `@media(max-width:360px)` :
+  - `.bk-slots` 1 colonne (créneaux pleine largeur).
+  - `.bk-share-btns button` flex 1 1 100% (partage full-width).
+- `.bk-modal-inner` → `max-height:90vh; overflow-y:auto` (tous les modals).
+- `.bk-touch` → `min-height:44px` (utilitaire cible tactile).
+
+### Classes appliquées
+
+#### BookingPage.jsx
+- Step 2 grid employés : ajout `bk-emp-grid`.
+- Step 4 grid créneaux : ajout `bk-slots` + `minHeight:48` sur les boutons.
+- Section adresse iframe : ajout `bk-iframe`.
+- Footer "Nous contacter / Bon à savoir" : ajout `bk-footer-grid`.
+
+#### booking/NavBar.jsx
+- Container NavBar : `bk-nav-pad` (padding réduit mobile).
+- Span business name : `bk-nav-title` (ellipsis mobile).
+
+#### booking/SideCard.jsx
+- Logo avatar rond : `bk-side-logo` (64×64 mobile).
+- Lignes horaires : `bk-hours-row` (padding réduit).
+
+#### booking/Account.jsx
+- Grid prénom/nom (x2) + grid mois/année + grid profil : tous `bk-grid2`.
+
+#### booking/MyAppointments.jsx
+- 2 modals (annulation + info commerçant) : ajout `bk-modal-inner` + `maxHeight:90vh; overflowY:auto`.
+- Tabs RDV/Fidélité/Profil : `bk-tabs bk-nav-pad`.
+
+#### booking/ReferralPage.jsx
+- Code parrainage monospace : `bk-ref-code`.
+- Boutons partage SMS/WhatsApp/lien : `bk-share-btns`.
+
+### Build
+- `npx vite build` : OK (11.78s, 87 modules). `page-booking` +1.77 kB pour
+  la feuille de styles étendue et les classNames.
+
+### Compatibilité préservée
+- Zéro modification de logique métier ou de handlers.
+- Aucune prop supplémentaire, aucun import `useMediaQuery`/`useWindowSize`.
+- Les styles desktop existants sont conservés (les `@media` ne s'activent que
+  sous le breakpoint).
+- Les classes existantes (`bk-do`, `bk-mo`, `bk-steps`, `bk-2c`, `bk-sb`,
+  `rp-grid3`, `rp-code-row`) continuent de fonctionner normalement.
+- Les modals restent visibles et fonctionnels desktop ; seul ajout mobile =
+  scroll interne si le contenu dépasse 90vh.
+- Les breakpoints progressifs (767 → 480 → 360) évitent les sauts brusques.
+
+### Test visuel recommandé
+- iPhone SE (375×667), iPhone 14 (390×844), Galaxy S21 (360×800).
+- Pixel 4 (411×869), iPad Mini portrait (768×1024, reste desktop).
+- Rotation portrait/paysage : sidebar passe order:-1 en portrait, flex desktop
+  en paysage large (>767px).
+
+---
+
+## Session 2026-04-19 (suite 12) : Parrainage — fix réduction filleul + traçabilité agenda + refus caisse
 
 ### Demande (onboarding.md)
 Programme parrainage cassé. Fix complet à faire :

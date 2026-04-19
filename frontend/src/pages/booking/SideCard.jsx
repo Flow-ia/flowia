@@ -133,7 +133,7 @@ export function SideCard({ th, slug, business, onReserve }) {
         {/* Logo + nom + lien avis Google */}
         <div style={{ padding:'24px 20px 18px', textAlign:'center',
           borderBottom:`1px solid ${th.border}` }}>
-          <div style={{ width:80, height:80, borderRadius:99, margin:'0 auto 12px',
+          <div className="bk-side-logo" style={{ width:80, height:80, borderRadius:99, margin:'0 auto 12px',
             overflow:'hidden', background:th.cardAlt,
             display:'flex', alignItems:'center', justifyContent:'center',
             border:`3px solid ${th.border}` }}>
@@ -196,7 +196,7 @@ export function SideCard({ th, slug, business, onReserve }) {
                 const isToday = dow === curDow;
                 const isLast  = i === WEEK_ORDER.length - 1;
                 return (
-                  <div key={dow} style={{ display:'flex', alignItems:'center',
+                  <div key={dow} className="bk-hours-row" style={{ display:'flex', alignItems:'center',
                     justifyContent:'space-between', padding:'8px 18px',
                     borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
                     <span style={{ fontSize:13, fontWeight: isToday ? 800 : 500,

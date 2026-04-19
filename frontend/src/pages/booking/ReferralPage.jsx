@@ -515,7 +515,7 @@ export function ReferralPage({
             <div className="rp-code-row" style={{
               display: "flex", alignItems: "center", gap: 12, marginBottom: 14,
             }}>
-              <div style={{
+              <div className="bk-ref-code" style={{
                 flex: 1, background: th.card,
                 border: `0.5px solid ${dashedBorder}`,
                 borderRadius: 8, padding: "14px 18px",
@@ -534,7 +534,7 @@ export function ReferralPage({
                 {copied ? "Copié ✓" : "Copier"}
               </button>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="bk-share-btns" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={shareSms}
                 style={shareBtn(th, dashedBorder)}>
                 Partager par SMS

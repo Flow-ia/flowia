@@ -308,7 +308,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             {/* Champs register */}
             {mode === 'register' && (
               <>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div className="bk-grid2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                   <div>
                     <label style={S.label}>Prénom *</label>
                     <input placeholder="Prénom" value={first}
@@ -522,7 +522,7 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
         </p>
 
         {/* Mois + année */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+        <div className="bk-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
           <div>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: th.muted,
               marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -837,7 +837,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
             </div>
 
             {mode==='register' && (
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div className="bk-grid2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                 <input placeholder="Prénom *" value={first} onChange={e=>setFirst(e.target.value)} style={inp} />
                 <input placeholder="Nom" value={last} onChange={e=>setLast(e.target.value)} style={inp} />
               </div>
@@ -993,7 +993,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               {/* Édition du profil */}
               <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}` }}>
                 <p style={{ margin:'0 0 14px', fontWeight:800, fontSize:15, color:th.text }}>Mes informations</p>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                <div className="bk-grid2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                   <input placeholder="Prénom" value={editFirst||gcUser?.first_name||''}
                     onFocus={e=>{ if(!editFirst&&!editLast) initProfileEdit(); }}
                     onChange={e=>setEditFirst(e.target.value)} style={inp} />

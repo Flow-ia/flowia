@@ -245,7 +245,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
       {/* ── Tabs ── */}
       <div style={{ background:th.navBg, borderBottom:`1px solid ${th.border}` }}>
-        <div style={{ maxWidth:720, margin:'0 auto', padding:'0 24px',
+        <div className="bk-tabs bk-nav-pad" style={{ maxWidth:720, margin:'0 auto', padding:'0 24px',
           display:'flex', gap:0 }}>
           {[
               ['appts',
@@ -700,8 +700,8 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
         <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
           alignItems:'center', justifyContent:'center', padding:16,
           background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-          <div style={{ background:th.card, border:`1px solid ${th.border}`,
-            borderRadius:20, padding:28, width:'100%', maxWidth:400,
+          <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+            borderRadius:20, padding:28, width:'100%', maxWidth:400, maxHeight:'90vh', overflowY:'auto',
             boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
             <div style={{ width:52, height:52, borderRadius:14, background:'rgba(239,68,68,0.1)',
               display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
@@ -746,8 +746,8 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
         <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
           alignItems:'center', justifyContent:'center', padding:16,
           background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-          <div style={{ background:th.card, border:`1px solid ${th.border}`,
-            borderRadius:20, padding:28, width:'100%', maxWidth:420,
+          <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+            borderRadius:20, padding:28, width:'100%', maxWidth:420, maxHeight:'90vh', overflowY:'auto',
             boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
             <div style={{ width:52, height:52, borderRadius:14, background:'rgba(245,158,11,0.1)',
               display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>

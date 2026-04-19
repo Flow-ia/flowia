@@ -15,7 +15,7 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
     <nav style={{ position:'sticky', top:0, zIndex:50, background:th.navBg,
       borderBottom:`1px solid ${th.navBorder}`, boxShadow:'0 1px 3px rgba(0,0,0,0.06)',
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
-      <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 24px', height:60,
+      <div className="bk-nav-pad" style={{ maxWidth:1100, margin:'0 auto', padding:'0 24px', height:60,
         display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
 
         {/* Logo + nom — cliquable → retour accueil */}
@@ -32,7 +32,7 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
                   {(business?.business_name||'B').charAt(0).toUpperCase()}
                 </span>}
           </div>
-          <span style={{ fontSize:15, fontWeight:700, color:th.text, letterSpacing:'-0.01em' }}>
+          <span className="bk-nav-title" style={{ fontSize:15, fontWeight:700, color:th.text, letterSpacing:'-0.01em' }}>
             {business?.business_name}
           </span>
         </button>
