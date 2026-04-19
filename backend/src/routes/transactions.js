@@ -263,6 +263,16 @@ router.post('/', async (req, res) => {
         [req.user.userId, promo_code_id, logEmail, logName, tx.id,
          discount_amount||0, original_amount||amount||0]
       ).catch(e => console.error('[PROMO LOG ERR]', e.message));
+
+      // Non-cumulabilité : marquer la client_rewards liée au promo comme
+      // 'used' (filet de sécurité au cas où le front n'appelle pas
+      // POST /referrals/rewards/:id/use). Une seule réduction consommée.
+      await pool.query(
+        `UPDATE client_rewards
+            SET status='used', used_at=NOW()
+          WHERE user_id=$1 AND promo_code_id=$2 AND status='available'`,
+        [req.user.userId, promo_code_id]
+      ).catch(() => {});
     }
 
     // ── Parrainage : créer referral_uses + auto-valider (caisse = payé immédiat)

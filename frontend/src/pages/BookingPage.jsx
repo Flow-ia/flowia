@@ -2014,9 +2014,12 @@ export default function BookingPage({ slug }) {
 
                   {selSvc?.price > 0 && (
                     <div style={{marginBottom:20}}>
-                      <label style={{fontSize:12,fontWeight:600,color:th.muted,display:'block',marginBottom:8}}>
+                      <label style={{fontSize:12,fontWeight:600,color:th.muted,display:'block',marginBottom:4}}>
                         Code promo ou parrainage (optionnel)
                       </label>
+                      <p style={{fontSize:10,color:th.dim,margin:'0 0 8px',fontStyle:'italic'}}>
+                        Non cumulable avec une autre réduction (anniversaire, promo…).
+                      </p>
                       <div style={{display:'flex',gap:8}}>
                         <input value={promoCode}
                           onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');}}

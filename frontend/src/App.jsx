@@ -854,8 +854,11 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
             {/* Code promo */}
             {(empId==='' || employees.find(e=>e.id===empId)?.can_use_promo!==false) && (
               <div className="mb-4">
+                <p className="text-[10px] italic mb-1" style={{ color: isDark ? '#768390' : '#9CA3AF' }}>
+                  Une seule réduction par encaissement (non cumulable avec anniversaire, parrainage ou autre code).
+                </p>
                 <div className="flex gap-2">
-                  <input placeholder="Code promo (optionnel)" value={promoCode}
+                  <input placeholder="Code promo ou parrainage (optionnel)" value={promoCode}
                     onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');setSelectedRewardId(null);}}
                     onKeyDown={e=>e.key==='Enter'&&checkPromo()}
                     style={{ ...inpStyle, flex:1, textTransform:'uppercase', letterSpacing:'0.05em',

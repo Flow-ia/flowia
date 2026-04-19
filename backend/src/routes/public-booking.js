@@ -833,6 +833,16 @@ router.post('/:slug/book', async (req, res) => {
            WHERE promo_code_id = $2 AND used_at IS NULL`,
           [appt.id, promoCodeId]
         ).catch(() => {});
+        // Non-cumulabilité : si ce promo_code correspond à une client_rewards
+        // (anniversaire, parrain_reward, fidélité), la marquer 'used'. Evite
+        // qu'un même bénéfice apparaisse encore "disponible" côté caisse ou
+        // page parrainage après un booking en ligne.
+        await pool.query(
+          `UPDATE client_rewards
+              SET status='used', used_at=NOW()
+            WHERE user_id=$1 AND promo_code_id=$2 AND status='available'`,
+          [userId, promoCodeId]
+        ).catch(() => {});
       } catch(promoErr) { console.error('[PROMO USE ERR]', promoErr.message); }
     }
 
