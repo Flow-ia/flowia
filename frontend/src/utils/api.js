@@ -506,6 +506,12 @@ export const globalClientApi = {
   myVisit:        (id)           => gcRequest('/global-clients/me/visits/' + encodeURIComponent(id)),
   loyalty:        (token)       => gcRequest('/global-clients/loyalty',         {}, token),
   changePwd:      (token, data) => gcRequest('/global-clients/change-password', { method:'POST', body: JSON.stringify(data) }, token),
+  // Changement email en 2 étapes (code OTP à l'email actuel)
+  changeEmailInit:    (data) => gcRequest('/global-clients/me/change-email',         { method:'POST', body: JSON.stringify(data) }),
+  changeEmailConfirm: (data) => gcRequest('/global-clients/me/change-email/confirm', { method:'POST', body: JSON.stringify(data) }),
+  // Changement mot de passe en 2 étapes (code OTP à l'email du compte)
+  changePwdInit:      (data) => gcRequest('/global-clients/me/change-password',         { method:'POST', body: JSON.stringify(data) }),
+  changePwdConfirm:   (data) => gcRequest('/global-clients/me/change-password/confirm', { method:'POST', body: JSON.stringify(data) }),
   forgotPassword: (data)        => gcRequest('/global-clients/forgot-password', { method:'POST', body: JSON.stringify(data) }),
   resetPassword:  (data)        => gcRequest('/global-clients/reset-password',  { method:'POST', body: JSON.stringify(data) }),
   // RGPD

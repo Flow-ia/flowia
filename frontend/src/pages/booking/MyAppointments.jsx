@@ -95,13 +95,12 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
   const saveProfile = async () => {
     if (!editFirst.trim() || !editLast.trim()) { setProfErr('Prenom et nom requis.'); return; }
-    if (!editEmail.trim()) { setProfErr('Email requis.'); return; }
+    // Email volontairement exclu : change via modal dédiée (code OTP).
     setProfLoad(true); setProfErr(''); setProfOk('');
     try {
       const res = await pubApi.updateClientProfile(slug, {
         first_name: editFirst.trim(),
         last_name:  editLast.trim(),
-        email:      editEmail.trim(),
         phone:      editPhone.trim() || undefined,
       });
       const updated = { ...(clientInfo||{}), ...res };
@@ -112,6 +111,96 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       setTimeout(() => setProfOk(''), 3000);
     } catch(e) { setProfErr(e.message || 'Erreur'); }
     finally { setProfLoad(false); }
+  };
+
+  // ── Modal changement d'email (2 étapes : saisie → code OTP) ────────────
+  const [emailModal,      setEmailModal]      = useState(false);
+  const [emailStep,       setEmailStep]       = useState(1); // 1 = saisie, 2 = code
+  const [emailNew,        setEmailNew]        = useState('');
+  const [emailCode,       setEmailCode]       = useState('');
+  const [emailSentTo,     setEmailSentTo]     = useState('');
+  const [emailLoading,    setEmailLoading]    = useState(false);
+  const [emailErr,        setEmailErr]        = useState('');
+
+  const openEmailModal = () => {
+    setEmailModal(true); setEmailStep(1);
+    setEmailNew(''); setEmailCode(''); setEmailSentTo(''); setEmailErr('');
+  };
+  const closeEmailModal = () => {
+    if (emailLoading) return;
+    setEmailModal(false);
+  };
+  const submitEmailInit = async () => {
+    const v = emailNew.trim().toLowerCase();
+    if (!v || !v.includes('@')) { setEmailErr('Email invalide.'); return; }
+    setEmailLoading(true); setEmailErr('');
+    try {
+      const res = await globalClientApi.changeEmailInit({ new_email: v });
+      setEmailSentTo(res?.sent_to || clientInfo?.email || '');
+      setEmailStep(2);
+      setEmailCode('');
+    } catch (e) { setEmailErr(e.message || 'Erreur'); }
+    finally { setEmailLoading(false); }
+  };
+  const submitEmailConfirm = async () => {
+    const c = emailCode.trim();
+    if (!/^\d{6}$/.test(c)) { setEmailErr('Code à 6 chiffres requis.'); return; }
+    setEmailLoading(true); setEmailErr('');
+    try {
+      const res = await globalClientApi.changeEmailConfirm({ code: c });
+      const updated = { ...(clientInfo||{}), email: res?.new_email || emailNew.trim().toLowerCase() };
+      localStorage.setItem('ff_client_info', JSON.stringify(updated));
+      setClientInfo(updated);
+      setEmailModal(false);
+      setProfOk('Email mis à jour ✓');
+      setTimeout(() => setProfOk(''), 3000);
+    } catch (e) { setEmailErr(e.message || 'Erreur'); }
+    finally { setEmailLoading(false); }
+  };
+
+  // ── Modal changement de mot de passe (2 étapes : current+new → code) ───
+  const [pwdModal,     setPwdModal]     = useState(false);
+  const [pwdStep,      setPwdStep]      = useState(1);
+  const [pwdCurrent,   setPwdCurrent]   = useState('');
+  const [pwdNew,       setPwdNew]       = useState('');
+  const [pwdNew2,      setPwdNew2]      = useState('');
+  const [pwdCode,      setPwdCode]      = useState('');
+  const [pwdSentTo,    setPwdSentTo]    = useState('');
+  const [pwdLoading,   setPwdLoading]   = useState(false);
+  const [pwdErr,       setPwdErr]       = useState('');
+
+  const openPwdModal = () => {
+    setPwdModal(true); setPwdStep(1);
+    setPwdCurrent(''); setPwdNew(''); setPwdNew2('');
+    setPwdCode(''); setPwdSentTo(''); setPwdErr('');
+  };
+  const closePwdModal = () => { if (!pwdLoading) setPwdModal(false); };
+  const submitPwdInit = async () => {
+    if (!pwdCurrent || !pwdNew) { setPwdErr('Tous les champs sont requis.'); return; }
+    if (pwdNew.length < 6) { setPwdErr('Le nouveau mot de passe doit faire 6 caractères min.'); return; }
+    if (pwdNew !== pwdNew2) { setPwdErr('Les deux mots de passe ne correspondent pas.'); return; }
+    setPwdLoading(true); setPwdErr('');
+    try {
+      const res = await globalClientApi.changePwdInit({
+        current_password: pwdCurrent,
+        new_password:     pwdNew,
+      });
+      setPwdSentTo(res?.sent_to || clientInfo?.email || '');
+      setPwdStep(2); setPwdCode('');
+    } catch (e) { setPwdErr(e.message || 'Erreur'); }
+    finally { setPwdLoading(false); }
+  };
+  const submitPwdConfirm = async () => {
+    const c = pwdCode.trim();
+    if (!/^\d{6}$/.test(c)) { setPwdErr('Code à 6 chiffres requis.'); return; }
+    setPwdLoading(true); setPwdErr('');
+    try {
+      await globalClientApi.changePwdConfirm({ code: c });
+      setPwdModal(false);
+      setProfOk('Mot de passe mis à jour ✓');
+      setTimeout(() => setProfOk(''), 3000);
+    } catch (e) { setPwdErr(e.message || 'Erreur'); }
+    finally { setPwdLoading(false); }
   };
 
   // Resync l'onglet actif si la prop initialTab change (navigation
@@ -805,19 +894,15 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                   <div>
                     <label style={{ display:'block', fontSize:11, fontWeight:700,
                       color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                      Email *
-                    </label>
-                    <input type="email" value={editEmail} onChange={e=>setEditEmail(e.target.value)}
-                      placeholder="votre@email.com" style={inpStyle}/>
-                  </div>
-                  <div>
-                    <label style={{ display:'block', fontSize:11, fontWeight:700,
-                      color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
                       Téléphone
                     </label>
                     <input type="tel" value={editPhone} onChange={e=>setEditPhone(e.target.value)}
                       placeholder="06 00 00 00 00" style={inpStyle}/>
                   </div>
+                  <p style={{ fontSize:11, color:th.muted, margin:0, lineHeight:1.5 }}>
+                    Pour modifier votre email, utilisez le bouton «&nbsp;Changer mon email&nbsp;»
+                    dans la vue principale : un code sera envoyé à votre adresse actuelle.
+                  </p>
                   {profErr && (
                     <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:0 }}>{profErr}</p>
                   )}
@@ -864,6 +949,50 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Sécurité : email + mot de passe (vérification par code OTP) */}
+            <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
+              <div style={{ padding:'16px 20px', borderBottom:`1px solid ${th.border}` }}>
+                <p style={{ fontWeight:800, fontSize:15, color:th.text, margin:0 }}>Sécurité</p>
+                <p style={{ fontSize:12, color:th.muted, margin:'4px 0 0' }}>
+                  Un code à 6 chiffres vous sera envoyé par email pour confirmer chaque changement.
+                </p>
+              </div>
+              <button onClick={openEmailModal} style={{ width:'100%', padding:'14px 20px',
+                background:'none', border:'none', borderBottom:`1px solid ${th.border}`,
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                cursor:'pointer', color:th.text, fontWeight:700, fontSize:13 }}>
+                <span style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    style={{width:15,height:15,color:th.muted}}>
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                  Changer mon email
+                </span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{width:14,height:14,color:th.muted}}>
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+              <button onClick={openPwdModal} style={{ width:'100%', padding:'14px 20px',
+                background:'none', border:'none',
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                cursor:'pointer', color:th.text, fontWeight:700, fontSize:13 }}>
+                <span style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                    style={{width:15,height:15,color:th.muted}}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  Changer mon mot de passe
+                </span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{width:14,height:14,color:th.muted}}>
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
             </div>
 
             {/* Déconnexion */}
@@ -1214,6 +1343,229 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                 {deleteLoading ? '...' : 'Supprimer définitivement'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal changement d'email (2 étapes) ── */}
+      {emailModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
+          alignItems:'center', justifyContent:'center', padding:16,
+          background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
+          <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+            borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
+            boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
+            <div style={{ width:52, height:52, borderRadius:14, background:'rgba(99,102,241,0.1)',
+              display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"
+                style={{width:26,height:26}}>
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </div>
+            <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 6px' }}>
+              Changer mon email
+            </p>
+            {emailStep === 1 ? (
+              <>
+                <p style={{ fontSize:13, color:th.muted, margin:'0 0 16px', lineHeight:1.5 }}>
+                  Votre adresse actuelle : <strong style={{color:th.text}}>{clientInfo?.email || '—'}</strong>.
+                  Un code à 6 chiffres y sera envoyé pour confirmer le changement.
+                </p>
+                <label style={{ display:'block', fontSize:11, fontWeight:700,
+                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                  Nouvel email
+                </label>
+                <input type="email" value={emailNew}
+                  onChange={e => { setEmailNew(e.target.value); if (emailErr) setEmailErr(''); }}
+                  placeholder="nouveau@email.com" autoComplete="email"
+                  disabled={emailLoading}
+                  style={{ ...inpStyle, marginBottom:10,
+                    borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
+                {emailErr && (
+                  <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+                    {emailErr}
+                  </p>
+                )}
+                <div style={{ display:'flex', gap:10, marginTop:6 }}>
+                  <button onClick={closeEmailModal} disabled={emailLoading}
+                    style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                      background:th.cardAlt, border:`1px solid ${th.border}`,
+                      color:th.muted, fontWeight:700, fontSize:13 }}>
+                    Annuler
+                  </button>
+                  <button onClick={submitEmailInit} disabled={emailLoading}
+                    style={{ flex:1, padding:'12px', borderRadius:11, cursor: emailLoading ? 'not-allowed' : 'pointer',
+                      background:th.accent, border:'none',
+                      color:th.accentText, fontWeight:800, fontSize:13,
+                      opacity: emailLoading ? 0.6 : 1 }}>
+                    {emailLoading ? '...' : 'Envoyer le code'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize:13, color:th.muted, margin:'0 0 16px', lineHeight:1.5 }}>
+                  Un code à 6 chiffres a été envoyé à <strong style={{color:th.text}}>{emailSentTo}</strong>.
+                  Saisissez-le ci-dessous pour confirmer.
+                </p>
+                <label style={{ display:'block', fontSize:11, fontWeight:700,
+                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                  Code de vérification
+                </label>
+                <input type="text" inputMode="numeric" value={emailCode}
+                  onChange={e => { setEmailCode(e.target.value.replace(/\D/g,'').slice(0,6)); if (emailErr) setEmailErr(''); }}
+                  placeholder="123456" autoComplete="one-time-code"
+                  maxLength={6} disabled={emailLoading}
+                  style={{ ...inpStyle, marginBottom:10, fontFamily:'monospace',
+                    fontSize:18, letterSpacing:4, textAlign:'center',
+                    borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
+                {emailErr && (
+                  <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+                    {emailErr}
+                  </p>
+                )}
+                <div style={{ display:'flex', gap:10, marginTop:6 }}>
+                  <button onClick={() => setEmailStep(1)} disabled={emailLoading}
+                    style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                      background:th.cardAlt, border:`1px solid ${th.border}`,
+                      color:th.muted, fontWeight:700, fontSize:13 }}>
+                    Retour
+                  </button>
+                  <button onClick={submitEmailConfirm} disabled={emailLoading || emailCode.length !== 6}
+                    style={{ flex:1, padding:'12px', borderRadius:11,
+                      cursor: (emailLoading || emailCode.length !== 6) ? 'not-allowed' : 'pointer',
+                      background:th.accent, border:'none',
+                      color:th.accentText, fontWeight:800, fontSize:13,
+                      opacity: (emailLoading || emailCode.length !== 6) ? 0.6 : 1 }}>
+                    {emailLoading ? '...' : 'Confirmer'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal changement de mot de passe (2 étapes) ── */}
+      {pwdModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
+          alignItems:'center', justifyContent:'center', padding:16,
+          background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
+          <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+            borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
+            boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
+            <div style={{ width:52, height:52, borderRadius:14, background:'rgba(99,102,241,0.1)',
+              display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"
+                style={{width:26,height:26}}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 6px' }}>
+              Changer mon mot de passe
+            </p>
+            {pwdStep === 1 ? (
+              <>
+                <p style={{ fontSize:13, color:th.muted, margin:'0 0 16px', lineHeight:1.5 }}>
+                  Un code à 6 chiffres sera envoyé à <strong style={{color:th.text}}>{clientInfo?.email || '—'}</strong>
+                  {' '}pour confirmer le changement.
+                </p>
+                <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                  <div>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700,
+                      color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                      Mot de passe actuel
+                    </label>
+                    <input type="password" value={pwdCurrent}
+                      onChange={e => { setPwdCurrent(e.target.value); if (pwdErr) setPwdErr(''); }}
+                      autoComplete="current-password" disabled={pwdLoading}
+                      style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700,
+                      color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                      Nouveau mot de passe
+                    </label>
+                    <input type="password" value={pwdNew}
+                      onChange={e => { setPwdNew(e.target.value); if (pwdErr) setPwdErr(''); }}
+                      autoComplete="new-password" disabled={pwdLoading}
+                      placeholder="6 caractères minimum"
+                      style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700,
+                      color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                      Confirmer le nouveau
+                    </label>
+                    <input type="password" value={pwdNew2}
+                      onChange={e => { setPwdNew2(e.target.value); if (pwdErr) setPwdErr(''); }}
+                      autoComplete="new-password" disabled={pwdLoading}
+                      style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                  </div>
+                </div>
+                {pwdErr && (
+                  <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'12px 0 0' }}>
+                    {pwdErr}
+                  </p>
+                )}
+                <div style={{ display:'flex', gap:10, marginTop:14 }}>
+                  <button onClick={closePwdModal} disabled={pwdLoading}
+                    style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                      background:th.cardAlt, border:`1px solid ${th.border}`,
+                      color:th.muted, fontWeight:700, fontSize:13 }}>
+                    Annuler
+                  </button>
+                  <button onClick={submitPwdInit} disabled={pwdLoading}
+                    style={{ flex:1, padding:'12px', borderRadius:11, cursor: pwdLoading ? 'not-allowed' : 'pointer',
+                      background:th.accent, border:'none',
+                      color:th.accentText, fontWeight:800, fontSize:13,
+                      opacity: pwdLoading ? 0.6 : 1 }}>
+                    {pwdLoading ? '...' : 'Envoyer le code'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize:13, color:th.muted, margin:'0 0 16px', lineHeight:1.5 }}>
+                  Un code à 6 chiffres a été envoyé à <strong style={{color:th.text}}>{pwdSentTo}</strong>.
+                  Saisissez-le pour appliquer le nouveau mot de passe.
+                </p>
+                <label style={{ display:'block', fontSize:11, fontWeight:700,
+                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                  Code de vérification
+                </label>
+                <input type="text" inputMode="numeric" value={pwdCode}
+                  onChange={e => { setPwdCode(e.target.value.replace(/\D/g,'').slice(0,6)); if (pwdErr) setPwdErr(''); }}
+                  placeholder="123456" autoComplete="one-time-code"
+                  maxLength={6} disabled={pwdLoading}
+                  style={{ ...inpStyle, marginBottom:10, fontFamily:'monospace',
+                    fontSize:18, letterSpacing:4, textAlign:'center',
+                    borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                {pwdErr && (
+                  <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+                    {pwdErr}
+                  </p>
+                )}
+                <div style={{ display:'flex', gap:10, marginTop:6 }}>
+                  <button onClick={() => setPwdStep(1)} disabled={pwdLoading}
+                    style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
+                      background:th.cardAlt, border:`1px solid ${th.border}`,
+                      color:th.muted, fontWeight:700, fontSize:13 }}>
+                    Retour
+                  </button>
+                  <button onClick={submitPwdConfirm} disabled={pwdLoading || pwdCode.length !== 6}
+                    style={{ flex:1, padding:'12px', borderRadius:11,
+                      cursor: (pwdLoading || pwdCode.length !== 6) ? 'not-allowed' : 'pointer',
+                      background:th.accent, border:'none',
+                      color:th.accentText, fontWeight:800, fontSize:13,
+                      opacity: (pwdLoading || pwdCode.length !== 6) ? 0.6 : 1 }}>
+                    {pwdLoading ? '...' : 'Confirmer'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

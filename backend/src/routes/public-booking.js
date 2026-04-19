@@ -1346,9 +1346,12 @@ router.put('/:slug/client/profile', async (req, res) => {
     catch { return res.status(401).json({ error: 'Token invalide.' }); }
 
     const { slug } = req.params;
-    const { first_name, last_name, email, phone, birth_date } = req.body;
-    if (!first_name?.trim() || !last_name?.trim() || !email?.trim()) {
-      return res.status(400).json({ error: 'Prénom, nom et email sont requis.' });
+    // Email volontairement NON modifiable ici. Le changement d'email passe
+    // par POST /api/global-clients/me/change-email (code envoyé à l'email
+    // actuel). On accepte le champ pour backcompat mais on l'ignore.
+    const { first_name, last_name, phone, birth_date } = req.body;
+    if (!first_name?.trim() || !last_name?.trim()) {
+      return res.status(400).json({ error: 'Prénom et nom sont requis.' });
     }
 
     // birth_date : accepte YYYY-MM-DD ou YYYY-MM (= 1er du mois), vide = null,
@@ -1363,10 +1366,10 @@ router.put('/:slug/client/profile', async (req, res) => {
     }
 
     // Le token client contient clientId (= client_accounts.id)
-    // Mettre à jour directement client_accounts
-    const sets = ['first_name = $1', 'last_name = $2', 'email = LOWER($3)', 'phone = $4'];
-    const vals = [first_name.trim(), last_name.trim(), email.trim(), phone?.trim() || null];
-    let idx = 5;
+    // Mettre à jour directement client_accounts (email exclu volontairement)
+    const sets = ['first_name = $1', 'last_name = $2', 'phone = $3'];
+    const vals = [first_name.trim(), last_name.trim(), phone?.trim() || null];
+    let idx = 4;
     if (bdParam !== undefined) { sets.push(`birth_date = $${idx++}`); vals.push(bdParam); }
     vals.push(decoded.clientId);
     const updated = await pool.query(
@@ -1376,15 +1379,15 @@ router.put('/:slug/client/profile', async (req, res) => {
     );
     if (!updated.rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
 
-    // Sync global_clients si lié
+    // Sync global_clients si lié (email exclu — passe par /change-email)
     try {
       const { rows: gc } = await pool.query(
         'SELECT global_client_id FROM client_accounts WHERE id=$1', [decoded.clientId]
       );
       if (gc[0]?.global_client_id) {
-        const gcSets = ['first_name=$1', 'last_name=$2', 'email=LOWER($3)', 'phone=$4'];
-        const gcVals = [first_name.trim(), last_name.trim(), email.trim(), phone?.trim()||null];
-        let gi = 5;
+        const gcSets = ['first_name=$1', 'last_name=$2', 'phone=$3'];
+        const gcVals = [first_name.trim(), last_name.trim(), phone?.trim()||null];
+        let gi = 4;
         if (bdParam !== undefined) { gcSets.push(`birth_date=$${gi++}`); gcVals.push(bdParam); }
         gcVals.push(gc[0].global_client_id);
         await pool.query(
