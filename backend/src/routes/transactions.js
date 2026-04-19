@@ -126,13 +126,26 @@ router.post('/', async (req, res) => {
       ? 'multi'
       : (payList[0]?.method || payment_method || 'cash');
 
+    // Résoudre global_client_id depuis l'email (cross-commerçant → passage sur place
+    // visible sur le compte client connecté).
+    let globalClientId = null;
+    if (client_email) {
+      try {
+        const { rows: gc } = await pool.query(
+          'SELECT id FROM global_clients WHERE LOWER(email)=LOWER($1) LIMIT 1',
+          [client_email]
+        );
+        if (gc.length) globalClientId = gc[0].id;
+      } catch (e) { console.warn('[TX global_client lookup]', e.message); }
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO transactions
         (user_id, type, amount, description, category_id, employee_id,
          payment_method, date, time, datetime_iso, appointment_id, source, locked,
          promo_code_id, discount_amount, original_amount, client_email, client_note,
-         qty_total)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18)
+         qty_total, global_client_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19)
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
          payment_method, locked, client_email, client_note, qty_total,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
@@ -142,7 +155,7 @@ router.post('/', async (req, res) => {
        employee_id || null, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
-       client_email || null, client_note || null, qtyTotal]
+       client_email || null, client_note || null, qtyTotal, globalClientId]
     );
     const tx = rows[0];
 

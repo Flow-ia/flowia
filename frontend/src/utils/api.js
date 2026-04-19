@@ -495,6 +495,7 @@ export const globalClientApi = {
   updateMe:       (token, data) => gcRequest('/global-clients/me',              { method:'PUT',  body: JSON.stringify(data) }, token),
   deleteAccount:  (token)       => gcRequest('/global-clients/me',              { method:'DELETE' }, token),
   appointments:   (token)       => gcRequest('/global-clients/appointments',    {}, token),
+  myVisits:       (token)       => gcRequest('/global-clients/me/visits',       {}, token),
   loyalty:        (token)       => gcRequest('/global-clients/loyalty',         {}, token),
   changePwd:      (token, data) => gcRequest('/global-clients/change-password', { method:'POST', body: JSON.stringify(data) }, token),
   forgotPassword: (data)        => gcRequest('/global-clients/forgot-password', { method:'POST', body: JSON.stringify(data) }),

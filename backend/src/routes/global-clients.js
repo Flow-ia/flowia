@@ -488,6 +488,70 @@ router.get('/appointments', globalClientAuth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/global-clients/me/visits — passages "sur place" du client
+// ─────────────────────────────────────────────────────────────────────────────
+// Liste les transactions encaissées en caisse SANS RDV préalable (source !='rdv'
+// OR appointment_id IS NULL). Filtrées soit via global_client_id, soit via
+// l'email du client si le lien n'a pas été établi (anciennes transactions).
+// Inclut les items/prestations, le commerçant, date/heure et montant total.
+router.get('/me/visits', globalClientAuth, async (req, res) => {
+  try {
+    const gcId = req.globalClient.globalClientId;
+    const { rows: gc } = await pool.query(
+      'SELECT email FROM global_clients WHERE id=$1', [gcId]
+    );
+    if (!gc.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    const email = gc[0].email;
+
+    const { rows } = await pool.query(
+      `SELECT
+         t.id, t.user_id, t.amount, t.original_amount, t.discount_amount,
+         t.payment_method, t.description,
+         TO_CHAR(t.date, 'YYYY-MM-DD') as date,
+         TO_CHAR(t.time, 'HH24:MI')     as time,
+         t.datetime_iso, t.created_at, t.qty_total,
+         biz.business_name, biz.slug,
+         u.phone AS business_phone, u.address AS business_address,
+         e.name AS employee_name
+       FROM transactions t
+       LEFT JOIN booking_settings biz ON biz.user_id = t.user_id
+       LEFT JOIN users u              ON u.id        = t.user_id
+       LEFT JOIN employees e          ON e.id        = t.employee_id
+       WHERE t.type IN ('income','revenue')
+         AND t.appointment_id IS NULL
+         AND (t.global_client_id = $1 OR LOWER(t.client_email) = LOWER($2))
+       ORDER BY t.date DESC, t.time DESC NULLS LAST, t.created_at DESC
+       LIMIT 200`,
+      [gcId, email]
+    );
+
+    if (!rows.length) return res.json([]);
+
+    // Charger les items de chaque transaction en un seul round-trip
+    const ids = rows.map(r => r.id);
+    const { rows: items } = await pool.query(
+      `SELECT transaction_id, service_name, qty, unit_price
+         FROM transaction_items
+        WHERE transaction_id = ANY($1::uuid[])
+        ORDER BY created_at`,
+      [ids]
+    );
+    const byTx = {};
+    for (const it of items) {
+      (byTx[it.transaction_id] = byTx[it.transaction_id] || []).push({
+        service_name: it.service_name,
+        qty: it.qty,
+        unit_price: parseFloat(it.unit_price),
+      });
+    }
+    res.json(rows.map(r => ({ ...r, items: byTx[r.id] || [] })));
+  } catch (e) {
+    console.error('[GC VISITS]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/global-clients/me — mettre à jour le profil
 // ─────────────────────────────────────────────────────────────────────────────
 router.put('/me', globalClientAuth, async (req, res) => {

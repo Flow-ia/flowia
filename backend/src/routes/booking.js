@@ -938,13 +938,27 @@ router.post('/appointments/:id/checkout', async (req, res) => {
       desc = `RDV — ${appt.service_name || 'Service'}${appt.client_name ? ` (${appt.client_name})` : ''}`;
     }
 
+    // Résoudre global_client_id depuis l'email du RDV (traçabilité passages
+    // dans le compte client connecté, cross-commerçant).
+    let globalClientId = null;
+    if (appt.client_email) {
+      try {
+        const { rows: gc } = await pool.query(
+          'SELECT id FROM global_clients WHERE LOWER(email)=LOWER($1) LIMIT 1',
+          [appt.client_email]
+        );
+        if (gc.length) globalClientId = gc[0].id;
+      } catch (e) { console.warn('[CHECKOUT global_client lookup]', e.message); }
+    }
+
     // Créer la transaction — inclure les infos promo si le RDV en avait une
     const { rows: txR } = await pool.query(
       `INSERT INTO transactions
          (user_id, type, amount, description, employee_id, payment_method,
           date, time, datetime_iso, appointment_id, source,
-          promo_code_id, discount_amount, original_amount)
-       VALUES ($1,'revenue',$2,$3,$4,$5,$6,$7,$8,$9,'rdv',$10,$11,$12)
+          promo_code_id, discount_amount, original_amount,
+          client_email, global_client_id)
+       VALUES ($1,'revenue',$2,$3,$4,$5,$6,$7,$8,$9,'rdv',$10,$11,$12,$13,$14)
        RETURNING id, type, TO_CHAR(date,'YYYY-MM-DD') as date, TO_CHAR(time,'HH24:MI') as time,
          amount, description, payment_method, employee_id, appointment_id, source, created_at,
          promo_code_id, discount_amount, original_amount`,
@@ -953,7 +967,8 @@ router.post('/appointments/:id/checkout', async (req, res) => {
        now.toISOString(), req.params.id,
        appt.promo_code_id || null,
        discountFromAppt || 0,
-       appt.original_amount || null]
+       appt.original_amount || null,
+       appt.client_email || null, globalClientId]
     );
     const tx = txR[0];
 

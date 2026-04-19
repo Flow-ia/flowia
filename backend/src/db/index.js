@@ -605,6 +605,9 @@ async function initDB() {
   await runMigration(`ALTER TABLE client_loyalty ADD COLUMN IF NOT EXISTS total_points_ever NUMERIC(10,2) DEFAULT 0`);
   await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS client_note TEXT`);
   await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS client_email VARCHAR(255)`);
+  // Passages sur place : lien transaction → compte global du client (cross-commerçant)
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS global_client_id UUID REFERENCES global_clients(id) ON DELETE SET NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_global_client ON transactions(global_client_id) WHERE global_client_id IS NOT NULL`);
   await runMigration(`ALTER TABLE promo_usage_logs ADD COLUMN IF NOT EXISTS transaction_amount NUMERIC(10,2) DEFAULT 0`);
   await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_use_promo BOOLEAN DEFAULT TRUE`);
   await runMigration(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS target_clients VARCHAR(20) DEFAULT 'all'`);

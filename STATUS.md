@@ -5,7 +5,130 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 16) : Fix styles NavBar cassés sur Mes RDV + tabs scrollables
+## 🆕 Session 2026-04-19 (suite 17) : Traçabilité passages sur place cross-commerçant
+
+### Demande (onboarding.md)
+Tracer les passages « sur place » des clients : quand un employé d'un
+commerçant encaisse et identifie un client dans une transaction (sans RDV
+préalable), ce passage doit apparaître sur le compte client connecté avec
+le détail (commerçant, date, heure, prestations, prix). UI responsive,
+cross-commerçant (visible pour tous les commerçants où le client est passé).
+
+### Backend — Schéma DB (`db/index.js`)
+Nouvelle colonne + index idempotents (ligne 608-609) :
+```sql
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS global_client_id UUID
+  REFERENCES global_clients(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_transactions_global_client
+  ON transactions(global_client_id) WHERE global_client_id IS NOT NULL;
+```
+Le `ON DELETE SET NULL` garantit que la suppression d'un global_client
+(option RGPD) ne supprime pas les transactions historiques du commerçant.
+
+### Backend — Lookup automatique global_client_id
+
+**`routes/transactions.js` POST /** :
+- Avant l'INSERT, si `client_email` est fourni, recherche `global_clients.id`
+  par email (LOWER). Stocké dans la nouvelle colonne.
+- Si le client n'a pas de compte global (jamais inscrit sur un site
+  réservation), `global_client_id` = NULL. La transaction reste créée mais
+  ne sera pas visible dans « Mes passages ». Si plus tard le client crée
+  un compte global avec ce même email, les futures transactions seront
+  liées (pas les anciennes — c'est volontaire, respect du consentement).
+
+**`routes/booking.js` POST /appointments/:id/checkout** :
+- Même lookup depuis `appt.client_email`. La transaction RDV est liée au
+  global_client si dispo (permet traçabilité uniforme, même si affichée
+  dans « Mes RDV » pas « Passages »).
+- Ajout des colonnes `client_email` et `global_client_id` à l'INSERT.
+
+### Backend — Nouveau endpoint `GET /me/visits`
+`routes/global-clients.js` (après `/appointments`) :
+- Auth : `globalClientAuth` (JWT scope='global_client').
+- Filtre : `t.appointment_id IS NULL` (exclut les encaissements RDV) +
+  `t.type IN ('income','revenue')` (exclut les dépenses) +
+  `(global_client_id = $gcId OR LOWER(client_email) = LOWER($email))`.
+  Le double critère OR supporte les anciennes transactions où le lookup
+  n'existait pas, via fallback sur l'email du compte global.
+- JOIN `booking_settings` pour `business_name` + `slug`, `users` pour
+  phone/adresse, `employees` pour le nom de l'employé qui a encaissé.
+- Charge les `transaction_items` en 1 round-trip via `ANY($1::uuid[])`.
+- Retourne : id, business_name, slug, date, time, amount, original_amount,
+  discount_amount, payment_method, employee_name, items[] {service_name, qty, unit_price}.
+- Limite 200 par défaut (suffisant, pas de pagination pour l'instant).
+
+### Frontend — API (`utils/api.js`)
+```js
+globalClientApi.myVisits: (token) =>
+  gcRequest('/global-clients/me/visits', {}, token),
+```
+Utilise le fallback `ff_gc_token` → `ff_client_token` déjà en place dans
+`gcRequest` (session 10).
+
+### Frontend — `MyAppointments.jsx`
+- Nouveau state `visits` / `visitsLoading` / `visitsLoaded`.
+- `useEffect` lazy : charge `globalClientApi.myVisits()` la première fois
+  que l'onglet 'visits' devient actif (pas au mount pour économiser un
+  appel réseau si l'utilisateur consulte seulement « Mes RDV »).
+- Nouvel onglet `visits` ajouté **entre** « Mes RDV » et « Mon profil »
+  dans la barre des tabs principaux. Icône GPS pin.
+- Rendu du tab 'visits' :
+  - Loading → Spinner.
+  - Empty state → pin 48px gris + message explicatif « Quand un commerçant
+    vous encaisse en caisse sans RDV préalable, la trace apparaît ici… ».
+  - Liste de cards (même style visuel que les cards RDV) :
+    - Badge violet « 📍 Passage sur place »
+    - Nom du commerçant (gros titre)
+    - Date long format (« Lun. 14 avr. 2026 ») + heure
+    - Montant vert gros (avec prix barré si remise appliquée)
+    - Liste des prestations : nom + quantité (×N) + prix unitaire × qté
+    - Footer : « Avec {employé} » + badge méthode de paiement
+  - Responsive : `flexWrap:'wrap'` sur le footer, `minWidth:0` +
+    `textOverflow:'ellipsis'` sur les textes longs (business_name, items).
+
+### Parcours utilisateur corrigé (scénarios)
+
+**Scénario A — Client inscrit passe en caisse chez Commerçant X :**
+1. Employé ouvre la caisse, saisit les items, entre l'email du client.
+2. POST /api/transactions avec `client_email='alice@mail.com'`.
+3. Backend lookup `global_clients` → trouvé, stocke `global_client_id`.
+4. Transaction créée avec lien global.
+5. Alice se connecte sur n'importe quel site réservation → ouvre « Mes RDV »
+   → clique onglet « Sur place » → voit le passage chez Commerçant X
+   avec détails complets.
+
+**Scénario B — Client inscrit chez 3 commerçants différents :**
+- Même global_client_id pour les 3 → 3 passages affichés dans le même tab,
+  chacun avec le bon business_name grâce au JOIN booking_settings.
+
+**Scénario C — Client passe en caisse SANS compte global :**
+- Le lookup échoue, `global_client_id` reste NULL.
+- Si plus tard le client crée un compte avec cet email, **les anciennes
+  transactions NE sont PAS rétroactivement liées** (par choix, pour éviter
+  de lier un email partagé à un mauvais compte).
+- Seules les nouvelles transactions post-inscription sont tracées.
+
+### Build
+- `node --check` × 4 backend : OK.
+- `npx vite build` : OK (17.83s, 87 modules).
+- `page-booking` : +4.5 kB (155.82 → 160.32) pour le nouveau tab + carte
+  visite + fetch lazy.
+
+### Compatibilité préservée
+- Migration `ADD COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS` → idempotent.
+- Anciennes transactions : `global_client_id` = NULL (pas de backfill).
+  Fallback via `client_email` dans la requête `/me/visits` → les passages
+  antérieurs avec email correspondant restent visibles au client.
+- Aucun changement sur la caisse (App.jsx) — le flux d'encaissement est
+  identique. Le lookup est fait silencieusement côté backend.
+- La vue agenda/transactions du commerçant n'est pas modifiée (la
+  nouvelle colonne n'est pas exposée côté API merchant pour l'instant).
+- Si le client n'est pas connecté avec un compte global, l'onglet
+  « Sur place » reste vide (endpoint auth protégé → 401).
+
+---
+
+## Session 2026-04-19 (suite 16) : Fix styles NavBar cassés sur Mes RDV + tabs scrollables
 
 ### Bug rapporté
 Click sur la card « Mes rendez-vous » du drawer → la page s'ouvre mais le
