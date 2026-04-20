@@ -115,7 +115,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `f599a2d` security(headers) Y: CSP + HSTS + Referrer-Policy + Permissions-Policy (frontend Vercel + backend middleware)
 - `76b2972` rgpd(opt-in) Z1: migration DB + filtres marketing_opt_in + endpoint unsubscribe
 - `f5457da` rgpd(opt-in) Z2: injection lien unsubscribe dans SMS + email marketing
-- `<Z3-hash>` rgpd(opt-in) Z3: checkbox opt-in inscription (quick + full) + toggle profil client + endpoints backend
+- `6e7935b` rgpd(opt-in) Z3: checkbox opt-in inscription (quick + full) + toggle profil client + endpoints backend
 
 ### 🔒 RGPD opt-in marketing — commits Z1/Z2/Z3
 
