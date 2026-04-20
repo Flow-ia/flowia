@@ -2,25 +2,57 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const PDFDocument = require('pdfkit');
 const router   = express.Router();
 router.use(authMiddleware);
 
-function escCsv(v) {
+// AUDIT export #3 + #4 + #5 : escCsv robuste contre séparateurs multiples,
+// injection de formules Excel (= + - @ \t \r), et double escape.
+// IMPORTANT : ne jamais repasser une valeur déjà escapée dans cette fonction.
+function escCsv(v, sep = ';') {
   if (v == null) return '';
-  const s = String(v);
-  return s.includes(',') || s.includes('"') || s.includes('\n')
-    ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = String(v);
+  // Préfixe apostrophe si le champ peut être interprété comme formule Excel.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  const needsQuote = s.includes(sep) || s.includes(',') || s.includes('"')
+                  || s.includes('\n') || s.includes('\r');
+  return needsQuote ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// AUDIT export #1 : valider dates YYYY-MM-DD et UUIDs avant usage SQL pour
+// éviter 500 PG (qui fuitait err.message) et DoS facile.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function validDate(s)  { return typeof s === 'string' && DATE_RE.test(s); }
+function validUuid(s)  { return typeof s === 'string' && UUID_RE.test(s); }
+// AUDIT export #12 : borne max 2 ans sur une plage (DoS mémoire PDFKit).
+const MAX_RANGE_DAYS = 2 * 366;
+function rangeOk(fromD, toD) {
+  const diff = (new Date(toD) - new Date(fromD)) / 86400000;
+  return diff >= 0 && diff <= MAX_RANGE_DAYS;
 }
 
 // ── GET /api/export/csv?from=&to=&employee_id=&category_id=&type= ─────────────
-router.get('/csv', async (req, res) => {
+// AUDIT export #9 : protégé par PIN admin (export complet = données sensibles).
+router.get('/csv', pinAdminMiddleware, async (req, res) => {
   try {
     const { from, to, employee_id, category_id, type, include_payment, include_employees } = req.query;
     const fromD = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
     const toD   = to   || new Date().toISOString().split('T')[0];
     const withPayment   = include_payment   === '1';
     const withEmployees = include_employees === '1';
+
+    if (!validDate(fromD) || !validDate(toD))
+      return res.status(400).json({ error: 'Dates invalides (format YYYY-MM-DD attendu).' });
+    if (!rangeOk(fromD, toD))
+      return res.status(400).json({ error: `Plage max ${MAX_RANGE_DAYS} jours.` });
+    if (employee_id && employee_id !== 'all' && !validUuid(employee_id))
+      return res.status(400).json({ error: 'employee_id invalide.' });
+    if (category_id && category_id !== 'all' && !validUuid(category_id))
+      return res.status(400).json({ error: 'category_id invalide.' });
+    if (type && !['all','revenue','expense'].includes(type))
+      return res.status(400).json({ error: 'type invalide.' });
 
     const { rows: biz } = await pool.query(
       'SELECT business_name FROM users WHERE id=$1', [req.user.userId]);
@@ -65,8 +97,8 @@ router.get('/csv', async (req, res) => {
       WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
 
-    if (employee_id) { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
-    if (category_id) { params.push(category_id); q += ` AND t.category_id=$${params.length}`; }
+    if (employee_id && employee_id !== 'all') { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
+    if (category_id && category_id !== 'all') { params.push(category_id); q += ` AND t.category_id=$${params.length}`; }
     if (type && type !== 'all') { params.push(type); q += ` AND t.type=$${params.length}`; }
     q += ' ORDER BY t.date ASC, t.time ASC';
 
@@ -79,6 +111,8 @@ router.get('/csv', async (req, res) => {
     let csv = BOM + header.join(sep) + '\r\n';
     let totalRev = 0, totalExp = 0;
 
+    // AUDIT export #4 : un seul passage escCsv par cellule (le map final), pas
+    // de pré-escape sur categorie/employe/description.
     for (const r of rows) {
       const isRev = r.type === 'Recette';
       if (isRev) totalRev += parseFloat(r.amount)||0;
@@ -90,11 +124,11 @@ router.get('/csv', async (req, res) => {
         String(parseFloat(r.remise).toFixed(2)).replace('.', ','),
         String(parseFloat(r.montant_brut).toFixed(2)).replace('.', ','),
         r.mode_paiement,
-        escCsv(r.categorie),
-        escCsv(r.employe),
-        escCsv(r.description),
+        r.categorie,
+        r.employe,
+        r.description,
         r.source,
-      ].map(escCsv).join(sep) + '\r\n';
+      ].map(v => escCsv(v, sep)).join(sep) + '\r\n';
     }
 
     // Totaux
@@ -136,32 +170,37 @@ router.get('/csv', async (req, res) => {
       csv += `${sep}${sep}CA PAR MOYEN DE PAIEMENT\r\n`;
       csv += `${sep}${sep}Mode${sep}CA${sep}Transactions\r\n`;
       pmRows.forEach(r => {
-        csv += `${sep}${sep}${escCsv(r.mode)}${sep}${String(parseFloat(r.total).toFixed(2)).replace('.', ',')}${sep}${r.nb}\r\n`;
+        csv += `${sep}${sep}${escCsv(r.mode, sep)}${sep}${String(parseFloat(r.total).toFixed(2)).replace('.', ',')}${sep}${r.nb}\r\n`;
       });
     }
 
     // ── CA par employé ──────────────────────────────────────────────────────
+    // AUDIT export #7 : GROUP BY e.id pour éviter fusion d'employés homonymes.
     if (withEmployees) {
       const { rows: empRows } = await pool.query(
         `SELECT COALESCE(e.name, 'Non attribué') as employe, SUM(t.amount) as total, COUNT(*) as nb
          FROM transactions t LEFT JOIN employees e ON e.id=t.employee_id
          WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
-         GROUP BY e.name ORDER BY total DESC`,
+         GROUP BY e.id, e.name ORDER BY total DESC`,
         [req.user.userId, fromD, toD]
       );
       csv += '\r\n';
       csv += `${sep}${sep}CA PAR EMPLOYÉ (classement décroissant)\r\n`;
       csv += `${sep}${sep}Classement${sep}Employé${sep}CA${sep}Transactions\r\n`;
       empRows.forEach((r, i) => {
-        csv += `${sep}${sep}${i+1}${sep}${escCsv(r.employe)}${sep}${String(parseFloat(r.total).toFixed(2)).replace('.', ',')}${sep}${r.nb}\r\n`;
+        csv += `${sep}${sep}${i+1}${sep}${escCsv(r.employe, sep)}${sep}${String(parseFloat(r.total).toFixed(2)).replace('.', ',')}${sep}${r.nb}\r\n`;
       });
     }
 
+    // AUDIT export #10 : fromD/toD sont validés, donc safe dans filename.
     const filename = `export-comptable_${fromD}_${toD}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
-  } catch(e) { console.error('[EXPORT CSV]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[EXPORT CSV]', e.message);
+    res.status(500).json({ error: 'Erreur serveur lors de la génération du CSV.' });
+  }
 });
 
 // ── GET /api/export/summary?from=&to= ── données pour preview ────────────────
@@ -171,7 +210,22 @@ router.get('/summary', async (req, res) => {
     const fromD = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
     const toD   = to   || new Date().toISOString().split('T')[0];
 
+    if (!validDate(fromD) || !validDate(toD))
+      return res.status(400).json({ error: 'Dates invalides.' });
+    if (!rangeOk(fromD, toD))
+      return res.status(400).json({ error: `Plage max ${MAX_RANGE_DAYS} jours.` });
+    if (employee_id && employee_id !== 'all' && !validUuid(employee_id))
+      return res.status(400).json({ error: 'employee_id invalide.' });
+    if (category_id && category_id !== 'all' && !validUuid(category_id))
+      return res.status(400).json({ error: 'category_id invalide.' });
+    if (type && !['all','revenue','expense'].includes(type))
+      return res.status(400).json({ error: 'type invalide.' });
+
+    // AUDIT export #6 : séparer le COUNT par type (total_tx mélangeait recettes+dépenses
+    // alors que total_revenus/total_depenses étaient typés → KPI trompeur).
     let q = `SELECT
+        COUNT(*) FILTER (WHERE t.type='revenue') as total_tx_revenue,
+        COUNT(*) FILTER (WHERE t.type='expense') as total_tx_expense,
         COUNT(*) as total_tx,
         COALESCE(SUM(CASE WHEN t.type='revenue' THEN t.amount ELSE 0 END),0) as total_revenus,
         COALESCE(SUM(CASE WHEN t.type='expense' THEN t.amount ELSE 0 END),0) as total_depenses,
@@ -179,24 +233,39 @@ router.get('/summary', async (req, res) => {
         COUNT(DISTINCT t.category_id) as nb_categories
       FROM transactions t WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
-    if (employee_id) { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
-    if (category_id) { params.push(category_id); q += ` AND t.category_id=$${params.length}`; }
+    if (employee_id && employee_id !== 'all') { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
+    if (category_id && category_id !== 'all') { params.push(category_id); q += ` AND t.category_id=$${params.length}`; }
     if (type && type !== 'all') { params.push(type); q += ` AND t.type=$${params.length}`; }
 
     const { rows } = await pool.query(q, params);
     res.json({ ...rows[0], from: fromD, to: toD });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[EXPORT SUMMARY]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 
 // ── GET /api/export/pdf ────────────────────────────────────────────────────────
-router.get('/pdf', async (req, res) => {
+// AUDIT export #9 : protégé par PIN admin (export complet = données sensibles).
+router.get('/pdf', pinAdminMiddleware, async (req, res) => {
   try {
     const { from, to, employee_id, category_id, type, include_payment, include_employees } = req.query;
     const fromD = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
     const toD   = to   || new Date().toISOString().split('T')[0];
     const withPayment   = include_payment   === '1';
     const withEmployees = include_employees === '1';
+
+    if (!validDate(fromD) || !validDate(toD))
+      return res.status(400).json({ error: 'Dates invalides.' });
+    if (!rangeOk(fromD, toD))
+      return res.status(400).json({ error: `Plage max ${MAX_RANGE_DAYS} jours.` });
+    if (employee_id && employee_id !== 'all' && !validUuid(employee_id))
+      return res.status(400).json({ error: 'employee_id invalide.' });
+    if (category_id && category_id !== 'all' && !validUuid(category_id))
+      return res.status(400).json({ error: 'category_id invalide.' });
+    if (type && !['all','revenue','expense'].includes(type))
+      return res.status(400).json({ error: 'type invalide.' });
 
     const { rows: biz } = await pool.query(
       'SELECT business_name, email FROM users WHERE id=$1', [req.user.userId]);
@@ -238,8 +307,8 @@ router.get('/pdf', async (req, res) => {
       WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
 
-    if (employee_id) { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
-    if (category_id) { params.push(category_id); q += ` AND t.category_id=$${params.length}`; }
+    if (employee_id && employee_id !== 'all') { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
+    if (category_id && category_id !== 'all') { params.push(category_id); q += ` AND t.category_id=$${params.length}`; }
     if (type && type !== 'all') { params.push(type); q += ` AND t.type=$${params.length}`; }
     q += ' ORDER BY t.date ASC, t.time ASC';
 
@@ -284,12 +353,13 @@ router.get('/pdf', async (req, res) => {
         [req.user.userId, fromD, toD]);
       pmRows = res2.rows;
     }
+    // AUDIT export #7 : GROUP BY e.id pour éviter fusion d'employés homonymes.
     if (withEmployees) {
       const res3 = await pool.query(
         `SELECT COALESCE(e.name,'Non attribue') as employe, SUM(t.amount) as total, COUNT(*) as nb
          FROM transactions t LEFT JOIN employees e ON e.id=t.employee_id
          WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
-         GROUP BY e.name ORDER BY total DESC`,
+         GROUP BY e.id, e.name ORDER BY total DESC`,
         [req.user.userId, fromD, toD]);
       empRows = res3.rows;
     }
@@ -559,7 +629,7 @@ router.get('/pdf', async (req, res) => {
     doc.end();
   } catch (e) {
     console.error('[EXPORT PDF]', e.message);
-    if (!res.headersSent) res.status(500).json({ error: e.message });
+    if (!res.headersSent) res.status(500).json({ error: 'Erreur serveur lors de la génération du PDF.' });
   }
 });
 
