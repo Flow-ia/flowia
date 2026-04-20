@@ -55,7 +55,7 @@ dans `git log` (le fichier a été réinitialisé).
   produit (saisie d'absence = opérationnel quotidien, pas RH critique).
 
 ### Commit
-- `<TBD>` audit(rh/paie) O: pinAdmin gaps + type preservation + error hygiene
+- `95c4e09` audit(rh/paie) O: pinAdmin gaps + type preservation + error hygiene
 
 ---
 
