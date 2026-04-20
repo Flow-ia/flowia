@@ -109,7 +109,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `2f80d47` feat(qr) S: UI QR dans Settings/Clients — canvas + download PNG 512px + copy lien (lib `qrcode`)
 - `151877d` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
 - `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
-- `<V-hash>` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
+- `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
 
 ### 🔒 Audit transactions.js — commit V
 
