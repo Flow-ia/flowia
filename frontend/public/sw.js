@@ -1,8 +1,17 @@
 // Service Worker — FlowFinances
 // Gère les push notifications Web Push en arrière-plan
+// J19 : version du SW — augmenter pour forcer un refresh chez tous les clients
+// (utile quand on modifie la logique push/click). Loggué au register/activate.
+const SW_VERSION = '2026-04-20-1';
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('install', () => {
+  console.log('[SW] install v' + SW_VERSION);
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  console.log('[SW] activate v' + SW_VERSION);
+  e.waitUntil(self.clients.claim());
+});
 
 // ── Réception d'une push notification ────────────────────────────────────────
 self.addEventListener('push', event => {

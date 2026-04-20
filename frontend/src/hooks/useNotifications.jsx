@@ -153,8 +153,30 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
   useEffect(() => {
     if (!enabled) return;
     loadNotifications();
-    pollRef.current = setInterval(loadNotifications, 30000);
-    return () => clearInterval(pollRef.current);
+    // J25 : polling 30s, mais pause quand l'onglet est caché (économie batterie
+    // mobile). Re-fetch immédiat au retour au foreground pour rattraper les
+    // notifs reçues pendant l'absence.
+    const startPoll = () => {
+      if (pollRef.current) return;
+      pollRef.current = setInterval(loadNotifications, 30000);
+    };
+    const stopPoll = () => {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications();
+        startPoll();
+      } else {
+        stopPoll();
+      }
+    };
+    if (document.visibilityState === 'visible') startPoll();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      stopPoll();
+    };
   }, [loadNotifications]);
 
   useEffect(() => {
@@ -182,15 +204,33 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
       const reg = await navigator.serviceWorker.getRegistration('/');
       if (!reg) return;
       const sub = await reg.pushManager.getSubscription();
-      if (sub) { await notifApi.unsubscribePush({ endpoint: sub.endpoint }); await sub.unsubscribe(); }
+      if (sub) {
+        // J16 : ordre inversé + sub.unsubscribe dans try/catch pour garantir
+        // la suppression serveur même si le navigateur rejette l'unsubscribe
+        // local (cas rare). Un sub fantôme côté navigateur crée aujourd'hui
+        // une re-sub silencieuse au prochain enablePush via l'UPSERT.
+        try { await sub.unsubscribe(); } catch (uErr) {
+          console.warn('[disablePush] sub.unsubscribe local a échoué', uErr?.message);
+        }
+        await notifApi.unsubscribePush({ endpoint: sub.endpoint }).catch(() => {});
+      }
       setPushEnabled(false);
     } catch {}
   }, []);
 
   const markRead = useCallback(async (id) => {
-    await notifApi.markRead({ id });
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    // J15 : ne décrémente le badge QUE si la notif n'était pas déjà lue.
+    // Double-clic ou re-click sur une notif déjà lue n'impacte plus le count.
+    let wasUnread = false;
+    setNotifications(prev => prev.map(n => {
+      if (n.id === id) {
+        if (!n.is_read) wasUnread = true;
+        return { ...n, is_read: true };
+      }
+      return n;
+    }));
+    if (wasUnread) setUnreadCount(prev => Math.max(0, prev - 1));
+    try { await notifApi.markRead({ id }); } catch {}
   }, []);
 
   const markAllRead = useCallback(async () => {
