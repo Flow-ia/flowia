@@ -19,6 +19,13 @@ const crypto   = require('crypto');
 const router   = express.Router();
 router.use(authMiddleware);
 
+// RFC5322-lite : suffisant pour rejeter `test@@x`, espaces, caractères exotiques
+// sans tomber dans la regex cauchemardesque du standard complet.
+const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+function isValidEmail(e) {
+  return typeof e === 'string' && e.length <= 254 && EMAIL_RE.test(e.trim());
+}
+
 // ─── Helper : upsert fiche locale ────────────────────────────────────────────
 async function upsertLocalClient(userId, { email, first_name, last_name, phone, notes }) {
   if (!email && !phone && !first_name) return null;
@@ -237,6 +244,7 @@ router.post('/', async (req, res) => {
     const uid = req.user.userId;
     const { email, first_name, last_name, phone, notes } = req.body;
     if (!first_name && !email) return res.status(400).json({ error: 'Nom ou email requis.' });
+    if (email && !isValidEmail(email)) return res.status(400).json({ error: 'Email invalide.' });
     const client = await upsertLocalClient(uid, { email, first_name, last_name, phone, notes });
     res.json(client);
   } catch (e) {
@@ -268,7 +276,7 @@ router.get('/:id', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
          ca.id, ca.user_id, ca.email, ca.first_name, ca.last_name, ca.phone,
-         ca.notes, ca.created_at, ca.global_client_id, ca.password_hash,
+         ca.notes, ca.created_at, ca.global_client_id,
          CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
          COALESCE(ca.first_name||' '||ca.last_name, ca.email) AS full_name,
          gc.is_verified AS has_global_account,
@@ -452,6 +460,28 @@ router.post('/:id/invite', async (req, res) => {
     if (!client.email) {
       return res.status(400).json({ error: 'Email requis pour envoyer une invitation.' });
     }
+    if (!isValidEmail(client.email)) {
+      return res.status(400).json({ error: 'Email invalide.' });
+    }
+
+    // Si un global_client vérifié existe déjà pour cet email (chez un autre
+    // merchant), il ne faut pas écraser son invite_token — ce serait un vecteur
+    // d'abus (spam d'invitations à des clients d'autres prestataires).
+    // On lie la fiche locale au compte existant et on sort avec un message clair.
+    const { rows: existingGc } = await pool.query(
+      'SELECT id, is_verified FROM global_clients WHERE LOWER(email)=LOWER($1)',
+      [client.email]
+    );
+    if (existingGc[0]?.is_verified) {
+      await pool.query(
+        'UPDATE client_accounts SET global_client_id=$1 WHERE id=$2 AND global_client_id IS NULL',
+        [existingGc[0].id, client.id]
+      );
+      return res.status(400).json({
+        error: 'Ce client possède déjà un compte plateforme actif. Fiche liée automatiquement.',
+        _linked: true,
+      });
+    }
 
     const { rows: biz } = await pool.query('SELECT business_name, email FROM users WHERE id=$1', [uid]);
     const bizName = biz[0]?.business_name || biz[0]?.email?.split('@')[0] || 'Votre prestataire';
@@ -465,7 +495,8 @@ router.post('/:id/invite', async (req, res) => {
          invite_sent_at = NOW(),
          first_name     = COALESCE(NULLIF(global_clients.first_name,''), EXCLUDED.first_name),
          last_name      = COALESCE(NULLIF(global_clients.last_name,''), EXCLUDED.last_name),
-         phone          = COALESCE(NULLIF(global_clients.phone,''), EXCLUDED.phone)`,
+         phone          = COALESCE(NULLIF(global_clients.phone,''), EXCLUDED.phone)
+       WHERE global_clients.is_verified = FALSE`,
       [client.email, client.first_name, client.last_name||'', client.phone||null, token]
     );
 

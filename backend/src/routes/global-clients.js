@@ -9,6 +9,19 @@ const crypto   = require('crypto');
 const { sendPasswordReset, sendVerificationEmail } = require('../utils/email');
 const router   = express.Router();
 
+// Regex email commune aux routes register/reset/invite. Rejette `a@@b`, espaces,
+// caractères exotiques, emails >254 chars (RFC 5321 SMTP cap).
+const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+function isValidEmail(e) {
+  return typeof e === 'string' && e.length <= 254 && EMAIL_RE.test(e.trim());
+}
+// Vérifie qu'une chaîne YYYY-MM-DD est bien une date réelle (ex: 2024-02-31 refusé)
+function isRealDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Middleware : authentification compte client global
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,17 +65,20 @@ router.post('/register', async (req, res) => {
     const { email, password, first_name, last_name, phone, invite_token, birth_date } = req.body;
     if (!email || !password || !first_name)
       return res.status(400).json({ error: 'Email, mot de passe et prénom requis.' });
+    if (!isValidEmail(email))
+      return res.status(400).json({ error: 'Email invalide.' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
 
     const emailLow = email.toLowerCase().trim();
     // Accepte YYYY-MM-DD et YYYY-MM (= 1er du mois). Cohérent avec
     // public-booking register et l'UI client (select mois+année).
+    // Refuse les dates impossibles (ex: 2024-02-31) qui passent la regex.
     let bd = null;
     if (birth_date && typeof birth_date === 'string') {
       const s = birth_date.trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bd = s;
-      else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s) && isRealDate(s))      bd = s;
+      else if (/^\d{4}-\d{2}$/.test(s) && isRealDate(s + '-01')) bd = s + '-01';
     }
 
     // Vérifier si email déjà pris
@@ -994,22 +1010,25 @@ async function deleteCode(key) {
 // Envoie un code de réinitialisation par email (6 chiffres, valide 15 min)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/forgot-password', async (req, res) => {
+  // Défense timing-attack : la branche "email inexistant" retourne en <5ms alors
+  // que la branche "email trouvé" prend ~300ms (saveCode + sendPasswordReset SMTP).
+  // Un attaquant énumère ainsi les comptes via la latence HTTP. On impose un
+  // plancher de 400ms dans tous les cas.
+  const floor = new Promise((r) => setTimeout(r, 400));
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email requis.' });
+    if (!email) { await floor; return res.status(400).json({ error: 'Email requis.' }); }
     const emailLow = email.trim().toLowerCase();
 
     const { rows } = await pool.query(
       'SELECT id, first_name, last_name FROM global_clients WHERE LOWER(email)=LOWER($1)',
       [emailLow]
     );
-    // Toujours répondre OK pour ne pas révéler si le compte existe
-    if (!rows.length) return res.json({ ok: true });
+    if (!rows.length) { await floor; return res.json({ ok: true }); }
 
     const gc   = rows[0];
     const code = String(Math.floor(100000 + Math.random() * 900000));
 
-    // Stocker dans verification_codes (fiable, pas de dépendance de migration)
     await saveCode(`gc_rst_${emailLow}`, code, { gcId: gc.id, email: emailLow }, 15);
 
     try {
@@ -1022,10 +1041,12 @@ router.post('/forgot-password', async (req, res) => {
       console.error('[RESET EMAIL ERR]', emailErr.message);
     }
 
+    await floor;
     res.json({ ok: true });
   } catch (e) {
     console.error('[forgot-password]', e);
-    res.status(500).json({ error: e.message });
+    await floor;
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -1077,7 +1098,7 @@ router.post('/reset-password', async (req, res) => {
     res.json({ ok: true, message: 'Mot de passe mis à jour avec succès.' });
   } catch (e) {
     console.error('[reset-password]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
