@@ -56,7 +56,14 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
 
     const emailLow = email.toLowerCase().trim();
-    const bd = (birth_date && /^\d{4}-\d{2}-\d{2}$/.test(birth_date)) ? birth_date : null;
+    // Accepte YYYY-MM-DD et YYYY-MM (= 1er du mois). Cohérent avec
+    // public-booking register et l'UI client (select mois+année).
+    let bd = null;
+    if (birth_date && typeof birth_date === 'string') {
+      const s = birth_date.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bd = s;
+      else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
+    }
 
     // Vérifier si email déjà pris
     const { rows: ex } = await pool.query(
@@ -280,9 +287,16 @@ router.get('/me', globalClientAuth, async (req, res) => {
 router.patch('/me', globalClientAuth, async (req, res) => {
   try {
     const { birth_date, phone, first_name, last_name } = req.body;
-    const bd = birth_date === '' || birth_date === null
-      ? null
-      : (birth_date && /^\d{4}-\d{2}-\d{2}$/.test(birth_date) ? birth_date : undefined);
+    // Accepte YYYY-MM-DD, YYYY-MM (1er du mois), '' / null (effacer), undefined (ne pas toucher)
+    let bd;
+    if (birth_date === '' || birth_date === null) bd = null;
+    else if (typeof birth_date === 'string') {
+      const s = birth_date.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bd = s;
+      else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
+      else                                    bd = undefined;
+    } else bd = undefined;
+
     const fields = [];
     const vals   = [];
     let i = 1;
@@ -292,12 +306,40 @@ router.patch('/me', globalClientAuth, async (req, res) => {
     if (last_name != null) { fields.push(`last_name=$${i++}`);  vals.push(last_name || ''); }
     if (!fields.length) return res.json({ ok: true, unchanged: true });
     fields.push(`updated_at=NOW()`);
-    vals.push(req.globalClient.globalClientId);
+    const gcId = req.globalClient.globalClientId;
+    vals.push(gcId);
     const { rows } = await pool.query(
       `UPDATE global_clients SET ${fields.join(', ')} WHERE id=$${i}
          RETURNING id, email, first_name, last_name, phone, birth_date`,
       vals
     );
+    // Propage birth_date (et autres champs) aux fiches locales liées.
+    // Sans cela, le cron anniversaire (qui lit client_accounts.birth_date)
+    // ne verrait pas la mise à jour → aucune promo émise.
+    if (bd !== undefined) {
+      await pool.query(
+        `UPDATE client_accounts SET birth_date=$1 WHERE global_client_id=$2`,
+        [bd, gcId]
+      ).catch(e => console.warn('[GC PATCH /me propagate birth]', e.message));
+    }
+    if (phone != null) {
+      await pool.query(
+        `UPDATE client_accounts SET phone=$1 WHERE global_client_id=$2`,
+        [phone || null, gcId]
+      ).catch(() => {});
+    }
+    if (first_name != null && first_name.trim()) {
+      await pool.query(
+        `UPDATE client_accounts SET first_name=$1 WHERE global_client_id=$2`,
+        [first_name.trim(), gcId]
+      ).catch(() => {});
+    }
+    if (last_name != null) {
+      await pool.query(
+        `UPDATE client_accounts SET last_name=$1 WHERE global_client_id=$2`,
+        [last_name || '', gcId]
+      ).catch(() => {});
+    }
     res.json(rows[0]);
   } catch(e) { console.error('[GC PATCH /me]', e.message); res.status(500).json({ error: e.message }); }
 });

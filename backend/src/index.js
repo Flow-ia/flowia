@@ -548,31 +548,40 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       const { sendBirthdayPromo } = require('./utils/email');
       let totalSent = 0;
 
+      // Fallback 29 février : en année non-bissextile, on fait correspondre
+      // aussi les naissances du 29/02 au 28/02.
+      const todayMon = now.getMonth() + 1;
+      const todayDay = now.getDate();
+      const y = now.getFullYear();
+      const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+      const feb29Fallback = (!isLeap && todayMon === 2 && todayDay === 28)
+        ? ` OR (EXTRACT(MONTH FROM ca.birth_date)=2 AND EXTRACT(DAY FROM ca.birth_date)=29)`
+        : '';
+
       for (const camp of campaigns) {
         // Clients de ce commerçant dont c'est l'anniversaire aujourd'hui.
-        // Anti-fraude : exclus les clients ayant déjà reçu un reward dans les
-        // 330 derniers jours (rolling window) — robuste face au changement
-        // de birth_date après bénéfice. Le match se fait aussi via le
-        // global_client lié pour suivre les clients à travers les commerces.
+        // Anti-fraude 330j : porté UNIQUEMENT par client_accounts (scope
+        // user_id → par commerçant). La version globale bloquait faussement
+        // les autres commerçants d'un client multi-commerces.
         const { rows: clients } = await dbPool.query(
           `SELECT DISTINCT ca.email, ca.first_name, ca.last_name
              FROM client_accounts ca
-             LEFT JOIN global_clients gc ON gc.id = ca.global_client_id
             WHERE ca.user_id = $1
               AND ca.birth_date IS NOT NULL
-              AND EXTRACT(MONTH FROM ca.birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
-              AND EXTRACT(DAY   FROM ca.birth_date) = EXTRACT(DAY   FROM CURRENT_DATE)
+              AND (
+                (EXTRACT(MONTH FROM ca.birth_date)=EXTRACT(MONTH FROM CURRENT_DATE)
+                 AND EXTRACT(DAY FROM ca.birth_date)=EXTRACT(DAY FROM CURRENT_DATE))
+                ${feb29Fallback}
+              )
               AND ca.email IS NOT NULL AND ca.email <> ''
               AND (ca.last_birthday_reward_at IS NULL
-                   OR ca.last_birthday_reward_at < NOW() - INTERVAL '330 days')
-              AND (gc.last_birthday_reward_at IS NULL
-                   OR gc.last_birthday_reward_at < NOW() - INTERVAL '330 days')`,
+                   OR ca.last_birthday_reward_at < NOW() - INTERVAL '330 days')`,
           [camp.user_id]
         );
         if (!clients.length) continue;
 
-        const validity = parseInt(camp.validity_days) || 30;
-        const year = now.getFullYear();
+        const validity = Math.max(1, parseInt(camp.validity_days) || 30);
+        const year = y;
 
         for (const c of clients) {
           const emailLow = c.email.toLowerCase();
@@ -590,39 +599,62 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
             if (already.length) continue;
             if (global.emailsToday >= 300) { console.log('[CRON birthday] limite email atteinte'); return; }
 
+            // INSERT promo + INSERT reward en TRANSACTION atomique.
+            // + Retry (3 tentatives) sur collision UNIQUE(user_id, code) —
+            //   4 chars aléatoires = ~1.6M combinaisons, collision possible
+            //   chez un gros commerçant avec plusieurs clients aux mêmes
+            //   initiales.
             const initials = [c.first_name, c.last_name]
               .filter(Boolean).map(s => s.charAt(0).toUpperCase()).join('') || 'C';
-            const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-            const code = `BDAY-${initials}-${rand}`;
-
-            const { rows: promo } = await dbPool.query(
-              `INSERT INTO promo_codes
-                 (user_id, code, type, value, max_uses, valid_from, valid_until,
-                  is_active, target_clients, owner_client_email)
-               VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + ($5 || ' days')::INTERVAL,
-                       TRUE,'specific',$6)
-               RETURNING id, valid_until`,
-              [camp.user_id, code, camp.discount_type, camp.discount_value,
-               String(validity), emailLow]
-            );
-            await dbPool.query(
-              `INSERT INTO client_rewards
-                 (user_id, client_email, reward_type, status, promo_code_id, expires_at)
-               VALUES ($1,$2,'birthday','available',$3,(CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
-              [camp.user_id, emailLow, promo[0].id, String(validity)]
-            );
-            // Anti-fraude : tag le dernier reward anniversaire sur les 2 tables.
-            // Empêche un second reward avant 330j même si la birth_date change.
-            await dbPool.query(
-              `UPDATE client_accounts SET last_birthday_reward_at = NOW()
-                WHERE user_id=$1 AND LOWER(email)=$2`,
-              [camp.user_id, emailLow]
-            );
-            await dbPool.query(
-              `UPDATE global_clients SET last_birthday_reward_at = NOW()
-                WHERE LOWER(email)=$1`,
-              [emailLow]
-            );
+            const txClient = await dbPool.connect();
+            let promoRow = null;
+            let code = null;
+            try {
+              await txClient.query('BEGIN');
+              let inserted = false;
+              for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
+                const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+                code = `BDAY-${initials}-${rand}`;
+                try {
+                  const { rows } = await txClient.query(
+                    `INSERT INTO promo_codes
+                       (user_id, code, type, value, max_uses, valid_from, valid_until,
+                        is_active, target_clients, owner_client_email)
+                     VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + ($5 || ' days')::INTERVAL,
+                             TRUE,'specific',$6)
+                     RETURNING id, valid_until`,
+                    [camp.user_id, code, camp.discount_type, camp.discount_value,
+                     String(validity), emailLow]
+                  );
+                  promoRow = rows[0];
+                  inserted = true;
+                } catch (dupErr) {
+                  if (dupErr.code !== '23505') throw dupErr; // autre erreur → abort
+                  // collision code — savepoint SQL invalidé, on recommence la tx
+                  await txClient.query('ROLLBACK');
+                  await txClient.query('BEGIN');
+                }
+              }
+              if (!inserted) throw new Error(`code collision 3x for ${emailLow}`);
+              await txClient.query(
+                `INSERT INTO client_rewards
+                   (user_id, client_email, reward_type, status, promo_code_id, expires_at)
+                 VALUES ($1,$2,'birthday','available',$3,(CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
+                [camp.user_id, emailLow, promoRow.id, String(validity)]
+              );
+              await txClient.query(
+                `UPDATE client_accounts SET last_birthday_reward_at = NOW()
+                  WHERE user_id=$1 AND LOWER(email)=$2`,
+                [camp.user_id, emailLow]
+              );
+              await txClient.query('COMMIT');
+            } catch (txErr) {
+              try { await txClient.query('ROLLBACK'); } catch(_) {}
+              throw txErr;
+            } finally {
+              txClient.release();
+            }
+            const promo = [promoRow];
 
             const clientName = [c.first_name, c.last_name].filter(Boolean).join(' ');
             await sendBirthdayPromo({

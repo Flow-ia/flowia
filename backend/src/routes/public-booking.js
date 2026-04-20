@@ -1409,20 +1409,36 @@ router.put('/:slug/client/profile', async (req, res) => {
     );
     if (!updated.rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
 
-    // Sync global_clients si lié (email exclu — passe par /change-email)
+    // Sync global_clients + TOUTES les fiches locales liées (autres commerçants).
+    // Sans le fan-out, le cron anniversaire de chaque commerçant lirait une
+    // birth_date obsolète → plusieurs promos manquées. Email exclu (passe par
+    // /change-email).
     try {
       const { rows: gc } = await pool.query(
         'SELECT global_client_id FROM client_accounts WHERE id=$1', [decoded.clientId]
       );
       if (gc[0]?.global_client_id) {
+        const gcId = gc[0].global_client_id;
         const gcSets = ['first_name=$1', 'last_name=$2', 'phone=$3'];
         const gcVals = [first_name.trim(), last_name.trim(), phone?.trim()||null];
         let gi = 4;
         if (bdParam !== undefined) { gcSets.push(`birth_date=$${gi++}`); gcVals.push(bdParam); }
-        gcVals.push(gc[0].global_client_id);
+        gcVals.push(gcId);
         await pool.query(
           `UPDATE global_clients SET ${gcSets.join(', ')} WHERE id=$${gi}`,
           gcVals
+        );
+        // Fan-out vers les autres fiches locales (même global_client_id,
+        // autres commerçants). Exclut la fiche actuelle déjà mise à jour.
+        const faSets = ['first_name=$1', 'last_name=$2', 'phone=$3'];
+        const faVals = [first_name.trim(), last_name.trim(), phone?.trim()||null];
+        let fi = 4;
+        if (bdParam !== undefined) { faSets.push(`birth_date=$${fi++}`); faVals.push(bdParam); }
+        faVals.push(gcId, decoded.clientId);
+        await pool.query(
+          `UPDATE client_accounts SET ${faSets.join(', ')}
+            WHERE global_client_id=$${fi++} AND id<>$${fi}`,
+          faVals
         );
       }
     } catch(_) {}
