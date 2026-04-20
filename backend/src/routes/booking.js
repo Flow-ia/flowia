@@ -411,7 +411,32 @@ router.put('/appointments/:id', async (req, res) => {
 
 router.delete('/appointments/:id', async (req, res) => {
   try {
+    // Cascade parrainage : révoquer les referral_uses liés AVANT le DELETE
+    // (ON DELETE SET NULL sur appointment_id sinon on perd la trace).
+    const { rows: refs } = await pool.query(
+      `SELECT id, parrain_promo_id FROM referral_uses
+        WHERE appointment_id=$1 AND user_id=$2`,
+      [req.params.id, req.user.userId]
+    );
     await pool.query('DELETE FROM appointments WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
+    for (const ref of refs) {
+      try {
+        await pool.query(
+          `UPDATE referral_uses SET status='cancelled' WHERE id=$1`, [ref.id]
+        );
+        if (ref.parrain_promo_id) {
+          await pool.query(
+            `UPDATE promo_codes SET is_active=FALSE WHERE id=$1 AND user_id=$2`,
+            [ref.parrain_promo_id, req.user.userId]
+          );
+          await pool.query(
+            `UPDATE client_rewards SET status='cancelled'
+              WHERE promo_code_id=$1 AND status='available'`,
+            [ref.parrain_promo_id]
+          );
+        }
+      } catch (cErr) { console.warn('[APPT DELETE referral cascade]', cErr.message); }
+    }
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });

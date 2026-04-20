@@ -287,8 +287,11 @@ export default function BookingPage({ slug }) {
   //      PRÉVENIR l'utilisateur AVANT qu'il ne valide sa réservation si les
   //      conditions ne sont pas remplies. Évite le faux espoir.
   // ⚠ Déclaré APRÈS clientUser : références dans la deps-array sinon TDZ.
+  // Reset préemptif de referralInfo à null quand l'email change pour éviter
+  // le clignotement "bandeau vert → bandeau orange" avec l'ancien state.
   useEffect(() => {
     if (!referralCode) { setReferralInfo(null); return; }
+    setReferralInfo(null); // cache tout bandeau pendant le refetch
     let cancelled = false;
     const email = clientUser?.email || '';
     pubApi.checkReferral(slug, referralCode, email)

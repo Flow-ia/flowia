@@ -467,15 +467,52 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
     if (!before || before.user_id !== req.user.userId)
       return res.status(404).json({ error: 'Transaction introuvable.' });
 
+    // Cascade parrainage AVANT le DELETE — récupérer les referral_uses
+    // liés avant que la FK ON DELETE SET NULL ne nous fasse perdre la trace.
+    // Un parrainage lié à une transaction supprimée doit être revoqué :
+    // annule le referral_use, désactive la promo parrain (si émise), et
+    // passe la client_rewards à 'cancelled' si elle n'est pas déjà 'used'.
+    const { rows: refs } = await pool.query(
+      `SELECT id, status, parrain_promo_id FROM referral_uses
+        WHERE transaction_id=$1 AND user_id=$2`,
+      [req.params.id, req.user.userId]
+    );
+
     await pool.query('DELETE FROM transactions WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
+
+    for (const ref of refs) {
+      try {
+        await pool.query(
+          `UPDATE referral_uses SET status='cancelled' WHERE id=$1`,
+          [ref.id]
+        );
+        if (ref.parrain_promo_id) {
+          // Désactiver la promo parrain (future utilisation bloquée).
+          // On ne rollback PAS les utilisations passées (audit trail).
+          await pool.query(
+            `UPDATE promo_codes SET is_active=FALSE
+              WHERE id=$1 AND user_id=$2`,
+            [ref.parrain_promo_id, req.user.userId]
+          );
+          // Annuler la client_rewards si elle est encore disponible.
+          await pool.query(
+            `UPDATE client_rewards SET status='cancelled'
+              WHERE promo_code_id=$1 AND status='available'`,
+            [ref.parrain_promo_id]
+          );
+        }
+      } catch (cErr) {
+        console.warn('[TX DELETE referral cascade]', cErr.message);
+      }
+    }
 
     global.memCache?.del(`txs:${req.user.userId}`);
 
     await audit(req.user.userId, req.params.id, 'delete', before, null,
       req.body?.reason || 'Suppression admin');
 
-    res.json({ ok: true });
+    res.json({ ok: true, referrals_revoked: refs.length });
   } catch(e) { console.error('[TX DELETE]', e.message); res.status(500).json({ error: e.message }); }
 });
 
