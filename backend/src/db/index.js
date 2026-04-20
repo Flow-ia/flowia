@@ -50,6 +50,17 @@ if (process.env.DATABASE_URL) {
 }
 
 async function initDB() {
+  // Helpers migration — déclarés en tête pour éviter TDZ (utilisés dès les
+  // CREATE INDEX/ALTER COLUMN plus bas, avant les déclarations historiques).
+  const runMigration = async (sql) => {
+    try { await pool.query(sql); }
+    catch (e) { if (!e.message.includes('already exists')) console.warn('[DB migration]', e.message); }
+  };
+  const runMig = async (sql) => {
+    try { await pool.query(sql); }
+    catch (e) { if (!e.message.includes('already exists') && !e.message.includes("n'existe pas")) console.warn('[DB mig]', e.message.slice(0, 80)); }
+  };
+
   await pool.query(`
     -- ── Tables de base ──────────────────────────────────────────────────────
 
@@ -595,7 +606,7 @@ async function initDB() {
   `);
 
   // ── Migrations client_accounts + client_loyalty enrichis ───────────────────
-  const runMig = async (sql) => { try { await pool.query(sql); } catch(e) { if (!e.message.includes('already exists') && !e.message.includes('n\'existe pas')) console.warn('[DB mig]', e.message.slice(0,80)); } };
+  // (runMig est déclaré en tête de initDB)
   await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS global_client_id UUID REFERENCES global_clients(id) ON DELETE SET NULL`);
   await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
   await runMig(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS notes TEXT`);
@@ -623,7 +634,7 @@ async function initDB() {
   await runMig(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS email VARCHAR(255)`);
 
     // ── Migrations colonnes (séparées pour résistance aux erreurs) ────────────
-  const runMigration = async (sql) => { try { await pool.query(sql); } catch(e) { if (!e.message.includes('already exists')) console.warn('[DB migration]', e.message); } };
+  // (runMigration est déclaré en tête de initDB)
   await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS reward_type VARCHAR(20) DEFAULT 'percent'`);
   await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS count_trigger VARCHAR(20) DEFAULT 'both'`);
   await runMigration(`ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS reward_value NUMERIC(10,2) DEFAULT 10`);
