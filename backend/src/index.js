@@ -103,6 +103,24 @@ function startServer() {
     },
     credentials: true,
   }));
+
+  // Audit Y : security headers. Le backend sert du JSON uniquement (pas de
+  // HTML), CSP détaillée dans `frontend/vercel.json`. Ici on applique les
+  // headers transverses utiles même sur API :
+  // - nosniff : empêche le navigateur de "deviner" le type de contenu
+  // - X-Frame-Options: DENY → anti-clickjacking pour les éventuelles pages
+  //   d'erreur HTML (rare mais défensif)
+  // - HSTS : force HTTPS sur les sous-domaines (1 an)
+  // - Referrer-Policy : ne leak pas l'URL complète aux services tiers
+  // - Permissions-Policy : coupe les API sensibles par défaut
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), usb=(), autoplay=()');
+    next();
+  });
   // Webhook Stripe doit recevoir le raw body AVANT express.json()
   app.use('/api/payments/sms/webhook', express.raw({ type: 'application/json' }));
 
