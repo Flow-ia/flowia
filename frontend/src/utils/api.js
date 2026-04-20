@@ -20,10 +20,34 @@ async function adminRequest(path, options = {}) {
   return data;
 }
 
+// Lit le token PIN employé stocké pour un employeeId donné (sessionStorage
+// avec TTL 5 min client-side — cf. useEmployeePin). Utilisé pour envoyer
+// x-employee-pin sur les routes sensibles.
+function getEmployeePinToken(employeeId) {
+  if (!employeeId) return null;
+  try {
+    const raw = sessionStorage.getItem('ff_emp_pin_' + employeeId);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj?.token || !obj?.ts) return null;
+    if (Date.now() - obj.ts > 5 * 60 * 1000) {
+      sessionStorage.removeItem('ff_emp_pin_' + employeeId);
+      return null;
+    }
+    return obj.token;
+  } catch { return null; }
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Si actingEmployeeId fourni, injecter x-employee-pin header
+  // (backend employeePinOptional.js vérifie + charge req.employee).
+  if (options.actingEmployeeId) {
+    const pinT = getEmployeePinToken(options.actingEmployeeId);
+    if (pinT) headers['x-employee-pin'] = pinT;
+  }
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
@@ -119,7 +143,7 @@ export const api = {
 
   // ── Transactions ──────────────────────────────────────────────────────────
   getTransactions:    (q)      => request('/transactions' + (q ? '?' + new URLSearchParams(q) : '')),
-  createTransaction:  (b)      => request('/transactions',        { method: 'POST',   body: JSON.stringify(b) }),
+  createTransaction:  (b, actingEmployeeId) => request('/transactions',        { method: 'POST',   body: JSON.stringify(b), actingEmployeeId }),
   updateTransaction:  (id, b)  => adminRequest(`/transactions/${id}`,  { method: 'PUT',    body: JSON.stringify(b) }),
   deleteTransaction:  (id)     => adminRequest(`/transactions/${id}`,  { method: 'DELETE' }),
 };
@@ -151,9 +175,9 @@ export const bookingApi = {
   // RDV
   getAppointments:(q)   => request('/booking/appointments' + (q ? '?'+new URLSearchParams(q) : '')),
   createAppt:     (b)   => request('/booking/appointments',     { method: 'POST', body: JSON.stringify(b) }),
-  updateAppt:     (id,b)=> request(`/booking/appointments/${id}`,{ method: 'PUT',  body: JSON.stringify(b) }),
+  updateAppt:     (id,b,actingEmployeeId)=> request(`/booking/appointments/${id}`,{ method: 'PUT',  body: JSON.stringify(b), actingEmployeeId }),
   deleteAppt:     (id)  => request(`/booking/appointments/${id}`,{ method: 'DELETE' }),
-  checkoutAppt:   (id,b)=> request(`/booking/appointments/${id}/checkout`, { method: 'POST', body: JSON.stringify(b) }),
+  checkoutAppt:   (id,b,actingEmployeeId)=> request(`/booking/appointments/${id}/checkout`, { method: 'POST', body: JSON.stringify(b), actingEmployeeId }),
 
   // Clients
   getClients:     ()    => request('/booking/clients'),

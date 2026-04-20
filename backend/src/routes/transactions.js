@@ -5,9 +5,14 @@ const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const { upsertLocalClient } = require('./clients');
 const { resolveReferralForFilleul, validateReferralUse } = require('./referrals');
+const { employeePinOptional } = require('../middleware/employeePinOptional');
 const router = express.Router();
 
 router.use(authMiddleware);
+// AUDIT perms commit C : si un header x-employee-pin est présent, on
+// charge req.employee (flags can_*). Routes sensibles (POST) utilisent
+// req.employee.id comme employee_id (anti-spoofing du body).
+router.use(employeePinOptional);
 
 // ── Helper : snapshot complet d'une transaction (incl. items + payments) ────
 async function getSnapshot(id) {
@@ -125,13 +130,26 @@ router.post('/', async (req, res) => {
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
 
-    // Audit caisse : si un employee_id est fourni, il DOIT avoir can_encash.
-    // Protection contre un employé qui contourne le PIN client-side en
-    // postant directement via devtools/fetch avec son propre employee_id.
-    // NB : si aucun employee_id n'est fourni, on suppose que le commerçant
-    // (JWT) encaisse lui-même — aucun contrôle supplémentaire possible
-    // à ce niveau sans middleware PIN dédié à la caisse.
-    if (employee_id && type === 'revenue') {
+    // AUDIT perms : enforcement can_encash.
+    // 1. Si req.employee présent (header x-employee-pin valide) → source
+    //    de vérité. On OVERRIDE body.employee_id pour empêcher le spoofing
+    //    (un employé avec le PIN de Jean ne peut pas l'attribuer à Marie).
+    //    Vérif stricte can_encash.
+    // 2. Sinon si body.employee_id fourni → check permission (commit A
+    //    enforcement minimal : un JWT merchant seul suffit, mais au moins
+    //    on valide que l'employé désigné a can_encash).
+    // 3. Sinon (no header, no body) → présumé action merchant (JWT).
+    let effectiveEmployeeId = employee_id || null;
+    if (req.employee) {
+      if (type === 'revenue' && !req.employee.can_encash) {
+        return res.status(403).json({
+          error: "Vous n'avez pas la permission d'encaisser.",
+          code: 'NO_ENCASH_PERMISSION',
+        });
+      }
+      // Override : source de vérité = token PIN
+      effectiveEmployeeId = req.employee.id;
+    } else if (employee_id && type === 'revenue') {
       const { rows: empR } = await pool.query(
         'SELECT can_encash FROM employees WHERE id=$1 AND user_id=$2',
         [employee_id, req.user.userId]
@@ -142,6 +160,15 @@ router.post('/', async (req, res) => {
           code: 'NO_ENCASH_PERMISSION',
         });
       }
+    }
+
+    // AUDIT perms : can_use_promo — front only avant ce commit. Si req.employee
+    // présent et promo utilisée, verify flag côté back aussi.
+    if (req.employee && promo_code_id && !req.employee.can_use_promo) {
+      return res.status(403).json({
+        error: "Vous n'avez pas la permission d'appliquer des promotions.",
+        code: 'NO_PROMO_PERMISSION',
+      });
     }
 
     // R1 : idempotency key — si le client a envoyé le même UUID (double-clic,
@@ -260,7 +287,7 @@ router.post('/', async (req, res) => {
          TO_CHAR(time, 'HH24:MI') as time,
          datetime_iso, appointment_id, source, created_at`,
       [req.user.userId, type, amt, description || null, category_id || null,
-       employee_id || null, pmStored, date, time || null,
+       effectiveEmployeeId, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
        clientEmailNorm, client_note || null, qtyTotal, globalClientId,

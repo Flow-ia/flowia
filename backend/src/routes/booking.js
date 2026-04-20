@@ -56,10 +56,13 @@ router.get('/check-slug', async (req, res) => {
 // Toutes les routes suivantes sont protégées par auth JWT
 // ══════════════════════════════════════════════════════════
 router.use(authMiddleware);
+// Injecte req.employee si header x-employee-pin présent (flags can_*)
+router.use(employeePinOptional);
 
 const { sendAppointmentConfirmation, sendAppointmentCancellation, sendLoyaltyReward } = require('../utils/email');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const { validateReferralUse, cancelReferralUseByAppt } = require('./referrals');
+const { employeePinOptional } = require('../middleware/employeePinOptional');
 
 // ══════════════════════════════════════════════════════════
 // PARAMÈTRES RÉSERVATION
@@ -370,27 +373,25 @@ router.put('/appointments/:id', async (req, res) => {
     const cur = await pool.query('SELECT * FROM appointments WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
     if (!cur.rows.length) return res.status(404).json({ error: 'RDV introuvable.' });
     const appt = cur.rows[0];
-    // AUDIT perms #2 : si un employé agit sur ce RDV (client envoie
-    // acting_employee_id), vérifier la permission correspondante côté back.
-    // Cancel → can_cancel, modification structurelle → can_modify.
-    // Limitation connue : sans acting_employee_id, on suppose que le
-    // commerçant (JWT) fait l'action — fix complet en commit C via header
-    // x-employee-pin.
-    if (acting_employee_id) {
+    // AUDIT perms #2 : check can_cancel / can_modify.
+    // Source de vérité : req.employee (header x-employee-pin) > body.acting_employee_id.
+    const actingEmp = req.employee || (acting_employee_id ? await (async () => {
       const { rows: empR } = await pool.query(
-        'SELECT can_cancel, can_modify FROM employees WHERE id=$1 AND user_id=$2',
+        'SELECT id, can_cancel, can_modify FROM employees WHERE id=$1 AND user_id=$2',
         [acting_employee_id, req.user.userId]
       );
-      if (!empR.length) return res.status(403).json({ error: 'Employé introuvable.' });
+      return empR[0] || null;
+    })() : null);
+    if (actingEmp) {
       const isCancelling = status === 'cancelled' && appt.status !== 'cancelled';
       const isModifying  = (date !== undefined && date !== appt.date)
                         || (start_time !== undefined && start_time !== appt.start_time)
                         || (service_id !== undefined && service_id !== appt.service_id)
                         || (employee_id !== undefined && employee_id !== appt.employee_id);
-      if (isCancelling && !empR[0].can_cancel) {
+      if (isCancelling && !actingEmp.can_cancel) {
         return res.status(403).json({ error: "Cet employé n'a pas la permission d'annuler les RDV.", code: 'NO_CANCEL_PERMISSION' });
       }
-      if (isModifying && !empR[0].can_modify) {
+      if (isModifying && !actingEmp.can_modify) {
         return res.status(403).json({ error: "Cet employé n'a pas la permission de modifier les RDV.", code: 'NO_MODIFY_PERMISSION' });
       }
     }
@@ -942,9 +943,19 @@ router.post('/appointments/:id/checkout', async (req, res) => {
   try {
     const { employee_id, payment_method, category_id, amount: customAmount } = req.body;
 
-    // R5 : vérifier can_encash AVANT le claim atomique (pas de rollback
-    // nécessaire si permission refusée).
-    if (employee_id) {
+    // AUDIT perms : enforcement strict si req.employee (header PIN valide).
+    // 1. Si req.employee : check can_encash, override body.employee_id
+    //    (anti-spoof).
+    // 2. Sinon si body.employee_id : check permission (commit A minimal).
+    // 3. Sinon : présumé action merchant.
+    if (req.employee) {
+      if (!req.employee.can_encash) {
+        return res.status(403).json({
+          error: "Vous n'avez pas la permission d'encaisser les RDV.",
+          code: 'NO_ENCASH_PERMISSION',
+        });
+      }
+    } else if (employee_id) {
       const { rows: empR } = await pool.query(
         'SELECT can_encash FROM employees WHERE id=$1 AND user_id=$2',
         [employee_id, req.user.userId]

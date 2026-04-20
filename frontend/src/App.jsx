@@ -1424,7 +1424,11 @@ export default function App() {
     if (!checking && hasPin === false && user) { navigate('/settings', { replace: true }); setAdminStep('onboarding'); }
   }, [hasPin, checking, user]);
 
-  const addTx  = useCallback(async d => { const t = await api.createTransaction(d); setTxs(p=>[t,...p]); }, []);
+  const addTx  = useCallback(async (d, actingEmployeeId) => {
+    const t = await api.createTransaction(d, actingEmployeeId || d?.employee_id || null);
+    setTxs(p => [t, ...p]);
+    return t;
+  }, []);
   const updTx  = useCallback(async (id,d) => { const t = await api.updateTransaction(id,d); setTxs(p=>p.map(x=>x.id===id?t:x)); }, []);
   const delTx  = useCallback(async id => { await api.deleteTransaction(id); setTxs(p=>p.filter(x=>x.id!==id)); }, []);
   const addCat      = useCallback(async d => { const c = await api.createCategory(d); setCats(p=>[...p,c]); }, []);

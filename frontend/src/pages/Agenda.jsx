@@ -166,7 +166,10 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
         try {
           const payload = { payment_method:payMethod, amount:finalAmt };
           if (employee) payload.employee_id = employee.id;
-          const res = await bookingApi.checkoutAppt(appt.id, payload);
+          // AUDIT perms C : passe actingEmployeeId pour injecter header
+          // x-employee-pin si token stocké — backend override body.employee_id
+          // par req.employee.id (anti-spoofing).
+          const res = await bookingApi.checkoutAppt(appt.id, payload, employee?.id);
           // Si le back a auto-validé un parrainage lié au RDV, remonter le
           // nouveau statut dans le state local pour que le badge agenda
           // passe de "À valider" à "Validé" immédiatement.
