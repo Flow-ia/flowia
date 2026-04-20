@@ -108,6 +108,61 @@ marchand. 3 findings CRITIQUES corrigés :
 - `5d2cf39` hardening(qr) R1: rate-limit dédié /client/quick-register (30/15min/IP) + rejet téléphones fake (chiffres identiques / séquences 0-9)
 - `2f80d47` feat(qr) S: UI QR dans Settings/Clients — canvas + download PNG 512px + copy lien (lib `qrcode`)
 - `151877d` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
+- `<U-hash>` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
+
+### 🔒 Audit global-clients.js (cross-tenant) — commit U
+
+**Fichier** : `backend/src/routes/global-clients.js` (1273 lignes). Compte
+PLATEFORME cross-marchand — un client peut être inscrit chez plusieurs
+salons via le même compte. Une faille = fuite de données entre salons OU
+takeover via OTP faible.
+
+**Vulnérabilités corrigées** :
+
+- **OTP cryptographiquement faible** (CRITIQUE) : 3 codes générés via
+  `Math.floor(100000 + Math.random() * 900000)` — `Math.random()` est
+  déterministe, un attaquant qui observe quelques codes peut prédire les
+  suivants. Fix : `crypto.randomInt(100000, 1000000)` (PRNG cryptographique).
+  Appliqué lignes 814 (change-email), 903 (change-password), 1030
+  (forgot-password).
+
+- **Rate limiting trop laxe** (CRITIQUE) : les endpoints sensibles
+  (`/register`, `/login`, `/forgot-password`, `/reset-password`,
+  `/me/change-email`, `/me/change-password`) étaient sous `apiLimiter`
+  (300 req/min) — ce qui permettait 300 essais d'OTP 6-chiffres par
+  minute = bruteforce complet en 1h. Fix : appliqué dans `index.js`
+  `registerLimiter` (5 req/10min) sur tous ces endpoints. Bruteforce =
+  10^6 / (5/10min) = 3 ans.
+
+- **Error hygiene** (18 occurrences alignées K→T) : `res.status(500)
+  .json({ error: e.message })` fuitait SQL/stack/bcrypt errors.
+  Remplacé par `'Erreur serveur.'` + log serveur conservé pour debug.
+
+### Non corrigé (non-bugs ou hors scope)
+
+- **/appointments filtré par email** (L544-564) : l'agent d'audit a
+  signalé un IDOR potentiel. FAUX POSITIF : l'email est extrait de
+  `SELECT email FROM global_clients WHERE id=$1` (L547) — autorité est
+  le `globalClientId` du JWT, pas un param user. OK.
+
+- **Race /me/change-email/confirm** (L848-865) : re-check puis UPDATE.
+  Protégé par la contrainte UNIQUE email en DB + catch explicite `23505`
+  ligne 863 qui renvoie 409. La race est correctement gérée.
+
+- **JWT 30j sans blacklist** : réduire à 7j déconnecterait tous les
+  utilisateurs actifs (breaking UX). Implémenter blacklist JTI =
+  nouvelle table + Redis-like — refactor propre, pas chirurgical.
+
+- **Password 6 chars min** : faible mais policy UX assumée.
+
+- **Code OTP en clair en DB** : `verification_codes.code` non hashé. TTL
+  15 min + rate limit strict R (3 tentatives / 10 min) rend le risque
+  acceptable. À hasher (HMAC) si audit compliance futur.
+
+- **Fusion automatique email/phone au /register** : feature produit
+  assumée (un client peut se rattacher à sa fiche locale existante).
+  Nécessite un flow OTP d'attestation email avant fusion pour durcir —
+  gros refactor, hors scope.
 
 ### 🔒 Audit payments.js (Stripe) — commit T
 

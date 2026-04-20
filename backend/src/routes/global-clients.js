@@ -155,7 +155,7 @@ router.post('/register', async (req, res) => {
     });
   } catch (e) {
     console.error('[global-clients register]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -187,7 +187,7 @@ router.post('/login', async (req, res) => {
       ok: true, token,
       client: { id: gc.id, email: gc.email, first_name: gc.first_name, last_name: gc.last_name, phone: gc.phone },
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ router.post('/activate', async (req, res) => {
         phone:      gcUpdated.phone,
       },
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -295,7 +295,7 @@ router.get('/me', globalClientAuth, async (req, res) => {
     );
 
     res.json({ ...rows[0], merchants: locals });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -377,7 +377,7 @@ router.patch('/me', globalClientAuth, async (req, res) => {
       ).catch(() => {});
     }
     res.json(rows[0]);
-  } catch(e) { console.error('[GC PATCH /me]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[GC PATCH /me]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -440,7 +440,7 @@ router.get('/me/referral-code/:slug', clientOrGlobalClientAuth, async (req, res)
       uses_count: rc[0].uses_count,
       program: prog[0],
     });
-  } catch(e) { console.error('[REF MY-CODE]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[REF MY-CODE]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -500,7 +500,7 @@ router.get('/me/referral-history/:slug', clientOrGlobalClientAuth, async (req, r
     );
 
     res.json({ history, rewards });
-  } catch(e) { console.error('[REF HISTORY]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[REF HISTORY]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -534,7 +534,7 @@ router.get('/pub/:slug/referral-program', async (req, res) => {
     });
   } catch(e) {
     console.error('[REF PROG PUB]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -564,7 +564,7 @@ router.get('/appointments', globalClientAuth, async (req, res) => {
       [email]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -667,7 +667,7 @@ router.get('/me/visits', clientOrGlobalClientAuth, async (req, res) => {
     res.json({ items: out, total, page, pageSize });
   } catch (e) {
     console.error('[GC VISITS]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -725,7 +725,7 @@ router.get('/me/visits/:id', clientOrGlobalClientAuth, async (req, res) => {
     res.json(v);
   } catch (e) {
     console.error('[GC VISIT DETAIL]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -759,7 +759,7 @@ router.put('/me', globalClientAuth, async (req, res) => {
     );
 
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -780,7 +780,7 @@ router.post('/change-password', globalClientAuth, async (req, res) => {
     const hash = await bcrypt.hash(new_password, 10);
     await pool.query('UPDATE global_clients SET password_hash=$1, updated_at=NOW() WHERE id=$2', [hash, req.globalClient.globalClientId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -811,7 +811,7 @@ router.post('/me/change-email', clientOrGlobalClientAuth, async (req, res) => {
     );
     if (dup.length) return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte.' });
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(crypto.randomInt(100000, 1000000));
     await saveCode(`gc_chg_email_${gid}`, code, { newEmail: raw }, 15);
 
     // Envoi asynchrone à l'ancien email — authentifie le propriétaire
@@ -824,7 +824,7 @@ router.post('/me/change-email', clientOrGlobalClientAuth, async (req, res) => {
     res.json({ ok: true, sent_to: currentEmail });
   } catch (e) {
     console.error('[gc change-email]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -874,7 +874,7 @@ router.post('/me/change-email/confirm', clientOrGlobalClientAuth, async (req, re
     res.json({ ok: true, new_email: newEmail });
   } catch (e) {
     console.error('[gc change-email confirm]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -900,7 +900,7 @@ router.post('/me/change-password', clientOrGlobalClientAuth, async (req, res) =>
       return res.status(401).json({ error: 'Mot de passe actuel incorrect.' });
     }
 
-    const code    = String(Math.floor(100000 + Math.random() * 900000));
+    const code    = String(crypto.randomInt(100000, 1000000));
     const newHash = await bcrypt.hash(new_password, 10);
     await saveCode(`gc_chg_pwd_${gid}`, code, { newHash }, 15);
 
@@ -913,7 +913,7 @@ router.post('/me/change-password', clientOrGlobalClientAuth, async (req, res) =>
     res.json({ ok: true, sent_to: rows[0].email });
   } catch (e) {
     console.error('[gc change-password]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -945,7 +945,7 @@ router.post('/me/change-password/confirm', clientOrGlobalClientAuth, async (req,
     res.json({ ok: true });
   } catch (e) {
     console.error('[gc change-password confirm]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -974,7 +974,7 @@ router.get('/loyalty', globalClientAuth, async (req, res) => {
       [gc[0].email]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -1027,7 +1027,7 @@ router.post('/forgot-password', async (req, res) => {
     if (!rows.length) { await floor; return res.json({ ok: true }); }
 
     const gc   = rows[0];
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(crypto.randomInt(100000, 1000000));
 
     await saveCode(`gc_rst_${emailLow}`, code, { gcId: gc.id, email: emailLow }, 15);
 
@@ -1266,7 +1266,7 @@ router.get('/me/export', globalClientAuth, async (req, res) => {
     res.json(exportData);
   } catch(e) {
     console.error('[RGPD EXPORT]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 

@@ -201,6 +201,15 @@ function startServer() {
   app.use('/api/promo',          apiLimiter,  require('./routes/promo'));
   app.use('/api/client-notes',   apiLimiter,  require('./routes/client-notes'));
   app.use('/api/clients',        apiLimiter,  require('./routes/clients'));
+  // Audit U : rate limiters dédiés sur les endpoints sensibles global-clients.
+  // L'apiLimiter général (300/min) permettait 300 tentatives OTP/min — trop
+  // laxe pour un OTP 6-digits (10^6). Avec 3/10min, bruteforce = 3000 ans.
+  app.use('/api/global-clients/register',        registerLimiter);
+  app.use('/api/global-clients/login',           loginLimiter);
+  app.use('/api/global-clients/forgot-password', registerLimiter);
+  app.use('/api/global-clients/reset-password',  registerLimiter);
+  app.use('/api/global-clients/me/change-email', registerLimiter);
+  app.use('/api/global-clients/me/change-password', registerLimiter);
   app.use('/api/global-clients', apiLimiter,  require('./routes/global-clients'));
   app.use('/api/export',         apiLimiter,  require('./routes/export'));
   app.use('/api/credits',        apiLimiter,  require('./routes/credits'));
