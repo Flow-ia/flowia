@@ -19,6 +19,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   const [loading, setLoading]   = useState(false);
   const [consent, setConsent]   = useState(false);
   const [showRgpdModal, setShowRgpdModal] = useState(false);
+  // Audit Z (RGPD) : opt-in marketing séparé du consentement RGPD général.
+  // Par défaut FALSE. Client doit cocher explicitement pour recevoir SMS/email
+  // promo.
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   // Détection intelligente du type de compte à la saisie email
   const [emailType, setEmailType]   = useState(null);   // null | 'free' | 'local' | 'global' | 'both'
@@ -93,7 +97,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       } else {
         if (!first.trim() || !last.trim()) { setErr('Prenom et nom requis.'); setLoading(false); return; }
         if (pwd.length < 6) { setErr('Mot de passe minimum 6 caracteres.'); setLoading(false); return; }
-        r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), referral_code: referralCode || undefined });
+        r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), referral_code: referralCode || undefined, marketing_opt_in: marketingOptIn });
       }
       localStorage.setItem('ff_client_token', r.token);
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));
@@ -135,6 +139,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         first_name: first.trim(),
         last_name:  last.trim(),
         phone:      phone.trim(),
+        marketing_opt_in: marketingOptIn,
       });
       localStorage.setItem('ff_client_token', r.token);
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));
@@ -257,6 +262,17 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                 onKeyDown={e=>e.key==='Enter'&&quickSubmit()}
                 style={S.inp}/>
             </div>
+            {/* Audit Z (RGPD) : opt-in marketing explicite */}
+            <label style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
+              borderRadius:9, background:'rgba(99,102,241,0.04)',
+              border:'1px solid rgba(99,102,241,0.15)', cursor:'pointer' }}>
+              <input type="checkbox" checked={marketingOptIn}
+                onChange={e=>setMarketingOptIn(e.target.checked)}
+                style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer' }}/>
+              <span style={{ fontSize:11, color:th.muted, lineHeight:1.5 }}>
+                J'accepte de recevoir des offres commerciales par SMS/email. Désabonnement à tout moment (lien dans chaque message).
+              </span>
+            </label>
             {err && (
               <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
                 borderRadius:9, background:'rgba(239,68,68,0.06)',
@@ -433,21 +449,35 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
 
             {/* Consentement RGPD — uniquement à l'inscription */}
             {mode === 'register' && (
-              <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
-                borderRadius:9, background:'rgba(99,102,241,0.04)',
-                border:'1px solid rgba(99,102,241,0.15)' }}>
-                <input type="checkbox" id="consent-rgpd" checked={consent}
-                  onChange={e=>setConsent(e.target.checked)}
-                  style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer' }} />
-                <label htmlFor="consent-rgpd" style={{ fontSize:11, color:th.muted, lineHeight:1.5, cursor:'pointer' }}>
-                  J'accepte que mes données personnelles (nom, email, téléphone) soient utilisées
-                  pour gérer mes réservations, conformément au{' '}
-                  <a href="#rgpd-policy" onClick={e=>{e.preventDefault();setShowRgpdModal(true);}}
-                    style={{ color:'#6366f1', textDecoration:'underline' }}>
-                    règlement RGPD
-                  </a>. Vous pouvez supprimer votre compte à tout moment.
-                </label>
-              </div>
+              <>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
+                  borderRadius:9, background:'rgba(99,102,241,0.04)',
+                  border:'1px solid rgba(99,102,241,0.15)' }}>
+                  <input type="checkbox" id="consent-rgpd" checked={consent}
+                    onChange={e=>setConsent(e.target.checked)}
+                    style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer' }} />
+                  <label htmlFor="consent-rgpd" style={{ fontSize:11, color:th.muted, lineHeight:1.5, cursor:'pointer' }}>
+                    J'accepte que mes données personnelles (nom, email, téléphone) soient utilisées
+                    pour gérer mes réservations, conformément au{' '}
+                    <a href="#rgpd-policy" onClick={e=>{e.preventDefault();setShowRgpdModal(true);}}
+                      style={{ color:'#6366f1', textDecoration:'underline' }}>
+                      règlement RGPD
+                    </a>. Vous pouvez supprimer votre compte à tout moment.
+                  </label>
+                </div>
+                {/* Audit Z : opt-in marketing (séparé du consentement RGPD) */}
+                <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
+                  borderRadius:9, background:'rgba(16,185,129,0.04)',
+                  border:'1px solid rgba(16,185,129,0.15)' }}>
+                  <input type="checkbox" id="consent-marketing" checked={marketingOptIn}
+                    onChange={e=>setMarketingOptIn(e.target.checked)}
+                    style={{ marginTop:2, flexShrink:0, accentColor:'#10b981', cursor:'pointer' }} />
+                  <label htmlFor="consent-marketing" style={{ fontSize:11, color:th.muted, lineHeight:1.5, cursor:'pointer' }}>
+                    J'accepte de recevoir des offres commerciales (SMS, email) — optionnel.
+                    Désabonnement à tout moment via le lien présent dans chaque message.
+                  </label>
+                </div>
+              </>
             )}
 
             {/* Bouton principal */}

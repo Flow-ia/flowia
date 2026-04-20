@@ -113,6 +113,84 @@ marchand. 3 findings CRITIQUES corrigés :
 - `0379c64` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
 - `111da9d` audit(loyalty) X: PIN admin config/delete + caps metier + cap stamps_to_add + normalisation email
 - `f599a2d` security(headers) Y: CSP + HSTS + Referrer-Policy + Permissions-Policy (frontend Vercel + backend middleware)
+- `76b2972` rgpd(opt-in) Z1: migration DB + filtres marketing_opt_in + endpoint unsubscribe
+- `f5457da` rgpd(opt-in) Z2: injection lien unsubscribe dans SMS + email marketing
+- `<Z3-hash>` rgpd(opt-in) Z3: checkbox opt-in inscription (quick + full) + toggle profil client + endpoints backend
+
+### 🔒 RGPD opt-in marketing — commits Z1/Z2/Z3
+
+**Contexte** : audit P avait flaggé que les SMS/emails marketing partaient
+à tous les clients ayant renseigné tél/email — consentement implicite
+non conforme CNIL. Dette résolue en 3 commits chirurgicaux.
+
+**Z1 (backend infra)** :
+- Migration DB `client_accounts` + `global_clients` : nouvelles colonnes
+  `marketing_opt_in BOOLEAN DEFAULT FALSE`, `marketing_opt_in_at
+  TIMESTAMPTZ`, `unsubscribe_token UUID UNIQUE`. Backfill tokens pour
+  lignes existantes. Index partiels `WHERE marketing_opt_in = TRUE`.
+- Filtrage `AND ca.marketing_opt_in = TRUE` dans 5 SELECTs marketing :
+  `campaigns.js` (getTopClients, getClientSegments,
+  getClientSegmentsWithHabits), `marketing.js` (/plan, /plan/launch),
+  cron anniversaires `index.js`.
+- Endpoint public `GET /api/pub/unsubscribe/:token` → désinscription
+  1-clic, rend une page HTML autonome (inline CSS) de confirmation,
+  validation UUID, UPDATE sur les 2 tables, différencie "nouvellement
+  désinscrit" vs "déjà désinscrit".
+
+**Z2 (injection lien SMS/email)** :
+- Nouvel `utils/unsubscribe.js` avec 3 helpers :
+  `unsubscribeUrl(token)` construit l'URL backend,
+  `appendUnsubscribeSms(msg, token)` ajoute "Stop: <url>" en footer SMS,
+  `unsubscribeEmailHtml(token)` rend un bloc HTML discret (inline
+  styles pour compat Gmail/Outlook/iOS Mail).
+- SELECTs retournent désormais `ca.unsubscribe_token` pour propagation
+  au site d'envoi.
+- Injection aux 4 sites d'envoi marketing : campagnes SMS/email,
+  marketing plan SMS, cron birthday email.
+
+**Z3 (frontend + endpoints backend opt-in)** :
+- Backend `/client/register`, `/client/quick-register`, `/client/profile`
+  acceptent `marketing_opt_in` bool dans le body. Persistance sur
+  `client_accounts` + `global_clients` avec timestamp
+  `marketing_opt_in_at` automatiquement synchrone.
+- Quick re-scan (QR) : ne décoche jamais silencieusement un opt-in
+  existant, ne fait que l'activer.
+- Frontend `Account.jsx AuthPanel` : checkbox opt-in en mode register
+  (vert, séparé du consentement RGPD classique) + checkbox dans le
+  formulaire quick signup (QR).
+- Frontend `MyAppointments.jsx` : toggle "Offres commerciales" dans la
+  modal d'édition profil. Affiche l'état actuel à l'ouverture.
+- Par défaut opt-in = FALSE partout : conformité stricte. Clients
+  existants migrés en FALSE, le marchand devra lancer une campagne
+  "inviter mes clients à s'inscrire aux offres" pour récupérer son
+  audience.
+
+### Impact
+
+**Avant Z** : toute SMS/email marketing partait à tous les clients →
+risque de sanction CNIL (amende jusqu'à 4% du CA).
+
+**Après Z** :
+- Consentement explicite requis (checkbox séparée) → conformité
+  CNIL/RGPD sur le consentement marketing (≠ consentement booking).
+- Lien de désinscription 1-clic présent dans chaque SMS + email
+  marketing.
+- Le marchand ne peut plus toucher un client qui a opt-out (requête
+  SQL level).
+- Clients existants dans la base : migrés en FALSE. Transition
+  nécessaire (campagne d'opt-in à planifier par le marchand).
+
+### Non fait (hors scope Z)
+
+- Route frontend dédiée `/unsubscribe/:token` qui appelle l'API et
+  affiche une confirmation stylée dans la charte FlowIA : l'HTML
+  autonome du backend suffit pour v1.
+- Notification au marchand quand un client se désinscrit : hors scope,
+  les stats de campagne montrent déjà le taux de désinscription via
+  message_log.
+- Double opt-in email (lien de confirmation dans un 1er email) : plus
+  de friction, pas requis par CNIL pour un consentement à l'inscription
+  avec checkbox explicite.
 
 ### 🔒 Security headers — commit Y
 

@@ -80,6 +80,8 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   const [editBirth,    setEditBirth]    = useState(''); // YYYY-MM-DD
   const [editPostal,   setEditPostal]   = useState('');
   const [editCity,     setEditCity]     = useState('');
+  // Audit Z (RGPD) : opt-in marketing modifiable depuis le profil.
+  const [editOptIn,    setEditOptIn]    = useState(false);
   const [profLoad,     setProfLoad]     = useState(false);
   const [profErr,      setProfErr]      = useState('');
   const [profOk,       setProfOk]       = useState('');
@@ -101,6 +103,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     setEditBirth(ymd(clientInfo?.birth_date));
     setEditPostal(clientInfo?.postal_code || '');
     setEditCity(clientInfo?.city          || '');
+    setEditOptIn(!!clientInfo?.marketing_opt_in);
     setEditing(true);
     setProfErr(''); setProfOk('');
   };
@@ -120,6 +123,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
         phone:      editPhone.trim() || undefined,
         postal_code: editPostal.trim(),
         city:        editCity.trim(),
+        marketing_opt_in: editOptIn,
       };
       if (bdPayload !== undefined) payload.birth_date = bdPayload;
       const res = await pubApi.updateClientProfile(slug, payload);
@@ -998,6 +1002,20 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                     Pour modifier votre email, utilisez le bouton «&nbsp;Changer mon email&nbsp;»
                     dans la vue principale : un code sera envoyé à votre adresse actuelle.
                   </p>
+                  {/* Audit Z : toggle opt-in marketing */}
+                  <label style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px',
+                    borderRadius:10, background:'rgba(16,185,129,0.05)',
+                    border:'1px solid rgba(16,185,129,0.2)', cursor:'pointer', marginTop:4 }}>
+                    <input type="checkbox" checked={editOptIn}
+                      onChange={e=>setEditOptIn(e.target.checked)}
+                      style={{ marginTop:2, flexShrink:0, accentColor:'#10b981', cursor:'pointer' }}/>
+                    <span style={{ fontSize:12, color:th.text, lineHeight:1.5 }}>
+                      <strong style={{ color:'#10b981' }}>Offres commerciales</strong>
+                      <span style={{ display:'block', fontSize:11, color:th.muted, marginTop:2 }}>
+                        Recevoir les promos et nouveautés par SMS/email. Décocher à tout moment.
+                      </span>
+                    </span>
+                  </label>
                   {profErr && (
                     <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:0 }}>{profErr}</p>
                   )}

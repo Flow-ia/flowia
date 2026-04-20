@@ -1116,11 +1116,13 @@ router.post('/:slug/client/register', async (req, res) => {
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const userId   = biz[0].user_id;
-    const { email, password, first_name, last_name, phone, birth_date } = req.body;
+    const { email, password, first_name, last_name, phone, birth_date, marketing_opt_in } = req.body;
     if (!email || !password || !first_name || !last_name)
       return res.status(400).json({ error: 'Champs requis.' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
+    // Audit Z : opt-in marketing explicite. Par défaut FALSE.
+    const optIn = marketing_opt_in === true || marketing_opt_in === 'true';
 
     const emailLow = email.toLowerCase().trim();
     // birth_date optionnelle : accepte YYYY-MM-DD OU YYYY-MM (= 1er du mois)
@@ -1172,23 +1174,25 @@ router.post('/:slug/client/register', async (req, res) => {
       const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
       const { rows: newGc } = await pool.query(
         `INSERT INTO global_clients
-           (email, password_hash, first_name, last_name, phone, birth_date, is_verified, consent_at, consent_ip)
-         VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW(),$7) RETURNING id`,
-        [emailLow, hash, first_name, last_name||'', phone||null, bd, consentIp]
+           (email, password_hash, first_name, last_name, phone, birth_date, is_verified, consent_at, consent_ip, marketing_opt_in, marketing_opt_in_at)
+         VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW(),$7,$8, CASE WHEN $8 THEN NOW() ELSE NULL END) RETURNING id`,
+        [emailLow, hash, first_name, last_name||'', phone||null, bd, consentIp, optIn]
       );
       gcId = newGc[0].id;
     }
 
     // 4. Créer la fiche locale liée au compte global
     const { rows } = await pool.query(
-      `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, birth_date, global_client_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, birth_date, global_client_id, marketing_opt_in, marketing_opt_in_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $9 THEN NOW() ELSE NULL END)
        ON CONFLICT (user_id, email) DO UPDATE SET
          global_client_id = EXCLUDED.global_client_id,
          password_hash    = EXCLUDED.password_hash,
-         birth_date       = COALESCE(EXCLUDED.birth_date, client_accounts.birth_date)
-       RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id`,
-      [userId, emailLow, hash, first_name, last_name||'', phone||null, bd, gcId]
+         birth_date       = COALESCE(EXCLUDED.birth_date, client_accounts.birth_date),
+         marketing_opt_in = EXCLUDED.marketing_opt_in,
+         marketing_opt_in_at = CASE WHEN EXCLUDED.marketing_opt_in THEN NOW() ELSE NULL END
+       RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id, marketing_opt_in`,
+      [userId, emailLow, hash, first_name, last_name||'', phone||null, bd, gcId, optIn]
     );
     const client = rows[0];
 
@@ -1280,8 +1284,21 @@ router.post('/:slug/client/quick-register', async (req, res) => {
       [userId, phoneDigits]
     );
 
+    // Audit Z : opt-in marketing explicite (par défaut FALSE même en QR,
+    // le commerçant devra inviter le client à opter-in plus tard si besoin).
+    const optIn = req.body?.marketing_opt_in === true || req.body?.marketing_opt_in === 'true';
+
     let client;
     if (existing.length) {
+      // Re-scan : on peut mettre à jour l'opt-in si le client nous l'a cochée
+      // cette fois. Jamais le décocher silencieusement (respect choix user).
+      if (optIn) {
+        await pool.query(
+          `UPDATE client_accounts SET marketing_opt_in = TRUE, marketing_opt_in_at = NOW()
+             WHERE id=$1 AND marketing_opt_in = FALSE`,
+          [existing[0].id]
+        ).catch(() => {});
+      }
       client = existing[0];
     } else {
       const rand  = Math.random().toString(36).slice(2, 10);
@@ -1289,10 +1306,10 @@ router.post('/:slug/client/quick-register', async (req, res) => {
       const hash  = await bcrypt.hash(rand + Date.now(), 10);
       const { rows } = await pool.query(
         `INSERT INTO client_accounts
-           (user_id, email, password_hash, first_name, last_name, phone, source)
-         VALUES ($1,$2,$3,$4,$5,$6,'qr')
+           (user_id, email, password_hash, first_name, last_name, phone, source, marketing_opt_in, marketing_opt_in_at)
+         VALUES ($1,$2,$3,$4,$5,$6,'qr',$7, CASE WHEN $7 THEN NOW() ELSE NULL END)
          RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id`,
-        [userId, email, hash, first, last || '', phoneRaw]
+        [userId, email, hash, first, last || '', phoneRaw, optIn]
       );
       client = rows[0];
     }
@@ -1598,10 +1615,14 @@ router.put('/:slug/client/profile', async (req, res) => {
     // Email volontairement NON modifiable ici. Le changement d'email passe
     // par POST /api/global-clients/me/change-email (code envoyé à l'email
     // actuel). On accepte le champ pour backcompat mais on l'ignore.
-    const { first_name, last_name, phone, birth_date, postal_code, city } = req.body;
+    const { first_name, last_name, phone, birth_date, postal_code, city, marketing_opt_in } = req.body;
     if (!first_name?.trim() || !last_name?.trim()) {
       return res.status(400).json({ error: 'Prénom et nom sont requis.' });
     }
+    // Audit Z : opt-in marketing peut être basculé depuis le profil client.
+    // undefined = ne pas toucher. true/false = MAJ explicite.
+    const optInParam = marketing_opt_in === undefined ? undefined
+                     : (marketing_opt_in === true || marketing_opt_in === 'true');
 
     // birth_date : accepte YYYY-MM-DD ou YYYY-MM (= 1er du mois), vide = null,
     // undefined = ne pas modifier. L'anti-fraude cron check 'last_birthday_reward_at'
@@ -1627,10 +1648,14 @@ router.put('/:slug/client/profile', async (req, res) => {
                     : (city === null || city === '' ? null : String(city).trim().slice(0,120));
     if (pcParam   !== undefined) { sets.push(`postal_code = $${idx++}`); vals.push(pcParam); }
     if (cityParam !== undefined) { sets.push(`city = $${idx++}`);         vals.push(cityParam); }
+    if (optInParam !== undefined) {
+      sets.push(`marketing_opt_in = $${idx++}`); vals.push(optInParam);
+      sets.push(`marketing_opt_in_at = CASE WHEN $${idx-1} THEN NOW() ELSE NULL END`);
+    }
     vals.push(decoded.clientId);
     const updated = await pool.query(
       `UPDATE client_accounts SET ${sets.join(', ')} WHERE id = $${idx}
-       RETURNING id, first_name, last_name, email, phone, birth_date, postal_code, city`,
+       RETURNING id, first_name, last_name, email, phone, birth_date, postal_code, city, marketing_opt_in`,
       vals
     );
     if (!updated.rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
