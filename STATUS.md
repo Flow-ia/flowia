@@ -1,11 +1,87 @@
-# FlowIA — STATUS (2026-04-19)
+# FlowIA — STATUS (2026-04-20)
 
 Dernier commit : voir `git log -1`. Historique complet des sessions précédentes
 dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 22) : Audit STATS + EXPORT — commits E, F, G
+## 🆕 Session 2026-04-20 (suite 23) : Audit CLIENTS / CRM — commits H, I, J
+
+### Audit mené par agent (15 bugs bruts, 13 retenus + 2 faux positifs skip)
+Faux positifs écartés : (a) reset-password "cross-tenant" → design intentionnel
+(global_client est partagé entre merchants) ; (b) 404 vs 400 leak sur /invite
+→ négligeable.
+
+### Commit H (`8ca1009`) — Auth/info-leak hardening
+**Fichiers** : `backend/src/routes/clients.js`, `backend/src/routes/global-clients.js`
+
+- **GET /clients/:id** : `password_hash` retiré du SELECT. Avant, le bcrypt du
+  client remontait dans le JSON côté front → exposition inutile.
+- **POST /clients/:id/invite** : refuse si un `global_client` vérifié existe
+  déjà pour cet email. Avant, le `ON CONFLICT (email) DO UPDATE` écrasait
+  l'`invite_token` d'un compte vérifié chez un autre merchant → vecteur de
+  spam d'invitations à des clients d'autres prestataires. Ajout clause
+  `WHERE is_verified=FALSE` dans le DO UPDATE pour ceinture+bretelles.
+- **Helper `isValidEmail()`** (regex RFC5322-lite, ≤254 chars) partagé sur
+  `/register` global-clients, POST `/clients`, POST `/clients/:id/invite`.
+- **`isRealDate()`** : rejette 2024-02-31 et dates impossibles qui passaient
+  la regex YYYY-MM-DD dans `/register`.
+- **Timing-attack forgot-password** : plancher 400ms dans toutes les branches.
+  Avant, email inexistant répondait <5ms / email existant ~300ms (saveCode +
+  SMTP) → énumération de comptes via latence HTTP.
+- **Messages génériques** sur forgot-password et reset-password.
+
+### Commit I (`92cba90`) — RGPD delete atomicity + anonymisation scopée
+**Fichier** : `backend/src/routes/global-clients.js`
+
+- **DELETE /api/global-clients/me** entièrement enveloppé en `BEGIN/COMMIT`
+  via `pool.connect()`. 9 opérations sur 6 tables : sans transaction, un
+  échec à mi-parcours (timeout, deadlock) laissait un état incohérent
+  (fiches locales supprimées mais compte global encore actif, ou inverse).
+  `ROLLBACK` sur toute erreur, `release()` garanti via `finally`.
+- **Annulation RDV futurs scopée** aux ids retournés par l'UPDATE
+  d'anonymisation (via `RETURNING id` puis `WHERE id = ANY($1::uuid[])`).
+  Avant : `WHERE client_id IS NULL AND client_name='Client anonyme'`
+  annulait aussi les RDV d'anciennes suppressions RGPD → cascade non
+  voulue entre comptes sans rapport.
+- **Anonymisation fusionnée** (1 UPDATE au lieu de 2) : match par
+  `global_client_id` OU `client_email` dans la même requête.
+- Messages génériques.
+
+### Commit J (`e309b57`) — Input validation + error message hygiene
+**Fichiers** : `clients.js`, `client-notes.js`, `birthday.js`
+
+- **GET /clients** : pagination cap `limit ∈ [1..200]` + fallback NaN → 100.
+  Avant : `?limit=9999999` → OOM sur gros merchants.
+- **PUT /clients/:id (interne)** : validation email + **lowercase**
+  normalisation avant UPDATE. Tous les SELECT/JOIN sur `client_accounts.email`
+  utilisent `LOWER(email)=...` → un email mixed-case devenait introuvable
+  (loyalty, notes, transactions décorrélés).
+- **note_text cap 5000 chars** dans POST `/clients/:id/note` et POST/PUT
+  `/client-notes` (DoS disque + UX).
+- **birthday PUT /** : cap `discount_value` percent ≤ 100 et fixed ≤ 10000€.
+  Avant, 150% acceptée → bug applicatif en aval dans le calcul de remise.
+- **Concat nom plus robuste** dans POST `/:id/note` : `NULL last_name`
+  n'insère plus "John null".
+- **`res.json({error: e.message})` → `'Erreur serveur.'`** partout
+  (clients.js 9 occurrences, client-notes.js 4, birthday.js 2) + ajout
+  `console.error` pour tracer.
+
+### Bugs couverts (13/13 retenus traités)
+Critiques : timing forgot-password, fuite password_hash, abus invitation
+cross-merchant, DELETE /me non-atomique, anonymisation RGPD trop large.
+Majeurs : regex email, validation birth_date réelle, pagination cap,
+discount percent cap. Mineurs : email lowercase PUT, note cap, hygiène
+messages erreur.
+
+### Commits
+- `8ca1009` audit(clients/CRM) H: auth/info-leak hardening
+- `92cba90` audit(clients/CRM) I: RGPD delete atomicity + scoped anonymisation
+- `e309b57` audit(clients/CRM) J: input validation + error message hygiene
+
+---
+
+## Session 2026-04-20 (suite 22) : Audit STATS + EXPORT — commits E, F, G
 
 ### Audit mené par agent (18 bugs trouvés)
 5 critiques + 7 majeurs + 6 mineurs. Traités dans 3 commits.
