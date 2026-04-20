@@ -5,7 +5,68 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 20) : Modal suppression épurée + politique de confidentialité étoffée
+## 🆕 Session 2026-04-19 (suite 21) : Commit D — Timezone-aware booking (DST + serveur UTC)
+
+### Problèmes visés (audit booking)
+- **#6** `getSlots` utilisait `new Date().toLocaleDateString('sv-SE')` / `getHours()` → heure
+  serveur Render (UTC) et non l'heure du commerçant → décalage d'1-2h sur l'affichage du
+  nowMin (créneaux passés encore visibles ou créneaux actuels masqués).
+- **#7** POST `/book` comparaison `new Date(apptDt) < new Date(Date.now() + h*3600000)` →
+  DST non gérée proprement quand la période franchit un changement d'heure.
+- **#24** Annulation client calculait `diffHours` en JS local sur le serveur UTC → pouvait
+  refuser ou accepter à tort selon le décalage TZ.
+
+### Approche
+Utiliser PostgreSQL `AT TIME ZONE <merchant_tz>` partout où un `date+time` doit être comparé
+à « maintenant » ou à un seuil relatif. PG gère DST nativement. Le champ
+`booking_settings.timezone VARCHAR(50) DEFAULT 'Europe/Paris'` existait déjà en schéma.
+
+### Fichier — `backend/src/routes/public-booking.js`
+
+**`getSlots()`** (signature + body) : ajout param `timezone` (défaut `'Europe/Paris'`). Le
+calcul de `todayStr`/`nowMin` passe par une requête PG unique :
+```sql
+SELECT TO_CHAR(NOW() AT TIME ZONE $1, 'YYYY-MM-DD') AS today,
+       EXTRACT(HOUR FROM NOW() AT TIME ZONE $1)::int AS h,
+       EXTRACT(MINUTE FROM NOW() AT TIME ZONE $1)::int AS mi
+```
+
+**GET `/:slug/slots`** : SELECT étendu avec `COALESCE(timezone, 'Europe/Paris')` → passé en
+6e param à `getSlots`.
+
+**GET `/:slug/month-status`** : idem, boucle interne passe `bizTz`.
+
+**POST `/:slug/book`** : SELECT merchant étendu avec `timezone`. Les deux contrôles
+min_notice et advance_booking_days fusionnés en une seule requête :
+```sql
+SELECT
+  (($1::date + $2::time) AT TIME ZONE $3) < (NOW() + ($4 || ' hours')::interval) AS too_soon,
+  $1::date > ((NOW() AT TIME ZONE $3)::date + ($5 || ' days')::interval)::date AS too_far
+```
+Suppression des `new Date(...)` locaux (apptDt/minDt/maxDt) devenus inutiles.
+L'appel interne à `getSlots` passe aussi `bizTz`.
+
+**PUT `/:slug/client/appointments/:id/cancel`** : SELECT biz ajoute `timezone`. `diffHours`
+recalculé via `EXTRACT(EPOCH FROM (($1::date + $2::time) AT TIME ZONE $3 - NOW())) / 3600`.
+
+### Effet
+- Serveur Render (UTC) se comporte désormais comme si le calcul tournait sur le fuseau du
+  commerçant pour tous les contrôles de réservation publique.
+- DST (dimanche d'avril et octobre) géré nativement par PG → plus de créneaux fantômes le
+  jour du changement d'heure.
+- Merchant peut configurer sa TZ (Europe/Paris par défaut) → évolutif pour DOM-TOM ou
+  expansion internationale.
+
+### Rétro-compatibilité
+Aucune migration (colonne existait déjà). `COALESCE` protège les settings historiques sans
+valeur explicite. Signature `getSlots` rétro-compatible (param optionnel avec défaut).
+
+### Sanity check
+- `node --check src/routes/public-booking.js` : OK.
+
+---
+
+## Session 2026-04-19 (suite 20) : Modal suppression épurée + politique de confidentialité étoffée
 
 ### Demande (onboarding.md)
 Retirer le gros paragraphe explicatif de la modal de suppression (« Vos

@@ -171,13 +171,21 @@ async function getSlotsForRanges(ranges, durationMin, existing, nowMin, isToday)
   return slots;
 }
 
-async function getSlots(userId, employeeId, date, durationMin, minNoticeMin = 0) {
+async function getSlots(userId, employeeId, date, durationMin, minNoticeMin = 0, timezone = 'Europe/Paris') {
   const [y, m, d] = date.split('-').map(Number);
   const dayOfWeek = new Date(y, m - 1, d).getDay();
 
-  const todayStr = new Date().toLocaleDateString('sv-SE');
+  // AUDIT booking #6 + #7 : "today" & "now" calculés dans le fuseau du commerçant
+  // (serveur Render en UTC → sinon décalage d'1-2h selon DST → créneaux fantômes).
+  const { rows: tzNow } = await pool.query(
+    `SELECT TO_CHAR(NOW() AT TIME ZONE $1, 'YYYY-MM-DD') AS today,
+            EXTRACT(HOUR   FROM NOW() AT TIME ZONE $1)::int AS h,
+            EXTRACT(MINUTE FROM NOW() AT TIME ZONE $1)::int AS mi`,
+    [timezone]
+  );
+  const todayStr = tzNow[0].today;
   const isToday  = date === todayStr;
-  const nowMin   = isToday ? (new Date().getHours()*60 + new Date().getMinutes() + minNoticeMin) : 0;
+  const nowMin   = isToday ? (tzNow[0].h * 60 + tzNow[0].mi + minNoticeMin) : 0;
 
   // Vérifier que le commerce est ouvert (avec pauses intégrées)
   const bizRanges = await getBusinessOpenRanges(userId, dayOfWeek);
@@ -372,12 +380,14 @@ router.get('/:slug/slots', async (req, res) => {
     if (_shit) return res.json(_shit);
 
     const { rows: biz } = await pool.query(
-      'SELECT user_id, min_notice_hours FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+      `SELECT user_id, min_notice_hours, COALESCE(timezone, 'Europe/Paris') AS timezone
+       FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE`,
       [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const userId = biz[0].user_id;
     const minNoticeMin = (parseInt(biz[0].min_notice_hours) || 0) * 60;
+    const bizTz = biz[0].timezone;
 
     // ── Vérif blocage client (si connecté) ──────────────────────────────────
     const authHeader = req.headers.authorization;
@@ -406,7 +416,7 @@ router.get('/:slug/slots', async (req, res) => {
     const empId = employee_id && !['null','undefined',''].includes(employee_id)
       ? employee_id : null;
 
-    const slots = await getSlots(userId, empId, date, svc[0].duration_minutes, minNoticeMin);
+    const slots = await getSlots(userId, empId, date, svc[0].duration_minutes, minNoticeMin, bizTz);
     const _sresp = { slots, date, duration: svc[0].duration_minutes, isFull: slots.length === 0 };
     global.memCache?.set(_sKey, _sresp, 30 * 1000);
     res.json(_sresp);
@@ -438,11 +448,13 @@ router.get('/:slug/month-status', async (req, res) => {
       return res.status(400).json({ error: 'year, month, service_id requis.' });
 
     const { rows: biz } = await pool.query(
-      'SELECT user_id, min_notice_hours FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE', [req.params.slug]
+      `SELECT user_id, min_notice_hours, COALESCE(timezone, 'Europe/Paris') AS timezone
+       FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE`, [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const userId       = biz[0].user_id;
     const minNoticeMin = (parseInt(biz[0].min_notice_hours) || 0) * 60;
+    const bizTz        = biz[0].timezone;
 
     const { rows: svc } = await pool.query(
       'SELECT duration_minutes FROM booking_services WHERE id=$1 AND user_id=$2',
@@ -479,7 +491,7 @@ router.get('/:slug/month-status', async (req, res) => {
       }
 
       // Calculer les créneaux disponibles (avec min_notice et employee_id si fourni)
-      const slots = await getSlots(userId, empId, dateStr, dur, minNoticeMin);
+      const slots = await getSlots(userId, empId, dateStr, dur, minNoticeMin, bizTz);
       result[dateStr] = slots.length === 0 ? 'full' : 'open';
     }
     res.json(result);
@@ -538,7 +550,8 @@ router.post('/:slug/book', async (req, res) => {
   try {
     const { rows: biz } = await pool.query(
       `SELECT bs.user_id, bs.min_notice_hours, bs.advance_booking_days,
-              bs.require_account, u.business_name
+              bs.require_account, COALESCE(bs.timezone, 'Europe/Paris') AS timezone,
+              u.business_name
        FROM booking_settings bs
        JOIN users u ON u.id = bs.user_id
        WHERE bs.slug=$1 AND bs.is_enabled=TRUE`,
@@ -546,7 +559,7 @@ router.post('/:slug/book', async (req, res) => {
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const { user_id: userId, min_notice_hours, advance_booking_days,
-            require_account, business_name } = biz[0];
+            require_account, timezone: bizTz, business_name } = biz[0];
 
     const { service_id, employee_id, date, start_time,
             client_name, client_email, client_phone, notes, client_token } = req.body;
@@ -620,21 +633,19 @@ router.post('/:slug/book', async (req, res) => {
       }
     }
 
-    // AUDIT booking #5 : harmonise min_notice_hours avec getSlots
-    // (parseInt(...)||0 au lieu de ||1). Si merchant configure 0 → accepté.
-    const apptDt     = new Date(`${date}T${start_time}`);
+    // AUDIT booking #5 + #6 + #7 : min_notice & advance_days via PG AT TIME ZONE
+    // → calculs dans le fuseau du commerçant, DST géré nativement.
     const minNoticeH = Math.max(0, parseInt(min_notice_hours) || 0);
-    const minDt      = new Date(Date.now() + minNoticeH * 3600000);
-    if (apptDt < minDt)
+    const maxDays    = Math.max(1, parseInt(advance_booking_days) || 30);
+    const { rows: tzCheck } = await pool.query(
+      `SELECT
+         (($1::date + $2::time) AT TIME ZONE $3) < (NOW() + ($4 || ' hours')::interval) AS too_soon,
+         $1::date > ((NOW() AT TIME ZONE $3)::date + ($5 || ' days')::interval)::date AS too_far`,
+      [date, start_time, bizTz, minNoticeH, maxDays]
+    );
+    if (tzCheck[0].too_soon)
       return res.status(400).json({ error: `Réservation impossible moins de ${minNoticeH}h à l'avance.` });
-
-    // AUDIT booking #4 : advance_booking_days enforced backend (avant :
-    // front-only, un bot pouvait réserver dans 5 ans).
-    const maxDays = Math.max(1, parseInt(advance_booking_days) || 30);
-    const maxDt   = new Date();
-    maxDt.setHours(23, 59, 59, 999);
-    maxDt.setDate(maxDt.getDate() + maxDays);
-    if (apptDt > maxDt) {
+    if (tzCheck[0].too_far) {
       return res.status(400).json({
         error: `Réservation possible jusqu'à ${maxDays} jours à l'avance.`,
         code: 'ADVANCE_LIMIT',
@@ -685,7 +696,7 @@ router.post('/:slug/book', async (req, res) => {
     );
     const minNoticeMinBook = (parseInt(bsR[0]?.min_notice_hours) || 0) * 60;
 
-    const availSlots = await getSlots(userId, empId, date, duration, minNoticeMinBook);
+    const availSlots = await getSlots(userId, empId, date, duration, minNoticeMinBook, bizTz);
     if (!availSlots.includes(normalizedStartTime))
       return res.status(409).json({ error: 'Ce créneau n\'est plus disponible ou trop proche.' });
 
@@ -1360,7 +1371,8 @@ router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
     // ── Résoudre le merchant + politique d'annulation + coordonnées ──────────
     const { rows: bizRows } = await pool.query(
       `SELECT u.id AS user_id, u.business_name, u.phone AS merchant_phone, u.address AS merchant_address,
-              COALESCE(bs.cancellation_policy_hours, 2) AS policy_hours
+              COALESCE(bs.cancellation_policy_hours, 2) AS policy_hours,
+              COALESCE(bs.timezone, 'Europe/Paris') AS timezone
        FROM users u
        LEFT JOIN booking_settings bs ON bs.user_id = u.id
        WHERE (bs.slug = $1 OR u.id = $2)
@@ -1402,15 +1414,18 @@ router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
     // ── Politique d'annulation merchant-driven ──────────────────────────────
     // policy_hours=0 → annulation possible à tout moment
     // sinon → doit être plus de N heures avant le RDV
+    // AUDIT booking #24 : diff calculée en UTC via TZ merchant (gère DST).
     const dateStr = typeof appt.date === 'string'
       ? appt.date.substring(0, 10)
       : new Date(appt.date).toISOString().substring(0, 10);
     const timeStr = typeof appt.start_time === 'string'
       ? appt.start_time.substring(0, 5)
       : '00:00';
-    const apptStart = new Date(`${dateStr}T${timeStr}:00`);
-    const now       = new Date();
-    const diffHours = (apptStart - now) / (1000 * 60 * 60);
+    const { rows: tzDiff } = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM (($1::date + $2::time) AT TIME ZONE $3 - NOW())) / 3600 AS diff_hours`,
+      [dateStr, timeStr, biz.timezone]
+    );
+    const diffHours = parseFloat(tzDiff[0].diff_hours);
     if (policyHours > 0 && diffHours < policyHours) {
       const labelHours = policyHours < 24 ? `${policyHours}h`
                                           : `${Math.round(policyHours/24)} jour${policyHours>=48?'s':''}`;
