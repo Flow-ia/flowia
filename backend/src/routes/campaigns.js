@@ -27,6 +27,8 @@ const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT; // 300/jour total
 // client dormant chute même s'il a dépensé. LATERAL JOIN = 1 requête unique.
 async function getTopClients(userId, limit, needPhone, needEmail) {
   let conds = [`ca.user_id = $1`];
+  // Audit Z (RGPD) : filtrage opt-in marketing explicite.
+  conds.push(`ca.marketing_opt_in = TRUE`);
   if (needPhone) conds.push(`ca.phone IS NOT NULL AND ca.phone != ''`);
   if (needEmail) conds.push(`ca.email IS NOT NULL AND ca.email != '' AND ca.email LIKE '%@%'`);
 
@@ -127,6 +129,7 @@ async function getClientSegments(userId, excludeRecentSms = true) {
     ) stats ON TRUE
     WHERE ca.user_id = $1
       AND ca.phone IS NOT NULL AND ca.phone != ''
+      AND ca.marketing_opt_in = TRUE
       ${excludeRecentSms ? `AND NOT EXISTS (
         SELECT 1 FROM message_log ml
         WHERE ml.user_id = ca.user_id AND ml.phone = ca.phone
@@ -189,6 +192,7 @@ async function getClientSegmentsWithHabits(userId) {
     LEFT JOIN habits h ON h.client_id = ca.id
     WHERE ca.user_id = $1
       AND ca.phone IS NOT NULL AND ca.phone != ''
+      AND ca.marketing_opt_in = TRUE
       AND NOT EXISTS (
         SELECT 1 FROM message_log ml
         WHERE ml.user_id = ca.user_id AND ml.phone = ca.phone

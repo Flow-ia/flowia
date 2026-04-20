@@ -48,6 +48,7 @@ router.get('/plan', async (req, res) => {
       ) stats ON TRUE
       WHERE ca.user_id = $1
         AND ca.phone IS NOT NULL AND ca.phone != ''
+        AND ca.marketing_opt_in = TRUE
     `, [userId]);
 
     const byId = { at_risk: [], lost: [], loyal: [] };
@@ -134,6 +135,7 @@ router.post('/plan/launch', async (req, res) => {
       ) stats ON TRUE
       WHERE ca.user_id = $1
         AND ca.phone IS NOT NULL AND ca.phone != ''
+        AND ca.marketing_opt_in = TRUE
         AND NOT EXISTS (
           SELECT 1 FROM message_log ml
           WHERE ml.user_id = ca.user_id AND ml.phone = ca.phone

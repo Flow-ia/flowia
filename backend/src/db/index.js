@@ -1191,6 +1191,27 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_rewards_promo
     ON client_rewards(promo_code_id)`);
 
+  // ── Audit Z (RGPD) : opt-in marketing explicite ─────────────────────────────
+  // Sans ces colonnes, les SMS/emails marketing partaient à tous les clients
+  // ayant renseigné tel/email (consentement implicite) — non conforme CNIL.
+  // Défaut FALSE : opt-in explicite requis (checkbox à l'inscription + lien
+  // de désabonnement 1-clic dans chaque message via unsubscribe_token).
+  // IMPORTANT prod : les clients existants sont migrés en `FALSE`. Le marchand
+  // doit les inviter à opter-in via une campagne de transition (mentionne-le
+  // dans l'UI admin).
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS marketing_opt_in BOOLEAN NOT NULL DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS marketing_opt_in_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS unsubscribe_token UUID UNIQUE DEFAULT gen_random_uuid()`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS marketing_opt_in BOOLEAN NOT NULL DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS marketing_opt_in_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS unsubscribe_token UUID UNIQUE DEFAULT gen_random_uuid()`);
+  // Backfill : tokens manquants sur lignes existantes (ajoutées AVANT la
+  // migration de la colonne) — sinon le UNIQUE échoue à l'insert-time.
+  await runMigration(`UPDATE client_accounts SET unsubscribe_token = gen_random_uuid() WHERE unsubscribe_token IS NULL`);
+  await runMigration(`UPDATE global_clients  SET unsubscribe_token = gen_random_uuid() WHERE unsubscribe_token IS NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_accounts_optin ON client_accounts(user_id, marketing_opt_in) WHERE marketing_opt_in = TRUE`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_global_clients_optin ON global_clients(marketing_opt_in) WHERE marketing_opt_in = TRUE`);
+
 console.log('[DB] Tables initialisées');
 }
 

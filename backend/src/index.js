@@ -646,10 +646,11 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
         // user_id → par commerçant). La version globale bloquait faussement
         // les autres commerçants d'un client multi-commerces.
         const { rows: clients } = await dbPool.query(
-          `SELECT DISTINCT ca.email, ca.first_name, ca.last_name
+          `SELECT DISTINCT ca.email, ca.first_name, ca.last_name, ca.unsubscribe_token
              FROM client_accounts ca
             WHERE ca.user_id = $1
               AND ca.birth_date IS NOT NULL
+              AND ca.marketing_opt_in = TRUE
               AND (
                 (EXTRACT(MONTH FROM ca.birth_date)=EXTRACT(MONTH FROM CURRENT_DATE)
                  AND EXTRACT(DAY FROM ca.birth_date)=EXTRACT(DAY FROM CURRENT_DATE))
