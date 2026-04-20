@@ -917,21 +917,8 @@ router.post('/appointments/:id/checkout', async (req, res) => {
   try {
     const { employee_id, payment_method, category_id, amount: customAmount } = req.body;
 
-    // Vérifier le RDV
-    const { rows: apptR } = await pool.query(
-      `SELECT a.*, bs.name as service_name, bs.price as service_price,
-        e.can_encash, e.name as employee_name
-       FROM appointments a
-       LEFT JOIN booking_services bs ON bs.id = a.service_id
-       LEFT JOIN employees e ON e.id = a.employee_id
-       WHERE a.id=$1 AND a.user_id=$2`,
-      [req.params.id, req.user.userId]
-    );
-    if (!apptR.length) return res.status(404).json({ error: 'RDV introuvable.' });
-    const appt = apptR[0];
-    if (appt.paid) return res.status(400).json({ error: 'Ce RDV est déjà encaissé.' });
-
-    // Vérifier permission si employee_id fourni (l'employé qui encaisse)
+    // R5 : vérifier can_encash AVANT le claim atomique (pas de rollback
+    // nécessaire si permission refusée).
     if (employee_id) {
       const { rows: empR } = await pool.query(
         'SELECT can_encash FROM employees WHERE id=$1 AND user_id=$2',
@@ -941,6 +928,35 @@ router.post('/appointments/:id/checkout', async (req, res) => {
         return res.status(403).json({ error: "Vous n'avez pas la permission d'encaisser les RDV." });
       }
     }
+
+    // R5 : CLAIM ATOMIQUE — UPDATE WHERE paid=FALSE garantit qu'un seul
+    // employé peut encaisser en cas de double-clic OU de 2 employés
+    // simultanés. Renvoie le RDV avec les champs enrichis (service, etc.)
+    // pour continuer le flux sans re-SELECT.
+    const { rows: apptR } = await pool.query(
+      `WITH claimed AS (
+        UPDATE appointments a
+           SET paid=TRUE, paid_method=$1, status='completed', updated_at=NOW()
+         WHERE a.id=$2 AND a.user_id=$3 AND a.paid=FALSE
+        RETURNING a.*
+      )
+      SELECT c.*, bs.name as service_name, bs.price as service_price,
+             e.can_encash, e.name as employee_name
+        FROM claimed c
+        LEFT JOIN booking_services bs ON bs.id = c.service_id
+        LEFT JOIN employees e          ON e.id = c.employee_id`,
+      [payment_method || 'cash', req.params.id, req.user.userId]
+    );
+    if (!apptR.length) {
+      // Check pour distinguer 'not found' vs 'already paid'
+      const { rows: check } = await pool.query(
+        'SELECT id, paid FROM appointments WHERE id=$1 AND user_id=$2',
+        [req.params.id, req.user.userId]
+      );
+      if (!check.length) return res.status(404).json({ error: 'RDV introuvable.' });
+      return res.status(400).json({ error: 'Ce RDV est déjà encaissé.', code: 'ALREADY_PAID' });
+    }
+    const appt = apptR[0];
 
     // Montant : priorité au custom de l'employé, sinon total_amount (déjà réduit si promo),
     // sinon prix service. Si le RDV avait un promo, total_amount contient déjà le prix réduit.
@@ -1020,11 +1036,11 @@ router.post('/appointments/:id/checkout', async (req, res) => {
       tx.items = apptItems;
     }
 
-    // Mettre à jour le RDV : paid + status=completed
+    // R5 : RDV déjà marqué paid + status=completed via CLAIM atomique au
+    // début de la route. Ici on ajoute juste transaction_id pour le lien.
     await pool.query(
-      `UPDATE appointments SET paid=TRUE, paid_method=$1, transaction_id=$2, status='completed', updated_at=NOW()
-       WHERE id=$3`,
-      [payment_method || 'cash', tx.id, req.params.id]
+      `UPDATE appointments SET transaction_id=$1 WHERE id=$2`,
+      [tx.id, req.params.id]
     );
 
     // ── Hook parrainage : valider automatiquement le referral_use lié au RDV

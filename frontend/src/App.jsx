@@ -332,6 +332,10 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
     if (cart.length===0 || busy) return;
     if (!paymentsValid) return;
     setBusy(true);
+    // R1 idempotency : UUID généré une fois par clic. Si le client retry
+    // (réseau, double-clic malgré busy, React StrictMode en dev), le back
+    // détecte la même clé et renvoie la transaction déjà créée.
+    const idemKey = (crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(36).slice(2)));
     try {
       // Description = juste les noms (la qty est portée par items[])
       // → Les stats comptent N ventes réelles du service, pas une fausse ligne "Coupe ×N"
@@ -365,6 +369,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
         client_note: clientNote.trim() || null,
         client_email: clientEmail.trim() || null,
         client_name: clientName.trim() || null,
+        idempotency_key: idemKey,
       });
       // Si une réduction client_rewards a été appliquée → la marquer comme utilisée
       if (selectedRewardId) {

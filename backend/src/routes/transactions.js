@@ -120,9 +120,47 @@ router.post('/', async (req, res) => {
             date, time, datetime_iso, appointment_id, source,
             client_email, client_name,
             promo_code_id, discount_amount, original_amount,
-            client_note, items, payments, referral_code } = req.body;
+            client_note, items, payments, referral_code,
+            idempotency_key } = req.body;
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
+
+    // R1 : idempotency key — si le client a envoyé le même UUID (double-clic,
+    // retry réseau, React StrictMode), on renvoie la transaction déjà créée
+    // au lieu d'en créer une nouvelle.
+    const idemKey = String(idempotency_key || '').trim().slice(0, 64) || null;
+    if (idemKey) {
+      const { rows: ex } = await pool.query(
+        `SELECT id, type, amount, description, category_id, employee_id,
+                payment_method, qty_total, locked, client_email,
+                TO_CHAR(date,'YYYY-MM-DD') as date, TO_CHAR(time,'HH24:MI') as time,
+                datetime_iso, appointment_id, source, created_at
+           FROM transactions
+          WHERE user_id=$1 AND idempotency_key=$2 LIMIT 1`,
+        [req.user.userId, idemKey]
+      );
+      if (ex.length) {
+        return res.status(200).json({ ...ex[0], idempotent_replay: true });
+      }
+    }
+
+    // R2 : validation montant + sum split payments.
+    const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt < 0) {
+      return res.status(400).json({ error: 'Montant invalide (doit être ≥ 0).' });
+    }
+    const payListRaw = Array.isArray(payments)
+      ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
+      : [];
+    if (payListRaw.length > 1) {
+      const sumPay = payListRaw.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+      if (Math.abs(sumPay - amt) > 0.01) {
+        return res.status(400).json({
+          error: `Somme des paiements (${sumPay.toFixed(2)} €) ≠ total (${amt.toFixed(2)} €).`,
+          code: 'SPLIT_MISMATCH',
+        });
+      }
+    }
 
     // ── Parrainage (encaissement caisse d'un filleul) ───────────────────────
     // Si referral_code fourni, on le valide côté serveur AVANT insert pour
@@ -161,9 +199,8 @@ router.post('/', async (req, res) => {
       : 1;
 
     // ── Paiements normalisés → méthode stockée + breakdown ────────────────────
-    const payList = Array.isArray(payments)
-      ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
-      : [];
+    // Réutilise payListRaw déjà filtré + validé (sum check en R2 plus haut).
+    const payList = payListRaw;
     const pmStored = payList.length > 1
       ? 'multi'
       : (payList[0]?.method || payment_method || 'cash');
@@ -181,25 +218,42 @@ router.post('/', async (req, res) => {
       } catch (e) { console.warn('[TX global_client lookup]', e.message); }
     }
 
-    const { rows } = await pool.query(
+    // INSERT avec ON CONFLICT sur (user_id, idempotency_key) — si le client
+    // a envoyé la même clé en race (double-clic), la 2e tentative ne crée pas
+    // de doublon. RETURNING vide → on SELECT l'existant et retourne.
+    const insertResult = await pool.query(
       `INSERT INTO transactions
         (user_id, type, amount, description, category_id, employee_id,
          payment_method, date, time, datetime_iso, appointment_id, source, locked,
          promo_code_id, discount_amount, original_amount, client_email, client_note,
-         qty_total, global_client_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19)
+         qty_total, global_client_id, idempotency_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19,$20)
+       ON CONFLICT (user_id, idempotency_key) DO NOTHING
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
          payment_method, locked, client_email, client_note, qty_total,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
          TO_CHAR(time, 'HH24:MI') as time,
          datetime_iso, appointment_id, source, created_at`,
-      [req.user.userId, type, amount, description || null, category_id || null,
+      [req.user.userId, type, amt, description || null, category_id || null,
        employee_id || null, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
-       client_email || null, client_note || null, qtyTotal, globalClientId]
+       client_email || null, client_note || null, qtyTotal, globalClientId,
+       idemKey]
     );
-    const tx = rows[0];
+    if (!insertResult.rows.length && idemKey) {
+      // Race idempotency : un autre process a gagné. Retourner sa transaction.
+      const { rows: existing } = await pool.query(
+        `SELECT id, type, amount, description, category_id, employee_id,
+                payment_method, qty_total, locked, client_email,
+                TO_CHAR(date,'YYYY-MM-DD') as date, TO_CHAR(time,'HH24:MI') as time,
+                datetime_iso, appointment_id, source, created_at
+           FROM transactions WHERE user_id=$1 AND idempotency_key=$2 LIMIT 1`,
+        [req.user.userId, idemKey]
+      );
+      return res.status(200).json({ ...(existing[0] || {}), idempotent_replay: true });
+    }
+    const tx = insertResult.rows[0];
 
     // ── Insérer transaction_items ─────────────────────────────────────────────
     if (itemList.length) {
@@ -248,9 +302,13 @@ router.post('/', async (req, res) => {
       ).catch(e => console.error('[CLIENT NOTE ERR]', e.message));
     }
 
-    // Incrémenter uses_count du code promo si utilisé
+    // Incrémenter uses_count du code promo si utilisé.
+    // Audit caisse : UPDATE atomique avec WHERE max_uses — si le code a
+    // atteint sa limite entre la vérif initiale et cet INSERT (race 2 caisses
+    // simultanées), le UPDATE ne touchera pas la ligne (is_active bascule
+    // automatiquement à FALSE via CASE). Le RETURNING sert à tracer les cas
+    // où l'increment a été rejeté (utile pour diagnostic).
     if (promo_code_id) {
-      // Incrémenter uses_count ET désactiver si max_uses atteint
       await pool.query(
         `UPDATE promo_codes
            SET uses_count = uses_count + 1,
@@ -258,9 +316,14 @@ router.post('/', async (req, res) => {
                  WHEN max_uses IS NOT NULL AND (uses_count + 1) >= max_uses THEN FALSE
                  ELSE is_active
                END
-         WHERE id=$1 AND user_id=$2`,
+         WHERE id=$1 AND user_id=$2
+           AND is_active = TRUE
+           AND (max_uses IS NULL OR uses_count < max_uses)
+         RETURNING id`,
         [promo_code_id, req.user.userId]
-      ).catch(e => console.error('[PROMO COUNT ERR]', e.message));
+      ).then(r => {
+        if (!r.rows.length) console.warn('[PROMO COUNT race] max_uses atteint concurrent', { promo_code_id });
+      }).catch(e => console.error('[PROMO COUNT ERR]', e.message));
 
       // Log traçabilité usage avec montant transaction
       const logEmail = client_email || null;

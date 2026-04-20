@@ -349,6 +349,28 @@ async function initDB() {
   await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT NULL`);
   // Migration : transactions.qty_total
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qty_total INT DEFAULT 1`);
+  // Audit caisse R1 : idempotency_key pour protéger POST /transactions du
+  // double-clic (même UUID client = même transaction, pas de doublon).
+  // NULLS DISTINCT (défaut PG) → les lignes sans idempotency_key ne
+  // conflictent pas entre elles. Pas de WHERE partial → ON CONFLICT
+  // (user_id, idempotency_key) fonctionne en PG 12+.
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(64)`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_idempotency
+    ON transactions(user_id, idempotency_key)`);
+  // Audit caisse : CHECK amount >= 0 (normalise les eventuels negatifs d'abord).
+  await pool.query(`UPDATE transactions SET amount=0 WHERE amount < 0`).catch(() => {});
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='transactions' AND constraint_name='transactions_amount_nonneg'
+      ) THEN
+        ALTER TABLE transactions ADD CONSTRAINT transactions_amount_nonneg
+          CHECK (amount >= 0);
+      END IF;
+    END$$;
+  `).catch(e => console.warn('[MIG transactions_amount_nonneg]', e.message));
   // Migration : table transaction_items
   await pool.query(`
     CREATE TABLE IF NOT EXISTS transaction_items (
