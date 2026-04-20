@@ -484,8 +484,15 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
   const [recalcing, setRecalcing] = useState(false);
   const [history, setHistory] = useState([]);
 
+  // J2 : source unique de vérité pour SMS_PRICE = backend. Les env VITE_*
+  // peuvent diverger du back si l'admin oublie de sync — on évite cette
+  // classe de bug en lisant price_per_sms depuis /sms/balance.
+  const [pricePerSmsBackend, setPricePerSmsBackend] = useState(null);
   useEffect(() => {
-    paymentsApi.getSMSBalance().then(b => setBalance(parseFloat(b.balance))).catch(() => {});
+    paymentsApi.getSMSBalance().then(b => {
+      setBalance(parseFloat(b.balance));
+      if (b.price_per_sms) setPricePerSmsBackend(parseFloat(b.price_per_sms));
+    }).catch(() => {});
     campaignsApi.getAiHistory().then(setHistory).catch(() => {});
   }, []);
 
@@ -520,13 +527,15 @@ function TabMarketingIA({ theme, showToast, onGoToSolde }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [discounts.risque, discounts.perdu, discounts.fidele, budget, duration]);
 
+  // J2 : priorité au prix retourné par le backend (source unique).
+  // Fallback sur les env VITE_* en attendant la réponse du fetch initial.
   const parseEnvFloat = (v, fallback) => {
     const n = parseFloat(v);
     return Number.isFinite(n) && n > 0 ? n : fallback;
   };
-  const smsCost   = parseEnvFloat(import.meta.env.VITE_SMS_COST_UNIT, 0.045);
-  const smsMargin = parseEnvFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT, 30);
-  const pricePerSms = smsCost * (1 + smsMargin / 100);
+  const smsCostFallback   = parseEnvFloat(import.meta.env.VITE_SMS_COST_UNIT, 0.045);
+  const smsMarginFallback = parseEnvFloat(import.meta.env.VITE_SMS_MARGIN_PERCENT, 30);
+  const pricePerSms = pricePerSmsBackend ?? (smsCostFallback * (1 + smsMarginFallback / 100));
   const previewSms  = pricePerSms > 0 ? Math.floor(budget / pricePerSms) : 0;
   const insufficient = balance != null && budget > balance;
   const thirdDays = Math.max(1, Math.round(duration / 3));

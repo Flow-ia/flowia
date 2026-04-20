@@ -149,6 +149,16 @@ function startServer() {
     message: { error: 'Trop de requêtes.' },
     standardHeaders: true, legacyHeaders: false,
   });
+  // J8 : limite dédiée sur les endpoints de création de paiement Stripe
+  // (évite qu'un attaquant spamme /sms/intent pour créer 300 PaymentIntents/
+  // min et épuiser l'API Stripe ou polluer le dashboard).
+  // 15 intents/checkouts par 15 min par IP → largement suffisant pour un
+  // commerçant normal, très restrictif pour un bot.
+  const paymentsIntentLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 15,
+    message: { error: 'Trop de tentatives de recharge. Réessayez dans quelques minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
 
   // ── Routes ───────────────────────────────────────────────────────────────
   // Routes auth avec limiters spécifiques par endpoint
@@ -178,6 +188,11 @@ function startServer() {
   app.use('/api/marketing',     apiLimiter,  require('./routes/marketing'));
   app.use('/api/birthday-campaign', apiLimiter, require('./routes/birthday'));
   app.use('/api/referrals',     apiLimiter,  require('./routes/referrals'));
+  // Limite spécifique sur les endpoints de création d'intent/checkout AVANT
+  // le apiLimiter général (express évalue dans l'ordre). Les autres routes
+  // /api/payments/* gardent le apiLimiter standard.
+  app.use('/api/payments/sms/intent',   paymentsIntentLimiter);
+  app.use('/api/payments/sms/checkout', paymentsIntentLimiter);
   app.use('/api/payments',      apiLimiter,  require('./routes/payments'));
 
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
@@ -298,7 +313,26 @@ function startServer() {
   // ── Traitement file d'attente SMS (toutes les 30 min, 9h-20h) ──────────────
   // Les envois IA sont planifiés avec scheduled_at précis (date + heure).
   // On envoie uniquement les SMS dont l'heure planifiée est passée.
-  const { sendSMS } = require('./utils/messenger');
+  const { sendSMS, SMS_PRICE } = require('./utils/messenger');
+  // R6 : refund du solde sur SMS en échec. Le débit a été fait upfront en
+  // bloc (auto-send estimated_cost), donc chaque échec doit re-créditer
+  // SMS_PRICE sinon le commerçant paie pour du vide. Log la transaction
+  // de refund pour traçabilité.
+  async function refundFailedSms(userId, campaignId, phone, reason) {
+    try {
+      await dbPool.query(
+        `UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2`,
+        [SMS_PRICE, userId]
+      );
+      await dbPool.query(
+        `INSERT INTO sms_transactions (user_id, type, amount, sms_count, description, status)
+         VALUES ($1,'refund',$2,1,$3,'completed')`,
+        [userId, SMS_PRICE, `Refund SMS échoué ${phone || ''} (${reason || 'sans raison'})`.slice(0, 250)]
+      );
+    } catch (e) {
+      console.error('[CRON sms refund]', e.message);
+    }
+  }
   async function processSmsQueue() {
     const hour = new Date().getHours();
     if (hour < 9 || hour > 20) return;
@@ -318,7 +352,7 @@ function startServer() {
         FOR UPDATE SKIP LOCKED
       `);
       if (!rows.length) return;
-      let sent = 0, failed = 0;
+      let sent = 0, failed = 0, refunded = 0;
       for (const item of rows) {
         try {
           const r = await sendSMS(item.client_phone, item.message);
@@ -328,7 +362,7 @@ function startServer() {
             await dbPool.query(
               `INSERT INTO message_log (user_id, campaign_id, phone, channel, cost, status)
                VALUES ($1,$2,$3,'sms',$4,'sent')`,
-              [item.user_id, item.campaign_id, item.client_phone, require('./utils/messenger').SMS_PRICE || 0.045]
+              [item.user_id, item.campaign_id, item.client_phone, SMS_PRICE]
             );
             // Traçabilité IA — marque le code comme sent
             if (item.ai_code_id) {
@@ -347,14 +381,19 @@ function startServer() {
                 [item.ai_code_id]
               ).catch(() => {});
             }
+            // R6 : refund — le SMS n'a pas été envoyé, on re-crédite.
+            await refundFailedSms(item.user_id, item.campaign_id, item.client_phone, r.reason);
+            refunded++;
           }
           await cronSleep(200);
         } catch (e) {
           failed++;
           await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`, [item.id, e.message]);
+          await refundFailedSms(item.user_id, item.campaign_id, item.client_phone, e.message);
+          refunded++;
         }
       }
-      console.log(`[CRON sms] ${sent} envoyés, ${failed} échecs sur ${rows.length}`);
+      console.log(`[CRON sms] ${sent} envoyés, ${failed} échecs (${refunded} remboursés) sur ${rows.length}`);
     } catch (e) {
       console.error('[CRON sms]', e.message);
     }

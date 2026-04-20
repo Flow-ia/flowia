@@ -853,6 +853,25 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sms_balance DECIMAL(10,2) DEFAULT 0`);
+  // J7 : normaliser tout solde négatif résiduel (bug historique pré-R1)
+  // avant d'ajouter le CHECK qui sinon ferait échouer la migration.
+  await runMigration(`UPDATE users SET sms_balance = 0 WHERE sms_balance < 0`);
+  // CHECK ≥ 0 : belt-and-suspenders avec le débit atomique (R1). Garantit
+  // qu'un UPDATE direct en BDD ou un bug futur ne puisse pas passer en
+  // négatif. Ignore l'erreur si la contrainte existe déjà (IF NOT EXISTS
+  // pas supporté sur ADD CONSTRAINT → check via information_schema).
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_sms_balance_nonneg'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_sms_balance_nonneg
+          CHECK (sms_balance >= 0);
+      END IF;
+    END$$;
+  `);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_today INT DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_month INT DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_day_reset DATE DEFAULT CURRENT_DATE`);
