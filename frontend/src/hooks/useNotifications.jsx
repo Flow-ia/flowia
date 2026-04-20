@@ -203,7 +203,14 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
 
   useEffect(() => {
     const handler = (e) => {
-      if (e.data?.type === 'navigate') window.location.href = e.data.url;
+      if (e.data?.type !== 'navigate') return;
+      // SÉCURITÉ : validation stricte — uniquement chemins relatifs internes.
+      // Refuse javascript:, data:, //evil, http://, URL avec \ ou control chars.
+      const raw = e.data.url;
+      if (typeof raw !== 'string' || !raw.length) return;
+      if (raw[0] !== '/' || raw.startsWith('//')) return;
+      if (/[\x00-\x1f]/.test(raw) || raw.includes('\\')) return;
+      window.location.href = raw;
     };
     navigator.serviceWorker?.addEventListener('message', handler);
     return () => navigator.serviceWorker?.removeEventListener('message', handler);

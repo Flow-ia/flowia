@@ -29,17 +29,33 @@ self.addEventListener('push', event => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// ── Validation d'URL : n'accepte QUE les chemins relatifs internes (/xxx) ──
+// Protection contre un payload poisoned qui forcerait une redirection vers
+// javascript:, http://evil.com, //evil.com, ou un SSO callback malicieux.
+// Un path doit commencer par '/' et ne pas être un protocol (// ou :).
+function safeInternalPath(raw, fallback = '/agenda') {
+  if (typeof raw !== 'string' || !raw.length) return fallback;
+  if (raw[0] !== '/') return fallback;                // pas relatif
+  if (raw.startsWith('//')) return fallback;          // protocol-relative
+  if (/[\x00-\x1f]/.test(raw)) return fallback;       // control chars
+  if (raw.includes('\\')) return fallback;            // backslash tricks
+  return raw;
+}
+
 // ── Clic sur une notification ─────────────────────────────────────────────────
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   if (event.action === 'dismiss') return;
 
-  const urlToOpen = event.notification.data?.url || '/agenda';
+  const urlToOpen = safeInternalPath(event.notification.data?.url, '/agenda');
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      // Réutiliser un onglet déjà ouvert si possible
-      const existing = clientList.find(c => c.url.includes(self.location.origin));
+      // Réutiliser un onglet déjà ouvert si possible.
+      // startsWith(origin + '/') évite qu'un site tiers contenant l'origin
+      // dans son URL matche par erreur.
+      const existing = clientList.find(c => c.url.startsWith(self.location.origin + '/') || c.url === self.location.origin);
       if (existing) { existing.focus(); existing.postMessage({ type: 'navigate', url: urlToOpen }); return; }
+      // openWindow avec un path relatif → scope du SW garanti
       return self.clients.openWindow(urlToOpen);
     })
   );

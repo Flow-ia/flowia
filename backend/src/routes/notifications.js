@@ -294,14 +294,20 @@ router.post('/push-subscribe', async (req, res) => {
     if (!subscription?.endpoint) return res.status(400).json({ error: 'Abonnement invalide.' });
     await savePushSubscription(req.user.userId, subscription, req.headers['user-agent'] || '');
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    if (e.code === 'ENDPOINT_OWNED') {
+      return res.status(409).json({ error: 'Cet endpoint est déjà enregistré pour un autre compte.', code: 'ENDPOINT_OWNED' });
+    }
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── DELETE /api/notifications/push-subscribe ─────────────────────────────────
+// #2 : filtre ownership — un user ne peut supprimer QUE ses propres subs.
 router.delete('/push-subscribe', async (req, res) => {
   try {
     const { endpoint } = req.body;
-    if (endpoint) await deletePushSubscription(endpoint);
+    if (endpoint) await deletePushSubscription(endpoint, req.user.userId);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
