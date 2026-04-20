@@ -13,6 +13,7 @@ const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router   = express.Router();
 
 router.use(authMiddleware);
@@ -57,7 +58,9 @@ router.get('/:employeeId/status', async (req, res) => {
 
 // ─── POST /api/employee-pins/:employeeId/set — créer ou remplacer le PIN ──────
 // Requiert : { pin: "1234" }  (4 chiffres)
-router.post('/:employeeId/set', async (req, res) => {
+// AUDIT perms #4 : PIN admin requis — sans ça, n'importe qui avec le JWT
+// merchant pouvait réécrire le PIN d'un autre employé et l'usurper.
+router.post('/:employeeId/set', pinAdminMiddleware, async (req, res) => {
   try {
     const { pin } = req.body;
     if (!pin || !/^\d{4}$/.test(String(pin)))
@@ -86,7 +89,7 @@ router.post('/:employeeId/set', async (req, res) => {
 });
 
 // ─── DELETE /api/employee-pins/:employeeId — supprimer le PIN ─────────────────
-router.delete('/:employeeId', async (req, res) => {
+router.delete('/:employeeId', pinAdminMiddleware, async (req, res) => {
   try {
     await pool.query(
       `DELETE FROM employee_pins
@@ -100,7 +103,7 @@ router.delete('/:employeeId', async (req, res) => {
 });
 
 // ─── PATCH /api/employee-pins/:employeeId/toggle — activer / désactiver ───────
-router.patch('/:employeeId/toggle', async (req, res) => {
+router.patch('/:employeeId/toggle', pinAdminMiddleware, async (req, res) => {
   try {
     const { is_active } = req.body;
     if (typeof is_active !== 'boolean')

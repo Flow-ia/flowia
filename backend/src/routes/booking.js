@@ -365,10 +365,35 @@ router.post('/appointments', async (req, res) => {
 
 router.put('/appointments/:id', async (req, res) => {
   try {
-    const { status, notes, cancel_reason, date, start_time, employee_id, service_id } = req.body;
+    const { status, notes, cancel_reason, date, start_time, employee_id, service_id,
+            acting_employee_id } = req.body;
     const cur = await pool.query('SELECT * FROM appointments WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
     if (!cur.rows.length) return res.status(404).json({ error: 'RDV introuvable.' });
     const appt = cur.rows[0];
+    // AUDIT perms #2 : si un employé agit sur ce RDV (client envoie
+    // acting_employee_id), vérifier la permission correspondante côté back.
+    // Cancel → can_cancel, modification structurelle → can_modify.
+    // Limitation connue : sans acting_employee_id, on suppose que le
+    // commerçant (JWT) fait l'action — fix complet en commit C via header
+    // x-employee-pin.
+    if (acting_employee_id) {
+      const { rows: empR } = await pool.query(
+        'SELECT can_cancel, can_modify FROM employees WHERE id=$1 AND user_id=$2',
+        [acting_employee_id, req.user.userId]
+      );
+      if (!empR.length) return res.status(403).json({ error: 'Employé introuvable.' });
+      const isCancelling = status === 'cancelled' && appt.status !== 'cancelled';
+      const isModifying  = (date !== undefined && date !== appt.date)
+                        || (start_time !== undefined && start_time !== appt.start_time)
+                        || (service_id !== undefined && service_id !== appt.service_id)
+                        || (employee_id !== undefined && employee_id !== appt.employee_id);
+      if (isCancelling && !empR[0].can_cancel) {
+        return res.status(403).json({ error: "Cet employé n'a pas la permission d'annuler les RDV.", code: 'NO_CANCEL_PERMISSION' });
+      }
+      if (isModifying && !empR[0].can_modify) {
+        return res.status(403).json({ error: "Cet employé n'a pas la permission de modifier les RDV.", code: 'NO_MODIFY_PERMISSION' });
+      }
+    }
     let duration = appt.duration_minutes;
     if (service_id) {
       const { rows: svc } = await pool.query('SELECT duration_minutes FROM booking_services WHERE id=$1', [service_id]);

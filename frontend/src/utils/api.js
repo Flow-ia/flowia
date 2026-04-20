@@ -99,18 +99,21 @@ export const api = {
 
   // ── Employés ─────────────────────────────────────────────────────────────
   getEmployees:       ()       => request('/employees'),
-  createEmployee:     (b)      => request('/employees',           { method: 'POST',   body: JSON.stringify(b) }),
-  updateEmployee:     (id, b)  => request(`/employees/${id}`,     { method: 'PUT',    body: JSON.stringify(b) }),
-  deleteEmployee:         (id) => request(`/employees/${id}`,  { method: 'DELETE' }),
+  // AUDIT perms : ces routes exigent maintenant PIN admin (x-pin-session)
+  // côté backend — on passe par adminRequest qui joint le header auto.
+  createEmployee:     (b)      => adminRequest('/employees',       { method: 'POST',   body: JSON.stringify(b) }),
+  updateEmployee:     (id, b)  => adminRequest(`/employees/${id}`, { method: 'PUT',    body: JSON.stringify(b) }),
+  deleteEmployee:         (id) => adminRequest(`/employees/${id}`, { method: 'DELETE' }),
   getEmployeeFutureAppts: (id) => request(`/employees/${id}/future-appointments`),
   smartDeleteEmployee:    (id) => request(`/employees/${id}/smart-delete`, { method: 'POST' }),
 
   // ── Codes PIN employés ────────────────────────────────────────────────────
   getEmployeePins:           ()           => request('/employee-pins'),
   getEmployeePinStatus:      (empId)      => request(`/employee-pins/${empId}/status`),
-  setEmployeePin:            (empId, b)   => request(`/employee-pins/${empId}/set`,           { method: 'POST',   body: JSON.stringify(b) }),
-  deleteEmployeePin:         (empId)      => request(`/employee-pins/${empId}`,               { method: 'DELETE' }),
-  toggleEmployeePin:         (empId, b)   => request(`/employee-pins/${empId}/toggle`,         { method: 'PATCH',  body: JSON.stringify(b) }),
+  // AUDIT perms : set/delete/toggle PIN employé requiert PIN admin
+  setEmployeePin:            (empId, b)   => adminRequest(`/employee-pins/${empId}/set`,    { method: 'POST',   body: JSON.stringify(b) }),
+  deleteEmployeePin:         (empId)      => adminRequest(`/employee-pins/${empId}`,        { method: 'DELETE' }),
+  toggleEmployeePin:         (empId, b)   => adminRequest(`/employee-pins/${empId}/toggle`, { method: 'PATCH',  body: JSON.stringify(b) }),
   verifyEmployeePin:         (empId, b)   => request(`/employee-pins/${empId}/verify`,         { method: 'POST',   body: JSON.stringify(b) }),
   checkEmployeePinSession:   (empId, b)   => request(`/employee-pins/${empId}/check-session`,  { method: 'POST',   body: JSON.stringify(b) }),
 

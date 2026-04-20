@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router = express.Router();
 
 router.use(authMiddleware);
@@ -28,7 +29,11 @@ router.get('/', async (req, res) => {
   } catch { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-router.post('/', async (req, res) => {
+// AUDIT perms #3 : création / modification / suppression d'employés requièrent
+// PIN admin. Sans ça, un employé avec le JWT merchant (device partagé, XSS)
+// pouvait créer un employé avec tous les droits ou modifier ses propres
+// scopes → escalade triviale.
+router.post('/', pinAdminMiddleware, async (req, res) => {
   try {
     const { name, role, phone, avatar_color, is_active, can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse, can_use_promo, can_grant_credit, can_repay_credit } = req.body;
     if (!name) return res.status(400).json({ error: 'Nom requis.' });
@@ -40,7 +45,7 @@ router.post('/', async (req, res) => {
   } catch { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', pinAdminMiddleware, async (req, res) => {
   try {
     const { name, role, phone, email, avatar_color, is_active, can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse, can_use_promo, can_grant_credit, can_repay_credit } = req.body;
     const { rows } = await pool.query(
@@ -53,7 +58,7 @@ router.put('/:id', async (req, res) => {
   } catch { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', pinAdminMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM employees WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
     res.json({ ok: true });
