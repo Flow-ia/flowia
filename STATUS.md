@@ -116,6 +116,39 @@ marchand. 3 findings CRITIQUES corrigés :
 - `76b2972` rgpd(opt-in) Z1: migration DB + filtres marketing_opt_in + endpoint unsubscribe
 - `f5457da` rgpd(opt-in) Z2: injection lien unsubscribe dans SMS + email marketing
 - `6e7935b` rgpd(opt-in) Z3: checkbox opt-in inscription (quick + full) + toggle profil client + endpoints backend
+- `<Z4-hash>` rgpd(opt-in) Z4: bannière opt-in stats dans TabMarketing + endpoint `/opt-in/:token` + email transactionnel d'invitation
+
+### Z4 — Transition pour clients existants
+
+Résout le problème de transition évoqué en Z3 : tous les clients legacy
+migrés en opt-in=FALSE → le marchand n'a plus personne à qui envoyer des
+campagnes jusqu'à ce qu'ils opt-in.
+
+**Backend** :
+- `GET /api/pub/opt-in/:token` — pendant symétrique de `/unsubscribe`.
+  Page HTML autonome "Merci, vous recevrez désormais les offres".
+- `GET /api/marketing/opt-in-stats` — compte total / opted_in /
+  invitable (exclut emails synthétiques QR et lignes sans email ni
+  phone). Calcule `opt_in_rate`.
+- `POST /api/marketing/opt-in-invite` — envoie un email transactionnel
+  unique (CNIL autorise ce type d'email pour solliciter consentement) à
+  tous les clients `marketing_opt_in=FALSE` avec email réel et pas
+  encore invités (flag `opt_in_invited_at` anti-spam, migration inline).
+  Limite 500 clients par appel (throttle 200ms/mail).
+- `email.js sendOptInInvite` — template email dédié : pas de contenu
+  promo, uniquement CTA "Oui je veux les offres" qui appelle
+  `/api/pub/opt-in/:token`.
+
+**Frontend** :
+- `TabMarketing.jsx` en-tête : nouveau composant `OptInBanner` qui fetch
+  les stats au montage, affiche `{opted_in}/{total}` clients + couleur
+  orange si `opt_in_rate < 30%` sinon vert. Bouton "Inviter X clients"
+  → confirm modal → `POST /opt-in-invite` → toast + reload stats.
+- Cachée si `total === 0` ou si tous déjà opt-in (`invitable=0 &&
+  rate>=95%`).
+
+Résultat : transition fluide, le commerçant voit immédiatement qu'il
+peut récupérer son audience via un CTA bien visible.
 
 ### 🔒 RGPD opt-in marketing — commits Z1/Z2/Z3
 

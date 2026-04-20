@@ -498,6 +498,8 @@ export const marketingApi = {
   getPlan:    () => request('/marketing/plan'),
   launchPlan: (body) => request('/marketing/plan/launch',
     { method: 'POST', body: JSON.stringify(body) }),
+  getOptInStats: () => request('/marketing/opt-in-stats'),
+  sendOptInInvite: () => request('/marketing/opt-in-invite', { method: 'POST' }),
 };
 
 export const creditsApi = {

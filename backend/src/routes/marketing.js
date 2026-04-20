@@ -267,4 +267,94 @@ router.post('/plan/launch', async (req, res) => {
   }
 });
 
+// ── Audit Z4 : stats opt-in RGPD ─────────────────────────────────────────────
+// Retourne la taille de l'audience marketing avec et sans filtre opt-in.
+// Utilisé pour la bannière TabMarketing qui signale au commerçant combien de
+// clients il peut VRAIMENT toucher + invite à lancer une campagne d'opt-in.
+router.get('/opt-in-stats', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE marketing_opt_in = TRUE)::int AS opted_in,
+         COUNT(*) FILTER (WHERE marketing_opt_in = FALSE
+                              AND ((email IS NOT NULL AND email <> '' AND email NOT LIKE 'qr-%@qr.flowia.local')
+                                   OR (phone IS NOT NULL AND phone <> '')))::int AS invitable
+       FROM client_accounts WHERE user_id=$1`,
+      [userId]
+    );
+    const s = rows[0] || { total: 0, opted_in: 0, invitable: 0 };
+    res.json({
+      total: s.total,
+      opted_in: s.opted_in,
+      invitable: s.invitable,
+      opt_in_rate: s.total ? Math.round((s.opted_in / s.total) * 100) : 0,
+    });
+  } catch (e) { console.error('[OPT-IN STATS]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
+// ── Audit Z4 : envoi campagne d'invitation opt-in (email uniquement) ────────
+// Email transactionnel autorisé (CNIL) pour solliciter le consentement
+// marketing des clients existants. Envoyé AUX CLIENTS PENDING UNIQUEMENT
+// (marketing_opt_in=FALSE, email réel — filtre les emails synthétiques QR).
+// Un client invité ne peut pas être ré-invité tant qu'il n'a pas opt-in
+// (flag `opt_in_invited_at` anti-spam).
+router.post('/opt-in-invite', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    // Colonne `opt_in_invited_at` créée à la volée si absente (migration inline).
+    await pool.query(
+      `ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS opt_in_invited_at TIMESTAMPTZ`
+    ).catch(() => {});
+
+    // Récupère le business pour le template email
+    const { rows: biz } = await pool.query(
+      `SELECT business_name, email AS biz_email, address AS biz_address, phone AS biz_phone
+       FROM users WHERE id=$1`, [userId]
+    );
+    const business = biz[0] || {};
+
+    const { rows: targets } = await pool.query(
+      `SELECT id, email, first_name, last_name, unsubscribe_token
+       FROM client_accounts
+       WHERE user_id=$1
+         AND marketing_opt_in = FALSE
+         AND email IS NOT NULL AND email <> ''
+         AND email NOT LIKE 'qr-%@qr.flowia.local'
+         AND opt_in_invited_at IS NULL
+       LIMIT 500`,
+      [userId]
+    );
+
+    if (!targets.length) {
+      return res.json({ ok: true, sent: 0, message: 'Aucun client à inviter (déjà invités ou opt-in).' });
+    }
+
+    const { sendOptInInvite } = require('../utils/email');
+    let sent = 0, failed = 0;
+    for (const c of targets) {
+      try {
+        await sendOptInInvite({
+          to: c.email,
+          clientName: [c.first_name, c.last_name].filter(Boolean).join(' '),
+          businessName: business.business_name || 'Votre commerçant',
+          optInToken: c.unsubscribe_token,
+          businessEmail: business.biz_email,
+          businessPhone: business.biz_phone,
+        });
+        await pool.query(
+          `UPDATE client_accounts SET opt_in_invited_at = NOW() WHERE id=$1`, [c.id]
+        );
+        sent++;
+      } catch (e) {
+        failed++;
+        console.warn('[OPT-IN INVITE mail err]', c.email, e.message);
+      }
+      await sleep(200); // throttle SMTP
+    }
+    res.json({ ok: true, sent, failed, total_targets: targets.length });
+  } catch (e) { console.error('[OPT-IN INVITE]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
 module.exports = router;

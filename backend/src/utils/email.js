@@ -924,6 +924,74 @@ async function incrUserEmailCount(userId) {
   }
 }
 
+// ── Email invitation à l'opt-in marketing (RGPD, Audit Z4) ──────────────────
+// Email transactionnel unique pour solliciter le consentement marketing des
+// clients existants de la base. Un seul CTA : bouton "Oui je veux les offres"
+// qui appelle /api/pub/opt-in/:token. Pas de contenu promotionnel (qui
+// nécessiterait déjà l'opt-in) — purement administratif.
+async function sendOptInInvite({ to, clientName, businessName, optInToken, businessEmail, businessPhone }) {
+  const backendBase = (process.env.BACKEND_PUBLIC_URL || process.env.API_URL || '').split(',')[0]?.replace(/\/$/,'') || '';
+  const optInUrl    = `${backendBase}/api/pub/opt-in/${optInToken}`;
+  const firstName = (clientName || '').split(' ')[0] || '';
+  const subject   = `${businessName} — souhaitez-vous recevoir nos offres ?`;
+  const text = [
+    `Bonjour ${firstName || 'cher client'},`,
+    '',
+    `${businessName} met à jour ses pratiques de communication.`,
+    'Pour continuer à recevoir nos offres commerciales par email ou SMS, merci de confirmer votre inscription :',
+    '',
+    optInUrl,
+    '',
+    'Si vous ne souhaitez pas recevoir ces offres, vous pouvez simplement ignorer cet email.',
+    '',
+    'Vos notifications de rendez-vous (confirmations, rappels) continueront normalement dans tous les cas.',
+    '',
+    `À bientôt,`,
+    businessName,
+  ].join('\n');
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06)">
+  <div style="padding:32px 28px 20px;text-align:center">
+    <p style="font-size:36px;margin:0 0 12px">💌</p>
+    <h1 style="font-size:20px;font-weight:800;color:#111;margin:0 0 10px">
+      Souhaitez-vous recevoir nos offres ?
+    </h1>
+    <p style="font-size:14px;color:#555;line-height:1.6;margin:0">
+      Bonjour ${firstName ? firstName : 'cher client'},<br/>
+      <strong style="color:#111">${businessName}</strong> met à jour ses pratiques de communication conformément au RGPD.
+    </p>
+  </div>
+  <div style="padding:0 28px 28px">
+    <p style="font-size:14px;color:#555;line-height:1.6">
+      Pour continuer à recevoir nos offres commerciales (promotions, nouveautés) par email ou SMS,
+      confirmez votre inscription en un clic :
+    </p>
+    <p style="text-align:center;margin:24px 0">
+      <a href="${optInUrl}"
+         style="display:inline-block;padding:14px 28px;background:#10b981;color:#fff;
+                text-decoration:none;border-radius:12px;font-weight:700;font-size:15px">
+        ✓ Oui, je veux recevoir les offres
+      </a>
+    </p>
+    <p style="font-size:12px;color:#888;line-height:1.5;margin:16px 0 0">
+      Si vous ne souhaitez pas recevoir ces offres, <strong>vous n'avez rien à faire</strong>.
+      Ignorez simplement cet email.
+    </p>
+    <p style="font-size:12px;color:#888;line-height:1.5;margin:8px 0 0">
+      Vos notifications de rendez-vous (confirmations, rappels) continueront normalement dans tous les cas.
+    </p>
+    ${(businessEmail || businessPhone) ? `<p style="color:#6b7280;font-size:12px;margin:20px 0 0;border-top:1px solid #eee;padding-top:14px;">
+      ${businessEmail ? `📧 ${businessEmail}<br/>` : ''}${businessPhone ? `☎ ${businessPhone}` : ''}
+    </p>` : ''}
+  </div>
+</div>
+</body></html>`;
+  const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
+  await sendEmail({ to, subject, html, text, replyTo });
+  return true;
+}
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -939,6 +1007,7 @@ module.exports = {
   sendReferralReward,
   sendReferralWelcome,
   sendBirthdayPromo,
+  sendOptInInvite,
   getGlobalEmailCount,
   incrGlobalEmailCount,
   incrUserEmailCount,
