@@ -108,7 +108,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `5d2cf39` hardening(qr) R1: rate-limit dédié /client/quick-register (30/15min/IP) + rejet téléphones fake (chiffres identiques / séquences 0-9)
 - `2f80d47` feat(qr) S: UI QR dans Settings/Clients — canvas + download PNG 512px + copy lien (lib `qrcode`)
 - `151877d` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
-- `<U-hash>` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
+- `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
 
 ### 🔒 Audit global-clients.js (cross-tenant) — commit U
 
