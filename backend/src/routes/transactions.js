@@ -506,6 +506,51 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     // Invalider le cache liste
     global.memCache?.del(`txs:${req.user.userId}`);
 
+    // R4 : resync fidélité si le montant ou qty_total a changé.
+    // - mode points : delta = (new_amount - old_amount) * points_per_euro
+    // - mode stamps : delta = (new_qty_total - old_qty_total)
+    // Si client_email a changé : on NE transfère PAS automatiquement les
+    // stamps (logique métier ambiguë : doivent-ils retourner au vieux
+    // client ? aller au nouveau ?). On log un warning pour l'admin.
+    let loyaltyResync = null;
+    let emailChangedWarn = false;
+    try {
+      const oldEmail = (before.client_email || '').toLowerCase().trim();
+      const newEmail = (rows[0]?.client_email || '').toLowerCase().trim();
+      if (oldEmail && newEmail && oldEmail !== newEmail) {
+        emailChangedWarn = true;
+      }
+      // Delta uniquement si même client_email (pas de transfert auto entre clients)
+      if (before.type === 'revenue' && oldEmail && oldEmail === newEmail) {
+        const { rows: prog } = await pool.query(
+          'SELECT loyalty_mode, points_per_euro FROM loyalty_programs WHERE user_id=$1 AND enabled=TRUE',
+          [req.user.userId]
+        );
+        if (prog.length) {
+          const mode          = prog[0].loyalty_mode || 'stamps';
+          const pointsPerEuro = parseFloat(prog[0].points_per_euro) || 1;
+          const oldAmount     = parseFloat(before.amount || 0);
+          const newAmount     = parseFloat(rows[0]?.amount || 0);
+          const oldQty        = parseInt(before.qty_total) || 1;
+          const newQty        = parseInt(rows[0]?.qty_total) || 1;
+          const deltaPoints   = mode === 'points' ? Math.floor((newAmount - oldAmount) * pointsPerEuro) : 0;
+          const deltaStamps   = mode === 'stamps' ? (newQty - oldQty) : 0;
+          if (deltaPoints !== 0 || deltaStamps !== 0) {
+            await pool.query(
+              `UPDATE client_loyalty SET
+                 stamps             = GREATEST(0, stamps + $3),
+                 total_stamps_ever  = GREATEST(0, total_stamps_ever + GREATEST(0, $3)),
+                 points             = GREATEST(0, points + $4),
+                 total_points_ever  = GREATEST(0, total_points_ever + GREATEST(0, $4))
+               WHERE user_id=$1 AND LOWER(client_email)=$2`,
+              [req.user.userId, oldEmail, deltaStamps, deltaPoints]
+            );
+            loyaltyResync = { mode, deltaStamps, deltaPoints };
+          }
+        }
+      }
+    } catch (lErr) { console.warn('[TX PUT loyalty resync]', lErr.message); }
+
     const after = await getSnapshot(req.params.id);
     await audit(req.user.userId, req.params.id, 'update', before, after, reason || null);
 
@@ -513,6 +558,10 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     const out = rows[0];
     out.items    = after?.items    || [];
     out.payments = after?.payments || [];
+    if (loyaltyResync) out.loyalty_resync = loyaltyResync;
+    if (emailChangedWarn) {
+      out.email_changed_warning = "Email client modifié : les tampons fidélité restent sur l'ancien email. Transfert manuel nécessaire si besoin.";
+    }
     res.json(out);
   } catch(e) {
     try { await client.query('ROLLBACK'); } catch {}
@@ -524,17 +573,16 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
 });
 
 // ── DELETE /:id — supprimer (admin PIN requis + audit) ────────────────────────
+// Rollback complet : promo uses_count, client_loyalty stamps/points, RDV
+// paid + transaction_id, promo_usage_logs, client_rewards used→available,
+// referral_uses cascade (existant).
 router.delete('/:id', pinAdminMiddleware, async (req, res) => {
   try {
     const before = await getSnapshot(req.params.id);
     if (!before || before.user_id !== req.user.userId)
       return res.status(404).json({ error: 'Transaction introuvable.' });
 
-    // Cascade parrainage AVANT le DELETE — récupérer les referral_uses
-    // liés avant que la FK ON DELETE SET NULL ne nous fasse perdre la trace.
-    // Un parrainage lié à une transaction supprimée doit être revoqué :
-    // annule le referral_use, désactive la promo parrain (si émise), et
-    // passe la client_rewards à 'cancelled' si elle n'est pas déjà 'used'.
+    // Récupérer les referral_uses liés AVANT le DELETE (FK SET NULL perdrait la trace)
     const { rows: refs } = await pool.query(
       `SELECT id, status, parrain_promo_id FROM referral_uses
         WHERE transaction_id=$1 AND user_id=$2`,
@@ -544,6 +592,74 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
     await pool.query('DELETE FROM transactions WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
 
+    // R3a : rollback uses_count + restaurer client_rewards (birthday / fidélité
+    // / parrain) si la promo était liée à une reward consommée par cette tx.
+    if (before.promo_code_id) {
+      try {
+        await pool.query(
+          `UPDATE promo_codes
+             SET uses_count = GREATEST(0, uses_count - 1),
+                 is_active  = TRUE
+           WHERE id=$1 AND user_id=$2`,
+          [before.promo_code_id, req.user.userId]
+        );
+        // Client_rewards : la promo consommée peut être 'used' — restaurer
+        // à 'available' pour que le client puisse ré-utiliser (puisque la
+        // transaction qui l'a consommée n'existe plus).
+        await pool.query(
+          `UPDATE client_rewards SET status='available', used_at=NULL
+            WHERE user_id=$1 AND promo_code_id=$2 AND status='used'`,
+          [req.user.userId, before.promo_code_id]
+        );
+        // Promo_usage_logs : supprimer la ligne pour cette transaction
+        await pool.query(
+          `DELETE FROM promo_usage_logs WHERE transaction_id=$1`,
+          [req.params.id]
+        );
+      } catch (pErr) { console.warn('[TX DELETE promo rollback]', pErr.message); }
+    }
+
+    // R3b : décrémenter stamps / points fidélité (best effort, clamp ≥ 0).
+    // On cherche le programme actif pour savoir s'il est en mode points ou stamps.
+    if (before.client_email && before.type === 'revenue') {
+      try {
+        const { rows: prog } = await pool.query(
+          'SELECT loyalty_mode, points_per_euro FROM loyalty_programs WHERE user_id=$1 AND enabled=TRUE',
+          [req.user.userId]
+        );
+        const mode = prog[0]?.loyalty_mode || 'stamps';
+        const pointsPerEuro = parseFloat(prog[0]?.points_per_euro) || 1;
+        const qty = parseInt(before.qty_total) || 1;
+        const pointsLost = mode === 'points'
+          ? Math.floor(parseFloat(before.amount || 0) * pointsPerEuro)
+          : 0;
+        await pool.query(
+          `UPDATE client_loyalty
+              SET stamps             = GREATEST(0, stamps - $3),
+                  total_stamps_ever  = GREATEST(0, total_stamps_ever - $3),
+                  points             = GREATEST(0, points - $4),
+                  total_points_ever  = GREATEST(0, total_points_ever - $4)
+            WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)`,
+          [req.user.userId, before.client_email, qty, pointsLost]
+        );
+      } catch (lErr) { console.warn('[TX DELETE loyalty rollback]', lErr.message); }
+    }
+
+    // R3c : si transaction liée à un RDV, le RDV redevient non-encaissé
+    // (sinon il reste paid=TRUE avec transaction_id vers une ligne supprimée).
+    if (before.appointment_id) {
+      try {
+        await pool.query(
+          `UPDATE appointments
+              SET paid=FALSE, paid_method=NULL, transaction_id=NULL,
+                  status='confirmed', updated_at=NOW()
+            WHERE id=$1 AND user_id=$2`,
+          [before.appointment_id, req.user.userId]
+        );
+      } catch (aErr) { console.warn('[TX DELETE appt unpay]', aErr.message); }
+    }
+
+    // Cascade referral_uses (déjà en place)
     for (const ref of refs) {
       try {
         await pool.query(
@@ -551,14 +667,11 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
           [ref.id]
         );
         if (ref.parrain_promo_id) {
-          // Désactiver la promo parrain (future utilisation bloquée).
-          // On ne rollback PAS les utilisations passées (audit trail).
           await pool.query(
             `UPDATE promo_codes SET is_active=FALSE
               WHERE id=$1 AND user_id=$2`,
             [ref.parrain_promo_id, req.user.userId]
           );
-          // Annuler la client_rewards si elle est encore disponible.
           await pool.query(
             `UPDATE client_rewards SET status='cancelled'
               WHERE promo_code_id=$1 AND status='available'`,
@@ -575,7 +688,12 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
     await audit(req.user.userId, req.params.id, 'delete', before, null,
       req.body?.reason || 'Suppression admin');
 
-    res.json({ ok: true, referrals_revoked: refs.length });
+    res.json({
+      ok: true,
+      referrals_revoked: refs.length,
+      appointment_unpaid: !!before.appointment_id,
+      promo_rollback: !!before.promo_code_id,
+    });
   } catch(e) { console.error('[TX DELETE]', e.message); res.status(500).json({ error: e.message }); }
 });
 
