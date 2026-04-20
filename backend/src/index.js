@@ -636,11 +636,17 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                 }
               }
               if (!inserted) throw new Error(`code collision 3x for ${emailLow}`);
+              // expires_at stockée à 00:00 UTC du jour APRÈS valid_until
+              // (= moment exact où la promo bascule "valide" → "expirée"
+              // côté backend via `valid_until >= CURRENT_DATE`). Aligne
+              // l'affichage frontend avec la vraie expiration — évite
+              // "expiré" visuel plusieurs heures avant l'heure réelle en
+              // timezone locale non-UTC.
               await txClient.query(
                 `INSERT INTO client_rewards
                    (user_id, client_email, reward_type, status, promo_code_id, expires_at)
                  VALUES ($1,$2,'birthday','available',$3,(CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
-                [camp.user_id, emailLow, promoRow.id, String(validity)]
+                [camp.user_id, emailLow, promoRow.id, String(validity + 1)]
               );
               await txClient.query(
                 `UPDATE client_accounts SET last_birthday_reward_at = NOW()

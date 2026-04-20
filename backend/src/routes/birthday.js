@@ -31,6 +31,12 @@ router.put('/', async (req, res) => {
       return res.status(400).json({ error: 'discount_type invalide.' });
     const v = parseFloat(discount_value);
     if (isNaN(v) || v < 0) return res.status(400).json({ error: 'discount_value invalide.' });
+    // Validity : entier > 0 (min 1 jour, max 365). Evite promo mort-nee avec
+    // value=0 ou negative + UX coherente (>1 an n'a pas de sens pour un anniv).
+    const validRaw = parseInt(validity_days);
+    if (validity_days != null && (isNaN(validRaw) || validRaw < 1 || validRaw > 365))
+      return res.status(400).json({ error: 'validity_days doit etre entre 1 et 365.' });
+    const validFinal = (!isNaN(validRaw) && validRaw > 0) ? validRaw : 30;
 
     const { rows } = await pool.query(
       `INSERT INTO birthday_campaigns (user_id, is_enabled, discount_type, discount_value, validity_days, message, updated_at)
@@ -44,7 +50,7 @@ router.put('/', async (req, res) => {
          updated_at     = NOW()
        RETURNING *`,
       [req.user.userId, !!is_enabled, discount_type || 'percent', v,
-       parseInt(validity_days) || 30, message || null]
+       validFinal, message || null]
     );
     res.json(rows[0]);
   } catch (e) { console.error('[BIRTHDAY PUT]', e.message); res.status(500).json({ error: e.message }); }

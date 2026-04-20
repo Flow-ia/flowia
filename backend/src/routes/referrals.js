@@ -227,11 +227,14 @@ async function validateReferralUse(useId, userId) {
       `UPDATE referral_codes SET uses_count = uses_count + 1 WHERE id=$1`,
       [use.referral_code_id]
     );
+    // expires_at = jour APRÈS valid_until (aligne avec le check backend
+    // `valid_until >= CURRENT_DATE` qui reste valide jusqu'à minuit UTC
+    // du jour suivant). Évite "expiré" visuel trop tôt en timezone locale.
     await client.query(
       `INSERT INTO client_rewards
          (user_id, client_email, reward_type, status, promo_code_id, expires_at, referral_use_id)
        VALUES ($1,$2,'referral_parrain','available',$3, (CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz, $5)`,
-      [userId, use.parrain_email, promo[0].id, String(validityDays), use.id]
+      [userId, use.parrain_email, promo[0].id, String(validityDays + 1), use.id]
     );
 
     await client.query('COMMIT');
