@@ -5,6 +5,21 @@ const { authMiddleware } = require('../middleware/auth');
 const router   = express.Router();
 router.use(authMiddleware);
 
+// Validation commune POST + PUT. Retourne un string d'erreur ou null si OK.
+function validatePromoInput({ type, value, max_uses }) {
+  const v = parseFloat(value);
+  if (isNaN(v) || v < 0) return 'Valeur invalide (≥ 0 attendu).';
+  if (type === 'percent' && v > 100) return 'Remise en % : max 100.';
+  // Cap fixed à 10000€ : au-delà, la "remise" dépasse n'importe quelle
+  // prestation raisonnable et signale une erreur de saisie (ou fraude).
+  if (type === 'fixed'   && v > 10000) return 'Montant remise trop élevé (max 10000 €).';
+  if (max_uses != null && max_uses !== '') {
+    const mu = parseInt(max_uses);
+    if (isNaN(mu) || mu < 1) return 'max_uses doit être ≥ 1.';
+  }
+  return null;
+}
+
 // ── GET /api/promo ────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
@@ -13,7 +28,7 @@ router.get('/', async (req, res) => {
       [req.user.userId]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/promo/check ── valider un code (avant encaissement) ─────────────
@@ -85,7 +100,7 @@ router.post('/check', async (req, res) => {
       ? Math.min(baseAmt, baseAmt * parseFloat(promo.value) / 100)
       : Math.min(baseAmt, parseFloat(promo.value));
     res.json({ valid: true, promo, discount: Math.round(discount * 100) / 100 });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/promo ── créer un code ─────────────────────────────────────────
@@ -97,6 +112,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
     if (!['percent','fixed'].includes(type))
       return res.status(400).json({ error: 'Type invalide.' });
+    const vErr = validatePromoInput({ type, value, max_uses });
+    if (vErr) return res.status(400).json({ error: vErr });
     const { rows } = await pool.query(
       `INSERT INTO promo_codes
          (user_id, code, type, value, max_uses, valid_from, valid_until, target_clients,
@@ -112,7 +129,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(rows[0]);
   } catch(e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ce code existe déjà.' });
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -129,6 +146,10 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Les codes générés par la fidélité ne peuvent pas être modifiés.' });
     }
     const { code, type, value, max_uses, valid_from, valid_until, is_active, target_clients } = req.body;
+    if (!['percent','fixed'].includes(type))
+      return res.status(400).json({ error: 'Type invalide.' });
+    const vErr = validatePromoInput({ type, value, max_uses });
+    if (vErr) return res.status(400).json({ error: vErr });
     const { rows } = await pool.query(
       `UPDATE promo_codes SET code=UPPER($1), type=$2, value=$3, max_uses=$4,
         valid_from=$5, valid_until=$6, is_active=$7, target_clients=$8
@@ -140,7 +161,7 @@ router.put('/:id', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Code introuvable.' });
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── DELETE /api/promo/:id ─────────────────────────────────────────────────────
@@ -156,7 +177,7 @@ router.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM promo_codes WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/promo/stats ─ traçabilité globale codes promo ──────────────────
@@ -188,7 +209,7 @@ router.get('/stats', async (req, res) => {
       [req.user.userId]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -241,7 +262,7 @@ router.post('/:id/send-emails', async (req, res) => {
     res.json({ sent, failed, total: clients.length });
   } catch(e) {
     console.error('[PROMO SEND] ERREUR:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
