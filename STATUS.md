@@ -106,6 +106,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `a75fe5b` feat(qr) + audit(front) R: quick signup /j/:slug + postMessage origin + error hygiene + input validation
 - `565141d` docs: STATUS session 29 commit R avec SHA
 - `5d2cf39` hardening(qr) R1: rate-limit dédié /client/quick-register (30/15min/IP) + rejet téléphones fake (chiffres identiques / séquences 0-9)
+- `<S-hash>` feat(qr) S: UI QR dans Settings/Clients — canvas + download PNG 512px + copy lien (lib `qrcode`)
 
 ---
 

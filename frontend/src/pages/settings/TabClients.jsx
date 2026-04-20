@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { clientsApi } from '../../utils/api';
+import QRCard from './QRCard';
 
 const PAGE_SIZE = 5;
 
@@ -314,6 +315,8 @@ export default function TabClients({ theme, showToast }) {
 
   return (
     <div>
+      <QRCard theme={theme} showToast={showToast} />
+
       <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, flexWrap:'wrap' }}>
         <h2 style={{ margin:0, fontSize:20, fontWeight:800, color:theme.text, flex:1 }}>
           👥 Clients ({total})
