@@ -36,7 +36,7 @@ merchantRouter.get('/program', async (req, res) => {
       });
     }
     res.json(rows[0]);
-  } catch (e) { console.error('[REF PROG GET]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[REF PROG GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/referrals/program — upsert config ──────────────────────────────
@@ -89,7 +89,7 @@ merchantRouter.put('/program', async (req, res) => {
        lc, lp]
     );
     res.json(rows[0]);
-  } catch (e) { console.error('[REF PROG PUT]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[REF PROG PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/referrals/codes — liste des codes générés pour ce commerçant ──
@@ -104,7 +104,7 @@ merchantRouter.get('/codes', async (req, res) => {
       [req.user.userId]
     );
     res.json(rows);
-  } catch (e) { console.error('[REF CODES GET]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[REF CODES GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/referrals/rewards?email=… ─────────────────────────────────────
@@ -155,7 +155,7 @@ merchantRouter.get('/rewards', async (req, res) => {
       ),
     ]);
     res.json({ pending: pendingR.rows, rewards: rewardsR.rows });
-  } catch (e) { console.error('[REF REWARDS GET]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[REF REWARDS GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── Helper interne : valide un referral_use (émet promo parrain + reward)
@@ -348,7 +348,7 @@ merchantRouter.get('/stats', async (req, res) => {
     });
   } catch (e) {
     console.error('[REF STATS]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -387,7 +387,7 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
     if (e.code === 'ALREADY_HANDLED') return res.status(409).json({ error: e.message });
     if (e.code === 'NO_PROGRAM')      return res.status(409).json({ error: e.message });
     console.error('[REF VALIDATE]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -406,7 +406,7 @@ merchantRouter.post('/uses/:id/cancel', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Parrainage introuvable ou déjà traité.' });
     res.json({ ok: true });
-  } catch (e) { console.error('[REF CANCEL]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[REF CANCEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/referrals/rewards/:id/use — marquer reward comme utilisée ────
@@ -424,7 +424,7 @@ merchantRouter.post('/rewards/:id/use', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Réduction introuvable ou déjà utilisée.' });
     res.json({ ok: true });
-  } catch (e) { console.error('[REF REWARD USE]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[REF REWARD USE]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── Helper interne : résout un code parrainage pour un filleul donné ─────
@@ -437,7 +437,13 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
   if (!rawCode || !filleulEmailRaw) { out.reason = 'missing_params'; return out; }
   const code    = String(rawCode).trim().toUpperCase();
   const filEmail = String(filleulEmailRaw).trim().toLowerCase();
-  if (!code || !filEmail.includes('@')) { out.reason = 'bad_input'; return out; }
+  // Regex stricte : avant, .includes('@') laissait passer "a@b@c" ou "@x"
+  // (potentiellement exploité en ILIKE aval si l'email était réinjecté).
+  const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+  if (!code || !EMAIL_RE.test(filEmail) || filEmail.length > 254) {
+    out.reason = 'bad_input';
+    return out;
+  }
 
   const { rows: prog } = await pool.query(
     `SELECT is_enabled, filleul_type, filleul_value, limit_count, limit_period

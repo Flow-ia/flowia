@@ -18,7 +18,7 @@ router.get('/program', async (req, res) => {
       loyalty_mode: 'stamps', points_per_euro: 1,
       min_purchase: 0, validity_days: 90,
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/loyalty/program ──────────────────────────────────────────────────
@@ -52,7 +52,7 @@ router.put('/program', async (req, res) => {
        Math.max(1, parseInt(validity_days) || 90)]
     );
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/loyalty/clients ──────────────────────────────────────────────────
@@ -65,7 +65,7 @@ router.get('/clients', async (req, res) => {
     q += ' ORDER BY stamps DESC, last_visit DESC NULLS LAST';
     const { rows } = await pool.query(q, p);
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -91,7 +91,7 @@ router.post('/stamp', async (req, res) => {
       ...result,
       stamps_required: prog[0]?.stamps_required || 10,
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── DELETE /api/loyalty/clients/:id ──────────────────────────────────────────
@@ -100,7 +100,7 @@ router.delete('/clients/:id', async (req, res) => {
     await pool.query('DELETE FROM client_loyalty WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -127,7 +127,7 @@ router.get('/promo-history', async (req, res) => {
       [req.user.userId]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/loyalty/search-clients ─ recherche client (nom/email/téléphone) ──
@@ -168,7 +168,7 @@ router.get('/search-clients', async (req, res) => {
       [req.user.userId, term]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/loyalty/add-service ─ ajouter prestation manuellement ────────────
@@ -201,7 +201,7 @@ router.post('/add-service', async (req, res) => {
       reward_triggered: result.reward_triggered || false,
       reward_code: result.reward_code || null,
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/loyalty/stats ─ traçabilité codes fidélité + promo ──────────────
@@ -240,7 +240,7 @@ router.get('/stats', async (req, res) => {
       [req.user.userId]
     );
     res.json({ summary: generated[0] || {}, clients: caRows });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = { router };
