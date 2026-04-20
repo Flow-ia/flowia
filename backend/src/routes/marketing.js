@@ -102,7 +102,7 @@ router.get('/plan', async (req, res) => {
     });
   } catch(e) {
     console.error('[MARKETING PLAN ERR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -113,7 +113,9 @@ router.post('/plan/launch', async (req, res) => {
     const userId = req.user.userId;
     const { messages = {}, discounts = {} } = req.body;
 
-    // Récupérer les clients par segment (même query que /plan)
+    // Récupérer les clients par segment (anti-spam 7j ajouté pour aligner
+    // avec campaigns.js:getClientSegmentsWithHabits — sinon un client
+    // pouvait recevoir 2 SMS le même jour via 2 plans lancés consécutifs).
     const { rows: clients } = await pool.query(`
       SELECT
         ca.id, ca.first_name, ca.last_name, ca.phone,
@@ -132,6 +134,11 @@ router.post('/plan/launch', async (req, res) => {
       ) stats ON TRUE
       WHERE ca.user_id = $1
         AND ca.phone IS NOT NULL AND ca.phone != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM message_log ml
+          WHERE ml.user_id = ca.user_id AND ml.phone = ca.phone
+            AND ml.channel = 'sms' AND ml.sent_at > NOW() - INTERVAL '7 days'
+        )
     `, [userId]);
 
     const totalSms = clients.length;
@@ -154,7 +161,11 @@ router.post('/plan/launch', async (req, res) => {
     };
     const promoCodesBySegment = {};
     for (const seg of Object.keys(SEG_INFO)) {
-      const pct = parseInt(discounts[seg]) || SEG_INFO[seg].default_discount;
+      // Validation stricte du pct : avant, `parseInt(discounts[seg]) ||
+      // default` laissait passer 10000 -> INSERT promo_codes value=10000.
+      // Bypass direct de la validation audit K (promo.js : percent<=100).
+      let pct = parseInt(discounts[seg]);
+      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) pct = SEG_INFO[seg].default_discount;
       const code = 'IA' + seg.toUpperCase().slice(0,3) + Math.random().toString(36).slice(2,5).toUpperCase();
       const { rows: p } = await pool.query(
         `INSERT INTO promo_codes (user_id, code, type, value, is_active, valid_from, valid_until, target_clients)
@@ -220,7 +231,19 @@ router.post('/plan/launch', async (req, res) => {
       }
 
       const totalDeducted = sentTotal * SMS_PRICE;
-      await pool.query('UPDATE users SET sms_balance = sms_balance - $1 WHERE id=$2', [totalDeducted, userId]);
+      // Garde anti-overdraft (cohérent audit R1 / campaigns.js). Si le solde
+      // a été épuisé par un envoi parallèle, on log mais on ne passe pas en
+      // négatif. Les SMS sont déjà partis (non réversibles) donc perte
+      // marchand acceptée côté produit — priorité : ne jamais passer négatif.
+      const dbt = await pool.query(
+        `UPDATE users SET sms_balance = sms_balance - $1
+          WHERE id=$2 AND sms_balance >= $1
+          RETURNING sms_balance`,
+        [totalDeducted, userId]
+      );
+      if (!dbt.rows.length && totalDeducted > 0) {
+        console.error('[MARKETING debit] Solde insuffisant au moment du débit — SMS déjà envoyés', { userId, totalDeducted, sentTotal });
+      }
       await pool.query(
         `UPDATE campaigns SET sent_sms=$2, failed_count=$3, sms_cost=$4, status='completed', completed_at=NOW() WHERE id=$1`,
         [campaignId, sentTotal, failedTotal, totalDeducted]
@@ -235,7 +258,7 @@ router.post('/plan/launch', async (req, res) => {
 
   } catch(e) {
     console.error('[MARKETING PLAN LAUNCH ERR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 

@@ -5,7 +5,69 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 26) : Audit RH/PAIE — commit O
+## 🆕 Session 2026-04-20 (suite 27) : Audit CAMPAGNES/MARKETING — commit P
+
+**Fichiers** : `campaigns.js`, `marketing.js`
+
+### Vulnérabilités corrigées
+
+- **`marketing.js /plan/launch` — bypass validation promo** :
+  `parseInt(discounts[seg]) || default_discount` INSÉRAIT direct dans
+  `promo_codes` avec `value=pct` sans contrôle max. `discounts.at_risk=10000`
+  passait → contourne la validation audit K (`promo.js` percent ≤ 100).
+  Fix : validation stricte `Number.isFinite(pct) && 0<pct<=100`, fallback
+  au défaut sinon.
+
+- **`marketing.js /plan/launch` — débit sans garde anti-overdraft** : le
+  `UPDATE sms_balance = sms_balance - $1` n'avait pas de clause
+  `WHERE sms_balance >= $1` → solde négatif possible si envoi concurrent.
+  Incohérent avec `campaigns.js` (audit R1). Fix : garde + log si échec
+  (SMS déjà partis, pas réversibles).
+
+- **`marketing.js /plan/launch` — anti-spam 7j absent** : `campaigns.js`
+  `getClientSegmentsWithHabits` excluait les clients ayant reçu un SMS
+  dans les 7 derniers jours. `/plan/launch` ne le faisait pas → 2 plans
+  lancés en chaîne envoyaient 2 SMS au même client le même jour. Fix :
+  `NOT EXISTS` sur `message_log` dans la SELECT de `/plan/launch`.
+
+- **`campaigns.js /send` — validation inputs absente** : `channel`,
+  `target_type`, `message_sms`, `message_email` acceptaient n'importe
+  quoi. `channel='xyz'` créait une campagne sans envoi (piège comptable),
+  `message_sms` vide ou 5000 chars passait (spam/coût). Fix :
+  whitelist `VALID_CHANNELS` / `VALID_TARGET_TYPES`, `MAX_SMS_LEN=480`
+  (3 SMS concaténés), `MAX_EMAIL_LEN=10000`.
+
+- **`campaigns.js /auto-send` — budget/duration non validés** :
+  `/auto-plan` validait `budget < 1`/`duration 3-30` mais `/auto-send`
+  ne validait RIEN en entrée (délégait à `generateCampaignPlan` qui
+  cappait `durationDays` mais pas `budget`). Un appel direct avec
+  `budget:-1000` ou `budget:9999999` passait jusqu'au check
+  `balance_sufficient`. Fix : mêmes gardes qu'`/auto-plan` + borne
+  `budget ≤ 10000€` + validation `discounts.{risque,perdu,fidele}`
+  entre 5-50%.
+
+- **Error hygiene** : `e.message` → `'Erreur serveur.'` sur 6 handlers
+  (4 campaigns + 2 marketing). Aligné K/L/M/N/O.
+
+### Non corrigé (dette structurelle)
+- **RGPD opt-out absent** : aucune colonne `unsubscribed`/`marketing_opt_in`
+  dans `client_accounts` / `global_clients`. Les SMS/emails marketing
+  partent à tous les clients ayant téléphone/email, sans consentement
+  marketing explicite (le consentement BOOKING ≠ consentement MARKETING).
+  Nécessite migration DB + UI d'opt-in + lien de désabonnement dans
+  chaque SMS/email. À planifier en session dédiée.
+- **Rate limit niveau route** (`/send`, `/auto-send`, `/plan/launch`) :
+  couvert au middleware Express (`index.js`). Pas modifié ici.
+- **Advisory lock sur `/send`** : `/auto-send` l'a (R9). `/send` non —
+  double-clic peut créer 2 campagnes. Impact limité (le preview côté
+  client doit déjà gérer), non modifié pour rester chirurgical.
+
+### Commit
+- `<TBD>` audit(campaigns/marketing) P: validation inputs + anti-overdraft + anti-spam 7j
+
+---
+
+## Session 2026-04-20 (suite 26) : Audit RH/PAIE — commit O
 
 **Fichiers** : `employees.js`, `employee-pins.js`, `commissions.js`, `absences.js`
 

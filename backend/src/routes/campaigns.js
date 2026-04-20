@@ -594,14 +594,30 @@ router.get('/preview', async (req, res) => {
 });
 
 // ── POST /api/campaigns/send ────────────────────────────────────────────────
+const VALID_CHANNELS     = ['sms', 'email', 'both'];
+const VALID_TARGET_TYPES = ['top50', 'top100', 'top200', 'all', 'custom'];
+const MAX_SMS_LEN        = 480;  // 3 SMS concaténés max — au-delà c'est du spam
+const MAX_EMAIL_LEN      = 10000;
 router.post('/send', async (req, res) => {
   try {
     const { promo_code_id, target_type, custom_count, channel, message_sms, message_email, promo_code } = req.body;
     const userId = req.user.userId;
-    const limit = getTargetCount(target_type, custom_count);
 
+    // Validation input stricte (avant : channel/target_type/messages
+    // non validés -> campagne créée avec channel='xyz' sans envoi, ou
+    // message_sms vide/5000 chars consommant SMS sans valeur utile).
+    if (!VALID_CHANNELS.includes(channel))
+      return res.status(400).json({ error: 'Channel invalide (sms|email|both).' });
+    if (!VALID_TARGET_TYPES.includes(target_type))
+      return res.status(400).json({ error: 'Target invalide.' });
     const needSMS = channel === 'sms' || channel === 'both';
     const needEmail = channel === 'email' || channel === 'both';
+    if (needSMS && (!message_sms || !String(message_sms).trim() || String(message_sms).length > MAX_SMS_LEN))
+      return res.status(400).json({ error: `Message SMS requis (1-${MAX_SMS_LEN} caractères).` });
+    if (needEmail && message_email && String(message_email).length > MAX_EMAIL_LEN)
+      return res.status(400).json({ error: `Email trop long (max ${MAX_EMAIL_LEN}).` });
+
+    const limit = getTargetCount(target_type, custom_count);
 
     // Récupérer les clients cibles
     const smsClients = needSMS ? await getTopClients(userId, limit, true, false) : [];
@@ -835,7 +851,7 @@ router.get('/auto-plan', async (req, res) => {
     res.json(plan);
   } catch(e) {
     console.error('[AUTO PLAN]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -852,6 +868,27 @@ router.post('/auto-send', async (req, res) => {
   try {
     const userId = req.user.userId;
     const { budget, duration_days, discounts } = req.body;
+
+    // Validation input alignée avec /auto-plan (avant : /auto-send ne
+    // validait RIEN en entrée, on déléguait à generateCampaignPlan qui
+    // cappait durationDays mais pas le budget -> budget=-1000 acceptait,
+    // budget=999999 acceptait jusqu'au check balance_sufficient).
+    const b = Number(budget);
+    const d = parseInt(duration_days);
+    if (!Number.isFinite(b) || b < 1 || b > 10000)
+      return res.status(400).json({ error: 'Budget invalide (1-10000€).' });
+    if (!Number.isFinite(d) || d < 3 || d > 30)
+      return res.status(400).json({ error: 'Durée invalide (3-30 jours).' });
+    if (discounts && typeof discounts === 'object') {
+      for (const k of ['risque', 'perdu', 'fidele']) {
+        if (discounts[k] != null) {
+          const v = Number(discounts[k]);
+          if (!Number.isFinite(v) || v < 5 || v > 50) {
+            return res.status(400).json({ error: `Remise ${k} invalide (5-50%).` });
+          }
+        }
+      }
+    }
 
     await dbClient.query('BEGIN');
     // Hash deterministe du userId → bigint pour l'advisory lock. 'ai_campaign'
@@ -1008,7 +1045,7 @@ router.post('/auto-send', async (req, res) => {
   } catch(e) {
     await dbClient.query('ROLLBACK').catch(() => {});
     console.error('[AI SEND]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   } finally { dbClient.release(); }
 });
 
@@ -1034,7 +1071,7 @@ router.post('/auto-recalculate', async (req, res) => {
     });
   } catch(e) {
     console.error('[AI RECALC]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -1084,7 +1121,7 @@ router.get('/ai-history', async (req, res) => {
     })));
   } catch(e) {
     console.error('[AI HISTORY]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
