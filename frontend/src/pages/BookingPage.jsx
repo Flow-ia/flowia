@@ -10,7 +10,7 @@ import {
 import { NavBar } from './booking/NavBar';
 import { SideCard, MobileHoursBlock } from './booking/SideCard';
 import { AccordionGroup, ServiceThumb, ServiceCard } from './booking/Services';
-import { MyAppointments } from './booking/MyAppointments';
+import { MyAppointments } from './booking/my-appointments';
 import { AuthPanel, GlobalAccountView, PostRegisterPopup } from './booking/Account';
 import { ReferralPage } from './booking/ReferralPage';
 
