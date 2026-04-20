@@ -1109,95 +1109,96 @@ router.post('/reset-password', async (req, res) => {
 // principalement ff_client_token après login sur un site réservation.
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/me', clientOrGlobalClientAuth, async (req, res) => {
+  // Suppression RGPD : 9 opérations sur 6 tables. Sans transaction, un échec
+  // à mi-parcours (timeout, deadlock) laisse un état incohérent : compte global
+  // encore visible mais fiches locales supprimées, ou inverse. On enveloppe
+  // tout en BEGIN/COMMIT pour garantir l'atomicité.
+  const dbClient = await pool.connect();
   try {
     const gid = req.globalClient.globalClientId;
 
-    const { rows: gcRows } = await pool.query(
+    const { rows: gcRows } = await dbClient.query(
       'SELECT email, first_name FROM global_clients WHERE id=$1', [gid]
     );
     if (!gcRows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const { email } = gcRows[0];
 
-    // 1. Anonymiser les RDV — garder l'historique commerçant mais effacer identité
-    // appointments.client_id référence client_accounts.id (pas global_clients.id).
-    // Résolution: on matche via les fiches locales liées au compte global + email.
-    await pool.query(
-      `UPDATE appointments SET
-         client_id=NULL,
-         client_name='Client anonyme',
-         client_email=NULL,
-         client_phone=NULL
-       WHERE client_id IN (SELECT id FROM client_accounts WHERE global_client_id=$1)`,
-      [gid]
-    );
-    if (email) {
-      await pool.query(
+    await dbClient.query('BEGIN');
+    try {
+      // 1. Anonymiser les RDV (liés par fiche locale OU par email) et capturer
+      // les ids mis à jour. Capture critique : l'ancien code annulait ensuite
+      // TOUS les RDV "Client anonyme" futurs — y compris ceux de suppressions
+      // précédentes, causant des annulations en chaîne non désirées.
+      const { rows: anonymized } = await dbClient.query(
         `UPDATE appointments SET
            client_id=NULL,
            client_name='Client anonyme',
            client_email=NULL,
            client_phone=NULL
-         WHERE LOWER(client_email)=LOWER($1)`,
-        [email]
+         WHERE client_id IN (SELECT id FROM client_accounts WHERE global_client_id=$1)
+            OR ($2::text IS NOT NULL AND LOWER(client_email)=LOWER($2))
+         RETURNING id`,
+        [gid, email || null]
       );
-    }
-    // Annuler les RDV futurs du client anonymisé
-    if (email) {
-      await pool.query(
-        `UPDATE appointments SET status='cancelled',
-           cancel_reason='Compte client supprimé',
-           updated_at=NOW()
-         WHERE client_id IS NULL AND client_name='Client anonyme'
-           AND status IN ('confirmed','pending') AND date >= CURRENT_DATE`
-      );
-      // Cascade parrainage : marquer referral_uses pending de ce filleul
-      // comme annulés (RGPD — le compte disparaît donc aucune validation
-      // future n'aura lieu).
-      await pool.query(
-        `UPDATE referral_uses SET status='cancelled'
-          WHERE LOWER(filleul_email)=LOWER($1) AND status='pending'`,
-        [email]
-      ).catch(() => {});
-    }
 
-    // 2. Anonymiser les transactions (garder le montant pour la comptabilité)
-    if (email) {
-      await pool.query(
-        `UPDATE transactions SET
-           client_email=NULL,
-           client_note=NULL
-         WHERE LOWER(client_email)=LOWER($1)`,
-        [email]
-      );
-    }
+      // 2. Annuler les RDV futurs — scopé uniquement aux ids qu'on vient
+      // d'anonymiser dans cette transaction.
+      if (anonymized.length) {
+        await dbClient.query(
+          `UPDATE appointments SET status='cancelled',
+             cancel_reason='Compte client supprimé',
+             updated_at=NOW()
+           WHERE id = ANY($1::uuid[])
+             AND status IN ('confirmed','pending')
+             AND date >= CURRENT_DATE`,
+          [anonymized.map((r) => r.id)]
+        );
+      }
 
-    // 3. Supprimer les fiches locales chez tous les commerçants
-    await pool.query(
-      'DELETE FROM client_accounts WHERE global_client_id=$1', [gid]
-    );
-    if (email) {
-      await pool.query(
-        'DELETE FROM client_accounts WHERE LOWER(email)=LOWER($1)', [email]
-      );
-    }
+      if (email) {
+        // Cascade parrainage : annuler les referral_uses pending de ce filleul.
+        await dbClient.query(
+          `UPDATE referral_uses SET status='cancelled'
+            WHERE LOWER(filleul_email)=LOWER($1) AND status='pending'`,
+          [email]
+        );
+        // Anonymiser les transactions (montants gardés pour la compta).
+        await dbClient.query(
+          `UPDATE transactions SET client_email=NULL, client_note=NULL
+           WHERE LOWER(client_email)=LOWER($1)`,
+          [email]
+        );
+      }
 
-    // 4. Supprimer fidélité, notes, crédits
-    if (email) {
-      await pool.query('DELETE FROM client_loyalty WHERE LOWER(client_email)=LOWER($1)', [email]);
-      await pool.query(
-        `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
-         WHERE LOWER(client_email)=LOWER($1)`, [email]
+      // 3. Supprimer les fiches locales chez tous les commerçants
+      await dbClient.query(
+        'DELETE FROM client_accounts WHERE global_client_id=$1', [gid]
       );
-      await pool.query(
-        `UPDATE client_credits SET
-           client_email=NULL,
-           client_name='[Compte supprimé]'
-         WHERE LOWER(client_email)=LOWER($1)`, [email]
-      );
-    }
+      if (email) {
+        await dbClient.query(
+          'DELETE FROM client_accounts WHERE LOWER(email)=LOWER($1)', [email]
+        );
+        await dbClient.query('DELETE FROM client_loyalty WHERE LOWER(client_email)=LOWER($1)', [email]);
+        await dbClient.query(
+          `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
+           WHERE LOWER(client_email)=LOWER($1)`, [email]
+        );
+        await dbClient.query(
+          `UPDATE client_credits SET
+             client_email=NULL,
+             client_name='[Compte supprimé]'
+           WHERE LOWER(client_email)=LOWER($1)`, [email]
+        );
+      }
 
-    // 5. Supprimer le compte global
-    await pool.query('DELETE FROM global_clients WHERE id=$1', [gid]);
+      // 4. Supprimer le compte global
+      await dbClient.query('DELETE FROM global_clients WHERE id=$1', [gid]);
+
+      await dbClient.query('COMMIT');
+    } catch (txErr) {
+      await dbClient.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    }
 
     console.log(`[RGPD] Suppression compte ${gid} — email anonymisé`);
     res.json({
@@ -1206,7 +1207,9 @@ router.delete('/me', clientOrGlobalClientAuth, async (req, res) => {
     });
   } catch(e) {
     console.error('[DELETE ACCOUNT]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    dbClient.release();
   }
 });
 
