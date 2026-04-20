@@ -42,8 +42,17 @@ async function fetchImageBuffer(path, provider) {
     return { buf, ct: res.ContentType || 'image/jpeg' };
   }
   // local — path relatif dans uploads/
-  const fs   = require('fs');
-  const fPath = require('path').join(process.cwd(), 'uploads', path);
+  const fs    = require('fs');
+  const pMod  = require('path');
+  const root  = pMod.join(process.cwd(), 'uploads');
+  const fPath = pMod.resolve(root, path);
+  // Anti path-traversal : un path DB malicieux "../../etc/passwd" résoudrait
+  // hors de uploads/ et permettrait de lire n'importe quel fichier serveur.
+  // resolve + startsWith(root + sep) bloque le traversal (plus robuste que
+  // join() qui normalise mais n'empêche pas la sortie du répertoire).
+  if (!fPath.startsWith(root + pMod.sep) && fPath !== root) {
+    throw new Error('Chemin invalide');
+  }
   if (!fs.existsSync(fPath)) throw new Error('Image introuvable');
   const buf = fs.readFileSync(fPath);
   const ext = path.split('.').pop().toLowerCase();
@@ -73,7 +82,7 @@ router.get('/commercant/:userId/profile', async (req, res) => {
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buf);
-  } catch (e) { res.status(404).json({ error: e.message }); }
+  } catch (e) { res.status(404).json({ error: 'Image introuvable' }); }
 });
 
 // ── GET /api/media/commercant/:userId/logo ───────────────────────────────────
@@ -89,7 +98,7 @@ router.get('/commercant/:userId/logo', async (req, res) => {
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buf);
-  } catch (e) { res.status(404).json({ error: e.message }); }
+  } catch (e) { res.status(404).json({ error: 'Image introuvable' }); }
 });
 
 // ── GET /api/media/commercant/:userId/cover/:imageId ─────────────────────────
@@ -105,7 +114,7 @@ router.get('/commercant/:userId/cover/:imageId', async (req, res) => {
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buf);
-  } catch (e) { res.status(404).json({ error: e.message }); }
+  } catch (e) { res.status(404).json({ error: 'Image introuvable' }); }
 });
 
 // ── GET /api/media/service/:serviceId/image ───────────────────────────────────
@@ -121,7 +130,7 @@ router.get('/service/:serviceId/image', async (req, res) => {
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buf);
-  } catch (e) { res.status(404).json({ error: e.message }); }
+  } catch (e) { res.status(404).json({ error: 'Image introuvable' }); }
 });
 
 // ── GET /api/media/employee/:employeeId/image ────────────────────────────────
@@ -137,7 +146,7 @@ router.get('/employee/:employeeId/image', async (req, res) => {
     res.setHeader('Content-Type', ct);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(buf);
-  } catch (e) { res.status(404).json({ error: e.message }); }
+  } catch (e) { res.status(404).json({ error: 'Image introuvable' }); }
 });
 
 // ── Métadonnées (pour le frontend savoir si une image existe) ─────────────────
@@ -160,7 +169,7 @@ router.get('/commercant/:userId/meta', async (req, res) => {
       profile_version: ver(profile),
       cover_list:      covers.map(c => ({ id: c.id, version: ver(c), sort_order: c.sort_order })),
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -179,13 +188,18 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 let cloudinaryInst = null;
 function getCloudinary() {
   if (!cloudinaryInst) {
+    // SECRETS : jamais de fallback hardcodé. Avant, les clés Cloudinary
+    // étaient en dur dans le source -> compromission publique via le repo
+    // GitHub. Credentials à rotater dans le dashboard Cloudinary (les
+    // anciennes sont dans l'historique git).
+    const cloud_name = process.env.CLOUDINARY_CLOUD_NAME;
+    const api_key    = process.env.CLOUDINARY_API_KEY;
+    const api_secret = process.env.CLOUDINARY_API_SECRET;
+    if (!cloud_name || !api_key || !api_secret) {
+      throw new Error('Cloudinary non configuré : définir CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.');
+    }
     const { v2: cld } = require('cloudinary');
-    cld.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'daovpx82c',
-      api_key:    process.env.CLOUDINARY_API_KEY    || '656558537324395',
-      api_secret: process.env.CLOUDINARY_API_SECRET || 'UpTgNOyLYKXPD3vWQ0VncEHEkOQ',
-      secure: true,
-    });
+    cld.config({ cloud_name, api_key, api_secret, secure: true });
     cloudinaryInst = cld;
   }
   return cloudinaryInst;
@@ -223,25 +237,73 @@ async function deleteFromProvider(resourcePath, provider) {
   }
 }
 
+// Whitelist stricte MIME + extensions (avant : `startsWith('image/')`
+// laissait passer image/svg+xml -> XSS si servi inline, et image/heic
+// cassait les libs image côté client).
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_EXT  = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
 // Pour local : multer diskStorage. Pour cloudinary : memoryStorage puis upload stream
 const storage = PROVIDER === 'cloudinary'
   ? multer.memoryStorage()
   : multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadDir),
       filename:    (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-        cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+        const ext = path.extname(file.originalname).toLowerCase();
+        // Normalise l'extension vers une valeur whitelistée (fileFilter
+        // a déjà validé) — évite d'écrire un `file.exe.jpg` avec l'extension
+        // originale préservée.
+        const safeExt = ALLOWED_EXT.has(ext) ? ext : '.jpg';
+        cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${safeExt}`);
       },
     });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Seules les images sont acceptées'));
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!ALLOWED_MIME.has(file.mimetype)) {
+      return cb(new Error('Type d\'image non autorisé (jpeg/png/webp/gif).'));
+    }
+    if (!ALLOWED_EXT.has(ext)) {
+      return cb(new Error('Extension de fichier non autorisée.'));
+    }
+    cb(null, true);
   },
 });
+
+// Magic-bytes : le MIME client est déclaratif et falsifiable. On vérifie
+// que les premiers octets du fichier correspondent à un format image réel.
+// Lance une Error qui sera capturée par le handler -> 400.
+const MAGIC = [
+  { name: 'image/jpeg', bytes: [0xFF, 0xD8, 0xFF] },
+  { name: 'image/png',  bytes: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
+  { name: 'image/gif',  bytes: [0x47, 0x49, 0x46, 0x38] },
+  // WebP : RIFF....WEBP (octets 0-3 = RIFF, 8-11 = WEBP)
+];
+function matchPrefix(buf, bytes) {
+  if (buf.length < bytes.length) return false;
+  for (let i = 0; i < bytes.length; i++) if (buf[i] !== bytes[i]) return false;
+  return true;
+}
+function isValidImageBuffer(buf) {
+  if (!buf || buf.length < 12) return false;
+  for (const m of MAGIC) if (matchPrefix(buf, m.bytes)) return true;
+  // WebP
+  if (buf.slice(0, 4).toString('ascii') === 'RIFF' &&
+      buf.slice(8, 12).toString('ascii') === 'WEBP') return true;
+  return false;
+}
+function assertImageBuffer(buf) {
+  if (!isValidImageBuffer(buf))
+    throw Object.assign(new Error('Fichier non reconnu comme image valide.'), { _status: 400 });
+}
+// Lit le début du fichier (cloudinary : buffer mémoire / local : disque)
+function getUploadBuffer(req) {
+  if (req.file.buffer) return req.file.buffer; // memoryStorage
+  return fs.readFileSync(req.file.path);       // diskStorage
+}
 
 // Helper : après upload multer, persister vers provider et retourner le path final
 async function persistUpload(req, folder) {
@@ -262,6 +324,8 @@ async function persistUpload(req, folder) {
 router.post('/commercant/profile', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    if (!isValidImageBuffer(getUploadBuffer(req)))
+      return res.status(400).json({ error: 'Fichier non reconnu comme image valide.' });
     // 1. Récupérer l'ancien profil (pour cleanup provider)
     const { rows: old } = await pool.query(
       'SELECT path, provider FROM media WHERE user_id=$1 AND type=$2',
@@ -278,13 +342,15 @@ router.post('/commercant/profile', upload.single('image'), async (req, res) => {
       [req.user.userId, 'profile', filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/profile` });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // POST /api/media/commercant/logo — Upload logo commerçant (remplace l'ancien)
 router.post('/commercant/logo', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    if (!isValidImageBuffer(getUploadBuffer(req)))
+      return res.status(400).json({ error: 'Fichier non reconnu comme image valide.' });
     const { rows: old } = await pool.query(
       'SELECT path, provider FROM media WHERE user_id=$1 AND type=$2',
       [req.user.userId, 'logo']
@@ -297,13 +363,15 @@ router.post('/commercant/logo', upload.single('image'), async (req, res) => {
       [req.user.userId, 'logo', filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/logo` });
-  } catch (e) { console.error('[POST logo]', e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[POST logo]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // POST /api/media/commercant/cover — Ajouter une photo galerie (max 4)
 router.post('/commercant/cover', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    if (!isValidImageBuffer(getUploadBuffer(req)))
+      return res.status(400).json({ error: 'Fichier non reconnu comme image valide.' });
     const { rows: existing } = await pool.query(
       'SELECT id FROM media WHERE user_id=$1 AND type=$2', [req.user.userId, 'cover']
     );
@@ -314,7 +382,7 @@ router.post('/commercant/cover', upload.single('image'), async (req, res) => {
       [req.user.userId, 'cover', filePath, PROVIDER, existing.length]
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/cover/${rows[0].id}` });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // DELETE /api/media/:id — Supprimer une image
@@ -327,7 +395,7 @@ router.delete('/:id', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Image introuvable' });
     await deleteFromProvider(rows[0].path, rows[0].provider);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // POST /api/media/service/:serviceId/image — Image d'un service
@@ -335,6 +403,8 @@ router.delete('/:id', async (req, res) => {
 router.post('/service/:serviceId/image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    if (!isValidImageBuffer(getUploadBuffer(req)))
+      return res.status(400).json({ error: 'Fichier non reconnu comme image valide.' });
     const { rows: svc } = await pool.query(
       'SELECT id FROM booking_services WHERE id=$1 AND user_id=$2',
       [req.params.serviceId, req.user.userId]
@@ -356,7 +426,7 @@ router.post('/service/:serviceId/image', upload.single('image'), async (req, res
       [req.user.userId, 'service', req.params.serviceId, filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/service/${req.params.serviceId}/image` });
-  } catch (e) { console.error('[POST service/image]', e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[POST service/image]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // POST /api/media/employee/:employeeId/image — Image d'un employé
@@ -364,6 +434,8 @@ router.post('/service/:serviceId/image', upload.single('image'), async (req, res
 router.post('/employee/:employeeId/image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image requise' });
+    if (!isValidImageBuffer(getUploadBuffer(req)))
+      return res.status(400).json({ error: 'Fichier non reconnu comme image valide.' });
     const { rows: emp } = await pool.query(
       'SELECT id FROM employees WHERE id=$1 AND user_id=$2',
       [req.params.employeeId, req.user.userId]
@@ -385,7 +457,7 @@ router.post('/employee/:employeeId/image', upload.single('image'), async (req, r
       [req.user.userId, 'employee', req.params.employeeId, filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/employee/${req.params.employeeId}/image` });
-  } catch (e) { console.error('[POST employee/image]', e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[POST employee/image]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // DELETE /api/media/employee/:employeeId/image — Supprimer l'image d'un employé
@@ -402,7 +474,7 @@ router.delete('/employee/:employeeId/image', async (req, res) => {
     );
     for (const m of rows) await deleteFromProvider(m.path, m.provider);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // DELETE /api/media/service/:serviceId/image — Supprimer l'image d'un service
@@ -419,7 +491,7 @@ router.delete('/service/:serviceId/image', async (req, res) => {
     );
     for (const m of rows) await deleteFromProvider(m.path, m.provider);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;

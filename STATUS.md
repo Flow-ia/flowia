@@ -5,7 +5,86 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 27) : Audit CAMPAGNES/MARKETING — commit P
+## 🆕 Session 2026-04-20 (suite 28) : Audit MEDIA/Upload — commit Q
+
+**Fichier** : `backend/src/routes/media.js`
+
+### 🚨 FUITE DE SECRETS DÉTECTÉE (CRITIQUE)
+
+Les **clés Cloudinary étaient hardcodées** comme fallback dans le source
+(lignes 184-186 avant audit) :
+```js
+cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'daovpx82c',
+api_key:    process.env.CLOUDINARY_API_KEY    || '656558537324395',
+api_secret: process.env.CLOUDINARY_API_SECRET || 'UpTgNOyLYKXPD3vWQ0VncEHEkOQ',
+```
+
+**Ces credentials sont dans l'historique git public** → compromis
+définitivement.
+
+**🔴 ACTION MANUELLE OBLIGATOIRE** :
+1. Aller dans Cloudinary → Console → Settings → Access Keys
+2. **Révoquer `656558537324395`** (le api_secret `UpTgNOy…EkOQ` permettait
+   upload/delete sur le compte).
+3. Générer une nouvelle paire api_key/api_secret.
+4. Mettre à jour les env vars `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET`
+   sur Render + local `.env`.
+5. Redéployer — le code actuel fail-fast si les env vars manquent.
+
+### Vulnérabilités corrigées
+
+- **Secrets hardcodés** : fallbacks retirés, `throw new Error` au boot si
+  env vars manquent (fail-fast).
+
+- **MIME whitelist stricte** : avant `file.mimetype.startsWith('image/')`
+  laissait passer `image/svg+xml` (→ XSS si servi inline), `image/heic`
+  (casse les libs client), etc. Fix : whitelist `jpeg|png|webp|gif`.
+
+- **Validation magic bytes** : avant, le MIME déclaré par le client
+  suffisait (falsifiable trivialement). Un `.exe` renommé `.jpg` avec
+  `Content-Type: image/jpeg` passait. Fix : fonction
+  `isValidImageBuffer()` qui lit les premiers octets et vérifie les
+  signatures JPEG (FF D8 FF), PNG (89 50 4E 47 …), GIF (47 49 46 38),
+  WebP (RIFF…WEBP). Rejet 400 si mismatch.
+
+- **Path traversal local storage** : `fetchImageBuffer` pour
+  `provider='local'` faisait `path.join(uploads, pathDB)`. Un path DB
+  malicieux (via un autre endpoint compromis ou injection future)
+  `../../etc/passwd` résolvait hors de `uploads/` → lecture arbitraire
+  de fichiers serveur. Fix : `path.resolve` + vérif
+  `fPath.startsWith(root + sep)`.
+
+- **Extension whitelist + normalisation** : `filename` multer diskStorage
+  préservait l'extension originale → `attack.php.jpg` stocké tel quel.
+  Fix : whitelist `.jpg/.jpeg/.png/.webp/.gif`, normalisation vers
+  `.jpg` si extension non whitelistée.
+
+- **`files: 1`** ajouté dans multer limits (avant, pas de cap sur le
+  nombre de champs par requête).
+
+- **Error hygiene** : `e.message` fuitait les détails Cloudinary / S3 /
+  fs (ex: "403 Forbidden", "AccessDenied", paths serveur). Fix : GET
+  routes → `'Image introuvable'`, POST/DELETE → `'Erreur serveur.'` +
+  log serveur. 14 handlers corrigés.
+
+### Non corrigé (hors scope)
+- **Rate limit GET public** : `/commercant/:userId/profile` etc.
+  exposés sans rate limit spécifique (seul le global Express s'applique).
+  DDoS vers Cloudinary = coût $$. À renforcer middleware.
+- **Validation dimensions image** : un 5 MB 20000×20000 px peut exploser
+  la mémoire côté client lors du resize. Nécessite lib `sharp` (non
+  installée) — skip.
+- **Vérification contenu SVG/polyglot** : whitelist MIME + magic bytes
+  couvre déjà les cas classiques. Un vrai polyglot JPEG/HTML reste
+  théoriquement servable mais le `Content-Type: image/jpeg` du serveur
+  empêche l'exécution dans le navigateur.
+
+### Commit
+- `<TBD>` audit(media) Q: remove hardcoded Cloudinary secrets + MIME/magic-byte whitelist + path traversal
+
+---
+
+## Session 2026-04-20 (suite 27) : Audit CAMPAGNES/MARKETING — commit P
 
 **Fichiers** : `campaigns.js`, `marketing.js`
 
@@ -63,7 +142,7 @@ dans `git log` (le fichier a été réinitialisé).
   client doit déjà gérer), non modifié pour rester chirurgical.
 
 ### Commit
-- `<TBD>` audit(campaigns/marketing) P: validation inputs + anti-overdraft + anti-spam 7j
+- `f37aa13` audit(campaigns/marketing) P: validation inputs + anti-overdraft + anti-spam 7j
 
 ---
 
