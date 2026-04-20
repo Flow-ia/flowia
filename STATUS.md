@@ -112,7 +112,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
 - `0379c64` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
 - `111da9d` audit(loyalty) X: PIN admin config/delete + caps metier + cap stamps_to_add + normalisation email
-- `<Y-hash>` security(headers) Y: CSP + HSTS + Referrer-Policy + Permissions-Policy (frontend Vercel + backend middleware)
+- `f599a2d` security(headers) Y: CSP + HSTS + Referrer-Policy + Permissions-Policy (frontend Vercel + backend middleware)
 
 ### 🔒 Security headers — commit Y
 
