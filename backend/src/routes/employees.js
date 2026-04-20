@@ -92,7 +92,13 @@ router.get('/:id/future-appointments', async (req, res) => {
 // 1. Tente de réaffecter chaque RDV futur à un employé disponible
 // 2. Si impossible → annule et envoie email client
 // 3. Supprime l'employé
-router.post('/:id/smart-delete', async (req, res) => {
+//
+// AUDIT perms #3 bis : pinAdmin requis. Avant, DELETE /:id l'exigeait mais
+// ce POST /:id/smart-delete (qui supprime ÉGALEMENT l'employé à la ligne
+// 204) était accessible avec seulement le JWT merchant → bypass trivial
+// du PIN admin pour supprimer n'importe quel employé (y compris l'admin
+// lui-même) + annuler/réaffecter tous les RDV futurs.
+router.post('/:id/smart-delete', pinAdminMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -209,8 +215,8 @@ router.post('/:id/smart-delete', async (req, res) => {
     res.json({ ok: true, reassigned, cancelled });
   } catch (e) {
     await client.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ error: 'Erreur serveur : ' + e.message });
+    console.error('[SMART-DELETE]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
   } finally {
     client.release();
   }

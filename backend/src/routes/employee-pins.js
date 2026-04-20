@@ -137,7 +137,12 @@ const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 min
 router.post('/:employeeId/verify', async (req, res) => {
   try {
     const { pin } = req.body;
-    if (!pin) return res.status(400).json({ error: 'PIN requis.' });
+    // Validation format strict (cohérent avec /set) : avant, un PIN non
+    // 4-chiffres consommait une tentative via bcrypt.compare (inutile et
+    // surcharge CPU) et pouvait déclencher le lockout sur des inputs
+    // manifestement invalides.
+    if (!pin || !/^\d{4}$/.test(String(pin)))
+      return res.status(400).json({ error: 'PIN de 4 chiffres requis.' });
 
     const { rows } = await pool.query(
       `SELECT ep.pin_hash, ep.is_active, ep.failed_attempts, ep.locked_until

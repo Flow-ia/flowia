@@ -5,7 +5,61 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 25) : Audit AUTH — commit N (critique sécurité)
+## 🆕 Session 2026-04-20 (suite 26) : Audit RH/PAIE — commit O
+
+**Fichiers** : `employees.js`, `employee-pins.js`, `commissions.js`, `absences.js`
+
+### Vulnérabilités corrigées
+
+- **`employees.js` — bypass PIN admin sur smart-delete** : `DELETE /:id`
+  exigeait `pinAdminMiddleware` (audit perms #3) mais `POST /:id/smart-delete`
+  qui supprime AUSSI l'employé (ligne 204) + annule/réaffecte tous les RDV
+  futurs était accessible avec seulement le JWT merchant → contournement
+  trivial de la protection RH. Fix : `pinAdminMiddleware` ajouté.
+
+- **`commissions.js` — bypass PIN admin sur `PUT /settings/:employeeId`** :
+  un utilisateur avec le seul JWT merchant (device partagé, XSS) pouvait
+  pousser `commission_pct=100` sur n'importe quel employé → vol financier
+  direct via la route `/api/commissions`. Incohérent avec `employees.js`
+  qui exige le PIN admin sur tout UPDATE. Fix : `pinAdminMiddleware` +
+  validation stricte `Number.isFinite(pct)` (avant, `"50"` ou `null` passait
+  silencieusement).
+
+- **`absences.js` — bug métier PUT type écrasé** : `type||'conges'` dans
+  le UPDATE écrasait silencieusement un `maladie` ou `maternite` en
+  `conges` si le client ne renvoyait pas le champ. Fix :
+  `COALESCE($3, type)` préserve la valeur existante en BDD.
+
+- **`absences.js` — format date non validé** : `"2026-13-40"` ou
+  `"bad-string"` remontaient jusqu'à PG avec message d'erreur cryptique
+  (fuite via `e.message`). Fix : helper `isValidDate()` + regex `YYYY-MM-DD`
+  + round-trip ISO sur POST, PUT, GET /stats.
+
+- **`employee-pins.js` — `/verify` sans regex 4 digits** : cohérence avec
+  `/set`. Avant, un PIN `"abcd"` ou `"12345"` consommait une tentative
+  bcrypt inutile (CPU + pouvait déclencher lockout sur inputs
+  manifestement invalides).
+
+- **Error hygiene** : `res.status(500).json({error: e.message})` →
+  `'Erreur serveur.'` + log serveur sur 10 handlers (3 commissions + 6
+  absences + 1 employees smart-delete). Aligné K/L/M/N.
+
+### Non corrigé (hors scope)
+- `employees.js` : `module.exports = router;` ligne 68 avec des
+  `router.get/post` ajoutés APRÈS (lignes 71-217). Fonctionne car Node
+  exporte par référence mais anti-pattern. Cosmétique, zéro impact runtime.
+- `commissions.js GET /` : `new Date()` UTC pour fromD/toD par défaut.
+  Même bug mineur que credits.js (audit L). Impact : transition minuit
+  Paris/UTC mid-period. Non critique, à envisager en audit TZ global.
+- `absences.js` : pas de `pinAdminMiddleware` sur CRUD absences — choix
+  produit (saisie d'absence = opérationnel quotidien, pas RH critique).
+
+### Commit
+- `<TBD>` audit(rh/paie) O: pinAdmin gaps + type preservation + error hygiene
+
+---
+
+## Session 2026-04-20 (suite 25) : Audit AUTH — commit N (critique sécurité)
 
 **Fichier** : `backend/src/routes/auth.js` (login / register / forgot-password
 + change-email + PIN + Google OAuth)

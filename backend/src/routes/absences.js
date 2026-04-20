@@ -6,6 +6,14 @@ const router   = express.Router();
 router.use(authMiddleware);
 
 const VALID_TYPES = ['conges','maladie','formation','autre','accident_travail','maternite','paternite','sans_solde'];
+// Format ISO date strict (YYYY-MM-DD) — avant, "2026-13-40" remontait
+// jusqu'à PG avec un message d'erreur cryptique (et fuite via e.message).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isValidDate(s) {
+  if (typeof s !== 'string' || !DATE_RE.test(s)) return false;
+  const d = new Date(s + 'T12:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
 
 // Calcule le nombre de jours calendaires inclusifs entre deux dates
 function countDays(start, end) {
@@ -38,7 +46,7 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(q, params);
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[ABS GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/absences/stats — statistiques sur une période ────────────────────
@@ -46,6 +54,8 @@ router.get('/stats', async (req, res) => {
   try {
     const { from, to, employee_id } = req.query;
     if (!from || !to) return res.status(400).json({ error: 'from et to requis.' });
+    if (!isValidDate(from) || !isValidDate(to))
+      return res.status(400).json({ error: 'Format de date invalide (YYYY-MM-DD).' });
 
     let q = `
       SELECT
@@ -83,7 +93,7 @@ router.get('/stats', async (req, res) => {
       byEmployee[r.employee_id].by_type[r.type] = { count: cnt, days };
     }
     res.json({ period: { from, to }, employees: Object.values(byEmployee) });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[ABS STATS]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/absences — créer une absence ────────────────────────────────────
@@ -95,6 +105,8 @@ router.post('/', async (req, res) => {
     if (!employee_id) return res.status(400).json({ error: 'Employé obligatoire.' });
     if (!start_date)  return res.status(400).json({ error: 'Date de début obligatoire.' });
     if (!end_date)    return res.status(400).json({ error: 'Date de fin obligatoire.' });
+    if (!isValidDate(start_date) || !isValidDate(end_date))
+      return res.status(400).json({ error: 'Format de date invalide (YYYY-MM-DD).' });
     if (new Date(end_date) < new Date(start_date))
       return res.status(400).json({ error: 'La date de fin doit être égale ou postérieure à la date de début.' });
     if (!VALID_TYPES.includes(type))
@@ -111,7 +123,7 @@ router.post('/', async (req, res) => {
       [employee_id, req.user.userId, start_date, end_date, type, label||null, reason||null]
     );
     res.status(201).json({ ...rows[0], days: countDays(start_date, end_date) });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[ABS POST]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/absences/:id — modifier une absence ──────────────────────────────
@@ -121,16 +133,21 @@ router.put('/:id', async (req, res) => {
 
     if (!start_date) return res.status(400).json({ error: 'Date de début obligatoire.' });
     if (!end_date)   return res.status(400).json({ error: 'Date de fin obligatoire.' });
+    if (!isValidDate(start_date) || !isValidDate(end_date))
+      return res.status(400).json({ error: 'Format de date invalide (YYYY-MM-DD).' });
     if (new Date(end_date) < new Date(start_date))
       return res.status(400).json({ error: 'La date de fin doit être égale ou postérieure à la date de début.' });
     if (type && !VALID_TYPES.includes(type))
       return res.status(400).json({ error: 'Type invalide.' });
 
+    // COALESCE($3, type) : si le client ne renvoie pas `type`, on conserve
+    // la valeur existante. Avant, `type||'conges'` écrasait silencieusement
+    // un arrêt maladie en congés si l'UI ne renvoyait pas le champ.
     const { rows } = await pool.query(
       `UPDATE employee_absences
           SET start_date  = $1,
               end_date    = $2,
-              type        = $3,
+              type        = COALESCE($3, type),
               label       = $4,
               reason      = $5,
               updated_at  = NOW(),
@@ -138,11 +155,11 @@ router.put('/:id', async (req, res) => {
               cancelled_reason = NULL
         WHERE id = $6 AND user_id = $7
         RETURNING *`,
-      [start_date, end_date, type||'conges', label||null, reason||null, req.params.id, req.user.userId]
+      [start_date, end_date, type || null, label||null, reason||null, req.params.id, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Absence introuvable.' });
     res.json({ ...rows[0], days: countDays(rows[0].start_date, rows[0].end_date) });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[ABS PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PATCH /api/absences/:id/cancel — annuler une absence (garde historique) ───
@@ -160,7 +177,7 @@ router.patch('/:id/cancel', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Absence introuvable.' });
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[ABS CANCEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── DELETE /api/absences/:id — suppression définitive ────────────────────────
@@ -171,7 +188,7 @@ router.delete('/:id', async (req, res) => {
       [req.params.id, req.user.userId]);
     if (!rowCount) return res.status(404).json({ error: 'Absence introuvable.' });
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[ABS DEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;
