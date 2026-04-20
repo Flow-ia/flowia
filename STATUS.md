@@ -15,11 +15,10 @@ headers (CSP/HSTS/Referrer-Policy).
 **Refactor frontend en cours** — décomposition des gros fichiers :
 - ✅ `TabMarketing.jsx` (2553 l) → `settings/marketing/`
 - ✅ `Agenda.jsx` (2386 l) → `agenda/`
-- ✅ `BookingPage.jsx` décomposition partielle → `booking/` (helpers, marketing, merchant-info, book, client-auth, client-profile, promo, google-rating)
+- ✅ `BookingPage.jsx` (2203 l) → `booking-page/` (constants, helpers, ReferralBanner, steps/ Step1Home→Step6Confirm, views/ Blocked/MyAppts/Parrain/Success) — commit `a4ac68a`, build OK, 22 routes /book/:slug/* préservées
 - ✅ `EmployeeAgenda.jsx` (2183 l) → `employee-agenda/` (commit `d8109cf`)
 
 **Reste à décomposer (>1000 lignes)** :
-- `BookingPage.jsx` (2203) — le fichier principal reste gros malgré les sous-composants extraits
 - `MyAppointments.jsx` (1895)
 - `TabEquipe.jsx` (1290)
 - `Account.jsx` (1243)
