@@ -116,7 +116,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `76b2972` rgpd(opt-in) Z1: migration DB + filtres marketing_opt_in + endpoint unsubscribe
 - `f5457da` rgpd(opt-in) Z2: injection lien unsubscribe dans SMS + email marketing
 - `6e7935b` rgpd(opt-in) Z3: checkbox opt-in inscription (quick + full) + toggle profil client + endpoints backend
-- `<Z4-hash>` rgpd(opt-in) Z4: bannière opt-in stats dans TabMarketing + endpoint `/opt-in/:token` + email transactionnel d'invitation
+- `a42542b` rgpd(opt-in) Z4: bannière opt-in stats dans TabMarketing + endpoint `/opt-in/:token` + email transactionnel d'invitation
 
 ### Z4 — Transition pour clients existants
 
