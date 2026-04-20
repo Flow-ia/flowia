@@ -111,7 +111,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
 - `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
 - `0379c64` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
-- `<X-hash>` audit(loyalty) X: PIN admin config/delete + caps metier + cap stamps_to_add + normalisation email
+- `111da9d` audit(loyalty) X: PIN admin config/delete + caps metier + cap stamps_to_add + normalisation email
 
 ### 🔒 Audit loyalty.js — commit X (dernier P1)
 
