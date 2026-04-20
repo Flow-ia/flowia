@@ -80,7 +80,7 @@ définitivement.
   empêche l'exécution dans le navigateur.
 
 ### Commit
-- `<TBD>` audit(media) Q: remove hardcoded Cloudinary secrets + MIME/magic-byte whitelist + path traversal
+- `0196e67` audit(media) Q: remove hardcoded Cloudinary secrets + MIME/magic-byte whitelist + path traversal
 
 ---
 
