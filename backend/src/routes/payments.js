@@ -148,10 +148,18 @@ router.post('/sms/intent', authMiddleware, async (req, res) => {
   } catch(e) {
     console.error('[STRIPE INTENT ERR]', e.message);
     // Erreur de paiement Stripe (carte refusée, fonds insuffisants, etc.)
-    if (e.type === 'StripeCardError' || e.code) {
-      return res.status(400).json({ error: e.message, code: e.code });
+    // Audit T : on ne renvoie PAS `e.message` brut — Stripe peut inclure des
+    // détails internes (ID raw, endpoints). Le `code` suffit au front pour
+    // afficher le bon message utilisateur. Quelques messages généraux sont
+    // whitelistés pour les cartes (UX).
+    if (e.type === 'StripeCardError') {
+      const safeMsg = { card_declined:'Carte refusée.', insufficient_funds:'Fonds insuffisants.',
+                        expired_card:'Carte expirée.', incorrect_cvc:'Code CVC incorrect.',
+                        processing_error:'Erreur de traitement. Réessayez.' }[e.code]
+                      || 'Paiement refusé.';
+      return res.status(400).json({ error: safeMsg, code: e.code });
     }
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -180,7 +188,7 @@ router.get('/sms/payment-methods', authMiddleware, async (req, res) => {
     });
   } catch(e) {
     console.error('[STRIPE METHODS ERR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -206,7 +214,7 @@ router.delete('/sms/payment-methods/:id', authMiddleware, async (req, res) => {
     res.json({ ok: true });
   } catch(e) {
     console.error('[STRIPE DETACH ERR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -226,7 +234,7 @@ router.post('/sms/set-default', authMiddleware, async (req, res) => {
     res.json({ ok: true });
   } catch(e) {
     console.error('[STRIPE DEFAULT ERR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -244,7 +252,17 @@ router.post('/sms/verify-intent', authMiddleware, async (req, res) => {
     if (intent.status !== 'succeeded')
       return res.json({ credited: false, status: intent.status });
 
-    const amount   = parseFloat(intent.metadata?.amount || 0);
+    // Audit T : defense-in-depth sur amount. La source de vérité est
+    // `intent.amount_received` (cents → EUR). metadata.amount est écrit par
+    // nous-mêmes lors de la création, mais un mismatch = bug ou tampering,
+    // on refuse le crédit.
+    const metaAmount   = parseFloat(intent.metadata?.amount || 0);
+    const stripeAmount = (intent.amount_received || intent.amount || 0) / 100;
+    if (Math.abs(metaAmount - stripeAmount) > 0.01) {
+      console.error('[STRIPE VERIFY INTENT] amount mismatch', { id: intent.id, metaAmount, stripeAmount });
+      return res.status(400).json({ error: 'Incohérence de montant.' });
+    }
+    const amount   = stripeAmount;
     const smsCount = parseInt(intent.metadata?.sms_count || 0);
     const result = await creditSmsOnce({
       userId, amount, smsCount,
@@ -262,7 +280,7 @@ router.post('/sms/verify-intent', authMiddleware, async (req, res) => {
     });
   } catch(e) {
     console.error('[STRIPE VERIFY INTENT ERR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -319,7 +337,7 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
 
   } catch(e) {
     console.error('[STRIPE CHECKOUT ERROR]', e.message);
-    res.status(500).json({ error: 'Erreur paiement: ' + e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -353,10 +371,18 @@ router.post('/sms/webhook',
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
         if (session.payment_status !== 'paid') return;
-        const userId   = session.metadata?.user_id;
-        const amount   = parseFloat(session.metadata?.amount || 0);
-        const smsCount = parseInt(session.metadata?.sms_count || 0);
-        if (!userId || !amount) return;
+        const userId    = session.metadata?.user_id;
+        const smsCount  = parseInt(session.metadata?.sms_count || 0);
+        // Audit T : amount = source of truth Stripe. Cross-check avec
+        // metadata pour détecter tampering/bug. Refuse si mismatch.
+        const metaAmount   = parseFloat(session.metadata?.amount || 0);
+        const stripeAmount = (session.amount_total || 0) / 100;
+        if (!userId || !stripeAmount) return;
+        if (Math.abs(metaAmount - stripeAmount) > 0.01) {
+          console.error('[STRIPE WEBHOOK session] amount mismatch', { id: session.id, metaAmount, stripeAmount });
+          return;
+        }
+        const amount = stripeAmount;
         const r = await creditSmsOnce({
           userId, amount, smsCount,
           description: `Recharge ${amount} EUR`,
@@ -368,15 +394,79 @@ router.post('/sms/webhook',
       if (event.type === 'payment_intent.succeeded') {
         const intent   = event.data.object;
         const userId   = intent.metadata?.user_id;
-        const amount   = parseFloat(intent.metadata?.amount || 0);
         const smsCount = parseInt(intent.metadata?.sms_count || 0);
-        if (!userId || !amount) return;
+        const metaAmount   = parseFloat(intent.metadata?.amount || 0);
+        const stripeAmount = (intent.amount_received || intent.amount || 0) / 100;
+        if (!userId || !stripeAmount) return;
+        if (Math.abs(metaAmount - stripeAmount) > 0.01) {
+          console.error('[STRIPE WEBHOOK intent] amount mismatch', { id: intent.id, metaAmount, stripeAmount });
+          return;
+        }
+        const amount = stripeAmount;
         const r = await creditSmsOnce({
           userId, amount, smsCount,
           description: `Recharge ${amount} EUR`,
           checkoutId: intent.id,
         });
         if (r.credited) console.log('[STRIPE WEBHOOK intent] Credite:', amount, 'EUR ->', userId);
+      }
+
+      // Audit T : refund / dispute. Sans ce handler, un attaquant paie
+      // 500 €, obtient 500 € de crédit SMS, dispute la CB auprès de sa
+      // banque → Stripe rétrocède l'argent mais le solde reste crédité
+      // (cadeau gratuit). Fix : débiter le solde SMS à la hauteur du
+      // remboursement. Idempotent via UNIQUE(sumup_checkout_id) sur
+      // `charge.id` (une ligne refund par refund).
+      if (event.type === 'charge.refunded' || event.type === 'charge.dispute.closed') {
+        const charge = event.data.object;
+        // `charge.dispute.closed` ne débite que si l'issue est perdue
+        // (funds returned to customer). Sinon on ignore.
+        if (event.type === 'charge.dispute.closed') {
+          const dispute = event.data.object;
+          if (!['lost', 'charge_refunded'].includes(dispute.status)) return;
+        }
+        const refundedCents = charge.amount_refunded || charge.amount || 0;
+        if (!refundedCents) return;
+        const refundedAmount = refundedCents / 100;
+        const intentId = charge.payment_intent;
+        // Retrouver la tx de crédit originale (cherche par intent ID ; si
+        // le paiement venait d'une session, l'intent est aussi stocké).
+        let userId = null;
+        if (intentId) {
+          const { rows } = await pool.query(
+            `SELECT user_id FROM sms_transactions
+             WHERE sumup_checkout_id=$1 AND type='credit' AND status='completed'
+             LIMIT 1`, [intentId]
+          );
+          if (rows.length) userId = rows[0].user_id;
+        }
+        // Fallback : metadata sur le charge (Stripe copie parfois la
+        // metadata du PaymentIntent sur le charge).
+        if (!userId) userId = charge.metadata?.user_id || null;
+        if (!userId) {
+          console.error('[STRIPE WEBHOOK refund] user_id introuvable', { charge: charge.id, intent: intentId });
+          return;
+        }
+        // Idempotence : INSERT d'une tx type='refund'. UNIQUE sur
+        // sumup_checkout_id garantit qu'un retry webhook = no-op.
+        try {
+          await pool.query(
+            `INSERT INTO sms_transactions
+               (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
+             VALUES ($1,'refund',$2,0,$3,$4,'completed')`,
+            [userId, refundedAmount, `Remboursement ${refundedAmount} EUR`, charge.id]
+          );
+        } catch (e) {
+          if (e.code === '23505') return; // déjà traité
+          throw e;
+        }
+        // Débit du solde — jamais en négatif (si le marchand a déjà dépensé
+        // les SMS avant le refund, perte pour nous mais pas de trou DB).
+        await pool.query(
+          `UPDATE users SET sms_balance = GREATEST(0, sms_balance - $1) WHERE id=$2`,
+          [refundedAmount, userId]
+        );
+        console.log('[STRIPE WEBHOOK refund] Debite:', refundedAmount, 'EUR ->', userId);
       }
     } catch(e) {
       console.error('[STRIPE WEBHOOK handler error]', e.message);
@@ -413,7 +503,15 @@ router.get('/sms/verify/:sessionId', authMiddleware, async (req, res) => {
     if (!txRows.length) return res.status(404).json({ error: 'Transaction introuvable' });
 
     const tx = txRows[0];
-    const amount = parseFloat(session.metadata?.amount || tx.amount || 0);
+    // Audit T : amount = source of truth Stripe (amount_total en cents),
+    // cross-check metadata. Refuse si mismatch.
+    const metaAmount   = parseFloat(session.metadata?.amount || tx.amount || 0);
+    const stripeAmount = (session.amount_total || 0) / 100;
+    if (Math.abs(metaAmount - stripeAmount) > 0.01) {
+      console.error('[STRIPE VERIFY] amount mismatch', { id: session.id, metaAmount, stripeAmount });
+      return res.status(400).json({ error: 'Incohérence de montant.' });
+    }
+    const amount   = stripeAmount;
     const smsCount = parseInt(session.metadata?.sms_count || tx.sms_count || 0);
     const r = await creditSmsOnce({
       userId, amount, smsCount,
@@ -433,7 +531,7 @@ router.get('/sms/verify/:sessionId', authMiddleware, async (req, res) => {
     });
   } catch(e) {
     console.error('[STRIPE VERIFY ERROR]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -449,7 +547,7 @@ router.get('/sms/balance', authMiddleware, async (req, res) => {
       estimated_sms: Math.floor(balance / SMS_PRICE),
       price_per_sms: SMS_PRICE,
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[SMS ERR]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // GET /api/payments/sms/transactions
@@ -461,7 +559,7 @@ router.get('/sms/transactions', authMiddleware, async (req, res) => {
       ORDER BY created_at DESC LIMIT 10
     `, [req.user.userId]);
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[SMS ERR]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;

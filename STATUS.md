@@ -107,6 +107,55 @@ marchand. 3 findings CRITIQUES corrigés :
 - `565141d` docs: STATUS session 29 commit R avec SHA
 - `5d2cf39` hardening(qr) R1: rate-limit dédié /client/quick-register (30/15min/IP) + rejet téléphones fake (chiffres identiques / séquences 0-9)
 - `2f80d47` feat(qr) S: UI QR dans Settings/Clients — canvas + download PNG 512px + copy lien (lib `qrcode`)
+- `<T-hash>` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
+
+### 🔒 Audit payments.js (Stripe) — commit T
+
+**Fichier** : `backend/src/routes/payments.js` (467 lignes). Critique financier —
+une faille = perte d'argent directe ou crédit gratuit.
+
+**Vulnérabilités corrigées** :
+
+- **Handlers refund/dispute absents** (CRITIQUE, vraie faille). Avant : un
+  attaquant paye 500 €, obtient 500 € SMS, dispute la CB → Stripe rétrocède
+  l'argent mais solde SMS conservé = recharge gratuite. Fix : nouveaux
+  handlers `charge.refunded` + `charge.dispute.closed` qui insèrent une
+  `sms_transactions` type='refund' (idempotent via UNIQUE
+  `sumup_checkout_id`=charge.id) puis `UPDATE users SET sms_balance =
+  GREATEST(0, sms_balance - refund)` (jamais négatif).
+
+- **Amount tampering defense-in-depth** (HAUT). L'amount crédité venait de
+  `session.metadata.amount` / `intent.metadata.amount` sans cross-check
+  contre l'amount Stripe officiel (`amount_total`, `amount_received`). Un
+  bug futur ou une manipulation metadata créditait n'importe quoi. Fix :
+  validation `Math.abs(metaAmount - stripeAmount) < 0.01` avant crédit
+  dans les 3 chemins (webhook session, webhook intent, verify-intent,
+  verify-session). Source of truth = Stripe.
+
+- **Error hygiene** (aligné K→R) : `res.status(500).json({ error: e.message })`
+  et `'Erreur paiement: ' + e.message` fuitaient détails Stripe / SQL.
+  Fix : `'Erreur serveur.'` générique sur 10 handlers 500, log serveur
+  conservé pour debug. Sur 400 StripeCardError : whitelist de messages
+  utilisateurs (`'Carte refusée.'`, `'Fonds insuffisants.'` etc.) au lieu
+  de `e.message` brut.
+
+### Non modifié (protections existantes suffisantes)
+
+- **Webhook signature** : `stripe.webhooks.constructEvent` appliqué
+  correctement, `express.raw` registered AVANT `express.json` dans
+  `index.js:107`. OK.
+- **Idempotence crédit** : `creditSmsOnce` via UPDATE atomique
+  (`status='pending' → 'completed'`) + UNIQUE index
+  `uq_sms_tx_checkout`. OK.
+- **Auth création intent** : `authMiddleware` sur `/intent` + `/checkout`,
+  `userId` extrait du JWT (pas du body). OK.
+- **Rate limit** : `paymentsIntentLimiter` 15/15min sur intent+checkout
+  (pas sur webhook — volontaire, Stripe retry). OK.
+- **Currency** : hardcodée `'eur'` côté serveur, aucune lecture du body.
+  OK.
+- **Bounds amount** : 5-1000 EUR enforced (L98-99, L274-278). OK.
+- **Logs avec montants/userId** : conservés (debug oncall légitime, pas
+  un secret). Non fixé.
 
 ---
 
