@@ -73,21 +73,34 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   const [clientInfo, setClientInfo] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ff_client_info') || 'null'); } catch { return null; }
   });
-  const [editFirst,  setEditFirst]  = useState('');
-  const [editLast,   setEditLast]   = useState('');
-  const [editEmail,  setEditEmail]  = useState('');
-  const [editPhone,  setEditPhone]  = useState('');
-  const [profLoad,   setProfLoad]   = useState(false);
-  const [profErr,    setProfErr]    = useState('');
-  const [profOk,     setProfOk]     = useState('');
-  const [editing,    setEditing]    = useState(false);
+  const [editFirst,    setEditFirst]    = useState('');
+  const [editLast,     setEditLast]     = useState('');
+  const [editEmail,    setEditEmail]    = useState('');
+  const [editPhone,    setEditPhone]    = useState('');
+  const [editBirth,    setEditBirth]    = useState(''); // YYYY-MM-DD
+  const [editPostal,   setEditPostal]   = useState('');
+  const [editCity,     setEditCity]     = useState('');
+  const [profLoad,     setProfLoad]     = useState(false);
+  const [profErr,      setProfErr]      = useState('');
+  const [profOk,       setProfOk]       = useState('');
+  const [editing,      setEditing]      = useState(false);
+
+  // Extrait YYYY-MM-DD depuis un ISO / Date / string quel qu'il soit
+  const ymd = (d) => {
+    if (!d) return '';
+    const s = String(d);
+    return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+  };
 
   // initialiser les champs d'édition
   const startEdit = () => {
-    setEditFirst(clientInfo?.first_name || '');
-    setEditLast(clientInfo?.last_name   || '');
-    setEditEmail(clientInfo?.email      || '');
-    setEditPhone(clientInfo?.phone      || '');
+    setEditFirst(clientInfo?.first_name   || '');
+    setEditLast(clientInfo?.last_name     || '');
+    setEditEmail(clientInfo?.email        || '');
+    setEditPhone(clientInfo?.phone        || '');
+    setEditBirth(ymd(clientInfo?.birth_date));
+    setEditPostal(clientInfo?.postal_code || '');
+    setEditCity(clientInfo?.city          || '');
     setEditing(true);
     setProfErr(''); setProfOk('');
   };
@@ -98,11 +111,18 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     // Email volontairement exclu : change via modal dédiée (code OTP).
     setProfLoad(true); setProfErr(''); setProfOk('');
     try {
-      const res = await pubApi.updateClientProfile(slug, {
+      // birth_date : '' → effacer (null), sinon passer tel quel si format OK
+      const bdPayload = editBirth === '' ? '' :
+        (/^\d{4}-\d{2}-\d{2}$/.test(editBirth) || /^\d{4}-\d{2}$/.test(editBirth)) ? editBirth : undefined;
+      const payload = {
         first_name: editFirst.trim(),
         last_name:  editLast.trim(),
         phone:      editPhone.trim() || undefined,
-      });
+        postal_code: editPostal.trim(),
+        city:        editCity.trim(),
+      };
+      if (bdPayload !== undefined) payload.birth_date = bdPayload;
+      const res = await pubApi.updateClientProfile(slug, payload);
       const updated = { ...(clientInfo||{}), ...res };
       localStorage.setItem('ff_client_info', JSON.stringify(updated));
       setClientInfo(updated);
@@ -939,6 +959,41 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                     <input type="tel" value={editPhone} onChange={e=>setEditPhone(e.target.value)}
                       placeholder="06 00 00 00 00" style={inpStyle}/>
                   </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700,
+                      color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                      Date de naissance
+                    </label>
+                    <input type="date" value={editBirth} onChange={e=>setEditBirth(e.target.value)}
+                      max={new Date().toISOString().slice(0,10)}
+                      style={inpStyle}/>
+                    <p style={{ fontSize:11, color:th.muted, margin:'6px 0 0', lineHeight:1.5,
+                      background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.2)',
+                      padding:'8px 10px', borderRadius:8 }}>
+                      🎂 Cette information permet de bénéficier d'offres et de réductions
+                      spéciales anniversaire proposées par le commerçant (envoyées le jour J,
+                      selon les conditions de chaque commerce).
+                    </p>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
+                    <div>
+                      <label style={{ display:'block', fontSize:11, fontWeight:700,
+                        color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                        Code postal
+                      </label>
+                      <input type="text" value={editPostal}
+                        onChange={e=>setEditPostal(e.target.value.replace(/[^\d\s-]/g,'').slice(0,10))}
+                        placeholder="75001" inputMode="numeric" style={inpStyle}/>
+                    </div>
+                    <div>
+                      <label style={{ display:'block', fontSize:11, fontWeight:700,
+                        color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                        Ville
+                      </label>
+                      <input type="text" value={editCity} onChange={e=>setEditCity(e.target.value.slice(0,120))}
+                        placeholder="Paris" style={inpStyle}/>
+                    </div>
+                  </div>
                   <p style={{ fontSize:11, color:th.muted, margin:0, lineHeight:1.5 }}>
                     Pour modifier votre email, utilisez le bouton «&nbsp;Changer mon email&nbsp;»
                     dans la vue principale : un code sera envoyé à votre adresse actuelle.
@@ -972,12 +1027,25 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                       ✓ {profOk}
                     </div>
                   )}
-                  {[
-                    ['Prenom',    clientInfo?.first_name || '-'],
-                    ['Nom',       clientInfo?.last_name  || '-'],
-                    ['Email',     clientInfo?.email      || '-'],
-                    ['Télephone', clientInfo?.phone      || '-'],
-                  ].map(([lbl, val], i) => (
+                  {(() => {
+                    const birthStr = (() => {
+                      const s = ymd(clientInfo?.birth_date);
+                      if (!s) return '-';
+                      try {
+                        return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR',
+                          { day: 'numeric', month: 'long', year: 'numeric' });
+                      } catch { return s; }
+                    })();
+                    const cityLine = [clientInfo?.postal_code, clientInfo?.city].filter(Boolean).join(' ') || '-';
+                    return [
+                      ['Prenom',      clientInfo?.first_name || '-'],
+                      ['Nom',         clientInfo?.last_name  || '-'],
+                      ['Email',       clientInfo?.email      || '-'],
+                      ['Télephone',   clientInfo?.phone      || '-'],
+                      ['Anniversaire',birthStr],
+                      ['Ville',       cityLine],
+                    ];
+                  })().map(([lbl, val], i) => (
                     <div key={lbl} style={{ display:'flex', justifyContent:'space-between',
                       alignItems:'center', padding:'13px 20px',
                       borderTop: i===0 ? `1px solid ${th.border}` : 'none',

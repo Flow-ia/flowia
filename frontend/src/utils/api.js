@@ -292,9 +292,10 @@ export const pubApi = {
   },
   updateClientProfile: (slug, body) => pubRequest(`/${slug}/client/profile`, { method: 'PUT', body: JSON.stringify(body) }),
   checkEmail:     (slug, email) => pubRequest(`/${slug}/client/check-email?email=${encodeURIComponent(email)}`),
-  googleAuthUrl:  (slug) => {
+  googleAuthUrl:  (slug, ref) => {
     const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
-    return `${BASE}/api/pub/${slug}/client/auth/google`;
+    const q = ref ? `?ref=${encodeURIComponent(ref)}` : '';
+    return `${BASE}/api/pub/${slug}/client/auth/google${q}`;
   },
   // Note Google Business réelle (Places API) — silent fail si non configuré
   getGoogleRating: (slug) => pubRequest(`/${slug}/google-rating`),

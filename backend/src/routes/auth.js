@@ -791,10 +791,14 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
 //  Le slug du commerçant est récupéré via le paramètre `state`
 // ═══════════════════════════════════════════════════════════════════════════
 router.get('/google/callback', async (req, res) => {
-  const { code, state: slug, error } = req.query;
+  const { code, state: stateRaw, error } = req.query;
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
   const FRONTEND_URL = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'https://haircoifflille.fr';
   const redirectUri  = `${BACKEND_URL}/api/auth/google/callback`;
+
+  // state = slug OU "slug|REFCODE" (cf. public-booking /client/auth/google).
+  const [slug, refFromState] = String(stateRaw || '').split('|');
+  const incomingRef = (refFromState || '').trim().toUpperCase();
 
   if (error || !code || !slug) {
     return res.redirect(`${FRONTEND_URL}?auth_error=google_denied`);
@@ -880,6 +884,41 @@ router.get('/google/callback', async (req, res) => {
     );
     const local = localRows[0];
 
+    // 5bis. Fan-out : lier toutes les autres fiches locales du même email
+    // au compte global. Aligne la cohérence avec /client/register classique
+    // (sans ça, un user Google pourrait avoir des fiches pré-existantes
+    // chez d'autres commerçants non liées, sans propagation profil).
+    await pool.query(
+      `UPDATE client_accounts SET global_client_id=$1, source='platform'
+        WHERE LOWER(email)=LOWER($2) AND global_client_id IS NULL`,
+      [gc.id, emailLow]
+    ).catch(e => console.warn('[google fan-out]', e.message));
+
+    // 5ter. Si l'inscription Google vient d'un lien ?ref=CODE, déclencher
+    // l'email welcome parrainage (après check d'éligibilité). Aligné avec
+    // /client/register classique. Non-bloquant : setImmediate + try/catch.
+    if (incomingRef) {
+      setImmediate(async () => {
+        try {
+          const { resolveReferralForFilleul } = require('./referrals');
+          const resolved = await resolveReferralForFilleul(userId, incomingRef, emailLow, 0);
+          if (!resolved.ok) return;
+          const { rows: biz } = await pool.query(
+            'SELECT business_name FROM users WHERE id=$1', [userId]
+          );
+          const { sendReferralWelcome } = require('../utils/email');
+          await sendReferralWelcome({
+            to:           emailLow,
+            filleulName:  gc.first_name,
+            businessName: biz[0]?.business_name || 'votre commerçant',
+            code:         incomingRef,
+            type:         resolved.filleul_type,
+            value:        resolved.filleul_value,
+          });
+        } catch (e) { console.warn('[google referral welcome]', e.message); }
+      });
+    }
+
     // 6. Générer le JWT
     const token = jwt.sign(
       { clientId: local.id, merchantId: userId, globalClientId: gc.id, scope: 'client' },
@@ -891,6 +930,9 @@ router.get('/google/callback', async (req, res) => {
       id: local.id, email: gc.email,
       first_name: gc.first_name, last_name: gc.last_name,
       phone: local.phone || null,
+      birth_date: local.birth_date || gc.birth_date || null,
+      postal_code: local.postal_code || gc.postal_code || null,
+      city:        local.city        || gc.city        || null,
       avatar_url: gc.avatar_url || null,
       global_client_id: gc.id, has_global_account: true,
     };

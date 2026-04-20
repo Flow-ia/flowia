@@ -1047,7 +1047,7 @@ router.post('/:slug/client/register', async (req, res) => {
          global_client_id = EXCLUDED.global_client_id,
          password_hash    = EXCLUDED.password_hash,
          birth_date       = COALESCE(EXCLUDED.birth_date, client_accounts.birth_date)
-       RETURNING id, email, first_name, last_name, phone, birth_date, global_client_id`,
+       RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id`,
       [userId, emailLow, hash, first_name, last_name||'', phone||null, bd, gcId]
     );
     const client = rows[0];
@@ -1192,6 +1192,9 @@ router.post('/:slug/client/login', async (req, res) => {
         first_name:       local.first_name,
         last_name:        local.last_name,
         phone:            local.phone,
+        birth_date:       local.birth_date || null,
+        postal_code:      local.postal_code || null,
+        city:             local.city || null,
         global_client_id: local.global_client_id,
         has_global_account: !!local.global_client_id,
       },
@@ -1379,7 +1382,7 @@ router.put('/:slug/client/profile', async (req, res) => {
     // Email volontairement NON modifiable ici. Le changement d'email passe
     // par POST /api/global-clients/me/change-email (code envoyé à l'email
     // actuel). On accepte le champ pour backcompat mais on l'ignore.
-    const { first_name, last_name, phone, birth_date } = req.body;
+    const { first_name, last_name, phone, birth_date, postal_code, city } = req.body;
     if (!first_name?.trim() || !last_name?.trim()) {
       return res.status(400).json({ error: 'Prénom et nom sont requis.' });
     }
@@ -1401,10 +1404,17 @@ router.put('/:slug/client/profile', async (req, res) => {
     const vals = [first_name.trim(), last_name.trim(), phone?.trim() || null];
     let idx = 4;
     if (bdParam !== undefined) { sets.push(`birth_date = $${idx++}`); vals.push(bdParam); }
+    // postal_code / city : undefined = ne pas toucher, '' / null = effacer
+    const pcParam = postal_code === undefined ? undefined
+                  : (postal_code === null || postal_code === '' ? null : String(postal_code).trim().slice(0,20));
+    const cityParam = city === undefined ? undefined
+                    : (city === null || city === '' ? null : String(city).trim().slice(0,120));
+    if (pcParam   !== undefined) { sets.push(`postal_code = $${idx++}`); vals.push(pcParam); }
+    if (cityParam !== undefined) { sets.push(`city = $${idx++}`);         vals.push(cityParam); }
     vals.push(decoded.clientId);
     const updated = await pool.query(
       `UPDATE client_accounts SET ${sets.join(', ')} WHERE id = $${idx}
-       RETURNING id, first_name, last_name, email, phone, birth_date`,
+       RETURNING id, first_name, last_name, email, phone, birth_date, postal_code, city`,
       vals
     );
     if (!updated.rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
@@ -1422,7 +1432,9 @@ router.put('/:slug/client/profile', async (req, res) => {
         const gcSets = ['first_name=$1', 'last_name=$2', 'phone=$3'];
         const gcVals = [first_name.trim(), last_name.trim(), phone?.trim()||null];
         let gi = 4;
-        if (bdParam !== undefined) { gcSets.push(`birth_date=$${gi++}`); gcVals.push(bdParam); }
+        if (bdParam   !== undefined) { gcSets.push(`birth_date=$${gi++}`);  gcVals.push(bdParam); }
+        if (pcParam   !== undefined) { gcSets.push(`postal_code=$${gi++}`); gcVals.push(pcParam); }
+        if (cityParam !== undefined) { gcSets.push(`city=$${gi++}`);        gcVals.push(cityParam); }
         gcVals.push(gcId);
         await pool.query(
           `UPDATE global_clients SET ${gcSets.join(', ')} WHERE id=$${gi}`,
@@ -1433,7 +1445,9 @@ router.put('/:slug/client/profile', async (req, res) => {
         const faSets = ['first_name=$1', 'last_name=$2', 'phone=$3'];
         const faVals = [first_name.trim(), last_name.trim(), phone?.trim()||null];
         let fi = 4;
-        if (bdParam !== undefined) { faSets.push(`birth_date=$${fi++}`); faVals.push(bdParam); }
+        if (bdParam   !== undefined) { faSets.push(`birth_date=$${fi++}`);  faVals.push(bdParam); }
+        if (pcParam   !== undefined) { faSets.push(`postal_code=$${fi++}`); faVals.push(pcParam); }
+        if (cityParam !== undefined) { faSets.push(`city=$${fi++}`);        faVals.push(cityParam); }
         faVals.push(gcId, decoded.clientId);
         await pool.query(
           `UPDATE client_accounts SET ${faSets.join(', ')}
@@ -1564,12 +1578,19 @@ router.post('/:slug/check-promo', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // GET /:slug/client/auth/google — redirige vers Google
+// Query param optionnel ?ref=CODE → encodé dans le state pour que le callback
+// applique le même traitement parrainage que /client/register classique.
 router.get('/:slug/client/auth/google', (req, res) => {
   const { slug } = req.params;
+  const ref = String(req.query.ref || '').trim().toUpperCase();
   const clientId    = process.env.GOOGLE_CLIENT_ID;
   const BACKEND_URL = process.env.BACKEND_URL || 'https://flowia-backend.onrender.com';
   // Callback générique — 1 seule URL enregistrée chez Google
   const redirectUri = `${BACKEND_URL}/api/auth/google/callback`;
+
+  // state = slug seul OU slug|REFCODE (séparateur | car ni slug ni code ne
+  // peuvent en contenir). Parsé côté callback.
+  const stateVal = ref ? `${slug}|${ref}` : slug;
 
   const params = new URLSearchParams({
     client_id:     clientId,
@@ -1578,7 +1599,7 @@ router.get('/:slug/client/auth/google', (req, res) => {
     scope:         'openid email profile',
     access_type:   'online',
     prompt:        'select_account',
-    state:         slug,   // slug transmis via state OAuth
+    state:         stateVal,
   });
 
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);

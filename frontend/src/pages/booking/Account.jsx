@@ -55,9 +55,12 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     if (initialEmail) handleEmailChange(initialEmail);
   }, []);
 
-  // Connexion via Google — ouvre une popup
+  // Connexion via Google — ouvre une popup.
+  // Passe le code parrainage (si inscription via lien ?ref=) pour que la
+  // logique backend applique welcome email + liens parrainage, comme le
+  // /client/register classique.
   const loginWithGoogle = () => {
-    const url = pubApi.googleAuthUrl(slug);
+    const url = pubApi.googleAuthUrl(slug, referralCode || undefined);
     const popup = window.open(url, 'google_auth',
       'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
       Math.round((window.screen.width - 500) / 2)

@@ -933,12 +933,16 @@ function MiniRow({ label, value, theme, accent }) {
 
 function TabLoyalty({ theme }) {
   const isDark = theme.mode === 'dark';
+  const LOYALTY_PAGE_SIZE = 5;
   const [program, setProgram]   = useState(null);
   const [clients, setClients]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [editProg, setEditProg] = useState(false);
   const [saving, setSaving]     = useState(false);
   const [search, setSearch]     = useState('');
+  // Pagination côté client (5/page) — la liste reste petite en mémoire mais
+  // on n'affiche qu'un slice pour alléger le DOM et améliorer l'UX.
+  const [page, setPage] = useState(1);
   const [stampModal, setStampModal] = useState(null);
   const [stampEmail, setStampEmail] = useState('');
   const [stampName, setStampName]   = useState('');
@@ -984,6 +988,9 @@ function TabLoyalty({ theme }) {
     try { const p = await loyaltyApi.saveProgram(program); setProgram(p); setEditProg(false); }
     finally { setSaving(false); }
   };
+
+  // Reset à la page 1 quand la recherche change ou quand la liste rétrécit.
+  useEffect(() => { setPage(1); }, [search, clients.length]);
 
   const loadHistory = async () => {
     setHistLoad(true);
@@ -1249,12 +1256,12 @@ function TabLoyalty({ theme }) {
         </div>
       ) : (
         <div style={{ background:theme.card, borderRadius:18, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
-          {clients.map((cl,i) => {
+          {clients.slice((page-1)*LOYALTY_PAGE_SIZE, page*LOYALTY_PAGE_SIZE).map((cl,i,arr) => {
             const isPoints = (program?.loyalty_mode||'stamps') === 'points';
             const currentVal = isPoints ? (parseFloat(cl.points)||0) : (parseInt(cl.stamps)||0);
             const pct = program ? Math.min(100, (currentVal / (program.stamps_required||10))*100) : 0;
             return (
-              <div key={cl.id} style={{ padding:'14px 16px', borderBottom: i<clients.length-1?`1px solid ${theme.separator}`:'none' }}>
+              <div key={cl.id} style={{ padding:'14px 16px', borderBottom: i<arr.length-1?`1px solid ${theme.separator}`:'none' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
                   <div style={{ width:36, height:36, borderRadius:12, background:'rgba(245,158,11,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:15, color:'#f59e0b', flexShrink:0 }}>
                     {(cl.client_name||cl.client_email||'?').charAt(0).toUpperCase()}
@@ -1292,6 +1299,25 @@ function TabLoyalty({ theme }) {
               </div>
             );
           })}
+          {clients.length > LOYALTY_PAGE_SIZE && (() => {
+            const total = clients.length;
+            const pages = Math.max(1, Math.ceil(total / LOYALTY_PAGE_SIZE));
+            const cur   = Math.min(page, pages);
+            const from  = (cur - 1) * LOYALTY_PAGE_SIZE + 1;
+            const to    = Math.min(cur * LOYALTY_PAGE_SIZE, total);
+            return (
+              <div style={{ padding:'12px 16px', borderTop:`1px solid ${theme.separator}`, display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                <p style={{ fontSize:12, color:theme.muted, margin:0 }}>{from}–{to} sur {total}</p>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={cur<=1}
+                    style={{ padding:'6px 12px', borderRadius:8, border:`1px solid ${theme.border}`, background:isDark?'rgba(255,255,255,0.04)':'#f5f5f4', color:theme.text, fontWeight:700, fontSize:12, cursor:cur<=1?'not-allowed':'pointer', opacity:cur<=1?0.4:1 }}>← Préc.</button>
+                  <span style={{ padding:'6px 10px', fontSize:12, fontWeight:700, color:theme.muted }}>{cur} / {pages}</span>
+                  <button onClick={() => setPage(p => Math.min(pages, p+1))} disabled={cur>=pages}
+                    style={{ padding:'6px 12px', borderRadius:8, border:`1px solid ${theme.border}`, background:isDark?'rgba(255,255,255,0.04)':'#f5f5f4', color:theme.text, fontWeight:700, fontSize:12, cursor:cur>=pages?'not-allowed':'pointer', opacity:cur>=pages?0.4:1 }}>Suiv. →</button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

@@ -1006,6 +1006,12 @@ async function initDB() {
   // Date de naissance optionnelle sur les deux tables clients.
   await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS birth_date DATE`);
   await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS birth_date DATE`);
+  // Code postal + ville optionnels — utilisés pour segmentation marketing
+  // (IA, campagnes géolocalisées) et anniversaire/parrainage secondaire.
+  await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20)`);
+  await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS city VARCHAR(120)`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS postal_code VARCHAR(20)`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS city VARCHAR(120)`);
   // Anti-fraude : date/heure du dernier reward anniversaire émis pour ce client.
   // Empêche qu'un client qui change sa date de naissance après avoir reçu une
   // offre ne puisse en recevoir une seconde avant ~330 jours (rolling window
