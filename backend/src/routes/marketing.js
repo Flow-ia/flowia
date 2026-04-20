@@ -3,6 +3,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { sendSMS, SMS_PRICE, chunk, sleep } = require('../utils/messenger');
+const { appendUnsubscribeSms } = require('../utils/unsubscribe');
 const router = express.Router();
 router.use(authMiddleware);
 
@@ -119,7 +120,7 @@ router.post('/plan/launch', async (req, res) => {
     // pouvait recevoir 2 SMS le même jour via 2 plans lancés consécutifs).
     const { rows: clients } = await pool.query(`
       SELECT
-        ca.id, ca.first_name, ca.last_name, ca.phone,
+        ca.id, ca.first_name, ca.last_name, ca.phone, ca.unsubscribe_token,
         CASE
           WHEN stats.last_visit IS NULL OR stats.last_visit < (CURRENT_DATE - INTERVAL '90 days') THEN 'lost'
           WHEN stats.last_visit < (CURRENT_DATE - INTERVAL '30 days') THEN 'at_risk'
@@ -218,8 +219,10 @@ router.post('/plan/launch', async (req, res) => {
               .replace(/\{prenom\}/gi, firstName)
               + (template.includes(promoCodesBySegment[seg].code) ? '' : ' Code: ' + promoCodesBySegment[seg].code);
             const smsMsg = msg.length > 160 ? msg.slice(0, 157) + '...' : msg;
+            // Audit Z : injection lien unsubscribe (RGPD).
+            const finalMsg = appendUnsubscribeSms(smsMsg, client.unsubscribe_token);
             try {
-              const result = await sendSMS(client.phone, smsMsg);
+              const result = await sendSMS(client.phone, finalMsg);
               await pool.query(
                 `INSERT INTO message_log (user_id, campaign_id, phone, channel, cost, status)
                  VALUES ($1,$2,$3,'sms',$4,$5)`,

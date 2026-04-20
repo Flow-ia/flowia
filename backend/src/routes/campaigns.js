@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { sendSMS, sleep, chunk, SMS_COST, SMS_PRICE } = require('../utils/messenger');
 const { sendMarketingEmail, getEmailQuota } = require('../utils/emailSender');
+const { appendUnsubscribeSms } = require('../utils/unsubscribe');
 const router = express.Router();
 
 // Toutes les routes nécessitent une authentification commerçant
@@ -35,6 +36,7 @@ async function getTopClients(userId, limit, needPhone, needEmail) {
   const { rows } = await pool.query(`
     SELECT
       ca.id, ca.email, ca.phone, ca.first_name, ca.last_name,
+      ca.unsubscribe_token,
       COALESCE(ca.total_visits, 0)      AS visits,
       COALESCE(ca.total_spent, 0)::float AS spent,
       COALESCE(stats.paid_appts, 0)     AS paid_appts,
@@ -109,6 +111,7 @@ async function getClientSegments(userId, excludeRecentSms = true) {
     )
     SELECT
       ca.id, ca.first_name, ca.last_name, ca.phone, ca.email,
+      ca.unsubscribe_token,
       COALESCE(ca.total_visits, 0)::int    AS visits,
       COALESCE(ca.total_spent, 0)::float   AS spent,
       stats.last_visit,
@@ -177,6 +180,7 @@ async function getClientSegmentsWithHabits(userId) {
     )
     SELECT
       ca.id, ca.first_name, ca.last_name, ca.phone, ca.email,
+      ca.unsubscribe_token,
       COALESCE(ca.total_visits, 0)::int    AS visits,
       COALESCE(ca.total_spent, 0)::float   AS spent,
       h.pref_dow, h.pref_slot, h.visit_count, h.last_visit,
@@ -680,7 +684,10 @@ router.post('/send', async (req, res) => {
       const batches = chunk(smsClients, 10);
       for (const batch of batches) {
         for (const client of batch) {
-          const result = await sendSMS(client.phone, message_sms);
+          // Audit Z : injection lien unsubscribe (RGPD). Si pas de token
+          // (clients legacy pas encore backfillés), on envoie sans.
+          const finalMsg = appendUnsubscribeSms(message_sms, client.unsubscribe_token);
+          const result = await sendSMS(client.phone, finalMsg);
           // R8 : log cost = SMS_PRICE (ce que paie le commerçant) et non
           // SMS_COST (coût brut Brevo). Cohérent avec marketing.js + débit.
           await pool.query(
@@ -737,7 +744,8 @@ router.post('/send', async (req, res) => {
               client.email,
               `${client.first_name || ''} ${client.last_name || ''}`.trim(),
               msg,
-              promo_code || null
+              promo_code || null,
+              client.unsubscribe_token
             );
             sentEmail++;
 

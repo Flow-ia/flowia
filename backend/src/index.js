@@ -759,6 +759,7 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               businessEmail: camp.biz_email,
               businessPhone: camp.biz_phone,
               businessAddress: camp.biz_address,
+              unsubscribeToken: c.unsubscribe_token,
             });
             await incrGlobalEmailCount();
             await incrUserEmailCount(camp.user_id);

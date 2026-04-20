@@ -779,7 +779,8 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
 }
 
 // ── Email anniversaire client ─────────────────────────────────────────────
-async function sendBirthdayPromo({ to, clientName, businessName, code, type, value, validUntil, customMessage, businessEmail, businessPhone, businessAddress }) {
+// Audit Z : accepte `unsubscribeToken` pour conformité RGPD.
+async function sendBirthdayPromo({ to, clientName, businessName, code, type, value, validUntil, customMessage, businessEmail, businessPhone, businessAddress, unsubscribeToken }) {
   const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
   const firstName = (clientName || '').split(' ')[0] || '';
   const subject = `Joyeux anniversaire ${firstName ? firstName + ' ' : ''}— ${discountStr} offert par ${businessName}`;
@@ -827,6 +828,7 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
     <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
       <p style="color:#94a3b8;font-size:11px;margin:0;">Offre anniversaire <strong style="color:#ec4899;">${businessName}</strong></p>
     </div>
+    ${require('./unsubscribe').unsubscribeEmailHtml(unsubscribeToken)}
   </div>
 </body></html>`;
 

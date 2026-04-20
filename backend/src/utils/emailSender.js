@@ -63,10 +63,15 @@ async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 
 }
 
 // Email marketing campagne code promo
-async function sendMarketingEmail(clientEmail, clientName, message, promoCode) {
+// Audit Z : accepte un `unsubscribeToken` pour injecter le lien de
+// désabonnement 1-clic dans le footer (RGPD).
+async function sendMarketingEmail(clientEmail, clientName, message, promoCode, unsubscribeToken = null) {
   const subject = promoCode
     ? `Offre exclusive : ${promoCode} vous attend !`
     : 'Une offre exclusive pour vous';
+
+  const { unsubscribeEmailHtml } = require('./unsubscribe');
+  const unsubFooter = unsubscribeEmailHtml(unsubscribeToken);
 
   const htmlContent = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -85,6 +90,7 @@ async function sendMarketingEmail(clientEmail, clientName, message, promoCode) {
   <div class="body">
     <p style="font-size:16px;color:#333;">Bonjour ${clientName || 'cher client'},</p>
     <div class="message">${message}</div>
+    ${unsubFooter}
   </div>
   <div class="footer">
     <p>Vous recevez cet email car vous etes client de notre etablissement.</p>
