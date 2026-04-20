@@ -613,11 +613,13 @@ router.post('/:slug/book', async (req, res) => {
       }
     }
 
-    // Vérif délai minimum
-    const apptDt = new Date(`${date}T${start_time}`);
-    const minDt  = new Date(Date.now() + (min_notice_hours || 1) * 3600000);
+    // AUDIT booking #5 : harmonise min_notice_hours avec getSlots
+    // (parseInt(...)||0 au lieu de ||1). Si merchant configure 0 → accepté.
+    const apptDt     = new Date(`${date}T${start_time}`);
+    const minNoticeH = Math.max(0, parseInt(min_notice_hours) || 0);
+    const minDt      = new Date(Date.now() + minNoticeH * 3600000);
     if (apptDt < minDt)
-      return res.status(400).json({ error: `Réservation impossible moins de ${min_notice_hours}h à l'avance.` });
+      return res.status(400).json({ error: `Réservation impossible moins de ${minNoticeH}h à l'avance.` });
 
     // Infos service
     const { rows: svc } = await pool.query(
@@ -762,13 +764,23 @@ router.post('/:slug/book', async (req, res) => {
       referralSkipReason = 'promo_used';
     }
 
-    // Insertion
+    // AUDIT booking #1 #2 : INSERT conditionnel anti-race-double-booking.
+    // WHERE NOT EXISTS (overlap avec RDV actif) → si race entre 2 POST
+    // simultanés sur le même créneau, un seul gagne (INSERT atomique PG),
+    // l'autre reçoit 0 rows → 409 explicite. Remplace le check SELECT +
+    // INSERT en 2 étapes qui laissait une fenêtre de ms.
     const { rows } = await pool.query(
       `INSERT INTO appointments
          (user_id, service_id, employee_id, client_id, client_name, client_email,
           client_phone, date, start_time, end_time, duration_minutes, notes, status,
           total_amount, original_amount, promo_code_id, promo_code, discount_amount)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17)
+       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17
+        WHERE NOT EXISTS (
+          SELECT 1 FROM appointments
+           WHERE user_id=$1 AND employee_id=$3 AND date=$8
+             AND status NOT IN ('cancelled','no_show')
+             AND NOT (end_time <= $9::time OR start_time >= $10::time)
+        )
        RETURNING id, user_id, service_id, employee_id, client_id,
          client_name, client_email, client_phone,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
@@ -780,7 +792,23 @@ router.post('/:slug/book', async (req, res) => {
        client_phone||null, date, start_time, end_time, duration, notes||null,
        finalPrice, originalAmt, promoCodeId, promoCodeStr, discountAmt]
     );
+    if (!rows.length) {
+      // Race perdue : un autre client a pris ce créneau entre la vérif et l'INSERT
+      return res.status(409).json({
+        error: "Ce créneau vient d'être réservé par un autre client. Merci de choisir un autre horaire.",
+        code: 'SLOT_TAKEN',
+      });
+    }
     const appt = rows[0];
+    // Invalide le cache slots pour ce date (memCache 30s) — sinon un autre
+    // client chargeant /slots dans les 30s voit encore le créneau libre.
+    try {
+      const { rows: bsC } = await pool.query('SELECT slug FROM booking_settings WHERE user_id=$1', [userId]);
+      const slugC = bsC[0]?.slug;
+      if (slugC) {
+        global.memCache?.del(`slots:${slugC}:${date}:${finalEmpId || 'any'}:${service_id}`);
+      }
+    } catch {}
 
     // Marquer le code promo comme utilisé (uses_count + is_active si max_uses atteint)
     if (promoCodeId) {
