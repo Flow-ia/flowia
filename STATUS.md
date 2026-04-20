@@ -27,9 +27,19 @@ décomposés :
 Plus aucun fichier frontend > 1000 lignes. Le plus gros restant est
 `booking-page/index.jsx` (936 l, orchestrateur inévitable).
 
-**Backend gros fichiers** (audit terminé, refactor non prioritaire) :
-- `booking.js` (1337), `global-clients.js` (1273), `db/index.js` (1221),
-  `campaigns.js` (1140), `auth.js` (1011)
+**Refactor backend en cours** — décomposition des gros routers :
+- ✅ `booking.js` (1337 l) → `routes/booking/` (slug, settings, services,
+  appointments, clients, availability, employee-hours, employee-agenda,
+  employee-permissions, checkout, breaks, employee-slots) — 32 routes
+  préservées, boot OK (`7155540`)
+- ✅ `global-clients.js` (1273 l) → `routes/global-clients/` (auth, profile,
+  change-credentials, referral, appointments, visits, loyalty, account) —
+  22 routes préservées, boot OK (`c340fe1`)
+
+**Reste à décomposer (optionnel, non prioritaire)** :
+- `db/index.js` (1221) — schéma SQL inline, refactor sensible
+- `campaigns.js` (1140) — router marketing campagnes
+- `auth.js` (1011) — router auth merchant
 
 ## Bugs / dette non traités
 
