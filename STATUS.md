@@ -12,18 +12,20 @@ auditées : error hygiene, PIN admin, bounds, normalisation email, IDOR,
 whitelists, rate-limiting dédiés, CNIL/RGPD opt-in marketing, security
 headers (CSP/HSTS/Referrer-Policy).
 
-**Refactor frontend en cours** — décomposition des gros fichiers :
-- ✅ `TabMarketing.jsx` (2553 l) → `settings/marketing/`
-- ✅ `Agenda.jsx` (2386 l) → `agenda/`
-- ✅ `BookingPage.jsx` (2203 l) → `booking-page/` (constants, helpers, ReferralBanner, steps/ Step1Home→Step6Confirm, views/ Blocked/MyAppts/Parrain/Success) — commit `a4ac68a`, build OK, 22 routes /book/:slug/* préservées
-- ✅ `EmployeeAgenda.jsx` (2183 l) → `employee-agenda/` (commit `d8109cf`)
+**Refactor frontend TERMINÉ** — tous les fichiers >1000 lignes ont été
+décomposés :
+- ✅ `TabMarketing.jsx` (2553 l) → `settings/marketing/` (`251c624`)
+- ✅ `Agenda.jsx` (2386 l) → `agenda/` (`d4346b3`)
+- ✅ `EmployeeAgenda.jsx` (2183 l) → `employee-agenda/` (`d8109cf`)
+- ✅ `BookingPage.jsx` (2203 l) → `booking-page/` (`a4ac68a`)
+- ✅ `MyAppointments.jsx` (1895 l) → `booking/my-appointments/` (`80bc366`)
+- ✅ `TabEquipe.jsx` (1290 l) → `Settings/equipe/` (`b928814`)
+- ✅ `Account.jsx` (1243 l) → `booking/account/` (`a4a65bc`)
+- ✅ `ClientsPage.jsx` (1138 l) → `clients/` (`067fed3`)
+- ✅ `TabCategories.jsx` (1095 l) → `Settings/categories/` (`bb79dac`)
 
-**Reste à décomposer (>1000 lignes)** :
-- `MyAppointments.jsx` (1895)
-- `TabEquipe.jsx` (1290)
-- `Account.jsx` (1243)
-- `ClientsPage.jsx` (1138)
-- `TabCategories.jsx` (1095)
+Plus aucun fichier frontend > 1000 lignes. Le plus gros restant est
+`booking-page/index.jsx` (936 l, orchestrateur inévitable).
 
 **Backend gros fichiers** (audit terminé, refactor non prioritaire) :
 - `booking.js` (1337), `global-clients.js` (1273), `db/index.js` (1221),
