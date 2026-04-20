@@ -125,10 +125,35 @@ router.post('/', async (req, res) => {
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
 
+    // Audit caisse : si un employee_id est fourni, il DOIT avoir can_encash.
+    // Protection contre un employé qui contourne le PIN client-side en
+    // postant directement via devtools/fetch avec son propre employee_id.
+    // NB : si aucun employee_id n'est fourni, on suppose que le commerçant
+    // (JWT) encaisse lui-même — aucun contrôle supplémentaire possible
+    // à ce niveau sans middleware PIN dédié à la caisse.
+    if (employee_id && type === 'revenue') {
+      const { rows: empR } = await pool.query(
+        'SELECT can_encash FROM employees WHERE id=$1 AND user_id=$2',
+        [employee_id, req.user.userId]
+      );
+      if (!empR.length || !empR[0].can_encash) {
+        return res.status(403).json({
+          error: "Cet employé n'a pas la permission d'encaisser.",
+          code: 'NO_ENCASH_PERMISSION',
+        });
+      }
+    }
+
     // R1 : idempotency key — si le client a envoyé le même UUID (double-clic,
     // retry réseau, React StrictMode), on renvoie la transaction déjà créée
     // au lieu d'en créer une nouvelle.
     const idemKey = String(idempotency_key || '').trim().slice(0, 64) || null;
+    // Normalisation client_email : LOWER + TRIM partout pour éviter la
+    // fragmentation fidélité entre 'JOHN@X.COM' et 'john@x.com'. Les lectures
+    // utilisent déjà LOWER() côté agenda/loyalty, on aligne les writes.
+    const clientEmailNorm = (typeof client_email === 'string' && client_email.trim())
+      ? client_email.trim().toLowerCase()
+      : null;
     if (idemKey) {
       const { rows: ex } = await pool.query(
         `SELECT id, type, amount, description, category_id, employee_id,
@@ -208,11 +233,11 @@ router.post('/', async (req, res) => {
     // Résoudre global_client_id depuis l'email (cross-commerçant → passage sur place
     // visible sur le compte client connecté).
     let globalClientId = null;
-    if (client_email) {
+    if (clientEmailNorm) {
       try {
         const { rows: gc } = await pool.query(
-          'SELECT id FROM global_clients WHERE LOWER(email)=LOWER($1) LIMIT 1',
-          [client_email]
+          'SELECT id FROM global_clients WHERE LOWER(email)=$1 LIMIT 1',
+          [clientEmailNorm]
         );
         if (gc.length) globalClientId = gc[0].id;
       } catch (e) { console.warn('[TX global_client lookup]', e.message); }
@@ -238,7 +263,7 @@ router.post('/', async (req, res) => {
        employee_id || null, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
-       client_email || null, client_note || null, qtyTotal, globalClientId,
+       clientEmailNorm, client_note || null, qtyTotal, globalClientId,
        idemKey]
     );
     if (!insertResult.rows.length && idemKey) {
@@ -291,13 +316,13 @@ router.post('/', async (req, res) => {
     global.memCache?.del(`txs:${req.user.userId}`);
 
     // Sauvegarder la note client dans client_notes si fournie
-    if (client_note && client_note.trim() && (client_email || client_name)) {
+    if (client_note && client_note.trim() && (clientEmailNorm || client_name)) {
       await pool.query(
         `INSERT INTO client_notes
            (user_id, client_email, client_name, note_text, appointment_id,
             created_by_employee_id, created_by_name)
          VALUES ($1,$2,$3,$4,NULL,$5,$6)`,
-        [req.user.userId, client_email || null, client_name || null,
+        [req.user.userId, clientEmailNorm, client_name || null,
          client_note.trim(), employee_id || null, null]
       ).catch(e => console.error('[CLIENT NOTE ERR]', e.message));
     }
@@ -326,7 +351,7 @@ router.post('/', async (req, res) => {
       }).catch(e => console.error('[PROMO COUNT ERR]', e.message));
 
       // Log traçabilité usage avec montant transaction
-      const logEmail = client_email || null;
+      const logEmail = clientEmailNorm;
       const logName  = client_name  || null;
       await pool.query(
         `INSERT INTO promo_usage_logs
@@ -378,18 +403,21 @@ router.post('/', async (req, res) => {
     // ── Incrément automatique fidélité ─────────────────────────────────────
     if (tx.type === 'revenue') {
       try {
-        let clientEmail = req.body.client_email || null;
+        let clientEmail = clientEmailNorm;
         let clientName  = req.body.client_name  || null;
         if (!clientEmail && req.body.appointment_id) {
           const { rows: appt } = await pool.query(
             'SELECT client_email, client_name FROM appointments WHERE id=$1',
             [req.body.appointment_id]
           );
-          if (appt.length) { clientEmail = appt[0].client_email; clientName = appt[0].client_name; }
+          if (appt.length) {
+            clientEmail = (appt[0].client_email || '').toLowerCase().trim() || null;
+            clientName = appt[0].client_name;
+          }
         }
         if (clientEmail) {
           // Les transactions manuelles (caisse) = source 'physical'
-          await incrementStamps(req.user.userId, clientEmail, clientName, 1, 'physical', amount || 0);
+          await incrementStamps(req.user.userId, clientEmail, clientName, 1, 'physical', amt || 0);
           // Auto-créer/mettre à jour la fiche client locale
           try {
             const parts = (clientName || '').split(' ');
@@ -450,6 +478,11 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
 
     await client.query('BEGIN');
 
+    // Normalisation client_email (LOWER+TRIM) cohérente avec POST
+    const clientEmailNormPut = (typeof client_email === 'string' && client_email.trim())
+      ? client_email.trim().toLowerCase()
+      : null;
+
     const { rows } = await client.query(
       `UPDATE transactions SET
         type=$1, amount=$2, description=$3, category_id=$4, employee_id=$5,
@@ -463,7 +496,7 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
          datetime_iso, appointment_id, source, created_at`,
       [type, amount, description || null, category_id || null, employee_id || null,
        pmStored, date, time || null, datetime_iso || null,
-       client_email || null,
+       clientEmailNormPut,
        client_note != null ? client_note : before.client_note,
        qtyTotal,
        req.params.id, req.user.userId]
