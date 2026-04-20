@@ -103,7 +103,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - Backend syntax check `node -c public-booking.js` → OK.
 
 ### Commit
-- `<hash-à-remplir>` feat(qr) + audit(front) R: quick signup via QR + postMessage origin + error hygiene + input validation
+- `a75fe5b` feat(qr) + audit(front) R: quick signup /j/:slug + postMessage origin + error hygiene + input validation
 
 ---
 
