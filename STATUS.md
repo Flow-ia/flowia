@@ -63,7 +63,7 @@ dans `git log` (le fichier a été réinitialisé).
   existants ; fenêtre de 15 min ; impact limité.
 
 ### Commit
-- `<TBD>` audit(auth) N: anti-enumeration + strict email + postMessage origin
+- `9199a07` audit(auth) N: anti-enumeration + strict email + postMessage origin
 
 ---
 
