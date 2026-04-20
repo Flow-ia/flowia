@@ -415,6 +415,14 @@ async function initDB() {
       meta JSONB
     );
   `);
+  // Index pour accélérer les lookups dedup des crons reminder (le NOT EXISTS
+  // scannait la table en full avant). (user_id, type) couvre les 2 SELECT.
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_notif_log_user_type
+    ON notification_log(user_id, type)`);
+  // Index GIN pour les filtres sur meta->>'appointment_id'
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_notif_log_appt
+    ON notification_log((meta->>'appointment_id'))
+    WHERE meta ? 'appointment_id'`);
 
   // ── Feature 5 : Absences / congés employés ──────────────────────────────────
   await pool.query(`

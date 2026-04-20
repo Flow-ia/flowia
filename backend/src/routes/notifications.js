@@ -3,6 +3,7 @@ const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { sendDailyRecap, sendRdvReminder, sendEmployeeReminder } = require('../utils/email');
+const { notifyAppointmentReminder } = require('../utils/push');
 const router   = express.Router();
 router.use(authMiddleware);
 
@@ -170,7 +171,9 @@ async function runRdvReminders() {
 
       for (const delayMin of delays) {
         // Trouver les RDV confirmés dont le début est exactement dans ~delayMin minutes
-        // Fenêtre : [delayMin-1, delayMin+1] minutes pour tolérer le cron à 60s
+        // Fenêtre : [delayMin-1, delayMin+1] minutes pour tolérer le cron à 60s.
+        // #10 : dedup via meta (delay_min + appointment_id) au lieu du filtre
+        // type littéral qui ne matchait jamais (type réel contient un uuid).
         const { rows: appts } = await pool.query(
           `SELECT a.*, bs.name as service_name
            FROM appointments a
@@ -182,10 +185,11 @@ async function runRdvReminders() {
                  AND     NOW() + ($2 || ' minutes')::interval + interval '1 minute'
              AND NOT EXISTS (
                SELECT 1 FROM notification_log nl
-               WHERE nl.user_id=$1 AND nl.type=$3
+               WHERE nl.user_id=$1
                  AND nl.meta->>'appointment_id'=a.id::text
+                 AND (nl.meta->>'delay_min')::int = $2
              )`,
-          [cfg.user_id, delayMin, reminderKey('_', delayMin).replace('__', '')]
+          [cfg.user_id, delayMin]
         );
 
         for (const appt of appts) {
@@ -209,6 +213,12 @@ async function runRdvReminders() {
             startTime: appt.start_time,
             hoursBeforeLabel,
           });
+          // #12 : push + in-app au commerçant (abonnement, badge, sound).
+          // Non-bloquant — l'email est déjà envoyé, on n'empêche pas le log
+          // si le push échoue (ex: pas d'abonnement actif).
+          notifyAppointmentReminder(cfg.user_id, appt, delayMin).catch(e =>
+            console.warn('[RDV REMINDER push]', e.message)
+          );
           await pool.query(
             `INSERT INTO notification_log (user_id, type, meta) VALUES ($1,$2,$3)`,
             [cfg.user_id, logType, JSON.stringify({ appointment_id: appt.id, delay_min: delayMin })]
@@ -235,6 +245,8 @@ async function runEmployeeReminders() {
         .split(',').map(d => parseInt(d.trim())).filter(d => !isNaN(d) && d > 0);
 
       for (const delayMin of delays) {
+        // #11 : NOT EXISTS inline pour éviter N round-trips dans la boucle.
+        // Dedup via meta (delay_min + appointment_id + type-prefix).
         const { rows: appts } = await pool.query(
           `SELECT a.*, bs.name as service_name, e.name as employee_name, e.email as employee_email
            FROM appointments a
@@ -244,12 +256,20 @@ async function runEmployeeReminders() {
              AND e.email IS NOT NULL AND e.email != ''
              AND (a.date::text || ' ' || a.start_time::text)::timestamptz
                  BETWEEN NOW() + ($2 || ' minutes')::interval - interval '1 minute'
-                 AND     NOW() + ($2 || ' minutes')::interval + interval '1 minute'`,
+                 AND     NOW() + ($2 || ' minutes')::interval + interval '1 minute'
+             AND NOT EXISTS (
+               SELECT 1 FROM notification_log nl
+               WHERE nl.user_id=$1
+                 AND nl.type LIKE 'emp_reminder_%'
+                 AND nl.meta->>'appointment_id'=a.id::text
+                 AND (nl.meta->>'delay_min')::int = $2
+             )`,
           [cfg.user_id, delayMin]
         );
 
         for (const appt of appts) {
           const logType = `emp_reminder_${appt.id}_${delayMin}m`;
+          // Filet de sécurité (race du cron) — peu coûteux
           const { rows: already } = await pool.query(
             `SELECT id FROM notification_log WHERE user_id=$1 AND type=$2`, [cfg.user_id, logType]);
           if (already.length) continue;
