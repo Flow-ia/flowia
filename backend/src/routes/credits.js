@@ -59,7 +59,7 @@ router.get('/', async (req, res) => {
     q += ` ORDER BY cc.balance DESC, cc.updated_at DESC`;
     const { rows } = await pool.query(q, params);
     res.json(rows);
-  } catch (e) { console.error('[GET /credits]', e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[GET /credits]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // GET /api/credits/client/:clientId — crédit + historique
@@ -90,11 +90,12 @@ router.get('/client/:clientId', async (req, res) => {
       history = rows;
     }
     res.json({ credit: credits[0]||null, history, client: ca[0] });
-  } catch (e) { console.error('[GET /credits/client]', e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[GET /credits/client]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // POST /api/credits/grant — accorder un crédit
 router.post('/grant', async (req, res) => {
+  const db = await pool.connect();
   try {
     const uid = req.user.userId;
     const { client_id, client_email, client_name, amount, note, employee_id, appointment_id } = req.body;
@@ -105,7 +106,7 @@ router.post('/grant', async (req, res) => {
 
     let empName = null;
     if (employee_id) {
-      const { rows: empR } = await pool.query(
+      const { rows: empR } = await db.query(
         'SELECT name, can_grant_credit FROM employees WHERE id=$1 AND user_id=$2 AND is_active=TRUE',
         [employee_id, uid]
       );
@@ -116,25 +117,54 @@ router.post('/grant', async (req, res) => {
     }
 
     const amt = parseFloat(amount);
-    const credit = await getOrCreateCredit(uid, client.email, name);
-    const { rows: updated } = await pool.query(
-      'UPDATE client_credits SET balance=balance+$1, total_granted=total_granted+$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-      [amt, credit.id]
-    );
-    const { rows: ct } = await pool.query(
-      `INSERT INTO credit_transactions (user_id,credit_id,client_email,employee_id,employee_name,type,amount,note,appointment_id)
-       VALUES ($1,$2,$3,$4,$5,'grant',$6,$7,$8) RETURNING *`,
-      [uid, credit.id, client.email, employee_id||null, empName, amt, note||null, appointment_id||null]
-    );
-    res.json({
-      ok: true, credit: updated[0], credit_transaction: ct[0],
-      message: `Crédit de ${amt.toFixed(2)} € accordé. Solde : ${parseFloat(updated[0].balance).toFixed(2)} €`,
-    });
-  } catch (e) { console.error('[POST /credits/grant]', e); res.status(500).json({ error: e.message }); }
+    await db.query('BEGIN');
+    try {
+      // getOrCreateCredit n'utilise pas `db` directement — on upsert inline
+      // pour rester dans la transaction.
+      const email = client.email.toLowerCase().trim();
+      const { rows: creditRows } = await db.query(
+        `INSERT INTO client_credits (user_id, client_email, client_name, balance, total_granted, total_repaid)
+         VALUES ($1,$2,$3,0,0,0)
+         ON CONFLICT (user_id, client_email) DO UPDATE SET
+           client_name = COALESCE(NULLIF(EXCLUDED.client_name,''), client_credits.client_name),
+           updated_at  = NOW()
+         RETURNING *`,
+        [uid, email, name || email]
+      );
+      const credit = creditRows[0];
+      const { rows: updated } = await db.query(
+        'UPDATE client_credits SET balance=balance+$1, total_granted=total_granted+$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+        [amt, credit.id]
+      );
+      const { rows: ct } = await db.query(
+        `INSERT INTO credit_transactions (user_id,credit_id,client_email,employee_id,employee_name,type,amount,note,appointment_id)
+         VALUES ($1,$2,$3,$4,$5,'grant',$6,$7,$8) RETURNING *`,
+        [uid, credit.id, client.email, employee_id||null, empName, amt, note||null, appointment_id||null]
+      );
+      await db.query('COMMIT');
+      res.json({
+        ok: true, credit: updated[0], credit_transaction: ct[0],
+        message: `Crédit de ${amt.toFixed(2)} € accordé. Solde : ${parseFloat(updated[0].balance).toFixed(2)} €`,
+      });
+    } catch (txErr) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    }
+  } catch (e) {
+    console.error('[POST /credits/grant]', e);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    db.release();
+  }
 });
 
 // POST /api/credits/repay — remboursement → transaction en caisse
+// Critique : 3 opérations (INSERT tx + UPDATE balance + INSERT credit_tx)
+// doivent être atomiques. Avant, un crash entre INSERT tx et UPDATE balance
+// laissait une transaction de caisse non-adossée à un débit de crédit
+// (client payait et le solde ne baissait pas → double réclamation).
 router.post('/repay', async (req, res) => {
+  const db = await pool.connect();
   try {
     const uid = req.user.userId;
     const { client_id, client_email, amount, payment_method = 'cash', note, employee_id } = req.body;
@@ -147,7 +177,7 @@ router.post('/repay', async (req, res) => {
 
     let empRow = null;
     if (employee_id) {
-      const { rows: empR } = await pool.query(
+      const { rows: empR } = await db.query(
         'SELECT id, name, can_encash, can_repay_credit FROM employees WHERE id=$1 AND user_id=$2 AND is_active=TRUE',
         [employee_id, uid]
       );
@@ -159,59 +189,88 @@ router.post('/repay', async (req, res) => {
       empRow = empR[0];
     }
 
-    const { rows: credits } = await pool.query(
-      'SELECT * FROM client_credits WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)',
-      [uid, client.email]
+    // Date/heure TZ-aware (merchant) — avant: new Date() UTC sur Render →
+    // une transaction faite à 23h30 Paris était datée du lendemain.
+    const { rows: tzRows } = await db.query(
+      `SELECT COALESCE(bs.timezone,'Europe/Paris') AS tz,
+              TO_CHAR(NOW() AT TIME ZONE COALESCE(bs.timezone,'Europe/Paris'), 'YYYY-MM-DD') AS date_str,
+              TO_CHAR(NOW() AT TIME ZONE COALESCE(bs.timezone,'Europe/Paris'), 'HH24:MI')    AS time_str
+         FROM users u
+         LEFT JOIN booking_settings bs ON bs.user_id = u.id
+         WHERE u.id = $1`,
+      [uid]
     );
-    if (!credits[0]) return res.status(404).json({ error: 'Aucun crédit pour ce client.' });
+    const dateStr = tzRows[0]?.date_str || new Date().toLocaleDateString('sv-SE');
+    const timeStr = tzRows[0]?.time_str || new Date().toTimeString().substring(0, 5);
+    const nowIso  = new Date().toISOString();
 
-    const credit = credits[0];
-    const amt    = parseFloat(amount);
-    const balance = parseFloat(credit.balance);
-    if (amt > balance)
-      return res.status(400).json({ error: `Montant (${amt.toFixed(2)} €) supérieur au solde (${balance.toFixed(2)} €).` });
-
-    const now     = new Date();
-    const dateStr = now.toLocaleDateString('sv-SE');
-    const timeStr = now.toTimeString().substring(0, 5);
     const PAYMENT_LABELS = { cash:'Espèces', card:'Carte bancaire', transfer:'Virement', other:'Autre' };
-    const clientDisplay  = credit.client_name || client.email;
-    const desc = `Remboursement crédit — ${clientDisplay}${note ? ` · ${note}` : ''} (${PAYMENT_LABELS[payment_method]||payment_method})`;
 
-    // ── Transaction en caisse — revenue attribué à l'employé encaissant ───────
-    const { rows: txR } = await pool.query(
-      `INSERT INTO transactions
-         (user_id, type, amount, description, employee_id, payment_method,
-          date, time, datetime_iso, source, client_email)
-       VALUES ($1,'revenue',$2,$3,$4,$5,$6,$7,$8,'credit',$9)
-       RETURNING id, type,
-         TO_CHAR(date,'YYYY-MM-DD') AS date, TO_CHAR(time,'HH24:MI') AS time,
-         amount, description, payment_method, employee_id, source, client_email, created_at`,
-      [uid, amt, desc, employee_id||null, payment_method, dateStr, timeStr, now.toISOString(), client.email]
-    );
-    const tx = txR[0];
+    await db.query('BEGIN');
+    try {
+      // FOR UPDATE pour sérialiser deux remboursements concurrents du même
+      // crédit (sinon : lire balance=50, 2 threads soustraient 30 chacun →
+      // balance=-10 ou incohérence).
+      const { rows: credits } = await db.query(
+        'SELECT * FROM client_credits WHERE user_id=$1 AND LOWER(client_email)=LOWER($2) FOR UPDATE',
+        [uid, client.email]
+      );
+      if (!credits[0]) {
+        await db.query('ROLLBACK');
+        return res.status(404).json({ error: 'Aucun crédit pour ce client.' });
+      }
+      const credit = credits[0];
+      const amt    = parseFloat(amount);
+      const balance = parseFloat(credit.balance);
+      if (amt > balance) {
+        await db.query('ROLLBACK');
+        return res.status(400).json({ error: `Montant (${amt.toFixed(2)} €) supérieur au solde (${balance.toFixed(2)} €).` });
+      }
 
-    // ── Mettre à jour le solde ─────────────────────────────────────────────────
-    const { rows: updated } = await pool.query(
-      'UPDATE client_credits SET balance=balance-$1, total_repaid=total_repaid+$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-      [amt, credit.id]
-    );
+      const clientDisplay  = credit.client_name || client.email;
+      const desc = `Remboursement crédit — ${clientDisplay}${note ? ` · ${note}` : ''} (${PAYMENT_LABELS[payment_method]||payment_method})`;
 
-    // ── Historique crédit lié à la transaction ─────────────────────────────────
-    const { rows: ct } = await pool.query(
-      `INSERT INTO credit_transactions
-         (user_id,credit_id,client_email,employee_id,employee_name,type,amount,note,transaction_id,payment_method)
-       VALUES ($1,$2,$3,$4,$5,'repay',$6,$7,$8,$9) RETURNING *`,
-      [uid, credit.id, client.email, employee_id||null, empRow?.name||null, amt, note||null, tx.id, payment_method]
-    );
+      const { rows: txR } = await db.query(
+        `INSERT INTO transactions
+           (user_id, type, amount, description, employee_id, payment_method,
+            date, time, datetime_iso, source, client_email)
+         VALUES ($1,'revenue',$2,$3,$4,$5,$6,$7,$8,'credit',$9)
+         RETURNING id, type,
+           TO_CHAR(date,'YYYY-MM-DD') AS date, TO_CHAR(time,'HH24:MI') AS time,
+           amount, description, payment_method, employee_id, source, client_email, created_at`,
+        [uid, amt, desc, employee_id||null, payment_method, dateStr, timeStr, nowIso, client.email]
+      );
+      const tx = txR[0];
 
-    res.json({
-      ok: true, credit: updated[0], credit_transaction: ct[0], transaction: tx,
-      message: parseFloat(updated[0].balance) === 0
-        ? `✓ Crédit soldé intégralement (${amt.toFixed(2)} €)`
-        : `Paiement de ${amt.toFixed(2)} € enregistré. Reste dû : ${parseFloat(updated[0].balance).toFixed(2)} €`,
-    });
-  } catch (e) { console.error('[POST /credits/repay]', e); res.status(500).json({ error: e.message }); }
+      const { rows: updated } = await db.query(
+        'UPDATE client_credits SET balance=balance-$1, total_repaid=total_repaid+$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+        [amt, credit.id]
+      );
+
+      const { rows: ct } = await db.query(
+        `INSERT INTO credit_transactions
+           (user_id,credit_id,client_email,employee_id,employee_name,type,amount,note,transaction_id,payment_method)
+         VALUES ($1,$2,$3,$4,$5,'repay',$6,$7,$8,$9) RETURNING *`,
+        [uid, credit.id, client.email, employee_id||null, empRow?.name||null, amt, note||null, tx.id, payment_method]
+      );
+
+      await db.query('COMMIT');
+      res.json({
+        ok: true, credit: updated[0], credit_transaction: ct[0], transaction: tx,
+        message: parseFloat(updated[0].balance) === 0
+          ? `✓ Crédit soldé intégralement (${amt.toFixed(2)} €)`
+          : `Paiement de ${amt.toFixed(2)} € enregistré. Reste dû : ${parseFloat(updated[0].balance).toFixed(2)} €`,
+      });
+    } catch (txErr) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    }
+  } catch (e) {
+    console.error('[POST /credits/repay]', e);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    db.release();
+  }
 });
 
 // DELETE /api/credits/:id — supprimer (soldé seulement)
@@ -224,7 +283,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: `Solde restant : ${parseFloat(rows[0].balance).toFixed(2)} €. Soldez d'abord le crédit.` });
     await pool.query('DELETE FROM client_credits WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;
