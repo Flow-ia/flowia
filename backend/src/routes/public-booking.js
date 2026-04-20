@@ -532,14 +532,16 @@ router.get('/:slug/referral/:code', async (req, res) => {
 router.post('/:slug/book', async (req, res) => {
   try {
     const { rows: biz } = await pool.query(
-      `SELECT bs.user_id, bs.min_notice_hours, bs.require_account, u.business_name
+      `SELECT bs.user_id, bs.min_notice_hours, bs.advance_booking_days,
+              bs.require_account, u.business_name
        FROM booking_settings bs
        JOIN users u ON u.id = bs.user_id
        WHERE bs.slug=$1 AND bs.is_enabled=TRUE`,
       [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
-    const { user_id: userId, min_notice_hours, require_account, business_name } = biz[0];
+    const { user_id: userId, min_notice_hours, advance_booking_days,
+            require_account, business_name } = biz[0];
 
     const { service_id, employee_id, date, start_time,
             client_name, client_email, client_phone, notes, client_token } = req.body;
@@ -621,13 +623,36 @@ router.post('/:slug/book', async (req, res) => {
     if (apptDt < minDt)
       return res.status(400).json({ error: `Réservation impossible moins de ${minNoticeH}h à l'avance.` });
 
-    // Infos service
+    // AUDIT booking #4 : advance_booking_days enforced backend (avant :
+    // front-only, un bot pouvait réserver dans 5 ans).
+    const maxDays = Math.max(1, parseInt(advance_booking_days) || 30);
+    const maxDt   = new Date();
+    maxDt.setHours(23, 59, 59, 999);
+    maxDt.setDate(maxDt.getDate() + maxDays);
+    if (apptDt > maxDt) {
+      return res.status(400).json({
+        error: `Réservation possible jusqu'à ${maxDays} jours à l'avance.`,
+        code: 'ADVANCE_LIMIT',
+      });
+    }
+
+    // Infos service — AUDIT #8 : vérifie is_active (sinon UUID d'un service
+    // désactivé restait réservable si connu).
     const { rows: svc } = await pool.query(
-      'SELECT duration_minutes, name, price FROM booking_services WHERE id=$1 AND user_id=$2',
+      'SELECT duration_minutes, name, price, is_active FROM booking_services WHERE id=$1 AND user_id=$2',
       [service_id, userId]
     );
     if (!svc.length) return res.status(404).json({ error: 'Service introuvable.' });
+    if (svc[0].is_active === false) {
+      return res.status(400).json({ error: 'Ce service n\'est plus disponible.', code: 'SERVICE_INACTIVE' });
+    }
     const { duration_minutes: duration, name: svcName, price } = svc[0];
+    // AUDIT #14 : durée plafonnée à 8h (480 min) pour éviter un service
+    // mal configuré (ex: 9999 min → end_time franchit minuit et produit un
+    // TIME invalide).
+    if (!Number.isFinite(duration) || duration < 1 || duration > 480) {
+      return res.status(400).json({ error: 'Durée de service invalide.' });
+    }
 
     // Normaliser start_time : on ne garde que "HH:MM" (toStr retourne "HH:MM")
     const normalizedStartTime = String(start_time).trim().substring(0, 5);
@@ -635,6 +660,20 @@ router.post('/:slug/book', async (req, res) => {
     // Vérif créneau encore libre
     const empId = employee_id && !['null','undefined',''].includes(String(employee_id))
       ? employee_id : null;
+    // AUDIT #9 : si un empId spécifique est fourni, vérifier qu'il est
+    // actif ET visible dans le booking (sinon UUID d'employé caché
+    // réservable directement).
+    if (empId) {
+      const { rows: empCheck } = await pool.query(
+        `SELECT is_active, show_on_booking FROM employees
+          WHERE id=$1 AND user_id=$2`,
+        [empId, userId]
+      );
+      if (!empCheck.length) return res.status(404).json({ error: 'Employé introuvable.' });
+      if (!empCheck[0].is_active || !empCheck[0].show_on_booking) {
+        return res.status(400).json({ error: 'Cet employé n\'est pas disponible à la réservation.', code: 'EMPLOYEE_UNAVAILABLE' });
+      }
+    }
     // Récupérer min_notice_hours pour valider le créneau
     const { rows: bsR } = await pool.query(
       'SELECT min_notice_hours FROM booking_settings WHERE user_id=$1', [userId]
@@ -671,9 +710,17 @@ router.post('/:slug/book', async (req, res) => {
       if (!finalEmpId) return res.status(409).json({ error: 'Ce créneau n\'est plus disponible (tous les employés complets).' });
     }
 
-    // Calcul end_time
+    // Calcul end_time — AUDIT #15 : rejette si le RDV dépasse minuit
+    // (PG TIME ne peut stocker >24h, et sémantiquement un RDV qui traverse
+    // minuit est ambigu).
     const [h, mn] = normalizedStartTime.split(':').map(Number);
     const endMin  = h * 60 + mn + duration;
+    if (endMin >= 24 * 60) {
+      return res.status(400).json({
+        error: 'Le créneau dépasse minuit — impossible.',
+        code: 'SLOT_OVERFLOW',
+      });
+    }
     const end_time = `${String(Math.floor(endMin / 60)).padStart(2,'0')}:${String(endMin % 60).padStart(2,'0')}`;
 
     // Promo : revalider entièrement le code côté serveur avant l'INSERT
@@ -971,8 +1018,10 @@ router.post('/:slug/book', async (req, res) => {
 // Retourne : { exists, type: 'local'|'global'|'both'|null }
 router.get('/:slug/client/check-email', async (req, res) => {
   try {
+    // AUDIT #17 : filtre is_enabled même sur endpoints lecture — cohérence
+    // avec désactivation complète du booking.
     const { rows: biz } = await pool.query(
-      'SELECT user_id FROM booking_settings WHERE slug=$1', [req.params.slug]
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE', [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const userId = biz[0].user_id;
@@ -1234,8 +1283,9 @@ router.get('/:slug/client/appointments', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+    // AUDIT #17 : filtre is_enabled (cohérence désactivation).
     const { rows: biz } = await pool.query(
-      'SELECT user_id FROM booking_settings WHERE slug=$1', [req.params.slug]
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE', [req.params.slug]
     );
     if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
     const userId = biz[0].user_id;
