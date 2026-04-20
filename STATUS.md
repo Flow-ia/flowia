@@ -5,7 +5,99 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 23) : Audit CLIENTS / CRM — commits H, I, J
+## 🆕 Session 2026-04-20 (suite 24) : Hotfix prod + Audit ÉCONOMIQUE — K, L, M
+
+### 🔥 Hotfix prod (`3d35622`)
+Crash Render en boucle depuis le commit D (booking.js):
+```
+ReferenceError: Cannot access 'employeePinOptional' before initialization
+  at booking.js:60 (router.use before require)
+```
+`const` bindings sont hoistés mais en TDZ jusqu'à leur déclaration. Le
+`router.use(employeePinOptional)` ligne 60 appelait la référence avant
+que le `require` ligne 65 ne l'initialise → chaque worker mourrait au
+boot → port jamais bindé → deploy timeout Render.
+
+Fix : déplacement de tous les `require()` en haut du fichier (idiome
+Node standard), au-dessus des `router.use()`. Zéro changement
+comportemental.
+
+### Audit domaine économique/fraude (loyalty / promo / referrals / credits)
+13 bugs bruts détectés par agent, 9 retenus + 4 faux positifs écartés :
+- Montants négatifs credits.grant : déjà rejetés par `parseFloat(amount) <= 0`.
+- UPSERT `stamps=stamps+1` race : PG ON CONFLICT DO UPDATE est atomique
+  via row lock implicite. Pas de perte de mise à jour.
+- Auto-parrainage : le check `self_referral` ligne 453 existait déjà.
+- LEFT JOIN promo_codes user_id leak : les promos sont scoped par user_id
+  dans le WHERE principal, pas de fuite cross-merchant.
+
+### Commit K (`9d6f6a7`) — Input validation promo
+**Fichier** : `backend/src/routes/promo.js`
+
+- **Helper `validatePromoInput()`** partagé POST + PUT : value ≥ 0,
+  percent ≤ 100, fixed ≤ 10000€, max_uses ≥ 1 si fourni.
+- Avant : `value=-10` accepté → discount négatif = surcoût appliqué
+  au client. `value=150%` accepté (capé au runtime par Math.min, mais
+  UX trompeuse).
+- **PUT /:id** : ajout du check `type in {percent,fixed}` manquant —
+  un PUT pouvait changer le type vers n'importe quoi.
+- `e.message` → `'Erreur serveur.'` sur les 7 handlers.
+
+### Commit L (`177a285`) — Credits atomicity + FOR UPDATE + TZ-aware date
+**Fichier** : `backend/src/routes/credits.js`
+
+- **POST /grant** : `UPDATE balance` + `INSERT credit_transactions` wrap
+  dans BEGIN/COMMIT via `pool.connect()`. Avant, un crash entre les 2
+  laissait le solde mis à jour sans historique (ou inverse).
+- **POST /repay** (critique : impact financier direct) : 3 opérations
+  (INSERT transaction caisse + UPDATE balance + INSERT credit_tx)
+  désormais atomiques. Avant : crash après le tx caisse mais avant
+  le débit du crédit → client payait + solde inchangé = double
+  réclamation possible.
+- **SELECT FOR UPDATE** sur `client_credits` dans /repay pour
+  sérialiser deux remboursements concurrents du même crédit (sinon
+  balance=-10 ou incohérence entre threads).
+- **TZ-aware date/heure** : lecture de `booking_settings.timezone` +
+  `NOW() AT TIME ZONE` pour dater la transaction caisse. Avant :
+  `new Date()` UTC sur Render → tx faite à 23h30 Paris datée du
+  lendemain.
+- ROLLBACK sur toute erreur, `release()` garanti via `finally`.
+- Messages génériques.
+
+### Commit M (`d131173`) — Hygiène loyalty/referrals
+**Fichiers** : `loyalty.js`, `referrals.js`
+
+- **`e.message` → `'Erreur serveur.'`** (21 occurrences). Plus de fuite
+  schéma PG au client.
+- **`referrals.js:resolveReferralForFilleul`** : regex email durcie.
+  Avant, `.includes('@')` laissait passer `a@b@c`, `@x`, etc.
+  Remplacé par la même `EMAIL_RE` RFC5322-lite utilisée dans
+  clients/global-clients + cap 254 chars (RFC 5321 SMTP).
+
+### Bugs couverts
+Critiques : atomicité credits/grant & credits/repay, TZ date. Majeurs :
+validation value promo (négatif/overflow), max_uses, type PUT. Mineurs :
+regex email referrals, hygiène messages erreur.
+
+### Commits
+- `3d35622` fix(prod): TDZ crash on booking.js require order
+- `9d6f6a7` audit(promo) K: input validation + error message hygiene
+- `177a285` audit(credits) L: atomicity + FOR UPDATE + TZ-aware date
+- `d131173` audit(loyalty/referrals) M: error hygiene + strict email regex
+
+### Reste à faire (dette reportée)
+- **loyalty-utils.js** : race condition entre le UPSERT atomique et le
+  reset `stamps -= threshold`. Si 2 RDV concurrents franchissent le
+  seuil, 2 codes récompense peuvent être créés. Fix : advisory lock PG
+  sur `(user_id, client_email)` ou wrap complet en transaction.
+- **referrals.js** : race condition sur `uses_count` increment + INSERT
+  referral_uses. FOR UPDATE sur referral_codes manquant.
+- **promo_usage_logs / referral_uses** : RGPD — emails en clair, pas de
+  cron d'anonymisation.
+
+---
+
+## Session 2026-04-20 (suite 23) : Audit CLIENTS / CRM — commits H, I, J
 
 ### Audit mené par agent (15 bugs bruts, 13 retenus + 2 faux positifs skip)
 Faux positifs écartés : (a) reset-password "cross-tenant" → design intentionnel
