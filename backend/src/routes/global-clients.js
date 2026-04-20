@@ -256,7 +256,8 @@ router.post('/activate', async (req, res) => {
 router.get('/me', globalClientAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, first_name, last_name, phone, birth_date, is_verified, created_at
+      `SELECT id, email, first_name, last_name, phone, birth_date,
+              postal_code, city, is_verified, created_at
          FROM global_clients WHERE id=$1`,
       [req.globalClient.globalClientId]
     );
@@ -286,7 +287,7 @@ router.get('/me', globalClientAuth, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.patch('/me', globalClientAuth, async (req, res) => {
   try {
-    const { birth_date, phone, first_name, last_name } = req.body;
+    const { birth_date, phone, first_name, last_name, postal_code, city } = req.body;
     // Accepte YYYY-MM-DD, YYYY-MM (1er du mois), '' / null (effacer), undefined (ne pas toucher)
     let bd;
     if (birth_date === '' || birth_date === null) bd = null;
@@ -296,6 +297,11 @@ router.patch('/me', globalClientAuth, async (req, res) => {
       else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
       else                                    bd = undefined;
     } else bd = undefined;
+    // postal_code / city : même sémantique que bd (undefined/null/''/string)
+    const pc = postal_code === undefined ? undefined
+             : (postal_code === null || postal_code === '' ? null : String(postal_code).trim().slice(0,20));
+    const ct = city === undefined ? undefined
+             : (city === null || city === '' ? null : String(city).trim().slice(0,120));
 
     const fields = [];
     const vals   = [];
@@ -304,13 +310,15 @@ router.patch('/me', globalClientAuth, async (req, res) => {
     if (phone     != null) { fields.push(`phone=$${i++}`);      vals.push(phone || null); }
     if (first_name!= null && first_name.trim()) { fields.push(`first_name=$${i++}`); vals.push(first_name.trim()); }
     if (last_name != null) { fields.push(`last_name=$${i++}`);  vals.push(last_name || ''); }
+    if (pc !== undefined) { fields.push(`postal_code=$${i++}`); vals.push(pc); }
+    if (ct !== undefined) { fields.push(`city=$${i++}`);        vals.push(ct); }
     if (!fields.length) return res.json({ ok: true, unchanged: true });
     fields.push(`updated_at=NOW()`);
     const gcId = req.globalClient.globalClientId;
     vals.push(gcId);
     const { rows } = await pool.query(
       `UPDATE global_clients SET ${fields.join(', ')} WHERE id=$${i}
-         RETURNING id, email, first_name, last_name, phone, birth_date`,
+         RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city`,
       vals
     );
     // Propage birth_date (et autres champs) aux fiches locales liées.
@@ -338,6 +346,18 @@ router.patch('/me', globalClientAuth, async (req, res) => {
       await pool.query(
         `UPDATE client_accounts SET last_name=$1 WHERE global_client_id=$2`,
         [last_name || '', gcId]
+      ).catch(() => {});
+    }
+    if (pc !== undefined) {
+      await pool.query(
+        `UPDATE client_accounts SET postal_code=$1 WHERE global_client_id=$2`,
+        [pc, gcId]
+      ).catch(() => {});
+    }
+    if (ct !== undefined) {
+      await pool.query(
+        `UPDATE client_accounts SET city=$1 WHERE global_client_id=$2`,
+        [ct, gcId]
       ).catch(() => {});
     }
     res.json(rows[0]);
