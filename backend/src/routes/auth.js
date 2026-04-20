@@ -16,6 +16,17 @@ const SEED_CATS = [
   { name: 'Fournitures',  type: 'expense', icon: 'ShoppingBag', color: '#f59e0b' },
 ];
 
+// Regex RFC5322-lite partagée (cf. clients.js / global-clients.js / referrals.js).
+// Avant, .includes('@') laissait passer "a@b@c", "@x", etc.
+const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+function isValidEmail(e) {
+  return typeof e === 'string' && EMAIL_RE.test(e) && e.length <= 254;
+}
+
+// Hash bcrypt "dummy" pour enforcer un temps constant sur /login quand
+// l'email n'existe pas (empêche l'énumération par timing attack bcrypt).
+const DUMMY_BCRYPT = bcrypt.hashSync('dummy_' + process.pid + '_' + Date.now(), 12);
+
 function genCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -53,6 +64,8 @@ router.post('/register', async (req, res) => {
     const { email, password, businessName, phone, address, country, city, postalCode, lat, lng } = req.body;
     if (!email || !password || !businessName)
       return res.status(400).json({ error: 'Tous les champs sont requis.' });
+    if (!isValidEmail(String(email).trim().toLowerCase()))
+      return res.status(400).json({ error: 'Email invalide.' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
@@ -68,6 +81,7 @@ router.post('/register', async (req, res) => {
 router.post('/register/confirm', async (req, res) => {
   try {
     const { email, code } = req.body;
+    if (!email || !code?.trim()) return res.status(400).json({ error: 'Email et code requis.' });
     const rec = await getCode(`reg_${email.toLowerCase()}`);
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
@@ -172,11 +186,15 @@ router.post('/resend-code', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis.' });
+    // Message unifié + bcrypt.compare systématique pour empêcher
+    // l'énumération des emails (avant: "Email introuvable" vs "Mot de passe
+    // incorrect" + différence de temps bcrypt révélait l'existence du compte).
+    const INVALID = 'Email ou mot de passe incorrect.';
     const { rows } = await pool.query('SELECT * FROM users WHERE email=LOWER($1)', [email]);
-    if (!rows.length) return res.status(401).json({ error: 'Email introuvable.' });
-    const valid = await bcrypt.compare(password, rows[0].password_hash);
-    if (!valid) return res.status(401).json({ error: 'Mot de passe incorrect.' });
-    const user = rows[0];
+    const user = rows[0] || null;
+    const valid = await bcrypt.compare(String(password), user?.password_hash || DUMMY_BCRYPT);
+    if (!user || !valid) return res.status(401).json({ error: INVALID });
     const token = jwt.sign(
       { userId: user.id, email: user.email, businessName: user.business_name },
       process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -205,18 +223,23 @@ router.post('/login', async (req, res) => {
 router.post('/forgot', async (req, res) => {
   try {
     const { email } = req.body;
-    const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
-    if (!rows.length) return res.status(404).json({ error: 'Aucun compte avec cet email.' });
+    const em = String(email || '').trim().toLowerCase();
+    // Toujours renvoyer ok:true pour ne pas révéler l'existence du compte
+    // (anti-énumération). Aligné avec /pin-forgot-request.
+    if (!isValidEmail(em)) return res.json({ ok: true });
+    const { rows } = await pool.query('SELECT id FROM users WHERE email=$1', [em]);
+    if (!rows.length) return res.json({ ok: true });
     const code = genCode();
-    await saveCode(`rst_${email.toLowerCase()}`, code, { userId: rows[0].id });
+    await saveCode(`rst_${em}`, code, { userId: rows[0].id });
     res.json({ ok: true });
-    setImmediate(() => sendVerificationEmail(email, code, 'Réinitialisez votre mot de passe FlowIA').catch(e => console.error('[EMAIL forgot]', e.message)));
+    setImmediate(() => sendVerificationEmail(em, code, 'Réinitialisez votre mot de passe FlowIA').catch(e => console.error('[EMAIL forgot]', e.message)));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 router.post('/forgot/verify', async (req, res) => {
   try {
     const { email, code } = req.body;
+    if (!email || !code?.trim()) return res.status(400).json({ error: 'Email et code requis.' });
     const rec = await getCode(`rst_${email.toLowerCase()}`);
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
@@ -227,6 +250,7 @@ router.post('/forgot/verify', async (req, res) => {
 router.post('/forgot/reset', async (req, res) => {
   try {
     const { email, code, newPassword } = req.body;
+    if (!email || !code?.trim()) return res.status(400).json({ error: 'Email et code requis.' });
     if (!newPassword || newPassword.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court.' });
     const rec = await getCode(`rst_${email.toLowerCase()}`);
@@ -247,7 +271,8 @@ const EMAIL_TAKEN_MSG = 'Email déjà existant, merci de changer de mail et rée
 router.post('/change-email', authMiddleware, async (req, res) => {
   try {
     const raw = (req.body?.newEmail || '').trim().toLowerCase();
-    if (!raw || !raw.includes('@')) return res.status(400).json({ error: 'Email invalide.' });
+    // Regex stricte : avant, .includes('@') laissait passer "a@b@c" ou "@x".
+    if (!isValidEmail(raw)) return res.status(400).json({ error: 'Email invalide.' });
     // 1. Vérifier que le nouvel email n'est pas déjà utilisé par un autre compte
     const { rows: exists } = await pool.query(
       'SELECT id FROM users WHERE email=$1 AND id<>$2',
@@ -276,6 +301,7 @@ router.post('/change-email', authMiddleware, async (req, res) => {
 router.post('/change-email/confirm', authMiddleware, async (req, res) => {
   try {
     const { code } = req.body;
+    if (!code?.trim()) return res.status(400).json({ error: 'Code requis.' });
     const rec = await getCode(`chg_email_${req.user.userId}`);
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
@@ -422,8 +448,10 @@ router.post('/pin-forgot-request', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email requis.' });
-    const { rows } = await pool.query('SELECT id,email FROM users WHERE email=LOWER($1)', [email.toLowerCase()]);
-    if (!rows.length) return res.json({ ok: true, emailMasked: maskEmail(email) }); // sécurité
+    const em = String(email).trim().toLowerCase();
+    if (!isValidEmail(em)) return res.json({ ok: true, emailMasked: maskEmail(em) });
+    const { rows } = await pool.query('SELECT id,email FROM users WHERE email=$1', [em]);
+    if (!rows.length) return res.json({ ok: true, emailMasked: maskEmail(em) }); // sécurité
     const user = rows[0];
     const code = genCode();
     await saveCode(`pin_forgot_${user.id}`, code, { userId: user.id }, 15);
@@ -436,7 +464,7 @@ router.post('/pin-forgot-request', async (req, res) => {
 router.post('/pin-forgot-verify', async (req, res) => {
   try {
     const { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ error: 'Email et code requis.' });
+    if (!email || !code?.trim()) return res.status(400).json({ error: 'Email et code requis.' });
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email.toLowerCase()]);
     if (!rows.length) return res.status(400).json({ error: 'Code invalide.' });
     const userId = rows[0].id;
@@ -452,12 +480,18 @@ router.post('/pin-forgot-verify', async (req, res) => {
 router.post('/pin-lockout-notify', async (req, res) => {
   try {
     const { email } = req.body || {};
-    if (email) {
-      const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
-      await sendVerificationEmail(email, '3 tentatives échouées à ' + now,
-        '⚠️ Alerte sécurité — Tentatives PIN FlowIA', 'lockout_alert');
+    const em = String(email || '').trim().toLowerCase();
+    // Endpoint non authentifié — on ne notifie QUE si l'email existe en BDD,
+    // sinon un attaquant pourrait spammer des emails arbitraires via ce relai.
+    if (isValidEmail(em)) {
+      const { rows } = await pool.query('SELECT id FROM users WHERE email=$1', [em]);
+      if (rows.length) {
+        const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+        await sendVerificationEmail(em, '3 tentatives échouées à ' + now,
+          '⚠️ Alerte sécurité — Tentatives PIN FlowIA', 'lockout_alert');
+      }
     }
-    res.json({ ok: true });
+    res.json({ ok: true }); // réponse uniforme anti-énumération
   } catch (err) { console.error(err); res.json({ ok: true }); }
 });
 
@@ -510,7 +544,7 @@ router.delete('/account', authMiddleware, async (req, res) => {
     res.json({ ok: true, message: 'Votre compte a été supprimé définitivement.' });
   } catch(e) {
     console.error('[DELETE MERCHANT ACCOUNT]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -541,7 +575,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       hasGoogle:          !!u.google_id,
       avatarUrl:          u.avatar_url,
     }});
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[AUTH ME]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -558,7 +592,7 @@ router.post('/change-password', authMiddleware, async (req, res) => {
     const hash = await bcrypt.hash(newPassword, 12);
     await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, req.user.userId]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[CHANGE PWD]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/auth/profile — mise à jour infos commerçant ────────────────────
@@ -592,7 +626,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
       }
     } catch { /* cache best-effort */ }
     res.json({ ok: true, user: rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[PROFILE PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -710,8 +744,12 @@ router.get('/google/merchant/callback', async (req, res) => {
       <script>
         const token = ${JSON.stringify(token)};
         const user  = ${JSON.stringify(userObj)};
+        // Restreint l'origine cible au FRONTEND_URL — avant, '*' leakait
+        // le JWT à tout opener malveillant (ex: popup ré-ouverte depuis
+        // un site attaquant via window.open chain).
+        const TARGET = ${JSON.stringify(FRONTEND_URL)};
         if (window.opener && !window.opener.closed) {
-          window.opener.postMessage({ type: 'MERCHANT_GOOGLE_AUTH_SUCCESS', token, user }, '*');
+          window.opener.postMessage({ type: 'MERCHANT_GOOGLE_AUTH_SUCCESS', token, user }, TARGET);
           setTimeout(() => window.close(), 400);
         } else {
           localStorage.setItem('ff_token', token);
@@ -949,8 +987,10 @@ router.get('/google/callback', async (req, res) => {
       <script>
         const token  = ${JSON.stringify(token)};
         const client = ${JSON.stringify(clientObj)};
+        // Restreint l'origine cible au FRONTEND_URL — cf. callback merchant.
+        const TARGET = ${JSON.stringify(FRONTEND_URL)};
         if (window.opener && !window.opener.closed) {
-          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', token, client }, '*');
+          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', token, client }, TARGET);
           setTimeout(() => window.close(), 400);
         } else {
           // Fallback : redirection directe (mobile / no-popup)

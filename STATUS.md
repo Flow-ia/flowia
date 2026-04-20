@@ -5,7 +5,69 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 24) : Hotfix prod + Audit ÉCONOMIQUE — K, L, M
+## 🆕 Session 2026-04-20 (suite 25) : Audit AUTH — commit N (critique sécurité)
+
+**Fichier** : `backend/src/routes/auth.js` (login / register / forgot-password
++ change-email + PIN + Google OAuth)
+
+### Vulnérabilités corrigées
+
+- **Énumération email `/login`** : retournait `'Email introuvable.'` (401) si
+  le compte n'existait pas, `'Mot de passe incorrect.'` (401) sinon. En plus,
+  la branche "email inconnu" court-circuitait `bcrypt.compare` → différence
+  de timing ~300ms révélait l'existence du compte. Fix : message unifié
+  `'Email ou mot de passe incorrect.'` + `bcrypt.compare` systématique contre
+  un hash bcrypt dummy (`DUMMY_BCRYPT`, 12 rounds, généré au boot) quand
+  l'email n'existe pas → temps constant.
+
+- **Énumération email `/forgot`** : retournait `404 'Aucun compte avec cet
+  email.'` si inconnu. Alignement avec `/pin-forgot-request` : toujours
+  renvoyer `ok:true` (+ validation regex email stricte). Un attaquant ne peut
+  plus sonder quels emails ont un compte commerçant.
+
+- **Validation email faible** : `/change-email` n'utilisait que
+  `.includes('@')` → acceptait `a@b@c`, `@x`, etc. `/register`, `/login`,
+  `/forgot`, `/pin-forgot-request` ne validaient rien. Fix : helper partagé
+  `isValidEmail()` (même regex RFC5322-lite que clients/global-clients/
+  referrals, cap 254 chars RFC 5321).
+
+- **`postMessage('*', token)` dans les 2 callbacks Google OAuth** : la page
+  de succès envoie le JWT au `window.opener` avec origine cible `'*'` → tout
+  opener (y compris une page attaquante qui aurait `window.open` la popup)
+  pouvait lire le token via un listener `message`. Fix : origine cible
+  restreinte à `FRONTEND_URL` (injectée côté serveur dans le HTML). Impact
+  critique : vol de JWT commerçant + JWT client via Google sign-in.
+
+- **`code.trim()` sur `undefined`** : 5 handlers OTP (`/register/confirm`,
+  `/forgot/verify`, `/forgot/reset`, `/change-email/confirm`,
+  `/pin-forgot-verify`) crashaient en 500 si le champ `code` était absent
+  (DoS trivial + fuite stack via `e.message`). Fix : guard `code?.trim()` en
+  début de handler.
+
+- **`/pin-lockout-notify` relai à spam** : endpoint non authentifié qui
+  envoyait un email d'alerte à n'importe quelle adresse fournie dans le body
+  → vecteur de spam/phishing via l'infra SMTP du commerçant (expéditeur
+  légitime). Fix : vérif que l'email existe en BDD avant envoi + regex
+  stricte ; réponse uniforme `ok:true` anti-énumération.
+
+- **Error hygiene** : 4 handlers renvoyaient `e.message` au client
+  (`DELETE /account`, `GET /me`, `POST /change-password`, `PUT /profile`) →
+  fuite potentielle du schéma PG (nom de colonne, constraint). Fix :
+  `'Erreur serveur.'` + log côté serveur (aligné K/L/M).
+
+### Non corrigé (hors scope surgical)
+- Password complexity (min 6 chars) : choix produit, pas une vulnérabilité.
+- Rate-limit PIN `/pin/verify` : couvert au niveau middleware Express.
+- `resend-code` signale `SESSION_EXPIRED` si pas de registration en cours :
+  révèle seulement les comptes en cours d'inscription, pas les comptes
+  existants ; fenêtre de 15 min ; impact limité.
+
+### Commit
+- `<TBD>` audit(auth) N: anti-enumeration + strict email + postMessage origin
+
+---
+
+## Session 2026-04-20 (suite 24) : Hotfix prod + Audit ÉCONOMIQUE — K, L, M
 
 ### 🔥 Hotfix prod (`3d35622`)
 Crash Render en boucle depuis le commit D (booking.js):
