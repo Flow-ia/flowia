@@ -2,6 +2,10 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { employeePinOptional } = require('../middleware/employeePinOptional');
+const { sendAppointmentConfirmation, sendAppointmentCancellation, sendLoyaltyReward } = require('../utils/email');
+const { incrementStamps } = require('../utils/loyalty-utils');
+const { validateReferralUse, cancelReferralUseByAppt } = require('./referrals');
 const router = express.Router();
 
 // ══════════════════════════════════════════════════════════
@@ -58,11 +62,6 @@ router.get('/check-slug', async (req, res) => {
 router.use(authMiddleware);
 // Injecte req.employee si header x-employee-pin présent (flags can_*)
 router.use(employeePinOptional);
-
-const { sendAppointmentConfirmation, sendAppointmentCancellation, sendLoyaltyReward } = require('../utils/email');
-const { incrementStamps } = require('../utils/loyalty-utils');
-const { validateReferralUse, cancelReferralUseByAppt } = require('./referrals');
-const { employeePinOptional } = require('../middleware/employeePinOptional');
 
 // ══════════════════════════════════════════════════════════
 // PARAMÈTRES RÉSERVATION
