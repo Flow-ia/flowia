@@ -117,6 +117,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `f5457da` rgpd(opt-in) Z2: injection lien unsubscribe dans SMS + email marketing
 - `6e7935b` rgpd(opt-in) Z3: checkbox opt-in inscription (quick + full) + toggle profil client + endpoints backend
 - `a42542b` rgpd(opt-in) Z4: bannière opt-in stats dans TabMarketing + endpoint `/opt-in/:token` + email transactionnel d'invitation
+- `c906d2d` audit(P2) AA: birthday + notifications + client-notes — error hygiene + bounds + PIN admin + email normalization (clôture audit backend)
 
 ### Z4 — Transition pour clients existants
 
