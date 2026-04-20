@@ -2,7 +2,25 @@ const express = require('express');
 const crypto = require('crypto');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router = express.Router();
+
+// Audit W : normalise un email pour comparaison anti-self-referral.
+// - trim + lowercase
+// - retire les suffixes Gmail-style (`user+alias@gmail.com` → `user@gmail.com`)
+//   car Gmail ignore tout ce qui est après `+`
+// - retire espaces internes (impossible en RFC mais certains providers
+//   tolèrent copier-coller)
+// Sans cette normalisation, un parrain peut se parrainer via un alias.
+function normalizeEmailForCompare(e) {
+  if (typeof e !== 'string') return '';
+  const clean = e.trim().toLowerCase().replace(/\s+/g, '');
+  const at = clean.lastIndexOf('@');
+  if (at < 0) return clean;
+  const local  = clean.slice(0, at).replace(/\+.*$/, '');
+  const domain = clean.slice(at);
+  return local + domain;
+}
 
 // Génère un code unique type "REF-AB12CD"
 function genReferralCode() {
@@ -40,7 +58,10 @@ merchantRouter.get('/program', async (req, res) => {
 });
 
 // ── PUT /api/referrals/program — upsert config ──────────────────────────────
-merchantRouter.put('/program', async (req, res) => {
+// Audit W : PIN admin requis (aligné O — toute modif de config financière
+// sensible exige le PIN). Évite qu'un JWT compromis via XSS pousse
+// filleul_value=90% et vide la marge.
+merchantRouter.put('/program', pinAdminMiddleware, async (req, res) => {
   try {
     const {
       is_enabled, parrain_type, parrain_value, filleul_type, filleul_value,
@@ -52,8 +73,18 @@ merchantRouter.put('/program', async (req, res) => {
     }
     const pv = parseFloat(parrain_value);
     const fv = parseFloat(filleul_value);
-    if (isNaN(pv) || pv < 0 || isNaN(fv) || fv < 0)
+    if (!Number.isFinite(pv) || pv < 0 || !Number.isFinite(fv) || fv < 0)
       return res.status(400).json({ error: 'valeurs invalides.' });
+    // Audit W : caps métier. percent ≤ 100 (plus = offrir plus que le prix),
+    // fixed ≤ 500 € (remise excessive = typo ou fraude admin).
+    if (parrain_type === 'percent' && pv > 100)
+      return res.status(400).json({ error: 'Récompense parrain ≤ 100 %.' });
+    if (filleul_type === 'percent' && fv > 100)
+      return res.status(400).json({ error: 'Récompense filleul ≤ 100 %.' });
+    if (parrain_type !== 'percent' && pv > 500)
+      return res.status(400).json({ error: 'Récompense parrain ≤ 500 €.' });
+    if (filleul_type !== 'percent' && fv > 500)
+      return res.status(400).json({ error: 'Récompense filleul ≤ 500 €.' });
 
     // Limite anti-abus : période + nombre. Période 'unlimited' ou 'lifetime'
     // n'utilise pas limit_count (lifetime = 1 implicite, unlimited = pas de limite).
@@ -65,6 +96,7 @@ merchantRouter.put('/program', async (req, res) => {
     } else if (lp !== 'unlimited') {
       const n = parseInt(limit_count, 10);
       if (isNaN(n) || n < 1) return res.status(400).json({ error: 'Nombre de parrainages invalide (min 1).' });
+      if (n > 10000) return res.status(400).json({ error: 'Nombre de parrainages trop élevé (max 10 000).' });
       lc = n;
     }
 
@@ -371,7 +403,7 @@ merchantRouter.post('/check', async (req, res) => {
     });
   } catch (e) {
     console.error('[REF CHECK]', e.message);
-    res.status(500).json({ valid: false, error: e.message });
+    res.status(500).json({ valid: false, error: 'Erreur serveur.' });
   }
 });
 
@@ -456,7 +488,12 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
       WHERE user_id=$1 AND code=$2`, [userId, code]
   );
   if (!rc.length) { out.reason = 'code_not_found'; return out; }
-  if (rc[0].owner_client_email.toLowerCase() === filEmail) { out.reason = 'self_referral'; return out; }
+  // Audit W : comparaison anti-self-referral basée sur la forme normalisée
+  // (Gmail alias, whitespace). Avant, `parrain+x@gmail.com` passait.
+  if (normalizeEmailForCompare(rc[0].owner_client_email) === normalizeEmailForCompare(filEmail)) {
+    out.reason = 'self_referral';
+    return out;
+  }
 
   // Filleul ne doit jamais être venu — RDV honoré (pas cancelled/no_show)
   // OU transaction caisse ACTIVE (non-supprimée, mais pas de status sur tx,

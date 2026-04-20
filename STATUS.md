@@ -110,6 +110,62 @@ marchand. 3 findings CRITIQUES corrigés :
 - `151877d` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
 - `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
 - `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
+- `<W-hash>` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
+
+### 🔒 Audit referrals.js (parrainage) — commit W
+
+**Fichier** : `backend/src/routes/referrals.js` (552 lignes). Système de
+parrainage — un bug = fraude directe (parrain = filleul → double
+récompense). Aligné audits K/O.
+
+**Vulnérabilités corrigées** :
+
+- **Self-referral via Gmail alias** (CRITIQUE). Avant, la comparaison
+  `owner_client_email.toLowerCase() === filEmail` (L459) laissait passer
+  `parrain@gmail.com` vs `parrain+x@gmail.com` (Gmail ignore `+alias`)
+  ou `parrain @gmail.com` (espace). Un client pouvait se parrainer
+  lui-même et empocher 2 remises. Fix : helper
+  `normalizeEmailForCompare()` qui trim+lowercase+strip whitespace+ôte
+  `+suffix` avant comparaison.
+
+- **PUT /program sans PIN admin** (HAUT, aligné O). Un JWT marchand
+  compromis via XSS / session hijack pouvait pousser `filleul_value=90%`
+  et vider la marge marketing. Fix : `pinAdminMiddleware` ajouté sur
+  PUT `/program` (cohérent avec `commissions`, `credits`, `rh/paie`).
+
+- **Caps métier sur récompenses** (HAUT) : avant, `parrain_value=999` en
+  percent passait (parrain reçoit 999% du prix). Fix : percent ≤ 100,
+  fixed ≤ 500 €, `limit_count` ≤ 10 000. Protège contre typos admin et
+  escalade de privilèges si le JWT est compromis.
+
+- **Validation `Number.isFinite`** remplace `!isNaN` sur `pv`/`fv` —
+  stricte, refuse `Infinity`, `null→0` implicites (aligné audit O sur
+  commissions).
+
+- **Error hygiene** : L374 `res.status(500).json({ valid: false, error:
+  e.message })` → `'Erreur serveur.'` (aligné K→V). Les autres `e.message`
+  (L386-388) sont des erreurs contrôlées throw par `validateReferralUse`
+  (codes métier `NOT_FOUND`, `ALREADY_HANDLED`) — conservés.
+
+### Non corrigé / analysé
+
+- **UNIQUE constraint sur `referral_uses(user_id, filleul_email, status)`** :
+  protection applicative existe déjà (L482-488 SELECT + check). Race
+  théorique sous forte concurrence → fix propre = migration DB avec
+  partial index. Hors scope chirurgical.
+
+- **Rate limit dédié sur `/check`** : route marchand derrière
+  `authMiddleware` + `apiLimiter` 300/min. Suffisant car il faut un JWT
+  valide pour appeler — pas d'accès public.
+
+- **Race validation double** (L381-392) : `validateReferralUse` utilise
+  `FOR UPDATE` et transition stricte `pending → validated`, retourne
+  erreur `ALREADY_HANDLED` si déjà traité. Idempotent correct.
+
+- **IDOR `/uses/:id/validate` et `/uses/:id/cancel`** : déjà protégés
+  par filtre `user_id=$2` dans le UPDATE. OK.
+
+- **Soft-delete codes** : feature produit non critique.
 
 ### 🔒 Audit transactions.js — commit V
 
