@@ -109,6 +109,66 @@ marchand. 3 findings CRITIQUES corrigés :
 - `2f80d47` feat(qr) S: UI QR dans Settings/Clients — canvas + download PNG 512px + copy lien (lib `qrcode`)
 - `151877d` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
 - `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
+- `<V-hash>` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
+
+### 🔒 Audit transactions.js — commit V
+
+**Fichier** : `backend/src/routes/transactions.js` (786 lignes). Cœur
+métier — tout encaissement passe ici. Aligné avec audits O/P/Q/U
+(whitelists, bounds, error hygiene).
+
+**Vulnérabilités corrigées** :
+
+- **IDOR cross-tenant via `appointment_id`** (CRITIQUE). Ligne 447
+  (devenue 450) : `SELECT client_email, client_name FROM appointments
+  WHERE id=$1` sans filtre `user_id`. Un marchand pouvait POST une
+  transaction avec l'`appointment_id` d'un autre marchand → fuite du
+  `client_email` + `client_name` dans sa propre table loyalty. Fix :
+  `AND user_id=$2` + paramètre `req.user.userId`.
+
+- **Whitelists `type` et `payment_method`** (HAUT). Avant,
+  `type='foobar'` / `payment_method='bitcoin'` passaient silencieusement
+  → stats/recaps cassés en GROUP BY. Fix : `VALID_TX_TYPES`
+  (`revenue|expense|refund|adjustment`) + `VALID_TX_METHODS`
+  (`cash|card|transfer|check|multi|other`), rejet 400 sinon.
+  Appliqué POST + PUT.
+
+- **Cap amount** (HAUT) : `MAX_AMOUNT=999 999.99` (NUMERIC(10,2) safe).
+  Avant, une typo `100` → `100 000 000` passait → compta corrompue.
+  Appliqué POST + PUT.
+
+- **Bornes texte** (HAUT, anti-DB-bloat) : `description ≤ 500`,
+  `client_note ≤ 2000`. Sans ces bornes, un marchand malveillant pouvait
+  POST 1M tx avec note 100 KB → saturation DB.
+
+- **Date format** (MOYEN) : `"2026-13-40"` remontait jusqu'à PG avec
+  erreur cryptique. Fix : `isRealDate()` + regex `YYYY-MM-DD` +
+  round-trip ISO. Appliqué POST + PUT (aligné audit O absences).
+
+- **Error hygiene** (5 occurrences) : `res.status(500).json({ error:
+  e.message })` → `'Erreur serveur.'` (aligné K→U). Logs serveur
+  conservés.
+
+### Non corrigé / faux positifs
+
+- **POST sans PIN admin** (agent flaggait CRITIQUE) : faux positif. Les
+  encaissements caisse sont voulus sans PIN à chaque tx (UX). Les
+  mutations sensibles (PUT, DELETE) exigent déjà `pinAdminMiddleware`.
+  `employee_id` est anti-spoofé via `req.employee.id` si PIN employé
+  présent (commit C).
+
+- **Race double-encaissement sur même `appointment_id`** : protégé par
+  `idempotency_key` UNIQUE sur `(user_id, idempotency_key)`. Le cas
+  "2 clients différents encaissent le même RDV" est théorique (nécessite
+  accès concurrent sans idem key côté front) — non adressé ici pour
+  rester chirurgical.
+
+- **PUT loyalty resync hors transaction** : refactor non trivial
+  (resync fait des appels async séparés sur `client_loyalty` et
+  `passages`). Pas de bug observable en prod, skip chirurgical.
+
+- **Sort injection** (L120 `ORDER BY t.date DESC` hardcodé) : safe tant
+  que pas de `sort_by` query. Noté pour futur dev.
 
 ### 🔒 Audit global-clients.js (cross-tenant) — commit U
 

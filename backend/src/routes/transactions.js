@@ -14,6 +14,21 @@ router.use(authMiddleware);
 // req.employee.id comme employee_id (anti-spoofing du body).
 router.use(employeePinOptional);
 
+// Audit V : whitelists strictes. Avant, `type='foobar'` ou
+// `payment_method='bitcoin'` passaient silencieusement → stats/recaps
+// cassés (agrégats en GROUP BY invalides). Aligné avec audits K/P.
+const VALID_TX_TYPES   = new Set(['revenue', 'expense', 'refund', 'adjustment']);
+const VALID_TX_METHODS = new Set(['cash', 'card', 'transfer', 'check', 'multi', 'other']);
+const MAX_AMOUNT       = 999999.99;          // NUMERIC(10,2) safe + realistic
+const MAX_DESC_LEN     = 500;                // anti-DB-bloat
+const MAX_NOTE_LEN     = 2000;               // idem sur client_note
+const DATE_RE          = /^\d{4}-\d{2}-\d{2}$/;
+function isRealDate(s) {
+  if (!DATE_RE.test(s)) return false;
+  const d = new Date(s + 'T00:00:00Z');
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 // AUDIT stats #2 : invalide les caches stats du merchant après toute écriture
 // de transaction (sinon /stats/today, /products, /forecast, /heatmap restent
 // figés jusqu'à 10 min → "j'ai vendu mais le dashboard ne bouge pas").
@@ -124,7 +139,7 @@ router.get('/', async (req, res) => {
 
     if (noFilter) global.memCache?.set(_tk, rows, 30 * 1000);
     res.json(rows);
-  } catch(e) { console.error('[TX GET]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[TX GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST / — créer une transaction (toujours locked=true) ────────────────────
@@ -138,6 +153,17 @@ router.post('/', async (req, res) => {
             idempotency_key } = req.body;
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
+    // Audit V : validations strictes inputs (aligné K/P/O).
+    if (!VALID_TX_TYPES.has(String(type)))
+      return res.status(400).json({ error: 'Type de transaction invalide.' });
+    if (payment_method && !VALID_TX_METHODS.has(String(payment_method)))
+      return res.status(400).json({ error: 'Mode de paiement invalide.' });
+    if (!isRealDate(String(date)))
+      return res.status(400).json({ error: 'Date invalide (attendu YYYY-MM-DD).' });
+    if (typeof description === 'string' && description.length > MAX_DESC_LEN)
+      return res.status(400).json({ error: 'Description trop longue.' });
+    if (typeof client_note === 'string' && client_note.length > MAX_NOTE_LEN)
+      return res.status(400).json({ error: 'Note client trop longue.' });
 
     // AUDIT perms : enforcement can_encash.
     // 1. Si req.employee présent (header x-employee-pin valide) → source
@@ -209,6 +235,10 @@ router.post('/', async (req, res) => {
     const amt = parseFloat(amount);
     if (!Number.isFinite(amt) || amt < 0) {
       return res.status(400).json({ error: 'Montant invalide (doit être ≥ 0).' });
+    }
+    // Audit V : cap NUMERIC(10,2) safe + borne métier réaliste.
+    if (amt > MAX_AMOUNT) {
+      return res.status(400).json({ error: `Montant trop élevé (max ${MAX_AMOUNT} €).` });
     }
     const payListRaw = Array.isArray(payments)
       ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
@@ -443,9 +473,12 @@ router.post('/', async (req, res) => {
         let clientEmail = clientEmailNorm;
         let clientName  = req.body.client_name  || null;
         if (!clientEmail && req.body.appointment_id) {
+          // Audit V : scope user_id — sans ce filtre, un merchant peut POST
+          // avec un appointment_id d'un autre merchant et lire son
+          // client_email/name (data leak cross-tenant via fidélité).
           const { rows: appt } = await pool.query(
-            'SELECT client_email, client_name FROM appointments WHERE id=$1',
-            [req.body.appointment_id]
+            'SELECT client_email, client_name FROM appointments WHERE id=$1 AND user_id=$2',
+            [req.body.appointment_id, req.user.userId]
           );
           if (appt.length) {
             clientEmail = (appt[0].client_email || '').toLowerCase().trim() || null;
@@ -471,7 +504,7 @@ router.post('/', async (req, res) => {
     }
 
     res.status(201).json(tx);
-  } catch(e) { console.error('[TX POST]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[TX POST]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /:id — modifier (admin PIN requis + audit) ────────────────────────────
@@ -486,6 +519,35 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
             payment_method, date, time, datetime_iso, reason,
             client_email, client_name, client_note,
             items, payments } = req.body;
+
+    // Audit V : mêmes validations strictes que POST.
+    if (type !== undefined && !VALID_TX_TYPES.has(String(type))) {
+      client.release();
+      return res.status(400).json({ error: 'Type de transaction invalide.' });
+    }
+    if (payment_method !== undefined && !VALID_TX_METHODS.has(String(payment_method))) {
+      client.release();
+      return res.status(400).json({ error: 'Mode de paiement invalide.' });
+    }
+    if (date && !isRealDate(String(date))) {
+      client.release();
+      return res.status(400).json({ error: 'Date invalide (attendu YYYY-MM-DD).' });
+    }
+    if (amount != null) {
+      const amtPut = parseFloat(amount);
+      if (!Number.isFinite(amtPut) || amtPut < 0 || amtPut > MAX_AMOUNT) {
+        client.release();
+        return res.status(400).json({ error: 'Montant invalide.' });
+      }
+    }
+    if (typeof description === 'string' && description.length > MAX_DESC_LEN) {
+      client.release();
+      return res.status(400).json({ error: 'Description trop longue.' });
+    }
+    if (typeof client_note === 'string' && client_note.length > MAX_NOTE_LEN) {
+      client.release();
+      return res.status(400).json({ error: 'Note client trop longue.' });
+    }
 
     const before = await getSnapshot(req.params.id);
     if (!before || before.user_id !== req.user.userId) {
@@ -637,7 +699,7 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
   } catch(e) {
     try { await client.query('ROLLBACK'); } catch {}
     console.error('[TX PUT]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   } finally {
     client.release();
   }
@@ -766,7 +828,7 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
       appointment_unpaid: !!before.appointment_id,
       promo_rollback: !!before.promo_code_id,
     });
-  } catch(e) { console.error('[TX DELETE]', e.message); res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[TX DELETE]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /audit/:id — historique d'une transaction (admin) ────────────────────
@@ -781,7 +843,7 @@ router.get('/audit/:id', pinAdminMiddleware, async (req, res) => {
       [req.params.id, req.user.userId]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;
