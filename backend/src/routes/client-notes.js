@@ -100,14 +100,17 @@ router.get('/', async (req, res) => {
   try {
     const { email } = req.query;
     if (!email) return res.status(400).json({ error: 'Email requis.' });
+    // Audit AA : normalisation email (aligné V/X) — empêche la fragmentation
+    // 'John@X.com' vs 'john@x.com' qui séparerait les notes d'un même client.
+    const emailNorm = String(email).trim().toLowerCase();
     const { rows } = await pool.query(
       `SELECT * FROM client_notes
-       WHERE user_id=$1 AND client_email=$2
+       WHERE user_id=$1 AND LOWER(client_email)=$2
        ORDER BY created_at DESC`,
-      [req.user.userId, email]
+      [req.user.userId, emailNorm]
     );
     res.json(rows);
-  } catch(e) { console.error('[client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch(e) { console.error('[client-notes]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/client-notes ─ créer une note ───────────────────────────────────
@@ -118,19 +121,26 @@ router.post('/', async (req, res) => {
     const trimmed = note_text?.trim() || '';
     if (!client_email || !trimmed)
       return res.status(400).json({ error: 'Email et note requis.' });
+    // Audit AA : regex email + normalisation (aligné V/X).
+    const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+    const emailNorm = String(client_email).trim().toLowerCase();
+    if (!EMAIL_RE.test(emailNorm) || emailNorm.length > 254)
+      return res.status(400).json({ error: 'Email invalide.' });
     if (trimmed.length > 5000)
       return res.status(400).json({ error: 'Note trop longue (5000 caractères max).' });
+    if (typeof client_name === 'string' && client_name.length > 200)
+      return res.status(400).json({ error: 'Nom client trop long.' });
 
     const { rows } = await pool.query(
       `INSERT INTO client_notes
          (user_id, client_email, client_name, note_text, appointment_id,
           created_by_employee_id, created_by_name)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [req.user.userId, client_email, client_name||null, trimmed,
+      [req.user.userId, emailNorm, client_name||null, trimmed,
        appointment_id||null, employee_id||null, employee_name||null]
     );
     res.status(201).json(rows[0]);
-  } catch(e) { console.error('[POST /client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch(e) { console.error('[POST /client-notes]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/client-notes/:id ─ modifier une note ────────────────────────────

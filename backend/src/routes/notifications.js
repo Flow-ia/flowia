@@ -33,7 +33,7 @@ router.get('/settings', async (req, res) => {
       sound_repeat:    s.sound_repeat    ?? 2,
       sound_rdv_before: s.sound_rdv_before ?? 15,
     });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/notifications/settings ─────────────────────────────────────────
@@ -46,13 +46,29 @@ router.put('/settings', async (req, res) => {
       sound_caisse, sound_new_appt, sound_reminder, sound_repeat, sound_rdv_before,
     } = req.body;
 
-    // Normaliser reminder_delays en string CSV
-    const delaysStr = Array.isArray(reminder_delays)
-      ? reminder_delays.join(',')
-      : String(reminder_delays || '1440');
-    const empDelaysStr = Array.isArray(employee_reminder_delays)
-      ? employee_reminder_delays.join(',')
-      : String(employee_reminder_delays || '60');
+    // Audit AA : validations strictes (aligné V/X).
+    // Format HH:MM (00-23:00-59) pour daily_recap_time.
+    if (daily_recap_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(daily_recap_time)))
+      return res.status(400).json({ error: 'Heure invalide (HH:MM).' });
+    // Email propre si fourni.
+    if (daily_recap_email) {
+      const EMAIL_RE = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
+      if (!EMAIL_RE.test(String(daily_recap_email).trim()) || String(daily_recap_email).length > 254)
+        return res.status(400).json({ error: 'Email invalide.' });
+    }
+    // Sanity caps sons — avant parseInt(99999999) passait.
+    const soundRepeat = Math.min(10, Math.max(0, parseInt(sound_repeat) || 2));
+    const soundBefore = Math.min(1440, Math.max(0, parseInt(sound_rdv_before) || 15));
+
+    // Filtre strict des délais : whitelist numérique et bornes 1-10080 min (7j).
+    const sanitizeDelays = (raw, def) => {
+      const arr = Array.isArray(raw) ? raw : String(raw || def).split(',');
+      const clean = arr.map(d => parseInt(d, 10))
+        .filter(d => Number.isFinite(d) && d > 0 && d <= 10080);
+      return (clean.length ? clean : [parseInt(def, 10)]).join(',');
+    };
+    const delaysStr    = sanitizeDelays(reminder_delays,          '1440');
+    const empDelaysStr = sanitizeDelays(employee_reminder_delays,   '60');
 
     const { rows } = await pool.query(
       `INSERT INTO notification_settings
@@ -80,11 +96,11 @@ router.put('/settings', async (req, res) => {
        sound_caisse ?? true,
        sound_new_appt ?? true,
        sound_reminder ?? true,
-       parseInt(sound_repeat) || 2,
-       parseInt(sound_rdv_before) || 15]
+       soundRepeat,
+       soundBefore]
     );
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/notifications/test-recap ──────────────────────────────────────
@@ -98,7 +114,7 @@ router.post('/test-recap', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     await triggerDailyRecapForUser(req.user.userId, users[0], today);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── Fonction : récap pour 1 user ─────────────────────────────────────────────
@@ -328,7 +344,8 @@ router.post('/push-subscribe', async (req, res) => {
     if (e.code === 'ENDPOINT_OWNED') {
       return res.status(409).json({ error: 'Cet endpoint est déjà enregistré pour un autre compte.', code: 'ENDPOINT_OWNED' });
     }
-    res.status(500).json({ error: e.message });
+    console.error('[PUSH SUB]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -339,7 +356,7 @@ router.delete('/push-subscribe', async (req, res) => {
     const { endpoint } = req.body;
     if (endpoint) await deletePushSubscription(endpoint, req.user.userId);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/notifications/inapp ─────────────────────────────────────────────
@@ -365,7 +382,7 @@ router.get('/inapp', async (req, res) => {
       ),
     ]);
     res.json({ notifications: rows, unread_count: c[0]?.n || 0 });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PATCH /api/notifications/inapp/read ──────────────────────────────────────
@@ -379,7 +396,7 @@ router.patch('/inapp/read', async (req, res) => {
       await pool.query('UPDATE app_notifications SET is_read=TRUE WHERE id=$1 AND user_id=$2', [id, req.user.userId]);
     }
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── DELETE /api/notifications/inapp/:id ──────────────────────────────────────
@@ -387,5 +404,5 @@ router.delete('/inapp/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM app_notifications WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[NOTIF]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });

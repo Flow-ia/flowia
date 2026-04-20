@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router = express.Router();
 
 router.use(authMiddleware);
@@ -24,13 +25,18 @@ router.get('/', async (req, res) => {
 });
 
 // ── PUT /api/birthday-campaign — upsert config ──────────────────────────────
-router.put('/', async (req, res) => {
+// Audit AA : PIN admin (aligné W/X — toute modif de config de récompense
+// financière doit passer par le PIN admin).
+router.put('/', pinAdminMiddleware, async (req, res) => {
   try {
     const { is_enabled, discount_type, discount_value, validity_days, message } = req.body;
     if (discount_type && !['percent','fixed'].includes(discount_type))
       return res.status(400).json({ error: 'discount_type invalide.' });
     const v = parseFloat(discount_value);
-    if (isNaN(v) || v < 0) return res.status(400).json({ error: 'discount_value invalide.' });
+    if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: 'discount_value invalide.' });
+    // Audit AA : cap message (anti-DB-bloat, aligné V).
+    if (typeof message === 'string' && message.length > 500)
+      return res.status(400).json({ error: 'Message trop long (500 caractères max).' });
     // Cap percent ≤ 100 (avant: 150% "remise" acceptée → bug applicatif ailleurs).
     // Cap fixed ≤ 10000€ (sanity: anniversaire à 10k€ = config erronée).
     if (discount_type === 'percent' && v > 100)
