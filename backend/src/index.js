@@ -149,6 +149,15 @@ function startServer() {
     message: { error: 'Trop de requêtes.' },
     standardHeaders: true, legacyHeaders: false,
   });
+  // Audit R (session 29) : quick-register via QR est public et crée une
+  // fiche à chaque hit (idempotent sur phone, mais un bot peut varier le
+  // numéro). Cap IP strict. 30 / 15 min couvre un salon bondé (5 clients/h)
+  // tout en bloquant un bot type 10 req/s (=> 600/15min -> 20× le cap).
+  const quickRegisterLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 30,
+    message: { error: 'Trop d\'inscriptions depuis cette connexion. Réessayez dans 15 minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
   // J8 : limite dédiée sur les endpoints de création de paiement Stripe
   // (évite qu'un attaquant spamme /sms/intent pour créer 300 PaymentIntents/
   // min et épuiser l'API Stripe ou polluer le dashboard).
@@ -175,6 +184,9 @@ function startServer() {
   app.use('/api/auth/register', registerLimiter);
   app.use('/api/auth/login',    loginLimiter);
   app.use('/api/auth',          authLimiter, authRouter);
+  // Cap dédié AVANT le pubLimiter général (express évalue dans l'ordre).
+  // Matche sur le path — /pub/:slug/client/quick-register en POST.
+  app.use('/api/pub/:slug/client/quick-register', quickRegisterLimiter);
   app.use('/api/pub',            pubLimiter,  require('./routes/public-booking'));
   app.use('/api/categories',     apiLimiter,  require('./routes/categories'));
   app.use('/api/employees',      apiLimiter,  require('./routes/employees'));

@@ -1215,6 +1215,13 @@ router.post('/:slug/client/quick-register', async (req, res) => {
     const phoneDigits = phoneRaw.replace(/\D/g, '');
     if (phoneDigits.length < 6 || phoneDigits.length > 20)
       return res.status(400).json({ error: 'Téléphone invalide.' });
+    // Anti-bot : rejet des numéros manifestement fake (tous chiffres
+    // identiques : 0000000000, 1111111111, séquences 0123456789 /
+    // 9876543210). Sans ce garde, un bot peut créer des fiches variées en
+    // changeant 1 digit (l'idempotence sur phone n'aide que sur répétition
+    // exacte).
+    if (/^(\d)\1+$/.test(phoneDigits) || phoneDigits === '0123456789' || phoneDigits === '9876543210')
+      return res.status(400).json({ error: 'Téléphone invalide.' });
 
     // Idempotence : retrouver fiche existante pour ce marchand via téléphone
     // (comparaison sur chiffres uniquement côté SQL via regexp_replace).
