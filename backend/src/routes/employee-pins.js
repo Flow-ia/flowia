@@ -74,11 +74,14 @@ router.post('/:employeeId/set', pinAdminMiddleware, async (req, res) => {
     if (!empRows.length) return res.status(404).json({ error: 'Employé introuvable.' });
 
     const hash = await bcrypt.hash(String(pin), 12);
+    // Reset failed_attempts + locked_until au changement de PIN (le PIN est
+    // neuf, la tentative historique n'a plus de sens).
     await pool.query(
-      `INSERT INTO employee_pins (employee_id, user_id, pin_hash, is_active, updated_at)
-       VALUES ($1, $2, $3, TRUE, NOW())
+      `INSERT INTO employee_pins (employee_id, user_id, pin_hash, is_active, updated_at, failed_attempts, locked_until)
+       VALUES ($1, $2, $3, TRUE, NOW(), 0, NULL)
        ON CONFLICT (employee_id) DO UPDATE
-         SET pin_hash=$3, is_active=TRUE, updated_at=NOW()`,
+         SET pin_hash=$3, is_active=TRUE, updated_at=NOW(),
+             failed_attempts=0, locked_until=NULL`,
       [req.params.employeeId, req.user.userId, hash]
     );
     res.json({ ok: true });
@@ -123,15 +126,21 @@ router.patch('/:employeeId/toggle', pinAdminMiddleware, async (req, res) => {
 });
 
 // ─── POST /api/employee-pins/:employeeId/verify — vérifier le PIN saisi ───────
-// Appelé par l'interface lors d'une transaction sensible
-// Retourne un employeePinToken (JWT 2h) si le PIN est correct
+// Appelé par l'interface lors d'une transaction sensible.
+// Retourne un employeePinToken (JWT 2h) si le PIN est correct.
+// AUDIT perms commit B : anti-brute-force DB-level :
+//  - lockout 30 min après 5 échecs consécutifs pour le même employeeId
+//  - complémentaire du rate-limit IP côté index.js (couvre le cas distribué)
+//  - reset des compteurs sur PIN correct OU sur changement de PIN (/set)
+const LOCKOUT_MAX_FAILS   = 5;
+const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 min
 router.post('/:employeeId/verify', async (req, res) => {
   try {
     const { pin } = req.body;
     if (!pin) return res.status(400).json({ error: 'PIN requis.' });
 
     const { rows } = await pool.query(
-      `SELECT ep.pin_hash, ep.is_active
+      `SELECT ep.pin_hash, ep.is_active, ep.failed_attempts, ep.locked_until
        FROM employee_pins ep
        JOIN employees e ON e.id = ep.employee_id
        WHERE ep.employee_id=$1 AND e.user_id=$2`,
@@ -141,10 +150,48 @@ router.post('/:employeeId/verify', async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Aucun PIN configuré pour cet employé.' });
     if (!rows[0].is_active) return res.status(403).json({ error: 'PIN désactivé pour cet employé.' });
 
-    const valid = await bcrypt.compare(String(pin), rows[0].pin_hash);
-    if (!valid) return res.json({ valid: false });
+    // Check lockout DB-level
+    const lockedUntil = rows[0].locked_until ? new Date(rows[0].locked_until) : null;
+    if (lockedUntil && lockedUntil > new Date()) {
+      const secsLeft = Math.ceil((lockedUntil - new Date()) / 1000);
+      const minsLeft = Math.ceil(secsLeft / 60);
+      return res.status(429).json({
+        error: `Trop de tentatives. PIN verrouillé ${minsLeft} min.`,
+        code: 'PIN_LOCKED',
+        locked_until: lockedUntil.toISOString(),
+      });
+    }
 
-    // PIN correct → session token 2h lié à l'employé ET au compte admin
+    const valid = await bcrypt.compare(String(pin), rows[0].pin_hash);
+
+    if (!valid) {
+      // Increment failed_attempts. Si >= MAX, set locked_until + reset counter.
+      const newFails = (rows[0].failed_attempts || 0) + 1;
+      if (newFails >= LOCKOUT_MAX_FAILS) {
+        const lockTill = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        await pool.query(
+          `UPDATE employee_pins SET failed_attempts=0, locked_until=$2 WHERE employee_id=$1`,
+          [req.params.employeeId, lockTill]
+        );
+        return res.status(429).json({
+          error: 'Trop d\'echecs — PIN verrouille 30 min.',
+          code: 'PIN_LOCKED',
+          locked_until: lockTill.toISOString(),
+        });
+      }
+      await pool.query(
+        `UPDATE employee_pins SET failed_attempts=$2 WHERE employee_id=$1`,
+        [req.params.employeeId, newFails]
+      );
+      return res.json({ valid: false, attempts_left: LOCKOUT_MAX_FAILS - newFails });
+    }
+
+    // PIN correct → reset compteurs + émettre token session 2h
+    await pool.query(
+      `UPDATE employee_pins SET failed_attempts=0, locked_until=NULL WHERE employee_id=$1`,
+      [req.params.employeeId]
+    ).catch(() => {});
+
     const employeePinToken = jwt.sign(
       {
         employeeId: req.params.employeeId,

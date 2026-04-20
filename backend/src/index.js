@@ -159,6 +159,15 @@ function startServer() {
     message: { error: 'Trop de tentatives de recharge. Réessayez dans quelques minutes.' },
     standardHeaders: true, legacyHeaders: false,
   });
+  // AUDIT perms commit B : anti-brute-force sur /employee-pins/:id/verify.
+  // PIN 4 chiffres = 10000 combinaisons. 5 tentatives / 5 min / IP + lockout
+  // DB-level par employeeId (30 min apres 5 echecs). Empeche le crack local
+  // ET distribue (lockout partage entre IPs).
+  const employeePinVerifyLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, max: 5,
+    message: { error: 'Trop de tentatives de PIN. Patientez 5 minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
 
   // ── Routes ───────────────────────────────────────────────────────────────
   // Routes auth avec limiters spécifiques par endpoint
@@ -193,6 +202,10 @@ function startServer() {
   // /api/payments/* gardent le apiLimiter standard.
   app.use('/api/payments/sms/intent',   paymentsIntentLimiter);
   app.use('/api/payments/sms/checkout', paymentsIntentLimiter);
+  // AUDIT perms : rate limit specifique brute-force PIN employe. Monte
+  // AVANT employee-pins apiLimiter pour intercepter. Route pattern matche
+  // /employee-pins/<uuid>/verify (methode POST verifiee dans le handler).
+  app.use(/^\/api\/employee-pins\/[^/]+\/verify$/, employeePinVerifyLimiter);
   app.use('/api/payments',      apiLimiter,  require('./routes/payments'));
 
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =

@@ -706,6 +706,10 @@ async function initDB() {
     )
   `);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_employee_pins_user_id ON employee_pins(user_id)`);
+  // AUDIT perms commit B : anti-brute-force. Compteur d'echecs + lockout
+  // temporaire. Reset sur verify OK. Reset sur PIN change (set).
+  await runMigration(`ALTER TABLE employee_pins ADD COLUMN IF NOT EXISTS failed_attempts INT NOT NULL DEFAULT 0`);
+  await runMigration(`ALTER TABLE employee_pins ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ`);
 
   // ── Web Push — abonnements navigateur/mobile ─────────────────────────────────
   await runMigration(`
