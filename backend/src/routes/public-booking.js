@@ -1063,22 +1063,18 @@ router.post('/:slug/client/register', async (req, res) => {
       process.env.JWT_SECRET, { expiresIn: '30d' }
     );
 
-    // Email de bienvenue filleul si inscription via lien de parrainage
-    // Non-bloquant : on répond immédiatement, l'envoi se fait en background.
+    // Email de bienvenue filleul si inscription via lien de parrainage.
+    // Check d'éligibilité COMPLET avant envoi (via resolveReferralForFilleul)
+    // pour ne pas promettre une remise qu'on refusera : self-referral, quota,
+    // déjà-servi… Non-bloquant : setImmediate, try/catch interne, l'envoi se
+    // fait après res.json().
     const incomingRef = String(req.body?.referral_code || '').trim().toUpperCase();
     if (incomingRef) {
       setImmediate(async () => {
         try {
-          const { rows: prog } = await pool.query(
-            `SELECT is_enabled, filleul_type, filleul_value
-               FROM referral_programs WHERE user_id=$1`, [userId]
-          );
-          if (!prog.length || !prog[0].is_enabled) return;
-          const { rows: rc } = await pool.query(
-            `SELECT 1 FROM referral_codes WHERE user_id=$1 AND code=$2 LIMIT 1`,
-            [userId, incomingRef]
-          );
-          if (!rc.length) return;
+          const { resolveReferralForFilleul } = require('./referrals');
+          const resolved = await resolveReferralForFilleul(userId, incomingRef, emailLow, 0);
+          if (!resolved.ok) return; // silencieux — UI front affichera déjà l'alerte
           const { rows: biz } = await pool.query(
             'SELECT business_name FROM users WHERE id=$1', [userId]
           );
@@ -1087,8 +1083,8 @@ router.post('/:slug/client/register', async (req, res) => {
             filleulName:  first_name,
             businessName: biz[0]?.business_name || 'votre commerçant',
             code:         incomingRef,
-            type:         prog[0].filleul_type,
-            value:        prog[0].filleul_value,
+            type:         resolved.filleul_type,
+            value:        resolved.filleul_value,
           });
         } catch (e) { console.warn('[referral welcome mail]', e.message); }
       });

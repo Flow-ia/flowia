@@ -449,9 +449,15 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
   if (!rc.length) { out.reason = 'code_not_found'; return out; }
   if (rc[0].owner_client_email.toLowerCase() === filEmail) { out.reason = 'self_referral'; return out; }
 
-  // Filleul ne doit jamais être venu — ni RDV ni transaction payée
+  // Filleul ne doit jamais être venu — RDV honoré (pas cancelled/no_show)
+  // OU transaction caisse ACTIVE (non-supprimée, mais pas de status sur tx,
+  // donc toute tx revenue compte). Un RDV annulé n'a pas de "venue" effective
+  // → on laisse passer pour permettre une 2e chance au parrainage.
   const { rows: prevAppt } = await pool.query(
-    `SELECT 1 FROM appointments WHERE user_id=$1 AND LOWER(client_email)=$2 LIMIT 1`,
+    `SELECT 1 FROM appointments
+      WHERE user_id=$1 AND LOWER(client_email)=$2
+        AND status NOT IN ('cancelled','no_show')
+      LIMIT 1`,
     [userId, filEmail]
   );
   const { rows: prevTx } = await pool.query(
@@ -462,6 +468,8 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
   );
   if (prevAppt.length || prevTx.length) { out.reason = 'filleul_not_new'; return out; }
 
+  // Un parrainage déjà "actif" (pending/validated) bloque. Les cancelled
+  // ne comptent pas — le filleul peut être re-parrainé après un refus.
   const { rows: existing } = await pool.query(
     `SELECT 1 FROM referral_uses
       WHERE user_id=$1 AND LOWER(filleul_email)=$2
@@ -470,7 +478,9 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
   );
   if (existing.length) { out.reason = 'already_parraine'; return out; }
 
-  // Quota parrain
+  // Quota parrain — compte les validated ET les pending RÉCENTS (< 30j).
+  // Les pending anciens (filleul no-show silencieux non-cancel) ne pénalisent
+  // plus le parrain éternellement.
   const lp = prog[0].limit_period || 'unlimited';
   const lc = prog[0].limit_count;
   if (lp !== 'unlimited' && lc != null && lc > 0) {
@@ -484,7 +494,10 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
          FROM referral_uses ru
          JOIN referral_codes rcc ON rcc.id = ru.referral_code_id
         WHERE ru.user_id=$1 AND LOWER(rcc.owner_client_email)=$2
-          AND ru.status IN ('pending','validated') ${dateClause}`,
+          AND (
+            ru.status = 'validated'
+            OR (ru.status = 'pending' AND ru.created_at > NOW() - INTERVAL '30 days')
+          ) ${dateClause}`,
       [userId, ownerEmail]
     );
     if (cnt[0].n >= lc) { out.reason = 'quota_exceeded'; return out; }

@@ -260,30 +260,35 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme, so
       const res = await promoApi.check({ code: codeUp, amount: total, client_email: clientEmail.trim() || undefined });
       if (res.valid) { setPromoData({ ...res, source:'promo' }); setPromoErr(''); return; }
       // 2. Fallback : code parrainage (filleul encaissé en caisse)
-      if (clientEmail.trim()) {
-        try {
-          const ref = await referralsApi.checkCode({
-            code: codeUp, filleul_email: clientEmail.trim(), amount: total,
-          });
-          if (ref?.valid) {
-            setPromoData({
-              source:   'referral',
-              discount: ref.discount,
-              promo:    { type: ref.discount_type, value: ref.discount_value },
-            });
-            setPromoErr('');
-            return;
-          }
-          // Code existe mais conditions non remplies → message pédagogique
-          if (ref?.reason && ref.reason !== 'code_not_found') {
-            setPromoData(null);
-            setPromoErr(ref.reason === 'program_disabled'
-              ? 'Programme parrainage désactivé.'
-              : 'Ce client ne peut pas bénéficier de ce parrainage (conditions non remplies).');
-            return;
-          }
-        } catch { /* silencieux */ }
+      //    Nécessite l'email du client pour vérifier l'éligibilité. Sans email,
+      //    on informe le cashier plutôt que de dire "code invalide".
+      if (!clientEmail.trim()) {
+        setPromoData(null);
+        setPromoErr("Pour un code parrainage, renseignez d'abord l'email du client.");
+        return;
       }
+      try {
+        const ref = await referralsApi.checkCode({
+          code: codeUp, filleul_email: clientEmail.trim(), amount: total,
+        });
+        if (ref?.valid) {
+          setPromoData({
+            source:   'referral',
+            discount: ref.discount,
+            promo:    { type: ref.discount_type, value: ref.discount_value },
+          });
+          setPromoErr('');
+          return;
+        }
+        // Code existe mais conditions non remplies → message pédagogique
+        if (ref?.reason && ref.reason !== 'code_not_found') {
+          setPromoData(null);
+          setPromoErr(ref.reason === 'program_disabled'
+            ? 'Programme parrainage désactivé.'
+            : 'Ce client ne peut pas bénéficier de ce parrainage (conditions non remplies).');
+          return;
+        }
+      } catch { /* silencieux */ }
       setPromoData(null); setPromoErr(res.error || 'Code invalide');
     } catch(e) { setPromoErr(e.message || 'Impossible de verifier le code'); }
     finally { setPromoLoad(false); }
