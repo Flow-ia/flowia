@@ -96,6 +96,7 @@ router.post('/sms/intent', authMiddleware, async (req, res) => {
     const amount = parseFloat(req.body.amount);
     const { payment_method_id, save_card, new_card } = req.body;
     if (!amount || amount < 5) return res.status(400).json({ error: 'Montant minimum : 5 EUR' });
+    if (amount > 1000)          return res.status(400).json({ error: 'Montant maximum : 1000 EUR par recharge' });
 
     const stripe = getStripe();
     const customerId = await ensureStripeCustomer(userId);
@@ -272,6 +273,9 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
     const amount = parseFloat(req.body.amount);
     if (!amount || amount < 5) {
       return res.status(400).json({ error: 'Montant minimum : 5EUR' });
+    }
+    if (amount > 1000) {
+      return res.status(400).json({ error: 'Montant maximum : 1000 EUR par recharge' });
     }
     const stripe = getStripe();
     const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')

@@ -661,18 +661,31 @@ router.post('/send', async (req, res) => {
       for (const batch of batches) {
         for (const client of batch) {
           const result = await sendSMS(client.phone, message_sms);
+          // R8 : log cost = SMS_PRICE (ce que paie le commerçant) et non
+          // SMS_COST (coût brut Brevo). Cohérent avec marketing.js + débit.
           await pool.query(
             `INSERT INTO message_log (user_id, campaign_id, phone, channel, cost, status)
              VALUES ($1,$2,$3,'sms',$4,$5)`,
-            [userId, campaignId, client.phone, result.success ? SMS_COST : 0, result.success ? 'sent' : 'failed']
+            [userId, campaignId, client.phone, result.success ? SMS_PRICE : 0, result.success ? 'sent' : 'failed']
           );
           if (result.success) { sentSms++; totalSmsCost += SMS_PRICE; }
           else failedCount++;
         }
         await sleep(1000);
       }
-      // Déduire le solde SMS
-      await pool.query(`UPDATE users SET sms_balance = sms_balance - $2 WHERE id=$1`, [userId, totalSmsCost]);
+      // R1 : débit ATOMIQUE avec garde anti-overdraft. Si 2 campagnes
+      // parallèles tentent de débiter simultanément, seule celle qui a
+      // le solde suffisant passe. L'autre : solde inchangé, on log le
+      // problème (cas extrêmement rare car preview vérifie déjà le solde).
+      const debited = await pool.query(
+        `UPDATE users SET sms_balance = sms_balance - $1
+          WHERE id=$2 AND sms_balance >= $1
+          RETURNING sms_balance`,
+        [totalSmsCost, userId]
+      );
+      if (!debited.rows.length && totalSmsCost > 0) {
+        console.error('[CAMPAIGN debit] Solde insuffisant au moment du debit — race protection active', { userId, totalSmsCost });
+      }
       // Enregistrer la transaction de débit
       await pool.query(
         `INSERT INTO sms_transactions (user_id, type, amount, sms_count, description, status)
@@ -829,19 +842,44 @@ router.get('/auto-plan', async (req, res) => {
 // ── POST /api/campaigns/auto-send ───────────────────────────────────────────
 // Crée ai_campaigns + N promo_codes + N ai_campaign_codes + N campaign_queue
 // avec scheduled_at précis (heure calculée par client).
+// R9 : verrou applicatif anti-double-clic. Deux requêtes quasi-simultanées
+// pour le même commerçant (double-clic, retry, scripts) tenteraient de
+// générer 2 plans en parallèle → double débit + double envoi. On utilise
+// pg_try_advisory_xact_lock scope transaction : le 2e appel échoue vite.
 router.post('/auto-send', async (req, res) => {
   const dbClient = await pool.connect();
+  let lockAcquired = false;
   try {
     const userId = req.user.userId;
     const { budget, duration_days, discounts } = req.body;
 
-    const plan = await generateCampaignPlan(userId, budget, duration_days, discounts);
-    if (!plan.balance_sufficient)
-      return res.status(400).json({ error: 'Solde insuffisant.', code: 'INSUFFICIENT_BALANCE' });
-    if (plan.total_sms === 0)
-      return res.status(400).json({ error: 'Aucun client ciblable pour le moment (exclusion anti-spam 7 jours).' });
-
     await dbClient.query('BEGIN');
+    // Hash deterministe du userId → bigint pour l'advisory lock. 'ai_campaign'
+    // prefix évite collision avec un autre domaine utilisant des advisory
+    // locks. Se libère automatiquement à COMMIT/ROLLBACK de cette tx.
+    const { rows: lockR } = await dbClient.query(
+      `SELECT pg_try_advisory_xact_lock(hashtextextended('ai_campaign:' || $1, 42)) AS locked`,
+      [userId]
+    );
+    lockAcquired = !!lockR[0]?.locked;
+    if (!lockAcquired) {
+      await dbClient.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'Une campagne IA est déjà en cours de création. Merci de patienter quelques secondes.',
+        code: 'CAMPAIGN_IN_PROGRESS',
+      });
+    }
+
+    const plan = await generateCampaignPlan(userId, budget, duration_days, discounts);
+    if (!plan.balance_sufficient) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solde insuffisant.', code: 'INSUFFICIENT_BALANCE' });
+    }
+    if (plan.total_sms === 0) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'Aucun client ciblable pour le moment (exclusion anti-spam 7 jours).' });
+    }
+    // (transaction déjà ouverte au-dessus pour acquérir l'advisory lock)
 
     // 1. Créer l'ai_campaign (header)
     const { rows: aiCamp } = await dbClient.query(
@@ -933,11 +971,22 @@ router.post('/auto-send', async (req, res) => {
       }
     }
 
-    // 4. Débit immédiat du solde
-    await dbClient.query(
-      `UPDATE users SET sms_balance = sms_balance - $1 WHERE id=$2`,
+    // 4. Débit ATOMIQUE avec garde anti-overdraft (R1). Si le solde a baissé
+    // depuis la preview (autre campagne, cron anniv, reminders RDV), on
+    // annule la transaction plutôt que de passer en négatif.
+    const dbt = await dbClient.query(
+      `UPDATE users SET sms_balance = sms_balance - $1
+        WHERE id=$2 AND sms_balance >= $1
+        RETURNING sms_balance`,
       [plan.estimated_cost, userId]
     );
+    if (!dbt.rows.length) {
+      await dbClient.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'Solde insuffisant au moment du débit — une autre opération a entre-temps consommé le solde. Rechargez pour réessayer.',
+        code: 'INSUFFICIENT_BALANCE',
+      });
+    }
     await dbClient.query(
       `INSERT INTO sms_transactions (user_id, type, amount, sms_count, description, status)
        VALUES ($1,'debit',$2,$3,$4,'completed')`,
