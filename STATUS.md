@@ -111,6 +111,69 @@ marchand. 3 findings CRITIQUES corrigés :
 - `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
 - `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
 - `0379c64` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
+- `<X-hash>` audit(loyalty) X: PIN admin config/delete + caps metier + cap stamps_to_add + normalisation email
+
+### 🔒 Audit loyalty.js — commit X (dernier P1)
+
+**Fichier** : `backend/src/routes/loyalty.js` (246 lignes). Système de
+tampons/points fidélité. Aligné O/V/W.
+
+**Vulnérabilités corrigées** :
+
+- **PUT /program sans PIN admin** (HAUT) : modifier
+  `stamps_required`/`reward_value`/`points_per_euro` = impact financier
+  direct. Un JWT compromis (XSS) pouvait pousser `points_per_euro=9999`
+  → toute transaction crédite des points massifs. Fix :
+  `pinAdminMiddleware` (aligné O commissions / W referrals).
+
+- **DELETE /clients/:id sans PIN admin** (HAUT) : un employé
+  frauduleux avec JWT merchant peut effacer la ligne loyalty d'un
+  client pour dissimuler un vol de tampons. Fix :
+  `pinAdminMiddleware`.
+
+- **Caps métier PUT /program** : avant, aucune borne supérieure —
+  `reward_value=999` en percent, `points_per_euro=1000`,
+  `stamps_required=999999` passaient tous. Fix : plafonds explicites
+  `MAX_REWARD_PCT=100`, `MAX_REWARD_FIXED=500€`, `MAX_POINTS_PER_EU=100`,
+  `MAX_STAMPS_REQ=100`, `MAX_MIN_PURCHASE=10 000€`,
+  `MAX_VALIDITY_DAYS=3650`.
+
+- **Cap `stamps_to_add`** sur POST `/stamp` et `/add-service` : avant,
+  un appel pouvait ajouter 10 000 tampons d'un coup. Un marchand
+  frauduleux pouvait déclencher récompense sans passages réels. Fix :
+  `MAX_STAMPS_PER_OP=20` par appel.
+
+- **Normalisation email** (aligné transactions V) : `client_email` envoyé
+  en raw était passé tel quel à `incrementStamps` → `John@X.com` et
+  `john@x.com` créaient 2 lignes `client_loyalty` distinctes. Fix :
+  `trim().toLowerCase()` avant tout lookup/insert (POST /stamp +
+  /add-service).
+
+- **`Number.isFinite`** remplace `!isNaN` sur `reward_value` + validation
+  `< 0` explicite.
+
+- **Borne `reward_label ≤ 200`** : anti-DB-bloat (aligné V).
+
+### Non modifié (déjà sain)
+
+- **Scope `user_id`** systématique sur 100% des queries. OK.
+- **Whitelists** `reward_type`, `count_trigger`, `loyalty_mode`. OK.
+- **Error hygiene** déjà aligné `'Erreur serveur.'` (merci audit plus tôt).
+- **POST /stamp et /add-service sans PIN admin** : appels caisse
+  quotidiens, PIN casserait l'UX. Le cap `MAX_STAMPS_PER_OP=20` limite
+  l'abus.
+
+## 📊 Récap audit P1 backend (commits T, U, V, W, X)
+
+5 routes critiques auditées et hardénisées :
+- **T** : `payments.js` — Stripe refund/dispute handler + amount cross-check
+- **U** : `global-clients.js` — OTP crypto + rate limiters dédiés
+- **V** : `transactions.js` — IDOR appointment + whitelists + bounds
+- **W** : `referrals.js` — anti-self-referral Gmail alias + PIN config
+- **X** : `loyalty.js` — PIN config/delete + caps + normalisation email
+
+Toutes les routes backend critiques de FlowIA sont désormais auditées.
+P2 restant (cosmétique/compliance) : CSP headers, RGPD opt-out.
 
 ### 🔒 Audit referrals.js (parrainage) — commit W
 

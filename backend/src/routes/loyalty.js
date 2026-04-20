@@ -2,9 +2,21 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware }  = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const router = express.Router();
 router.use(authMiddleware);
+
+// Audit X : bornes métier fidélité. Évitent qu'une typo admin ou un JWT
+// compromis via XSS pousse des valeurs aberrantes (reward=999%, 1€ = 1000
+// points, stamps_required=999999 rendant la carte inutile).
+const MAX_STAMPS_REQ    = 100;     // 100 tampons = ~1 an pour un client régulier
+const MAX_REWARD_PCT    = 100;     // pas plus que 100% du prix
+const MAX_REWARD_FIXED  = 500;     // € de remise max
+const MAX_POINTS_PER_EU = 100;     // ratio points/euro realistic
+const MAX_MIN_PURCHASE  = 10000;   // plafond min_purchase €
+const MAX_VALIDITY_DAYS = 3650;    // 10 ans max
+const MAX_STAMPS_PER_OP = 20;      // par POST /stamp ou /add-service
 
 // ── GET /api/loyalty/program ──────────────────────────────────────────────────
 router.get('/program', async (req, res) => {
@@ -22,12 +34,33 @@ router.get('/program', async (req, res) => {
 });
 
 // ── PUT /api/loyalty/program ──────────────────────────────────────────────────
-router.put('/program', async (req, res) => {
+// Audit X : PIN admin requis (aligné O/W). Modifier les valeurs fidélité
+// = impact financier direct — défense-en-profondeur contre XSS qui
+// aurait récupéré un JWT marchand.
+router.put('/program', pinAdminMiddleware, async (req, res) => {
   try {
     const { enabled, stamps_required, reward_label, reward_type, reward_value, count_trigger,
             loyalty_mode, points_per_euro, min_purchase, validity_days } = req.body;
     if (reward_type && !['percent','fixed'].includes(reward_type))
       return res.status(400).json({ error: 'Type de récompense invalide.' });
+
+    const rewardType = reward_type || 'percent';
+    const rv = parseFloat(reward_value);
+    if (!Number.isFinite(rv) || rv < 0)
+      return res.status(400).json({ error: 'Valeur de récompense invalide.' });
+    if (rewardType === 'percent' && rv > MAX_REWARD_PCT)
+      return res.status(400).json({ error: `Récompense ≤ ${MAX_REWARD_PCT} %.` });
+    if (rewardType === 'fixed' && rv > MAX_REWARD_FIXED)
+      return res.status(400).json({ error: `Récompense ≤ ${MAX_REWARD_FIXED} €.` });
+
+    // Label : borne anti-DB-bloat (aligné V)
+    if (typeof reward_label === 'string' && reward_label.length > 200)
+      return res.status(400).json({ error: 'Libellé récompense trop long.' });
+
+    const stampsReq = Math.min(MAX_STAMPS_REQ, Math.max(1, parseInt(stamps_required) || 10));
+    const pPerEu    = Math.min(MAX_POINTS_PER_EU, Math.max(0.01, parseFloat(points_per_euro) || 1));
+    const minPurch  = Math.min(MAX_MIN_PURCHASE, Math.max(0, parseFloat(min_purchase) || 0));
+    const validity  = Math.min(MAX_VALIDITY_DAYS, Math.max(1, parseInt(validity_days) || 90));
 
     const { rows } = await pool.query(
       `INSERT INTO loyalty_programs
@@ -41,18 +74,18 @@ router.put('/program', async (req, res) => {
        RETURNING *`,
       [req.user.userId,
        enabled ?? false,
-       Math.max(1, parseInt(stamps_required) || 10),
+       stampsReq,
        reward_label || 'Prestation offerte',
-       reward_type  || 'percent',
-       parseFloat(reward_value) || 10,
+       rewardType,
+       rv,
        ['physical','online','both'].includes(count_trigger) ? count_trigger : 'both',
        ['stamps','points'].includes(loyalty_mode) ? loyalty_mode : 'stamps',
-       Math.max(0.01, parseFloat(points_per_euro) || 1),
-       Math.max(0, parseFloat(min_purchase) || 0),
-       Math.max(1, parseInt(validity_days) || 90)]
+       pPerEu,
+       minPurch,
+       validity]
     );
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch(e) { console.error('[LOY PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/loyalty/clients ──────────────────────────────────────────────────
@@ -74,14 +107,17 @@ router.post('/stamp', async (req, res) => {
   try {
     const { client_email, client_name, stamps_to_add = 1 } = req.body;
     if (!client_email) return res.status(400).json({ error: 'Email client requis.' });
+    // Audit X : normalisation email (aligné transactions V) + cap anti-abus.
+    const emailNorm = String(client_email).trim().toLowerCase();
+    const toAdd = Math.min(MAX_STAMPS_PER_OP, Math.max(1, parseInt(stamps_to_add) || 1));
 
-    const result = await incrementStamps(req.user.userId, client_email, client_name, stamps_to_add);
+    const result = await incrementStamps(req.user.userId, emailNorm, client_name, toAdd);
     if (!result) return res.status(400).json({ error: 'Programme de fidélité désactivé.' });
 
     // Retourner l'état complet du client
     const { rows } = await pool.query(
       'SELECT * FROM client_loyalty WHERE user_id=$1 AND client_email=$2',
-      [req.user.userId, client_email]
+      [req.user.userId, emailNorm]
     );
     const { rows: prog } = await pool.query(
       'SELECT stamps_required FROM loyalty_programs WHERE user_id=$1', [req.user.userId]);
@@ -95,12 +131,15 @@ router.post('/stamp', async (req, res) => {
 });
 
 // ── DELETE /api/loyalty/clients/:id ──────────────────────────────────────────
-router.delete('/clients/:id', async (req, res) => {
+// Audit X : PIN admin (aligné O). Supprimer une ligne loyalty efface
+// l'historique de tampons d'un client — potentielle dissimulation d'audit
+// interne si un employé frauduleux peut effacer.
+router.delete('/clients/:id', pinAdminMiddleware, async (req, res) => {
   try {
     await pool.query('DELETE FROM client_loyalty WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch(e) { console.error('[LOY DEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 
@@ -176,10 +215,13 @@ router.post('/add-service', async (req, res) => {
   try {
     const { client_email, client_name, stamps_to_add = 1 } = req.body;
     if (!client_email) return res.status(400).json({ error: 'Email requis.' });
+    // Audit X : normalisation email + cap anti-abus (idem /stamp).
+    const emailNorm = String(client_email).trim().toLowerCase();
+    const toAdd = Math.min(MAX_STAMPS_PER_OP, Math.max(1, parseInt(stamps_to_add) || 1));
 
     const result = await incrementStamps(
-      req.user.userId, client_email, client_name || null,
-      parseInt(stamps_to_add) || 1, 'physical'
+      req.user.userId, emailNorm, client_name || null,
+      toAdd, 'physical'
     );
 
     if (!result) return res.status(400).json({ error: 'Programme de fidélité désactivé.' });
@@ -189,7 +231,7 @@ router.post('/add-service', async (req, res) => {
 
     const { rows } = await pool.query(
       'SELECT * FROM client_loyalty WHERE user_id=$1 AND client_email=$2',
-      [req.user.userId, client_email]
+      [req.user.userId, emailNorm]
     );
     const { rows: prog } = await pool.query(
       'SELECT stamps_required FROM loyalty_programs WHERE user_id=$1', [req.user.userId]
