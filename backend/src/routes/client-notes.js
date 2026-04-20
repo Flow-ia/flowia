@@ -51,7 +51,7 @@ router.get('/search', async (req, res) => {
       [req.user.userId, term]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/client-notes/history?email=xxx[&employee_id=yyy] ──────────────
@@ -92,7 +92,7 @@ router.get('/history', async (req, res) => {
       params
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── GET /api/client-notes?email=xxx ─ notes internes client ──────────────────
@@ -107,7 +107,7 @@ router.get('/', async (req, res) => {
       [req.user.userId, email]
     );
     res.json(rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── POST /api/client-notes ─ créer une note ───────────────────────────────────
@@ -115,34 +115,40 @@ router.post('/', async (req, res) => {
   try {
     const { client_email, client_name, note_text, appointment_id,
             employee_id, employee_name } = req.body;
-    if (!client_email || !note_text?.trim())
+    const trimmed = note_text?.trim() || '';
+    if (!client_email || !trimmed)
       return res.status(400).json({ error: 'Email et note requis.' });
+    if (trimmed.length > 5000)
+      return res.status(400).json({ error: 'Note trop longue (5000 caractères max).' });
 
     const { rows } = await pool.query(
       `INSERT INTO client_notes
          (user_id, client_email, client_name, note_text, appointment_id,
           created_by_employee_id, created_by_name)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [req.user.userId, client_email, client_name||null, note_text.trim(),
+      [req.user.userId, client_email, client_name||null, trimmed,
        appointment_id||null, employee_id||null, employee_name||null]
     );
     res.status(201).json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[POST /client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/client-notes/:id ─ modifier une note ────────────────────────────
 router.put('/:id', async (req, res) => {
   try {
     const { note_text } = req.body;
-    if (!note_text?.trim()) return res.status(400).json({ error: 'Note vide.' });
+    const trimmed = note_text?.trim() || '';
+    if (!trimmed) return res.status(400).json({ error: 'Note vide.' });
+    if (trimmed.length > 5000)
+      return res.status(400).json({ error: 'Note trop longue (5000 caractères max).' });
     const { rows } = await pool.query(
       `UPDATE client_notes SET note_text=$1, updated_at=NOW()
        WHERE id=$2 AND user_id=$3 RETURNING *`,
-      [note_text.trim(), req.params.id, req.user.userId]
+      [trimmed, req.params.id, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Introuvable.' });
     res.json(rows[0]);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[PUT /client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── DELETE /api/client-notes/:id ─────────────────────────────────────────────
@@ -151,7 +157,7 @@ router.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM client_notes WHERE id=$1 AND user_id=$2',
       [req.params.id, req.user.userId]);
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[DELETE /client-notes]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;

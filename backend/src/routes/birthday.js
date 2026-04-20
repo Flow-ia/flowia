@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
       });
     }
     res.json(rows[0]);
-  } catch (e) { console.error('[BIRTHDAY GET]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[BIRTHDAY GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 // ── PUT /api/birthday-campaign — upsert config ──────────────────────────────
@@ -31,6 +31,12 @@ router.put('/', async (req, res) => {
       return res.status(400).json({ error: 'discount_type invalide.' });
     const v = parseFloat(discount_value);
     if (isNaN(v) || v < 0) return res.status(400).json({ error: 'discount_value invalide.' });
+    // Cap percent ≤ 100 (avant: 150% "remise" acceptée → bug applicatif ailleurs).
+    // Cap fixed ≤ 10000€ (sanity: anniversaire à 10k€ = config erronée).
+    if (discount_type === 'percent' && v > 100)
+      return res.status(400).json({ error: 'Pour une remise en %, le max est 100.' });
+    if (discount_type === 'fixed' && v > 10000)
+      return res.status(400).json({ error: 'Montant trop élevé (max 10000€).' });
     // Validity : entier > 0 (min 1 jour, max 365). Evite promo mort-nee avec
     // value=0 ou negative + UX coherente (>1 an n'a pas de sens pour un anniv).
     const validRaw = parseInt(validity_days);
@@ -53,7 +59,7 @@ router.put('/', async (req, res) => {
        validFinal, message || null]
     );
     res.json(rows[0]);
-  } catch (e) { console.error('[BIRTHDAY PUT]', e.message); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error('[BIRTHDAY PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
 module.exports = router;

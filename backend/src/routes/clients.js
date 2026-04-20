@@ -138,7 +138,10 @@ async function linkToGlobal(localId, email, phone) {
 // ─── GET / — liste clients du commerçant ─────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const { search, sort = 'name', limit = 100, offset = 0 } = req.query;
+    const { search, sort = 'name' } = req.query;
+    // Cap strict pour éviter OOM sur gros merchants (parseInt NaN fallback → 100).
+    const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit)  || 100));
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
     const uid = req.user.userId;
 
     // loyalty_mode vient de loyalty_programs (pas de client_loyalty)
@@ -191,7 +194,7 @@ router.get('/', async (req, res) => {
       spending: 'total_spent DESC',
     };
     q += ` ORDER BY ${orderMap[sort]||'full_name'} LIMIT $${params.length+1} OFFSET $${params.length+2}`;
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(limit, offset);
 
     const { rows } = await pool.query(q, params);
 
@@ -206,7 +209,7 @@ router.get('/', async (req, res) => {
     res.json({ clients: rows, total: parseInt(cr[0].count) });
   } catch (e) {
     console.error('[GET /clients]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -234,7 +237,7 @@ router.get('/search', async (req, res) => {
     `, [uid, term]);
     res.json(rows);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -249,7 +252,7 @@ router.post('/', async (req, res) => {
     res.json(client);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ce client existe déjà.' });
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -265,7 +268,7 @@ router.post('/auto', async (req, res) => {
     });
     res.json({ created: true, client });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -347,7 +350,7 @@ router.get('/:id', async (req, res) => {
     res.json({ ...client, total_spent, total_visits, transactions: txs, appointments: apts, notes_list: notes, promos });
   } catch (e) {
     console.error('[GET /clients/:id]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -394,6 +397,10 @@ router.put('/:id', async (req, res) => {
     }
 
     // Interne : modification complète
+    if (email && !isValidEmail(email)) return res.status(400).json({ error: 'Email invalide.' });
+    // Normalisation lowercase : indispensable car tous les SELECT/JOIN sur
+    // email utilisent LOWER(...) → un email stocké en mixed-case est introuvable.
+    const emailNorm = email ? email.toLowerCase().trim() : '';
     const { rows } = await pool.query(
       `UPDATE client_accounts SET
          first_name = COALESCE(NULLIF($3,''), first_name),
@@ -402,7 +409,7 @@ router.put('/:id', async (req, res) => {
          phone      = COALESCE(NULLIF($6,''), phone),
          notes      = $7
        WHERE id=$1 AND user_id=$2 RETURNING *`,
-      [req.params.id, uid, first_name||'', last_name||'', email||'', phone||'', notes??null]
+      [req.params.id, uid, first_name||'', last_name||'', emailNorm, phone||'', notes??null]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Client introuvable.' });
 
@@ -413,7 +420,7 @@ router.put('/:id', async (req, res) => {
     const r = await pool.query('SELECT * FROM client_accounts WHERE id=$1', [rows[0].id]);
     res.json({ ...r.rows[0], source: r.rows[0].global_client_id ? 'platform' : 'internal' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -439,7 +446,7 @@ router.delete('/:id', async (req, res) => {
         : 'Client supprimé.',
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -518,7 +525,7 @@ router.post('/:id/invite', async (req, res) => {
     }
   } catch (e) {
     console.error('[POST /clients/:id/invite]', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -533,16 +540,20 @@ router.post('/:id/note', async (req, res) => {
     if (!cl[0]) return res.status(404).json({ error: 'Client introuvable.' });
 
     const { note_text, employee_id, employee_name } = req.body;
-    if (!note_text?.trim()) return res.status(400).json({ error: 'Note vide.' });
+    const trimmed = note_text?.trim() || '';
+    if (!trimmed) return res.status(400).json({ error: 'Note vide.' });
+    if (trimmed.length > 5000) return res.status(400).json({ error: 'Note trop longue (5000 caractères max).' });
 
+    const fullName = `${cl[0].first_name || ''} ${cl[0].last_name || ''}`.trim() || 'Client';
     const { rows } = await pool.query(
       `INSERT INTO client_notes (user_id, client_email, client_name, note_text, created_by_employee_id, created_by_name)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [uid, cl[0].email, cl[0].first_name+' '+cl[0].last_name, note_text.trim(), employee_id||null, employee_name||null]
+      [uid, cl[0].email, fullName, trimmed, employee_id||null, employee_name||null]
     );
     res.json(rows[0]);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[POST /clients/:id/note]', e);
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -569,6 +580,6 @@ router.patch('/:id/block', async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Client introuvable.' });
     res.json({ ...rows[0], source: rows[0].global_client_id ? 'platform' : 'internal' });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
