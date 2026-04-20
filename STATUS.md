@@ -5,7 +5,62 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-19 (suite 21) : Commit D — Timezone-aware booking (DST + serveur UTC)
+## 🆕 Session 2026-04-20 (suite 22) : Audit STATS + EXPORT — commits E, F, G
+
+### Audit mené par agent (18 bugs trouvés)
+5 critiques + 7 majeurs + 6 mineurs. Traités dans 3 commits.
+
+### Commit E (`7e73c62`) — CSV/export hardening
+**Fichier** : `backend/src/routes/export.js`
+
+- **`escCsv()`** refait : gère `;` (sep CSV FR, Excel), formula injection Excel
+  (préfixe `'` si champ commence par `= + - @ \t \r`), retours chariot.
+- **Double escape supprimé** : `categorie`/`employe`/`description` passaient
+  2× dans `escCsv` → guillemets quadruplés, champs illisibles.
+- **`pinAdminMiddleware` sur `/csv` et `/pdf`** : l'export financier complet est
+  désormais gated derrière le PIN admin (auparavant JWT merchant suffisait →
+  session volée = dump compta complète). `/summary` reste sans PIN (preview).
+- **Validation stricte** : `from`/`to` (regex YYYY-MM-DD), `employee_id`/
+  `category_id` (regex UUID), `type ∈ {all,revenue,expense}`. Plage max 2 ans
+  (DoS mémoire PDFKit).
+- **GROUP BY e.id** au lieu de `e.name` → plus de fusion d'employés homonymes.
+- **`/summary`** : `total_tx_revenue` / `total_tx_expense` séparés (avant, un
+  `total_tx` global mélangeait recettes+dépenses → KPI incohérent).
+- **Error messages génériques** : plus de `e.message` PG fuit dans la réponse.
+
+### Commit F+G (`4268f7b`) — Stats TZ + cache invalidation
+**Fichiers** : `backend/src/routes/stats.js`, `backend/src/routes/transactions.js`
+
+- **Validation input stats** : `from`/`to` + `employee_id` (même regex).
+- **`/today` TZ-aware** via helper `merchantToday(userId)` qui requête
+  `NOW() AT TIME ZONE COALESCE(booking_settings.timezone, 'Europe/Paris')`.
+  Avant : serveur Render UTC → à 23h Paris le dashboard basculait au lendemain
+  (CA = 0€ affiché alors que le merchant vendait encore).
+- **`/forecast` borne TZ-aware** + **combler mois manquants avec 0** : si un
+  merchant saute un mois, la régression linéaire traitait `nov` comme `index+1
+  de sept` → prévision faussée. Corrigé.
+- **Error messages génériques** sur toutes les routes stats.
+- **`invalidateStatsCache(userId)`** dans `transactions.js` : appelé après
+  POST/PUT/DELETE d'une transaction. Invalide les clés
+  `stats:products|today|forecast|heatmap:${userId}`. Avant : décalage 2-10 min
+  entre vente et dashboard.
+
+### Reste à faire (optionnel, mineur)
+- Bug #8 : SUM(qty_total NULL) pour anciennes lignes pré-migration (à
+  surveiller, impact nul si migration appliquée).
+- Bug #18 : incohérence point/virgule dans libellé multi-paiement CSV.
+
+### Bugs couverts (18/18 bloquants traités)
+Critiques 1,3,4,5,9,10 : commit E. Majeurs 6,7,11,12,17 : commits E+F+G.
+Cache (2) : commit G.
+
+### Commits
+- `7e73c62` audit(export) E: CSV hardening + pinAdmin on /csv /pdf
+- `4268f7b` audit(stats) F+G: TZ-aware dates + input validation + cache invalidation
+
+---
+
+## Session 2026-04-19 (suite 21) : Commit D — Timezone-aware booking (DST + serveur UTC)
 
 ### Problèmes visés (audit booking)
 - **#6** `getSlots` utilisait `new Date().toLocaleDateString('sv-SE')` / `getHours()` → heure
