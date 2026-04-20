@@ -878,6 +878,50 @@ async function sendReferralWelcome({ to, filleulName, businessName, code, type, 
   return sendEmail({ to, subject, html });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// J3 : compteur email GLOBAL cluster-safe (DB-backed, remplace
+// global.emailsToday qui vivait en mémoire par worker).
+// + helper per-user coherent avec users.email_sent_today
+// ─────────────────────────────────────────────────────────────────────────────
+const { pool: _emailPool } = require('../db');
+/** Retourne le count global du jour (0 si aucune ligne) */
+async function getGlobalEmailCount() {
+  try {
+    const { rows } = await _emailPool.query(
+      `SELECT count FROM email_global_daily WHERE date=CURRENT_DATE`
+    );
+    return rows[0]?.count || 0;
+  } catch (e) {
+    console.error('[EMAIL getGlobalCount]', e.message);
+    return 0;
+  }
+}
+/** Incrémente de 1 le compteur global du jour (atomique, upsert) */
+async function incrGlobalEmailCount() {
+  try {
+    await _emailPool.query(
+      `INSERT INTO email_global_daily (date, count) VALUES (CURRENT_DATE, 1)
+       ON CONFLICT (date) DO UPDATE SET count = email_global_daily.count + 1`
+    );
+  } catch (e) {
+    console.error('[EMAIL incrGlobalCount]', e.message);
+  }
+}
+/** Incrémente le compteur per-user (users.email_sent_today + email_sent_month) */
+async function incrUserEmailCount(userId) {
+  if (!userId) return;
+  try {
+    await _emailPool.query(
+      `UPDATE users SET email_sent_today = email_sent_today + 1,
+                        email_sent_month = email_sent_month + 1
+        WHERE id=$1`,
+      [userId]
+    );
+  } catch (e) {
+    console.error('[EMAIL incrUserCount]', e.message);
+  }
+}
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -893,4 +937,7 @@ module.exports = {
   sendReferralReward,
   sendReferralWelcome,
   sendBirthdayPromo,
+  getGlobalEmailCount,
+  incrGlobalEmailCount,
+  incrUserEmailCount,
 };

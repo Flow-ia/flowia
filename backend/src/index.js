@@ -252,22 +252,13 @@ function startServer() {
   });
 
   // ── Protection Brevo gratuit — compteur global emails ────────────────────
-  global.emailsToday = 0;
-  // Reset chaque jour à minuit
-  const resetEmailCounter = () => {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0);
-    setTimeout(() => {
-      global.emailsToday = 0;
-      console.log('[EMAIL] Compteur journalier reset');
-      setInterval(() => { global.emailsToday = 0; }, 24 * 60 * 60 * 1000);
-    }, midnight - now);
-  };
-  resetEmailCounter();
+  // J3 : remplacé par un compteur DB-backed (table email_global_daily) pour
+  // être cluster-safe. Les helpers getGlobalEmailCount / incrGlobalEmailCount
+  // / incrUserEmailCount gèrent l'upsert atomique + reset implicite (nouvelle
+  // ligne par date = reset automatique à minuit sans setInterval).
 
   // ── Cron — uniquement sur le worker 1 pour éviter les doublons ───────────
-  const { sendEmail } = require('./utils/email');
+  const { sendEmail, getGlobalEmailCount, incrGlobalEmailCount, incrUserEmailCount } = require('./utils/email');
   const { pool: dbPool } = require('./db');
   const { sleep: cronSleep } = require('./utils/messenger');
 
@@ -287,18 +278,16 @@ function startServer() {
       if (!rows.length) return;
       for (const item of rows) {
         try {
-          if (global.emailsToday >= 300) {
+          const already = await getGlobalEmailCount();
+          if (already >= 300) {
             console.log('[CRON queue] Limite email marketing atteinte, arret');
             break;
           }
           await sendEmail({ to: item.client_email, subject: 'Offre speciale de votre commerce', html: item.message });
           await dbPool.query(`UPDATE campaign_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [item.id]);
-          await dbPool.query(
-            `UPDATE users SET email_sent_today = email_sent_today + 1, email_sent_month = email_sent_month + 1 WHERE id=$1`,
-            [item.user_id]
-          );
-          global.emailsToday++;
-          if (global.emailsToday > 250) console.warn('[EMAIL] Warning: > 250 emails aujourd\'hui !');
+          await incrUserEmailCount(item.user_id);
+          await incrGlobalEmailCount();
+          if (already + 1 > 250) console.warn('[EMAIL] Warning: > 250 emails aujourd\'hui !');
           await cronSleep(500);
         } catch (e) {
           await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`, [item.id, e.message]);
@@ -406,7 +395,7 @@ function startServer() {
     try {
       // Rappel 24h avant
       const { rows: reminders24 } = await dbPool.query(`
-        SELECT a.id, a.client_name, a.client_email, a.date, a.start_time, a.duration_minutes,
+        SELECT a.id, a.user_id, a.client_name, a.client_email, a.date, a.start_time, a.duration_minutes,
           bs.name AS service_name, e.name AS employee_name,
           u.business_name, u.address AS business_address
         FROM appointments a
@@ -450,13 +439,14 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
 </div></div></body></html>`,
           });
           await dbPool.query(`UPDATE appointments SET reminder_24h_sent=TRUE WHERE id=$1`, [r.id]);
-          global.emailsToday++;
+          await incrGlobalEmailCount();
+          await incrUserEmailCount(r.user_id);
         } catch (e) { console.error('[REMINDER 24h]', e.message); }
       }
 
       // Rappel 2h avant
       const { rows: reminders2 } = await dbPool.query(`
-        SELECT a.id, a.client_name, a.client_email, a.date, a.start_time,
+        SELECT a.id, a.user_id, a.client_name, a.client_email, a.date, a.start_time,
           bs.name AS service_name, e.name AS employee_name,
           u.business_name, u.address AS business_address
         FROM appointments a
@@ -498,7 +488,8 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
 </div></div></body></html>`,
           });
           await dbPool.query(`UPDATE appointments SET reminder_2h_sent=TRUE WHERE id=$1`, [r.id]);
-          global.emailsToday++;
+          await incrGlobalEmailCount();
+          await incrUserEmailCount(r.user_id);
         } catch (e) { console.error('[REMINDER 2h]', e.message); }
       }
 
@@ -636,7 +627,8 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               [camp.user_id, emailLow, year]
             );
             if (already.length) continue;
-            if (global.emailsToday >= 300) { console.log('[CRON birthday] limite email atteinte'); return; }
+            const sentToday = await getGlobalEmailCount();
+            if (sentToday >= 300) { console.log('[CRON birthday] limite email atteinte'); return; }
 
             // INSERT promo + INSERT reward en TRANSACTION atomique.
             // + Retry (3 tentatives) sur collision UNIQUE(user_id, code) —
@@ -715,7 +707,8 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               businessPhone: camp.biz_phone,
               businessAddress: camp.biz_address,
             });
-            global.emailsToday++;
+            await incrGlobalEmailCount();
+            await incrUserEmailCount(camp.user_id);
             totalSent++;
             await cronSleep(300);
           } catch (e) {

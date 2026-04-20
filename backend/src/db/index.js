@@ -875,6 +875,16 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_today INT DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_sent_month INT DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_day_reset DATE DEFAULT CURRENT_DATE`);
+  // J3 : compteur email GLOBAL cluster-safe. Remplace global.emailsToday qui
+  // vivait en mémoire par worker (multiplié par N workers en cluster Render).
+  // Une ligne par jour, INSERT ... ON CONFLICT ... DO UPDATE SET count+=1.
+  // Les lignes anciennes ne sont pas purgées (historique compact, 365 lignes/an).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS email_global_daily (
+      date  DATE PRIMARY KEY,
+      count INT  NOT NULL DEFAULT 0
+    )
+  `);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_month_reset DATE DEFAULT DATE_TRUNC('month',CURRENT_DATE)`);
 
   await runMigration(`
