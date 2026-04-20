@@ -14,6 +14,55 @@ function getStripe() {
   return require('stripe')(key);
 }
 
+// ── Helper : crédite le solde UNE SEULE FOIS pour un checkoutId donné ────────
+// Protège contre le double-crédit (race webhook + verify-intent + verify-session)
+// via UPDATE ... RETURNING atomique + UNIQUE index sur sumup_checkout_id.
+// Renvoie { credited: true } si le crédit a été appliqué par cet appel,
+// { credited: false, already: true } si un autre process l'a déjà fait.
+async function creditSmsOnce({ userId, amount, smsCount, description, checkoutId }) {
+  if (!userId || !amount || !checkoutId) {
+    throw new Error('creditSmsOnce: userId/amount/checkoutId requis');
+  }
+  // Étape 1 : "claim" la ligne pending de façon atomique. Un seul appelant
+  // peut passer 'pending' → 'completed' grâce au WHERE.
+  const claimed = await pool.query(
+    `UPDATE sms_transactions SET status='completed'
+      WHERE sumup_checkout_id=$1 AND status='pending'
+      RETURNING id`,
+    [checkoutId]
+  );
+  if (claimed.rows.length === 0) {
+    // Pas de pending : soit déjà completed, soit aucune ligne (webhook
+    // arrivé avant l'INSERT pending). On vérifie.
+    const { rows: ex } = await pool.query(
+      `SELECT status FROM sms_transactions WHERE sumup_checkout_id=$1`,
+      [checkoutId]
+    );
+    if (ex.length && ex[0].status === 'completed') {
+      return { credited: false, already: true };
+    }
+    // Cas rare : INSERT direct en 'completed'. La contrainte UNIQUE
+    // (uq_sms_tx_checkout) garantit qu'un seul INSERT réussit.
+    try {
+      await pool.query(
+        `INSERT INTO sms_transactions
+           (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
+         VALUES ($1,'credit',$2,$3,$4,$5,'completed')`,
+        [userId, amount, smsCount || 0, description || `Recharge ${amount} EUR`, checkoutId]
+      );
+    } catch (e) {
+      if (e.code === '23505') return { credited: false, already: true };
+      throw e;
+    }
+  }
+  // Crédit du solde uniquement si on a remporté le "claim"
+  await pool.query(
+    'UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
+    [amount, userId]
+  );
+  return { credited: true };
+}
+
 // Garantit qu'un Customer Stripe existe pour ce merchant (réutilise les cartes)
 async function ensureStripeCustomer(userId) {
   const { rows } = await pool.query(
@@ -194,27 +243,19 @@ router.post('/sms/verify-intent', authMiddleware, async (req, res) => {
     if (intent.status !== 'succeeded')
       return res.json({ credited: false, status: intent.status });
 
-    const { rows: existing } = await pool.query(
-      "SELECT * FROM sms_transactions WHERE sumup_checkout_id=$1", [intent.id]
-    );
-    if (existing.length && existing[0].status === 'completed') {
-      const { rows: [u] } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
-      return res.json({
-        credited: false, already_credited: true,
-        new_balance: parseFloat(u.sms_balance).toFixed(2),
-        new_sms_estimated: Math.floor(parseFloat(u.sms_balance) / SMS_PRICE),
-      });
-    }
-
     const amount   = parseFloat(intent.metadata?.amount || 0);
     const smsCount = parseInt(intent.metadata?.sms_count || 0);
-    await pool.query('UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2', [amount, userId]);
-    await pool.query(
-      "UPDATE sms_transactions SET status='completed' WHERE sumup_checkout_id=$1", [intent.id]
-    );
+    const result = await creditSmsOnce({
+      userId, amount, smsCount,
+      description: `Recharge ${amount} EUR`,
+      checkoutId: intent.id,
+    });
     const { rows: [u] } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
     res.json({
-      credited: true, amount, sms_count: smsCount,
+      credited: result.credited,
+      already_credited: !!result.already,
+      amount: result.credited ? amount : undefined,
+      sms_count: result.credited ? smsCount : undefined,
       new_balance: parseFloat(u.sms_balance).toFixed(2),
       new_sms_estimated: Math.floor(parseFloat(u.sms_balance) / SMS_PRICE),
     });
@@ -260,11 +301,13 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
       cancel_url:  `${FRONTEND_URL}/settings/marketing/solde?recharge=cancelled`,
     });
 
-    // Enregistrer EN ATTENTE — ne pas crediter ici
+    // Enregistrer EN ATTENTE — ne pas crediter ici. ON CONFLICT protège
+    // contre un double INSERT (impossible avec une session fresh, mais safe).
     await pool.query(`
       INSERT INTO sms_transactions
         (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
       VALUES ($1,'credit',$2,$3,$4,$5,'pending')
+      ON CONFLICT (sumup_checkout_id) DO NOTHING
     `, [userId, amount, estimatedSms, `Recharge ${amount}EUR`, session.id]);
 
     console.log('[STRIPE] Session creee:', session.id, '| Montant:', amount, '| User:', userId);
@@ -277,48 +320,45 @@ router.post('/sms/checkout', authMiddleware, async (req, res) => {
 });
 
 // POST /api/payments/sms/webhook — Stripe envoie l'evenement ici
+// SÉCURITÉ : signature OBLIGATOIRE. Sans STRIPE_WEBHOOK_SECRET ou sans header
+// 'stripe-signature' valide, l'endpoint rejette 400. Évite qu'un attaquant
+// forge un event payment_intent.succeeded et crédite n'importe quel compte.
+// On répond APRÈS la vérification signature pour que Stripe retry en cas
+// d'échec (ne pas renvoyer 200 à un payload invalide).
 router.post('/sms/webhook',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
-    res.json({ received: true }); // repondre immediatement
+    const sig = req.headers['stripe-signature'];
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!secret || !sig) {
+      console.error('[STRIPE WEBHOOK] Rejete : secret ou signature manquant');
+      return res.status(400).json({ error: 'webhook signature required' });
+    }
+    let event;
+    try {
+      const stripe = getStripe();
+      event = stripe.webhooks.constructEvent(req.body, sig, secret);
+    } catch (e) {
+      console.error('[STRIPE WEBHOOK] Signature invalide:', e.message);
+      return res.status(400).json({ error: 'invalid signature' });
+    }
+    // Signature OK → on peut acquitter Stripe avant le traitement DB
+    res.json({ received: true });
 
     try {
-      let event;
-      const sig = req.headers['stripe-signature'];
-      const secret = process.env.STRIPE_WEBHOOK_SECRET;
-      const stripe = getStripe();
-
-      if (secret && sig) {
-        event = stripe.webhooks.constructEvent(req.body, sig, secret);
-      } else {
-        event = JSON.parse(req.body.toString());
-        console.warn('[STRIPE WEBHOOK] Pas de secret — signature non verifiee');
-      }
-
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
         if (session.payment_status !== 'paid') return;
-
         const userId   = session.metadata?.user_id;
         const amount   = parseFloat(session.metadata?.amount || 0);
         const smsCount = parseInt(session.metadata?.sms_count || 0);
-
-        // Protection doublon
-        const { rows: existing } = await pool.query(
-          "SELECT id FROM sms_transactions WHERE sumup_checkout_id=$1 AND status='completed'",
-          [session.id]
-        );
-        if (existing.length > 0) return;
-
-        await pool.query(
-          'UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
-          [amount, userId]
-        );
-        await pool.query(
-          "UPDATE sms_transactions SET status='completed' WHERE sumup_checkout_id=$1",
-          [session.id]
-        );
-        console.log('[STRIPE WEBHOOK] Credite:', amount, 'EUR ->', userId, '|', smsCount, 'SMS');
+        if (!userId || !amount) return;
+        const r = await creditSmsOnce({
+          userId, amount, smsCount,
+          description: `Recharge ${amount} EUR`,
+          checkoutId: session.id,
+        });
+        if (r.credited) console.log('[STRIPE WEBHOOK session] Credite:', amount, 'EUR ->', userId);
       }
 
       if (event.type === 'payment_intent.succeeded') {
@@ -327,29 +367,15 @@ router.post('/sms/webhook',
         const amount   = parseFloat(intent.metadata?.amount || 0);
         const smsCount = parseInt(intent.metadata?.sms_count || 0);
         if (!userId || !amount) return;
-
-        const { rows: existing } = await pool.query(
-          "SELECT id, status FROM sms_transactions WHERE sumup_checkout_id=$1",
-          [intent.id]
-        );
-        if (existing.length && existing[0].status === 'completed') return;
-
-        await pool.query('UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2',
-          [amount, userId]);
-        if (existing.length) {
-          await pool.query("UPDATE sms_transactions SET status='completed' WHERE sumup_checkout_id=$1",
-            [intent.id]);
-        } else {
-          await pool.query(
-            `INSERT INTO sms_transactions (user_id, type, amount, sms_count, description, sumup_checkout_id, status)
-             VALUES ($1,'credit',$2,$3,$4,$5,'completed')`,
-            [userId, amount, smsCount, `Recharge ${amount} EUR`, intent.id]
-          );
-        }
-        console.log('[STRIPE WEBHOOK intent.succeeded] Credite:', amount, 'EUR ->', userId);
+        const r = await creditSmsOnce({
+          userId, amount, smsCount,
+          description: `Recharge ${amount} EUR`,
+          checkoutId: intent.id,
+        });
+        if (r.credited) console.log('[STRIPE WEBHOOK intent] Credite:', amount, 'EUR ->', userId);
       }
     } catch(e) {
-      console.error('[STRIPE WEBHOOK ERROR]', e.message);
+      console.error('[STRIPE WEBHOOK handler error]', e.message);
     }
   }
 );
@@ -383,25 +409,21 @@ router.get('/sms/verify/:sessionId', authMiddleware, async (req, res) => {
     if (!txRows.length) return res.status(404).json({ error: 'Transaction introuvable' });
 
     const tx = txRows[0];
-    if (tx.status === 'completed') {
-      const { rows: [u] } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
-      return res.json({
-        credited: false, already_credited: true,
-        new_balance: parseFloat(u.sms_balance).toFixed(2)
-      });
-    }
-
-    // Crediter
-    await pool.query('UPDATE users SET sms_balance = sms_balance + $1 WHERE id=$2', [tx.amount, userId]);
-    await pool.query("UPDATE sms_transactions SET status='completed' WHERE id=$1", [tx.id]);
+    const amount = parseFloat(session.metadata?.amount || tx.amount || 0);
+    const smsCount = parseInt(session.metadata?.sms_count || tx.sms_count || 0);
+    const r = await creditSmsOnce({
+      userId, amount, smsCount,
+      description: tx.description || `Recharge ${amount} EUR`,
+      checkoutId: sessionId,
+    });
 
     const { rows: [u] } = await pool.query('SELECT sms_balance FROM users WHERE id=$1', [userId]);
-    console.log('[STRIPE VERIFY] Credite:', tx.amount, 'EUR ->', userId);
-
+    if (r.credited) console.log('[STRIPE VERIFY] Credite:', amount, 'EUR ->', userId);
     res.json({
-      credited: true,
-      amount: tx.amount,
-      sms_count: tx.sms_count,
+      credited: r.credited,
+      already_credited: !!r.already,
+      amount: r.credited ? amount : undefined,
+      sms_count: r.credited ? smsCount : undefined,
       new_balance: parseFloat(u.sms_balance).toFixed(2),
       new_sms_estimated: Math.floor(parseFloat(u.sms_balance) / SMS_PRICE),
     });

@@ -973,6 +973,14 @@ async function initDB() {
     )
   `);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_sms_tx_user ON sms_transactions(user_id, created_at DESC)`);
+  // Idempotency strict : un checkout_id (session Stripe ou intent_id) ne peut
+  // correspondre qu'à UNE SEULE ligne. Protège contre le double-crédit lors
+  // des race conditions webhook + verify-intent + checkout verify.
+  // Partial unique : les transactions sans checkout_id (débits manuels) ne
+  // sont pas concernées.
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sms_tx_checkout
+    ON sms_transactions(sumup_checkout_id)
+    WHERE sumup_checkout_id IS NOT NULL`);
 
   await runMigration(`
     CREATE TABLE IF NOT EXISTS message_log (
