@@ -34,6 +34,15 @@ function BookingPolitiqueWrapper() {
   return <BookingPolitique slug={slug} />;
 }
 
+// Landing QR — /j/:slug redirige vers le flow quick (prénom + tel uniquement).
+// URL courte pour QR plus dense et plus fiable au scan.
+function QuickJoinRedirect() {
+  const { slug } = useParams();
+  const location = useLocation();
+  const sep = location.search ? '&' : '?';
+  return <Navigate to={`/book/${slug}/auth${location.search}${sep}quick=1`} replace />;
+}
+
 // Racine catch-all : sur booking domain, redirige vers /book/<slug> (garde
 // toutes les URLs internes `/book/lille/...` générées par BookingPage stables).
 // Sinon, rend l'app commerçant comme avant.
@@ -55,6 +64,7 @@ root.render(
           <AdminProvider>
             <Routes>
               {/* ── Routes PUBLIQUES booking ── */}
+              <Route path="/j/:slug"                                                                       element={<QuickJoinRedirect />} />
               <Route path="/book/:slug/politique"                                                          element={<BookingPolitiqueWrapper />} />
               {/* Toutes les sous-routes du flow de réservation → même composant BookingPage */}
               {/* Le composant gère lui-même la lecture et l'ecriture de l'URL via useNavigate  */}

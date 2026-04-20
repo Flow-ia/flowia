@@ -5,7 +5,109 @@ dans `git log` (le fichier a été réinitialisé).
 
 ---
 
-## 🆕 Session 2026-04-20 (suite 28) : Audit MEDIA/Upload — commit Q
+## 🆕 Session 2026-04-20 (suite 29) : Feature QR + Audit FRONT — commit R
+
+**Fichiers** : `backend/src/routes/public-booking.js`, `frontend/src/utils/api.js`,
+`frontend/src/index.jsx`, `frontend/src/pages/BookingPage.jsx`,
+`frontend/src/pages/booking/Account.jsx`, `frontend/src/pages/booking/ReferralPage.jsx`,
+`frontend/src/components/AuthFlow.jsx`, `frontend/src/pages/Agenda.jsx`,
+`frontend/src/pages/EmployeeAgenda.jsx`, `frontend/src/pages/settings/TabMarketing.jsx`.
+
+### ✨ Feature : inscription rapide via QR code
+
+**Flux** : commerçant affiche QR → client scan `https://domaine/j/<slug>` →
+redirect `/book/<slug>/auth?quick=1` → formulaire ultra-court (prénom + nom
+optionnel + téléphone) → fiche créée en ~10 s → commerçant voit le client
+dans `ClientsPage` et peut encaisser.
+
+**Backend** — nouvelle route `POST /api/pub/:slug/client/quick-register` :
+- Valide `first_name` (requis, ≤100) + `phone` (requis, 6-20 chiffres).
+- **Idempotence** : recherche sur `regexp_replace(phone, '\\D', '')` — re-scan
+  par le même numéro renvoie la fiche existante + nouveau JWT 30j, pas de
+  doublon.
+- Email synthétique `qr-<phoneDigits>-<rand>@qr.flowia.local` +
+  bcrypt random (inutilisable au login classique) pour respecter le schéma
+  `client_accounts` (email NOT NULL UNIQUE).
+- `source='qr'` dans la ligne créée → suivi des inscriptions QR côté stats.
+- `error hygiene` : 400 génériques, 500 `'Erreur serveur.'` + log serveur
+  (aligné audits K→Q).
+
+**Frontend** :
+- `/j/:slug` → composant `QuickJoinRedirect` qui `Navigate` vers
+  `/book/<slug>/auth?quick=1` (URL courte = QR plus dense/fiable).
+- `BookingPage` lit `?quick=1` au mount → `quickMode=true` → passé à
+  `AuthPanel`.
+- `AuthPanel` rend un formulaire minimal (prénom + tél, nom opt.) quand
+  `mode==='quick'`. Lien "Déjà un compte ? Se connecter" pour basculer.
+- Après succès : `?quick=1` nettoyé via `navigate` replace, le client
+  arrive sur l'accueil marchand identifié.
+
+### 🔒 Audit sécurité FRONTEND — commit R
+
+Audit complet de `Settings.jsx`+`settings/*` (~7800 lignes),
+`BookingPage.jsx`+`booking/*` (~4700 lignes), `Dashboard.jsx` + pages
+marchand. 3 findings CRITIQUES corrigés :
+
+- **`postMessage` origin check (CRITIQUE)** : les handlers Google OAuth
+  dans `Account.jsx:69-79`, `ReferralPage.jsx:302-312`, `AuthFlow.jsx:220`
+  et l'inline `BookingPage.jsx:1893` écoutaient `window.on('message', …)`
+  sans vérifier `e.origin`. Une page tierce ouverte dans un onglet à côté
+  pouvait `postMessage({type:'GOOGLE_AUTH_SUCCESS', token:'…'})` et se
+  faire stocker un faux `ff_client_token` / `ff_token` marchand. Fix :
+  `if (e.origin !== window.location.origin) return;` avant tout traitement.
+
+- **Error hygiene `alert(e.message)` sans fallback** : `Agenda.jsx` (5×),
+  `EmployeeAgenda.jsx` (4×), `TabMarketing.jsx:1712`. Sur erreur réseau
+  ou parse JSON, le message brut s'affichait. Fix : fallback
+  `e.message || 'Une erreur est survenue.'`. Aligné avec backend K→Q qui
+  renvoie toujours `'Erreur serveur.'` en 500.
+
+- **`setErr(e.message)` sans fallback** dans `Account.jsx:109`,
+  `AuthFlow.jsx:627`, `Account.jsx:811/822` (login/register global). Fix :
+  messages génériques `'Échec de la connexion.'` / `'Inscription
+  impossible. Réessayez.'`.
+
+- **`doCancel` sans `window.confirm`** dans `EmployeeAgenda.jsx:213`
+  (audit report C3). `Agenda.jsx:188` avait déjà `confirm(...)`, le flow
+  employé non. Fix : modal native de confirmation avant l'annulation.
+
+- **Validation inputs publics** (audit HAUT) :
+  - `BookingPage.jsx:1794` téléphone — ajout `inputMode="tel"`,
+    `maxLength={20}`, `pattern="[0-9+\\s\\-]*"`.
+  - `BookingPage.jsx:1806` textarea notes — `maxLength={500}` + slice
+    côté onChange (double garde anti-DOS / payload abusif).
+  - `BookingPage.jsx:45` query param `?ref=CODE` — regex
+    `/^[A-Z0-9]{4,30}$/` appliquée avant écriture `localStorage` (et
+    relecture). Avant, n'importe quel overflow passait.
+
+### Non modifié (faible impact)
+
+- **`console.error(e)` en clair** (audit report finding HAUT) — `vite.config.js`
+  a `drop_console:true`, Terser supprime **tous** les `console.*` en
+  production. Dev-only concern, non traité.
+
+- **Tokens clients en `localStorage`** — audit report CRITIQUE #3. Fix
+  propre = cookie HttpOnly côté backend (change majeur). À planifier en
+  session dédiée.
+
+- **PII en URL** (`/client/passages/:visitId`) — backend déjà isolé par
+  token, risque réel faible. Non critique.
+
+- **Suppression compte via string "SUPPRIMER"** — faible, demande OTP
+  email/SMS, feature à part.
+
+### Build
+
+- `cd frontend && npm run build` → ✓ 87 modules transformed en 13.92 s, pas
+  de warning.
+- Backend syntax check `node -c public-booking.js` → OK.
+
+### Commit
+- `<hash-à-remplir>` feat(qr) + audit(front) R: quick signup via QR + postMessage origin + error hygiene + input validation
+
+---
+
+## Session 2026-04-20 (suite 28) : Audit MEDIA/Upload — commit Q
 
 **Fichier** : `backend/src/routes/media.js`
 

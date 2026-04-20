@@ -1187,6 +1187,70 @@ router.post('/:slug/client/register', async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
+// ── Quick register via QR code ────────────────────────────────────────────────
+// Flow : client scan QR → /j/:slug → /book/:slug/auth?quick=1 → formulaire
+// court (prénom + téléphone) → POST ici. Objectif : fiche créée en < 15s pour
+// que le commerçant encaisse. Idempotent sur (user_id, phone_normalized) :
+// re-scan du même QR par le même tel renvoie le même compte (pas de doublon).
+// Email synthétique `qr-<phoneDigits>-<rand>@qr.flowia.local` pour rester
+// compatible avec le schéma client_accounts (email NOT NULL + UNIQUE par
+// marchand). Password bcrypt random (inutilisable au login classique).
+router.post('/:slug/client/quick-register', async (req, res) => {
+  try {
+    const { rows: biz } = await pool.query(
+      'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE', [req.params.slug]
+    );
+    if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+    const userId = biz[0].user_id;
+
+    const first = String(req.body?.first_name || '').trim();
+    const last  = String(req.body?.last_name  || '').trim();
+    const phoneRaw = String(req.body?.phone || '').trim();
+    if (!first) return res.status(400).json({ error: 'Prénom requis.' });
+    if (first.length > 100) return res.status(400).json({ error: 'Prénom trop long.' });
+    if (last.length  > 100) return res.status(400).json({ error: 'Nom trop long.' });
+
+    // Normalisation téléphone : garder + et chiffres, puis ne conserver que les
+    // chiffres pour la clé d'idempotence. +33 6 12… et 06 12… restent distincts.
+    const phoneDigits = phoneRaw.replace(/\D/g, '');
+    if (phoneDigits.length < 6 || phoneDigits.length > 20)
+      return res.status(400).json({ error: 'Téléphone invalide.' });
+
+    // Idempotence : retrouver fiche existante pour ce marchand via téléphone
+    // (comparaison sur chiffres uniquement côté SQL via regexp_replace).
+    const { rows: existing } = await pool.query(
+      `SELECT id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id
+       FROM client_accounts
+       WHERE user_id=$1 AND regexp_replace(COALESCE(phone,''), '\\D', '', 'g') = $2
+       LIMIT 1`,
+      [userId, phoneDigits]
+    );
+
+    let client;
+    if (existing.length) {
+      client = existing[0];
+    } else {
+      const rand  = Math.random().toString(36).slice(2, 10);
+      const email = `qr-${phoneDigits}-${rand}@qr.flowia.local`;
+      const hash  = await bcrypt.hash(rand + Date.now(), 10);
+      const { rows } = await pool.query(
+        `INSERT INTO client_accounts
+           (user_id, email, password_hash, first_name, last_name, phone, source)
+         VALUES ($1,$2,$3,$4,$5,$6,'qr')
+         RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id`,
+        [userId, email, hash, first, last || '', phoneRaw]
+      );
+      client = rows[0];
+    }
+
+    const token = jwt.sign(
+      { clientId: client.id, merchantId: userId, globalClientId: client.global_client_id || null, scope: 'client' },
+      process.env.JWT_SECRET, { expiresIn: '30d' }
+    );
+    res.json({ ok: true, token, client: { ...client, has_global_account: !!client.global_client_id } });
+  } catch (e) { console.error('[quick-register]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
+});
+
 router.post('/:slug/client/login', async (req, res) => {
   try {
     const { rows: biz } = await pool.query(

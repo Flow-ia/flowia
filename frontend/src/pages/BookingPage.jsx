@@ -45,11 +45,18 @@ export default function BookingPage({ slug }) {
   const [referralCode, setReferralCode] = useState(() => {
     try {
       const fromUrl = new URLSearchParams(window.location.search).get('ref');
+      // Garde-fou : code parrainage = alphanumérique, 4-30 chars. Rejette
+      // inputs suspects (overflows, URLs, HTML) avant écriture localStorage.
+      const REF_RE = /^[A-Z0-9]{4,30}$/;
       if (fromUrl) {
-        localStorage.setItem('ff_booking_ref_' + slug, fromUrl.toUpperCase());
-        return fromUrl.toUpperCase();
+        const up = fromUrl.toUpperCase();
+        if (REF_RE.test(up)) {
+          localStorage.setItem('ff_booking_ref_' + slug, up);
+          return up;
+        }
       }
-      return localStorage.getItem('ff_booking_ref_' + slug) || '';
+      const stored = localStorage.getItem('ff_booking_ref_' + slug) || '';
+      return REF_RE.test(stored) ? stored : '';
     } catch { return ''; }
   });
   // Info programme parrainage (type/valeur remise) fetchée dès qu'un code
@@ -60,6 +67,13 @@ export default function BookingPage({ slug }) {
   // Flag pour afficher une bannière ponctuelle juste après inscription
   // quand un code parrainage était en cours (message "promo appliquée").
   const [justRegisteredRef, setJustRegisteredRef] = useState(false);
+
+  // Mode QR : formulaire ultra-court (prénom + tél) pour encaissement rapide
+  // en boutique. Activé par `?quick=1` (via /j/:slug qui redirige ici).
+  const [quickMode, setQuickMode] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('quick') === '1'; }
+    catch { return false; }
+  });
 
   // Gérer le retour Google OAuth (URL directe sans popup)
   useEffect(() => {
@@ -1020,6 +1034,7 @@ export default function BookingPage({ slug }) {
                 initialEmail={authInitEmail}
                 initialMode={authInitMode}
                 referralCode={referralCode}
+                quickMode={quickMode}
                 onAuth={(u, meta) => {
                   // Si filleul avec code de parrainage → flag pour afficher
                   // la confirmation "promotion appliquée" sur la page d'accueil
@@ -1027,6 +1042,11 @@ export default function BookingPage({ slug }) {
                   handleAuth(u, meta);
                   setAuthInitEmail('');
                   setAuthInitMode('login');
+                  // Inscription QR : nettoyer `?quick=1` + repartir sur l'accueil
+                  if (meta?.quick) {
+                    setQuickMode(false);
+                    navigate(`/book/${slug}`, { replace:true });
+                  }
                 }}
                 onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); setAuthInitMode('login'); navigate(`/book/${slug}`, {replace:true}); }} />
             </div>
@@ -1778,7 +1798,8 @@ export default function BookingPage({ slug }) {
                                 </div>
                               )}
                             </div>
-                            <input type="tel" placeholder="6 03 04 46 17" value={phoneLocal}
+                            <input type="tel" inputMode="tel" placeholder="6 03 04 46 17" value={phoneLocal}
+                              maxLength={20} pattern="[0-9+\s\-]*"
                               onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
                               style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
                                 background:th.inputBg,border:`1px solid ${phoneErr?'#ef4444':th.inputBorder}`,
@@ -1790,7 +1811,8 @@ export default function BookingPage({ slug }) {
                       <label style={{display:'block',fontSize:12,fontWeight:600,color:th.muted,marginBottom:6}}>
                         Note (optionnelle)
                       </label>
-                      <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3}
+                      <textarea value={notes} onChange={e=>setNotes(e.target.value.slice(0,500))} rows={3}
+                        maxLength={500}
                         placeholder="Demandes particulières…"
                         style={{width:'100%',padding:'12px 14px',borderRadius:10,outline:'none',
                           background:th.inputBg,border:`1px solid ${th.inputBorder}`,
@@ -1877,7 +1899,7 @@ export default function BookingPage({ slug }) {
                               </button>
                             </div>
                             {/* Bouton Google */}
-                            <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug); const popup=window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); const h=(e)=>{ if(e.data?.type!=='GOOGLE_AUTH_SUCCESS')return; window.removeEventListener('message',h); if(popup&&!popup.closed)popup.close(); const{token,client}=e.data; if(!token||!client)return; localStorage.setItem('ff_client_token',token); localStorage.setItem('ff_client_info',JSON.stringify(client)); handleAuth(client); }; window.addEventListener('message',h); }}
+                            <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug); const popup=window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); const expectedOrigin=window.location.origin; const h=(e)=>{ if(e.origin!==expectedOrigin)return; if(e.data?.type!=='GOOGLE_AUTH_SUCCESS')return; window.removeEventListener('message',h); if(popup&&!popup.closed)popup.close(); const{token,client}=e.data; if(!token||!client)return; localStorage.setItem('ff_client_token',token); localStorage.setItem('ff_client_info',JSON.stringify(client)); handleAuth(client); }; window.addEventListener('message',h); }}
                               style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
                                 padding:'11px',borderRadius:10,background:th.card,
                                 border:`1px solid ${th.border}`,cursor:'pointer',

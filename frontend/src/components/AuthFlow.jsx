@@ -217,7 +217,9 @@ function Divider() {
 // ── Hook Google OAuth popup ───────────────────────────────────────────────────
 function useGoogleMerchantAuth(onSuccess) {
   useEffect(() => {
+    const expectedOrigin = window.location.origin;
     const handler = (e) => {
+      if (e.origin !== expectedOrigin) return;
       if (e.data?.type === 'MERCHANT_GOOGLE_AUTH_SUCCESS') {
         onSuccess(e.data.token, e.data.user);
       }
@@ -622,7 +624,7 @@ export function MerchantOnboarding({ user, onComplete }) {
         country: f.country, lat: f.lat, lng: f.lng,
       });
       onComplete(r.token, r.user);
-    } catch (e) { setErr(e.message); }
+    } catch (e) { setErr(e.message || 'Une erreur est survenue.'); }
     finally { setLd(false); }
   };
 

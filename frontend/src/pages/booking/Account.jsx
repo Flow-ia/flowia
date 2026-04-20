@@ -5,8 +5,8 @@ import { useState, useEffect, useRef } from 'react';
 import { pubApi, globalClientApi } from '../../utils/api';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
-export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '' }) {
-  const [mode, setMode]         = useState(initialMode);
+export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false }) {
+  const [mode, setMode]         = useState(quickMode ? 'quick' : initialMode);
   const [email, setEmail]       = useState(initialEmail);
   const [pwd, setPwd]           = useState('');
   const [newPwd, setNewPwd]     = useState('');
@@ -66,7 +66,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       Math.round((window.screen.width - 500) / 2)
     );
     const cleanup = () => window.removeEventListener('message', handler);
+    const expectedOrigin = window.location.origin;
     const handler = (e) => {
+      if (e.origin !== expectedOrigin) return;
       if (e.data?.type !== 'GOOGLE_AUTH_SUCCESS') return;
       cleanup();
       try { popup && popup.close(); } catch {}
@@ -104,7 +106,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         setMode('login');
         setErr('Un compte existe dejà avec cet email. Connectez-vous a la place.');
       } else {
-        setErr(e.message);
+        setErr(e.message || 'Échec de la connexion. Réessayez.');
       }
     }
     finally { setLoading(false); }
@@ -118,6 +120,31 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       setOk('Un code de réinitialisation a été envoye a votre email.');
       setMode('forgot_code');
     } catch(e) { setErr(e.message || 'Erreur envoi email'); }
+    finally { setLoading(false); }
+  };
+
+  // Quick register : prénom + téléphone → fiche créée instantanément.
+  // Backend idempotent sur (user_id, phone normalisé) : re-scan = même compte.
+  const quickSubmit = async () => {
+    if (!first.trim())           { setErr('Prénom requis.'); return; }
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 6)       { setErr('Téléphone invalide.'); return; }
+    setLoading(true); setErr(''); setOk('');
+    try {
+      const r = await pubApi.quickRegister(slug, {
+        first_name: first.trim(),
+        last_name:  last.trim(),
+        phone:      phone.trim(),
+      });
+      localStorage.setItem('ff_client_token', r.token);
+      localStorage.setItem('ff_client_info', JSON.stringify(r.client));
+      onAuth(r.client, { justRegistered: true, quick: true });
+    } catch(e) {
+      // Message générique : backend audit K→Q renvoie du texte propre,
+      // mais on se prémunit contre toute fuite (stack/SQL inattendu).
+      setErr('Impossible de créer votre fiche. Réessayez.');
+      if (e?.message) console.warn('[quick-register]', e.message);
+    }
     finally { setLoading(false); }
   };
 
@@ -184,7 +211,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       <div style={{ padding:20 }}>
 
         {/* Badge compte requis */}
-        {requireAccount && mode !== 'forgot' && mode !== 'forgot_code' && (
+        {requireAccount && mode !== 'forgot' && mode !== 'forgot_code' && mode !== 'quick' && (
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px',
             borderRadius:10, background:'rgba(245,158,11,0.08)',
             border:'1px solid rgba(245,158,11,0.2)', marginBottom:16 }}>
@@ -199,8 +226,61 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
           </div>
         )}
 
+        {/* ── QUICK REGISTER (QR) ── */}
+        {mode === 'quick' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div>
+              <p style={{ margin:'0 0 4px', fontSize:17, fontWeight:800, color:th.text, letterSpacing:'-0.01em' }}>
+                Bienvenue 👋
+              </p>
+              <p style={{ margin:0, fontSize:13, color:th.muted, lineHeight:1.5 }}>
+                Votre fiche est créée en 10 secondes. Pas d'email ni de mot de passe à retenir.
+              </p>
+            </div>
+            <div className="bk-grid2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <label style={S.label}>Prénom *</label>
+                <input placeholder="Prénom" value={first} maxLength={60}
+                  onChange={e=>setFirst(e.target.value)} style={S.inp} autoFocus />
+              </div>
+              <div>
+                <label style={S.label}>Nom</label>
+                <input placeholder="(optionnel)" value={last} maxLength={60}
+                  onChange={e=>setLast(e.target.value)} style={S.inp}/>
+              </div>
+            </div>
+            <div>
+              <label style={S.label}>Téléphone *</label>
+              <input type="tel" inputMode="tel" placeholder="06 00 00 00 00" value={phone}
+                maxLength={20} pattern="[0-9+\s\-]*"
+                onChange={e=>setPhone(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&quickSubmit()}
+                style={S.inp}/>
+            </div>
+            {err && (
+              <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
+                borderRadius:9, background:'rgba(239,68,68,0.06)',
+                border:'1px solid rgba(239,68,68,0.2)' }}>
+                <span style={{fontSize:13,flexShrink:0}}>⚠️</span>
+                <p style={{margin:0,fontSize:12,color:'#dc2626',fontWeight:600}}>{err}</p>
+              </div>
+            )}
+            <button onClick={quickSubmit}
+              disabled={loading||!first.trim()||phone.replace(/\D/g,'').length<6}
+              style={{...S.btnPrimary,
+                opacity:loading||!first.trim()||phone.replace(/\D/g,'').length<6?0.5:1}}>
+              {loading ? '...' : '→ Créer ma fiche'}
+            </button>
+            <button onClick={()=>{ setMode('login'); setErr(''); }}
+              style={{ background:'none', border:'none', cursor:'pointer', fontSize:12,
+                color:th.muted, textAlign:'center', padding:'2px 0' }}>
+              Déjà un compte ? Se connecter
+            </button>
+          </div>
+        )}
+
         {/* ── TABS LOGIN / REGISTER ── */}
-        {mode !== 'forgot' && mode !== 'forgot_code' && (
+        {mode !== 'quick' && mode !== 'forgot' && mode !== 'forgot_code' && (
           <div style={{ display:'flex', gap:4, padding:4, background:th.inputBg,
             borderRadius:12, marginBottom:18 }}>
             {[['login','Se connecter'],['register','Creer un compte']].map(([m,l]) => (
@@ -728,7 +808,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
       onLogin(r.token, r.client);
       setMode('dashboard');
       setTimeout(loadData, 100);
-    } catch(e) { setErr(e.message); }
+    } catch(e) { setErr(e.message || 'Échec de la connexion.'); }
     finally { setLoading(false); }
   };
 
@@ -739,7 +819,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
       onLogin(r.token, r.client);
       setMode('dashboard');
       setTimeout(loadData, 100);
-    } catch(e) { setErr(e.message); }
+    } catch(e) { setErr(e.message || 'Inscription impossible. Réessayez.'); }
     finally { setLoading(false); }
   };
 

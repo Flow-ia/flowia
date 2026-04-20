@@ -207,16 +207,17 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
       const end = fromMin(toMin(editForm.start_time)+dur);
       const upd = await bookingApi.updateAppt(appt.id, { date:editForm.date, start_time:editForm.start_time, end_time:end, client_name:editForm.client_name, client_email:editForm.client_email||null, client_phone:editForm.client_phone||null, notes:editForm.notes||null });
       const merged = {...appt,...upd}; setAppt(merged); onUpdated(merged); setTab('detail');
-    } catch(e) { alert(e.message); } finally { setSaving(false); }
+    } catch(e) { alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   const doCancel = async () => {
+    if (!window.confirm('Annuler ce rendez-vous ?')) return;
     setSaving(true);
     try {
       const upd = await bookingApi.updateAppt(appt.id, { status:'cancelled', cancel_reason:cancelReason||null, notify_client:cancelNotify&&!!appt.client_email });
       const merged = {...appt,...upd, status:'cancelled', cancel_reason:cancelReason};
       setAppt(merged); onUpdated(merged); setTab('detail');
-    } catch(e) { alert(e.message); } finally { setSaving(false); }
+    } catch(e) { alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   const doCheckout = async () => {
@@ -235,7 +236,7 @@ function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClos
           setAppt(merged); onUpdated(merged);
           if (res.transaction) onTxCreated(res.transaction);
           setTab('detail');
-        } catch(e) { alert(e.message); } finally { setSaving(false); }
+        } catch(e) { alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
       }
     );
   };
@@ -637,7 +638,7 @@ function NewApptModal({ empId, services, onSave, onClose, theme: t }) {
     try {
       await onSave({ employee_id:empId, client_name:client.name, client_email:client.email||null, client_phone:client.phone||null, date:client.date, start_time:client.start_time, notes:client.notes||null, items:cart, total_amount:autoTotal, total_duration:totalDuration, custom_duration:customDuration!==''?parseInt(customDuration)||0:null });
       onClose();
-    } catch(e){ alert(e.message); } finally { setSaving(false); }
+    } catch(e){ alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   return (

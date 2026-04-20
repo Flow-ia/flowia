@@ -306,6 +306,7 @@ export const pubApi = {
   getSlots:       (slug, q) => pubRequest(`/${slug}/slots?` + new URLSearchParams(q)),
   book:           (slug, b) => pubRequest(`/${slug}/book`,             { method: 'POST', body: JSON.stringify(b) }),
   register:       (slug, b) => pubRequest(`/${slug}/client/register`,  { method: 'POST', body: JSON.stringify(b) }),
+  quickRegister:  (slug, b) => pubRequest(`/${slug}/client/quick-register`, { method: 'POST', body: JSON.stringify(b) }),
   login:          (slug, b) => pubRequest(`/${slug}/client/login`,     { method: 'POST', body: JSON.stringify(b) }),
   myAppointments: (slug)    => pubRequest(`/${slug}/client/appointments`),
   cancel:         (slug,id,b)=> pubRequest(`/${slug}/client/appointments/${id}/cancel`, { method: 'PUT', body: JSON.stringify(b) }),

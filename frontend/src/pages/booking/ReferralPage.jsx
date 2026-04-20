@@ -299,7 +299,9 @@ export function ReferralPage({
               const popup = window.open(url, "google_auth",
                 "width=500,height=600,scrollbars=yes,top=100,left=" +
                 Math.round((window.screen.width - 500) / 2));
+              const expectedOrigin = window.location.origin;
               const handler = (e) => {
+                if (e.origin !== expectedOrigin) return;
                 if (e.data?.type !== "GOOGLE_AUTH_SUCCESS") return;
                 window.removeEventListener("message", handler);
                 try { popup && popup.close(); } catch {}

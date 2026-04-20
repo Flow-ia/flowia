@@ -139,7 +139,7 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
       });
       const merged = {...appt,...upd};
       setAppt(merged); onUpdated(merged); setTab('detail');
-    } catch(e){ alert(e.message); } finally { setSaving(false); }
+    } catch(e){ alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   /* ── annulation ── */
@@ -153,7 +153,7 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
       });
       const merged = {...appt,...upd, status:'cancelled'};
       setAppt(merged); onUpdated(merged); setTab('detail');
-    } catch(e){ alert(e.message); } finally { setSaving(false); }
+    } catch(e){ alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   /* ── encaissement ── */
@@ -178,7 +178,7 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
           setAppt(merged); onUpdated(merged);
           if (res.transaction) onTxCreated(res.transaction);
           setTab('detail');
-        } catch(e){ alert(e.message); } finally { setSaving(false); }
+        } catch(e){ alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
       }
     );
   };
@@ -191,7 +191,7 @@ function ApptModal({ appt: init, employees, employee, onUpdated, onDeleted, onTx
       await bookingApi.deleteAppt(appt.id);
       onDeleted(appt.id);
       onClose();
-    } catch(e){ alert(e.message); } finally { setSaving(false); }
+    } catch(e){ alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   return (
@@ -583,7 +583,7 @@ function AddApptModal({ employees, services, selectedDate, onSave, onClose, them
         custom_duration: customDuration!=='' ? parseInt(customDuration)||0 : null,
       });
       onClose();
-    } catch(e){ alert(e.message); } finally { setSaving(false); }
+    } catch(e){ alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
   };
 
   return (
