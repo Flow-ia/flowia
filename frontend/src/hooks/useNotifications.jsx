@@ -98,13 +98,19 @@ export function playSound(type, repeat = 1) {
 }
 
 // ── Enregistrement du Service Worker + Web Push ───────────────────────────────
+// #29 : retourne un objet structuré { ok, reason } au lieu de null silencieux,
+// pour que l'UI puisse afficher un message clair : 'Permission refusée' vs
+// 'Navigateur non supporté' vs 'Erreur technique'.
 async function registerPush(publicKey) {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return { ok: false, reason: 'unsupported' };
+  }
   try {
     const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     await navigator.serviceWorker.ready;
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return null;
+    if (permission === 'denied') return { ok: false, reason: 'denied' };
+    if (permission !== 'granted') return { ok: false, reason: 'dismissed' };
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
@@ -112,8 +118,11 @@ async function registerPush(publicKey) {
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
     }
-    return sub;
-  } catch (e) { console.warn('[Push]', e.message); return null; }
+    return { ok: true, subscription: sub };
+  } catch (e) {
+    console.warn('[Push]', e.message);
+    return { ok: false, reason: 'error', message: e.message };
+  }
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -155,13 +164,16 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
   const enablePush = useCallback(async () => {
     try {
       const keyData = await notifApi.getVapidKey();
-      if (!keyData?.publicKey) return false;
-      const sub = await registerPush(keyData.publicKey);
-      if (!sub) return false;
-      await notifApi.subscribePush(sub.toJSON());
+      if (!keyData?.publicKey) return { ok: false, reason: 'vapid_missing' };
+      const r = await registerPush(keyData.publicKey);
+      if (!r.ok) return r;
+      await notifApi.subscribePush(r.subscription.toJSON());
       setPushEnabled(true);
-      return true;
-    } catch (e) { console.warn('[enablePush]', e); return false; }
+      return { ok: true };
+    } catch (e) {
+      console.warn('[enablePush]', e);
+      return { ok: false, reason: 'error', message: e?.message };
+    }
   }, []);
 
   const disablePush = useCallback(async () => {

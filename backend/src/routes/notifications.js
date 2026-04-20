@@ -146,6 +146,16 @@ async function runDailyRecaps() {
         if (!logs.length) await triggerDailyRecapForUser(user.id, user, today);
       }
     }
+    // #21 : purge app_notifications > 90 jours. Garde un historique consultable
+    // sans faire grossir la table indéfiniment. S'exécute une fois par cron
+    // (toutes les minutes mais cheap sur une table vide / peu vieille).
+    // Bonus : purge notification_log > 60 jours pour même raison.
+    await pool.query(
+      `DELETE FROM app_notifications WHERE created_at < NOW() - INTERVAL '90 days'`
+    ).catch(() => {});
+    await pool.query(
+      `DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '60 days'`
+    ).catch(() => {});
   } catch(e) { console.error('[CRON RECAP]', e.message); }
 }
 
@@ -333,19 +343,28 @@ router.delete('/push-subscribe', async (req, res) => {
 });
 
 // ── GET /api/notifications/inapp ─────────────────────────────────────────────
-// Retourne les notifications in-app récentes (non lues en premier)
+// Retourne les notifications in-app récentes (non lues en premier).
+// #14 : unread_count calculé par SELECT COUNT dédié (pas limité par la
+// pagination) — avant le count était plafonné à 50 si l'user avait 200
+// notifs non-lues.
 router.get('/inapp', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const { rows } = await pool.query(
-      `SELECT * FROM app_notifications
-       WHERE user_id=$1
-       ORDER BY is_read ASC, created_at DESC
-       LIMIT $2`,
-      [req.user.userId, limit]
-    );
-    const unreadCount = rows.filter(r => !r.is_read).length;
-    res.json({ notifications: rows, unread_count: unreadCount });
+    const [{ rows }, { rows: c }] = await Promise.all([
+      pool.query(
+        `SELECT * FROM app_notifications
+         WHERE user_id=$1
+         ORDER BY is_read ASC, created_at DESC
+         LIMIT $2`,
+        [req.user.userId, limit]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS n FROM app_notifications
+         WHERE user_id=$1 AND is_read=FALSE`,
+        [req.user.userId]
+      ),
+    ]);
+    res.json({ notifications: rows, unread_count: c[0]?.n || 0 });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 

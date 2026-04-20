@@ -1252,7 +1252,23 @@ function NotificationCenter({ theme }) {
                 <button onClick={markAllRead} style={{ fontSize:11, color:theme.muted, background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Tout lire</button>
               )}
               {pushSupported && (
-                <button onClick={pushEnabled ? disablePush : enablePush}
+                <button onClick={async () => {
+                  if (pushEnabled) return disablePush();
+                  const r = await enablePush();
+                  if (r && r.ok === false) {
+                    // Feedback clair : distinction entre refus/support/erreur
+                    const msg = r.reason === 'denied'
+                      ? 'Vous avez refusé les notifications. Autorisez-les dans les paramètres de votre navigateur pour recevoir les alertes.'
+                      : r.reason === 'unsupported'
+                      ? 'Votre navigateur ne supporte pas les notifications push.'
+                      : r.reason === 'dismissed'
+                      ? 'Demande de notification fermée. Cliquez à nouveau pour réessayer.'
+                      : r.reason === 'vapid_missing'
+                      ? 'Service de notifications indisponible (contactez le support).'
+                      : `Erreur : ${r.message || 'inconnue'}`;
+                    alert(msg);
+                  }
+                }}
                   style={{ fontSize:11, padding:'3px 8px', borderRadius:8, border:`1px solid ${theme.border}`, background:pushEnabled?'rgba(16,185,129,0.1)':'transparent', color:pushEnabled?'#10b981':theme.muted, fontWeight:700, cursor:'pointer' }}>
                   {pushEnabled ? '🔔 Push ON' : '🔕 Push OFF'}
                 </button>

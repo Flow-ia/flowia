@@ -3,12 +3,25 @@
 const webpush = require('web-push');
 const { pool } = require('../db');
 
-// Configurer VAPID une seule fois
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL || 'mailto:admin@flowfinances.app',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+// #17 : validation au boot — log clair si clés manquantes (au lieu de
+// crash différé au premier envoi). Ne crash pas l'app : les autres features
+// peuvent tourner sans push.
+const VAPID_EMAIL   = process.env.VAPID_EMAIL || process.env.VAPID_SUBJECT || 'mailto:admin@flowfinances.app';
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+const PUSH_ENABLED  = !!(VAPID_PUBLIC && VAPID_PRIVATE);
+if (!PUSH_ENABLED) {
+  console.warn('[PUSH] VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY absentes — push désactivé');
+} else {
+  try {
+    webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE);
+  } catch (e) {
+    console.error('[PUSH] Clés VAPID invalides:', e.message);
+  }
+}
+// #22 : TTL par défaut 1h pour les notifs temps-réel (new appt, reminders).
+// Au-delà, inutile de livrer une notif périmée si le device était offline.
+const PUSH_TTL_SECONDS = 60 * 60;
 
 // ── Enregistrer un abonnement push ───────────────────────────────────────────
 // SÉCURITÉ #1 : rejette la tentative de réassignation d'un endpoint déjà
@@ -66,6 +79,7 @@ async function deletePushSubscription(endpoint, userId = null) {
 
 // ── Envoyer une push notification à tous les abonnements d'un user ───────────
 async function sendPushToUser(userId, payload) {
+  if (!PUSH_ENABLED) return [];
   const { rows } = await pool.query(
     'SELECT endpoint, p256dh, auth_key FROM push_subscriptions WHERE user_id=$1',
     [userId]
@@ -74,11 +88,13 @@ async function sendPushToUser(userId, payload) {
     rows.map(sub =>
       webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } },
-        JSON.stringify(payload)
+        JSON.stringify(payload),
+        { TTL: PUSH_TTL_SECONDS, urgency: 'high' }
       ).catch(async err => {
-        // 410 Gone / 404 = abonnement expiré, on supprime (scope user pour
-        // la défense en profondeur, l'endpoint vient déjà de WHERE user_id).
-        if (err.statusCode === 410 || err.statusCode === 404) {
+        // 410 Gone / 404 Not Found / 403 Forbidden = abonnement invalide/
+        // revoqué. On supprime (scope user pour défense en profondeur,
+        // l'endpoint vient déjà de WHERE user_id).
+        if ([410, 404, 403].includes(err.statusCode)) {
           await deletePushSubscription(sub.endpoint, userId);
         }
         throw err;
@@ -99,19 +115,30 @@ async function createAppNotification(userId, { type, title, body, data = {} }) {
 }
 
 // ── Notifier : nouveau RDV ───────────────────────────────────────────────────
+// #3 RGPD : le payload PUSH minimise les données visibles sur l'écran de
+// verrouillage (téléphone posé sur le comptoir = exposition publique).
+// Nom du client et nom du service ne sont PAS dans le title/body visibles —
+// uniquement l'heure. Les détails complets sont passés dans data (consultés
+// par l'app une fois ouverte, donc authentifié).
+// Le contenu IN-APP garde les détails (affichage protégé par login).
 async function notifyNewAppointment(userId, appt) {
-  const title = `📅 Nouveau RDV — ${appt.client_name}`;
-  const body  = `${appt.service_name || 'RDV'} le ${appt.date} à ${String(appt.start_time).substring(0,5)}`;
+  const timeStr = String(appt.start_time || '').substring(0, 5);
+  // Titre in-app (complet, affiché dans l'app loggée)
+  const appTitle = `📅 Nouveau RDV — ${appt.client_name || 'Client'}`;
+  const appBody  = `${appt.service_name || 'RDV'} le ${appt.date} à ${timeStr}`;
+  // Titre push (minifié pour lock-screen, pas d'info perso)
+  const pushTitle = '📅 Nouveau rendez-vous';
+  const pushBody  = timeStr ? `Créneau ${timeStr} — ouvrez l'agenda pour les détails` : 'Ouvrez l\'agenda pour les détails';
 
-  // 1. In-app
-  await createAppNotification(userId, { type: 'new_appointment', title, body, data: { appointment_id: appt.id } });
+  // 1. In-app (détails complets)
+  await createAppNotification(userId, { type: 'new_appointment', title: appTitle, body: appBody, data: { appointment_id: appt.id } });
 
-  // 2. Push (si abonnements actifs)
+  // 2. Push (minifié)
   try {
     await sendPushToUser(userId, {
       type: 'new_appointment',
-      title,
-      body,
+      title: pushTitle,
+      body:  pushBody,
       icon: '/icon-192.png',
       badge: '/badge-72.png',
       data: { appointment_id: appt.id, url: '/agenda' },
@@ -125,15 +152,19 @@ async function notifyAppointmentReminder(userId, appt, minutesBefore) {
   const label = minutesBefore < 60
     ? `dans ${minutesBefore} min`
     : minutesBefore < 1440 ? `dans ${minutesBefore / 60}h` : `demain`;
-  const title = `⏰ Rappel RDV ${label}`;
-  const body  = `${appt.client_name} — ${appt.service_name || 'RDV'} à ${String(appt.start_time).substring(0,5)}`;
+  const timeStr = String(appt.start_time || '').substring(0, 5);
+  const appTitle = `⏰ Rappel RDV ${label}`;
+  const appBody  = `${appt.client_name || 'Client'} — ${appt.service_name || 'RDV'} à ${timeStr}`;
+  const pushTitle = `⏰ Rendez-vous ${label}`;
+  const pushBody  = timeStr ? `Créneau ${timeStr} — détails dans l'agenda` : "Détails dans l'agenda";
 
-  await createAppNotification(userId, { type: 'appointment_reminder', title, body, data: { appointment_id: appt.id } });
+  await createAppNotification(userId, { type: 'appointment_reminder', title: appTitle, body: appBody, data: { appointment_id: appt.id } });
 
   try {
     await sendPushToUser(userId, {
       type: 'appointment_reminder',
-      title, body,
+      title: pushTitle,
+      body:  pushBody,
       icon: '/icon-192.png',
       data: { appointment_id: appt.id, url: '/agenda' },
       sound: 'reminder',
