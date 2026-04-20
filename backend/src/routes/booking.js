@@ -264,17 +264,55 @@ router.get('/appointments', async (req, res) => {
 
 router.post('/appointments', async (req, res) => {
   try {
-    const { service_id, employee_id, client_name, client_email, client_phone, date, start_time, notes } = req.body;
+    const { service_id, employee_id, client_name, client_email, client_phone, date, start_time, notes,
+            force } = req.body;
     if (!client_name || !date || !start_time) return res.status(400).json({ error: 'Données manquantes.' });
-    // Calcul end_time
+    // Calcul end_time + validation durée (AUDIT #14)
     let duration = 30;
     if (service_id) {
       const { rows: svc } = await pool.query('SELECT duration_minutes FROM booking_services WHERE id=$1', [service_id]);
       if (svc.length) duration = svc[0].duration_minutes;
     }
+    if (!Number.isFinite(duration) || duration < 1 || duration > 480) {
+      return res.status(400).json({ error: 'Durée invalide (1-480 min).' });
+    }
     const [h, m] = start_time.split(':').map(Number);
     const endMin = h * 60 + m + duration;
+    if (endMin >= 24 * 60) {
+      return res.status(400).json({ error: 'Le créneau dépasse minuit.', code: 'SLOT_OVERFLOW' });
+    }
     const end_time = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+
+    // AUDIT #12 : check conflit (RDV overlap) + absence côté merchant.
+    // Le merchant peut forcer via { force: true } (cas override volontaire).
+    if (!force && employee_id) {
+      const { rows: conflict } = await pool.query(
+        `SELECT id, start_time, end_time, client_name FROM appointments
+          WHERE user_id=$1 AND employee_id=$2 AND date=$3
+            AND status NOT IN ('cancelled','no_show')
+            AND NOT (end_time <= $4::time OR start_time >= $5::time)
+          LIMIT 1`,
+        [req.user.userId, employee_id, date, start_time, end_time]
+      );
+      if (conflict.length) {
+        return res.status(409).json({
+          error: `Conflit avec un autre RDV (${String(conflict[0].start_time).slice(0,5)}-${String(conflict[0].end_time).slice(0,5)} ${conflict[0].client_name || ''}).`,
+          code: 'SLOT_CONFLICT',
+          conflict_id: conflict[0].id,
+        });
+      }
+      // AUDIT #11 : absences.cancelled_at filtré (corrigé ici et sur booking.js:712).
+      const { rows: abs } = await pool.query(
+        `SELECT 1 FROM employee_absences
+          WHERE employee_id=$1 AND cancelled_at IS NULL
+            AND $2::date BETWEEN start_date AND end_date LIMIT 1`,
+        [employee_id, date]
+      );
+      if (abs.length) {
+        return res.status(409).json({ error: 'Employé en absence sur cette date.', code: 'EMPLOYEE_ABSENT' });
+      }
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO appointments (user_id, service_id, employee_id, client_name, client_email, client_phone, date, start_time, end_time, duration_minutes, notes, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'confirmed')
@@ -400,10 +438,52 @@ router.put('/appointments/:id', async (req, res) => {
       const { rows: svc } = await pool.query('SELECT duration_minutes FROM booking_services WHERE id=$1', [service_id]);
       if (svc.length) duration = svc[0].duration_minutes;
     }
+    if (!Number.isFinite(duration) || duration < 1 || duration > 480) {
+      return res.status(400).json({ error: 'Durée invalide (1-480 min).' });
+    }
     const st = start_time || appt.start_time;
     const [h, m] = st.split(':').map(Number);
     const endMin = h * 60 + m + duration;
+    if (endMin >= 24 * 60) {
+      return res.status(400).json({ error: 'Le créneau dépasse minuit.', code: 'SLOT_OVERFLOW' });
+    }
     const end_time = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+
+    // AUDIT #13 : si reprogrammation (date/time/employee change), vérifier
+    // qu'il n'y a pas de conflit. Exclut le RDV lui-même (id<>$1).
+    const newDate       = date       !== undefined ? date       : appt.date;
+    const newEmployeeId = employee_id !== undefined ? employee_id : appt.employee_id;
+    const isReprogramming = (start_time !== undefined && start_time !== appt.start_time)
+                         || (date       !== undefined && date       !== appt.date)
+                         || (service_id !== undefined && service_id !== appt.service_id)
+                         || (employee_id !== undefined && employee_id !== appt.employee_id);
+    if (isReprogramming && newEmployeeId && status !== 'cancelled' && !req.body.force) {
+      const { rows: conflict } = await pool.query(
+        `SELECT id, start_time, end_time, client_name FROM appointments
+          WHERE id<>$1 AND user_id=$2 AND employee_id=$3 AND date=$4
+            AND status NOT IN ('cancelled','no_show')
+            AND NOT (end_time <= $5::time OR start_time >= $6::time)
+          LIMIT 1`,
+        [req.params.id, req.user.userId, newEmployeeId, newDate, st, end_time]
+      );
+      if (conflict.length) {
+        return res.status(409).json({
+          error: `Conflit avec le RDV ${String(conflict[0].start_time).slice(0,5)}-${String(conflict[0].end_time).slice(0,5)} de ${conflict[0].client_name || 'client'}.`,
+          code: 'SLOT_CONFLICT',
+          conflict_id: conflict[0].id,
+        });
+      }
+      // Check absence (AUDIT #11)
+      const { rows: abs } = await pool.query(
+        `SELECT 1 FROM employee_absences
+          WHERE employee_id=$1 AND cancelled_at IS NULL
+            AND $2::date BETWEEN start_date AND end_date LIMIT 1`,
+        [newEmployeeId, newDate]
+      );
+      if (abs.length) {
+        return res.status(409).json({ error: 'Employé en absence sur cette date.', code: 'EMPLOYEE_ABSENT' });
+      }
+    }
     const { rows } = await pool.query(
       `UPDATE appointments SET status=$1, notes=$2, cancel_reason=$3, date=$4, start_time=$5, end_time=$6,
        employee_id=$7, service_id=$8, duration_minutes=$9, updated_at=NOW()
@@ -708,9 +788,11 @@ router.post('/employee-agenda/appointments', async (req, res) => {
     );
     if (!empR.length) return res.status(403).json({ error: 'Employé introuvable.' });
 
-    // Vérifier que l'employé n'est pas absent ce jour-là
+    // Vérifier que l'employé n'est pas absent ce jour-là — AUDIT #11 filtre cancelled_at
     const { rows: absR } = await pool.query(
-      `SELECT id FROM employee_absences WHERE employee_id=$1 AND $2::date BETWEEN start_date AND end_date`,
+      `SELECT id FROM employee_absences
+        WHERE employee_id=$1 AND cancelled_at IS NULL
+          AND $2::date BETWEEN start_date AND end_date`,
       [employee_id, date]
     );
     if (absR.length) return res.status(409).json({ error: "L'employé est absent ce jour-là." });

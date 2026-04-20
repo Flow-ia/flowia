@@ -116,8 +116,13 @@ async function getEmployeeRanges(userId, employeeId, date) {
     [employeeId, dayOfWeek]
   );
 
+  // AUDIT booking #10 : is_open=FALSE doit fermer l'employé même si
+  // use_business_hours=TRUE (jour off explicite prime). Avant : la branche
+  // use_biz descendait directement aux horaires commerce, ignorant le flag
+  // "jour off" de l'employé.
+  if (empH.length && empH[0].is_open === false) return [];
+
   if (empH.length && !empH[0].use_biz) {
-    if (!empH[0].is_open) return [];
     const empRange = [{ openMin: toMin(empH[0].open_time), closeMin: toMin(empH[0].close_time) }];
     return intersectRanges(empRange, bizRanges);
   }
