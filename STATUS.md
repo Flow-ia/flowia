@@ -110,7 +110,7 @@ marchand. 3 findings CRITIQUES corrigés :
 - `151877d` audit(payments) T: amount cross-check Stripe vs metadata + handler refund/dispute + error hygiene
 - `110dc79` audit(global-clients) U: OTP crypto.randomInt + rate limiters dédiés + error hygiene
 - `80630d4` audit(transactions) V: IDOR appointment scope + whitelists type/method + bounds amount/desc/note + date validation + error hygiene
-- `<W-hash>` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
+- `0379c64` audit(referrals) W: normalisation anti-self-referral + PIN admin config + caps metier + error hygiene
 
 ### 🔒 Audit referrals.js (parrainage) — commit W
 
