@@ -14,6 +14,15 @@ router.use(authMiddleware);
 // req.employee.id comme employee_id (anti-spoofing du body).
 router.use(employeePinOptional);
 
+// AUDIT stats #2 : invalide les caches stats du merchant après toute écriture
+// de transaction (sinon /stats/today, /products, /forecast, /heatmap restent
+// figés jusqu'à 10 min → "j'ai vendu mais le dashboard ne bouge pas").
+function invalidateStatsCache(userId) {
+  if (!global.memCache) return;
+  ['stats:products', 'stats:today', 'stats:forecast', 'stats:heatmap']
+    .forEach(prefix => global.memCache.del(`${prefix}:${userId}`));
+}
+
 // ── Helper : snapshot complet d'une transaction (incl. items + payments) ────
 async function getSnapshot(id) {
   const { rows } = await pool.query('SELECT * FROM transactions WHERE id=$1', [id]);
@@ -339,8 +348,9 @@ router.post('/', async (req, res) => {
       }));
     }
 
-    // Invalider le cache liste
+    // Invalider le cache liste + stats
     global.memCache?.del(`txs:${req.user.userId}`);
+    invalidateStatsCache(req.user.userId);
 
     // Sauvegarder la note client dans client_notes si fournie
     if (client_note && client_note.trim() && (clientEmailNorm || client_name)) {
@@ -563,8 +573,9 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Invalider le cache liste
+    // Invalider le cache liste + stats
     global.memCache?.del(`txs:${req.user.userId}`);
+    invalidateStatsCache(req.user.userId);
 
     // R4 : resync fidélité si le montant ou qty_total a changé.
     // - mode points : delta = (new_amount - old_amount) * points_per_euro
@@ -744,6 +755,7 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
     }
 
     global.memCache?.del(`txs:${req.user.userId}`);
+    invalidateStatsCache(req.user.userId);
 
     await audit(req.user.userId, req.params.id, 'delete', before, null,
       req.body?.reason || 'Suppression admin');

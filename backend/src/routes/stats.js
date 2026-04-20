@@ -4,12 +4,34 @@ const { authMiddleware } = require('../middleware/auth');
 const router = express.Router();
 router.use(authMiddleware);
 
+// AUDIT stats #1 : validation input (évite 500 PG + fuite err.message).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const validDate = s => typeof s === 'string' && DATE_RE.test(s);
+const validUuid = s => typeof s === 'string' && UUID_RE.test(s);
+
+// AUDIT stats #11 : "today" dans la TZ du commerçant (serveur Render en UTC
+// sinon à 23h Paris on voyait le lendemain).
+async function merchantToday(userId) {
+  const { rows } = await pool.query(
+    `SELECT TO_CHAR(NOW() AT TIME ZONE COALESCE(bs.timezone, 'Europe/Paris'), 'YYYY-MM-DD') AS today
+     FROM users u LEFT JOIN booking_settings bs ON bs.user_id = u.id
+     WHERE u.id = $1`, [userId]);
+  return rows[0]?.today || new Date().toISOString().split('T')[0];
+}
+
 // ── GET /api/stats/products?from=&to=&employee_id= ────────────────────────────
 // Statistiques par produit/service (depuis transaction_items) + par catégorie
 router.get('/products', async (req, res) => {
   try {
     const { from, to, employee_id } = req.query;
     const userId = req.user.userId;
+
+    if (from && !validDate(from)) return res.status(400).json({ error: 'from invalide.' });
+    if (to   && !validDate(to))   return res.status(400).json({ error: 'to invalide.' });
+    if (employee_id && employee_id !== 'all' && !validUuid(employee_id))
+      return res.status(400).json({ error: 'employee_id invalide.' });
+
     const _k = `stats:products:${userId}:${from||''}:${to||''}:${employee_id||''}`;
     const _h = global.memCache?.get(_k);
     if (_h) return res.json(_h);
@@ -93,7 +115,7 @@ router.get('/products', async (req, res) => {
     res.json(_r);
   } catch(e) {
     console.error('[STATS PRODUCTS]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -106,21 +128,36 @@ router.get('/forecast', async (req, res) => {
     const _fk = `stats:forecast:${req.user.userId}:${months}`;
     const _fh = global.memCache?.get(_fk);
     if (_fh) return res.json(_fh);
-    // Récupérer les 12 derniers mois de CA
-    const { rows } = await pool.query(
+    // Récupérer les 12 derniers mois de CA — TZ merchant pour la borne.
+    const { rows: rawRows } = await pool.query(
       `SELECT
          TO_CHAR(date,'YYYY-MM') as month,
          SUM(amount) as revenue,
          COUNT(*) as tx_count
        FROM transactions
        WHERE user_id=$1 AND type='revenue'
-         AND date >= CURRENT_DATE - INTERVAL '12 months'
+         AND date >= (NOW() AT TIME ZONE (
+           SELECT COALESCE(timezone,'Europe/Paris') FROM booking_settings WHERE user_id=$1
+         ))::date - INTERVAL '12 months'
        GROUP BY TO_CHAR(date,'YYYY-MM')
        ORDER BY month ASC`,
       [req.user.userId]
     );
 
-    if (rows.length < 2) return res.json({ historical: rows, forecasts: [] });
+    if (rawRows.length < 2) return res.json({ historical: rawRows, forecasts: [] });
+
+    // AUDIT stats #17 : combler les mois manquants avec 0 (sinon régression
+    // linéaire faussée — les "trous" décalent l'index temporel).
+    const byMonth = Object.fromEntries(rawRows.map(r => [r.month, r]));
+    const [fy, fm] = rawRows[0].month.split('-').map(Number);
+    const [ey, em] = rawRows[rawRows.length-1].month.split('-').map(Number);
+    const rows = [];
+    let cy = fy, cm = fm;
+    while (cy < ey || (cy === ey && cm <= em)) {
+      const key = `${cy}-${String(cm).padStart(2,'0')}`;
+      rows.push(byMonth[key] || { month: key, revenue: 0, tx_count: 0 });
+      cm++; if (cm > 12) { cm = 1; cy++; }
+    }
 
     // Calcul moyenne mobile pondérée (mois récents = poids plus fort)
     const revenues = rows.map(r => parseFloat(r.revenue)||0);
@@ -153,13 +190,19 @@ router.get('/forecast', async (req, res) => {
     const _fr = { historical: rows, forecasts, avg_monthly: Math.round(avgWeighted*100)/100, slope: Math.round(slope*100)/100 };
     global.memCache?.set(_fk, _fr, 5 * 60 * 1000);
     res.json(_fr);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[STATS FORECAST]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 // ── GET /api/stats/heatmap ── Heures de pointe ────────────────────────────────
 router.get('/heatmap', async (req, res) => {
   try {
     const { from, to } = req.query;
+    if (from && !validDate(from)) return res.status(400).json({ error: 'from invalide.' });
+    if (to   && !validDate(to))   return res.status(400).json({ error: 'to invalide.' });
+
     const _hk = `stats:heatmap:${req.user.userId}:${from||''}:${to||''}`;
     const _hh = global.memCache?.get(_hk);
     if (_hh) return res.json(_hh);
@@ -193,7 +236,10 @@ router.get('/heatmap', async (req, res) => {
     const _hr = { grid, maxCount, from: fromD, to: toD };
     global.memCache?.set(_hk, _hr, 10 * 60 * 1000);
     res.json(_hr);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[STATS HEATMAP]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 
@@ -202,7 +248,9 @@ router.get('/heatmap', async (req, res) => {
 router.get('/today', async (req, res) => {
   try {
     const userId = req.user.userId;
-    const today  = new Date().toISOString().split('T')[0];
+    // AUDIT stats #11 : TZ merchant — sinon à 23h Paris on bascule au lendemain
+    // UTC et le dashboard affiche "0 € aujourd'hui" alors qu'on vend encore.
+    const today  = await merchantToday(userId);
     const _k     = `stats:today:${userId}:${today}`;
     const _h     = global.memCache?.get(_k);
     if (_h) return res.json(_h);
@@ -257,7 +305,7 @@ router.get('/today', async (req, res) => {
     res.json(result);
   } catch(e) {
     console.error('[STATS TODAY]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
