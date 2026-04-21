@@ -89,9 +89,35 @@ export function AppointmentsTab({
             return (
               <div key={a.id} style={{
                 background: th.card, border: `0.5px solid ${th.border}`,
-                borderRadius:18, padding:16,
+                borderRadius:18, padding:0, overflow:'hidden',
                 opacity: st.group !== 'futurs' ? 0.85 : 1,
               }}>
+                {/* Bandeau commerçant — tracé clairement pour que le client
+                    sache à quel salon/commerce se rapporte le RDV quand la
+                    liste est cross-merchant. */}
+                {a.business_name && (
+                  <div style={{
+                    display:'flex', alignItems:'center', gap:8,
+                    padding:'10px 14px',
+                    background:'rgba(99,102,241,0.08)',
+                    borderBottom:`0.5px solid ${th.border}`,
+                  }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" style={{width:14,height:14,flexShrink:0}}>
+                      <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/>
+                    </svg>
+                    <span style={{ fontSize:13, fontWeight:600, color:'#4338ca', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {a.business_name}
+                    </span>
+                    {a.slug && (
+                      <a href={`/book/${a.slug}`} style={{
+                        fontSize:11, fontWeight:500, color:'#6366f1',
+                        textDecoration:'none', padding:'3px 8px',
+                        borderRadius:99, background:'rgba(99,102,241,0.12)',
+                      }}>Voir →</a>
+                    )}
+                  </div>
+                )}
+                <div style={{ padding:16 }}>
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10 }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     {/* Badge statut */}
@@ -111,15 +137,6 @@ export function AppointmentsTab({
                     <p style={{ fontWeight: 500, fontSize:14, color: st.group !== 'futurs' ? th.muted : th.text, marginBottom:3 }}>
                       {a.service_name || 'Service'}
                     </p>
-                    {/* Nom du commerçant (si liste cross-merchant) */}
-                    {a.business_name && (
-                      <p style={{ fontSize:12, fontWeight:500, color:th.text, marginBottom:2, display:'flex', alignItems:'center', gap:5 }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:11,height:11,opacity:0.55}}>
-                          <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/>
-                        </svg>
-                        {a.business_name}
-                      </p>
-                    )}
                     <p style={{ fontSize:13, color:th.muted }}>
                       {fmtApptDate(a.date)} à {(a.start_time||'').substring(0,5)}
                     </p>
@@ -157,6 +174,7 @@ export function AppointmentsTab({
                     border: '0.5px solid rgba(248,113,113,0.2)', cursor:'pointer',
                   }}>Annuler ce RDV</button>
                 )}
+                </div>
               </div>
             );
           })}
