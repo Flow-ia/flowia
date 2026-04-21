@@ -6,23 +6,24 @@ import { fmt } from '../../shared';
 import { formatDuration, reorderArray } from '../helpers';
 import CatFormModal from '../modals/CatFormModal';
 import SvcFormModal from '../modals/SvcFormModal';
+import { Button } from '../../../../components/primitives';
 
 // Catalogue booking — categories + services (drag&drop, image, prix libre, visibilite)
 export default function BookingServices({ theme, showToast }) {
-  const isDark = theme.mode === 'dark';
-  const [cats,     setCats]    = useState([]);
-  const [services, setServices]= useState([]);
-  const [loading,  setLoading] = useState(true);
+  const t = theme;
+  const [cats,     setCats]     = useState([]);
+  const [services, setServices] = useState([]);
+  const [loading,  setLoading]  = useState(true);
 
-  const [catForm,  setCatForm] = useState({ open: false, init: null });
-  const [svcForm,  setSvcForm] = useState({ open: false, init: null, parentId: null });
-  const [delCatId, setDelCatId]= useState(null);
-  const [delSvcId, setDelSvcId]= useState(null);
-  const [openCats, setOpenCats]= useState(new Set());
-  const didInitOpen= useRef(false);
-  const dragId     = useRef(null);
-  const [dragIdVis,setDragIdVis]=useState(null);
-  const [dragOver, setDragOver]= useState(null);
+  const [catForm,  setCatForm]  = useState({ open:false, init:null });
+  const [svcForm,  setSvcForm]  = useState({ open:false, init:null, parentId:null });
+  const [delCatId, setDelCatId] = useState(null);
+  const [delSvcId, setDelSvcId] = useState(null);
+  const [openCats, setOpenCats] = useState(new Set());
+  const didInitOpen = useRef(false);
+  const dragId      = useRef(null);
+  const [dragIdVis, setDragIdVis] = useState(null);
+  const [dragOver,  setDragOver]  = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,15 +55,15 @@ export default function BookingServices({ theme, showToast }) {
       if (catForm.init) {
         const updated = await bookingApi.updateServiceCategory(catForm.init.id, data);
         setCats(prev => prev.map(c => c.id === updated.id ? updated : c));
-        showToast('Catégorie modifiee ✓');
+        showToast('Categorie modifiee');
       } else {
         const created = await bookingApi.createServiceCategory(data);
         setCats(prev => [...prev, created]);
         setOpenCats(prev => new Set([...prev, created.id]));
-        showToast('Catégorie créee ✓');
+        showToast('Categorie creee');
       }
     } catch { showToast('Erreur', 'error'); }
-    setCatForm({ open: false, init: null });
+    setCatForm({ open:false, init:null });
   };
 
   const handleDelCat = async () => {
@@ -70,7 +71,7 @@ export default function BookingServices({ theme, showToast }) {
       await bookingApi.deleteServiceCategory(delCatId);
       setCats(prev => prev.filter(c => c.id !== delCatId));
       setServices(prev => prev.map(s => s.booking_category_id === delCatId ? { ...s, booking_category_id: null } : s));
-      showToast('Catégorie supprimee');
+      showToast('Categorie supprimee');
     } catch { showToast('Erreur', 'error'); }
     setDelCatId(null);
   };
@@ -90,14 +91,14 @@ export default function BookingServices({ theme, showToast }) {
       }
       if (_imageAction === 'upload' && _imageFile && saved?.id) {
         await mediaApi.uploadServiceImage(saved.id, _imageFile);
-        setServices(prev => prev.map(s => s.id === saved.id ? { ...s, has_image: true, _imgV: Date.now() } : s));
+        setServices(prev => prev.map(s => s.id === saved.id ? { ...s, has_image:true, _imgV:Date.now() } : s));
       } else if (_imageAction === 'delete' && saved?.id) {
         await mediaApi.deleteServiceImage(saved.id);
-        setServices(prev => prev.map(s => s.id === saved.id ? { ...s, has_image: false } : s));
+        setServices(prev => prev.map(s => s.id === saved.id ? { ...s, has_image:false } : s));
       }
-      showToast(svcForm.init ? 'Service modifie ✓' : 'Service crée ✓');
+      showToast(svcForm.init ? 'Service modifie' : 'Service cree');
     } catch { showToast('Erreur', 'error'); }
-    setSvcForm({ open: false, init: null, parentId: null });
+    setSvcForm({ open:false, init:null, parentId:null });
   };
 
   const handleDelSvc = async () => {
@@ -118,7 +119,7 @@ export default function BookingServices({ theme, showToast }) {
 
   const onDragStartCat = (e, id) => { dragId.current = id; setDragIdVis(id); e.dataTransfer.effectAllowed = 'move'; };
   const onDragOverCat  = (e, id) => { e.preventDefault(); setDragOver(id); };
-  const onDropCat      = (e, targetId) => {
+  const onDropCat = (e, targetId) => {
     e.preventDefault();
     const srcId = dragId.current;
     dragId.current = null; setDragIdVis(null); setDragOver(null);
@@ -128,51 +129,50 @@ export default function BookingServices({ theme, showToast }) {
     if (from < 0 || to < 0) return;
     const reordered = reorderArray(cats, from, to);
     saveOrderCats(reordered);
-    showToast('Ordre mis a jour ✓');
+    showToast('Ordre mis a jour');
   };
 
   if (loading) return (
-    <div style={{ display:'flex',alignItems:'center',justifyContent:'center',padding:48 }}>
-      <div style={{ width:32,height:32,borderRadius:99,border:'2px solid rgba(17,24,39,0.2)',
-        borderTopColor:'#111827',animation:'spin 0.8s linear infinite' }}/>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:48 }}>
+      <svg className="animate-spin" width="28" height="28" viewBox="0 0 24 24"
+           style={{ color:t.text }}>
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2"/>
+        <path d="M12 2 a10 10 0 0 1 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
     </div>
   );
 
   const orphanSvcs = services.filter(s => !s.booking_category_id || !cats.find(c => c.id === s.booking_category_id));
 
   return (
-    <div style={{ display:'flex',flexDirection:'column',gap:16 }}>
-      <div style={{ borderRadius:16,padding:'12px 16px',
-        background:isDark?'rgba(55,65,81,0.07)':'rgba(55,65,81,0.06)',
-        border:'1px solid rgba(55,65,81,0.2)' }}>
-        <p style={{ fontSize:12,fontWeight:800,color:'#374151',margin:'0 0 4px' }}>🌐 Catalogue de réservation</p>
-        <p style={{ fontSize:12,color:theme.muted,margin:0,lineHeight:1.6 }}>
-          Organisez vos <strong style={{ color:theme.text }}>catégories</strong> et <strong style={{ color:theme.text }}>services</strong> affichés sur le site de réservation.
-          Glissez <strong style={{ color:theme.text }}>⠿</strong> pour un ordre indépendant de la caisse.
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ borderRadius:12, padding:'12px 16px', background:'#ecfeff' }}>
+        <p style={{ fontSize:12, fontWeight:500, color:'#0e7490', margin:'0 0 4px' }}>
+          Catalogue de reservation
+        </p>
+        <p style={{ fontSize:12, color:'#0e7490', opacity:0.85, margin:0, lineHeight:1.6 }}>
+          Organisez vos categories et services affiches sur le site de reservation.
+          {' '}Glissez la poignee pour un ordre independant de la caisse.
         </p>
       </div>
 
-      <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10 }}>
-        <button onClick={() => setCatForm({ open:true, init:null })}
-          style={{ padding:'12px 0',borderRadius:16,border:'none',cursor:'pointer',fontWeight:800,fontSize:13,color:'white',
-            background:'linear-gradient(135deg,#374151,#0891b2)',boxShadow:'0 4px 16px rgba(6,182,212,0.3)',
-            display:'flex',alignItems:'center',justifyContent:'center',gap:7 }}>
-          <I.Plus style={{ width:15,height:15 }}/> Catégorie
-        </button>
-        <button onClick={() => setSvcForm({ open:true, init:null, parentId:null })}
-          style={{ padding:'12px 0',borderRadius:16,border:'none',cursor:'pointer',fontWeight:800,fontSize:13,color:'white',
-            background:'#1a73e8',boxShadow:'0 4px 16px rgba(17,24,39,0.3)',
-            display:'flex',alignItems:'center',justifyContent:'center',gap:7 }}>
-          <I.Plus style={{ width:15,height:15 }}/> Service
-        </button>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+        <Button variant="secondary" type="button" onClick={() => setCatForm({ open:true, init:null })}>
+          <I.Plus style={{ width:14, height:14, marginRight:6 }}/>
+          Categorie
+        </Button>
+        <Button variant="primary" type="button" onClick={() => setSvcForm({ open:true, init:null, parentId:null })}>
+          <I.Plus style={{ width:14, height:14, marginRight:6 }}/>
+          Service
+        </Button>
       </div>
 
       {cats.length === 0 && services.length === 0 && (
-        <div style={{ borderRadius:20,padding:'48px 24px',textAlign:'center',
-          background:theme.card,border:`1px solid ${theme.border}` }}>
-          <I.Scissors style={{ width:44,height:44,color:theme.dim,margin:'0 auto 12px' }}/>
-          <p style={{ fontWeight:700,color:theme.muted,margin:'0 0 4px' }}>Aucun service</p>
-          <p style={{ fontSize:13,color:theme.dim,margin:0 }}>Commencez par créer une catégorie ou un service</p>
+        <div style={{ borderRadius:12, padding:'48px 24px', textAlign:'center',
+                      background:t.card, border:`0.5px solid ${t.border}` }}>
+          <I.Scissors style={{ width:40, height:40, color:t.dim, margin:'0 auto 12px', display:'block' }}/>
+          <p style={{ fontWeight:500, color:t.muted, margin:'0 0 4px' }}>Aucun service</p>
+          <p style={{ fontSize:13, color:t.dim, margin:0 }}>Commencez par creer une categorie ou un service</p>
         </div>
       )}
 
@@ -184,138 +184,159 @@ export default function BookingServices({ theme, showToast }) {
         const isDragging = dragIdVis === cat.id;
 
         return (
-          <div key={cat.id}
-            draggable
-            onDragStart={e => onDragStartCat(e, cat.id)}
-            onDragOver={e  => onDragOverCat(e, cat.id)}
-            onDrop={e      => onDropCat(e, cat.id)}
-            onDragLeave={() => setDragOver(null)}
-            style={{ borderRadius:16,overflow:'hidden',
-              border: isDragOver ? '2px dashed #374151' : `1px solid ${theme.border}`,
-              background:isDark?'rgba(255,255,255,0.03)':'#ffffff',
-              opacity:isDragging?0.45:1,
-              transition:'opacity 0.15s,border 0.15s',
-              boxShadow:isDark?'none':'0 1px 6px rgba(0,0,0,0.06)' }}>
+          <div key={cat.id} draggable
+               onDragStart={e => onDragStartCat(e, cat.id)}
+               onDragOver={e => onDragOverCat(e, cat.id)}
+               onDrop={e => onDropCat(e, cat.id)}
+               onDragLeave={() => setDragOver(null)}
+               style={{ borderRadius:12, overflow:'hidden',
+                        border: isDragOver ? `0.5px solid ${t.text}` : `0.5px solid ${t.border}`,
+                        background:t.card,
+                        opacity: isDragging ? 0.45 : 1,
+                        transition:'opacity 0.15s, border 0.15s' }}>
 
-            <div style={{ display:'flex',alignItems:'center',gap:10,padding:'12px 14px',
-              background:isDark?'rgba(255,255,255,0.025)':'rgba(0,0,0,0.018)',
-              cursor:'pointer',userSelect:'none' }}
-              onClick={() => toggleCat(cat.id)}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px',
+                          background:t.cardAlt, cursor:'pointer', userSelect:'none' }}
+                 onClick={() => toggleCat(cat.id)}>
 
-              <div style={{ display:'flex',flexDirection:'column',gap:2.5,flexShrink:0,
-                cursor:'grab',opacity:0.28,padding:'3px 2px' }}
-                onClick={e => e.stopPropagation()}>
-                {[0,1,2].map(i => <div key={i} style={{ width:14,height:2,borderRadius:1,background:theme.muted }}/>)}
+              <div style={{ display:'flex', flexDirection:'column', gap:2, flexShrink:0,
+                            cursor:'grab', opacity:0.3, padding:'3px 2px' }}
+                   onClick={e => e.stopPropagation()}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ width:14, height:2, borderRadius:1, background:t.muted }}/>
+                ))}
               </div>
 
-              <div style={{ width:36,height:36,borderRadius:11,flexShrink:0,
-                background:cat.color||'#111827',
-                display:'flex',alignItems:'center',justifyContent:'center' }}>
-                <CatIcon style={{ width:18,height:18,color:'white' }}/>
+              <div style={{ width:36, height:36, borderRadius:8, flexShrink:0,
+                            background: cat.color || t.text,
+                            display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <CatIcon style={{ width:17, height:17, color:'white' }}/>
               </div>
 
-              <div style={{ flex:1,minWidth:0 }}>
-                <p style={{ fontWeight:800,fontSize:14,color:theme.text,margin:0,
-                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{cat.name}</p>
-                <p style={{ fontSize:11,color:theme.muted,margin:0 }}>
-                  {catSvcs.length} service{catSvcs.length!==1?'s':''}
+              <div style={{ flex:1, minWidth:0 }}>
+                <p style={{ fontWeight:500, fontSize:14, color:t.text, margin:0,
+                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {cat.name}
+                </p>
+                <p style={{ fontSize:11, color:t.muted, margin:0 }}>
+                  {catSvcs.length} service{catSvcs.length !== 1 ? 's' : ''}
                 </p>
               </div>
 
-              <div style={{ display:'flex',gap:5,flexShrink:0 }} onClick={e => e.stopPropagation()}>
+              <div style={{ display:'flex', gap:5, flexShrink:0 }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => setSvcForm({ open:true, init:null, parentId:cat.id })}
-                  style={{ width:28,height:28,borderRadius:8,border:'none',cursor:'pointer',
-                    display:'flex',alignItems:'center',justifyContent:'center',
-                    background:'rgba(55,65,81,0.12)',color:'#374151',fontSize:16,fontWeight:900 }}
-                  title="Ajouter un service">+</button>
+                        title="Ajouter un service"
+                        style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer',
+                                 background:'#ecfeff', color:'#0e7490',
+                                 display:'flex', alignItems:'center', justifyContent:'center',
+                                 fontFamily:'inherit' }}>
+                  <I.Plus style={{ width:13, height:13 }}/>
+                </button>
                 <button onClick={() => setCatForm({ open:true, init:cat })}
-                  style={{ width:28,height:28,borderRadius:8,border:'none',cursor:'pointer',
-                    display:'flex',alignItems:'center',justifyContent:'center',
-                    background:isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)' }}>
-                  <I.Edit style={{ width:12,height:12,color:theme.muted }}/>
+                        style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer',
+                                 background:t.cardAlt,
+                                 display:'flex', alignItems:'center', justifyContent:'center',
+                                 fontFamily:'inherit' }}>
+                  <I.Edit style={{ width:12, height:12, color:t.muted }}/>
                 </button>
                 <button onClick={() => setDelCatId(cat.id)}
-                  style={{ width:28,height:28,borderRadius:8,border:'none',cursor:'pointer',
-                    display:'flex',alignItems:'center',justifyContent:'center',
-                    background:'rgba(239,68,68,0.1)' }}>
-                  <I.Trash style={{ width:12,height:12,color:'#ef4444' }}/>
+                        style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer',
+                                 background:'rgba(239,68,68,0.1)',
+                                 display:'flex', alignItems:'center', justifyContent:'center',
+                                 fontFamily:'inherit' }}>
+                  <I.Trash style={{ width:12, height:12, color:'#991b1b' }}/>
                 </button>
               </div>
 
-              <div style={{ width:20,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
-                transition:'transform 0.2s',transform:isOpen?'rotate(180deg)':'rotate(0deg)' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke={theme.muted} strokeWidth="2.5"
-                  strokeLinecap="round" strokeLinejoin="round" style={{ width:14,height:14 }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round"
+                   style={{ width:14, height:14, flexShrink:0,
+                            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition:'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
             </div>
 
             {isOpen && (
               <div>
                 {catSvcs.length === 0 ? (
-                  <div style={{ padding:'14px 20px',textAlign:'center' }}>
-                    <p style={{ fontSize:12,color:theme.dim,margin:0 }}>Aucun service — cliquez sur + pour en ajouter</p>
+                  <div style={{ padding:'14px 20px', textAlign:'center' }}>
+                    <p style={{ fontSize:12, color:t.dim, margin:0 }}>
+                      Aucun service — cliquez sur + pour en ajouter
+                    </p>
                   </div>
                 ) : catSvcs.map((svc) => {
                   const durLabel = formatDuration(svc.duration_minutes);
                   return (
-                    <div key={svc.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',
-                      borderTop:`1px solid ${theme.border}` }}>
-                      <div style={{ width:3,height:22,borderRadius:99,flexShrink:0,
-                        background:svc.color||cat.color||'#111827',opacity:0.6 }}/>
+                    <div key={svc.id}
+                         style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
+                                  borderTop:`0.5px solid ${t.separator}` }}>
+                      <div style={{ width:3, height:22, borderRadius:99, flexShrink:0,
+                                    background: svc.color || cat.color || t.text, opacity:0.6 }}/>
                       {svc.has_image ? (
-                        <div style={{ width:40,height:40,borderRadius:9,flexShrink:0,overflow:'hidden',
-                          background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', border:`1px solid ${theme.border}` }}>
+                        <div style={{ width:40, height:40, borderRadius:8, flexShrink:0, overflow:'hidden',
+                                      background:t.cardAlt,
+                                      border:`0.5px solid ${t.border}` }}>
                           <img src={mediaApi.serviceUrl(svc.id) + `?v=${svc._imgV || svc.image_version || 1}`}
-                            alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}
-                            onError={e => { e.currentTarget.style.display='none'; }} />
+                               alt=""
+                               style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                               onError={e => { e.currentTarget.style.display = 'none'; }}/>
                         </div>
                       ) : (
-                        <div style={{ width:32,height:32,borderRadius:9,flexShrink:0,
-                          background:svc.color||cat.color||'#111827',
-                          display:'flex',alignItems:'center',justifyContent:'center' }}>
-                          <I.Scissors style={{ width:13,height:13,color:'white' }}/>
+                        <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
+                                      background: svc.color || cat.color || t.text,
+                                      display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <I.Scissors style={{ width:13, height:13, color:'white' }}/>
                         </div>
                       )}
-                      <div style={{ flex:1,minWidth:0 }}>
-                        <div style={{ display:'flex',alignItems:'center',gap:5 }}>
-                          <p style={{ fontWeight:600,fontSize:13,color:theme.text,margin:0,
-                            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{svc.name}</p>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <p style={{ fontWeight:500, fontSize:13, color:t.text, margin:0,
+                                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {svc.name}
+                          </p>
                           {svc.is_active === false && (
-                            <span style={{ fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:99,
-                              background:'rgba(248,113,113,0.12)',color:'#f87171',flexShrink:0 }}>Masqué</span>
+                            <span style={{ fontSize:10, fontWeight:500, padding:'2px 8px', borderRadius:99,
+                                           background:'#fef2f2', color:'#991b1b', flexShrink:0 }}>
+                              Masque
+                            </span>
                           )}
                         </div>
-                        <p style={{ fontSize:11,color:theme.muted,margin:0 }}>
-                          ⏱ {durLabel}{svc.price!=null&&!svc.is_free_price?` · ${fmt(svc.price)} €`:svc.is_free_price?' · Prix libre':''}
+                        <p style={{ fontSize:11, color:t.muted, margin:0 }}>
+                          {durLabel}
+                          {svc.price != null && !svc.is_free_price
+                            ? ` · ${fmt(svc.price)} €`
+                            : svc.is_free_price ? ' · Prix libre' : ''}
                         </p>
                       </div>
-                      <div style={{ display:'flex',gap:4,flexShrink:0 }}>
-                        <button onClick={() => setSvcForm({ open:true,init:svc,parentId:cat.id })}
-                          style={{ width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',
-                            display:'flex',alignItems:'center',justifyContent:'center',
-                            background:isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)' }}>
-                          <I.Edit style={{ width:11,height:11,color:theme.muted }}/>
+                      <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+                        <button onClick={() => setSvcForm({ open:true, init:svc, parentId:cat.id })}
+                                style={{ width:26, height:26, borderRadius:6, border:'none', cursor:'pointer',
+                                         background:t.cardAlt,
+                                         display:'flex', alignItems:'center', justifyContent:'center',
+                                         fontFamily:'inherit' }}>
+                          <I.Edit style={{ width:11, height:11, color:t.muted }}/>
                         </button>
                         <button onClick={() => setDelSvcId(svc.id)}
-                          style={{ width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',
-                            display:'flex',alignItems:'center',justifyContent:'center',
-                            background:'rgba(239,68,68,0.1)' }}>
-                          <I.Trash style={{ width:11,height:11,color:'#ef4444' }}/>
+                                style={{ width:26, height:26, borderRadius:6, border:'none', cursor:'pointer',
+                                         background:'rgba(239,68,68,0.1)',
+                                         display:'flex', alignItems:'center', justifyContent:'center',
+                                         fontFamily:'inherit' }}>
+                          <I.Trash style={{ width:11, height:11, color:'#991b1b' }}/>
                         </button>
                       </div>
                     </div>
                   );
                 })}
-                <button onClick={() => setSvcForm({ open:true,init:null,parentId:cat.id })}
-                  style={{ width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:6,
-                    padding:'10px 14px',border:'none',cursor:'pointer',
-                    borderTop:`1px dashed ${isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.08)'}`,
-                    background:'transparent',color:theme.muted,fontSize:12,fontWeight:600 }}
-                  onMouseEnter={e=>e.currentTarget.style.background=isDark?'rgba(55,65,81,0.05)':'rgba(55,65,81,0.04)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <I.Plus style={{ width:12,height:12 }}/> Ajouter dans « {cat.name} »
+                <button onClick={() => setSvcForm({ open:true, init:null, parentId:cat.id })}
+                        style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                                 padding:'10px 14px', border:'none', cursor:'pointer',
+                                 borderTop:`0.5px solid ${t.separator}`,
+                                 background:'transparent', color:t.muted, fontSize:12, fontWeight:500,
+                                 fontFamily:'inherit' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                  <I.Plus style={{ width:12, height:12 }}/> {`Ajouter dans « ${cat.name} »`}
                 </button>
               </div>
             )}
@@ -324,51 +345,59 @@ export default function BookingServices({ theme, showToast }) {
       })}
 
       {orphanSvcs.length > 0 && (
-        <div style={{ borderRadius:16,overflow:'hidden',
-          border:`1px solid ${theme.border}`,
-          background:isDark?'rgba(255,255,255,0.02)':'#fafafa' }}>
-          <div style={{ padding:'10px 14px',borderBottom:`1px solid ${theme.border}`,
-            background:isDark?'rgba(255,255,255,0.02)':'rgba(0,0,0,0.02)' }}>
-            <p style={{ fontSize:11,fontWeight:700,color:theme.muted,margin:0 }}>Sans catégorie</p>
+        <div style={{ borderRadius:12, overflow:'hidden',
+                      border:`0.5px solid ${t.border}`, background:t.cardAlt }}>
+          <div style={{ padding:'10px 14px',
+                        borderBottom:`0.5px solid ${t.separator}` }}>
+            <p style={{ fontSize:11, fontWeight:500, color:t.muted, margin:0 }}>Sans categorie</p>
           </div>
           {orphanSvcs.map((svc, idx) => {
             const durLabel = formatDuration(svc.duration_minutes);
             return (
-              <div key={svc.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 14px',
-                borderTop:idx>0?`1px solid ${theme.border}`:'none' }}>
+              <div key={svc.id}
+                   style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
+                            borderTop: idx > 0 ? `0.5px solid ${t.separator}` : 'none' }}>
                 {svc.has_image ? (
-                  <div style={{ width:40,height:40,borderRadius:9,flexShrink:0,overflow:'hidden',
-                    background:isDark?'rgba(255,255,255,0.06)':'#f1f5f9', border:`1px solid ${theme.border}` }}>
+                  <div style={{ width:40, height:40, borderRadius:8, flexShrink:0, overflow:'hidden',
+                                background:t.cardAlt, border:`0.5px solid ${t.border}` }}>
                     <img src={mediaApi.serviceUrl(svc.id) + `?v=${svc._imgV || svc.image_version || 1}`}
-                      alt="" style={{ width:'100%',height:'100%',objectFit:'cover',display:'block' }}
-                      onError={e => { e.currentTarget.style.display='none'; }} />
+                         alt=""
+                         style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                         onError={e => { e.currentTarget.style.display = 'none'; }}/>
                   </div>
                 ) : (
-                  <div style={{ width:32,height:32,borderRadius:9,flexShrink:0,
-                    background:svc.color||'#111827',
-                    display:'flex',alignItems:'center',justifyContent:'center' }}>
-                    <I.Scissors style={{ width:13,height:13,color:'white' }}/>
+                  <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
+                                background: svc.color || t.text,
+                                display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <I.Scissors style={{ width:13, height:13, color:'white' }}/>
                   </div>
                 )}
-                <div style={{ flex:1,minWidth:0 }}>
-                  <p style={{ fontWeight:600,fontSize:13,color:theme.text,margin:0,
-                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{svc.name}</p>
-                  <p style={{ fontSize:11,color:theme.muted,margin:0 }}>
-                    ⏱ {durLabel}{svc.price!=null&&!svc.is_free_price?` · ${fmt(svc.price)} €`:svc.is_free_price?' · Prix libre':''}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <p style={{ fontWeight:500, fontSize:13, color:t.text, margin:0,
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {svc.name}
+                  </p>
+                  <p style={{ fontSize:11, color:t.muted, margin:0 }}>
+                    {durLabel}
+                    {svc.price != null && !svc.is_free_price
+                      ? ` · ${fmt(svc.price)} €`
+                      : svc.is_free_price ? ' · Prix libre' : ''}
                   </p>
                 </div>
-                <div style={{ display:'flex',gap:4 }}>
-                  <button onClick={() => setSvcForm({ open:true,init:svc,parentId:null })}
-                    style={{ width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',
-                      display:'flex',alignItems:'center',justifyContent:'center',
-                      background:isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)' }}>
-                    <I.Edit style={{ width:11,height:11,color:theme.muted }}/>
+                <div style={{ display:'flex', gap:4 }}>
+                  <button onClick={() => setSvcForm({ open:true, init:svc, parentId:null })}
+                          style={{ width:26, height:26, borderRadius:6, border:'none', cursor:'pointer',
+                                   background:t.cardAlt,
+                                   display:'flex', alignItems:'center', justifyContent:'center',
+                                   fontFamily:'inherit' }}>
+                    <I.Edit style={{ width:11, height:11, color:t.muted }}/>
                   </button>
                   <button onClick={() => setDelSvcId(svc.id)}
-                    style={{ width:28,height:28,borderRadius:7,border:'none',cursor:'pointer',
-                      display:'flex',alignItems:'center',justifyContent:'center',
-                      background:'rgba(239,68,68,0.1)' }}>
-                    <I.Trash style={{ width:11,height:11,color:'#ef4444' }}/>
+                          style={{ width:26, height:26, borderRadius:6, border:'none', cursor:'pointer',
+                                   background:'rgba(239,68,68,0.1)',
+                                   display:'flex', alignItems:'center', justifyContent:'center',
+                                   fontFamily:'inherit' }}>
+                    <I.Trash style={{ width:11, height:11, color:'#991b1b' }}/>
                   </button>
                 </div>
               </div>
@@ -377,16 +406,19 @@ export default function BookingServices({ theme, showToast }) {
         </div>
       )}
 
-      <CatFormModal open={catForm.open} onClose={() => setCatForm({ open:false,init:null })}
-        onSubmit={handleSaveCat} init={catForm.init} theme={theme} />
-      <SvcFormModal open={svcForm.open} onClose={() => setSvcForm({ open:false,init:null,parentId:null })}
-        onSubmit={handleSaveSvc} init={svcForm.init} parentId={svcForm.parentId} cats={cats} theme={theme} />
+      <CatFormModal open={catForm.open} onClose={() => setCatForm({ open:false, init:null })}
+                    onSubmit={handleSaveCat} init={catForm.init} theme={theme}/>
+      <SvcFormModal open={svcForm.open} onClose={() => setSvcForm({ open:false, init:null, parentId:null })}
+                    onSubmit={handleSaveSvc} init={svcForm.init} parentId={svcForm.parentId}
+                    cats={cats} theme={theme}/>
       <Confirm open={!!delCatId} onClose={() => setDelCatId(null)} onConfirm={handleDelCat}
-        title="Supprimer cette catégorie ?"
-        desc="Les services de cette catégorie seront conservés (sans catégorie)." theme={theme} />
+               title="Supprimer cette categorie ?"
+               message="Les services de cette categorie seront conserves (sans categorie)."
+               theme={theme}/>
       <Confirm open={!!delSvcId} onClose={() => setDelSvcId(null)} onConfirm={handleDelSvc}
-        title="Supprimer ce service ?"
-        desc="Les rendez-vous existants ne seront pas affectés." theme={theme} />
+               title="Supprimer ce service ?"
+               message="Les rendez-vous existants ne seront pas affectes."
+               theme={theme}/>
     </div>
   );
 }
