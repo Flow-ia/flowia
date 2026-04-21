@@ -24,50 +24,51 @@ export default function OAuthCallback() {
     const token  = params.get('token');
     const err    = params.get('error');
 
+    // Helper : broadcast + fallback via `storage` event (localStorage setItem
+    // déclenche un `storage` event dans les autres onglets/fenêtres de la
+    // même origine). Double canal = robustesse si BroadcastChannel manque.
+    // Note : on ne close() PAS le channel tout de suite — fermer avant que
+    // l'event loop n'ait dispatché le message peut le faire silencieusement
+    // dropper. window.close() nettoiera tout de toute façon.
+    let bc = null;
+    try { bc = new BroadcastChannel('flowia-oauth'); } catch {}
+
     if (err || !token) {
-      // Erreur OAuth : referme si popup, sinon redirige vers accueil avec flag.
-      try {
-        const bc = new BroadcastChannel('flowia-oauth');
-        bc.postMessage({ type: 'oauth_error', error: err || 'missing_token' });
-        bc.close();
-      } catch { /* BroadcastChannel non supporté */ }
+      try { bc && bc.postMessage({ type: 'oauth_error', error: err || 'missing_token' }); } catch {}
       setTimeout(() => {
         try { window.close(); } catch {}
         if (!window.closed) window.location.replace('/?auth_error=' + encodeURIComponent(err || 'oauth_failed'));
-      }, 200);
+      }, 400);
       return;
     }
 
     if (type === 'merchant') {
       const userRaw = params.get('user');
-      localStorage.setItem('ff_token', token);
-      // Ancienne session PIN → autre userId, à nettoyer.
-      localStorage.removeItem('ff_pin_token');
       let user = null;
       try { if (userRaw) user = JSON.parse(userRaw); } catch { /* noop */ }
-      try {
-        const bc = new BroadcastChannel('flowia-oauth');
-        bc.postMessage({ type: 'merchant_login', token, user });
-        bc.close();
-      } catch { /* noop */ }
+      // localStorage setItem déclenche un `storage` event dans les autres
+      // fenêtres same-origin → fallback pour le cas où BroadcastChannel
+      // n'est pas supporté / n'arrive pas à temps.
+      if (user) {
+        try { localStorage.setItem('ff_oauth_user', JSON.stringify(user)); } catch {}
+      }
+      localStorage.removeItem('ff_pin_token');
+      localStorage.setItem('ff_token', token);
+      try { bc && bc.postMessage({ type: 'merchant_login', token, user }); } catch {}
     } else if (type === 'client') {
       const clientRaw = params.get('client');
-      localStorage.setItem('ff_client_token', token);
       let client = null;
       try { if (clientRaw) client = JSON.parse(clientRaw); } catch { /* noop */ }
       if (client) localStorage.setItem('ff_client_info', JSON.stringify(client));
-      try {
-        const bc = new BroadcastChannel('flowia-oauth');
-        bc.postMessage({ type: 'client_login', token, client });
-        bc.close();
-      } catch { /* noop */ }
+      localStorage.setItem('ff_client_token', token);
+      try { bc && bc.postMessage({ type: 'client_login', token, client }); } catch {}
     }
 
-    // Laisser 300ms pour que le broadcast arrive à l'opener avant de fermer.
+    // 500 ms laisse largement le temps à BroadcastChannel + storage event
+    // d'être dispatchés à l'opener avant de fermer la popup.
     setTimeout(() => {
+      try { bc && bc.close(); } catch {}
       try { window.close(); } catch {}
-      // Si la fermeture a échoué (popup ouverte comme onglet), reprendre
-      // l'app normalement : merchant → /, client → /book/<slug> si fourni.
       if (!window.closed) {
         if (type === 'client') {
           const slug = params.get('slug') || '';
@@ -76,7 +77,7 @@ export default function OAuthCallback() {
           window.location.replace('/');
         }
       }
-    }, 300);
+    }, 500);
   }, []);
 
   return (

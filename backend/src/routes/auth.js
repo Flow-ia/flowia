@@ -27,6 +27,36 @@ function isValidEmail(e) {
 // l'email n'existe pas (empêche l'énumération par timing attack bcrypt).
 const DUMMY_BCRYPT = bcrypt.hashSync('dummy_' + process.pid + '_' + Date.now(), 12);
 
+// Allowlist d'origines frontend acceptées pour le redirect OAuth (popup
+// retour Google → /__oauth). Aligné avec le CORS dans index.js : pour
+// chaque FRONTEND_URL, on ajoute aussi automatiquement www.* et
+// commercant.* afin de couvrir les multi-sous-domaines (ex:
+// haircoifflille.fr → haircoifflille.fr + www. + commercant.). Sans cette
+// expansion, le callback renvoyait la popup sur le mauvais sous-domaine
+// et BroadcastChannel (same-origin only) ne pouvait pas réveiller
+// l'opener.
+function buildOAuthOriginAllowlist() {
+  const raw = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const set = new Set();
+  for (const o of raw) {
+    set.add(o);
+    try {
+      const u = new URL(o);
+      if (!u.hostname.startsWith('www.') && !u.hostname.startsWith('commercant.')) {
+        set.add(`${u.protocol}//www.${u.hostname}`);
+        set.add(`${u.protocol}//commercant.${u.hostname}`);
+      }
+    } catch { /* ignore invalid URL */ }
+  }
+  return { list: Array.from(set), primary: raw[0] };
+}
+
+function resolveOAuthTarget(requestedOrigin) {
+  const { list, primary } = buildOAuthOriginAllowlist();
+  return list.includes(requestedOrigin) ? requestedOrigin : primary;
+}
+
 function genCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -637,23 +667,15 @@ router.put('/profile', authMiddleware, async (req, res) => {
 router.get('/google/merchant/callback', async (req, res) => {
   const { code, state: stateRaw, error } = req.query;
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
-  // FRONTEND_URL peut contenir plusieurs origines (ex:
-  // "https://haircoifflille.fr,https://commercant.haircoifflille.fr")
-  // — on les traite comme allowlist pour le postMessage target.
-  const FRONTEND_LIST = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')
-    .split(',').map(s => s.trim()).filter(Boolean);
-  const FRONTEND_URL = FRONTEND_LIST[0];
   const redirectUri  = `${BACKEND_URL}/api/auth/google/merchant/callback`;
 
   // state = "merchant" OU "merchant|<origin-opener-encoded>"
-  // L'origin opener permet de router correctement le postMessage quand
-  // frontend et backend sont sur des domaines distincts (ou plusieurs
-  // sous-domaines côté frontend). Validation contre l'allowlist FRONTEND_URL.
+  // L'origin opener doit être validé contre l'allowlist expansée (incluant
+  // www.* et commercant.*), sinon le TARGET fallback envoie la popup sur le
+  // mauvais sous-domaine et casse le BroadcastChannel (same-origin only).
   const stateParts = String(stateRaw || '').split('|');
   const requestedOriginRaw = stateParts[1] ? decodeURIComponent(stateParts[1]) : '';
-  const TARGET_ORIGIN = FRONTEND_LIST.includes(requestedOriginRaw)
-    ? requestedOriginRaw
-    : FRONTEND_URL;
+  const TARGET_ORIGIN = resolveOAuthTarget(requestedOriginRaw);
 
   if (error || !code) {
     return res.redirect(`${TARGET_ORIGIN}?auth_error=google_denied`);
@@ -835,23 +857,16 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
 router.get('/google/callback', async (req, res) => {
   const { code, state: stateRaw, error } = req.query;
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
-  // Allowlist multi-origines pour le postMessage target (cf. callback merchant).
-  const FRONTEND_LIST = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')
-    .split(',').map(s => s.trim()).filter(Boolean);
-  const FRONTEND_URL = FRONTEND_LIST[0];
   const redirectUri  = `${BACKEND_URL}/api/auth/google/callback`;
 
   // state = "slug" OU "slug|REFCODE" OU "slug|REFCODE|<origin>"
-  // L'origin (3e champ optionnel) identifie l'opener pour router le
-  // postMessage correctement quand frontend et backend sont sur des
-  // domaines distincts. Validée contre l'allowlist FRONTEND_URL.
+  // L'origin (3e champ optionnel) est validé contre l'allowlist expansée
+  // (cf. callback merchant) — indispensable pour le BroadcastChannel.
   const stateParts = String(stateRaw || '').split('|');
   const slug = stateParts[0];
   const incomingRef = (stateParts[1] || '').trim().toUpperCase();
   const requestedOriginRaw = stateParts[2] ? decodeURIComponent(stateParts[2]) : '';
-  const TARGET_ORIGIN = FRONTEND_LIST.includes(requestedOriginRaw)
-    ? requestedOriginRaw
-    : FRONTEND_URL;
+  const TARGET_ORIGIN = resolveOAuthTarget(requestedOriginRaw);
 
   if (error || !code || !slug) {
     return res.redirect(`${TARGET_ORIGIN}?auth_error=google_denied`);

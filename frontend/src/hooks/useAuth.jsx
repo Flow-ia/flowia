@@ -26,21 +26,38 @@ export function AuthProvider({ children }) {
     // Écoute les événements OAuth diffusés par /__oauth. Permet de
     // recharger l'utilisateur quand la popup Google termine sans passer
     // par window.opener (détaché par Google COOP:same-origin).
+    const applyMerchantLogin = (user) => {
+      localStorage.removeItem('ff_pin_token');
+      if (user) setUser(user);
+      else api.me().then(d => setUser(d.user)).catch(() => {});
+    };
+
     let bc = null;
     try {
       bc = new BroadcastChannel('flowia-oauth');
       bc.onmessage = (ev) => {
-        if (ev.data?.type !== 'merchant_login') return;
-        if (ev.data.user) {
-          localStorage.removeItem('ff_pin_token');
-          setUser(ev.data.user);
-        } else {
-          // Fallback : refresh depuis /me pour obtenir le user complet.
-          api.me().then(d => setUser(d.user)).catch(() => {});
-        }
+        if (ev.data?.type === 'merchant_login') applyMerchantLogin(ev.data.user);
       };
     } catch { /* BroadcastChannel non supporté */ }
-    return () => { try { bc && bc.close(); } catch {} };
+
+    // Fallback storage event : fire-and-forget dans la popup → déclenche
+    // un `storage` event dans l'opener (same-origin). Permet de survivre
+    // au cas où BroadcastChannel serait filtré (extensions, etc.).
+    const onStorage = (e) => {
+      if (e.key === 'ff_oauth_user' && e.newValue) {
+        let user = null;
+        try { user = JSON.parse(e.newValue); } catch {}
+        applyMerchantLogin(user);
+        // Nettoyer le marqueur éphémère (évite re-trigger au reload).
+        try { localStorage.removeItem('ff_oauth_user'); } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      try { bc && bc.close(); } catch {}
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   function login(token, userData) {
