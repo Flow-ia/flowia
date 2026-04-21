@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { notifApi } from '../../utils/api';
+import { I } from '../../utils/icons';
+import { Button } from '../../components/primitives';
 
 export default function TabNotifs({ theme, showToast }) {
-  const isDark = theme.mode === 'dark';
+  const t = theme;
   const [cfg, setCfg]       = useState(null);
   const [loading, setLoad]  = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,31 +38,31 @@ export default function TabNotifs({ theme, showToast }) {
       const ctx = new AudioContext();
       const now = ctx.currentTime;
       const configs = {
-        caisse:          [{ freq:880,start:0,dur:.10,gain:.8 },{ freq:1100,start:.07,dur:.14,gain:.7 },{ freq:1320,start:.15,dur:.22,gain:.9 }],
-        new_appointment: [{ freq:523,start:0,dur:.18,gain:.7 },{ freq:659,start:.14,dur:.18,gain:.7 },{ freq:784,start:.28,dur:.30,gain:.8 },{ freq:1047,start:.42,dur:.35,gain:.9 }],
-        reminder:        [{ freq:880,start:0,dur:.12,gain:.6 },{ freq:880,start:.20,dur:.12,gain:.6 },{ freq:880,start:.40,dur:.15,gain:.8 }],
+        caisse:          [{ freq:880, start:0, dur:.10, gain:.8 },{ freq:1100, start:.07, dur:.14, gain:.7 },{ freq:1320, start:.15, dur:.22, gain:.9 }],
+        new_appointment: [{ freq:523, start:0, dur:.18, gain:.7 },{ freq:659,  start:.14, dur:.18, gain:.7 },{ freq:784,  start:.28, dur:.30, gain:.8 },{ freq:1047, start:.42, dur:.35, gain:.9 }],
+        reminder:        [{ freq:880, start:0, dur:.12, gain:.6 },{ freq:880,  start:.20, dur:.12, gain:.6 },{ freq:880,  start:.40, dur:.15, gain:.8 }],
       };
       const repeat = cfg.sound_repeat || 2;
       const notes  = configs[type] || configs.caisse;
-      const lastN  = notes[notes.length-1];
+      const lastN  = notes[notes.length - 1];
       const singleDur = lastN.start + lastN.dur + 0.08;
       const gap    = 0.35;
       for (let r = 0; r < repeat; r++) {
         const off = r * (singleDur + gap);
         const master = ctx.createGain();
-        master.gain.setValueAtTime(0.55, now+off);
+        master.gain.setValueAtTime(0.55, now + off);
         master.connect(ctx.destination);
-        notes.forEach(({freq, start, dur, gain}) => {
+        notes.forEach(({ freq, start, dur, gain }) => {
           const osc = ctx.createOscillator(); const gn = ctx.createGain();
-          osc.type = type==='reminder'?'square':'sine';
-          osc.frequency.setValueAtTime(freq, now+off+start);
-          gn.gain.setValueAtTime(gain, now+off+start);
-          gn.gain.exponentialRampToValueAtTime(0.001, now+off+start+dur);
+          osc.type = type === 'reminder' ? 'square' : 'sine';
+          osc.frequency.setValueAtTime(freq, now + off + start);
+          gn.gain.setValueAtTime(gain, now + off + start);
+          gn.gain.exponentialRampToValueAtTime(0.001, now + off + start + dur);
           osc.connect(gn); gn.connect(master);
-          osc.start(now+off+start); osc.stop(now+off+start+dur+0.05);
+          osc.start(now + off + start); osc.stop(now + off + start + dur + 0.05);
         });
       }
-      setTimeout(() => { try { ctx.close(); } catch {} }, ((repeat-1)*(singleDur+gap)+singleDur+.2)*1000);
+      setTimeout(() => { try { ctx.close(); } catch {} }, ((repeat - 1) * (singleDur + gap) + singleDur + .2) * 1000);
     } catch {}
   };
 
@@ -75,7 +77,7 @@ export default function TabNotifs({ theme, showToast }) {
     setSaving(true);
     try {
       await notifApi.saveSettings(cfg);
-      showToast('Parametres sauvegardes ✓');
+      showToast('Parametres sauvegardes');
     } catch { showToast('Erreur sauvegarde', 'error'); }
     finally { setSaving(false); }
   };
@@ -83,76 +85,113 @@ export default function TabNotifs({ theme, showToast }) {
   const toggle = (key) => setCfg(p => ({ ...p, [key]: !p[key] }));
   const set    = (key, val) => setCfg(p => ({ ...p, [key]: val }));
 
-  const cardS = { borderRadius:16, overflow:'hidden', background:theme.card, border:`1px solid ${theme.border}`, marginBottom:12 };
-  const rowS  = { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px' };
-  const labelS = { fontSize:13, fontWeight:700, color:theme.text, margin:0 };
-  const subS   = { fontSize:11, color:theme.muted, margin:'2px 0 0' };
+  const cardS  = { borderRadius:12, overflow:'hidden',
+                   background:t.card, border:`0.5px solid ${t.border}`,
+                   marginBottom:12 };
+  const rowS   = { display:'flex', alignItems:'center', justifyContent:'space-between',
+                   padding:'14px 16px' };
+  const labelS = { fontSize:13, fontWeight:500, color:t.text, margin:0 };
+  const subS   = { fontSize:11, color:t.muted, margin:'2px 0 0' };
+
   const Tog = ({ on, onChange }) => (
     <button onClick={onChange}
-      style={{ width:44, height:24, borderRadius:99, border:'none', cursor:'pointer',
-        position:'relative', flexShrink:0,
-        background: on ? 'linear-gradient(90deg,#111827,#374151)' : (isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)'),
-        transition:'background .2s' }}>
-      <div style={{ width:20, height:20, borderRadius:99, background:'white',
-        position:'absolute', top:2, left:on?22:2, transition:'left .15s',
-        boxShadow:'0 1px 4px rgba(0,0,0,0.25)' }}/>
+            style={{ width:40, height:22, borderRadius:99, border:'none', cursor:'pointer',
+                     position:'relative', flexShrink:0,
+                     background: on ? t.text : t.cardAlt,
+                     transition:'background 0.2s', fontFamily:'inherit' }}>
+      <div style={{ width:18, height:18, borderRadius:'50%',
+                    background: on ? t.bg : 'white',
+                    position:'absolute', top:2, left: on ? 20 : 2,
+                    transition:'left 0.15s',
+                    boxShadow: t.shadowSm }}/>
     </button>
   );
-  const inp = { width:'100%', padding:'10px 12px', borderRadius:10, outline:'none',
-    background:isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.05)',
-    border:`1px solid ${theme.border}`, color:theme.text, fontSize:13, fontFamily:'inherit' };
 
-  if (loading) return <div style={{ padding:48, textAlign:'center' }}><div style={{ width:28,height:28,borderRadius:99,border:`2px solid ${isDark?'rgba(255,255,255,0.1)':'rgba(17,24,39,0.2)'}`,borderTopColor:isDark?'#e6edf3':'#111827',animation:'spin .8s linear infinite',margin:'0 auto' }}/></div>;
+  const inp = {
+    width:'100%', padding:'10px 12px', borderRadius:8, outline:'none',
+    background:t.inputBg, border:`0.5px solid ${t.borderInput}`,
+    color:t.text, fontSize:13, fontFamily:'inherit', boxSizing:'border-box',
+  };
+
+  const chip = (active, color) => ({
+    padding:'7px 12px', borderRadius:99, fontSize:12, fontWeight:500,
+    cursor:'pointer', fontFamily:'inherit',
+    border:`0.5px solid ${active ? color : t.border}`,
+    background: active ? `${color}18` : 'transparent',
+    color: active ? color : t.muted,
+  });
+
+  const sectionHeader = (title) => (
+    <div style={{ padding:'12px 16px', borderBottom:`0.5px solid ${t.separator}` }}>
+      <p style={{ fontSize:13, fontWeight:500, color:t.text, margin:0 }}>{title}</p>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div style={{ padding:48, textAlign:'center' }}>
+        <svg className="animate-spin" width="26" height="26" viewBox="0 0 24 24"
+             style={{ color:t.text, display:'inline-block' }}>
+          <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2"/>
+          <path d="M12 2 a10 10 0 0 1 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      </div>
+    );
+  }
   if (!cfg) return null;
 
   return (
     <div>
+      {/* Recap journalier */}
       <div style={cardS}>
-        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:16 }}>📊</span>
-          <p style={{ fontWeight:800, fontSize:13, color:theme.text, margin:0 }}>Récap journalier</p>
-        </div>
+        {sectionHeader('Recap journalier')}
         <div style={rowS}>
-          <div><p style={labelS}>Activer le récap journalier</p><p style={subS}>Reçois un email de synthèse chaque soir</p></div>
-          <Tog on={cfg.daily_recap_enabled} onChange={() => toggle('daily_recap_enabled')} />
+          <div>
+            <p style={labelS}>Activer le recap journalier</p>
+            <p style={subS}>Recois un email de synthese chaque soir</p>
+          </div>
+          <Tog on={cfg.daily_recap_enabled} onChange={() => toggle('daily_recap_enabled')}/>
         </div>
         {cfg.daily_recap_enabled && (
           <div style={{ padding:'0 16px 14px', display:'flex', flexDirection:'column', gap:10 }}>
             <div>
-              <p style={{ fontSize:11, fontWeight:700, color:theme.muted, marginBottom:5 }}>Heure d&apos;envoi</p>
-              <input type="time" value={cfg.daily_recap_time || '20:00'} onChange={e => set('daily_recap_time', e.target.value)} style={inp}/>
+              <p style={{ fontSize:12, color:t.muted, margin:'0 0 6px' }}>{"Heure d'envoi"}</p>
+              <input type="time" value={cfg.daily_recap_time || '20:00'}
+                     onChange={e => set('daily_recap_time', e.target.value)} style={inp}/>
             </div>
             <div>
-              <p style={{ fontSize:11, fontWeight:700, color:theme.muted, marginBottom:5 }}>Email de réception</p>
-              <input type="email" placeholder="ton@email.com" value={cfg.daily_recap_email || ''} onChange={e => set('daily_recap_email', e.target.value)} style={inp}/>
+              <p style={{ fontSize:12, color:t.muted, margin:'0 0 6px' }}>Email de reception</p>
+              <input type="email" placeholder="ton@email.com"
+                     value={cfg.daily_recap_email || ''}
+                     onChange={e => set('daily_recap_email', e.target.value)} style={inp}/>
             </div>
-            <button onClick={() => notifApi.testRecap().then(()=>showToast('Email test envoye ✓')).catch(()=>showToast('Erreur', 'error'))}
-              style={{ padding:'9px 0', borderRadius:10, border:`1px solid ${theme.border}`, background:'transparent', color:theme.muted, fontSize:12, fontWeight:700, cursor:'pointer' }}>
-              📨 Envoyer un récap test
-            </button>
+            <Button variant="secondary" size="small" type="button"
+                    onClick={() => notifApi.testRecap()
+                      .then(() => showToast('Email test envoye'))
+                      .catch(() => showToast('Erreur', 'error'))}>
+              Envoyer un recap test
+            </Button>
           </div>
         )}
       </div>
 
+      {/* Rappels RDV clients */}
       <div style={cardS}>
-        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:16 }}>📅</span>
-          <p style={{ fontWeight:800, fontSize:13, color:theme.text, margin:0 }}>Rappels RDV clients</p>
-        </div>
+        {sectionHeader('Rappels RDV clients')}
         <div style={rowS}>
-          <div><p style={labelS}>Activer les rappels</p><p style={subS}>Email automatique avant chaque RDV</p></div>
-          <Tog on={cfg.reminder_enabled} onChange={() => toggle('reminder_enabled')} />
+          <div>
+            <p style={labelS}>Activer les rappels</p>
+            <p style={subS}>Email automatique avant chaque RDV</p>
+          </div>
+          <Tog on={cfg.reminder_enabled} onChange={() => toggle('reminder_enabled')}/>
         </div>
         {cfg.reminder_enabled && (
           <div style={{ padding:'0 16px 14px' }}>
-            <p style={{ fontSize:11, fontWeight:700, color:theme.muted, marginBottom:8 }}>Délai avant le RDV</p>
+            <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Delai avant le RDV</p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               {DELAY_OPTS.map(d => (
                 <button key={d.v} onClick={() => set('reminder_delays', d.v)}
-                  style={{ padding:'7px 12px', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer',
-                    border:`1px solid ${cfg.reminder_delays===d.v?'#111827':theme.border}`,
-                    background: cfg.reminder_delays===d.v?'rgba(17,24,39,0.12)':'transparent',
-                    color: cfg.reminder_delays===d.v?'#111827':theme.muted }}>
+                        style={chip(cfg.reminder_delays === d.v, t.text)}>
                   {d.l}
                 </button>
               ))}
@@ -161,25 +200,23 @@ export default function TabNotifs({ theme, showToast }) {
         )}
       </div>
 
+      {/* Rappels employes */}
       <div style={cardS}>
-        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:16 }}>👥</span>
-          <p style={{ fontWeight:800, fontSize:13, color:theme.text, margin:0 }}>Rappels employés</p>
-        </div>
+        {sectionHeader('Rappels employes')}
         <div style={rowS}>
-          <div><p style={labelS}>Rappels pour les employés</p><p style={subS}>Email pour préparer leur journée</p></div>
-          <Tog on={cfg.employee_reminder_enabled} onChange={() => toggle('employee_reminder_enabled')} />
+          <div>
+            <p style={labelS}>Rappels pour les employes</p>
+            <p style={subS}>Email pour preparer leur journee</p>
+          </div>
+          <Tog on={cfg.employee_reminder_enabled} onChange={() => toggle('employee_reminder_enabled')}/>
         </div>
         {cfg.employee_reminder_enabled && (
           <div style={{ padding:'0 16px 14px' }}>
-            <p style={{ fontSize:11, fontWeight:700, color:theme.muted, marginBottom:8 }}>Délai avant le RDV</p>
+            <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Delai avant le RDV</p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              {DELAY_OPTS.slice(0,4).map(d => (
+              {DELAY_OPTS.slice(0, 4).map(d => (
                 <button key={d.v} onClick={() => set('employee_reminder_delays', d.v)}
-                  style={{ padding:'7px 12px', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer',
-                    border:`1px solid ${cfg.employee_reminder_delays===d.v?'#374151':theme.border}`,
-                    background: cfg.employee_reminder_delays===d.v?'rgba(55,65,81,0.12)':'transparent',
-                    color: cfg.employee_reminder_delays===d.v?'#374151':theme.muted }}>
+                        style={chip(cfg.employee_reminder_delays === d.v, t.text)}>
                   {d.l}
                 </button>
               ))}
@@ -188,67 +225,42 @@ export default function TabNotifs({ theme, showToast }) {
         )}
       </div>
 
+      {/* Sons & alertes */}
       <div style={cardS}>
-        <div style={{ padding:'12px 16px', borderBottom:`1px solid ${theme.border}`, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:16 }}>🔊</span>
-          <p style={{ fontWeight:800, fontSize:13, color:theme.text, margin:0 }}>Sons & alertes</p>
-        </div>
+        {sectionHeader('Sons & alertes')}
 
-        <div style={{ ...rowS, borderBottom:`1px solid ${theme.border}` }}>
-          <div style={{ flex:1 }}>
-            <p style={labelS}>Son validation encaissement</p>
-            <p style={subS}>Joué après validation du paiement (caisse + PIN)</p>
+        {[
+          { type:'caisse',          keyOn:'sound_caisse',     label:'Son validation encaissement', sub:'Joue apres validation du paiement (caisse + PIN)' },
+          { type:'new_appointment', keyOn:'sound_new_appt',   label:'Son nouveau rendez-vous',     sub:"Joue des reception d'un nouveau RDV" },
+          { type:'reminder',        keyOn:'sound_reminder',   label:'Son rappel de rendez-vous',   sub:'Alerte sonore quand un RDV approche' },
+        ].map(({ type, keyOn, label, sub }) => (
+          <div key={type}
+               style={{ ...rowS, borderBottom:`0.5px solid ${t.separator}` }}>
+            <div style={{ flex:1 }}>
+              <p style={labelS}>{label}</p>
+              <p style={subS}>{sub}</p>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+              <button onClick={() => testSound(type)}
+                      style={{ padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:500,
+                               cursor:'pointer', fontFamily:'inherit',
+                               border:`0.5px solid ${t.border}`,
+                               background:t.cardAlt, color:t.muted }}>
+                ▶ Tester
+              </button>
+              <Tog on={cfg[keyOn] ?? true}
+                   onChange={() => setCfg(p => ({ ...p, [keyOn]: !(p[keyOn] ?? true) }))}/>
+            </div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-            <button onClick={()=>testSound('caisse')}
-              style={{ padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer',
-                border:`1px solid ${theme.border}`, background:theme.cardAlt, color:theme.muted }}>
-              ▶ Tester
-            </button>
-            <Tog on={cfg.sound_caisse ?? true} onChange={()=>setCfg(p=>({...p, sound_caisse:!(p.sound_caisse??true)}))} />
-          </div>
-        </div>
-
-        <div style={{ ...rowS, borderBottom:`1px solid ${theme.border}` }}>
-          <div style={{ flex:1 }}>
-            <p style={labelS}>Son nouveau rendez-vous</p>
-            <p style={subS}>Joué dès réception d'un nouveau RDV</p>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-            <button onClick={()=>testSound('new_appointment')}
-              style={{ padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer',
-                border:`1px solid ${theme.border}`, background:theme.cardAlt, color:theme.muted }}>
-              ▶ Tester
-            </button>
-            <Tog on={cfg.sound_new_appt ?? true} onChange={()=>setCfg(p=>({...p, sound_new_appt:!(p.sound_new_appt??true)}))} />
-          </div>
-        </div>
-
-        <div style={{ ...rowS, borderBottom:`1px solid ${theme.border}` }}>
-          <div style={{ flex:1 }}>
-            <p style={labelS}>Son rappel de rendez-vous</p>
-            <p style={subS}>Alerte sonore quand un RDV approche</p>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-            <button onClick={()=>testSound('reminder')}
-              style={{ padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer',
-                border:`1px solid ${theme.border}`, background:theme.cardAlt, color:theme.muted }}>
-              ▶ Tester
-            </button>
-            <Tog on={cfg.sound_reminder ?? true} onChange={()=>setCfg(p=>({...p, sound_reminder:!(p.sound_reminder??true)}))} />
-          </div>
-        </div>
+        ))}
 
         {(cfg.sound_reminder ?? true) && (
-          <div style={{ padding:'10px 16px', borderBottom:`1px solid ${theme.border}` }}>
-            <p style={{ fontSize:11, fontWeight:700, color:theme.muted, marginBottom:8 }}>⏱ Alerte RDV avant :</p>
+          <div style={{ padding:'12px 16px', borderBottom:`0.5px solid ${t.separator}` }}>
+            <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Alerte RDV avant :</p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
               {SOUND_RDV_OPTS.map(d => (
-                <button key={d.v} onClick={()=>setCfg(p=>({...p, sound_rdv_before:d.v}))}
-                  style={{ padding:'7px 12px', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer',
-                    border:`1px solid ${(cfg.sound_rdv_before||15)===d.v?'#1a73e8':theme.border}`,
-                    background:(cfg.sound_rdv_before||15)===d.v?'rgba(26,115,232,0.1)':'transparent',
-                    color:(cfg.sound_rdv_before||15)===d.v?'#1a73e8':theme.muted }}>
+                <button key={d.v} onClick={() => setCfg(p => ({ ...p, sound_rdv_before: d.v }))}
+                        style={chip((cfg.sound_rdv_before || 15) === d.v, '#4338ca')}>
                   {d.l}
                 </button>
               ))}
@@ -256,15 +268,12 @@ export default function TabNotifs({ theme, showToast }) {
           </div>
         )}
 
-        <div style={{ padding:'10px 16px' }}>
-          <p style={{ fontSize:11, fontWeight:700, color:theme.muted, marginBottom:8 }}>🔁 Répéter les sons :</p>
+        <div style={{ padding:'12px 16px' }}>
+          <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Repeter les sons :</p>
           <div style={{ display:'flex', gap:6 }}>
             {SOUND_REPEAT_OPTS.map(d => (
-              <button key={d.v} onClick={()=>setCfg(p=>({...p, sound_repeat:d.v}))}
-                style={{ padding:'7px 12px', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer',
-                  border:`1px solid ${(cfg.sound_repeat||2)===d.v?'#1a73e8':theme.border}`,
-                  background:(cfg.sound_repeat||2)===d.v?'rgba(26,115,232,0.1)':'transparent',
-                  color:(cfg.sound_repeat||2)===d.v?'#1a73e8':theme.muted }}>
+              <button key={d.v} onClick={() => setCfg(p => ({ ...p, sound_repeat: d.v }))}
+                      style={chip((cfg.sound_repeat || 2) === d.v, '#4338ca')}>
                 {d.l}
               </button>
             ))}
@@ -272,12 +281,9 @@ export default function TabNotifs({ theme, showToast }) {
         </div>
       </div>
 
-      <button onClick={save} disabled={saving}
-        style={{ width:'100%', padding:'14px', borderRadius:16, border:'none', cursor:'pointer',
-          background:'#1a73e8', color:'white', fontWeight:800, fontSize:14,
-          boxShadow:'0 4px 16px rgba(17,24,39,0.3)', opacity:saving?0.7:1 }}>
+      <Button variant="primary" fullWidth type="button" onClick={save} disabled={saving}>
         {saving ? 'Sauvegarde...' : 'Enregistrer les parametres'}
-      </button>
+      </Button>
     </div>
   );
 }
