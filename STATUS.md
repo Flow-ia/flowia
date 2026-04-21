@@ -7,6 +7,23 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Deep-link notifications popup Dashboard → RDV** — La popup
+`NotifModal` du Dashboard (tuile « Notifs ») ouvrait auparavant juste la
+liste : clic sur une notif marquait lue et rien d'autre. Alignée avec la
+cloche `NotificationCenter` (App.jsx) : clic sur une notif de type
+rappel RDV / nouveau RDV ferme la popup et deep-link vers
+`/agenda?date=YYYY-MM-DD&appt=<id>` (construit par le backend dans
+`push.js` — champ `data.url`). L'agenda bascule en vue Jour au bon
+offset et ouvre automatiquement le modal du RDV concerné, avec tous les
+détails — plus besoin de chercher manuellement après avoir cliqué la
+notif. Même validation `safeInternalPath` (refuse `javascript:`, `data:`,
+`//evil`, control chars, backslashes). Fallback `/agenda` si pas d'url
+mais `appointment_id` présent. Curseur `pointer` partout (même sur
+notifs déjà lues). Fichier : `frontend/src/pages/Dashboard.jsx`
+(NotifModal + import `useNavigate`). Build OK.
+
+## État actuel (2026-04-22)
+
 **Fix boucle login commerçant — `.catch` api.me() ne purge plus
 aveuglément** — Symptôme : sur `commercant.haircoifflille.fr`,
 redirection systématique vers `/login` après authentification, 401 sur

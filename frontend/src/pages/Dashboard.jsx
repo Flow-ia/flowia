@@ -1,5 +1,6 @@
 // src/pages/Dashboard.jsx — Refonte visuelle 2026, logique intacte (PIN, stats, historique)
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { todayStr } from '../utils/dates';
 import { useTheme } from '../hooks/useTheme';
 import { useEmployeePin } from '../hooks/useEmployeePin';
@@ -391,6 +392,7 @@ function PinAccessModal({ open, onClose, onSuccess, employees, theme: t, title =
 function NotifModal({ open, onClose, theme: t }) {
   const [notifs, setNotifs]   = useState([]);
   const [loading, setLoading] = useState(false);
+  const navigate              = useNavigate();
 
   useEffect(() => {
     if (!open) return;
@@ -404,6 +406,22 @@ function NotifModal({ open, onClose, theme: t }) {
   const markRead = async id => { await notifApi.markRead({ id }).catch(() => {}); setNotifs(p => p.map(n => n.id === id ? { ...n, is_read:true } : n)); };
   const del      = async id => { await notifApi.deleteInApp(id).catch(() => {}); setNotifs(p => p.filter(n => n.id !== id)); };
   const clearAll = async ()  => { await Promise.all(notifs.map(n => notifApi.deleteInApp(n.id))).catch(() => {}); setNotifs([]); };
+
+  // Clic sur une notif : marque lue + deep-link vers le RDV concerné
+  // (ou /agenda générique si pas d'url). Même validation path interne que le SW
+  // et la cloche NotificationCenter — refuse javascript:, data:, //evil, etc.
+  const openNotif = (n) => {
+    if (!n.is_read) markRead(n.id);
+    const raw = n?.data?.url;
+    let target = null;
+    if (typeof raw === 'string' && raw.length && raw[0] === '/' && !raw.startsWith('//')
+        && !/[\x00-\x1f]/.test(raw) && !raw.includes('\\')) {
+      target = raw;
+    } else if (n?.data?.appointment_id) {
+      target = '/agenda';
+    }
+    if (target) { onClose(); navigate(target); }
+  };
 
   // Icones data metier (identifiants de type de notification) — conserves
   const ICON = { new_appointment:'📅', appointment_reminder:'⏰', caisse:'🧾' };
@@ -436,11 +454,11 @@ function NotifModal({ open, onClose, theme: t }) {
           <p style={{ fontSize:13, color:t.muted, margin:0 }}>Aucune notification</p>
         </div>
       ) : notifs.map((n, i) => (
-        <div key={n.id} onClick={() => !n.is_read && markRead(n.id)}
+        <div key={n.id} onClick={() => openNotif(n)}
              style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'13px 16px',
                       borderBottom: i < notifs.length - 1 ? sep : 'none',
                       background: n.is_read ? 'transparent' : t.cardAlt,
-                      cursor: n.is_read ? 'default' : 'pointer' }}>
+                      cursor:'pointer' }}>
           <div style={{ width:34, height:34, borderRadius:8, flexShrink:0, fontSize:16,
                         display:'flex', alignItems:'center', justifyContent:'center',
                         background:t.cardAlt }}>
