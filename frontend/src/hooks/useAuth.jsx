@@ -1,6 +1,6 @@
 // src/hooks/useAuth.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, notifyLoginJustHappened } from '../utils/api';
 
 const AuthContext = createContext(null);
 
@@ -30,6 +30,9 @@ export function AuthProvider({ children }) {
     const applyMerchantLogin = (token, user) => {
       if (token) localStorage.setItem('ff_token', token);
       localStorage.removeItem('ff_pin_token');
+      // Active la grace period anti-401 pour que l'intercepteur ne purge
+      // pas le nouveau token si une requête transitoire 401 juste après.
+      notifyLoginJustHappened();
       if (user) setUser(user);
       else api.me().then(d => setUser(d.user)).catch(() => {
         // Token invalide côté backend → purger pour éviter de réutiliser.
@@ -80,6 +83,7 @@ export function AuthProvider({ children }) {
     //  mais on nettoie côté frontend pour éviter un appel inutile à check-session)
     localStorage.removeItem('ff_pin_token');
     localStorage.setItem('ff_token', token);
+    notifyLoginJustHappened();
     setUser(userData);
   }
 

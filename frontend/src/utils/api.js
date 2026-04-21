@@ -2,8 +2,20 @@
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Garde contre les dispatchs répétés : plusieurs requêtes parallèles qui
-// 401 en même temps doivent déclencher un seul logout.
-let __authExpiredDispatched = false;
+// 401 en même temps ne doivent déclencher qu'un seul check.
+let __meCheckInFlight = null;
+// Fenêtre "grace period" post-login pour laisser le temps au nouveau token
+// de se propager partout (useAuth BroadcastChannel, localStorage sync, etc.).
+// Sans ce délai, un 401 transitoire juste après un login Google boucle :
+// purge token frais → user=null → /login → re-login → rebelote.
+let __lastLoginAt = 0;
+export function notifyLoginJustHappened() { __lastLoginAt = Date.now(); }
+
+function dispatchAuthExpired() {
+  localStorage.removeItem('ff_token');
+  localStorage.removeItem('ff_pin_token');
+  try { window.dispatchEvent(new Event('ff-auth-expired')); } catch {}
+}
 
 // Appelé quand une requête merchant retourne 401. Purge les tokens locaux
 // et signale useAuth pour qu'il remette user=null (l'app retombe alors
@@ -11,16 +23,33 @@ let __authExpiredDispatched = false;
 // mais tous les fetch échoueraient silencieusement (bell vide, agenda
 // vide, etc.) → comportement observé quand le JWT expire pendant qu'un
 // onglet reste ouvert.
-function handleMerchant401(res) {
+//
+// Double-check via /auth/me AVANT de purger : un 401 transitoire (backend
+// hiccup, latence replication DB, mauvais état intermédiaire) ne doit pas
+// déconnecter un utilisateur avec un token encore valide.
+function handleMerchant401(res, path) {
   if (res.status !== 401) return;
-  localStorage.removeItem('ff_token');
-  localStorage.removeItem('ff_pin_token');
-  if (__authExpiredDispatched) return;
-  __authExpiredDispatched = true;
-  try { window.dispatchEvent(new Event('ff-auth-expired')); } catch {}
-  // Reset du flag à la prochaine tick pour autoriser un nouveau cycle
-  // si l'utilisateur se re-login puis son nouveau token re-expire.
-  setTimeout(() => { __authExpiredDispatched = false; }, 2000);
+  // Pas de token local → rien à purger, juste signaler l'état null.
+  const token = localStorage.getItem('ff_token');
+  if (!token) { dispatchAuthExpired(); return; }
+  // Grace period post-login : ignorer 401 pendant 3s après un login (le
+  // temps que React propage user, que les requêtes en vol se terminent et
+  // que le client soit dans un état stable).
+  if (Date.now() - __lastLoginAt < 3000) return;
+  // /auth/me lui-même 401 → verdict sans ambiguïté : token invalide/expiré.
+  if (path === '/auth/me') { dispatchAuthExpired(); return; }
+  // Déjà en cours de vérification → les autres 401 parallèles attendent.
+  if (__meCheckInFlight) return;
+  __meCheckInFlight = (async () => {
+    try {
+      const check = await fetch(`${BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (check.status === 401) dispatchAuthExpired();
+      // Sinon : 401 transitoire, le token est encore valide — ne rien faire.
+    } catch { /* réseau KO : on laisse le token intact */ }
+    finally { __meCheckInFlight = null; }
+  })();
 }
 
 function getToken() {
@@ -52,7 +81,7 @@ async function adminRequest(path, options = {}) {
   if (token)    headers['Authorization'] = `Bearer ${token}`;
   if (pinToken) headers['x-pin-session'] = pinToken;
   const res  = await fetch(`${BASE}${path}`, { ...options, headers });
-  handleMerchant401(res);
+  handleMerchant401(res, path);
   const data = await res.json();
   if (!res.ok) throw Object.assign(new Error(data.message || data.error || 'Erreur serveur'), { code: data.error });
   return data;
@@ -88,7 +117,7 @@ async function request(path, options = {}) {
   }
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  handleMerchant401(res);
+  handleMerchant401(res, path);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erreur serveur');
   return data;

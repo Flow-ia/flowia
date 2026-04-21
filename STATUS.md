@@ -7,6 +7,26 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Fix boucle login Google commerçant** — Régression du commit précédent
+(`436aa06`) : l'intercepteur 401 purgeait le token trop agressivement →
+après un login Google OAuth, si UNE requête dans le Promise.all de
+chargement initial (categories/employees/transactions) tombait en 401
+pour une raison transitoire, tous les autres tokens frais étaient
+purgés et l'utilisateur renvoyé immédiatement sur `/login`, boucle
+infinie. Fix à 3 niveaux dans `handleMerchant401()` :
+1. **Grace period post-login** : `notifyLoginJustHappened()` exporté
+   depuis `api.js`, appelé par `useAuth.login()` et
+   `applyMerchantLogin()`. Pendant 3s après login, les 401 sont
+   ignorés (laisse le temps au nouveau token de se propager).
+2. **Double-check via `/auth/me`** : avant de purger sur 401, on
+   vérifie si le token est RÉELLEMENT invalide en interrogeant
+   `/auth/me`. Si cette route répond 200, c'est un 401 transitoire
+   (backend hiccup, latence DB) → on n'y touche pas. Si 401 aussi →
+   purge confirmée.
+3. **Déduplication concurrence** : garde `__meCheckInFlight` pour
+   qu'un burst de 401 parallèles ne déclenche qu'un seul check.
+Fichiers : `frontend/src/utils/api.js`, `frontend/src/hooks/useAuth.jsx`.
+
 **Fix 401 silencieux commerçant** — Symptôme observé : clic sur la
 cloche notif du dashboard commerçant, rien ne s'affiche, console crache
 401 sur `/api/notifications/inapp`, `/api/booking/appointments` et
