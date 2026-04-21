@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { bookingApi } from '../../../utils/api';
 import { Toast, useToast } from '../../../components/UI';
+import { Button, SegmentedControl } from '../../../components/primitives';
+import { I } from '../../../utils/icons';
 import { DAYS_FR, MONTHS_FR } from '../constants';
 import { svLocal } from '../helpers';
-import { glassCard, pillBtn, chip } from '../styles';
 import Spin from '../components/Spin';
 import ApptCard from '../components/ApptCard';
 import ApptActionModal from '../modals/ApptActionModal';
@@ -12,7 +13,6 @@ import NewApptModal from '../modals/NewApptModal';
 import ClientsTab from './ClientsTab';
 
 export default function EmpAgendaMain({ employee, services, allEmployees, onBack, onTxCreated, theme: t }) {
-  const isDark = t.mode === 'dark';
   const [toast, showToast]             = useToast();
   const [weekOffset, setWeekOffset]    = useState(0);
   const [selectedDate, setSelectedDate]= useState(new Date());
@@ -27,141 +27,273 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
 
   const today = new Date();
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate()-((today.getDay()+6)%7)+weekOffset*7);
-  const weekDays = Array.from({length:7},(_,i)=>{ const d=new Date(startOfWeek); d.setDate(startOfWeek.getDate()+i); return d; });
+  startOfWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7);
+  const weekDays = Array.from({length:7}, (_,i) => {
+    const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d;
+  });
   const weekFrom = svLocal(weekDays[0]);
   const weekTo   = svLocal(weekDays[6]);
 
-  const loadAppts = useCallback(async() => {
+  const loadAppts = useCallback(async () => {
     setLoading(true);
     try {
-      if (filterEmpId && filterEmpId!=='all') {
-        const data = await bookingApi.getEmployeeAgenda(filterEmpId, {from:weekFrom,to:weekTo});
-        setAllAppts(Array.isArray(data?.appointments)?data.appointments:[]);
+      if (filterEmpId && filterEmpId !== 'all') {
+        const data = await bookingApi.getEmployeeAgenda(filterEmpId, { from: weekFrom, to: weekTo });
+        setAllAppts(Array.isArray(data?.appointments) ? data.appointments : []);
       } else {
-        const data = await bookingApi.getAppointments({from:weekFrom,to:weekTo});
-        setAllAppts(Array.isArray(data)?data:[]);
+        const data = await bookingApi.getAppointments({ from: weekFrom, to: weekTo });
+        setAllAppts(Array.isArray(data) ? data : []);
       }
-    } catch {} finally { setLoading(false); }
+    } catch {}
+    finally { setLoading(false); }
   }, [weekFrom, weekTo, filterEmpId]);
 
-  useEffect(()=>{ loadAppts(); clearInterval(refreshRef.current); refreshRef.current=setInterval(loadAppts,30000); return()=>clearInterval(refreshRef.current); }, [loadAppts]);
+  useEffect(() => {
+    loadAppts();
+    clearInterval(refreshRef.current);
+    refreshRef.current = setInterval(loadAppts, 30000);
+    return () => clearInterval(refreshRef.current);
+  }, [loadAppts]);
 
   const selStr   = svLocal(selectedDate);
-  const dayAppts = allAppts.filter(a=>{
-    const d = typeof a.date==='string'?a.date.substring(0,10):'';
-    if (d!==selStr) return false;
-    if (searchQ.trim()) { const q=searchQ.trim().toLowerCase(); return (a.client_name||'').toLowerCase().includes(q)||(a.client_phone||'').toLowerCase().includes(q)||(a.client_email||'').toLowerCase().includes(q)||(a.id||'').substring(0,8).toLowerCase().includes(q); }
+  const dayAppts = allAppts.filter(a => {
+    const d = typeof a.date === 'string' ? a.date.substring(0, 10) : '';
+    if (d !== selStr) return false;
+    if (searchQ.trim()) {
+      const q = searchQ.trim().toLowerCase();
+      return (a.client_name || '').toLowerCase().includes(q)
+          || (a.client_phone || '').toLowerCase().includes(q)
+          || (a.client_email || '').toLowerCase().includes(q)
+          || (a.id || '').substring(0, 8).toLowerCase().includes(q);
+    }
     return true;
-  }).sort((a,b)=>a.start_time.localeCompare(b.start_time));
+  }).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   const dayCounts = {};
-  weekDays.forEach(d=>{
-    const ds=svLocal(d); const ap=allAppts.filter(a=>a.date?.substring(0,10)===ds);
-    dayCounts[ds]={total:ap.length,paid:ap.filter(a=>a.paid).length};
+  weekDays.forEach(d => {
+    const ds = svLocal(d);
+    const ap = allAppts.filter(a => a.date?.substring(0, 10) === ds);
+    dayCounts[ds] = { total: ap.length, paid: ap.filter(a => a.paid).length };
   });
 
-  const todayStats = dayCounts[selStr]||{total:0,paid:0};
+  const todayStats = dayCounts[selStr] || { total:0, paid:0 };
+
+  const perms = [
+    employee.can_cancel && { label: 'Annulation', dot: '#ef4444' },
+    employee.can_modify && { label: 'Modification', dot: '#8b5cf6' },
+    employee.can_encash && { label: 'Encaissement', dot: '#10b981' },
+  ].filter(Boolean);
+
+  const iconBtnStyle = {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    background: 'transparent',
+    border: `0.5px solid ${t.border}`,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: t.muted,
+    fontFamily: 'inherit',
+    padding: 0,
+  };
+
+  const sectionCard = {
+    background: t.card,
+    border: `0.5px solid ${t.border}`,
+    borderRadius: 12,
+  };
 
   return (
-    <div style={{ background:t.bg, minHeight:'100vh', paddingBottom:96 }} className='lg:pb-8'>
+    <div style={{ background: t.bg, minHeight: '100vh', paddingBottom: 96 }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
       <Toast msg={toast?.msg} type={toast?.type} />
 
       {/* ── HEADER ── */}
-      <div style={{ padding:'16px 16px 0', display:'flex', alignItems:'center', gap:12 }}>
-        <button onClick={onBack} style={{ width:36, height:36, borderRadius:10, ...glassCard(isDark), border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:14,height:14,color:t.muted}}><polyline points="15 18 9 12 15 6"/></svg>
+      <div style={{ padding: '14px 16px 0', display:'flex', alignItems:'center', gap:10 }}>
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Retour"
+          style={iconBtnStyle}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
 
-        <div style={{ width:40, height:40, borderRadius:12, background:employee.avatar_color||'#111827', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:18, fontWeight:800, flexShrink:0 }}>{employee.name.charAt(0)}</div>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          background: employee.avatar_color || t.text,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: 16,
+          fontWeight: 500,
+          flexShrink: 0,
+        }}>{employee.name.charAt(0)}</div>
 
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <p style={{ margin:0, fontSize:16, fontWeight:800, color:t.text, letterSpacing:'-.3px' }}>{employee.name}</p>
+            <p style={{ margin:0, fontSize:15, fontWeight:500, color:t.text }}>{employee.name}</p>
             {loading && <Spin size={14} />}
           </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:3 }}>
-            {employee.can_cancel && <span style={chip(isDark,'#ef4444')}>✕</span>}
-            {employee.can_modify && <span style={chip(isDark,'#8b5cf6')}>✎</span>}
-            {employee.can_encash && <span style={chip(isDark,'#22c55e')}>$</span>}
-            {!employee.can_cancel&&!employee.can_modify&&!employee.can_encash && <span style={chip(isDark,isDark?'#64748b':'#94a3b8')}>👁</span>}
+          <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginTop:3 }}>
+            {perms.length === 0 ? (
+              <span style={{ display:'inline-flex', alignItems:'center', gap:5, fontSize:11, color:t.muted }}>
+                <span style={{ width:5, height:5, borderRadius:'50%', background:t.dim }} />
+                Consultation
+              </span>
+            ) : perms.map((p, j) => (
+              <span key={j} style={{ display:'inline-flex', alignItems:'center', gap:5, fontSize:11, color:t.muted }}>
+                <span style={{ width:5, height:5, borderRadius:'50%', background:p.dot }} />
+                {p.label}
+              </span>
+            ))}
           </div>
         </div>
 
-        <button onClick={()=>setNewApptOpen(true)}
-          style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:10, background:'#1a73e8', color:'#fff', fontSize:12, fontWeight:700, border:'none', cursor:'pointer', flexShrink:0, boxShadow:'0 4px 12px rgba(17,24,39,0.3)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" style={{width:12,height:12}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <Button
+          size="small"
+          onClick={() => setNewApptOpen(true)}
+          style={{ display:'inline-flex', alignItems:'center', gap:6, flexShrink:0 }}
+        >
+          <I.Plus width={12} height={12} />
           RDV
-        </button>
+        </Button>
       </div>
 
       {/* ── TABS ── */}
       <div style={{ padding:'12px 16px 0' }}>
-        <div style={{ display:'flex', gap:2, background:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)', borderRadius:12, padding:3 }}>
-          {[{id:'agenda',label:'Mon agenda',icon:'📅'},{id:'clients',label:'Clients & Notes',icon:'👥'}].map(tb=>(
-            <button key={tb.id} onClick={()=>setMainTab(tb.id)} style={{
-              flex:1, padding:'9px 8px', borderRadius:10, border:'none', cursor:'pointer', fontSize:12, fontWeight:700, transition:'all .15s',
-              background:mainTab===tb.id?(isDark?'rgba(17,24,39,0.25)':'#fff'):'transparent',
-              color:mainTab===tb.id?'#111827':(isDark?'rgba(255,255,255,0.4)':'#9ca3af'),
-              boxShadow:mainTab===tb.id?'0 1px 4px rgba(0,0,0,0.08)':'none',
-            }}>
-              {tb.icon} {tb.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          fullWidth
+          value={mainTab}
+          onChange={setMainTab}
+          options={[
+            { value: 'agenda',  label: 'Mon agenda' },
+            { value: 'clients', label: 'Clients & notes' },
+          ]}
+        />
       </div>
 
       {mainTab === 'agenda' && (
         <>
           {/* ── CALENDRIER SEMAINE ── */}
           <div style={{ padding:'12px 16px 0' }}>
-            <div style={{ ...glassCard(isDark), padding:14 }}>
-              {/* Nav mois */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-                <button onClick={()=>setWeekOffset(w=>w-1)} style={{ width:32, height:32, borderRadius:9, background:isDark?'rgba(255,255,255,0.06)':'#f3f4f6', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:13,height:13,color:t.muted}}><polyline points="15 18 9 12 15 6"/></svg>
+            <div style={{ ...sectionCard, padding: 14 }}>
+              {/* Nav */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                <button
+                  type="button"
+                  onClick={() => setWeekOffset(w => w - 1)}
+                  aria-label="Semaine precedente"
+                  style={iconBtnStyle}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <div style={{ textAlign:'center' }}>
-                  <p style={{ margin:0, fontSize:13, fontWeight:700, color:t.text }}>{MONTHS_FR[weekDays[0].getMonth()]} {weekDays[0].getFullYear()}</p>
+                  <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text, textTransform:'capitalize' }}>
+                    {MONTHS_FR[weekDays[0].getMonth()]} {weekDays[0].getFullYear()}
+                  </p>
                 </div>
                 <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <button onClick={()=>{ setSelectedDate(new Date()); setWeekOffset(0); }} style={{ padding:'4px 10px', borderRadius:99, fontSize:11, fontWeight:700, background:'rgba(17,24,39,0.1)', color:'#111827', border:'none', cursor:'pointer' }}>Auj.</button>
-                  <button onClick={()=>setWeekOffset(w=>w+1)} style={{ width:32, height:32, borderRadius:9, background:isDark?'rgba(255,255,255,0.06)':'#f3f4f6', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:13,height:13,color:t.muted}}><polyline points="9 18 15 12 9 6"/></svg>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedDate(new Date()); setWeekOffset(0); }}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      background: 'transparent',
+                      color: t.text,
+                      border: `0.5px solid ${t.borderStrong}`,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Auj.
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWeekOffset(w => w + 1)}
+                    aria-label="Semaine suivante"
+                    style={iconBtnStyle}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="13" height="13"><polyline points="9 18 15 12 9 6"/></svg>
                   </button>
                 </div>
               </div>
 
               {/* Jours */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
-                {weekDays.map((d,i)=>{
+                {weekDays.map((d, i) => {
                   const ds   = svLocal(d);
-                  const info = dayCounts[ds]||{total:0,paid:0};
-                  const isT  = d.toDateString()===today.toDateString();
-                  const isSel= d.toDateString()===selectedDate.toDateString();
+                  const info = dayCounts[ds] || { total:0, paid:0 };
+                  const isT  = d.toDateString() === today.toDateString();
+                  const isSel= d.toDateString() === selectedDate.toDateString();
                   return (
-                    <button key={i} onClick={()=>setSelectedDate(new Date(d))} style={{
-                      display:'flex', flexDirection:'column', alignItems:'center', padding:'8px 0', borderRadius:12, cursor:'pointer', border:'none', transition:'all .15s',
-                      background: isSel?'linear-gradient(135deg,#111827,#8b5cf6)': isT?(isDark?'rgba(17,24,39,0.15)':'rgba(17,24,39,0.08)'):'transparent',
-                    }}>
-                      <span style={{ fontSize:9, fontWeight:700, color:isSel?'rgba(255,255,255,0.7)':(isT?'#111827':t.muted) }}>{DAYS_FR[d.getDay()]}</span>
-                      <span style={{ fontSize:16, fontWeight:800, marginTop:2, color:isSel?'#fff':(isT?'#111827':t.text) }}>{d.getDate()}</span>
-                      {info.total>0 ? (
-                        <div style={{ display:'flex', alignItems:'center', gap:2, marginTop:2 }}>
-                          <span style={{ fontSize:9, fontWeight:800, padding:'1px 5px', borderRadius:99, background:isSel?'rgba(255,255,255,0.2)':'rgba(17,24,39,0.12)', color:isSel?'#fff':'#111827' }}>{info.total}</span>
-                          {info.paid>0 && <span style={{ width:5, height:5, borderRadius:'50%', background:'#22c55e', flexShrink:0 }} />}
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedDate(new Date(d))}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        padding: '8px 0',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                        border: `0.5px solid ${
+                          isSel ? 'transparent' : (isT ? t.border : 'transparent')
+                        }`,
+                        background: isSel ? t.text : (isT ? t.cardAlt : 'transparent'),
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: isSel ? 'rgba(255,255,255,0.7)' : t.muted,
+                      }}>{DAYS_FR[d.getDay()]}</span>
+                      <span style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        marginTop: 2,
+                        color: isSel ? t.bg : t.text,
+                      }}>{d.getDate()}</span>
+                      {info.total > 0 ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:2, marginTop:3 }}>
+                          <span style={{
+                            fontSize: 10,
+                            fontWeight: 500,
+                            padding: '1px 6px',
+                            borderRadius: 99,
+                            background: isSel ? 'rgba(255,255,255,0.18)' : t.cardAlt,
+                            color: isSel ? t.bg : t.muted,
+                          }}>{info.total}</span>
+                          {info.paid > 0 && (
+                            <span style={{ width:5, height:5, borderRadius:'50%', background:'#10b981', flexShrink:0 }} />
+                          )}
                         </div>
-                      ) : <div style={{height:14}} />}
+                      ) : <div style={{ height:14 }} />}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Légende */}
-              <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:8, paddingTop:8, borderTop:`1px solid ${t.border}` }}>
-                <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'#111827'}}/><span style={{fontSize:10,color:t.muted}}>RDV</span></div>
-                <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:7,height:7,borderRadius:'50%',background:'#22c55e'}}/><span style={{fontSize:10,color:t.muted}}>Encaissé</span></div>
+              {/* Legende */}
+              <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:10, paddingTop:8, borderTop:`0.5px solid ${t.border}` }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <span style={{ width:5, height:5, borderRadius:'50%', background:'#6366f1' }} />
+                  <span style={{ fontSize:10, color:t.muted }}>RDV</span>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <span style={{ width:5, height:5, borderRadius:'50%', background:'#10b981' }} />
+                  <span style={{ fontSize:10, color:t.muted }}>Encaisse</span>
+                </div>
               </div>
             </div>
           </div>
@@ -170,17 +302,17 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
           {todayStats.total > 0 && (
             <div style={{ padding:'10px 16px 0' }}>
               <div style={{ display:'flex', gap:8 }}>
-                <div style={{ flex:1, ...glassCard(isDark), padding:'10px 14px' }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:700, color:t.muted, textTransform:'uppercase' }}>RDV du jour</p>
-                  <p style={{ margin:'4px 0 0', fontSize:22, fontWeight:800, color:t.text, letterSpacing:'-.5px' }}>{todayStats.total}</p>
+                <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
+                  <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>RDV du jour</p>
+                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:t.text }}>{todayStats.total}</p>
                 </div>
-                <div style={{ flex:1, ...glassCard(isDark), padding:'10px 14px' }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:700, color:t.muted, textTransform:'uppercase' }}>Encaissés</p>
-                  <p style={{ margin:'4px 0 0', fontSize:22, fontWeight:800, color:'#16a34a', letterSpacing:'-.5px' }}>{todayStats.paid}</p>
+                <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
+                  <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>Encaisses</p>
+                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:'#065f46' }}>{todayStats.paid}</p>
                 </div>
-                <div style={{ flex:1, ...glassCard(isDark), padding:'10px 14px' }}>
-                  <p style={{ margin:0, fontSize:10, fontWeight:700, color:t.muted, textTransform:'uppercase' }}>Restants</p>
-                  <p style={{ margin:'4px 0 0', fontSize:22, fontWeight:800, color:'#f59e0b', letterSpacing:'-.5px' }}>{todayStats.total-todayStats.paid}</p>
+                <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
+                  <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>Restants</p>
+                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:'#92400e' }}>{todayStats.total - todayStats.paid}</p>
                 </div>
               </div>
             </div>
@@ -190,45 +322,171 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
           <div style={{ padding:'10px 16px 0', display:'flex', flexDirection:'column', gap:8 }}>
             {allEmployees.length > 1 && (
               <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:2 }}>
-                <button onClick={()=>setFilterEmpId(employee.id)} style={pillBtn(filterEmpId===employee.id,isDark)}>Mes RDV</button>
-                {allEmployees.filter(e=>e.is_active!==false).map(emp=>(
-                  <button key={emp.id} onClick={()=>setFilterEmpId(emp.id===filterEmpId&&emp.id!==employee.id?employee.id:emp.id)}
-                    style={{ ...pillBtn(filterEmpId===emp.id,isDark), display:'flex', alignItems:'center', gap:6 }}>
-                    <div style={{ width:16, height:16, borderRadius:'50%', background:emp.avatar_color||'#111827', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:8, fontWeight:800 }}>{emp.name.charAt(0)}</div>
-                    {emp.name.split(' ')[0]}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  onClick={() => setFilterEmpId(employee.id)}
+                  style={{
+                    flexShrink: 0,
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    fontSize: 11,
+                    fontWeight: 500,
+                    border: `0.5px solid ${filterEmpId === employee.id ? t.borderStrong : t.border}`,
+                    background: filterEmpId === employee.id ? t.cardAlt : 'transparent',
+                    color: filterEmpId === employee.id ? t.text : t.muted,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  Mes RDV
+                </button>
+                {allEmployees.filter(e => e.is_active !== false).map(emp => {
+                  const active = filterEmpId === emp.id;
+                  return (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      onClick={() => setFilterEmpId(emp.id === filterEmpId && emp.id !== employee.id ? employee.id : emp.id)}
+                      style={{
+                        flexShrink: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        border: `0.5px solid ${active ? t.borderStrong : t.border}`,
+                        background: active ? t.cardAlt : 'transparent',
+                        color: active ? t.text : t.muted,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <div style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        background: emp.avatar_color || t.text,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontSize: 8,
+                        fontWeight: 500,
+                      }}>{emp.name.charAt(0)}</div>
+                      {emp.name.split(' ')[0]}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <div style={{ position:'relative' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width:14, height:14, position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:t.dim, pointerEvents:'none' }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Nom, téléphone, email, n° réservation…"
-                style={{ width:'100%', padding:'10px 36px', borderRadius:10, background:isDark?'rgba(255,255,255,0.05)':'#f4f4f6', border:`1px solid ${searchQ?'rgba(17,24,39,0.3)':t.border}`, color:t.text, fontSize:13, outline:'none', boxSizing:'border-box' }} />
-              {searchQ && <button onClick={()=>setSearchQ('')} style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', color:t.muted, cursor:'pointer', fontSize:14 }}>✕</button>}
+              <span style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: t.dim,
+                pointerEvents: 'none',
+                display: 'inline-flex',
+              }}>
+                <I.Search width={14} height={14} />
+              </span>
+              <input
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                placeholder="Nom, telephone, email, n° reservation…"
+                style={{
+                  width: '100%',
+                  padding: '10px 36px',
+                  borderRadius: 8,
+                  background: t.inputBg,
+                  border: `0.5px solid ${searchQ ? t.borderStrong : t.borderInput}`,
+                  color: t.text,
+                  fontSize: 13,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                }}
+              />
+              {searchQ && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQ('')}
+                  aria-label="Vider"
+                  style={{
+                    position: 'absolute',
+                    right: 12,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: t.muted,
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                  }}
+                >✕</button>
+              )}
             </div>
           </div>
 
           {/* ── LISTE DU JOUR ── */}
           <div style={{ padding:'12px 16px 0' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-              <div>
-                <p style={{ margin:0, fontSize:13, fontWeight:700, color:t.text }}>
-                  {selectedDate.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:8 }}>
+              <div style={{ minWidth:0 }}>
+                <p style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: t.text,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {selectedDate.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}
                 </p>
-                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>{dayAppts.length} rendez-vous</p>
+                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
+                  {dayAppts.length} rendez-vous
+                </p>
               </div>
-              <button onClick={loadAppts} style={{ width:32, height:32, borderRadius:9, background:isDark?'rgba(255,255,255,0.06)':'#f3f4f6', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:t.muted }}>↻</button>
+              <button
+                type="button"
+                onClick={loadAppts}
+                aria-label="Rafraichir"
+                style={iconBtnStyle}
+              >
+                <I.Refresh width={14} height={14} />
+              </button>
             </div>
 
-            {dayAppts.length===0 ? (
-              <div style={{ padding:'40px 20px', textAlign:'center', ...glassCard(isDark) }}>
-                <div style={{ fontSize:32, marginBottom:12 }}>📅</div>
-                <p style={{ margin:0, fontSize:14, fontWeight:600, color:t.muted }}>{searchQ?'Aucun resultat':'Aucun rendez-vous ce jour'}</p>
-                {!searchQ && <button onClick={()=>setNewApptOpen(true)} style={{ marginTop:12, padding:'8px 16px', borderRadius:99, background:'rgba(17,24,39,0.1)', color:'#111827', border:'none', cursor:'pointer', fontSize:12, fontWeight:700 }}>+ Créer un RDV</button>}
+            {dayAppts.length === 0 ? (
+              <div style={{
+                padding: '40px 20px',
+                textAlign: 'center',
+                background: t.card,
+                border: `0.5px dashed ${t.border}`,
+                borderRadius: 12,
+              }}>
+                <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.muted }}>
+                  {searchQ ? 'Aucun resultat' : 'Aucun rendez-vous ce jour'}
+                </p>
+                {!searchQ && (
+                  <div style={{ display:'flex', justifyContent:'center', marginTop:12 }}>
+                    <Button size="small" onClick={() => setNewApptOpen(true)}>Nouveau RDV</Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {dayAppts.map((a,i) => <div key={a.id} style={{ animation:`fadeUp .2s ease ${i*.05}s both` }}><ApptCard appt={a} theme={t} onClick={setDetailAppt} /></div>)}
+                {dayAppts.map((a, i) => (
+                  <div key={a.id} style={{ animation: `fadeUp .2s ease ${i*.05}s both` }}>
+                    <ApptCard appt={a} theme={t} onClick={setDetailAppt} />
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -238,15 +496,36 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
       {mainTab === 'clients' && <ClientsTab employee={employee} theme={t} />}
 
       {detailAppt && (
-        <ApptActionModal appt={detailAppt} employee={employee} services={services} theme={t}
-          onClose={()=>setDetailAppt(null)}
-          onUpdated={upd=>{ setAllAppts(p=>p.map(a=>a.id===upd.id?{...a,...upd}:a)); setDetailAppt(prev=>({...prev,...upd})); showToast('RDV mis a jour ✓'); }}
-          onTxCreated={tx=>{ onTxCreated(tx); showToast('💰 Encaissé ! Ajoute a la caisse.'); }} />
+        <ApptActionModal
+          appt={detailAppt}
+          employee={employee}
+          services={services}
+          theme={t}
+          onClose={() => setDetailAppt(null)}
+          onUpdated={upd => {
+            setAllAppts(p => p.map(a => a.id === upd.id ? { ...a, ...upd } : a));
+            setDetailAppt(prev => ({ ...prev, ...upd }));
+            showToast('RDV mis a jour ✓');
+          }}
+          onTxCreated={tx => {
+            onTxCreated(tx);
+            showToast('Encaisse ! Ajoute a la caisse.');
+          }}
+        />
       )}
 
       {newApptOpen && (
-        <NewApptModal empId={employee.id} services={services} theme={t} onClose={()=>setNewApptOpen(false)}
-          onSave={async form=>{ await bookingApi.createEmpAppt(form); await loadAppts(); showToast('RDV crée ✓'); }} />
+        <NewApptModal
+          empId={employee.id}
+          services={services}
+          theme={t}
+          onClose={() => setNewApptOpen(false)}
+          onSave={async form => {
+            await bookingApi.createEmpAppt(form);
+            await loadAppts();
+            showToast('RDV cree ✓');
+          }}
+        />
       )}
     </div>
   );

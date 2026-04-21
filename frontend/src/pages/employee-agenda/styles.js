@@ -1,26 +1,34 @@
 // src/pages/employee-agenda/styles.js
+// Helpers partages — retravailles pour coller a la direction visuelle 2026
+// (bordures 0.5px, aplats, radius 12, fontWeight <= 500, aucune ombre coloree).
+
 export const glassCard = (isDark) => ({
   background: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
-  border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}`,
-  borderRadius: 16,
-  boxShadow: isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.04)',
+  border: `0.5px solid ${isDark ? 'rgba(205,217,229,0.1)' : 'rgba(0,0,0,0.08)'}`,
+  borderRadius: 12,
 });
 
 export const pillBtn = (active, isDark) => ({
-  padding: '6px 14px',
-  borderRadius: 99,
+  padding: '6px 12px',
+  borderRadius: 8,
   fontSize: 12,
-  fontWeight: 700,
-  border: `1px solid ${active ? 'transparent' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')}`,
-  background: active ? 'linear-gradient(135deg,#111827,#8b5cf6)' : 'transparent',
-  color: active ? '#fff' : (isDark ? 'rgba(255,255,255,0.5)' : '#6b7280'),
+  fontWeight: 500,
+  border: `0.5px solid ${
+    active
+      ? (isDark ? 'rgba(205,217,229,0.18)' : 'rgba(0,0,0,0.14)')
+      : (isDark ? 'rgba(205,217,229,0.1)'  : 'rgba(0,0,0,0.08)')
+  }`,
+  background: active ? (isDark ? '#22272e' : '#f9f9fb') : 'transparent',
+  color:      active ? (isDark ? '#e6edf3' : '#111827') : (isDark ? '#768390' : '#6B7280'),
   cursor: 'pointer',
   transition: 'all .15s',
   whiteSpace: 'nowrap',
+  fontFamily: 'inherit',
 });
 
+// Encart pastel : fond doux + texte de la meme famille (principe 10)
 export const chip = (isDark, color) => ({
   display: 'inline-flex', alignItems: 'center', gap: 4,
-  padding: '3px 9px', borderRadius: 99, fontSize: 11, fontWeight: 600,
-  background: color+'18', color,
+  padding: '3px 8px', borderRadius: 8, fontSize: 11, fontWeight: 500,
+  background: color + '18', color,
 });

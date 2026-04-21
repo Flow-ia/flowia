@@ -1,11 +1,12 @@
-// src/pages/employee-agenda/components/MultiColumnAgenda.jsx — UI Google Calendar (Jour / Semaine / Mois)
+// src/pages/employee-agenda/components/MultiColumnAgenda.jsx
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { bookingApi } from '../../../utils/api';
 import { playSound } from '../../../hooks/useNotifications';
 import { Toast, useToast } from '../../../components/UI';
+import { Button, SegmentedControl } from '../../../components/primitives';
+import { I } from '../../../utils/icons';
 import { DAYS_FR, MONTHS_SH, MONTHS_FR, STATUS_GRID } from '../constants';
 import { fmtTime, svLocal } from '../helpers';
-import { glassCard, chip } from '../styles';
 import Spin from './Spin';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
@@ -15,7 +16,7 @@ import QuickAddApptModal from '../modals/QuickAddApptModal';
 export default function MultiColumnAgenda({ employees, services, onTxCreated, onSelectEmployee, theme: t }) {
   const isDark = t.mode === 'dark';
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode]         = useState('day'); // 'day' | 'week' | 'month'
+  const [viewMode, setViewMode]         = useState('day');
   const [allAppts, setAllAppts]         = useState([]);
   const [loading, setLoading]           = useState(false);
   const [editAppt, setEditAppt]         = useState(null);
@@ -28,21 +29,18 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
   const today = new Date();
 
-  // ─── Range à charger selon la vue ───
   const { fromDate, toDate } = useMemo(() => {
     const d = new Date(selectedDate);
     if (viewMode === 'day') {
       return { fromDate: new Date(d), toDate: new Date(d) };
     }
     if (viewMode === 'week') {
-      // Lundi → Dimanche
       const monday = new Date(d);
       const offset = (d.getDay() + 6) % 7;
       monday.setDate(d.getDate() - offset);
       const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
       return { fromDate: monday, toDate: sunday };
     }
-    // month : grille 42 cellules (début lundi avant le 1er, fin dimanche après)
     const first = new Date(d.getFullYear(), d.getMonth(), 1);
     const offset = (first.getDay() + 6) % 7;
     const gridStart = new Date(first); gridStart.setDate(1 - offset);
@@ -53,7 +51,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
   const fromStr = svLocal(fromDate);
   const toStr   = svLocal(toDate);
 
-  // Charger horaires commerce
   useEffect(() => {
     bookingApi.getHours().then(hrs => {
       if (!hrs || !hrs.length) return;
@@ -83,7 +80,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
   useEffect(()=>{ loadAppts(); }, [loadAppts]);
 
-  // Index RDV par jour pour vues semaine/mois
   const apptsByDay = useMemo(() => {
     const map = {};
     allAppts.forEach(a => {
@@ -93,7 +89,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
       if (!map[k]) map[k] = [];
       map[k].push(a);
     });
-    // Trier chaque jour par heure
     Object.values(map).forEach(arr => arr.sort((a,b) => String(a.start_time||'').localeCompare(String(b.start_time||''))));
     return map;
   }, [allAppts]);
@@ -127,7 +122,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
     setActiveEmployee(emp); setEditAppt(appt);
   };
 
-  // ─── Navigation prev/next selon la vue ───
   const navigatePrev = () => setSelectedDate(prev => {
     const n = new Date(prev);
     if (viewMode === 'day')   n.setDate(n.getDate() - 1);
@@ -144,7 +138,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
   });
   const goToday = () => setSelectedDate(new Date());
 
-  // ─── Titre central selon la vue ───
   const headerTitle = useMemo(() => {
     const d = selectedDate;
     if (viewMode === 'day') {
@@ -164,7 +157,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
     return `${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
   }, [selectedDate, viewMode]);
 
-  // Jours de la semaine (vue week)
   const weekDaysFull = useMemo(() => {
     const monday = new Date(selectedDate);
     const offset = (selectedDate.getDay() + 6) % 7;
@@ -174,7 +166,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
     });
   }, [selectedDate]);
 
-  // Mini-bar semaine (toujours affiché quand vue==day pour cohérence, optionnel)
   const miniWeekBase = (() => {
     const base = new Date(selectedDate);
     const offset = (base.getDay() + 6) % 7;
@@ -183,20 +174,6 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
   })();
   const miniWeek = Array.from({length:7},(_,i)=>{ const d=new Date(miniWeekBase); d.setDate(miniWeekBase.getDate()+i); return d; });
 
-  // ─── Styles toggle Jour/Semaine/Mois ───
-  const toggleBtn = (active) => ({
-    padding: '6px 12px',
-    fontSize: 12,
-    fontWeight: 700,
-    border: 'none',
-    background: active ? (isDark?'#1a73e8':'#1a73e8') : 'transparent',
-    color: active ? '#fff' : (isDark?'#adbac7':'#374151'),
-    cursor: 'pointer',
-    transition: 'all .12s',
-    height: 32,
-  });
-
-  // stats rapides (jour courant si vue day)
   const dayKey = svLocal(selectedDate);
   const dayAppts = viewMode === 'day' ? allAppts : (apptsByDay[dayKey] || []);
   const confirmed = dayAppts.filter(a=>a.status==='confirmed').length;
@@ -204,167 +181,397 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
   const isToday = selectedDate.toDateString()===today.toDateString();
 
+  const iconBtnStyle = {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    border: `0.5px solid ${t.border}`,
+    background: 'transparent',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: t.muted,
+    fontFamily: 'inherit',
+    padding: 0,
+  };
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:isDark?'#0d1117':'#f6f8fa', overflow:'hidden' }}>
+    <div style={{
+      display:'flex',
+      flexDirection:'column',
+      height:'100vh',
+      background: t.bg,
+      overflow:'hidden',
+    }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <Toast msg={toast?.msg} type={toast?.type} />
 
-      {/* ── HEADER Google-Calendar-like ── */}
-      <div style={{ padding:'10px 14px 8px', background:isDark?'#0d1117':'#fff', flexShrink:0, borderBottom:`1px solid ${isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.08)'}` }}>
-        {/* Ligne 1 : Today + Nav + Titre + Toggle + RDV */}
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:viewMode==='day'?10:0, flexWrap:'wrap' }}>
-          {/* Bouton Aujourd'hui */}
-          <button onClick={goToday} style={{
-            height:32, padding:'0 12px', borderRadius:8,
-            border:`1px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)'}`,
-            background:'transparent', cursor:'pointer',
-            fontSize:12, fontWeight:700, color:isDark?'#e6edf3':'#374151',
-            flexShrink:0,
-          }}>Aujourd'hui</button>
+      {/* ── HEADER ── */}
+      <div style={{
+        padding: '10px 14px 8px',
+        background: t.card,
+        flexShrink: 0,
+        borderBottom: `0.5px solid ${t.border}`,
+      }}>
+        {/* Ligne 1 */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: viewMode === 'day' ? 10 : 0,
+          flexWrap: 'wrap',
+        }}>
+          {/* Aujourd'hui */}
+          <button
+            type="button"
+            onClick={goToday}
+            style={{
+              height: 32,
+              padding: '0 12px',
+              borderRadius: 8,
+              border: `0.5px solid ${t.borderStrong}`,
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+              color: t.text,
+              fontFamily: 'inherit',
+              flexShrink: 0,
+            }}
+          >
+            Aujourd{"'"}hui
+          </button>
 
           {/* Prev / Next */}
-          <div style={{ display:'flex', gap:2, flexShrink:0 }}>
-            <button onClick={navigatePrev} style={{ width:32, height:32, borderRadius:8, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }} title="Précédent">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:16,height:16,color:isDark?'#adbac7':'#374151'}}><polyline points="15 18 9 12 15 6"/></svg>
+          <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+            <button type="button" onClick={navigatePrev} style={iconBtnStyle} aria-label="Precedent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
-            <button onClick={navigateNext} style={{ width:32, height:32, borderRadius:8, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }} title="Suivant">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:16,height:16,color:isDark?'#adbac7':'#374151'}}><polyline points="9 18 15 12 9 6"/></svg>
+            <button type="button" onClick={navigateNext} style={iconBtnStyle} aria-label="Suivant">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           </div>
 
-          {/* Titre central */}
-          <div style={{ flex:1, minWidth:120, fontSize:16, fontWeight:700, color:isDark?'#e6edf3':'#111827', letterSpacing:'-.3px', textTransform:'capitalize' }}>
+          {/* Titre */}
+          <div style={{
+            flex: 1,
+            minWidth: 120,
+            fontSize: 15,
+            fontWeight: 500,
+            color: t.text,
+            textTransform: 'capitalize',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
             {headerTitle}
           </div>
 
           {loading && <Spin size={14} />}
 
-          {/* Toggle Jour / Semaine / Mois */}
-          <div style={{
-            display:'flex',
-            borderRadius:8, overflow:'hidden',
-            border:`1px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)'}`,
-            flexShrink:0,
-          }}>
-            <button onClick={()=>setViewMode('day')}   style={toggleBtn(viewMode==='day')}>Jour</button>
-            <button onClick={()=>setViewMode('week')}  style={{ ...toggleBtn(viewMode==='week'),  borderLeft:`1px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)'}`, borderRight:`1px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)'}` }}>Semaine</button>
-            <button onClick={()=>setViewMode('month')} style={toggleBtn(viewMode==='month')}>Mois</button>
-          </div>
+          {/* Toggle vue */}
+          <SegmentedControl
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: 'day',   label: 'Jour' },
+              { value: 'week',  label: 'Semaine' },
+              { value: 'month', label: 'Mois' },
+            ]}
+          />
 
-          {/* Bouton RDV */}
-          <button onClick={()=>setQuickAddOpen(true)} style={{ display:'flex', alignItems:'center', gap:6, padding:'0 14px', height:32, borderRadius:8, background:'#1a73e8', border:'none', cursor:'pointer', boxShadow:'0 2px 6px rgba(26,115,232,0.25)', flexShrink:0 }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" style={{width:12,height:12}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span style={{ fontSize:12, fontWeight:800, color:'white' }}>RDV</span>
-          </button>
+          {/* Nouveau RDV */}
+          <Button
+            size="small"
+            onClick={() => setQuickAddOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+          >
+            <I.Plus width={12} height={12} />
+            RDV
+          </Button>
         </div>
 
-        {/* Mini-semaine : seulement vue Jour */}
+        {/* Mini-semaine : vue Jour */}
         {viewMode === 'day' && (
           <div style={{ display:'flex', gap:2, marginTop:8 }}>
-            {miniWeek.map((d,i)=>{
-              const isSel = d.toDateString()===selectedDate.toDateString();
-              const isTod = d.toDateString()===today.toDateString();
+            {miniWeek.map((d, i) => {
+              const isSel = d.toDateString() === selectedDate.toDateString();
+              const isTod = d.toDateString() === today.toDateString();
               return (
-                <button key={i} onClick={()=>setSelectedDate(new Date(d))} style={{
-                  flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'6px 0', borderRadius:10, border:'none', cursor:'pointer', transition:'all .15s',
-                  background: isSel?'#1a73e8':'transparent',
-                }}>
-                  <span style={{fontSize:9,fontWeight:700,color:isSel?'rgba(255,255,255,.8)':isTod?'#1a73e8':(isDark?'#768390':'#9ca3af')}}>{DAYS_FR[d.getDay()]}</span>
-                  <span style={{fontSize:14,fontWeight:800,marginTop:1,color:isSel?'#fff':isTod?'#1a73e8':(isDark?'#e6edf3':'#111')}}>{d.getDate()}</span>
-                  {isTod&&!isSel && <div style={{width:4,height:4,borderRadius:'50%',background:'#1a73e8',marginTop:1}} />}
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedDate(new Date(d))}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '6px 0',
+                    borderRadius: 8,
+                    border: `0.5px solid ${
+                      isSel ? 'transparent' : (isTod ? t.border : 'transparent')
+                    }`,
+                    background: isSel ? t.text : (isTod ? t.cardAlt : 'transparent'),
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 500,
+                    color: isSel ? 'rgba(255,255,255,.75)' : t.muted,
+                  }}>{DAYS_FR[d.getDay()]}</span>
+                  <span style={{
+                    fontSize: 14,
+                    fontWeight: 500,
+                    marginTop: 1,
+                    color: isSel ? t.bg : t.text,
+                  }}>{d.getDate()}</span>
+                  {isTod && !isSel && (
+                    <div style={{ width:4, height:4, borderRadius:'50%', background:t.text, marginTop:1 }} />
+                  )}
                 </button>
               );
             })}
           </div>
         )}
 
-        {/* Stats (vue Jour uniquement) */}
-        {viewMode === 'day' && dayAppts.length>0 && (
-          <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:8, paddingTop:8, borderTop:`1px solid ${isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}` }}>
-            <span style={{fontSize:12,fontWeight:700,color:t.text}}>{dayAppts.length} RDV</span>
-            <span style={{fontSize:12,fontWeight:600,color:'#22c55e'}}>✓ {confirmed} confirmés</span>
-            {encaissed>0&&<span style={{fontSize:12,fontWeight:600,color:'#10b981'}}>💰 {encaissed} encaissés</span>}
+        {/* Stats (vue Jour) */}
+        {viewMode === 'day' && dayAppts.length > 0 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            marginTop: 8,
+            paddingTop: 8,
+            borderTop: `0.5px solid ${t.separator}`,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: t.text }}>{dayAppts.length} RDV</span>
+            <span style={{ display:'inline-flex', alignItems:'center', gap:5, fontSize:12, color:t.muted }}>
+              <span style={{ width:5, height:5, borderRadius:'50%', background:'#6366f1' }} />
+              {confirmed} confirmes
+            </span>
+            {encaissed > 0 && (
+              <span style={{ display:'inline-flex', alignItems:'center', gap:5, fontSize:12, color:t.muted }}>
+                <span style={{ width:5, height:5, borderRadius:'50%', background:'#10b981' }} />
+                {encaissed} encaisses
+              </span>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── CONTENU : Jour / Semaine / Mois ── */}
+      {/* ── CONTENU ── */}
       <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
         {viewMode === 'day' && (
-          activeEmps.length===0 ? (
+          activeEmps.length === 0 ? (
             <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:40 }}>
-              <div style={{ textAlign:'center' }}>
-                <p style={{ fontSize:32, marginBottom:12 }}>👥</p>
-                <p style={{ margin:0, fontSize:14, color:t.muted }}>Aucun employé actif</p>
-              </div>
+              <p style={{ margin:0, fontSize:13, color:t.muted }}>Aucun employe actif</p>
             </div>
           ) : (
-            <div style={{ display:'flex', minWidth:activeEmps.length*150+52 }}>
+            <div style={{ display:'flex', minWidth: activeEmps.length * 150 + 52 }}>
               {/* Axe heures */}
-              <div style={{ width:52, flexShrink:0, position:'sticky', left:0, zIndex:10, background:isDark?'#0d1117':'#f6f8fa' }}>
-                <div style={{ height:56, borderBottom:`1px solid ${isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}` }} />
-                {HOURS.map((hMin,i) => {
+              <div style={{
+                width: 52,
+                flexShrink: 0,
+                position: 'sticky',
+                left: 0,
+                zIndex: 10,
+                background: t.cardAlt,
+              }}>
+                <div style={{ height: 56, borderBottom: `0.5px solid ${t.border}` }} />
+                {HOURS.map((hMin, i) => {
                   const hNum = Math.floor(hMin / 60) % 24;
                   const label = hNum === 0 ? 'Minuit' : `${hNum}h`;
                   return (
-                    <div key={i} style={{ height:HOUR_H, borderBottom:`1px solid ${isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.04)'}`, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:8 }}>
-                      <span style={{ fontSize:12, fontWeight:700, color:isDark?'#768390':'#9ca3af', marginTop:-7 }}>{label}</span>
+                    <div key={i} style={{
+                      height: HOUR_H,
+                      borderBottom: `0.5px solid ${t.separator}`,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'flex-end',
+                      paddingRight: 8,
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: t.dim, marginTop: -7 }}>
+                        {label}
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Colonnes employés */}
+              {/* Colonnes employes */}
               {activeEmps.map(emp => {
-                const empAppts = dayAppts.filter(a=>a.employee_id===emp.id);
+                const empAppts = dayAppts.filter(a => a.employee_id === emp.id);
                 return (
-                  <div key={emp.id} style={{ flex:1, minWidth:140, borderLeft:`1px solid ${isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'}`, display:'flex', flexDirection:'column' }}>
-                    <button onClick={()=>onSelectEmployee(emp)} style={{
-                      height:56, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'4px 6px', position:'sticky', top:0, zIndex:9, background:isDark?'#0d1117':'#f6f8fa', borderBottom:`1px solid ${isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}`, border:'none', cursor:'pointer', transition:'background .15s', flexShrink:0,
-                    }}
-                    onMouseEnter={e=>e.currentTarget.style.background=isDark?'rgba(17,24,39,0.1)':'rgba(17,24,39,0.06)'}
-                    onMouseLeave={e=>e.currentTarget.style.background=isDark?'#0d1117':'#f6f8fa'}>
-                      <div style={{ width:28, height:28, borderRadius:'50%', background:emp.avatar_color||'#111827', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:12, fontWeight:800 }}>{emp.name.charAt(0)}</div>
-                      <span style={{ fontSize:11, fontWeight:700, marginTop:2, color:isDark?'#adbac7':'#374151', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'90%', display:'block' }}>{emp.name.split(' ')[0]}</span>
-                      <div style={{ display:'flex', gap:2, marginTop:1 }}>
-                        {emp.can_cancel && <div style={{width:4,height:4,borderRadius:'50%',background:'#ef4444'}} />}
-                        {emp.can_modify && <div style={{width:4,height:4,borderRadius:'50%',background:'#8b5cf6'}} />}
-                        {emp.can_encash && <div style={{width:4,height:4,borderRadius:'50%',background:'#22c55e'}} />}
+                  <div key={emp.id} style={{
+                    flex: 1,
+                    minWidth: 140,
+                    borderLeft: `0.5px solid ${t.border}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectEmployee(emp)}
+                      style={{
+                        height: 56,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '4px 6px',
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 9,
+                        background: t.cardAlt,
+                        borderBottom: `0.5px solid ${t.border}`,
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background .15s',
+                        flexShrink: 0,
+                        fontFamily: 'inherit',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}
+                      onMouseLeave={e => e.currentTarget.style.background = t.cardAlt}
+                    >
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        background: emp.avatar_color || t.text,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontSize: 12,
+                        fontWeight: 500,
+                      }}>{emp.name.charAt(0)}</div>
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 500,
+                        marginTop: 2,
+                        color: t.muted,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        maxWidth: '90%',
+                        display: 'block',
+                      }}>{emp.name.split(' ')[0]}</span>
+                      <div style={{ display: 'flex', gap: 3, marginTop: 1 }}>
+                        {emp.can_cancel && <div style={{ width:4, height:4, borderRadius:'50%', background:'#ef4444' }} />}
+                        {emp.can_modify && <div style={{ width:4, height:4, borderRadius:'50%', background:'#8b5cf6' }} />}
+                        {emp.can_encash && <div style={{ width:4, height:4, borderRadius:'50%', background:'#10b981' }} />}
                       </div>
                     </button>
 
-                    <div style={{ position:'relative', height:HOURS.length*HOUR_H, flex:1 }}>
-                      {HOURS.map((_,i)=>(
-                        <div key={i} style={{ position:'absolute', left:0, right:0, top:i*HOUR_H, height:HOUR_H, borderBottom:`1px solid ${isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)'}` }} />
+                    <div style={{ position: 'relative', height: HOURS.length * HOUR_H, flex: 1 }}>
+                      {HOURS.map((_, i) => (
+                        <div key={i} style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: i * HOUR_H,
+                          height: HOUR_H,
+                          borderBottom: `0.5px solid ${t.separator}`,
+                        }} />
                       ))}
                       {isToday && (() => {
                         const n = new Date();
-                        let nowMin = n.getHours()*60 + n.getMinutes();
-                        if (nowMin < gridOriginMin) nowMin += 24*60;
+                        let nowMin = n.getHours() * 60 + n.getMinutes();
+                        if (nowMin < gridOriginMin) nowMin += 24 * 60;
                         const relMin = nowMin - gridOriginMin;
-                        if (relMin < 0 || relMin > HOURS.length*60) return null;
-                        return <div style={{position:'absolute',left:0,right:0,top:(relMin/60)*HOUR_H,height:1.5,background:'rgba(239,68,68,0.6)',zIndex:5}} />;
+                        if (relMin < 0 || relMin > HOURS.length * 60) return null;
+                        return (
+                          <div style={{
+                            position: 'absolute',
+                            left: 0,
+                            right: 0,
+                            top: (relMin / 60) * HOUR_H,
+                            height: 1,
+                            background: '#ef4444',
+                            zIndex: 5,
+                          }} />
+                        );
                       })()}
 
-                      {empAppts.map(appt=>{
-                        const {top,height} = getApptStyle(appt);
-                        const sc = STATUS_GRID[appt.status]||STATUS_GRID.confirmed;
+                      {empAppts.map(appt => {
+                        const { top, height } = getApptStyle(appt);
+                        const sc = STATUS_GRID[appt.status] || STATUS_GRID.confirmed;
+                        const accent = isDark ? (emp.avatar_color || sc.bd) : sc.bd;
+                        const bg     = isDark ? `${emp.avatar_color || t.text}22` : sc.bg;
+                        const tx     = isDark ? (emp.avatar_color || t.text) : sc.tx;
                         return (
-                          <button key={appt.id} onClick={()=>openApptModal(appt)} style={{
-                            position:'absolute', left:3, right:3, top, height:Math.max(height,36), borderRadius:12, overflow:'hidden', textAlign:'left', cursor:'pointer', zIndex:2, border:'none',
-                            background: isDark ? (emp.avatar_color||'#1a73e8')+'22' : sc.bg,
-                            outline: `1.5px solid ${isDark?(emp.avatar_color||'#1a73e8')+'50':sc.bd}`,
-                            transition:'transform .12s, box-shadow .12s',
-                            boxShadow: isDark?'none':'0 1px 4px rgba(0,0,0,0.06)',
-                          }}
-                          onMouseEnter={e=>{ e.currentTarget.style.transform='scale(1.01)'; e.currentTarget.style.boxShadow='0 6px 16px rgba(0,0,0,0.14)'; }}
-                          onMouseLeave={e=>{ e.currentTarget.style.transform='none'; e.currentTarget.style.boxShadow=isDark?'none':'0 1px 4px rgba(0,0,0,0.06)'; }}>
-                            <div style={{ position:'absolute', left:0, top:0, bottom:0, width:4, background:emp.avatar_color||'#1a73e8', borderRadius:'99px 0 0 99px' }} />
-                            <div style={{ paddingLeft:10, paddingRight:6, paddingTop:6 }}>
-                              <p style={{ margin:0, fontSize:14, fontWeight:800, color:isDark?(emp.avatar_color||'#e6edf3'):sc.tx, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{appt.client_name}</p>
-                              {height>40 && <p style={{ margin:'2px 0 0', fontSize:12, fontWeight:600, color:isDark?'rgba(255,255,255,0.65)':sc.tx, opacity:.9, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{fmtTime(appt.start_time)} · {appt.service_name||'RDV'}</p>}
-                              {height>65 && <p style={{ margin:'1px 0 0', fontSize:11, color:isDark?'rgba(255,255,255,0.45)':sc.tx, opacity:.7, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{fmtTime(appt.end_time)} · {appt.total_duration||appt.duration_minutes}min</p>}
-                              {height>80 && appt.paid && <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:3 }}><div style={{ width:7, height:7, borderRadius:'50%', background:'#22c55e' }} /><span style={{ fontSize:10, color:'#22c55e', fontWeight:700 }}>Encaissé</span></div>}
+                          <button
+                            key={appt.id}
+                            type="button"
+                            onClick={() => openApptModal(appt)}
+                            style={{
+                              position: 'absolute',
+                              left: 3,
+                              right: 3,
+                              top,
+                              height: Math.max(height, 36),
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              zIndex: 2,
+                              border: 'none',
+                              background: bg,
+                              padding: 0,
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            <div style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: 2,
+                              background: accent,
+                            }} />
+                            <div style={{ paddingLeft: 10, paddingRight: 6, paddingTop: 6 }}>
+                              <p style={{
+                                margin: 0,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: tx,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>{appt.client_name}</p>
+                              {height > 40 && (
+                                <p style={{
+                                  margin: '2px 0 0',
+                                  fontSize: 11,
+                                  fontWeight: 500,
+                                  color: tx,
+                                  opacity: 0.85,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>{fmtTime(appt.start_time)} · {appt.service_name || 'RDV'}</p>
+                              )}
+                              {height > 65 && (
+                                <p style={{
+                                  margin: '1px 0 0',
+                                  fontSize: 11,
+                                  color: tx,
+                                  opacity: 0.65,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>{fmtTime(appt.end_time)} · {appt.total_duration || appt.duration_minutes}min</p>
+                              )}
+                              {height > 80 && appt.paid && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981' }} />
+                                  <span style={{ fontSize: 10, color: tx, fontWeight: 500 }}>Encaisse</span>
+                                </div>
+                              )}
                             </div>
                           </button>
                         );
@@ -408,10 +615,19 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
       {/* ── MODAUX ── */}
       {editAppt && (
-        <ApptActionModal appt={editAppt} employee={activeEmployee} services={services} theme={t}
-          onClose={()=>{ setEditAppt(null); setActiveEmployee(null); }}
-          onUpdated={upd=>{ setAllAppts(p=>p.map(a=>a.id===upd.id?{...a,...upd}:a)); setEditAppt(prev=>({...prev,...upd})); showToast('RDV mis a jour ✓'); }}
-          onTxCreated={tx=>{ onTxCreated(tx); playSound('caisse', 2); showToast('💰 Encaissé !'); }} />
+        <ApptActionModal
+          appt={editAppt}
+          employee={activeEmployee}
+          services={services}
+          theme={t}
+          onClose={() => { setEditAppt(null); setActiveEmployee(null); }}
+          onUpdated={upd => {
+            setAllAppts(p => p.map(a => a.id === upd.id ? { ...a, ...upd } : a));
+            setEditAppt(prev => ({ ...prev, ...upd }));
+            showToast('RDV mis a jour ✓');
+          }}
+          onTxCreated={tx => { onTxCreated(tx); playSound('caisse', 2); showToast('Encaisse !'); }}
+        />
       )}
 
       {quickAddOpen && (
@@ -419,43 +635,106 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
           employees={employees}
           services={services}
           theme={t}
-          onClose={()=>setQuickAddOpen(false)}
+          onClose={() => setQuickAddOpen(false)}
           onSave={async form => {
             const appt = await bookingApi.createEmpAppt(form);
             await loadAppts();
-            showToast('RDV créé ✓');
+            showToast('RDV cree ✓');
             return appt;
           }}
         />
       )}
 
       {addOpen && (
-        <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-          <div onClick={()=>setAddOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', backdropFilter:'blur(6px)' }} />
-          <div style={{ position:'relative', width:'100%', maxWidth:360, borderRadius:20, overflow:'hidden', background:isDark?'#1c2128':'#fff', border:`1px solid ${isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.07)'}`, boxShadow:'0 24px 64px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding:'16px 20px', borderBottom:`1px solid ${isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)'}` }}>
-              <p style={{ margin:0, fontSize:16, fontWeight:800, color:t.text, letterSpacing:'-.3px' }}>Nouveau rendez-vous</p>
-              <p style={{ margin:'4px 0 0', fontSize:12, color:t.muted }}>Selectionnez l'employé</p>
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 50,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+        }}>
+          <div
+            onClick={() => setAddOpen(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              backdropFilter: 'blur(4px)',
+            }}
+          />
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: 360,
+            borderRadius: 16,
+            overflow: 'hidden',
+            background: t.elevated,
+            border: `0.5px solid ${t.border}`,
+            boxShadow: t.shadowModal,
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: `0.5px solid ${t.border}` }}>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text }}>Nouveau rendez-vous</p>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: t.muted }}>Selectionnez l{"'"}employe</p>
             </div>
-            <div style={{ padding:12, display:'flex', flexDirection:'column', gap:6 }}>
-              {activeEmps.map(emp=>(
-                <button key={emp.id} onClick={()=>{ setAddOpen(false); onSelectEmployee(emp); }} style={{
-                  display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:14, ...glassCard(isDark), border:'none', cursor:'pointer', textAlign:'left', transition:'background .12s',
-                }}
-                onMouseEnter={e=>e.currentTarget.style.background=isDark?'rgba(17,24,39,0.1)':'rgba(17,24,39,0.04)'}
-                onMouseLeave={e=>e.currentTarget.style.background=isDark?'rgba(255,255,255,0.04)':'#fff'}>
-                  <div style={{ width:40, height:40, borderRadius:12, background:emp.avatar_color||'#111827', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:16, fontWeight:800, flexShrink:0 }}>{emp.name.charAt(0)}</div>
-                  <div style={{ flex:1 }}>
-                    <p style={{ margin:0, fontSize:13, fontWeight:700, color:t.text }}>{emp.name}</p>
-                    <div style={{ display:'flex', gap:4, marginTop:4 }}>
-                      {emp.can_cancel && <span style={chip(isDark,'#ef4444')}>✕ Annul.</span>}
-                      {emp.can_modify && <span style={chip(isDark,'#8b5cf6')}>✎ Modif.</span>}
-                      {emp.can_encash && <span style={chip(isDark,'#22c55e')}>$ Encaiss.</span>}
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {activeEmps.map(emp => {
+                const perms = [
+                  emp.can_cancel && { label: 'Annul.', dot: '#ef4444' },
+                  emp.can_modify && { label: 'Modif.', dot: '#8b5cf6' },
+                  emp.can_encash && { label: 'Encaiss.', dot: '#10b981' },
+                ].filter(Boolean);
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => { setAddOpen(false); onSelectEmployee(emp); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      background: t.card,
+                      border: `0.5px solid ${t.border}`,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
+                    onMouseLeave={e => e.currentTarget.style.background = t.card}
+                  >
+                    <div style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      background: emp.avatar_color || t.text,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      flexShrink: 0,
+                    }}>{emp.name.charAt(0)}</div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text }}>{emp.name}</p>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                        {perms.map((p, j) => (
+                          <span key={j} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: t.muted }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: p.dot }} />
+                            {p.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:14,height:14,color:t.muted,flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-              ))}
+                    <span style={{ color: t.muted, flexShrink: 0, display: 'inline-flex' }}>
+                      <I.ChevR width={14} height={14} />
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

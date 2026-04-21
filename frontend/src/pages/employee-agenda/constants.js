@@ -4,20 +4,25 @@ export const DAYS_FULL = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendred
 export const MONTHS_FR = ['Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Decembre'];
 export const MONTHS_SH = ['Janv','Fevr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Dec'];
 
+// Palette pastel unifiee (alignee sur pages/agenda/constants + STATUS_PALETTE)
+//   bg     → fond encart / badge
+//   color  → couleur texte
+//   accent → puce, barre, dot (couleur saturee)
 export const STATUS_CFG = {
-  confirmed: { label:'Confirme',   color:'#22c55e', bg:'rgba(34,197,94,0.1)',   dot:'#22c55e' },
-  pending:   { label:'En attente', color:'#f59e0b', bg:'rgba(245,158,11,0.1)',  dot:'#f59e0b' },
-  cancelled: { label:'Annule',     color:'#ef4444', bg:'rgba(239,68,68,0.08)',  dot:'#ef4444' },
-  completed: { label:'Termine',    color:'#111827', bg:'rgba(17,24,39,0.08)', dot:'#111827' },
-  no_show:   { label:'Absent',     color:'#f97316', bg:'rgba(249,115,22,0.08)', dot:'#f97316' },
+  confirmed: { label:'Confirme',   bg:'#eef2ff', color:'#4338ca', accent:'#6366f1' },
+  pending:   { label:'En attente', bg:'#fffbeb', color:'#92400e', accent:'#f59e0b' },
+  cancelled: { label:'Annule',     bg:'#fef2f2', color:'#991b1b', accent:'#ef4444' },
+  completed: { label:'Termine',    bg:'#f0fdf4', color:'#065f46', accent:'#10b981' },
+  no_show:   { label:'Absent',     bg:'#fff7ed', color:'#9a3412', accent:'#fb923c' },
 };
 
+// bd = accent sature utilise pour la barre verticale 2px sur les RDV
 export const STATUS_GRID = {
-  confirmed: { bg:'rgba(34,197,94,0.08)',   bd:'rgba(34,197,94,0.2)',   tx:'#16a34a' },
-  pending:   { bg:'rgba(245,158,11,0.08)',  bd:'rgba(245,158,11,0.2)',  tx:'#d97706' },
-  cancelled: { bg:'rgba(239,68,68,0.06)',   bd:'rgba(239,68,68,0.15)',  tx:'#dc2626' },
-  completed: { bg:'rgba(17,24,39,0.08)',  bd:'rgba(17,24,39,0.2)',  tx:'#4f46e5' },
-  no_show:   { bg:'rgba(249,115,22,0.08)',  bd:'rgba(249,115,22,0.2)',  tx:'#ea580c' },
+  confirmed: { bg:'#eef2ff', bd:'#6366f1', tx:'#4338ca' },
+  pending:   { bg:'#fffbeb', bd:'#f59e0b', tx:'#92400e' },
+  cancelled: { bg:'#fef2f2', bd:'#ef4444', tx:'#991b1b' },
+  completed: { bg:'#f0fdf4', bd:'#10b981', tx:'#065f46' },
+  no_show:   { bg:'#fff7ed', bd:'#fb923c', tx:'#9a3412' },
 };
 
 export const PAY_OPTIONS = [
