@@ -1,6 +1,28 @@
 // src/utils/api.js
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
+// Garde contre les dispatchs répétés : plusieurs requêtes parallèles qui
+// 401 en même temps doivent déclencher un seul logout.
+let __authExpiredDispatched = false;
+
+// Appelé quand une requête merchant retourne 401. Purge les tokens locaux
+// et signale useAuth pour qu'il remette user=null (l'app retombe alors
+// sur /login). Sans ça, l'onglet resterait "logged in" en state React
+// mais tous les fetch échoueraient silencieusement (bell vide, agenda
+// vide, etc.) → comportement observé quand le JWT expire pendant qu'un
+// onglet reste ouvert.
+function handleMerchant401(res) {
+  if (res.status !== 401) return;
+  localStorage.removeItem('ff_token');
+  localStorage.removeItem('ff_pin_token');
+  if (__authExpiredDispatched) return;
+  __authExpiredDispatched = true;
+  try { window.dispatchEvent(new Event('ff-auth-expired')); } catch {}
+  // Reset du flag à la prochaine tick pour autoriser un nouveau cycle
+  // si l'utilisateur se re-login puis son nouveau token re-expire.
+  setTimeout(() => { __authExpiredDispatched = false; }, 2000);
+}
+
 function getToken() {
   const t = localStorage.getItem('ff_token');
   if (t) return t;
@@ -30,6 +52,7 @@ async function adminRequest(path, options = {}) {
   if (token)    headers['Authorization'] = `Bearer ${token}`;
   if (pinToken) headers['x-pin-session'] = pinToken;
   const res  = await fetch(`${BASE}${path}`, { ...options, headers });
+  handleMerchant401(res);
   const data = await res.json();
   if (!res.ok) throw Object.assign(new Error(data.message || data.error || 'Erreur serveur'), { code: data.error });
   return data;
@@ -65,6 +88,7 @@ async function request(path, options = {}) {
   }
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  handleMerchant401(res);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Erreur serveur');
   return data;

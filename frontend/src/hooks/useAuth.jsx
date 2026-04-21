@@ -47,6 +47,13 @@ export function AuthProvider({ children }) {
       };
     } catch { /* BroadcastChannel non supporté */ }
 
+    // Intercepteur 401 : api.js dispatch 'ff-auth-expired' dès qu'une
+    // requête merchant retourne 401. Remet user à null pour que l'app
+    // retombe sur /login au lieu d'afficher un dashboard vide aux fetches
+    // silencieusement en erreur.
+    const onAuthExpired = () => setUser(null);
+    window.addEventListener('ff-auth-expired', onAuthExpired);
+
     // Fallback storage event : fire-and-forget dans la popup → déclenche
     // un `storage` event dans l'opener (same-origin). Le payload contient
     // { token, user } sérialisés pour survivre au cas BroadcastChannel KO.
@@ -63,6 +70,7 @@ export function AuthProvider({ children }) {
     return () => {
       try { bc && bc.close(); } catch {}
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('ff-auth-expired', onAuthExpired);
     };
   }, []);
 

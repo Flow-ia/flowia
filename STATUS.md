@@ -7,6 +7,22 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Fix 401 silencieux commerçant** — Symptôme observé : clic sur la
+cloche notif du dashboard commerçant, rien ne s'affiche, console crache
+401 sur `/api/notifications/inapp`, `/api/booking/appointments` et
+`/api/employee-pins/:id/status`. Cause : quand le JWT commerçant expire
+pendant qu'un onglet reste ouvert, `useAuth` n'est plus rappelé
+(seulement au mount), `user` reste défini en state React, mais tous les
+`request()` échouent en 401 et les `.catch(()=>{})` swallow l'erreur →
+bell/agenda/etc. affichent vide. Fix : ajouté `handleMerchant401(res)`
+dans `api.js` (appelé par `request()` et `adminRequest()`) qui purge
+`ff_token` + `ff_pin_token`, dispatch `window.dispatchEvent(new
+Event('ff-auth-expired'))` (avec garde anti-dispatch multiple pour
+requêtes parallèles). `useAuth` écoute l'event et `setUser(null)` →
+l'app retombe sur `/login` via les routes d'auth. Comportement propre
+quel que soit l'endpoint qui détecte l'expiration en premier. Fichiers :
+`frontend/src/utils/api.js`, `frontend/src/hooks/useAuth.jsx`.
+
 **URLs login/register partagées (merchant + client)** — Refresh sur
 l'écran d'inscription ou de connexion ne renvoie plus vers login par
 défaut. Côté commerçant : `/login`, `/register`, `/forgot-password` sont
