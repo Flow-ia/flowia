@@ -3,6 +3,7 @@
 // Extrait inchangé depuis booking/Account.jsx.
 import { useState, useEffect, useRef } from 'react';
 import { pubApi, globalClientApi } from '../../../../utils/api';
+import { GoogleOAuthOverlay } from '../../../../components/AuthFlow';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false }) {
@@ -59,20 +60,48 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     if (initialEmail) handleEmailChange(initialEmail);
   }, []);
 
-  // Connexion via Google — ouvre une popup.
-  // Passe le code parrainage (si inscription via lien ?ref=) pour que la
-  // logique backend applique welcome email + liens parrainage, comme le
-  // /client/register classique.
-  // La popup revient sur /__oauth (frontend) qui écrit le token +
-  // broadcast via BroadcastChannel. On écoute ici le broadcast pour
-  // déclencher onAuth(client). Google COOP détache window.opener, donc
-  // postMessage direct ne fonctionne pas en prod.
+  // États OAuth Google : idle/loading/success/error/cancelled/timeout.
+  // Affichés via GoogleOAuthOverlay pour guider l'utilisateur sans
+  // qu'il se retrouve bloqué sans feedback quand la popup se ferme.
+  const [gStatus, setGStatus] = useState('idle');
+  const [gError, setGError] = useState('');
+  const gPopupRef = useRef(null);
+  const gTimerRef = useRef(null);
+  const gPollRef  = useRef(null);
+
+  const cleanupGoogle = () => {
+    if (gTimerRef.current) { clearTimeout(gTimerRef.current); gTimerRef.current = null; }
+    if (gPollRef.current)  { clearInterval(gPollRef.current);  gPollRef.current = null; }
+  };
+
   const loginWithGoogle = () => {
+    cleanupGoogle();
+    setGError(''); setGStatus('loading');
     const url = pubApi.googleAuthUrl(slug, referralCode || undefined);
-    window.open(url, 'google_auth',
+    gPopupRef.current = window.open(url, 'google_auth',
       'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
       Math.round((window.screen.width - 500) / 2)
     );
+    if (!gPopupRef.current) {
+      setGError('Popup bloquée. Autorisez les popups pour ce site.');
+      setGStatus('error');
+      return;
+    }
+    gPollRef.current = setInterval(() => {
+      try {
+        if (gPopupRef.current && gPopupRef.current.closed) {
+          setTimeout(() => {
+            setGStatus(s => s === 'loading' ? 'cancelled' : s);
+            cleanupGoogle();
+          }, 800);
+        }
+      } catch {}
+    }, 500);
+    gTimerRef.current = setTimeout(() => {
+      setGStatus(s => s === 'loading' ? 'timeout' : s);
+      cleanupGoogle();
+      try { gPopupRef.current && gPopupRef.current.close(); } catch {}
+    }, 2 * 60 * 1000);
   };
 
   // Écoute BroadcastChannel + storage event pour capter le retour OAuth
@@ -83,6 +112,8 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       if (!client) return;
       if (token) localStorage.setItem('ff_client_token', token);
       localStorage.setItem('ff_client_info', JSON.stringify(client));
+      cleanupGoogle();
+      setGStatus('success');
       onAuth(client);
     };
 
@@ -91,6 +122,11 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       bc = new BroadcastChannel('flowia-oauth');
       bc.onmessage = (ev) => {
         if (ev.data?.type === 'client_login') applyClientLogin(ev.data.token, ev.data.client);
+        else if (ev.data?.type === 'oauth_error') {
+          cleanupGoogle();
+          setGError(ev.data.error || 'Erreur Google');
+          setGStatus('error');
+        }
       };
     } catch { /* non supporté */ }
 
@@ -107,6 +143,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     return () => {
       try { bc && bc.close(); } catch {}
       window.removeEventListener('storage', onStorage);
+      cleanupGoogle();
     };
   }, [onAuth]);
 
@@ -235,6 +272,12 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
 
   return (
     <div style={S.card}>
+      <GoogleOAuthOverlay
+        status={gStatus}
+        errorMsg={gError}
+        onRetry={() => { setGStatus('idle'); setGError(''); loginWithGoogle(); }}
+        onClose={() => { setGStatus('idle'); setGError(''); }}
+      />
       <div style={{ padding:20 }}>
 
         {/* Badge compte requis */}

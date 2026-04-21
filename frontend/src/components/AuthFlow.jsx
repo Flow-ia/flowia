@@ -276,29 +276,183 @@ function Divider() {
 // l'auth via BroadcastChannel ; useAuth réagit globalement. Ici on écoute
 // en plus pour fermer le flux d'écran login/register si ça arrive pendant
 // qu'il est affiché (login(...) via useAuth sera déclenché depuis onSuccess).
+// États : 'idle' → 'loading' → 'success' | 'error' | 'cancelled' | 'timeout'.
+// Le consommateur affiche l'overlay selon status et peut réessayer.
 function useGoogleMerchantAuth(onSuccess) {
+  const [status, setStatus] = useState('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const popupRef = useRef(null);
+  const timeoutRef = useRef(null);
+  const pollRef = useRef(null);
+
+  const cleanup = () => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    if (pollRef.current)    { clearInterval(pollRef.current);  pollRef.current = null; }
+  };
+
+  useEffect(() => () => cleanup(), []);
+
   useEffect(() => {
+    const handleSuccess = (token, user) => {
+      cleanup();
+      setStatus('success');
+      onSuccess(token, user);
+    };
+    const handleError = (msg) => {
+      cleanup();
+      setErrorMsg(msg || 'Erreur Google');
+      setStatus('error');
+    };
+
     let bc = null;
     try {
       bc = new BroadcastChannel('flowia-oauth');
       bc.onmessage = (ev) => {
-        if (ev.data?.type !== 'merchant_login') return;
-        const { token, user } = ev.data;
-        if (token && user) onSuccess(token, user);
+        if (ev.data?.type === 'merchant_login') {
+          const { token, user } = ev.data;
+          if (token && user) handleSuccess(token, user);
+          else handleError('Données Google manquantes');
+        } else if (ev.data?.type === 'oauth_error') {
+          handleError(ev.data.error || 'Erreur Google');
+        }
       };
     } catch { /* non supporté */ }
-    return () => { try { bc && bc.close(); } catch {} };
+
+    const onStorage = (e) => {
+      if (e.key === 'ff_oauth_merchant' && e.newValue) {
+        try {
+          const p = JSON.parse(e.newValue);
+          if (p?.token && p?.user) handleSuccess(p.token, p.user);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      try { bc && bc.close(); } catch {}
+      window.removeEventListener('storage', onStorage);
+    };
   }, [onSuccess]);
 
   const openGoogle = () => {
+    cleanup();
+    setErrorMsg('');
+    setStatus('loading');
     const url = api.merchantGoogleAuthUrl();
     const w = 500, h = 600;
     const left = (screen.width - w) / 2;
     const top = (screen.height - h) / 2;
-    window.open(url, 'google-auth', `width=${w},height=${h},top=${top},left=${left}`);
+    popupRef.current = window.open(url, 'google-auth',
+      `width=${w},height=${h},top=${top},left=${left}`);
+
+    // Popup bloquée par le navigateur.
+    if (!popupRef.current) {
+      setErrorMsg('Votre navigateur a bloqué la popup. Autorisez les popups pour ce site et réessayez.');
+      setStatus('error');
+      return;
+    }
+
+    // Polling : détecte si l'utilisateur ferme la popup sans valider.
+    // NB : COOP peut fausser `closed` côté cross-origin, mais fonctionne
+    // fiablement une fois la popup revenue sur notre origine (/__oauth).
+    pollRef.current = setInterval(() => {
+      try {
+        if (popupRef.current && popupRef.current.closed) {
+          // Laisse 800 ms pour que le broadcast arrive avant de déclarer "annulé".
+          setTimeout(() => {
+            setStatus(s => s === 'loading' ? 'cancelled' : s);
+            cleanup();
+          }, 800);
+        }
+      } catch { /* COOP peut throw — ignorer */ }
+    }, 500);
+
+    // Timeout de sécurité — 2 minutes.
+    timeoutRef.current = setTimeout(() => {
+      setStatus(s => s === 'loading' ? 'timeout' : s);
+      cleanup();
+      try { popupRef.current && popupRef.current.close(); } catch {}
+    }, 2 * 60 * 1000);
   };
 
-  return openGoogle;
+  const reset = () => { setStatus('idle'); setErrorMsg(''); };
+
+  return { openGoogle, status, errorMsg, reset };
+}
+
+// ─── Overlay OAuth Google (loading / erreur / annulation) ───────────────────
+// Affiché par-dessus l'écran de login pendant que la popup Google est ouverte.
+// Statuts : loading (spinner), error/cancelled/timeout (message + bouton
+// Réessayer). Succès → fermé automatiquement par le consommateur.
+export function GoogleOAuthOverlay({ status, errorMsg, onRetry, onClose }) {
+  if (status === 'idle' || status === 'success') return null;
+
+  const TITLES = {
+    loading:   'Connexion à Google…',
+    error:     'Connexion impossible',
+    cancelled: 'Connexion annulée',
+    timeout:   'Délai dépassé',
+  };
+  const MESSAGES = {
+    loading:   'Validez vos informations dans la fenêtre Google. Ne fermez pas cette page.',
+    error:     errorMsg || 'Une erreur est survenue. Vérifiez votre connexion et réessayez.',
+    cancelled: 'Vous avez fermé la fenêtre Google avant la fin. Réessayez quand vous êtes prêt.',
+    timeout:   'La connexion a pris trop de temps. Vérifiez votre connexion internet et réessayez.',
+  };
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:10000,
+      background:'rgba(15, 23, 42, 0.82)', backdropFilter:'blur(6px)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    }}>
+      <div style={{
+        background:'#fff', borderRadius:16, padding:32, maxWidth:380, width:'100%',
+        textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.4)',
+        fontFamily:'inherit',
+      }}>
+        {status === 'loading' ? (
+          <div style={{
+            width:44, height:44, margin:'0 auto 16px', borderRadius:'50%',
+            border:'3px solid #e5e7eb', borderTopColor:'#4338ca',
+            animation:'spin .9s linear infinite',
+          }}/>
+        ) : (
+          <div style={{
+            width:44, height:44, margin:'0 auto 16px', borderRadius:'50%',
+            background: status === 'cancelled' ? '#fef3c7' : '#fee2e2',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:22, color: status === 'cancelled' ? '#92400e' : '#991b1b',
+          }}>
+            {status === 'cancelled' ? '!' : '✕'}
+          </div>
+        )}
+        <p style={{ margin:'0 0 6px', fontSize:16, fontWeight:600, color:'#0f172a' }}>
+          {TITLES[status] || 'Connexion Google'}
+        </p>
+        <p style={{ margin:'0 0 20px', fontSize:13, color:'#475569', lineHeight:1.55 }}>
+          {MESSAGES[status] || ''}
+        </p>
+        {status !== 'loading' && (
+          <div style={{ display:'flex', gap:8 }}>
+            <button type="button" onClick={onClose}
+              style={{
+                flex:1, padding:'11px', borderRadius:9,
+                background:'#f1f5f9', border:'none', color:'#0f172a',
+                fontSize:13, fontWeight:500, cursor:'pointer', fontFamily:'inherit',
+              }}>Fermer</button>
+            <button type="button" onClick={onRetry}
+              style={{
+                flex:1, padding:'11px', borderRadius:9,
+                background:'#4338ca', border:'none', color:'#fff',
+                fontSize:13, fontWeight:500, cursor:'pointer', fontFamily:'inherit',
+              }}>Réessayer</button>
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }`}</style>
+    </div>
+  );
 }
 
 // ─── Petit bouton de retour avec chevron ─────────────────────────────────────
@@ -332,9 +486,22 @@ export default function AuthFlow() {
 
   const go = (sc, email) => { if (email) setPendingEmail(email); setScreen(sc); };
 
-  const openGoogle = useGoogleMerchantAuth((token, user) => {
-    login(token, user);
-  });
+  const { openGoogle, status: oauthStatus, errorMsg: oauthError, reset: resetOauth } =
+    useGoogleMerchantAuth((token, user) => { login(token, user); });
+
+  // Lire ?auth_error=... de l'URL (fallback non-popup ou erreur Google).
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const authError = url.searchParams.get('auth_error');
+      if (authError) {
+        show(decodeURIComponent(authError), 'err');
+        url.searchParams.delete('auth_error');
+        window.history.replaceState({}, '',
+          url.pathname + (url.searchParams.toString() ? '?' + url.searchParams : '') + url.hash);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ minHeight:'100dvh', background:t.bg,
@@ -342,6 +509,7 @@ export default function AuthFlow() {
                   padding:16, position:'relative' }}>
       <div style={{ position:'absolute', top:48, right:20 }}><ThemeToggle/></div>
       <Toast msg={toast?.msg} type={toast?.type}/>
+      <GoogleOAuthOverlay status={oauthStatus} errorMsg={oauthError} onRetry={() => { resetOauth(); openGoogle(); }} onClose={resetOauth}/>
       <div style={{ width:'100%', maxWidth:400 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
           <img src="/images/logo-app.png" alt="FlowIA"
