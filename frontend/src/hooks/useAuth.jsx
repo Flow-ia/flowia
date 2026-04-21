@@ -1,6 +1,6 @@
 // src/hooks/useAuth.jsx
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api, notifyLoginJustHappened } from '../utils/api';
+import { api, notifyLoginJustHappened, isJwtLocallyExpired } from '../utils/api';
 
 const AuthContext = createContext(null);
 
@@ -10,7 +10,13 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const token = localStorage.getItem('ff_token');
-    if (token) {
+    // Check local expiry AVANT api.me() pour éviter un round-trip 401 parasite
+    // dans la console quand un vieux token zombie traîne dans localStorage.
+    if (token && isJwtLocallyExpired(token)) {
+      localStorage.removeItem('ff_token');
+      localStorage.removeItem('ff_pin_token');
+      setLoading(false);
+    } else if (token) {
       api.me()
         .then(data => setUser(data.user))
         .catch(() => {

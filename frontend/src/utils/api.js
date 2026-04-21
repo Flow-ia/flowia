@@ -11,6 +11,25 @@ let __meCheckInFlight = null;
 let __lastLoginAt = 0;
 export function notifyLoginJustHappened() { __lastLoginAt = Date.now(); }
 
+// Décode le payload JWT sans vérifier la signature. Utilisé uniquement pour
+// lire le claim `exp` côté client (économie d'un round-trip serveur quand
+// un token est localement expiré). La décision d'autorisation reste côté
+// backend via jwt.verify — ce check est purement un optimisation UX.
+export function isJwtLocallyExpired(token) {
+  if (!token || typeof token !== 'string') return true;
+  const parts = token.split('.');
+  if (parts.length !== 3) return true;
+  try {
+    // base64url → base64 (replace -_ by +/, pad)
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+    const payload = JSON.parse(atob(padded));
+    if (!payload || typeof payload.exp !== 'number') return false;
+    // 10s de marge pour couvrir un éventuel clock skew côté client
+    return payload.exp * 1000 < Date.now() - 10_000;
+  } catch { return true; }
+}
+
 function dispatchAuthExpired() {
   localStorage.removeItem('ff_token');
   localStorage.removeItem('ff_pin_token');
@@ -32,10 +51,11 @@ function handleMerchant401(res, path) {
   // Pas de token local → rien à purger, juste signaler l'état null.
   const token = localStorage.getItem('ff_token');
   if (!token) { dispatchAuthExpired(); return; }
-  // Grace period post-login : ignorer 401 pendant 3s après un login (le
+  // Grace period post-login : ignorer 401 pendant 5s après un login (le
   // temps que React propage user, que les requêtes en vol se terminent et
-  // que le client soit dans un état stable).
-  if (Date.now() - __lastLoginAt < 3000) return;
+  // que le client soit dans un état stable). 5s > temps typique d'un cold
+  // start backend Render + un round-trip réseau.
+  if (Date.now() - __lastLoginAt < 5000) return;
   // /auth/me lui-même 401 → verdict sans ambiguïté : token invalide/expiré.
   if (path === '/auth/me') { dispatchAuthExpired(); return; }
   // Déjà en cours de vérification → les autres 401 parallèles attendent.
@@ -53,22 +73,32 @@ function handleMerchant401(res, path) {
 }
 
 function getToken() {
-  const t = localStorage.getItem('ff_token');
-  if (t) return t;
-  // Fallback : si la popup OAuth a écrit ff_oauth_merchant mais que l'event
-  // listener n'a pas (encore) migré vers ff_token, on lit directement.
-  // Évite les 401 fantômes sur le 1er render après OAuth.
-  try {
-    const raw = localStorage.getItem('ff_oauth_merchant');
-    if (raw) {
-      const p = JSON.parse(raw);
-      if (p?.token) {
-        localStorage.setItem('ff_token', p.token);
-        return p.token;
+  let t = localStorage.getItem('ff_token');
+  if (!t) {
+    // Fallback : si la popup OAuth a écrit ff_oauth_merchant mais que l'event
+    // listener n'a pas (encore) migré vers ff_token, on lit directement.
+    // Évite les 401 fantômes sur le 1er render après OAuth.
+    try {
+      const raw = localStorage.getItem('ff_oauth_merchant');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p?.token) {
+          localStorage.setItem('ff_token', p.token);
+          t = p.token;
+        }
       }
-    }
-  } catch {}
-  return null;
+    } catch {}
+  }
+  if (!t) return null;
+  // Check local : si le token JWT est expiré selon son propre claim `exp`,
+  // on ne l'envoie PAS (éviterait juste un 401 backend) et on purge. Évite
+  // aussi le cas où un vieux token zombie traîne dans localStorage après
+  // expiration et génère un 401 parasite au chargement de l'app.
+  if (isJwtLocallyExpired(t)) {
+    dispatchAuthExpired();
+    return null;
+  }
+  return t;
 }
 function getPinToken() {
   return localStorage.getItem('ff_pin_token');

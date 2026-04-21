@@ -7,6 +7,24 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Hardening auth merchant — 4 couches défensives** — Renforcement
+complet de la chaîne d'auth pour éliminer les 401 parasites en console
+et garantir zéro boucle login :
+1. **Check local JWT `exp` dans `getToken()`** : `isJwtLocallyExpired()`
+   décode le payload JWT sans vérifier la signature (claim `exp` + 10s
+   skew). Si expiré localement, on purge et on renvoie null
+   immédiatement — évite un round-trip 401 "Token manquant" inutile.
+2. **Check local dans `useAuth` au mount** : avant d'appeler `api.me()`,
+   même vérif d'expiry. Évite le 401 parasite à l'ouverture de l'app
+   avec un vieux token zombie dans le localStorage.
+3. **Grace period post-login 5s** (augmentée de 3s → 5s) : couvre le
+   temps max d'un cold start Render + propagation React.
+4. **Double-check `/auth/me` avant purge** (déjà en place) : évite de
+   déconnecter sur un 401 transitoire. Garde anti-concurrence
+   `__meCheckInFlight` pour un seul check par burst.
+`isJwtLocallyExpired` exporté depuis api.js et consommé par useAuth.
+Fichiers : `frontend/src/utils/api.js`, `frontend/src/hooks/useAuth.jsx`.
+
 **Fix boucle login Google commerçant** — Régression du commit précédent
 (`436aa06`) : l'intercepteur 401 purgeait le token trop agressivement →
 après un login Google OAuth, si UNE requête dans le Promise.all de
