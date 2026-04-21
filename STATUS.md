@@ -14,6 +14,12 @@ vue façon Google Calendar. Nouveaux composants `WeekView.jsx` et
 (colonnes employés) est préservée avec son mini-bar semaine. Cliquer sur
 un jour (semaine ou mois) bascule en vue Jour. Build OK.
 
+**PIN employé : re-saisie systématique** — `useEmployeePinGate` ne
+réutilise plus la session 5 min. Le modal PIN s'affiche pour CHAQUE action
+sensible (stats, encaissement, crédit, remboursement, notes, etc.) et le
+token est invalidé après chaque action via `clearToken`. Le backend reste
+inchangé (JWT 2h côté serveur, plus envoyé côté client).
+
 **Audit backend clôturé** (commits K→AA). Toutes les routes backend ont été
 auditées : error hygiene, PIN admin, bounds, normalisation email, IDOR,
 whitelists, rate-limiting dédiés, CNIL/RGPD opt-in marketing, security

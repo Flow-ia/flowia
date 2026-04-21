@@ -237,7 +237,7 @@ export function EmployeePinModal({ open, employee, actionLabel, onSuccess, onCan
 //   return <>{PinModalNode}{/* reste du composant */}</>
 
 export function useEmployeePinGate() {
-  const { requiresPin, isSessionValid } = useEmployeePin();
+  const { requiresPin, clearToken } = useEmployeePin();
   const [modal, setModal] = useState(null); // null | { employee, actionLabel, resolve }
 
   const requestPin = useCallback(async (employee, actionLabel, action) => {
@@ -253,25 +253,30 @@ export function useEmployeePinGate() {
       return;
     }
 
-    // La session est-elle déjà valide ?
-    const valid = await isSessionValid(employee.id);
-    if (valid) {
-      await action();
-      return;
-    }
+    // Politique : toujours redemander le PIN pour CHAQUE action sensible,
+    // même si la session précédente est encore valide côté client. On ne
+    // réutilise jamais un token existant — le modal s'affiche systématiquement.
+    clearToken(employee.id);
 
     // Afficher le modal et attendre la réponse
     await new Promise((resolve) => {
       setModal({ employee, actionLabel, resolve, action });
     });
-  }, [requiresPin, isSessionValid]);
+  }, [requiresPin, clearToken]);
 
   const handleSuccess = useCallback(async () => {
     const current = modal;
     setModal(null);
-    if (current?.action) await current.action();
+    if (current?.action) {
+      try { await current.action(); }
+      finally {
+        // Invalider le token dès que l'action est terminée : la prochaine
+        // action sensible repassera par la saisie du PIN.
+        if (current.employee?.id) clearToken(current.employee.id);
+      }
+    }
     current?.resolve?.();
-  }, [modal]);
+  }, [modal, clearToken]);
 
   const handleCancel = useCallback(() => {
     const current = modal;
