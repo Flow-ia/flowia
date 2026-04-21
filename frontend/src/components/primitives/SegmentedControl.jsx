@@ -4,6 +4,7 @@ export function SegmentedControl({
   value,
   onChange,
   options = [],
+  fullWidth = false,
   style: styleOverride = {},
 }) {
   const { theme: t } = useTheme();
@@ -11,7 +12,8 @@ export function SegmentedControl({
   return (
     <div
       style={{
-        display: 'inline-flex',
+        display: fullWidth ? 'flex' : 'inline-flex',
+        width: fullWidth ? '100%' : undefined,
         background: t.cardAlt,
         borderRadius: 8,
         padding: 3,
@@ -38,6 +40,7 @@ export function SegmentedControl({
               fontFamily: 'inherit',
               transition: 'all 0.15s ease',
               whiteSpace: 'nowrap',
+              flex: fullWidth ? 1 : undefined,
             }}
           >
             {opt.label}
