@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../../utils/api';
+import { I } from '../../../../utils/icons';
+import { Button } from '../../../../components/primitives';
 
 export default function EmployeePinManager({ emp, onClose, showToast, theme }) {
-  const isDark = theme.mode === 'dark';
+  const t = theme;
   const [pinStatus, setPinStatus] = useState(null);
-  const [step, setStep] = useState('status');
-  const [pin1, setPin1] = useState('');
-  const [pin2, setPin2] = useState('');
+  const [step, setStep]     = useState('status');
+  const [pin1, setPin1]     = useState('');
+  const [pin2, setPin2]     = useState('');
   const [newPin, setNewPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
-  const [shake, setShake] = useState(false);
+  const [err, setErr]       = useState('');
+  const [shake, setShake]   = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -18,13 +20,15 @@ export default function EmployeePinManager({ emp, onClose, showToast, theme }) {
       try {
         const s = await api.getEmployeePinStatus(emp.id);
         if (!cancelled) setPinStatus(s);
-      } catch { if (!cancelled) setPinStatus({ has_pin: false, is_active: false }); }
+      } catch {
+        if (!cancelled) setPinStatus({ has_pin:false, is_active:false });
+      }
     })();
     return () => { cancelled = true; };
   }, [emp.id]);
 
   const pressPin = (k, cur, setCur, onFull) => {
-    if (k === '⌫') { setCur(p => p.slice(0,-1)); setErr(''); return; }
+    if (k === '⌫') { setCur(p => p.slice(0, -1)); setErr(''); return; }
     if (cur.length >= 4) return;
     const next = cur + k; setCur(next); setErr('');
     if (next.length === 4) setTimeout(() => onFull(next), 200);
@@ -34,8 +38,8 @@ export default function EmployeePinManager({ emp, onClose, showToast, theme }) {
     setLoading(true); setErr('');
     try {
       await api.setEmployeePin(emp.id, { pin: newPin });
-      setPinStatus({ has_pin: true, is_active: true });
-      showToast('Code PIN crée !');
+      setPinStatus({ has_pin:true, is_active:true });
+      showToast('Code PIN cree');
       setStep('status'); setPin1(''); setPin2(''); setNewPin('');
     } catch (e) { setErr(e.message || 'Erreur serveur'); }
     finally { setLoading(false); }
@@ -45,7 +49,7 @@ export default function EmployeePinManager({ emp, onClose, showToast, theme }) {
     setLoading(true);
     try {
       await api.deleteEmployeePin(emp.id);
-      setPinStatus({ has_pin: false, is_active: false });
+      setPinStatus({ has_pin:false, is_active:false });
       showToast('Code PIN supprime');
       setStep('status');
     } catch (e) { showToast('Erreur : ' + e.message); }
@@ -58,161 +62,219 @@ export default function EmployeePinManager({ emp, onClose, showToast, theme }) {
     try {
       const res = await api.toggleEmployeePin(emp.id, { is_active: !pinStatus.is_active });
       setPinStatus(s => ({ ...s, is_active: res.is_active }));
-      showToast(res.is_active ? 'PIN active' : 'PIN désactive');
+      showToast(res.is_active ? 'PIN active' : 'PIN desactive');
     } catch (e) { showToast('Erreur : ' + e.message); }
     finally { setLoading(false); }
   };
 
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+
   const PinKeypad = ({ cur, setCur, onFull }) => (
-    <div className="grid grid-cols-3 gap-2 max-w-[240px] mx-auto mt-4">
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8,
+                  maxWidth:240, margin:'16px auto 0' }}>
       {keys.map((k, i) => (
         k === '' ? <div key={i}/> : (
-          <button key={k+i} onClick={() => pressPin(k, cur, setCur, onFull)}
-            className="h-[52px] rounded-xl text-lg font-medium select-none active:scale-90 transition-all"
-            style={{
-              background: k==='⌫' ? (isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)') : (isDark?'rgba(255,255,255,0.07)':'#fff'),
-              border: `1px solid ${theme.border}`, color: k==='⌫'?theme.muted:theme.text,
-              boxShadow: isDark?'none':'0 1px 4px rgba(0,0,0,0.06)',
-            }}>{k}</button>
+          <button key={k + i} onClick={() => pressPin(k, cur, setCur, onFull)}
+                  style={{ height:50, borderRadius:12, fontSize:18, fontWeight:500,
+                           userSelect:'none', cursor:'pointer',
+                           border:`0.5px solid ${t.border}`,
+                           background: k === '⌫' ? t.cardAlt : t.card,
+                           color: k === '⌫' ? t.muted : t.text,
+                           boxShadow:t.shadowSm,
+                           transition:'transform 0.1s ease',
+                           fontFamily:'inherit' }}
+                  onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.94)'; }}
+                  onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}>
+            {k}
+          </button>
         )
       ))}
     </div>
   );
 
   const PinDots = ({ count }) => (
-    <div className={`flex justify-center gap-4 my-4 ${shake ? 'animate-bounce' : ''}`}>
-      {[0,1,2,3].map(i => (
+    <div style={{ display:'flex', justifyContent:'center', gap:14, margin:'16px 0',
+                  animation: shake ? 'shake 0.4s ease' : 'none' }}>
+      <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}`}</style>
+      {[0, 1, 2, 3].map(i => (
         <div key={i} style={{
           width:12, height:12, borderRadius:'50%',
-          background: i<count ? (isDark?'#e6edf3':'#111827') : 'transparent',
-          border: i<count ? 'none' : `2px solid ${isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)'}`,
-          transform: i<count?'scale(1.2)':'scale(1)',
-          transition: 'all 0.15s',
-          boxShadow: i<count?'0 0 8px rgba(17,24,39,0.5)':'none',
+          background: i < count ? t.text : t.separator,
+          transition:'all 0.2s',
+          transform: i < count ? 'scale(1.15)' : 'scale(1)',
         }}/>
       ))}
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      style={{ background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-sm rounded-t-3xl sm:rounded-3xl pb-8 pt-5 px-5 relative"
-        style={{ background: theme.card, border: `1px solid ${theme.border}`, boxShadow:'0 -8px 40px rgba(0,0,0,0.25)' }}>
-        <div className="w-10 h-1 rounded-full mx-auto mb-4 sm:hidden" style={{ background: isDark?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.1)' }}/>
-        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm"
-          style={{ background: isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', color: theme.muted }}>✕</button>
+  // Toggle sobre (PIN actif)
+  const StatusToggle = ({ on, onChange }) => (
+    <button onClick={onChange}
+            style={{ width:40, height:22, borderRadius:99,
+                     position:'relative', flexShrink:0,
+                     border:'none', cursor:'pointer',
+                     background: on ? '#065f46' : t.cardAlt,
+                     transition:'background 0.2s',
+                     fontFamily:'inherit' }}>
+      <div style={{ width:18, height:18, borderRadius:'50%',
+                    background:'white',
+                    position:'absolute', top:2,
+                    left: on ? 20 : 2,
+                    transition:'left 0.15s',
+                    boxShadow:'0 1px 2px rgba(0,0,0,0.15)' }}/>
+    </button>
+  );
 
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-            style={{ backgroundColor: emp.avatar_color||'#111827', boxShadow:`0 4px 14px ${emp.avatar_color||'#111827'}44` }}>
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:50,
+                  display:'flex', alignItems:'flex-end', justifyContent:'center',
+                  background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}
+         onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+         className="sm:items-center">
+      <div style={{ width:'100%', maxWidth:400, padding:'20px 20px 28px',
+                    borderRadius:'16px 16px 0 0', position:'relative',
+                    background:t.elevated,
+                    border:`0.5px solid ${t.border}`,
+                    boxShadow:t.shadowModal }}
+           className="sm:rounded-2xl">
+        <button onClick={onClose}
+                style={{ position:'absolute', top:14, right:14,
+                         width:28, height:28, borderRadius:'50%',
+                         display:'flex', alignItems:'center', justifyContent:'center',
+                         background:t.cardAlt, color:t.muted, fontSize:14,
+                         border:'none', cursor:'pointer', fontFamily:'inherit' }}>×</button>
+
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:18 }}>
+          <div style={{ width:42, height:42, borderRadius:8, flexShrink:0,
+                        backgroundColor: emp.avatar_color || t.text,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        color:'white', fontWeight:500, fontSize:17 }}>
             {emp.name?.charAt(0).toUpperCase()}
           </div>
           <div>
-            <p className="font-bold text-sm" style={{ color:theme.text }}>{emp.name}</p>
-            <p className="text-xs" style={{ color:theme.muted }}>Code PIN de sécurité</p>
+            <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0 }}>{emp.name}</p>
+            <p style={{ fontSize:12, color:t.muted, margin:0 }}>Code PIN de securite</p>
           </div>
         </div>
 
         {step === 'status' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-4 py-3 rounded-2xl"
-              style={{ background: isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)', border:`1px solid ${theme.border}` }}>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: pinStatus?.has_pin ? (pinStatus?.is_active ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)') : 'rgba(148,163,184,0.12)' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke={pinStatus?.has_pin ? (pinStatus?.is_active ? '#4ade80' : '#fbbf24') : '#94a3b8'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                    <rect x="3" y="11" width="18" height="11" rx="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                          padding:'12px 14px', borderRadius:12,
+                          background:t.cardAlt,
+                          border:`0.5px solid ${t.border}` }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:34, height:34, borderRadius:8,
+                              background: pinStatus?.has_pin
+                                ? (pinStatus?.is_active ? '#f0fdf4' : '#fffbeb')
+                                : t.cardAlt,
+                              display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <I.Lock style={{ width:14, height:14,
+                                   color: pinStatus?.has_pin
+                                     ? (pinStatus?.is_active ? '#065f46' : '#92400e')
+                                     : t.muted }}/>
                 </div>
                 <div>
-                  <p className="text-sm font-semibold" style={{ color:theme.text }}>
-                    {pinStatus === null ? 'Chargement...' : pinStatus.has_pin ? 'Code PIN configure' : 'Aucun code PIN'}
+                  <p style={{ fontSize:13, fontWeight:500, color:t.text, margin:0 }}>
+                    {pinStatus === null ? 'Chargement...'
+                      : pinStatus.has_pin ? 'Code PIN configure' : 'Aucun code PIN'}
                   </p>
-                  <p className="text-xs" style={{ color: pinStatus?.has_pin ? (pinStatus?.is_active ? '#4ade80' : '#fbbf24') : theme.muted }}>
-                    {pinStatus === null ? '' : pinStatus.has_pin ? (pinStatus.is_active ? '● Actif - requis pour chaque transaction' : '● Désactive') : 'Transactions sans validation'}
+                  <p style={{ fontSize:11, margin:0,
+                              color: pinStatus?.has_pin
+                                ? (pinStatus?.is_active ? '#065f46' : '#92400e')
+                                : t.muted }}>
+                    {pinStatus === null ? ''
+                      : pinStatus.has_pin
+                        ? (pinStatus.is_active
+                            ? 'Actif — requis pour chaque transaction'
+                            : 'Desactive')
+                        : 'Transactions sans validation'}
                   </p>
                 </div>
               </div>
               {pinStatus?.has_pin && (
-                <button onClick={handleToggle} disabled={loading}
-                  className="w-11 h-6 rounded-full relative flex-shrink-0"
-                  style={{ background: pinStatus.is_active ? 'linear-gradient(90deg,#4ade80,#22c55e)' : (isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.1)') }}>
-                  <div className="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all"
-                    style={{ left: pinStatus.is_active ? '24px' : '2px', boxShadow:'0 1px 4px rgba(0,0,0,0.25)' }}/>
-                </button>
+                <StatusToggle on={pinStatus.is_active} onChange={handleToggle}/>
               )}
             </div>
 
-            <button onClick={() => { setStep('set_pin'); setPin1(''); setPin2(''); setNewPin(''); setErr(''); }}
-              className="w-full py-3.5 rounded-2xl font-semibold text-white text-sm flex items-center justify-center gap-2"
-              style={{ background: isDark?'#e6edf3':'#111827', color:isDark?'#111827':'white', boxShadow:'0 6px 20px rgba(17,24,39,0.3)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-              </svg>
+            <Button variant="primary" fullWidth type="button"
+                    onClick={() => { setStep('set_pin'); setPin1(''); setPin2(''); setNewPin(''); setErr(''); }}>
+              <I.Key style={{ width:14, height:14, marginRight:6 }}/>
               {pinStatus?.has_pin ? 'Modifier le code PIN' : 'Creer un code PIN'}
-            </button>
+            </Button>
 
             {pinStatus?.has_pin && (
-              <button onClick={() => setStep('confirm_delete')}
-                className="w-full py-3 rounded-2xl text-sm font-medium"
-                style={{ background:'rgba(248,113,113,0.08)', color:'#f87171', border:'1px solid rgba(248,113,113,0.2)' }}>
+              <Button variant="danger" fullWidth type="button" onClick={() => setStep('confirm_delete')}>
                 Supprimer le code PIN
-              </button>
+              </Button>
             )}
           </div>
         )}
 
         {step === 'set_pin' && (
-          <div className="text-center">
-            <p className="font-bold text-base mb-1" style={{ color:theme.text }}>Nouveau code PIN</p>
-            <p className="text-xs mb-2" style={{ color:theme.muted }}>Choisissez 4 chiffres pour {emp.name}</p>
+          <div style={{ textAlign:'center' }}>
+            <p style={{ fontSize:15, fontWeight:500, color:t.text, margin:'0 0 4px' }}>Nouveau code PIN</p>
+            <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Choisissez 4 chiffres pour {emp.name}</p>
             <PinDots count={pin1.length}/>
-            {err && <p className="text-xs text-red-400 font-medium mb-1">{err}</p>}
-            <PinKeypad cur={pin1} setCur={setPin1} onFull={(v) => { setNewPin(v); setStep('confirm_pin'); setPin2(''); }}/>
-            <button onClick={() => { setStep('status'); setPin1(''); setErr(''); }} className="mt-4 text-xs underline" style={{ color:theme.muted }}>Annuler</button>
+            {err && <p style={{ fontSize:12, color:'#991b1b', fontWeight:500, margin:'0 0 4px' }}>{err}</p>}
+            <PinKeypad cur={pin1} setCur={setPin1}
+                       onFull={(v) => { setNewPin(v); setStep('confirm_pin'); setPin2(''); }}/>
+            <button onClick={() => { setStep('status'); setPin1(''); setErr(''); }}
+                    style={{ marginTop:16, fontSize:12, color:t.muted,
+                             background:'none', border:'none', cursor:'pointer',
+                             textDecoration:'underline', fontFamily:'inherit' }}>
+              Annuler
+            </button>
           </div>
         )}
 
         {step === 'confirm_pin' && (
-          <div className="text-center">
-            <p className="font-bold text-base mb-1" style={{ color:theme.text }}>Confirmer le code</p>
-            <p className="text-xs mb-2" style={{ color:theme.muted }}>Entrez à nouveau le code PIN</p>
+          <div style={{ textAlign:'center' }}>
+            <p style={{ fontSize:15, fontWeight:500, color:t.text, margin:'0 0 4px' }}>Confirmer le code</p>
+            <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Entrez a nouveau le code PIN</p>
             <PinDots count={pin2.length}/>
-            {err && <p className="text-xs text-red-400 font-medium mb-1">{err}</p>}
-            <PinKeypad cur={pin2} setCur={setPin2} onFull={async (v) => {
-              if (v === newPin) {
-                await handleSetPin();
-              } else {
-                setShake(true);
-                setErr('Les codes ne correspondent pas');
-                setTimeout(() => { setPin2(''); setStep('confirm_pin'); setShake(false); setErr(''); }, 800);
-              }
-            }}/>
-            <button onClick={() => { setStep('set_pin'); setPin1(''); setPin2(''); setErr(''); }} className="mt-4 text-xs underline" style={{ color:theme.muted }}>Recommencer</button>
+            {err && <p style={{ fontSize:12, color:'#991b1b', fontWeight:500, margin:'0 0 4px' }}>{err}</p>}
+            <PinKeypad cur={pin2} setCur={setPin2}
+                       onFull={async (v) => {
+                         if (v === newPin) {
+                           await handleSetPin();
+                         } else {
+                           setShake(true);
+                           setErr('Les codes ne correspondent pas');
+                           setTimeout(() => { setPin2(''); setStep('confirm_pin'); setShake(false); setErr(''); }, 800);
+                         }
+                       }}/>
+            <button onClick={() => { setStep('set_pin'); setPin1(''); setPin2(''); setErr(''); }}
+                    style={{ marginTop:16, fontSize:12, color:t.muted,
+                             background:'none', border:'none', cursor:'pointer',
+                             textDecoration:'underline', fontFamily:'inherit' }}>
+              Recommencer
+            </button>
           </div>
         )}
 
         {step === 'confirm_delete' && (
-          <div className="text-center py-2">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.2)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
-                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-              </svg>
+          <div style={{ textAlign:'center', padding:'8px 0' }}>
+            <div style={{ width:52, height:52, borderRadius:12,
+                          background:'#fef2f2',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          margin:'0 auto 16px' }}>
+              <I.Trash style={{ width:24, height:24, color:'#991b1b' }}/>
             </div>
-            <p className="font-bold text-base mb-2" style={{ color:theme.text }}>Supprimer le PIN ?</p>
-            <p className="text-sm mb-5" style={{ color:theme.muted }}>{emp.name} pourra effectuer des transactions sans validation.</p>
-            <div className="flex gap-2">
-              <button onClick={() => setStep('status')} className="flex-1 py-3 rounded-2xl text-sm font-medium"
-                style={{ background: isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.05)', color:theme.muted, border:`1px solid ${theme.border}` }}>
+            <p style={{ fontSize:15, fontWeight:500, color:t.text, margin:'0 0 8px' }}>Supprimer le PIN ?</p>
+            <p style={{ fontSize:13, color:t.muted, margin:'0 0 20px' }}>
+              {emp.name} pourra effectuer des transactions sans validation.
+            </p>
+            <div style={{ display:'flex', gap:8 }}>
+              <Button variant="secondary" type="button" onClick={() => setStep('status')} style={{ flex:1 }}>
                 Annuler
-              </button>
-              <button onClick={handleDelete} disabled={loading} className="flex-1 py-3 rounded-2xl text-sm font-bold text-white"
-                style={{ background:'linear-gradient(135deg,#ef4444,#dc2626)' }}>
+              </Button>
+              <button onClick={handleDelete} disabled={loading}
+                      style={{ flex:1, padding:'10px', borderRadius:8, border:'none', cursor:'pointer',
+                               background:'#991b1b', color:'white',
+                               fontWeight:500, fontSize:13, opacity: loading ? 0.7 : 1,
+                               fontFamily:'inherit' }}>
                 {loading ? '...' : 'Supprimer'}
               </button>
             </div>
