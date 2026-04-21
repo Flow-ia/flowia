@@ -264,8 +264,25 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   useEffect(() => { setActiveTabRaw(initialTab); }, [initialTab]);
 
   useEffect(() => {
-    pubApi.myAppointments(slug)
-      .then(setAppts).catch(() => {}).finally(() => setLoading(false));
+    // Liste cross-commerçants : on interroge /global-clients/appointments
+    // (token client global) pour récupérer TOUS les RDV du client (tous
+    // statuts, tous commerçants). Fallback sur /pub/:slug/client/appointments
+    // si pas de token global (ex: client encore au compte local legacy).
+    const gcToken = localStorage.getItem('ff_client_token');
+    const useGlobal = !!gcToken;
+    const fetcher = useGlobal
+      ? globalClientApi.appointments(gcToken)
+      : pubApi.myAppointments(slug);
+    fetcher
+      .then(setAppts)
+      .catch(() => {
+        // Si /global-clients fail (token invalide ou compte non lié),
+        // retry sur l'endpoint local du commerçant en cours.
+        if (useGlobal) {
+          pubApi.myAppointments(slug).then(setAppts).catch(() => {});
+        }
+      })
+      .finally(() => setLoading(false));
   }, [slug]);
 
   // Debounce de la recherche (300ms) pour éviter de spammer l'API.
@@ -403,7 +420,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     if (!cancelModal) return;
     setCancelLoading(true);
     try {
-      await pubApi.cancel(slug, cancelModal.id, { reason: 'Annule par le client' });
+      // Si le RDV vient d'un autre commerçant (cross-merchant list), on
+      // utilise le slug porté par l'appointment lui-même, pas le slug de
+      // la page courante.
+      const cancelSlug = cancelModal.slug || slug;
+      await pubApi.cancel(cancelSlug, cancelModal.id, { reason: 'Annule par le client' });
       setAppts(p => p.map(a => a.id === cancelModal.id ? {...a, status:'cancelled'} : a));
       setCancelModal(null);
     } catch(e) {

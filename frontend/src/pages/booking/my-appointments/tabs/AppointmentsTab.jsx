@@ -111,6 +111,15 @@ export function AppointmentsTab({
                     <p style={{ fontWeight: 500, fontSize:14, color: st.group !== 'futurs' ? th.muted : th.text, marginBottom:3 }}>
                       {a.service_name || 'Service'}
                     </p>
+                    {/* Nom du commerçant (si liste cross-merchant) */}
+                    {a.business_name && (
+                      <p style={{ fontSize:12, fontWeight:500, color:th.text, marginBottom:2, display:'flex', alignItems:'center', gap:5 }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:11,height:11,opacity:0.55}}>
+                          <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/>
+                        </svg>
+                        {a.business_name}
+                      </p>
+                    )}
                     <p style={{ fontSize:13, color:th.muted }}>
                       {fmtApptDate(a.date)} à {(a.start_time||'').substring(0,5)}
                     </p>
