@@ -1,12 +1,17 @@
 // src/routes/global-clients/appointments.js — GET /appointments (multi-commerces)
 const { pool } = require('../../db');
-const { globalClientAuth } = require('./helpers');
+const { clientOrGlobalClientAuth } = require('./helpers');
 
 module.exports = function attachAppointmentsRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
-  // GET /api/global-clients/appointments — tous les RDV multi-commerces
+  // GET /api/global-clients/appointments — tous les RDV multi-commerces.
+  // Accepte les 2 scopes : 'global_client' (ff_gc_token, jamais utilisé côté
+  // front actuellement) ET 'client' avec globalClientId (ff_client_token issu
+  // du login classique ou de Google OAuth). Sans cette tolérance, le front
+  // recevait 401 et fallbackait sur l'endpoint scopé commerçant → perte du
+  // cross-merchant + perte de business_name.
   // ─────────────────────────────────────────────────────────────────────────────
-  router.get('/appointments', globalClientAuth, async (req, res) => {
+  router.get('/appointments', clientOrGlobalClientAuth, async (req, res) => {
     try {
       const gcId = req.globalClient.globalClientId;
       const { rows: gc } = await pool.query('SELECT email FROM global_clients WHERE id=$1', [gcId]);
