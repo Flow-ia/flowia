@@ -4,68 +4,89 @@ import { Confirm } from '../../components/UI';
 import { TransactionForm } from '../../components/Forms';
 import { disp } from '../../utils/dates';
 import { Card, nd, fmt, PAY_INFO } from './shared';
+import { Button, SegmentedControl } from '../../components/primitives';
 
 const PAGE_SIZE = 10;
 
 export default function TabHistorique({ transactions, employees, categories, onUpdate, onDelete, showToast, theme }) {
-  const isDark = theme.mode === 'dark';
-  const [edit, setEdit] = useState(null);
-  const [modal, setModal] = useState(false);
-  const [delId, setDelId] = useState(null);
+  const t = theme;
+  const [edit,   setEdit]   = useState(null);
+  const [modal,  setModal]  = useState(false);
+  const [delId,  setDelId]  = useState(null);
   const [search, setSearch] = useState('');
-  const [typeF, setTypeF] = useState('all');
-  const [page, setPage] = useState(0);
+  const [typeF,  setTypeF]  = useState('all');
+  const [page,   setPage]   = useState(0);
 
-  const getEmp = id => employees.find(e=>e.id===id);
-  const getCat = id => categories.find(c=>c.id===id);
+  const getEmp = id => employees.find(e => e.id === id);
+  const getCat = id => categories.find(c => c.id === id);
 
   const filtered = useMemo(() => transactions.filter(tx => {
     if (typeF !== 'all' && tx.type !== typeF) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return getCat(tx.category_id)?.name?.toLowerCase().includes(q)
-      || getEmp(tx.employee_id)?.name?.toLowerCase().includes(q)
-      || tx.description?.toLowerCase().includes(q);
+        || getEmp(tx.employee_id)?.name?.toLowerCase().includes(q)
+        || tx.description?.toLowerCase().includes(q);
   }), [transactions, typeF, search, employees, categories]);
 
-  // Pagination 10/page — reset quand filtre change
   useEffect(() => { setPage(0); }, [typeF, search]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe   = Math.min(page, totalPages - 1);
   const pagedItems = filtered.slice(pageSafe * PAGE_SIZE, (pageSafe + 1) * PAGE_SIZE);
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl p-3.5 flex items-start gap-2.5" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
-        <I.Key className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#fbbf24' }} />
-        <p className="text-xs font-semibold" style={{ color: '#fbbf24' }}>Zone admin — modification et suppression des transactions</p>
+    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+      {/* Bandeau zone admin */}
+      <div style={{ padding:'12px 14px', borderRadius:8,
+                    display:'flex', alignItems:'flex-start', gap:10,
+                    background:'#fffbeb' }}>
+        <I.Key style={{ width:14, height:14, flexShrink:0, marginTop:2, color:'#92400e' }}/>
+        <p style={{ fontSize:12, fontWeight:500, color:'#92400e', margin:0 }}>
+          Zone admin — modification et suppression des transactions
+        </p>
       </div>
 
-      <div className="relative">
-        <I.Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: theme.muted }} />
-        <input placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full pl-10 pr-10 py-3.5 rounded-2xl text-sm focus:outline-none"
-          style={{ background: theme.card, border: `1px solid ${theme.border}`, color: theme.text }} />
-        {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><I.X className="w-4 h-4" style={{ color: theme.muted }} /></button>}
-      </div>
-
-      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }}>
-        {[['all','Tout'],['revenue','Revenus'],['expense','Depenses']].map(([v,l]) => (
-          <button key={v} onClick={() => setTypeF(v)}
-            className="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all"
-            style={{ background: typeF===v ? '#1a73e8' : 'transparent', color: typeF===v ? 'white' : theme.muted }}>
-            {l}
+      {/* Recherche */}
+      <div style={{ position:'relative' }}>
+        <I.Search style={{ width:14, height:14, position:'absolute', left:12, top:'50%',
+                           transform:'translateY(-50%)', color:t.muted }}/>
+        <input placeholder="Rechercher..." value={search}
+               onChange={e => setSearch(e.target.value)}
+               style={{ width:'100%', padding:'12px 36px', borderRadius:8,
+                        background:t.card, border:`0.5px solid ${t.borderInput}`,
+                        color:t.text, fontSize:14, fontFamily:'inherit', outline:'none',
+                        boxSizing:'border-box',
+                        transition:'border-color 0.15s ease, box-shadow 0.15s ease' }}
+               onFocus={e => { e.currentTarget.style.borderColor = t.borderStrong;
+                               e.currentTarget.style.boxShadow = `0 0 0 3px ${t.border}`; }}
+               onBlur={e => { e.currentTarget.style.borderColor = t.borderInput;
+                              e.currentTarget.style.boxShadow = 'none'; }}/>
+        {search && (
+          <button onClick={() => setSearch('')}
+                  style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)',
+                           background:'none', border:'none', cursor:'pointer', padding:4,
+                           fontFamily:'inherit' }}>
+            <I.X style={{ width:14, height:14, color:t.muted }}/>
           </button>
-        ))}
+        )}
       </div>
 
-      <p className="text-xs px-1" style={{ color: theme.muted }}>{filtered.length} transaction{filtered.length>1?'s':''}</p>
+      <SegmentedControl fullWidth value={typeF} onChange={setTypeF}
+                        options={[
+                          { value:'all',     label:'Tout'     },
+                          { value:'revenue', label:'Revenus'  },
+                          { value:'expense', label:'Depenses' },
+                        ]}/>
+
+      <p style={{ fontSize:12, color:t.muted, padding:'0 4px', margin:0 }}>
+        {filtered.length} transaction{filtered.length > 1 ? 's' : ''}
+      </p>
 
       <Card theme={theme}>
         {filtered.length === 0 ? (
-          <div className="py-14 text-center">
-            <I.BarCh className="w-10 h-10 mx-auto mb-3" style={{ color: theme.dim }} />
-            <p className="text-sm" style={{ color: theme.muted }}>Aucune transaction</p>
+          <div style={{ padding:'56px 0', textAlign:'center' }}>
+            <I.BarCh style={{ width:36, height:36, margin:'0 auto 10px', color:t.dim }}/>
+            <p style={{ fontSize:13, color:t.muted, margin:0 }}>Aucune transaction</p>
           </div>
         ) : (
           <div>
@@ -77,68 +98,103 @@ export default function TabHistorique({ transactions, employees, categories, onU
               const PmIc = pm.Ic;
               const hasItems    = Array.isArray(tx.items) && tx.items.length > 0;
               const hasPaySplit = Array.isArray(tx.payments) && tx.payments.length > 1;
+              const iconBg      = isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2';
+              const iconColor   = isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b';
+              const amountColor = isRev ? '#065f46' : '#991b1b';
+
               return (
-                <div key={tx.id} className="flex items-start gap-3 px-4 py-3"
-                  style={{ borderBottom: i < pagedItems.length - 1 ? `1px solid ${theme.border}` : 'none', fontFamily:"'DM Sans', sans-serif" }}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{ background: isRev ? (tx.source==='rdv'?'rgba(17,24,39,0.15)':'rgba(17,24,39,0.12)') : 'rgba(248,113,113,0.1)' }}>
-                    {tx.source==='rdv' ? <span style={{ fontSize:16 }}>📅</span> : isRev ? <I.ArrowUp className="w-4 h-4" style={{ color:'#a5a0ff' }} /> : <I.ArrowDown className="w-4 h-4" style={{ color: '#f87171' }} />}
+                <div key={tx.id}
+                     style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'12px 16px',
+                              borderBottom: i < pagedItems.length - 1 ? `0.5px solid ${t.separator}` : 'none' }}>
+                  <div style={{ width:36, height:36, borderRadius:8, flexShrink:0, marginTop:2,
+                                background:iconBg,
+                                display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    {tx.source === 'rdv'
+                      ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
+                      : isRev
+                        ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
+                        : <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:4 }}>
-                      <p className="text-sm font-semibold truncate flex-1" style={{ color: theme.text }}>{tx.source==='rdv' ? (tx.description || 'Encaissement RDV') : (cat?.name || tx.description || 'Transaction')}</p>
-                      <span style={{ fontWeight:900, fontSize:16, fontFamily:"'DM Mono', monospace", color: isRev ? '#a5a0ff' : '#f87171', flexShrink:0 }}>
-                        {isRev?'+':'-'}{fmt(tx.amount)} €
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                                  gap:8, marginBottom:4 }}>
+                      <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0,
+                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                        {tx.source === 'rdv'
+                          ? (tx.description || 'Encaissement RDV')
+                          : (cat?.name || tx.description || 'Transaction')}
+                      </p>
+                      <span style={{ fontSize:15, fontWeight:500, fontFamily:"'DM Mono', monospace",
+                                     color:amountColor, flexShrink:0 }}>
+                        {isRev ? '+' : '-'}{fmt(tx.amount)} €
                       </span>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
-                      <span style={{ fontSize:10, color: theme.muted, flexShrink:0 }}>{disp(nd(tx.date),'short')}{tx.time ? ` · ${tx.time}` : ''}</span>
-                      {emp && <span style={{ fontSize:10, color:theme.dim }}>·</span>}
+                      <span style={{ fontSize:11, color:t.muted, flexShrink:0 }}>
+                        {disp(nd(tx.date), 'short')}{tx.time ? ` · ${tx.time}` : ''}
+                      </span>
+                      {emp && <span style={{ fontSize:11, color:t.dim }}>·</span>}
                       {emp && (
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 6px 2px 3px', borderRadius:99, background: isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', fontSize:10, fontWeight:700, color:theme.text, flexShrink:0 }}>
-                          <div style={{ width:12, height:12, borderRadius:6, backgroundColor:emp.avatar_color||'#111827', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:6, fontWeight:900 }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4,
+                                       padding:'2px 8px 2px 3px', borderRadius:99,
+                                       background:t.cardAlt,
+                                       fontSize:11, fontWeight:500, color:t.text, flexShrink:0 }}>
+                          <div style={{ width:14, height:14, borderRadius:6,
+                                        backgroundColor: emp.avatar_color || t.text,
+                                        display:'flex', alignItems:'center', justifyContent:'center',
+                                        color:'white', fontSize:8, fontWeight:500 }}>
                             {emp.name?.charAt(0)?.toUpperCase()}
                           </div>
                           {emp.name}
                         </span>
                       )}
-                      {<span style={{ fontSize:10, color:theme.dim }}>·</span>}
-                      <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 6px', borderRadius:99, background:pm.bg, color:pm.color, fontSize:10, fontWeight:700, flexShrink:0 }}>
-                        <PmIc className="w-2.5 h-2.5" style={{ color: pm.color, flexShrink:0 }} />
+                      <span style={{ fontSize:11, color:t.dim }}>·</span>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:3,
+                                     padding:'2px 8px', borderRadius:99,
+                                     background:pm.bg, color:pm.color,
+                                     fontSize:11, fontWeight:500, flexShrink:0 }}>
+                        <PmIc style={{ width:10, height:10, color:pm.color, flexShrink:0 }}/>
                         {pm.label}
                       </span>
                       {tx.source === 'rdv' && (
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:2, padding:'2px 6px', borderRadius:99, background:'rgba(17,24,39,0.13)', color:'#a5a0ff', fontSize:10, fontWeight:800, flexShrink:0 }}>
-                          📅 RDV
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4,
+                                       padding:'2px 8px', borderRadius:99,
+                                       background:'#eef2ff', color:'#4338ca',
+                                       fontSize:11, fontWeight:500, flexShrink:0 }}>
+                          <I.Calendar style={{ width:10, height:10 }}/>
+                          RDV
                         </span>
                       )}
                       {tx.client_email && (
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:3, padding:'2px 6px', borderRadius:99,
-                          background:'rgba(59,130,246,0.1)', color:'#3b82f6',
-                          fontSize:10, fontWeight:700, flexShrink:0 }}>
-                          👤 {tx.client_email}
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4,
+                                       padding:'2px 8px', borderRadius:99,
+                                       background:'#eef2ff', color:'#4338ca',
+                                       fontSize:11, fontWeight:500, flexShrink:0 }}>
+                          <I.User style={{ width:10, height:10 }}/>
+                          {tx.client_email}
                         </span>
                       )}
                     </div>
 
-                    {/* Détails : items + split paiements */}
                     {(hasItems || hasPaySplit) && (
-                      <div style={{ marginTop:8, padding:'8px 10px', borderRadius:10,
-                        background: isDark?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)',
-                        border:`1px solid ${theme.border}` }}>
+                      <div style={{ marginTop:8, padding:'8px 10px', borderRadius:8,
+                                    background:t.cardAlt,
+                                    border:`0.5px solid ${t.border}` }}>
                         {hasItems && (
                           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
                             {tx.items.map((it, idx) => {
-                              const q = parseInt(it.qty)||1;
-                              const up = parseFloat(it.unit_price)||0;
+                              const q  = parseInt(it.qty) || 1;
+                              const up = parseFloat(it.unit_price) || 0;
                               return (
                                 <div key={idx} style={{ display:'flex', justifyContent:'space-between',
-                                  fontSize:11, color:theme.text, fontFamily:'monospace' }}>
-                                  <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                                    {q} × {it.service_name} <span style={{ color:theme.dim }}>@ {fmt(up)}€</span>
+                                                         fontSize:11, color:t.text, fontFamily:'monospace' }}>
+                                  <span style={{ overflow:'hidden', textOverflow:'ellipsis',
+                                                 whiteSpace:'nowrap' }}>
+                                    {q} × {it.service_name}{' '}
+                                    <span style={{ color:t.dim }}>@ {fmt(up)}€</span>
                                   </span>
-                                  <span style={{ fontWeight:800, flexShrink:0, marginLeft:8 }}>
-                                    {fmt(q*up)} €
+                                  <span style={{ fontWeight:500, flexShrink:0, marginLeft:8 }}>
+                                    {fmt(q * up)} €
                                   </span>
                                 </div>
                               );
@@ -146,15 +202,18 @@ export default function TabHistorique({ transactions, employees, categories, onU
                           </div>
                         )}
                         {hasPaySplit && (
-                          <div style={{ marginTop: hasItems ? 6 : 0, paddingTop: hasItems ? 6 : 0,
-                            borderTop: hasItems ? `1px dashed ${theme.border}` : 'none',
-                            display:'flex', gap:6, flexWrap:'wrap' }}>
+                          <div style={{ marginTop: hasItems ? 6 : 0,
+                                        paddingTop: hasItems ? 6 : 0,
+                                        borderTop: hasItems ? `0.5px solid ${t.border}` : 'none',
+                                        display:'flex', gap:6, flexWrap:'wrap' }}>
                             {tx.payments.map((p, idx) => {
                               const pi = PAY_INFO[p.method] || PAY_INFO.other;
                               return (
-                                <span key={idx} style={{ display:'inline-flex', alignItems:'center', gap:3,
-                                  padding:'2px 7px', borderRadius:99,
-                                  background:pi.bg, color:pi.color, fontSize:10, fontWeight:700 }}>
+                                <span key={idx}
+                                      style={{ display:'inline-flex', alignItems:'center', gap:3,
+                                               padding:'2px 8px', borderRadius:99,
+                                               background:pi.bg, color:pi.color,
+                                               fontSize:11, fontWeight:500 }}>
                                   {pi.label} {fmt(p.amount)}€
                                 </span>
                               );
@@ -164,17 +223,28 @@ export default function TabHistorique({ transactions, employees, categories, onU
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-1 flex-shrink-0 mt-0.5 items-end">
-                    <div className="flex gap-1">
-                      <button onClick={() => { setEdit(tx); setModal(true); }} title="Modifier (admin)" className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)' }}>
-                        <I.Edit className="w-3 h-3" style={{ color: theme.muted }} />
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, flexShrink:0,
+                                marginTop:2, alignItems:'flex-end' }}>
+                    <div style={{ display:'flex', gap:4 }}>
+                      <button onClick={() => { setEdit(tx); setModal(true); }} title="Modifier (admin)"
+                              style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer',
+                                       background:t.cardAlt,
+                                       display:'flex', alignItems:'center', justifyContent:'center',
+                                       fontFamily:'inherit' }}>
+                        <I.Edit style={{ width:12, height:12, color:t.muted }}/>
                       </button>
-                      <button onClick={() => setDelId(tx.id)} title="Supprimer (admin)" className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'rgba(248,113,113,0.1)' }}>
-                        <I.Trash className="w-3 h-3" style={{ color: '#f87171' }} />
+                      <button onClick={() => setDelId(tx.id)} title="Supprimer (admin)"
+                              style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer',
+                                       background:'rgba(239,68,68,0.1)',
+                                       display:'flex', alignItems:'center', justifyContent:'center',
+                                       fontFamily:'inherit' }}>
+                        <I.Trash style={{ width:12, height:12, color:'#991b1b' }}/>
                       </button>
                     </div>
-                    <span style={{ fontSize:8, fontWeight:700, letterSpacing:'0.05em', padding:'1px 5px', borderRadius:4, background:'rgba(251,191,36,0.1)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.2)' }}>
-                      🔒 AUDIT
+                    <span style={{ fontSize:9, fontWeight:500,
+                                   padding:'2px 7px', borderRadius:99,
+                                   background:'#fffbeb', color:'#92400e' }}>
+                      Audit
                     </span>
                   </div>
                 </div>
@@ -184,46 +254,51 @@ export default function TabHistorique({ transactions, employees, categories, onU
         )}
       </Card>
 
-      {/* Pagination 10 par page */}
       {filtered.length > 0 && (
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'8px 0 4px' }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={pageSafe === 0}
-            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: theme.card, color: pageSafe===0?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe===0?'default':'pointer', opacity: pageSafe===0?0.5:1 }}>
-            ‹ Préc.
-          </button>
-          <span style={{ fontSize:13, fontWeight:700, color:theme.muted, minWidth:80, textAlign:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
+                      gap:10, padding:'8px 0 4px' }}>
+          <Button variant="secondary" size="small" type="button"
+                  disabled={pageSafe === 0}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}>
+            ‹ Prec.
+          </Button>
+          <span style={{ fontSize:13, fontWeight:500, color:t.muted,
+                         minWidth:80, textAlign:'center' }}>
             Page {pageSafe + 1} / {totalPages}
           </span>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={pageSafe >= totalPages - 1}
-            style={{ padding:'8px 14px', borderRadius:12, border:`1px solid ${theme.border}`, background: theme.card, color: pageSafe>=totalPages-1?theme.dim:theme.text, fontWeight:700, fontSize:13, cursor: pageSafe>=totalPages-1?'default':'pointer', opacity: pageSafe>=totalPages-1?0.5:1 }}>
+          <Button variant="secondary" size="small" type="button"
+                  disabled={pageSafe >= totalPages - 1}
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}>
             Suiv. ›
-          </button>
+          </Button>
         </div>
       )}
 
       <TransactionForm open={modal} onClose={() => { setModal(false); setEdit(null); }}
-        onSubmit={async d => {
-          try {
-            if (edit) { await onUpdate(edit.id, d); showToast('Transaction modifiee ✓'); }
-          } catch(e) {
-            if (e.code === 'ACTION_ADMIN_ONLY') showToast('Session admin expiree - re-saisissez votre PIN', 'error');
-            else showToast('Erreur lors de la modification', 'error');
-          }
-          setEdit(null); setModal(false);
-        }}
-        employees={employees} categories={categories} init={edit} />
+                       onSubmit={async d => {
+                         try {
+                           if (edit) { await onUpdate(edit.id, d); showToast('Transaction modifiee'); }
+                         } catch (e) {
+                           if (e.code === 'ACTION_ADMIN_ONLY') showToast('Session admin expiree - re-saisissez votre PIN', 'error');
+                           else showToast('Erreur lors de la modification', 'error');
+                         }
+                         setEdit(null); setModal(false);
+                       }}
+                       employees={employees} categories={categories} init={edit}/>
       <Confirm open={!!delId} onClose={() => setDelId(null)}
-        onConfirm={async () => {
-          try {
-            await onDelete(delId);
-            showToast('Transaction supprimee ✓');
-          } catch(e) {
-            if (e.code === 'ACTION_ADMIN_ONLY') showToast('Session admin expiree - re-saisissez votre PIN', 'error');
-            else showToast('Erreur lors de la suppression', 'error');
-          }
-          setDelId(null);
-        }}
-        title="Supprimer cette transaction ?" desc="Action admin irréversible — enregistrée dans l'audit trail." theme={theme} />
+               onConfirm={async () => {
+                 try {
+                   await onDelete(delId);
+                   showToast('Transaction supprimee');
+                 } catch (e) {
+                   if (e.code === 'ACTION_ADMIN_ONLY') showToast('Session admin expiree - re-saisissez votre PIN', 'error');
+                   else showToast('Erreur lors de la suppression', 'error');
+                 }
+                 setDelId(null);
+               }}
+               title="Supprimer cette transaction ?"
+               message={"Action admin irreversible — enregistree dans l'audit trail."}
+               theme={theme}/>
     </div>
   );
 }
