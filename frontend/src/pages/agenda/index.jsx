@@ -71,6 +71,45 @@ export default function Agenda({ employees=[], categories=[], theme: themeProp, 
 
   const refreshRef = useRef(null);
 
+  /* ── Deep-link depuis une notification (push/in-app) ──
+     Si l'URL contient ?date=YYYY-MM-DD&appt=<id>, on saute directement
+     au bon jour et on ouvre le modal du RDV. Params nettoyés après usage
+     pour éviter de re-ouvrir au prochain remount. */
+  const pendingApptRef = useRef(null);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const dateParam = params.get('date');
+    const apptParam = params.get('appt');
+    if (!dateParam && !apptParam) return;
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const [y, m, d] = dateParam.split('-').map(Number);
+      const target = new Date(y, m - 1, d);
+      if (!isNaN(target.getTime())) {
+        const base = new Date();
+        base.setHours(0, 0, 0, 0);
+        target.setHours(0, 0, 0, 0);
+        const diffDays = Math.round((target - base) / 86400000);
+        setPeriodMode('day');
+        setPeriodOffset(diffDays);
+        setSelectedDate(new Date(y, m - 1, d));
+      }
+    }
+    if (apptParam) pendingApptRef.current = apptParam;
+    // Strip les query params pour ne pas relancer au remount suivant
+    navigate(location.pathname, { replace: true });
+  // Ré-exécuter quand l'URL change (ex: clic sur une autre notif
+  // alors qu'on est déjà sur /agenda — pas de remount du composant).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  /* Une fois les RDV chargés, ouvrir le RDV ciblé par ?appt= */
+  useEffect(() => {
+    const id = pendingApptRef.current;
+    if (!id || !allAppts.length) return;
+    const found = allAppts.find(a => String(a.id) === String(id));
+    if (found) { setEditAppt(found); pendingApptRef.current = null; }
+  }, [allAppts]);
+
   /* Horaires → mettre a jour startHour/endHour auto selon le commerce */
   const syncDisplayFromHours = useCallback((hrs) => {
     const openDays = hrs.filter(h=>h.is_open!==false);

@@ -5,7 +5,24 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
-## État actuel (2026-04-21)
+## État actuel (2026-04-22)
+
+**Deep-link notifications → RDV** — Clic sur une notification (push
+lock-screen ou cloche in-app) commerçant : on arrive directement sur
+l'agenda au bon jour avec le modal du RDV concerné ouvert, au lieu du
+`/agenda` générique. Backend `push.js` (`notifyNewAppointment` et
+`notifyAppointmentReminder`) construit `url=/agenda?date=YYYY-MM-DD&appt=<id>`
+et l'inclut aussi dans `data` in-app. Frontend `pages/agenda/index.jsx` lit
+`?date=` et `?appt=` (effect dépendant de `location.search` pour gérer un
+deuxième clic sans remount), bascule en vue Jour au bon offset, puis ouvre
+`editAppt` dès que les RDV sont chargés. Params strippés après usage pour
+éviter une ré-ouverture au remount suivant. Dans `App.jsx`, le handler de
+clic de la cloche (`NotificationCenter`) utilise maintenant `useNavigate`
+avec la même validation `safeInternalPath` que le SW. Fichiers touchés :
+`backend/src/utils/push.js`, `frontend/src/pages/agenda/index.jsx`,
+`frontend/src/App.jsx`.
+
+## État précédent (2026-04-21)
 
 **Fix Google OAuth (commerçant + client)** — 2 bugs cumulés empêchaient la
 connexion Google en prod : (1) backend envoyait le postMessage avec

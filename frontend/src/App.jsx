@@ -1337,6 +1337,7 @@ function PinOnboarding({ onSetupNow, theme: t }) {
 function NotificationCenter({ theme: t }) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef(null);
+  const navigate  = useNavigate();
   const {
     notifications, unreadCount,
     pushSupported, pushEnabled,
@@ -1344,6 +1345,25 @@ function NotificationCenter({ theme: t }) {
     markRead, markAllRead, deleteNotif,
     reload,
   } = useNotifications({ enabled: true });
+
+  // Clic sur une notif : marque lue + deep-link vers le RDV concerné
+  // (ou /agenda générique si pas d'url). Valide le path pour ne router
+  // que sur des chemins relatifs internes (même règle que le SW).
+  const openNotification = (n) => {
+    if (!n.is_read) markRead(n.id);
+    const raw = n?.data?.url;
+    let target = null;
+    if (typeof raw === 'string' && raw.length && raw[0] === '/' && !raw.startsWith('//')
+        && !/[\x00-\x1f]/.test(raw) && !raw.includes('\\')) {
+      target = raw;
+    } else if (n?.data?.appointment_id) {
+      target = '/agenda';
+    }
+    if (target) {
+      setOpen(false);
+      navigate(target);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -1463,7 +1483,7 @@ function NotificationCenter({ theme: t }) {
                               display:'flex', gap:10, alignItems:'flex-start',
                               background: n.is_read ? 'transparent' : t.cardAlt,
                               cursor:'pointer', transition:'background 0.1s' }}
-                     onClick={() => !n.is_read && markRead(n.id)}>
+                     onClick={() => openNotification(n)}>
                   <div style={{ width:32, height:32, borderRadius:8,
                                 background:`${cfg.color}18`,
                                 display:'flex', alignItems:'center', justifyContent:'center',

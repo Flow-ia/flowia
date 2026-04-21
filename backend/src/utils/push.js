@@ -121,8 +121,20 @@ async function createAppNotification(userId, { type, title, body, data = {} }) {
 // uniquement l'heure. Les détails complets sont passés dans data (consultés
 // par l'app une fois ouverte, donc authentifié).
 // Le contenu IN-APP garde les détails (affichage protégé par login).
+// Deep-link clic notif → /agenda?date=YYYY-MM-DD&appt=<id>. L'agenda
+// lit ces params, saute au bon jour et ouvre le modal du RDV directement.
+function apptDeepLink(appt) {
+  const dateStr = typeof appt.date === 'string'
+    ? appt.date.substring(0, 10)
+    : (appt.date instanceof Date ? appt.date.toISOString().substring(0, 10) : '');
+  const id = appt.id ? encodeURIComponent(appt.id) : '';
+  if (!dateStr || !id) return '/agenda';
+  return `/agenda?date=${dateStr}&appt=${id}`;
+}
+
 async function notifyNewAppointment(userId, appt) {
   const timeStr = String(appt.start_time || '').substring(0, 5);
+  const deepLink = apptDeepLink(appt);
   // Titre in-app (complet, affiché dans l'app loggée)
   const appTitle = `📅 Nouveau RDV — ${appt.client_name || 'Client'}`;
   const appBody  = `${appt.service_name || 'RDV'} le ${appt.date} à ${timeStr}`;
@@ -130,8 +142,8 @@ async function notifyNewAppointment(userId, appt) {
   const pushTitle = '📅 Nouveau rendez-vous';
   const pushBody  = timeStr ? `Créneau ${timeStr} — ouvrez l'agenda pour les détails` : 'Ouvrez l\'agenda pour les détails';
 
-  // 1. In-app (détails complets)
-  await createAppNotification(userId, { type: 'new_appointment', title: appTitle, body: appBody, data: { appointment_id: appt.id } });
+  // 1. In-app (détails complets) — inclut url pour deep-link depuis le bell
+  await createAppNotification(userId, { type: 'new_appointment', title: appTitle, body: appBody, data: { appointment_id: appt.id, url: deepLink } });
 
   // 2. Push (minifié)
   try {
@@ -141,7 +153,7 @@ async function notifyNewAppointment(userId, appt) {
       body:  pushBody,
       icon: '/icon-192.png',
       badge: '/badge-72.png',
-      data: { appointment_id: appt.id, url: '/agenda' },
+      data: { appointment_id: appt.id, url: deepLink },
       sound: 'new_appointment',
     });
   } catch {} // silencieux si pas d'abonnements
@@ -153,12 +165,13 @@ async function notifyAppointmentReminder(userId, appt, minutesBefore) {
     ? `dans ${minutesBefore} min`
     : minutesBefore < 1440 ? `dans ${minutesBefore / 60}h` : `demain`;
   const timeStr = String(appt.start_time || '').substring(0, 5);
+  const deepLink = apptDeepLink(appt);
   const appTitle = `⏰ Rappel RDV ${label}`;
   const appBody  = `${appt.client_name || 'Client'} — ${appt.service_name || 'RDV'} à ${timeStr}`;
   const pushTitle = `⏰ Rendez-vous ${label}`;
   const pushBody  = timeStr ? `Créneau ${timeStr} — détails dans l'agenda` : "Détails dans l'agenda";
 
-  await createAppNotification(userId, { type: 'appointment_reminder', title: appTitle, body: appBody, data: { appointment_id: appt.id } });
+  await createAppNotification(userId, { type: 'appointment_reminder', title: appTitle, body: appBody, data: { appointment_id: appt.id, url: deepLink } });
 
   try {
     await sendPushToUser(userId, {
@@ -166,7 +179,7 @@ async function notifyAppointmentReminder(userId, appt, minutesBefore) {
       title: pushTitle,
       body:  pushBody,
       icon: '/icon-192.png',
-      data: { appointment_id: appt.id, url: '/agenda' },
+      data: { appointment_id: appt.id, url: deepLink },
       sound: 'reminder',
     });
   } catch {}
