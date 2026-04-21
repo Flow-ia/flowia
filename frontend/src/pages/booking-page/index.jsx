@@ -116,7 +116,16 @@ export default function BookingPage({ slug }) {
     const path = location.pathname;
     const hash = location.hash; // ex: #equipe, #adresse, #commentaires, #prestations
     if (path.endsWith('/auth')) {
-      setShowAuthPanel(true);
+      // Si le client est déjà connecté, court-circuiter l'AuthPanel et
+      // rediriger vers sa page de compte (ou la page booking racine si
+      // on vient d'un deep-link). Évite d'imposer une reconnexion inutile.
+      if (localStorage.getItem('ff_client_token')) {
+        navigate(`/book/${slug}/client/profil`, { replace: true });
+        setView('myAppts');
+        setMyApptsInitTab('profile');
+      } else {
+        setShowAuthPanel(true);
+      }
     } else if (path.includes('/client/profil')) {
       setView('myAppts');
       setMyApptsInitTab('profile');

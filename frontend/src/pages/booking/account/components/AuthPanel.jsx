@@ -2,7 +2,7 @@
 // Panneau Auth client (login / register / quick register / forgot / reset).
 // Extrait inchangé depuis booking/Account.jsx.
 import { useState, useEffect, useRef } from 'react';
-import { pubApi, globalClientApi, api } from '../../../../utils/api';
+import { pubApi, globalClientApi } from '../../../../utils/api';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false }) {
@@ -63,32 +63,32 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   // Passe le code parrainage (si inscription via lien ?ref=) pour que la
   // logique backend applique welcome email + liens parrainage, comme le
   // /client/register classique.
+  // La popup revient sur /__oauth (frontend) qui écrit le token +
+  // broadcast via BroadcastChannel. On écoute ici le broadcast pour
+  // déclencher onAuth(client). Google COOP détache window.opener, donc
+  // postMessage direct ne fonctionne pas en prod.
   const loginWithGoogle = () => {
     const url = pubApi.googleAuthUrl(slug, referralCode || undefined);
-    const popup = window.open(url, 'google_auth',
+    window.open(url, 'google_auth',
       'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
       Math.round((window.screen.width - 500) / 2)
     );
-    const cleanup = () => window.removeEventListener('message', handler);
-    // e.origin = popup servie par le BACKEND ; comparer à window.location.origin
-    // (frontend) échouait en prod → handler jamais déclenché.
-    const expectedOrigin = api.oauthPopupOrigin();
-    const handler = (e) => {
-      if (e.origin !== expectedOrigin) return;
-      if (e.data?.type !== 'GOOGLE_AUTH_SUCCESS') return;
-      cleanup();
-      try { popup && popup.close(); } catch {}
-      const { token, client } = e.data;
-      if (!token || !client) return;
-      localStorage.setItem('ff_client_token', token);
-      localStorage.setItem('ff_client_info', JSON.stringify(client));
-      onAuth(client);
-    };
-    window.addEventListener('message', handler);
-    // Cleanup de secours après 5min — on ne polle plus popup.closed
-    // (bloqué par Cross-Origin-Opener-Policy de la page Google).
-    setTimeout(cleanup, 5 * 60 * 1000);
   };
+
+  // Écoute BroadcastChannel pour capter le retour OAuth de la popup.
+  useEffect(() => {
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('flowia-oauth');
+      bc.onmessage = (ev) => {
+        if (ev.data?.type !== 'client_login') return;
+        const { client } = ev.data;
+        if (!client) return;
+        onAuth(client);
+      };
+    } catch { /* non supporté */ }
+    return () => { try { bc && bc.close(); } catch {} };
+  }, [onAuth]);
 
   const submit = async () => {
     setLoading(true); setErr(''); setOk('');

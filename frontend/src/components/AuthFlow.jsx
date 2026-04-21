@@ -271,21 +271,23 @@ function Divider() {
 }
 
 // ─── Hook Google OAuth popup ─────────────────────────────────────────────────
-// e.origin = origine de l'émetteur (popup servie par le BACKEND après
-// redirection OAuth), PAS du récepteur. Comparer à window.location.origin
-// échouait systématiquement en prod (backend ≠ frontend) → le handler
-// ignorait le message, la popup se fermait sans connecter l'utilisateur.
+// La popup Google détache window.opener (COOP:same-origin) → postMessage
+// inutilisable. La popup revient sur /__oauth (frontend) qui broadcast
+// l'auth via BroadcastChannel ; useAuth réagit globalement. Ici on écoute
+// en plus pour fermer le flux d'écran login/register si ça arrive pendant
+// qu'il est affiché (login(...) via useAuth sera déclenché depuis onSuccess).
 function useGoogleMerchantAuth(onSuccess) {
   useEffect(() => {
-    const expectedOrigin = api.oauthPopupOrigin();
-    const handler = (e) => {
-      if (e.origin !== expectedOrigin) return;
-      if (e.data?.type === 'MERCHANT_GOOGLE_AUTH_SUCCESS') {
-        onSuccess(e.data.token, e.data.user);
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('flowia-oauth');
+      bc.onmessage = (ev) => {
+        if (ev.data?.type !== 'merchant_login') return;
+        const { token, user } = ev.data;
+        if (token && user) onSuccess(token, user);
+      };
+    } catch { /* non supporté */ }
+    return () => { try { bc && bc.close(); } catch {} };
   }, [onSuccess]);
 
   const openGoogle = () => {

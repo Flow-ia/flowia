@@ -6,7 +6,7 @@
 //  • Connecté    : code perso + 3 stats + (quota si limite) + suivi filleuls
 //                  (Validé / Utilisée / En attente / Refusé)
 import { useState } from 'react';
-import { pubApi, api } from '../../utils/api';
+import { pubApi } from '../../utils/api';
 
 export function ReferralPage({
   th, slug, business, refProgram, gcConnected, gcUser,
@@ -293,27 +293,23 @@ export function ReferralPage({
                 Créer un compte
               </button>
             </div>
-            {/* Google OAuth — popup, puis handleAuth côté parent */}
+            {/* Google OAuth — popup + BroadcastChannel (Google COOP détache
+                window.opener, donc postMessage inutilisable). */}
             <button onClick={() => {
               const url = pubApi.googleAuthUrl(slug);
-              const popup = window.open(url, "google_auth",
+              window.open(url, "google_auth",
                 "width=500,height=600,scrollbars=yes,top=100,left=" +
                 Math.round((window.screen.width - 500) / 2));
-              // e.origin = popup backend ; cf. AuthPanel / useGoogleMerchantAuth.
-              const expectedOrigin = api.oauthPopupOrigin();
-              const handler = (e) => {
-                if (e.origin !== expectedOrigin) return;
-                if (e.data?.type !== "GOOGLE_AUTH_SUCCESS") return;
-                window.removeEventListener("message", handler);
-                try { popup && popup.close(); } catch {}
-                const { token, client } = e.data;
-                if (!token || !client) return;
-                localStorage.setItem("ff_client_token", token);
-                localStorage.setItem("ff_client_info", JSON.stringify(client));
-                if (onAuthSuccess) onAuthSuccess(client);
-              };
-              window.addEventListener("message", handler);
-              setTimeout(() => window.removeEventListener("message", handler), 5 * 60 * 1000);
+              try {
+                const bc = new BroadcastChannel('flowia-oauth');
+                bc.onmessage = (ev) => {
+                  if (ev.data?.type !== 'client_login') return;
+                  const { client } = ev.data;
+                  if (client && onAuthSuccess) onAuthSuccess(client);
+                  bc.close();
+                };
+                setTimeout(() => { try { bc.close(); } catch {} }, 5 * 60 * 1000);
+              } catch { /* BroadcastChannel non supporté */ }
             }}
               style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center",

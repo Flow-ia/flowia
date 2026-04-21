@@ -9,20 +9,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fallback Google OAuth merchant : si la popup n'a pas pu postMessage
-    // (opener fermé / mobile / COOP), le backend redirige vers
-    // TARGET/?mg_token=... → on capture, on persiste, on nettoie l'URL.
-    try {
-      const url = new URL(window.location.href);
-      const mgToken = url.searchParams.get('mg_token');
-      if (mgToken) {
-        localStorage.setItem('ff_token', mgToken);
-        localStorage.removeItem('ff_pin_token');
-        url.searchParams.delete('mg_token');
-        window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams : '') + url.hash);
-      }
-    } catch { /* noop */ }
-
     const token = localStorage.getItem('ff_token');
     if (token) {
       api.me()
@@ -36,6 +22,25 @@ export function AuthProvider({ children }) {
     } else {
       setLoading(false);
     }
+
+    // Écoute les événements OAuth diffusés par /__oauth. Permet de
+    // recharger l'utilisateur quand la popup Google termine sans passer
+    // par window.opener (détaché par Google COOP:same-origin).
+    let bc = null;
+    try {
+      bc = new BroadcastChannel('flowia-oauth');
+      bc.onmessage = (ev) => {
+        if (ev.data?.type !== 'merchant_login') return;
+        if (ev.data.user) {
+          localStorage.removeItem('ff_pin_token');
+          setUser(ev.data.user);
+        } else {
+          // Fallback : refresh depuis /me pour obtenir le user complet.
+          api.me().then(d => setUser(d.user)).catch(() => {});
+        }
+      };
+    } catch { /* BroadcastChannel non supporté */ }
+    return () => { try { bc && bc.close(); } catch {} };
   }, []);
 
   function login(token, userData) {

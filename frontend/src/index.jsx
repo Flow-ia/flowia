@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from '
 import App from './App';
 import BookingPage from './pages/BookingPage';
 import BookingPolitique from './pages/BookingPolitique';
+import OAuthCallback from './pages/OAuthCallback';
 import { AuthProvider } from './hooks/useAuth';
 import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
@@ -63,6 +64,8 @@ root.render(
         <AuthProvider>
           <AdminProvider>
             <Routes>
+              {/* ── Callback OAuth (popup retour Google → ferme + broadcast) ── */}
+              <Route path="/__oauth" element={<OAuthCallback />} />
               {/* ── Routes PUBLIQUES booking ── */}
               <Route path="/j/:slug"                                                                       element={<QuickJoinRedirect />} />
               <Route path="/book/:slug/politique"                                                          element={<BookingPolitiqueWrapper />} />

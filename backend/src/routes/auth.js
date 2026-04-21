@@ -747,40 +747,26 @@ router.get('/google/merchant/callback', async (req, res) => {
       avatarUrl: user.avatar_url,
     };
 
-    // 6. Page HTML qui ferme la popup et envoie le token au parent
-    res.send(`<!DOCTYPE html><html><head><title>Connexion...</title>
-    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#fff}</style>
-    </head><body>
-      <div style="text-align:center">
-        <div style="font-size:32px;margin-bottom:12px">&#10003;</div>
-        <p style="font-size:15px;font-weight:600">Connexion reussie</p>
-        <p style="font-size:12px;opacity:0.6">Fermeture en cours...</p>
-      </div>
-      <script>
-        const token = ${JSON.stringify(token)};
-        const user  = ${JSON.stringify(userObj)};
-        // Restreint l'origine cible à l'opener validé (allowlist FRONTEND_URL)
-        // — avant, on hardcodait FRONTEND_URL[0] : le postMessage était
-        // silencieusement bloqué si l'opener venait d'un autre sous-domaine
-        // allowlisté (ex: commercant.haircoifflille.fr).
-        const TARGET = ${JSON.stringify(TARGET_ORIGIN)};
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage({ type: 'MERCHANT_GOOGLE_AUTH_SUCCESS', token, user }, TARGET);
-          setTimeout(() => window.close(), 400);
-        } else {
-          // Fallback : redirige vers TARGET avec token en hash (lu + stocké
-          // par l'app au chargement). Permet la connexion quand l'opener
-          // a été fermé ou bloqué (mobile / popup refusée).
-          window.location.href = TARGET + '/?mg_token=' + encodeURIComponent(token);
-        }
-      </script>
-    </body></html>`);
+    // 6. Redirection popup → /__oauth côté frontend. On ne tente plus de
+    //    postMessage depuis la page servie par le backend : Google impose
+    //    COOP:same-origin sur sa page d'auth, ce qui détache window.opener
+    //    (= null) dans la popup. La route frontend /__oauth écrit le token
+    //    en localStorage, signale l'opener via BroadcastChannel (qui
+    //    fonctionne indépendamment de window.opener), puis ferme la popup.
+    const hashParams = new URLSearchParams();
+    hashParams.set('type', 'merchant');
+    hashParams.set('token', token);
+    hashParams.set('user', JSON.stringify(userObj));
+    res.redirect(`${TARGET_ORIGIN}/__oauth#${hashParams.toString()}`);
 
     console.log(`[GOOGLE OAUTH MERCHANT] ${emailLow} connecté`);
 
   } catch(e) {
     console.error('[GOOGLE OAUTH MERCHANT]', e.message);
-    res.redirect(`${TARGET_ORIGIN}?auth_error=${encodeURIComponent(e.message)}`);
+    const hashParams = new URLSearchParams();
+    hashParams.set('type', 'merchant');
+    hashParams.set('error', e.message);
+    res.redirect(`${TARGET_ORIGIN}/__oauth#${hashParams.toString()}`);
   }
 });
 
@@ -1004,40 +990,26 @@ router.get('/google/callback', async (req, res) => {
       global_client_id: gc.id, has_global_account: true,
     };
 
-    // 7. Page HTML qui ferme la popup ou redirige
-    res.send(`<!DOCTYPE html><html><head><title>Connexion...</title>
-    <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f0f0f;color:#fff}</style>
-    </head><body>
-      <div style="text-align:center">
-        <div style="font-size:32px;margin-bottom:12px">✅</div>
-        <p style="font-size:15px;font-weight:600">Connexion réussie</p>
-        <p style="font-size:12px;opacity:0.6">Fermeture en cours...</p>
-      </div>
-      <script>
-        const token  = ${JSON.stringify(token)};
-        const client = ${JSON.stringify(clientObj)};
-        // Cible dynamiquement validée contre l'allowlist FRONTEND_URL
-        // (cf. callback merchant). Avant : FRONTEND_URL[0] hardcodé → le
-        // postMessage était bloqué quand l'opener venait d'un autre
-        // sous-domaine allowlisté.
-        const TARGET = ${JSON.stringify(TARGET_ORIGIN)};
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', token, client }, TARGET);
-          setTimeout(() => window.close(), 400);
-        } else {
-          // Fallback : redirection directe (mobile / no-popup)
-          const p = encodeURIComponent(JSON.stringify(client));
-          window.location.href = TARGET + '/book/' + ${JSON.stringify(slug)} +
-            '?gc_token=' + encodeURIComponent(token) + '&gc_client=' + p;
-        }
-      </script>
-    </body></html>`);
+    // 7. Redirection popup → /__oauth côté frontend (cf. callback merchant).
+    //    Google impose COOP:same-origin → window.opener = null dans la popup,
+    //    postMessage inutilisable. BroadcastChannel via /__oauth réveille
+    //    l'onglet parent indépendamment de window.opener.
+    const hashParams = new URLSearchParams();
+    hashParams.set('type', 'client');
+    hashParams.set('token', token);
+    hashParams.set('client', JSON.stringify(clientObj));
+    hashParams.set('slug', slug);
+    res.redirect(`${TARGET_ORIGIN}/__oauth#${hashParams.toString()}`);
 
     console.log(`[GOOGLE OAUTH] ${emailLow} connecté sur slug=${slug}`);
 
   } catch(e) {
     console.error('[GOOGLE OAUTH]', e.message);
-    res.redirect(`${TARGET_ORIGIN}/book/${slug || ''}?auth_error=${encodeURIComponent(e.message)}`);
+    const hashParams = new URLSearchParams();
+    hashParams.set('type', 'client');
+    hashParams.set('slug', slug || '');
+    hashParams.set('error', e.message);
+    res.redirect(`${TARGET_ORIGIN}/__oauth#${hashParams.toString()}`);
   }
 });
 

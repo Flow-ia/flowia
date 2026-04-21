@@ -89,15 +89,6 @@ export const api = {
     const state = `merchant|${encodeURIComponent(window.location.origin)}`;
     return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('openid email profile')}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`;
   },
-  // Origine backend attendue pour le postMessage d'OAuth (popup → opener).
-  // Utilisé par les handlers frontend pour valider e.origin (au lieu de
-  // window.location.origin qui est l'origine de l'opener, pas celle de
-  // l'émetteur du message).
-  oauthPopupOrigin: () => {
-    const api = import.meta.env.VITE_API_URL || '/api';
-    if (api.startsWith('/')) return window.location.origin;
-    try { return new URL(api).origin; } catch { return window.location.origin; }
-  },
 
   // ── PIN Admin — vérification via BDD (jamais en local) ──────────────────
   // Statut : le compte a-t-il un PIN en base ?
