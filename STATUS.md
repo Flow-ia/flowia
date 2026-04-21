@@ -7,6 +7,23 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Fix boucle login commerçant — `.catch` api.me() ne purge plus
+aveuglément** — Symptôme : sur `commercant.haircoifflille.fr`,
+redirection systématique vers `/login` après authentification, 401 sur
+`/api/booking/appointments`. Cause : `useAuth.useEffect` (au mount + dans
+`applyMerchantLogin` OAuth) purgeait `ff_token` sur toute erreur du
+`api.me()` initial — y compris timeout/500/réseau. Sur cold start Render
+(10-15 s), un `/auth/me` lent juste après login → `.catch` → token
+supprimé → boucle login. Fix dans `frontend/src/hooks/useAuth.jsx` :
+le `.catch` ne nettoie plus que la session PIN si `handleMerchant401` a
+déjà confirmé un 401 (token déjà absent). Sur erreur transitoire le
+token frais est conservé → la prochaine navigation re-tentera `api.me()`.
+En complément, grace period post-login bumpée de 5 s → 15 s dans
+`frontend/src/utils/api.js` (couvre cold start Render + propagation).
+Onboarding.md résume le bug + fix. Build OK.
+
+## État actuel (2026-04-22)
+
 **Gate auth client sur routes `/client/*`** — Les URLs
 `/book/:slug/client/profil`, `/client/rdv`, `/client/passages`
 s'affichaient même sans `ff_client_token` → la page montrait la coquille

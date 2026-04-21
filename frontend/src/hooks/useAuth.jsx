@@ -20,9 +20,14 @@ export function AuthProvider({ children }) {
       api.me()
         .then(data => setUser(data.user))
         .catch(() => {
-          localStorage.removeItem('ff_token');
-          // Nettoyer aussi la session PIN si le token auth est invalide
-          localStorage.removeItem('ff_pin_token');
+          // Si handleMerchant401 a déjà purgé (vrai 401), ff_token est absent
+          // → on est sur un échec auth confirmé, on nettoie aussi le PIN.
+          // Sinon (500, timeout, réseau KO sur cold start Render) on garde
+          // le token : la prochaine navigation re-tentera api.me() avec le
+          // token toujours valide. Purger ici déconnecterait à tort.
+          if (!localStorage.getItem('ff_token')) {
+            localStorage.removeItem('ff_pin_token');
+          }
         })
         .finally(() => setLoading(false));
     } else {
@@ -41,8 +46,9 @@ export function AuthProvider({ children }) {
       notifyLoginJustHappened();
       if (user) setUser(user);
       else api.me().then(d => setUser(d.user)).catch(() => {
-        // Token invalide côté backend → purger pour éviter de réutiliser.
-        localStorage.removeItem('ff_token');
+        // Ne purge que si handleMerchant401 a confirmé un 401 (token déjà
+        // retiré). Sur un échec transitoire (500, timeout cold start), on
+        // garde le token frais — sinon boucle login juste après OAuth.
       });
     };
 

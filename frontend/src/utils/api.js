@@ -51,11 +51,11 @@ function handleMerchant401(res, path) {
   // Pas de token local → rien à purger, juste signaler l'état null.
   const token = localStorage.getItem('ff_token');
   if (!token) { dispatchAuthExpired(); return; }
-  // Grace period post-login : ignorer 401 pendant 5s après un login (le
-  // temps que React propage user, que les requêtes en vol se terminent et
-  // que le client soit dans un état stable). 5s > temps typique d'un cold
-  // start backend Render + un round-trip réseau.
-  if (Date.now() - __lastLoginAt < 5000) return;
+  // Grace period post-login : ignorer 401 pendant 15s après un login. Couvre
+  // un cold start Render (peut atteindre 10-15s) + propagation React + tout
+  // round-trip lent. Sans ça, un 401 transitoire purge un token frais et
+  // déclenche une boucle login.
+  if (Date.now() - __lastLoginAt < 15_000) return;
   // /auth/me lui-même 401 → verdict sans ambiguïté : token invalide/expiré.
   if (path === '/auth/me') { dispatchAuthExpired(); return; }
   // Déjà en cours de vérification → les autres 401 parallèles attendent.
