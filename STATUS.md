@@ -20,6 +20,13 @@ sensible (stats, encaissement, crédit, remboursement, notes, etc.) et le
 token est invalidé après chaque action via `clearToken`. Le backend reste
 inchangé (JWT 2h côté serveur, plus envoyé côté client).
 
+**Dashboard & StatsModal** — retrait des cards « Dépenses » et « Transactions »
+dans les stats du jour (ne reste que CA total + Prestations). Ajout d'une
+tuile « Historique » (PIN-protégée) qui ouvre un modal listant les ventes
+du jour ligne par ligne : prestation (× qty) | employé | moyen de paiement
+| montant, typographie agrandie. `StatsAccessModal` renommé en
+`PinAccessModal` (réutilisable : title + actionLabel).
+
 **Audit backend clôturé** (commits K→AA). Toutes les routes backend ont été
 auditées : error hygiene, PIN admin, bounds, normalisation email, IDOR,
 whitelists, rate-limiting dédiés, CNIL/RGPD opt-in marketing, security

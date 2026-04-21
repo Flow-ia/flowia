@@ -45,6 +45,149 @@ function Modal({ open, onClose, title, children, theme }) {
   );
 }
 
+// ── HistoriqueModal — liste ligne par ligne (prestation | employé | paiement | montant), écriture en grand ──
+function HistoriqueModal({ open, onClose, theme, transactions, employees }) {
+  const isDark = theme.mode === 'dark';
+  const today  = todayStr();
+  const sep    = `1px solid ${isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)'}`;
+
+  // Revenus du jour triés par date desc (plus récent en haut)
+  const todayRevs = transactions
+    .filter(t => nd(t.date)===today && t.type==='revenue')
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const empById = Object.fromEntries(employees.map(e => [e.id, e]));
+
+  // Aplatir : une ligne par item (ou une ligne par transaction si pas d'items)
+  const lines = [];
+  todayRevs.forEach(t => {
+    const emp = empById[t.employee_id];
+    const items = Array.isArray(t.items) ? t.items : [];
+    // Label moyen de paiement
+    let pmLabel;
+    if (t.payment_method === 'multi' && Array.isArray(t.payments) && t.payments.length) {
+      pmLabel = t.payments.map(p => PM_CFG[p.method]?.label || p.method).join(' + ');
+    } else {
+      pmLabel = PM_CFG[t.payment_method]?.label || 'Autre';
+    }
+    const pmColor = t.payment_method === 'multi' ? '#8b5cf6' : (PM_CFG[t.payment_method]?.color || PM_CFG.other.color);
+
+    if (items.length > 0) {
+      items.forEach((it, i) => {
+        const qty  = parseInt(it.qty) || 1;
+        const unit = parseFloat(it.unit_price) || 0;
+        lines.push({
+          id: `${t.id}_${i}`,
+          service: it.service_name || 'Prestation',
+          qty,
+          amount: unit * qty,
+          emp, pmLabel, pmColor,
+        });
+      });
+    } else {
+      lines.push({
+        id: t.id,
+        service: t.description || 'Prestation',
+        qty: parseInt(t.qty_total) || 1,
+        amount: parseFloat(t.amount) || 0,
+        emp, pmLabel, pmColor,
+      });
+    }
+  });
+
+  const total = lines.reduce((s,l) => s + l.amount, 0);
+
+  return (
+    <Modal open={open} onClose={onClose} theme={theme} title="Historique du jour">
+      <div style={{ padding:'8px 0 16px' }}>
+        {lines.length === 0 ? (
+          <div style={{ padding:'48px 20px',textAlign:'center' }}>
+            <p style={{ fontSize:32,marginBottom:10 }}>📜</p>
+            <p style={{ fontSize:14,fontWeight:600,color:isDark?'#6b7280':'#9ca3af' }}>Aucune vente aujourd'hui</p>
+          </div>
+        ) : (
+          <>
+            {/* Total en haut */}
+            <div style={{ padding:'14px 20px',borderBottom:sep,
+              display:'flex',alignItems:'baseline',justifyContent:'space-between',
+              background:isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)' }}>
+              <span style={{ fontSize:13,fontWeight:700,color:isDark?'#9ca3af':'#6b7280',
+                textTransform:'uppercase',letterSpacing:'0.08em' }}>
+                {lines.length} vente{lines.length>1?'s':''}
+              </span>
+              <span style={{ fontSize:24,fontWeight:900,color:isDark?'#e6edf3':'#111827',fontFamily:'monospace' }}>
+                {fmtN(total)} €
+              </span>
+            </div>
+
+            {lines.map((l, idx) => (
+              <div key={l.id} style={{
+                display:'grid',
+                gridTemplateColumns:'1fr auto',
+                gap:12,
+                padding:'16px 20px',
+                borderBottom: idx < lines.length-1 ? sep : 'none',
+                alignItems:'center',
+              }}>
+                {/* Colonne gauche : prestation + employé + paiement */}
+                <div style={{ minWidth:0 }}>
+                  <p style={{
+                    fontSize:18, fontWeight:800,
+                    color:isDark?'#f1f5f9':'#1e293b',
+                    margin:'0 0 6px',
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                    letterSpacing:'-0.01em',
+                  }}>
+                    {l.qty > 1 && <span style={{ color:isDark?'#9ca3af':'#6b7280',fontWeight:700,marginRight:6 }}>{l.qty}×</span>}
+                    {l.service}
+                  </p>
+                  <div style={{ display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' }}>
+                    {l.emp && (
+                      <div style={{ display:'flex',alignItems:'center',gap:6 }}>
+                        <div style={{
+                          width:22, height:22, borderRadius:7,
+                          background:l.emp.avatar_color||'#111827',
+                          display:'flex',alignItems:'center',justifyContent:'center',
+                          color:'white',fontWeight:800,fontSize:11, flexShrink:0,
+                        }}>
+                          {(l.emp.name||'?').charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ fontSize:14,fontWeight:600,color:isDark?'#d1d5db':'#374151' }}>
+                          {l.emp.name}
+                        </span>
+                      </div>
+                    )}
+                    <span style={{
+                      fontSize:13, fontWeight:700,
+                      padding:'3px 10px', borderRadius:99,
+                      background: `${l.pmColor}1A`,
+                      color: l.pmColor,
+                      border: `1px solid ${l.pmColor}33`,
+                    }}>
+                      {l.pmLabel}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Colonne droite : montant en grand */}
+                <div style={{
+                  fontSize:22, fontWeight:900,
+                  color:isDark?'#e6edf3':'#111827',
+                  fontFamily:'monospace',
+                  whiteSpace:'nowrap',
+                  letterSpacing:'-0.02em',
+                }}>
+                  {fmtN(l.amount)} €
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ── PinKeypad — identique au composant EmployeePinModal ─────────────────────
 function PinKeypad({ onPress, theme }) {
   const isDark = theme.mode === 'dark';
@@ -90,8 +233,8 @@ function PinDots({ count, shake, theme }) {
   );
 }
 
-// ── StatsAccessModal — sélection employé puis clavier PIN identique à l'encaissement ─
-function StatsAccessModal({ open, onClose, onSuccess, employees, theme }) {
+// ── PinAccessModal — sélection employé puis clavier PIN (utilisé pour Stats et Historique) ─
+function PinAccessModal({ open, onClose, onSuccess, employees, theme, title='🔐 Accès protégé', actionLabel='Accéder' }) {
   const isDark = theme.mode === 'dark';
   const { requiresPin, isSessionValid, verifyPin } = useEmployeePin();
 
@@ -178,7 +321,7 @@ function StatsAccessModal({ open, onClose, onSuccess, employees, theme }) {
         {/* ─ ÉTAPE 1 : Sélection employé ─ */}
         {step === 'select' && (
           <>
-            <p style={{ fontWeight:800,fontSize:16,color:theme.text,margin:'0 0 4px',textAlign:'center' }}>🔐 Stats du jour</p>
+            <p style={{ fontWeight:800,fontSize:16,color:theme.text,margin:'0 0 4px',textAlign:'center' }}>{title}</p>
             <p style={{ fontSize:13,color:theme.muted,margin:'0 0 20px',textAlign:'center' }}>Sélectionnez votre profil</p>
             {checking ? (
               <div style={{ textAlign:'center',padding:'20px 0',color:theme.muted,fontSize:13 }}>Vérification…</div>
@@ -244,7 +387,7 @@ function StatsAccessModal({ open, onClose, onSuccess, employees, theme }) {
               <p style={{ fontSize:12,marginTop:5,padding:'3px 12px',borderRadius:99,
                 background:isDark?'rgba(17,24,39,0.12)':'rgba(17,24,39,0.08)',
                 color:isDark?'#e6edf3':'#111827',border:`1px solid ${isDark?'rgba(255,255,255,0.15)':'rgba(17,24,39,0.2)'}` }}>
-                Voir les stats du jour
+                {actionLabel}
               </p>
             </div>
 
@@ -437,8 +580,6 @@ function StatsModal({ open, onClose, theme, transactions, employees, categories 
           {[
             {label:'CA total',     value:`${fmtN(dayRev)} €`,color:isDark?'#e6edf3':'#111827'},
             {label:'Prestations',  value:prestCount,          color:'#374151'},
-            {label:'Depenses',     value:`${fmtN(dayExp)} €`,color:'#ef4444'},
-            {label:'Transactions', value:todayAll.length,     color:'#f59e0b'},
           ].map(k=>(
             <div key={k.label} style={{ padding:'12px 14px',borderRadius:14,
               background:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.03)',
@@ -654,6 +795,30 @@ function TileStats({ theme, onClick }) {
   );
 }
 
+function TileHistorique({ theme, onClick }) {
+  const isDark=theme.mode==='dark'; const [hov,setHov]=useState(false);
+  return (
+    <button onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={baseTile({
+        background:isDark?'linear-gradient(135deg,rgba(139,92,246,0.17),rgba(139,92,246,0.07))':'linear-gradient(135deg,#f5f3ff,#faf5ff)',
+        border:`1px solid ${isDark?'rgba(139,92,246,0.28)':'rgba(139,92,246,0.2)'}`,
+        boxShadow:hov?'0 10px 32px rgba(139,92,246,0.18)':'0 4px 16px rgba(139,92,246,0.07)',
+        transform:hov?'translateY(-3px)':'none' })}>
+      <div style={{ width:40,height:40,borderRadius:12,background:'rgba(139,92,246,0.15)',
+        display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10 }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:19,height:19}}>
+          <polyline points="3 6 3 12 9 12"/>
+          <path d="M3 13a9 9 0 1 0 3-7.7L3 9"/>
+          <line x1="12" y1="7" x2="12" y2="12"/>
+          <line x1="12" y1="12" x2="15" y2="14"/>
+        </svg>
+      </div>
+      <p style={{ fontWeight:800,fontSize:15,color:isDark?'#c4b5fd':'#6d28d9',margin:'0 0 3px' }}>Historique</p>
+      <p style={{ fontSize:11,color:isDark?'rgba(196,181,253,0.65)':'rgba(109,40,217,0.65)',fontWeight:500,margin:0 }}>🔐 Ventes du jour</p>
+    </button>
+  );
+}
+
 function TileAdmin({ theme, onClick }) {
   const isDark=theme.mode==='dark'; const [hov,setHov]=useState(false);
   return (
@@ -685,6 +850,8 @@ export default function Dashboard({ transactions, employees, categories, onAdd, 
   const [showNotifs,      setShowNotifs]      = useState(false);
   const [showStats,       setShowStats]       = useState(false);
   const [showStatsAccess, setShowStatsAccess] = useState(false);
+  const [showHisto,       setShowHisto]       = useState(false);
+  const [showHistoAccess, setShowHistoAccess] = useState(false);
 
   const today = todayStr();
   const now   = new Date();
@@ -707,6 +874,10 @@ export default function Dashboard({ transactions, employees, categories, onAdd, 
   const openStats = () => {
     if (employees.filter(e=>e.is_active!==false).length===0) { setShowStats(true); return; }
     setShowStatsAccess(true);
+  };
+  const openHisto = () => {
+    if (employees.filter(e=>e.is_active!==false).length===0) { setShowHisto(true); return; }
+    setShowHistoAccess(true);
   };
 
   return (
@@ -741,15 +912,18 @@ export default function Dashboard({ transactions, employees, categories, onAdd, 
           <TileStats   theme={theme} onClick={openStats}/>
         </div>
 
-        {/* Ligne 4 — Admin */}
-        <div>
-          <TileAdmin theme={theme} onClick={()=>onNavigate?.('settings')}/>
+        {/* Ligne 4 — Historique + Admin */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+          <TileHistorique theme={theme} onClick={openHisto}/>
+          <TileAdmin      theme={theme} onClick={()=>onNavigate?.('settings')}/>
         </div>
       </div>
 
       <NotifModal open={showNotifs} onClose={()=>setShowNotifs(false)} theme={theme}/>
-      <StatsAccessModal open={showStatsAccess} onClose={()=>setShowStatsAccess(false)} onSuccess={()=>setShowStats(true)} employees={employees} theme={theme}/>
+      <PinAccessModal open={showStatsAccess} onClose={()=>setShowStatsAccess(false)} onSuccess={()=>setShowStats(true)} employees={employees} theme={theme} title="🔐 Stats du jour" actionLabel="Voir les stats du jour"/>
       <StatsModal open={showStats} onClose={()=>setShowStats(false)} theme={theme} transactions={transactions} employees={employees} categories={categories}/>
+      <PinAccessModal open={showHistoAccess} onClose={()=>setShowHistoAccess(false)} onSuccess={()=>setShowHisto(true)} employees={employees} theme={theme} title="🔐 Historique du jour" actionLabel="Voir l'historique du jour"/>
+      <HistoriqueModal open={showHisto} onClose={()=>setShowHisto(false)} theme={theme} transactions={transactions} employees={employees}/>
     </div>
   );
 }
