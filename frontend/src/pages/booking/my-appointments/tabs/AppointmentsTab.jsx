@@ -90,9 +90,10 @@ export function AppointmentsTab({
               <div key={a.id} style={{
                 background: th.card, border: `0.5px solid ${th.border}`,
                 borderRadius:18, padding:16,
-                opacity: st.group !== 'futurs' ? 0.85 : 1,
+                opacity: st.group !== 'futurs' ? 0.88 : 1,
               }}>
-                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:14 }}>
+                  {/* ── Bloc info (gauche) ── */}
                   <div style={{ flex:1, minWidth:0 }}>
                     {/* Badge statut + ref */}
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:8 }}>
@@ -108,70 +109,80 @@ export function AppointmentsTab({
                         #{a.id.substring(0,8).toUpperCase()}
                       </span>
                     </div>
-                    {/* Commerçant — titre principal de la carte (le client
-                        identifie d'abord chez qui se passe le RDV). */}
+                    {/* Commerçant — titre principal */}
                     {a.business_name && (
-                      <p style={{ fontWeight: 600, fontSize:16, color: st.group !== 'futurs' ? th.muted : th.text, margin:'0 0 4px', letterSpacing:'-0.015em' }}>
+                      <p style={{ fontWeight: 600, fontSize:16, color: st.group !== 'futurs' ? th.muted : th.text, margin:'0 0 4px', letterSpacing:'-0.015em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {a.business_name}
                       </p>
                     )}
                     {/* Prestation */}
-                    <p style={{ fontWeight: 500, fontSize:13, color:th.muted, marginBottom:6 }}>
+                    <p style={{ fontWeight: 500, fontSize:13, color:th.muted, margin:'0 0 6px' }}>
                       {a.service_name || 'Service'}
                     </p>
                     {/* Date + heure */}
-                    <p style={{ fontSize:13, color:th.muted }}>
+                    <p style={{ fontSize:13, color:th.muted, margin:0 }}>
                       {fmtApptDate(a.date)} à {(a.start_time||'').substring(0,5)}
                     </p>
-                    {/* Employé */}
+                    {/* Employé — agrandi pour meilleure lisibilité */}
                     {a.employee_name && (
-                      <p style={{ fontSize:12, color:th.dim, marginTop:2 }}>avec {a.employee_name}</p>
-                    )}
-                    {/* Prix */}
-                    {a.service_price > 0 && (
-                      <p style={{ fontSize:13, fontWeight: 500, color:'#6366f1', marginTop:6 }}>{a.service_price} €</p>
+                      <p style={{ fontSize:13, fontWeight:500, color:th.text, margin:'4px 0 0' }}>
+                        avec {a.employee_name}
+                      </p>
                     )}
                   </div>
-                  {/* Action / statut visuel à droite, centré verticalement.
-                      Si annulable → bouton Annuler (icône + texte).
-                      Sinon → pastille statut (check, horloge, croix…). */}
-                  {st.canCancel ? (
-                    <button onClick={() => onCancel(a)} style={{
-                      alignSelf:'center', flexShrink:0,
-                      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-                      gap:4, padding:'10px 12px', minWidth:64,
-                      borderRadius:12,
-                      background:'rgba(248,113,113,0.08)', color:'#ef4444',
-                      border:'0.5px solid rgba(248,113,113,0.25)',
-                      cursor:'pointer', fontFamily:'inherit',
-                      transition:'background 0.15s ease, transform 0.1s ease',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.14)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(248,113,113,0.08)'; }}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}>
-                        <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                      </svg>
-                      <span style={{ fontSize:11, fontWeight:500, letterSpacing:'-0.01em' }}>Annuler</span>
-                    </button>
-                  ) : (
-                    <div style={{
-                      width:44, height:44, borderRadius:13, flexShrink:0, alignSelf:'center',
-                      background: st.bg,
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:18,
-                    }}>
-                      {a.status === 'cancelled' ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:18,height:18}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      ) : a.paid || a.status === 'completed' ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:18,height:18}}><polyline points="20 6 9 17 4 12"/></svg>
-                      ) : a.status === 'no_show' ? '-' :
-                        st.group === 'passes' ? (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.43"/></svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                      )}
-                    </div>
-                  )}
+
+                  {/* ── Bloc actions + prix (droite, centré verticalement) ── */}
+                  <div style={{
+                    display:'flex', flexDirection:'column', alignItems:'flex-end',
+                    justifyContent:'center', gap:10, flexShrink:0,
+                  }}>
+                    {/* Prix à droite, style cohérent avec VisitsTab (monospace) */}
+                    {a.service_price > 0 && (
+                      <p style={{ fontSize:16, fontWeight:600, color:th.text, margin:0,
+                        fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        letterSpacing:'-0.01em', whiteSpace:'nowrap' }}>
+                        {Number(a.service_price).toFixed(2)} €
+                      </p>
+                    )}
+                    {/* Action : bouton Annuler (N/B) si annulable, sinon
+                        pastille statut visuelle (check / horloge / croix). */}
+                    {st.canCancel ? (
+                      <button onClick={() => onCancel(a)} style={{
+                        display:'flex', alignItems:'center', gap:6,
+                        padding:'8px 12px', borderRadius:10,
+                        background:th.card, color:th.text,
+                        border: `0.5px solid ${th.border}`,
+                        cursor:'pointer', fontFamily:'inherit',
+                        fontSize:12, fontWeight:500, letterSpacing:'-0.01em',
+                        transition:'background .15s, border-color .15s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; e.currentTarget.style.borderColor = th.borderStrong || th.border; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = th.card; e.currentTarget.style.borderColor = th.border; }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}>
+                          <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                        Annuler
+                      </button>
+                    ) : (
+                      <div style={{
+                        width:40, height:40, borderRadius:12, background:st.bg,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                      }}>
+                        {a.status === 'cancelled' ? (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:17,height:17,color:st.color}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        ) : a.paid || a.status === 'completed' ? (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:17,height:17,color:st.color}}><polyline points="20 6 9 17 4 12"/></svg>
+                        ) : a.status === 'no_show' ? (
+                          <span style={{ fontSize:16, fontWeight:600, color:st.color }}>–</span>
+                        ) : st.group === 'passes' ? (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:17,height:17,color:st.color}}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.43"/></svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:17,height:17,color:st.color}}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
