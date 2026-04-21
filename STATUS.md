@@ -7,6 +7,30 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-21)
 
+**Fix Google OAuth (commerçant + client)** — 2 bugs cumulés empêchaient la
+connexion Google en prod : (1) backend envoyait le postMessage avec
+`TARGET = FRONTEND_URL[0]` hardcodé → le navigateur bloquait silencieusement
+le message dès que l'opener venait d'un autre sous-domaine allowlisté
+(ex: `commercant.haircoifflille.fr` alors que `FRONTEND_URL[0]` =
+`haircoifflille.fr`) ; (2) frontend comparait `e.origin !==
+window.location.origin`, mais `e.origin` est l'origine de l'émetteur (la
+popup servie par le BACKEND), qui ne matche jamais l'origine frontend en
+prod → le handler ignorait systématiquement le message, popup fermée sans
+connexion. Correctifs : l'opener transmet son `window.location.origin` via
+le paramètre `state` OAuth, backend valide contre l'allowlist `FRONTEND_URL`
+et l'utilise comme `TARGET`. Côté frontend, `api.oauthPopupOrigin()` retourne
+l'origine BACKEND pour la validation `e.origin`. Fallback ajouté : si la
+popup ne peut pas `postMessage` (COOP / mobile), backend redirige avec
+`?mg_token=…` que `useAuth` capture au mount. Fichiers touchés :
+`backend/routes/auth.js`, `backend/routes/public-booking/client-auth.js`,
+`frontend/utils/api.js`, `frontend/hooks/useAuth.jsx`,
+`frontend/components/AuthFlow.jsx`,
+`frontend/pages/booking/account/components/AuthPanel.jsx`,
+`frontend/pages/booking-page/steps/Step5Info.jsx`,
+`frontend/pages/booking/ReferralPage.jsx`. Le flow nouveau commerçant Google
+→ `MerchantOnboarding` pré-rempli (firstName/lastName/email) était déjà
+câblé côté App.jsx : il fonctionne désormais que OAuth délivre le token.
+
 **UI EmployeeAgenda redesign Google Calendar** — 3 vues (Jour / Semaine /
 Mois) avec navigation libre prev/next, bouton « Aujourd'hui », toggle de
 vue façon Google Calendar. Nouveaux composants `WeekView.jsx` et

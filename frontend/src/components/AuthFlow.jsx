@@ -271,9 +271,13 @@ function Divider() {
 }
 
 // ─── Hook Google OAuth popup ─────────────────────────────────────────────────
+// e.origin = origine de l'émetteur (popup servie par le BACKEND après
+// redirection OAuth), PAS du récepteur. Comparer à window.location.origin
+// échouait systématiquement en prod (backend ≠ frontend) → le handler
+// ignorait le message, la popup se fermait sans connecter l'utilisateur.
 function useGoogleMerchantAuth(onSuccess) {
   useEffect(() => {
-    const expectedOrigin = window.location.origin;
+    const expectedOrigin = api.oauthPopupOrigin();
     const handler = (e) => {
       if (e.origin !== expectedOrigin) return;
       if (e.data?.type === 'MERCHANT_GOOGLE_AUTH_SUCCESS') {

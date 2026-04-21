@@ -635,13 +635,28 @@ router.put('/profile', authMiddleware, async (req, res) => {
 //  state = "merchant" pour distinguer du flow client
 // ═══════════════════════════════════════════════════════════════════════════
 router.get('/google/merchant/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, state: stateRaw, error } = req.query;
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
-  const FRONTEND_URL = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'https://haircoifflille.fr';
+  // FRONTEND_URL peut contenir plusieurs origines (ex:
+  // "https://haircoifflille.fr,https://commercant.haircoifflille.fr")
+  // — on les traite comme allowlist pour le postMessage target.
+  const FRONTEND_LIST = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const FRONTEND_URL = FRONTEND_LIST[0];
   const redirectUri  = `${BACKEND_URL}/api/auth/google/merchant/callback`;
 
+  // state = "merchant" OU "merchant|<origin-opener-encoded>"
+  // L'origin opener permet de router correctement le postMessage quand
+  // frontend et backend sont sur des domaines distincts (ou plusieurs
+  // sous-domaines côté frontend). Validation contre l'allowlist FRONTEND_URL.
+  const stateParts = String(stateRaw || '').split('|');
+  const requestedOriginRaw = stateParts[1] ? decodeURIComponent(stateParts[1]) : '';
+  const TARGET_ORIGIN = FRONTEND_LIST.includes(requestedOriginRaw)
+    ? requestedOriginRaw
+    : FRONTEND_URL;
+
   if (error || !code) {
-    return res.redirect(`${FRONTEND_URL}?auth_error=google_denied`);
+    return res.redirect(`${TARGET_ORIGIN}?auth_error=google_denied`);
   }
 
   try {
@@ -744,16 +759,19 @@ router.get('/google/merchant/callback', async (req, res) => {
       <script>
         const token = ${JSON.stringify(token)};
         const user  = ${JSON.stringify(userObj)};
-        // Restreint l'origine cible au FRONTEND_URL — avant, '*' leakait
-        // le JWT à tout opener malveillant (ex: popup ré-ouverte depuis
-        // un site attaquant via window.open chain).
-        const TARGET = ${JSON.stringify(FRONTEND_URL)};
+        // Restreint l'origine cible à l'opener validé (allowlist FRONTEND_URL)
+        // — avant, on hardcodait FRONTEND_URL[0] : le postMessage était
+        // silencieusement bloqué si l'opener venait d'un autre sous-domaine
+        // allowlisté (ex: commercant.haircoifflille.fr).
+        const TARGET = ${JSON.stringify(TARGET_ORIGIN)};
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({ type: 'MERCHANT_GOOGLE_AUTH_SUCCESS', token, user }, TARGET);
           setTimeout(() => window.close(), 400);
         } else {
-          localStorage.setItem('ff_token', token);
-          window.location.href = '/';
+          // Fallback : redirige vers TARGET avec token en hash (lu + stocké
+          // par l'app au chargement). Permet la connexion quand l'opener
+          // a été fermé ou bloqué (mobile / popup refusée).
+          window.location.href = TARGET + '/?mg_token=' + encodeURIComponent(token);
         }
       </script>
     </body></html>`);
@@ -762,7 +780,7 @@ router.get('/google/merchant/callback', async (req, res) => {
 
   } catch(e) {
     console.error('[GOOGLE OAUTH MERCHANT]', e.message);
-    res.redirect(`${FRONTEND_URL}?auth_error=${encodeURIComponent(e.message)}`);
+    res.redirect(`${TARGET_ORIGIN}?auth_error=${encodeURIComponent(e.message)}`);
   }
 });
 
@@ -831,15 +849,26 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
 router.get('/google/callback', async (req, res) => {
   const { code, state: stateRaw, error } = req.query;
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
-  const FRONTEND_URL = process.env.FRONTEND_URL?.split(',')[0]?.trim() || 'https://haircoifflille.fr';
+  // Allowlist multi-origines pour le postMessage target (cf. callback merchant).
+  const FRONTEND_LIST = (process.env.FRONTEND_URL || 'https://haircoifflille.fr')
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const FRONTEND_URL = FRONTEND_LIST[0];
   const redirectUri  = `${BACKEND_URL}/api/auth/google/callback`;
 
-  // state = slug OU "slug|REFCODE" (cf. public-booking /client/auth/google).
-  const [slug, refFromState] = String(stateRaw || '').split('|');
-  const incomingRef = (refFromState || '').trim().toUpperCase();
+  // state = "slug" OU "slug|REFCODE" OU "slug|REFCODE|<origin>"
+  // L'origin (3e champ optionnel) identifie l'opener pour router le
+  // postMessage correctement quand frontend et backend sont sur des
+  // domaines distincts. Validée contre l'allowlist FRONTEND_URL.
+  const stateParts = String(stateRaw || '').split('|');
+  const slug = stateParts[0];
+  const incomingRef = (stateParts[1] || '').trim().toUpperCase();
+  const requestedOriginRaw = stateParts[2] ? decodeURIComponent(stateParts[2]) : '';
+  const TARGET_ORIGIN = FRONTEND_LIST.includes(requestedOriginRaw)
+    ? requestedOriginRaw
+    : FRONTEND_URL;
 
   if (error || !code || !slug) {
-    return res.redirect(`${FRONTEND_URL}?auth_error=google_denied`);
+    return res.redirect(`${TARGET_ORIGIN}?auth_error=google_denied`);
   }
 
   try {
@@ -987,15 +1016,18 @@ router.get('/google/callback', async (req, res) => {
       <script>
         const token  = ${JSON.stringify(token)};
         const client = ${JSON.stringify(clientObj)};
-        // Restreint l'origine cible au FRONTEND_URL — cf. callback merchant.
-        const TARGET = ${JSON.stringify(FRONTEND_URL)};
+        // Cible dynamiquement validée contre l'allowlist FRONTEND_URL
+        // (cf. callback merchant). Avant : FRONTEND_URL[0] hardcodé → le
+        // postMessage était bloqué quand l'opener venait d'un autre
+        // sous-domaine allowlisté.
+        const TARGET = ${JSON.stringify(TARGET_ORIGIN)};
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', token, client }, TARGET);
           setTimeout(() => window.close(), 400);
         } else {
           // Fallback : redirection directe (mobile / no-popup)
           const p = encodeURIComponent(JSON.stringify(client));
-          window.location.href = ${JSON.stringify(`${FRONTEND_URL}/book/${slug}`)} +
+          window.location.href = TARGET + '/book/' + ${JSON.stringify(slug)} +
             '?gc_token=' + encodeURIComponent(token) + '&gc_client=' + p;
         }
       </script>
@@ -1005,7 +1037,7 @@ router.get('/google/callback', async (req, res) => {
 
   } catch(e) {
     console.error('[GOOGLE OAUTH]', e.message);
-    res.redirect(`${FRONTEND_URL}/book/${slug || ''}?auth_error=${encodeURIComponent(e.message)}`);
+    res.redirect(`${TARGET_ORIGIN}/book/${slug || ''}?auth_error=${encodeURIComponent(e.message)}`);
   }
 });
 

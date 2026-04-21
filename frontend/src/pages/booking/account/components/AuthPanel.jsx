@@ -2,7 +2,7 @@
 // Panneau Auth client (login / register / quick register / forgot / reset).
 // Extrait inchangé depuis booking/Account.jsx.
 import { useState, useEffect, useRef } from 'react';
-import { pubApi, globalClientApi } from '../../../../utils/api';
+import { pubApi, globalClientApi, api } from '../../../../utils/api';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false }) {
@@ -70,7 +70,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       Math.round((window.screen.width - 500) / 2)
     );
     const cleanup = () => window.removeEventListener('message', handler);
-    const expectedOrigin = window.location.origin;
+    // e.origin = popup servie par le BACKEND ; comparer à window.location.origin
+    // (frontend) échouait en prod → handler jamais déclenché.
+    const expectedOrigin = api.oauthPopupOrigin();
     const handler = (e) => {
       if (e.origin !== expectedOrigin) return;
       if (e.data?.type !== 'GOOGLE_AUTH_SUCCESS') return;

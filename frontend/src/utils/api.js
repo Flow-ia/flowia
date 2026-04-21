@@ -83,7 +83,20 @@ export const api = {
     const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '376153951158-jm80phb46sl1fisbgeq587v83ho7ft5e.apps.googleusercontent.com';
     const redirectUri = `${BACKEND || window.location.origin}/api/auth/google/merchant/callback`;
-    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('openid email profile')}&access_type=offline&prompt=consent&state=merchant`;
+    // On transmet l'origine de l'opener via `state` pour que le callback
+    // route le postMessage vers le bon sous-domaine (validation allowlist
+    // FRONTEND_URL côté backend).
+    const state = `merchant|${encodeURIComponent(window.location.origin)}`;
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent('openid email profile')}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`;
+  },
+  // Origine backend attendue pour le postMessage d'OAuth (popup → opener).
+  // Utilisé par les handlers frontend pour valider e.origin (au lieu de
+  // window.location.origin qui est l'origine de l'opener, pas celle de
+  // l'émetteur du message).
+  oauthPopupOrigin: () => {
+    const api = import.meta.env.VITE_API_URL || '/api';
+    if (api.startsWith('/')) return window.location.origin;
+    try { return new URL(api).origin; } catch { return window.location.origin; }
   },
 
   // ── PIN Admin — vérification via BDD (jamais en local) ──────────────────
@@ -322,8 +335,13 @@ export const pubApi = {
   checkEmail:     (slug, email) => pubRequest(`/${slug}/client/check-email?email=${encodeURIComponent(email)}`),
   googleAuthUrl:  (slug, ref) => {
     const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
-    const q = ref ? `?ref=${encodeURIComponent(ref)}` : '';
-    return `${BASE}/api/pub/${slug}/client/auth/google${q}`;
+    // origin = sous-domaine de l'opener, relayé dans `state` par le
+    // /client/auth/google pour router correctement le postMessage du
+    // callback vers le bon sous-domaine frontend (validation allowlist).
+    const params = new URLSearchParams();
+    if (ref) params.set('ref', ref);
+    params.set('origin', window.location.origin);
+    return `${BASE}/api/pub/${slug}/client/auth/google?${params}`;
   },
   // Note Google Business réelle (Places API) — silent fail si non configuré
   getGoogleRating: (slug) => pubRequest(`/${slug}/google-rating`),

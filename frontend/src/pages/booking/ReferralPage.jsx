@@ -6,7 +6,7 @@
 //  • Connecté    : code perso + 3 stats + (quota si limite) + suivi filleuls
 //                  (Validé / Utilisée / En attente / Refusé)
 import { useState } from 'react';
-import { pubApi } from '../../utils/api';
+import { pubApi, api } from '../../utils/api';
 
 export function ReferralPage({
   th, slug, business, refProgram, gcConnected, gcUser,
@@ -299,7 +299,8 @@ export function ReferralPage({
               const popup = window.open(url, "google_auth",
                 "width=500,height=600,scrollbars=yes,top=100,left=" +
                 Math.round((window.screen.width - 500) / 2));
-              const expectedOrigin = window.location.origin;
+              // e.origin = popup backend ; cf. AuthPanel / useGoogleMerchantAuth.
+              const expectedOrigin = api.oauthPopupOrigin();
               const handler = (e) => {
                 if (e.origin !== expectedOrigin) return;
                 if (e.data?.type !== "GOOGLE_AUTH_SUCCESS") return;

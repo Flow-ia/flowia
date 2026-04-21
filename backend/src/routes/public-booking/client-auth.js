@@ -370,14 +370,21 @@ module.exports = function attachClientAuthRoutes(router) {
   router.get('/:slug/client/auth/google', (req, res) => {
     const { slug } = req.params;
     const ref = String(req.query.ref || '').trim().toUpperCase();
+    // origin = window.location.origin de l'opener (transmis par le frontend).
+    // Permet au callback de router le postMessage vers le bon sous-domaine
+    // (ex: haircoifflille.fr vs commercant.haircoifflille.fr). Validé
+    // côté callback contre l'allowlist FRONTEND_URL.
+    const origin = String(req.query.origin || '').trim();
     const clientId    = process.env.GOOGLE_CLIENT_ID;
     const BACKEND_URL = process.env.BACKEND_URL || 'https://flowia-backend.onrender.com';
     // Callback générique — 1 seule URL enregistrée chez Google
     const redirectUri = `${BACKEND_URL}/api/auth/google/callback`;
 
-    // state = slug seul OU slug|REFCODE (séparateur | car ni slug ni code ne
-    // peuvent en contenir). Parsé côté callback.
-    const stateVal = ref ? `${slug}|${ref}` : slug;
+    // state = slug | REFCODE? | origin?
+    // — séparateur | car ni slug ni code ne peuvent en contenir. Origine
+    //   encodée URL pour supporter les caractères spéciaux.
+    const encodedOrigin = origin ? encodeURIComponent(origin) : '';
+    const stateVal = `${slug}|${ref || ''}|${encodedOrigin}`;
 
     const params = new URLSearchParams({
       client_id:     clientId,

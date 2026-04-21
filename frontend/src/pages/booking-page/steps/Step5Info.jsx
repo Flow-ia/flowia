@@ -2,7 +2,7 @@
 // Étape 5 : infos client — auth-first (login/register/google/sans compte).
 // Gère le formulaire téléphone avec indicatif pays et la validation email.
 
-import { pubApi } from '../../../utils/api';
+import { pubApi, api } from '../../../utils/api';
 import { AuthPanel } from '../../booking/Account';
 import { PHONE_COUNTRIES } from '../constants';
 import { formatPhone, validatePhone } from '../helpers';
@@ -202,7 +202,7 @@ export function Step5Info({
                   </button>
                 </div>
                 {/* Bouton Google */}
-                <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug); const popup=window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); const expectedOrigin=window.location.origin; const h=(e)=>{ if(e.origin!==expectedOrigin)return; if(e.data?.type!=='GOOGLE_AUTH_SUCCESS')return; window.removeEventListener('message',h); if(popup&&!popup.closed)popup.close(); const{token,client}=e.data; if(!token||!client)return; localStorage.setItem('ff_client_token',token); localStorage.setItem('ff_client_info',JSON.stringify(client)); handleAuth(client); }; window.addEventListener('message',h); }}
+                <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug); const popup=window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); const expectedOrigin=api.oauthPopupOrigin(); const h=(e)=>{ if(e.origin!==expectedOrigin)return; if(e.data?.type!=='GOOGLE_AUTH_SUCCESS')return; window.removeEventListener('message',h); if(popup&&!popup.closed)popup.close(); const{token,client}=e.data; if(!token||!client)return; localStorage.setItem('ff_client_token',token); localStorage.setItem('ff_client_info',JSON.stringify(client)); handleAuth(client); }; window.addEventListener('message',h); }}
                   style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
                     padding:'11px',borderRadius:10,background:th.card,
                     border: `0.5px solid ${th.border}`,cursor:'pointer',

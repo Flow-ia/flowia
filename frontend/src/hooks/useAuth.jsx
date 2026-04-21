@@ -9,6 +9,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Fallback Google OAuth merchant : si la popup n'a pas pu postMessage
+    // (opener fermé / mobile / COOP), le backend redirige vers
+    // TARGET/?mg_token=... → on capture, on persiste, on nettoie l'URL.
+    try {
+      const url = new URL(window.location.href);
+      const mgToken = url.searchParams.get('mg_token');
+      if (mgToken) {
+        localStorage.setItem('ff_token', mgToken);
+        localStorage.removeItem('ff_pin_token');
+        url.searchParams.delete('mg_token');
+        window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams : '') + url.hash);
+      }
+    } catch { /* noop */ }
+
     const token = localStorage.getItem('ff_token');
     if (token) {
       api.me()
