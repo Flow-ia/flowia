@@ -352,20 +352,10 @@ function useGoogleMerchantAuth(onSuccess) {
       return;
     }
 
-    // Polling : détecte si l'utilisateur ferme la popup sans valider.
-    // NB : COOP peut fausser `closed` côté cross-origin, mais fonctionne
-    // fiablement une fois la popup revenue sur notre origine (/__oauth).
-    pollRef.current = setInterval(() => {
-      try {
-        if (popupRef.current && popupRef.current.closed) {
-          // Laisse 800 ms pour que le broadcast arrive avant de déclarer "annulé".
-          setTimeout(() => {
-            setStatus(s => s === 'loading' ? 'cancelled' : s);
-            cleanup();
-          }, 800);
-        }
-      } catch { /* COOP peut throw — ignorer */ }
-    }, 500);
+    // Pas de polling popup.closed : Google impose COOP:same-origin, ce qui
+    // fait que chaque lecture de popup.closed génère un warning dans la
+    // console (flood à 500 ms d'intervalle). On laisse l'utilisateur
+    // annuler via le bouton de l'overlay ou attendre le timeout.
 
     // Timeout de sécurité — 2 minutes.
     timeoutRef.current = setTimeout(() => {
@@ -433,7 +423,14 @@ export function GoogleOAuthOverlay({ status, errorMsg, onRetry, onClose }) {
         <p style={{ margin:'0 0 20px', fontSize:13, color:'#475569', lineHeight:1.55 }}>
           {MESSAGES[status] || ''}
         </p>
-        {status !== 'loading' && (
+        {status === 'loading' ? (
+          <button type="button" onClick={onClose}
+            style={{
+              width:'100%', padding:'10px', borderRadius:9,
+              background:'transparent', border:'1px solid #e5e7eb', color:'#64748b',
+              fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'inherit',
+            }}>Annuler</button>
+        ) : (
           <div style={{ display:'flex', gap:8 }}>
             <button type="button" onClick={onClose}
               style={{

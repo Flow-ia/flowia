@@ -87,16 +87,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       setGStatus('error');
       return;
     }
-    gPollRef.current = setInterval(() => {
-      try {
-        if (gPopupRef.current && gPopupRef.current.closed) {
-          setTimeout(() => {
-            setGStatus(s => s === 'loading' ? 'cancelled' : s);
-            cleanupGoogle();
-          }, 800);
-        }
-      } catch {}
-    }, 500);
+    // Pas de polling popup.closed (COOP Google spam la console).
     gTimerRef.current = setTimeout(() => {
       setGStatus(s => s === 'loading' ? 'timeout' : s);
       cleanupGoogle();

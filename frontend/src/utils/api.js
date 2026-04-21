@@ -2,7 +2,22 @@
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
 function getToken() {
-  return localStorage.getItem('ff_token');
+  const t = localStorage.getItem('ff_token');
+  if (t) return t;
+  // Fallback : si la popup OAuth a écrit ff_oauth_merchant mais que l'event
+  // listener n'a pas (encore) migré vers ff_token, on lit directement.
+  // Évite les 401 fantômes sur le 1er render après OAuth.
+  try {
+    const raw = localStorage.getItem('ff_oauth_merchant');
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p?.token) {
+        localStorage.setItem('ff_token', p.token);
+        return p.token;
+      }
+    }
+  } catch {}
+  return null;
 }
 function getPinToken() {
   return localStorage.getItem('ff_pin_token');
