@@ -24,7 +24,7 @@ export function ChangeEmailModal({
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
       alignItems:'center', justifyContent:'center', padding:16,
       background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-      <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+      <div className="bk-modal-inner" style={{ background:th.card, border: `0.5px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
         <div style={{ width:52, height:52, borderRadius:14, background:'rgba(99,102,241,0.1)',
@@ -35,7 +35,7 @@ export function ChangeEmailModal({
             <polyline points="22,6 12,13 2,6"/>
           </svg>
         </div>
-        <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 6px' }}>
+        <p style={{ fontSize:17, fontWeight: 500, color:th.text, margin:'0 0 6px' }}>
           Changer mon email
         </p>
         {emailStep === 1 ? (
@@ -44,8 +44,8 @@ export function ChangeEmailModal({
               Votre adresse actuelle : <strong style={{color:th.text}}>{clientInfo?.email || '—'}</strong>.
               Un code à 6 chiffres y sera envoyé pour confirmer le changement.
             </p>
-            <label style={{ display:'block', fontSize:11, fontWeight:700,
-              color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+            <label style={{ display:'block', fontSize:11, fontWeight: 500,
+              color:th.muted, marginBottom:6 }}>
               Nouvel email
             </label>
             <input type="email" value={emailNew}
@@ -55,21 +55,21 @@ export function ChangeEmailModal({
               style={{ ...inpStyle, marginBottom:10,
                 borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
             {emailErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
                 {emailErr}
               </p>
             )}
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={onClose} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border:`1px solid ${th.border}`,
-                  color:th.muted, fontWeight:700, fontSize:13 }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Annuler
               </button>
               <button onClick={onSubmitInit} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor: emailLoading ? 'not-allowed' : 'pointer',
                   background:th.accent, border:'none',
-                  color:th.accentText, fontWeight:800, fontSize:13,
+                  color:th.accentText, fontWeight: 500, fontSize:13,
                   opacity: emailLoading ? 0.6 : 1 }}>
                 {emailLoading ? '...' : 'Envoyer le code'}
               </button>
@@ -81,34 +81,34 @@ export function ChangeEmailModal({
               Un code à 6 chiffres a été envoyé à <strong style={{color:th.text}}>{emailSentTo}</strong>.
               Saisissez-le ci-dessous pour confirmer.
             </p>
-            <label style={{ display:'block', fontSize:11, fontWeight:700,
-              color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+            <label style={{ display:'block', fontSize:11, fontWeight: 500,
+              color:th.muted, marginBottom:6 }}>
               Code de vérification
             </label>
             <input type="text" inputMode="numeric" value={emailCode}
               onChange={onChangeCode}
               placeholder="123456" autoComplete="one-time-code"
               maxLength={6} disabled={emailLoading}
-              style={{ ...inpStyle, marginBottom:10, fontFamily:'monospace',
+              style={{ ...inpStyle, marginBottom:10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontSize:18, letterSpacing:4, textAlign:'center',
                 borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
             {emailErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
                 {emailErr}
               </p>
             )}
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={() => setEmailStep(1)} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border:`1px solid ${th.border}`,
-                  color:th.muted, fontWeight:700, fontSize:13 }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Retour
               </button>
               <button onClick={onSubmitConfirm} disabled={emailLoading || emailCode.length !== 6}
                 style={{ flex:1, padding:'12px', borderRadius:11,
                   cursor: (emailLoading || emailCode.length !== 6) ? 'not-allowed' : 'pointer',
                   background:th.accent, border:'none',
-                  color:th.accentText, fontWeight:800, fontSize:13,
+                  color:th.accentText, fontWeight: 500, fontSize:13,
                   opacity: (emailLoading || emailCode.length !== 6) ? 0.6 : 1 }}>
                 {emailLoading ? '...' : 'Confirmer'}
               </button>

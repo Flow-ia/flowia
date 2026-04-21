@@ -13,12 +13,11 @@ export function ReferralTab({
     <div style={{ display:'flex', flexDirection:'column', gap:14, animation:'fadeIn .2s ease' }}>
 
       {/* Code perso + partage */}
-      <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, padding:20 }}>
-        <p style={{ fontSize:11, fontWeight:700, color:th.muted, margin:'0 0 8px',
-          textTransform:'uppercase', letterSpacing:'0.05em' }}>Mon code de parrainage</p>
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+        <p style={{ fontSize:11, fontWeight: 500, color:th.muted, margin:'0 0 8px' }}>Mon code de parrainage</p>
         <div style={{ background:th.cardAlt, border:`2px dashed #8b5cf6`, borderRadius:14,
           padding:'18px 16px', textAlign:'center', marginBottom:12 }}>
-          <p style={{ fontFamily:'monospace', fontSize:24, fontWeight:900, color:'#6d28d9',
+          <p style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:24, fontWeight: 500, color:'#6d28d9',
             letterSpacing:3, margin:0 }}>{refInfo.code}</p>
           <p style={{ fontSize:11, color:th.muted, margin:'6px 0 0' }}>
             {refInfo.uses_count || 0} filleul{(refInfo.uses_count||0) > 1 ? 's' : ''} enregistré{(refInfo.uses_count||0) > 1 ? 's' : ''}
@@ -27,7 +26,7 @@ export function ReferralTab({
         <button onClick={onCopyReferralLink} style={{ width:'100%', padding:'12px',
           borderRadius:11, cursor:'pointer', border:'none',
           background:refCopied ? '#10b981' : '#8b5cf6',
-          color:'white', fontWeight:800, fontSize:13 }}>
+          color:'white', fontWeight: 500, fontSize:13 }}>
           {refCopied ? '✓ Lien copié' : 'Copier mon lien de parrainage'}
         </button>
         {refInfo.program && (
@@ -59,15 +58,15 @@ export function ReferralTab({
           return (
             <div key={r.id} style={{
               padding:'12px 14px', borderRadius:11,
-              border:`1px solid ${isUsed ? th.border : accent + '40'}`,
+              border: `0.5px solid ${isUsed ? th.border : accent + '40'}`,
               background:isUsed ? th.cardAlt : accent + '0f',
               opacity:isUsed ? 0.65 : 1,
             }}>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:22, filter: isUsed ? 'grayscale(0.3)' : 'none' }}>{isBday ? '🎂' : '🤝'}</span>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ margin:0, fontSize:13, fontWeight:800, color:th.text }}>
-                    {valStr} <span style={{ fontFamily:'monospace', fontSize:11, color:accent }}>· {r.code}</span>
+                  <p style={{ margin:0, fontSize:13, fontWeight: 500, color:th.text }}>
+                    {valStr} <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:11, color:accent }}>· {r.code}</span>
                   </p>
                   <p style={{ margin:'2px 0 0', fontSize:11, color:th.muted }}>
                     {isBday ? 'Anniversaire' : 'Parrainage'}
@@ -76,7 +75,7 @@ export function ReferralTab({
                   </p>
                 </div>
                 <span style={{
-                  fontSize:10, fontWeight:800,
+                  fontSize:10, fontWeight: 500,
                   padding:'3px 8px', borderRadius:99,
                   background:isUsed ? '#e5e7eb' : accent + '20',
                   color:isUsed ? '#6b7280' : accent,
@@ -88,8 +87,8 @@ export function ReferralTab({
         return (
           <>
             {available.length > 0 && (
-              <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, padding:20 }}>
-                <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 12px' }}>
+              <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+                <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 12px' }}>
                   Mes réductions disponibles
                 </p>
                 <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -98,8 +97,8 @@ export function ReferralTab({
               </div>
             )}
             {used.length > 0 && (
-              <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, padding:20 }}>
-                <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 4px' }}>
+              <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+                <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 4px' }}>
                   Historique des récompenses utilisées
                 </p>
                 <p style={{ fontSize:11, color:th.muted, margin:'0 0 12px' }}>
@@ -115,8 +114,8 @@ export function ReferralTab({
       })()}
 
       {/* Historique filleuls */}
-      <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, padding:20 }}>
-        <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 12px' }}>
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+        <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 12px' }}>
           Mes filleuls
         </p>
         {refHistory.length === 0 ? (
@@ -133,21 +132,21 @@ export function ReferralTab({
                                 : h.status === 'cancelled' ? 'Annulé' : 'En attente';
               return (
                 <div key={h.id} style={{ padding:'10px 12px', borderRadius:10,
-                  background:th.cardAlt, border:`1px solid ${th.border}` }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                     <div style={{ width:32, height:32, borderRadius:10, background:'#8b5cf620',
                       display:'flex', alignItems:'center', justifyContent:'center',
-                      fontSize:13, fontWeight:900, color:'#6d28d9', flexShrink:0 }}>
+                      fontSize:13, fontWeight: 500, color:'#6d28d9', flexShrink:0 }}>
                       {(name.charAt(0) || '?').toUpperCase()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ margin:0, fontSize:13, fontWeight:700, color:th.text,
+                      <p style={{ margin:0, fontSize:13, fontWeight: 500, color:th.text,
                         overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</p>
                       <p style={{ margin:0, fontSize:11, color:th.muted }}>
                         {new Date(h.created_at).toLocaleDateString('fr-FR')}
                       </p>
                     </div>
-                    <span style={{ fontSize:10, fontWeight:800,
+                    <span style={{ fontSize:10, fontWeight: 500,
                       padding:'3px 9px', borderRadius:99,
                       background:statusColor + '18', color:statusColor,
                       flexShrink:0 }}>{statusLabel}</span>

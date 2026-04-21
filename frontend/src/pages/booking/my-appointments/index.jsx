@@ -434,11 +434,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       {/* ── Sub-header (non-sticky) : bouton retour + identité client ──
           La NavBar principale (avec logo + hamburger) est rendue par
           BookingPage et reste le seul header sticky de la page. */}
-      <div style={{ background:th.navBg, borderBottom:`1px solid ${th.navBorder}` }}>
+      <div style={{ background:th.navBg, borderBottom: `0.5px solid ${th.navBorder}` }}>
         <div style={{ maxWidth:720, margin:'0 auto', padding:'12px 24px',
           display:'flex', alignItems:'center', gap:16 }}>
           <button onClick={onBack} aria-label="Retour"
-            style={{ width:34, height:34, borderRadius:8, border:`1px solid ${th.border}`,
+            style={{ width:34, height:34, borderRadius:8, border: `0.5px solid ${th.border}`,
               background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
               cursor:'pointer', flexShrink:0 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -449,11 +449,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
           <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
             <div style={{ width:36, height:36, borderRadius:99, flexShrink:0,
               background:th.accent, display:'flex', alignItems:'center', justifyContent:'center',
-              color:th.accentText, fontWeight:800, fontSize:15 }}>
+              color:th.accentText, fontWeight: 500, fontSize:15 }}>
               {(clientInfo?.first_name||'?').charAt(0).toUpperCase()}
             </div>
             <div style={{ minWidth:0 }}>
-              <p style={{ fontWeight:700, fontSize:14, color:th.text, margin:0,
+              <p style={{ fontWeight: 500, fontSize:14, color:th.text, margin:0,
                 overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                 {clientInfo?.first_name} {clientInfo?.last_name}
               </p>
@@ -464,7 +464,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ background:th.navBg, borderBottom:`1px solid ${th.border}` }}>
+      <div style={{ background:th.navBg, borderBottom: `0.5px solid ${th.border}` }}>
         <div className="bk-tabs bk-nav-pad" style={{ maxWidth:720, margin:'0 auto', padding:'0 24px',
           display:'flex', gap:0 }}>
           {[
@@ -505,7 +505,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
               ]] : []),
             ].map(([tab, label]) => (
             <button key={tab} onClick={()=>setActiveTab(tab)}
-              style={{ padding:'14px 20px', fontSize:13, fontWeight:600, cursor:'pointer',
+              style={{ padding:'14px 20px', fontSize:13, fontWeight: 500, cursor:'pointer',
                 background:'none', border:'none',
                 color: activeTab===tab ? th.text : th.muted,
                 borderBottom: activeTab===tab ? `2px solid ${th.accent}` : '2px solid transparent',

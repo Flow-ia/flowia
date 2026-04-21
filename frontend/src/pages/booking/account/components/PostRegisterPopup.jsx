@@ -55,10 +55,10 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
     }}>
       <div style={{
         background: th.card, borderRadius: 16, padding: 24,
-        maxWidth: 420, width: '100%', border: `1px solid ${th.border}`,
+        maxWidth: 420, width: '100%', border: `0.5px solid ${th.border}`,
       }}>
         <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>🎂</div>
-        <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: 17, color: th.text, textAlign: 'center' }}>
+        <p style={{ margin: '0 0 6px', fontWeight: 500, fontSize: 17, color: th.text, textAlign: 'center' }}>
           Un cadeau pour votre anniversaire ?
         </p>
         <p style={{ margin: '0 0 18px', fontSize: 13, color: th.muted, lineHeight: 1.5, textAlign: 'center' }}>
@@ -69,28 +69,28 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
         {/* Mois + année */}
         <div className="bk-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: th.muted,
-              marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: th.muted,
+              marginBottom: 5 }}>
               Mois
             </label>
             <select value={month} onChange={e => { setMonth(e.target.value); setErr(''); }}
               style={{ width: '100%', padding: '11px 12px', borderRadius: 10,
-                background: th.inputBg, border: `1px solid ${th.inputBorder}`,
+                background: th.inputBg, border: `0.5px solid ${th.inputBorder}`,
                 color: th.text, fontSize: 13, outline: 'none' }}>
               <option value="">—</option>
               {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: th.muted,
-              marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: th.muted,
+              marginBottom: 5 }}>
               Année
             </label>
             <input type="text" inputMode="numeric" placeholder="1990"
               value={year} maxLength={4}
               onChange={e => { setYear(e.target.value.replace(/\D/g, '').slice(0, 4)); setErr(''); }}
               style={{ width: '100%', padding: '11px 12px', borderRadius: 10,
-                background: th.inputBg, border: `1px solid ${th.inputBorder}`,
+                background: th.inputBg, border: `0.5px solid ${th.inputBorder}`,
                 color: th.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}/>
           </div>
         </div>
@@ -98,31 +98,31 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
         {/* Téléphone */}
         {!client?.phone && (
           <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: th.muted,
-              marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: th.muted,
+              marginBottom: 5 }}>
               Téléphone (optionnel)
             </label>
             <input type="tel" placeholder="06 00 00 00 00" value={phone}
               onChange={e => setPhone(e.target.value)}
               style={{ width: '100%', padding: '11px 12px', borderRadius: 10,
-                background: th.inputBg, border: `1px solid ${th.inputBorder}`,
+                background: th.inputBg, border: `0.5px solid ${th.inputBorder}`,
                 color: th.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}/>
           </div>
         )}
 
-        {err && <p style={{ margin: '6px 0 10px', fontSize: 12, color: '#ef4444', fontWeight: 600 }}>{err}</p>}
+        {err && <p style={{ margin: '6px 0 10px', fontSize: 12, color: '#ef4444', fontWeight: 500 }}>{err}</p>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button onClick={onClose}
             style={{ flex: 1, padding: 12, borderRadius: 10, background: 'transparent',
-              border: `1px solid ${th.border}`, color: th.text,
-              fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              border: `0.5px solid ${th.border}`, color: th.text,
+              fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
             Plus tard
           </button>
           <button onClick={save} disabled={loading}
             style={{ flex: 1, padding: 12, borderRadius: 10, background: th.accent,
               border: 'none', color: th.accentText,
-              fontWeight: 700, fontSize: 13, cursor: loading ? 'wait' : 'pointer',
+              fontWeight: 500, fontSize: 13, cursor: loading ? 'wait' : 'pointer',
               opacity: loading ? 0.6 : 1 }}>
             {loading ? '…' : 'Enregistrer'}
           </button>

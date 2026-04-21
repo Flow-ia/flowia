@@ -1,29 +1,58 @@
 // src/pages/booking-page/views/BlockedView.jsx
-// Vue : Client bloqué par le commerçant.
+// Vue : Client bloque par le commercant.
 
 export function BlockedView({ th, business }) {
   return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{background:th.bg}}>
-      <div style={{ maxWidth:380, width:'100%', textAlign:'center' }}>
-        <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(239,68,68,0.1)', border:'2px solid rgba(239,68,68,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, margin:'0 auto 24px' }}>
-          🚫
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+      background: th.bg,
+    }}>
+      <div style={{ maxWidth: 380, width: '100%', textAlign: 'center' }}>
+        <div style={{
+          padding: '16px 18px',
+          borderRadius: 8,
+          background: '#fef2f2',
+          borderLeft: '2px solid #ef4444',
+          marginBottom: 24,
+          textAlign: 'left',
+        }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#991b1b' }}>
+            Reservation impossible
+          </p>
         </div>
-        <h1 style={{ fontSize:20, fontWeight:900, color:th.text, marginBottom:12, letterSpacing:'-.4px' }}>
-          Réservation impossible
+        <h1 style={{ fontSize: 20, fontWeight: 500, color: th.text, marginBottom: 12 }}>
+          Reservation impossible
         </h1>
-        <p style={{ fontSize:15, color:th.muted, lineHeight:1.6, marginBottom:28 }}>
-          Ce commerçant n'accepte plus de réservation pour vous.<br/>
-          Merci de prendre contact avec le commerçant directement.
+        <p style={{ fontSize: 14, color: th.muted, lineHeight: 1.6, marginBottom: 28 }}>
+          Ce commercant n{"'"}accepte plus de reservation pour vous.<br/>
+          Merci de prendre contact avec le commercant directement.
         </p>
         {business?.phone && (
-          <a href={`tel:${business.phone}`}
-            style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'12px 24px', borderRadius:14, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff', fontWeight:800, fontSize:14, textDecoration:'none' }}>
-            📞 Appeler {business.business_name || 'le commerçant'}
+          <a
+            href={`tel:${business.phone}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 18px',
+              borderRadius: 8,
+              background: th.accent,
+              color: th.accentText,
+              fontWeight: 500,
+              fontSize: 14,
+              textDecoration: 'none',
+            }}
+          >
+            Appeler {business.business_name || 'le commercant'}
           </a>
         )}
         {!business?.phone && (
-          <p style={{ fontSize:13, color:th.muted, fontStyle:'italic' }}>
-            Contactez {business?.business_name || 'le commerçant'} pour plus d'informations.
+          <p style={{ fontSize: 13, color: th.muted, fontStyle: 'italic' }}>
+            Contactez {business?.business_name || 'le commercant'} pour plus d{"'"}informations.
           </p>
         )}
       </div>

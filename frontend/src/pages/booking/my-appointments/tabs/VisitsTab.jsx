@@ -54,8 +54,8 @@ export function VisitsTab({
             {(visitsQuery || visitsDate) && (
               <button onClick={() => { setVisitsQuery(''); setVisitsDate(''); }}
                 style={{ padding:'0 14px', borderRadius:12, cursor:'pointer',
-                  background:th.cardAlt, border:`1px solid ${th.border}`,
-                  color:th.muted, fontWeight:700, fontSize:12 }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  color:th.muted, fontWeight: 500, fontSize:12 }}>
                 Réinitialiser
               </button>
             )}
@@ -65,13 +65,13 @@ export function VisitsTab({
             <div style={{paddingTop:40}}><Spinner color="#6366f1"/></div>
           ) : visitsErr ? (
             <div style={{ textAlign:'center', paddingTop:40 }}>
-              <p style={{ color:'#ef4444', fontWeight:700, fontSize:13, margin:'0 0 12px' }}>
+              <p style={{ color:'#ef4444', fontWeight: 500, fontSize:13, margin:'0 0 12px' }}>
                 {visitsErr}
               </p>
               <button onClick={() => { setVisitsPage(p => p); setVisitsErr(''); }}
                 style={{ padding:'10px 20px', borderRadius:10, cursor:'pointer',
                   background:th.accent, border:'none', color:th.accentText,
-                  fontWeight:800, fontSize:12 }}>Réessayer</button>
+                  fontWeight: 500, fontSize:12 }}>Réessayer</button>
             </div>
           ) : visits.length === 0 ? (
             <div style={{ textAlign:'center', paddingTop:40 }}>
@@ -82,7 +82,7 @@ export function VisitsTab({
                   <circle cx="12" cy="10" r="3"/>
                 </svg>
               </div>
-              <p style={{ fontWeight:600, color:th.muted, marginBottom:6 }}>
+              <p style={{ fontWeight: 500, color:th.muted, marginBottom:6 }}>
                 {(visitsDebounced || visitsDate)
                   ? 'Aucun passage ne correspond aux filtres'
                   : 'Aucun passage sur place'}
@@ -107,14 +107,14 @@ export function VisitsTab({
                   return (
                     <button key={v.id} onClick={() => onOpenVisit(v)}
                       style={{ width:'100%', textAlign:'left', cursor:'pointer',
-                        background:th.card, border:`1px solid ${th.border}`,
+                        background:th.card, border: `0.5px solid ${th.border}`,
                         borderRadius:14, padding:'14px 16px',
                         display:'flex', alignItems:'center', justifyContent:'space-between',
                         gap:12, transition:'transform .08s, border-color .12s' }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = th.accent}
                       onMouseLeave={e => e.currentTarget.style.borderColor = th.border}>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <p style={{ fontSize:14, fontWeight:800, color:th.text, margin:'0 0 2px',
+                        <p style={{ fontSize:14, fontWeight: 500, color:th.text, margin:'0 0 2px',
                           overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                           {v.business_name || 'Commerçant'}
                         </p>
@@ -123,8 +123,8 @@ export function VisitsTab({
                         </p>
                       </div>
                       <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-                        <p style={{ fontSize:15, fontWeight:900, color:'#10b981',
-                          margin:0, fontFamily:'monospace' }}>
+                        <p style={{ fontSize:15, fontWeight: 500, color:'#10b981',
+                          margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {total.toFixed(2)} €
                         </p>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -154,20 +154,20 @@ export function VisitsTab({
                         disabled={pageSafe <= 1}
                         style={{ padding:'8px 12px', borderRadius:10,
                           cursor: pageSafe<=1 ? 'not-allowed' : 'pointer',
-                          background:th.cardAlt, border:`1px solid ${th.border}`,
-                          color:th.text, fontWeight:700, fontSize:12,
+                          background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                          color:th.text, fontWeight: 500, fontSize:12,
                           opacity: pageSafe<=1 ? 0.4 : 1 }}>
                         ← Précédent
                       </button>
-                      <span style={{ padding:'8px 12px', fontSize:12, fontWeight:700, color:th.muted }}>
+                      <span style={{ padding:'8px 12px', fontSize:12, fontWeight: 500, color:th.muted }}>
                         {pageSafe} / {totalPages}
                       </span>
                       <button onClick={() => setVisitsPage(p => Math.min(totalPages, p+1))}
                         disabled={pageSafe >= totalPages}
                         style={{ padding:'8px 12px', borderRadius:10,
                           cursor: pageSafe>=totalPages ? 'not-allowed' : 'pointer',
-                          background:th.cardAlt, border:`1px solid ${th.border}`,
-                          color:th.text, fontWeight:700, fontSize:12,
+                          background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                          color:th.text, fontWeight: 500, fontSize:12,
                           opacity: pageSafe>=totalPages ? 0.4 : 1 }}>
                         Suivant →
                       </button>

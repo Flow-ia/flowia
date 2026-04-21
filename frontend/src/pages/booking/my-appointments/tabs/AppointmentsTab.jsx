@@ -36,11 +36,11 @@ export function AppointmentsTab({
               boxShadow: rdvTab === t.id ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
               display:'flex', alignItems:'center', justifyContent:'center', gap:6,
               transition:'all .15s' }}>
-            <span style={{ fontSize:13, fontWeight:700, color: rdvTab===t.id ? th.text : th.muted }}>
+            <span style={{ fontSize:13, fontWeight: 500, color: rdvTab===t.id ? th.text : th.muted }}>
               {t.label}
             </span>
             {t.count > 0 && (
-              <span style={{ fontSize:11, fontWeight:700, padding:'1px 6px', borderRadius:99,
+              <span style={{ fontSize:11, fontWeight: 500, padding:'1px 6px', borderRadius:99,
                 background: rdvTab===t.id ? th.accent : th.border,
                 color: rdvTab===t.id ? th.accentText : th.muted }}>
                 {t.count}
@@ -69,15 +69,15 @@ export function AppointmentsTab({
               </svg>
             )}
           </div>
-          <p style={{ fontWeight:600, color:th.muted, marginBottom: rdvTab === 'futurs' ? 20 : 0 }}>
+          <p style={{ fontWeight: 500, color:th.muted, marginBottom: rdvTab === 'futurs' ? 20 : 0 }}>
             {rdvTab === 'futurs' ? 'Aucun rendez-vous a venir' :
              rdvTab === 'passes' ? 'Aucun rendez-vous passe' : 'Aucun rendez-vous annule'}
           </p>
           {rdvTab === 'futurs' && (
             <button onClick={onNewBooking}
               style={{ padding:'13px 28px', borderRadius:12, background:th.accent,
-                color:th.accentText, fontWeight:800, fontSize:14, border:'none', cursor:'pointer',
-                boxShadow:'0 2px 8px rgba(0,0,0,0.15)' }}>
+                color:th.accentText, fontWeight: 500, fontSize:14, border:'none', cursor:'pointer',
+                boxShadow: 'none' }}>
               Prendre un RDV
             </button>
           )}
@@ -88,7 +88,7 @@ export function AppointmentsTab({
             const st = getDisplayStatus(a);
             return (
               <div key={a.id} style={{
-                background: th.card, border:`1px solid ${th.border}`,
+                background: th.card, border: `0.5px solid ${th.border}`,
                 borderRadius:18, padding:16,
                 opacity: st.group !== 'futurs' ? 0.85 : 1,
               }}>
@@ -97,18 +97,18 @@ export function AppointmentsTab({
                     {/* Badge statut */}
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:6 }}>
                       <span style={{
-                        fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight:700,
+                        fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight: 500,
                         background:st.bg, color:st.color,
                         display:'flex', alignItems:'center', gap:4,
                       }}>
                         <span style={{ fontSize:9 }}>{st.icon}</span>
                         {st.label}
                       </span>
-                      <span style={{ fontSize:10, fontWeight:600, color:th.dim, fontFamily:'monospace' }}>
+                      <span style={{ fontSize:10, fontWeight: 500, color:th.dim, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                         #{a.id.substring(0,8).toUpperCase()}
                       </span>
                     </div>
-                    <p style={{ fontWeight:800, fontSize:14, color: st.group !== 'futurs' ? th.muted : th.text, marginBottom:3 }}>
+                    <p style={{ fontWeight: 500, fontSize:14, color: st.group !== 'futurs' ? th.muted : th.text, marginBottom:3 }}>
                       {a.service_name || 'Service'}
                     </p>
                     <p style={{ fontSize:13, color:th.muted }}>
@@ -118,7 +118,7 @@ export function AppointmentsTab({
                       <p style={{ fontSize:12, color:th.dim, marginTop:2 }}>avec {a.employee_name}</p>
                     )}
                     {a.service_price > 0 && (
-                      <p style={{ fontSize:12, fontWeight:700, color:'#6366f1', marginTop:4 }}>{a.service_price} €</p>
+                      <p style={{ fontSize:12, fontWeight: 500, color:'#6366f1', marginTop:4 }}>{a.service_price} €</p>
                     )}
                   </div>
                   <div style={{
@@ -143,9 +143,9 @@ export function AppointmentsTab({
                 {st.canCancel && (
                   <button onClick={() => onCancel(a)} style={{
                     marginTop:12, width:'100%', padding:'9px', borderRadius:10,
-                    fontSize:12, fontWeight:700,
+                    fontSize:12, fontWeight: 500,
                     background:'rgba(248,113,113,0.08)', color:'#f87171',
-                    border:'1px solid rgba(248,113,113,0.2)', cursor:'pointer',
+                    border: '0.5px solid rgba(248,113,113,0.2)', cursor:'pointer',
                   }}>Annuler ce RDV</button>
                 )}
               </div>
@@ -154,8 +154,8 @@ export function AppointmentsTab({
           {rdvTab === 'futurs' && (
             <button onClick={onNewBooking}
               style={{ marginTop:6, width:'100%', padding:'14px', borderRadius:12,
-                background:th.accent, color:th.accentText, fontWeight:800, fontSize:14,
-                border:'none', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.15)' }}>
+                background:th.accent, color:th.accentText, fontWeight: 500, fontSize:14,
+                border:'none', cursor:'pointer', boxShadow: 'none' }}>
               + Nouveau rendez-vous
             </button>
           )}

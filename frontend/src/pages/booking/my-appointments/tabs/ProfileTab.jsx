@@ -31,15 +31,15 @@ export function ProfileTab({
     <div style={{ display:'flex', flexDirection:'column', gap:14, animation:'fadeIn .2s ease' }}>
 
       {/* Card infos */}
-      <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
-        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${th.border}`,
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom: `0.5px solid ${th.border}`,
           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <p style={{ fontWeight:800, fontSize:15, color:th.text, margin:0 }}>Mes informations</p>
+          <p style={{ fontWeight: 500, fontSize:15, color:th.text, margin:0 }}>Mes informations</p>
           {!editing && (
             <button onClick={onStartEdit}
               style={{ padding:'7px 14px', borderRadius:9,
-                background:th.cardAlt, border:`1px solid ${th.border}`,
-                color:th.text, fontWeight:700, fontSize:12, cursor:'pointer',
+                background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                color:th.text, fontWeight: 500, fontSize:12, cursor:'pointer',
                 display:'flex', alignItems:'center', gap:6 }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                 style={{width:13,height:13}}>
@@ -56,16 +56,16 @@ export function ProfileTab({
           <div style={{ padding:20, display:'flex', flexDirection:'column', gap:14 }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
               <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:700,
-                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                <label style={{ display:'block', fontSize:11, fontWeight: 500,
+                  color:th.muted, marginBottom:6 }}>
                   Prénom *
                 </label>
                 <input value={editFirst} onChange={e=>setEditFirst(e.target.value)}
                   placeholder="Prénom" style={inpStyle}/>
               </div>
               <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:700,
-                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                <label style={{ display:'block', fontSize:11, fontWeight: 500,
+                  color:th.muted, marginBottom:6 }}>
                   Nom *
                 </label>
                 <input value={editLast} onChange={e=>setEditLast(e.target.value)}
@@ -73,23 +73,23 @@ export function ProfileTab({
               </div>
             </div>
             <div>
-              <label style={{ display:'block', fontSize:11, fontWeight:700,
-                color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+              <label style={{ display:'block', fontSize:11, fontWeight: 500,
+                color:th.muted, marginBottom:6 }}>
                 Téléphone
               </label>
               <input type="tel" value={editPhone} onChange={e=>setEditPhone(e.target.value)}
                 placeholder="06 00 00 00 00" style={inpStyle}/>
             </div>
             <div>
-              <label style={{ display:'block', fontSize:11, fontWeight:700,
-                color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+              <label style={{ display:'block', fontSize:11, fontWeight: 500,
+                color:th.muted, marginBottom:6 }}>
                 Date de naissance
               </label>
               <input type="date" value={editBirth} onChange={e=>setEditBirth(e.target.value)}
                 max={new Date().toISOString().slice(0,10)}
                 style={inpStyle}/>
               <p style={{ fontSize:11, color:th.muted, margin:'6px 0 0', lineHeight:1.5,
-                background:'rgba(236,72,153,0.08)', border:'1px solid rgba(236,72,153,0.2)',
+                background:'rgba(236,72,153,0.08)', border: '0.5px solid rgba(236,72,153,0.2)',
                 padding:'8px 10px', borderRadius:8 }}>
                 🎂 Cette information permet de bénéficier d'offres et de réductions
                 spéciales anniversaire proposées par le commerçant (envoyées le jour J,
@@ -98,8 +98,8 @@ export function ProfileTab({
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
               <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:700,
-                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                <label style={{ display:'block', fontSize:11, fontWeight: 500,
+                  color:th.muted, marginBottom:6 }}>
                   Code postal
                 </label>
                 <input type="text" value={editPostal}
@@ -107,8 +107,8 @@ export function ProfileTab({
                   placeholder="75001" inputMode="numeric" style={inpStyle}/>
               </div>
               <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:700,
-                  color:th.muted, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                <label style={{ display:'block', fontSize:11, fontWeight: 500,
+                  color:th.muted, marginBottom:6 }}>
                   Ville
                 </label>
                 <input type="text" value={editCity} onChange={e=>setEditCity(e.target.value.slice(0,120))}
@@ -122,7 +122,7 @@ export function ProfileTab({
             {/* Audit Z : toggle opt-in marketing */}
             <label style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px',
               borderRadius:10, background:'rgba(16,185,129,0.05)',
-              border:'1px solid rgba(16,185,129,0.2)', cursor:'pointer', marginTop:4 }}>
+              border: '0.5px solid rgba(16,185,129,0.2)', cursor:'pointer', marginTop:4 }}>
               <input type="checkbox" checked={editOptIn}
                 onChange={e=>setEditOptIn(e.target.checked)}
                 style={{ marginTop:2, flexShrink:0, accentColor:'#10b981', cursor:'pointer' }}/>
@@ -134,19 +134,19 @@ export function ProfileTab({
               </span>
             </label>
             {profErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:0 }}>{profErr}</p>
+              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:0 }}>{profErr}</p>
             )}
             <div style={{ display:'flex', gap:10, marginTop:4 }}>
               <button onClick={onCancelEdit}
                 style={{ flex:1, padding:'12px', borderRadius:10, cursor:'pointer',
-                  background:th.cardAlt, border:`1px solid ${th.border}`,
-                  color:th.muted, fontWeight:700, fontSize:13 }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Annuler
               </button>
               <button onClick={onSaveProfile} disabled={profLoad}
                 style={{ flex:2, padding:'12px', borderRadius:10, cursor:'pointer',
                   background:th.accent, border:'none',
-                  color:th.accentText, fontWeight:800, fontSize:13,
+                  color:th.accentText, fontWeight: 500, fontSize:13,
                   opacity:profLoad?0.7:1 }}>
                 {profLoad ? '...' : 'Enregistrer'}
               </button>
@@ -157,8 +157,8 @@ export function ProfileTab({
           <div>
             {profOk && (
               <div style={{ margin:'12px 20px 0', padding:'10px 14px', borderRadius:9,
-                background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.2)',
-                color:'#16a34a', fontSize:13, fontWeight:700 }}>
+                background:'rgba(34,197,94,0.08)', border: '0.5px solid rgba(34,197,94,0.2)',
+                color:'#16a34a', fontSize:13, fontWeight: 500 }}>
                 ✓ {profOk}
               </div>
             )}
@@ -184,10 +184,10 @@ export function ProfileTab({
               <div key={lbl} style={{ display:'flex', justifyContent:'space-between',
                 alignItems:'center', padding:'13px 20px',
                 borderTop: i===0 ? `1px solid ${th.border}` : 'none',
-                borderBottom:`1px solid ${th.border}` }}>
-                <span style={{ fontSize:12, color:th.muted, fontWeight:600, textTransform:'uppercase',
+                borderBottom: `0.5px solid ${th.border}` }}>
+                <span style={{ fontSize:12, color:th.muted, fontWeight: 500,
                   letterSpacing:'0.04em' }}>{lbl}</span>
-                <span style={{ fontSize:13, fontWeight:700, color:th.text }}>{val}</span>
+                <span style={{ fontSize:13, fontWeight: 500, color:th.text }}>{val}</span>
               </div>
             ))}
           </div>
@@ -195,17 +195,17 @@ export function ProfileTab({
       </div>
 
       {/* Sécurité : email + mot de passe (vérification par code OTP) */}
-      <div style={{ background:th.card, border:`1px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
-        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${th.border}` }}>
-          <p style={{ fontWeight:800, fontSize:15, color:th.text, margin:0 }}>Sécurité</p>
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom: `0.5px solid ${th.border}` }}>
+          <p style={{ fontWeight: 500, fontSize:15, color:th.text, margin:0 }}>Sécurité</p>
           <p style={{ fontSize:12, color:th.muted, margin:'4px 0 0' }}>
             Un code à 6 chiffres vous sera envoyé par email pour confirmer chaque changement.
           </p>
         </div>
         <button onClick={onOpenEmailModal} style={{ width:'100%', padding:'14px 20px',
-          background:'none', border:'none', borderBottom:`1px solid ${th.border}`,
+          background:'none', border:'none', borderBottom: `0.5px solid ${th.border}`,
           display:'flex', alignItems:'center', justifyContent:'space-between',
-          cursor:'pointer', color:th.text, fontWeight:700, fontSize:13 }}>
+          cursor:'pointer', color:th.text, fontWeight: 500, fontSize:13 }}>
           <span style={{ display:'flex', alignItems:'center', gap:10 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               style={{width:15,height:15,color:th.muted}}>
@@ -222,7 +222,7 @@ export function ProfileTab({
         <button onClick={onOpenPwdModal} style={{ width:'100%', padding:'14px 20px',
           background:'none', border:'none',
           display:'flex', alignItems:'center', justifyContent:'space-between',
-          cursor:'pointer', color:th.text, fontWeight:700, fontSize:13 }}>
+          cursor:'pointer', color:th.text, fontWeight: 500, fontSize:13 }}>
           <span style={{ display:'flex', alignItems:'center', gap:10 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               style={{width:15,height:15,color:th.muted}}>
@@ -247,16 +247,16 @@ export function ProfileTab({
           onBack();
         }
       }} style={{ width:'100%', padding:'13px', borderRadius:12, cursor:'pointer',
-        background:'rgba(248,113,113,0.06)', border:'1px solid rgba(248,113,113,0.2)',
-        color:'#ef4444', fontWeight:700, fontSize:13 }}>
+        background:'rgba(248,113,113,0.06)', border: '0.5px solid rgba(248,113,113,0.2)',
+        color:'#ef4444', fontWeight: 500, fontSize:13 }}>
         Se déconnecter
       </button>
 
       {/* Supprimer mon compte (RGPD) */}
       <button onClick={onOpenDeleteModal}
         style={{ width:'100%', padding:'13px', borderRadius:12, cursor:'pointer',
-          background:'transparent', border:`1px solid ${th.border}`,
-          color:th.muted, fontWeight:700, fontSize:13,
+          background:'transparent', border: `0.5px solid ${th.border}`,
+          color:th.muted, fontWeight: 500, fontSize:13,
           display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           style={{width:14,height:14}}>

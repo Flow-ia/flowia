@@ -178,7 +178,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
     finally { setGcForgotLoad(false); }
   };
 
-  const inp = { width:'100%', padding:'12px 16px', borderRadius:14, border:`1px solid ${th.inputBorder}`, background:th.inputBg, color:th.text, fontSize:14, outline:'none', boxSizing:'border-box' };
+  const inp = { width:'100%', padding:'12px 16px', borderRadius:14, border: `0.5px solid ${th.inputBorder}`, background:th.inputBg, color:th.text, fontSize:14, outline:'none', boxSizing:'border-box' };
   const statusC = STATUS_COLORS;
   const statusL = STATUS_LABELS;
 
@@ -191,25 +191,25 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
 
         {/* Header */}
         <div style={{ marginBottom:24 }}>
-          <h1 style={{ fontSize:22, fontWeight:900, color:th.text, margin:'0 0 4px' }}>Mon espace client</h1>
+          <h1 style={{ fontSize:22, fontWeight: 500, color:th.text, margin:'0 0 4px' }}>Mon espace client</h1>
           <p style={{ fontSize:13, color:th.muted, margin:0 }}>Gérez vos rendez-vous et fidélité chez tous vos commerçants</p>
         </div>
 
         {/* MOT DE PASSE OUBLIÉ — saisie email */}
         {mode === 'forgot_gc' && (
-          <div style={{ background:th.card, borderRadius:24, padding:24, border:`1px solid ${th.border}` }}>
+          <div style={{ background:th.card, borderRadius:24, padding:24, border: `0.5px solid ${th.border}` }}>
             <button onClick={()=>{ setMode('login'); setGcForgotErr(''); setGcForgotOk(''); }}
               style={{ background:'none', border:'none', color:th.muted, fontSize:13, cursor:'pointer', marginBottom:16 }}>← Retour</button>
-            <p style={{ margin:'0 0 6px', fontWeight:800, fontSize:16, color:th.text }}>Mot de passe oublié</p>
+            <p style={{ margin:'0 0 6px', fontWeight: 500, fontSize:16, color:th.text }}>Mot de passe oublié</p>
             <p style={{ margin:'0 0 16px', fontSize:13, color:th.muted }}>Entrez votre email pour recevoir un code de réinitialisation.</p>
             <div style={{ marginBottom:12 }}>
               <input type="email" placeholder="Votre email" value={gcForgotEmail} onChange={e=>setGcForgotEmail(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&sendGcResetCode()} style={inp} />
             </div>
-            {gcForgotErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight:600 }}>{gcForgotErr}</p>}
-            {gcForgotOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 12px', fontWeight:600 }}>{gcForgotOk}</p>}
+            {gcForgotErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotErr}</p>}
+            {gcForgotOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotOk}</p>}
             <button onClick={sendGcResetCode} disabled={gcForgotLoad || !gcForgotEmail.trim()}
-              style={{ width:'100%', padding:'15px', borderRadius:16, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white', border:'none', fontWeight:800, fontSize:15, cursor:'pointer', opacity:(gcForgotLoad||!gcForgotEmail.trim())?0.6:1 }}>
+              style={{ width:'100%', padding:'15px', borderRadius:16, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:15, cursor:'pointer', opacity:(gcForgotLoad||!gcForgotEmail.trim())?0.6:1 }}>
               {gcForgotLoad ? '...' : 'Envoyer le code'}
             </button>
           </div>
@@ -217,23 +217,23 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
 
         {/* MOT DE PASSE OUBLIÉ — saisie code + nouveau mdp */}
         {mode === 'forgot_gc_code' && (
-          <div style={{ background:th.card, borderRadius:24, padding:24, border:`1px solid ${th.border}` }}>
+          <div style={{ background:th.card, borderRadius:24, padding:24, border: `0.5px solid ${th.border}` }}>
             <button onClick={()=>{ setMode('forgot_gc'); setGcForgotErr(''); }}
               style={{ background:'none', border:'none', color:th.muted, fontSize:13, cursor:'pointer', marginBottom:16 }}>← Retour</button>
-            <p style={{ margin:'0 0 6px', fontWeight:800, fontSize:16, color:th.text }}>Code de réinitialisation</p>
+            <p style={{ margin:'0 0 6px', fontWeight: 500, fontSize:16, color:th.text }}>Code de réinitialisation</p>
             <p style={{ margin:'0 0 16px', fontSize:13, color:th.muted }}>Vérifiez votre boîte mail et entrez le code à 6 chiffres.</p>
-            {gcForgotOk && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 12px', fontWeight:600 }}>{gcForgotOk}</p>}
+            {gcForgotOk && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotOk}</p>}
             <div style={{ marginBottom:10 }}>
               <input placeholder="Code à 6 chiffres" value={gcResetCode} onChange={e=>setGcResetCode(e.target.value.replace(/\D/g,'').slice(0,6))}
-                maxLength={6} style={{ ...inp, textAlign:'center', fontSize:22, fontWeight:900, letterSpacing:'0.3em', fontFamily:'monospace' }} />
+                maxLength={6} style={{ ...inp, textAlign:'center', fontSize:22, fontWeight: 500, letterSpacing:'0.3em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
             </div>
             <div style={{ marginBottom:16 }}>
               <input type="password" placeholder="Nouveau mot de passe (min. 6 car.)" value={gcNewPwd} onChange={e=>setGcNewPwd(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&confirmGcReset()} style={inp} />
             </div>
-            {gcForgotErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight:600 }}>{gcForgotErr}</p>}
+            {gcForgotErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotErr}</p>}
             <button onClick={confirmGcReset} disabled={gcForgotLoad || gcResetCode.length < 6 || gcNewPwd.length < 6}
-              style={{ width:'100%', padding:'15px', borderRadius:16, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white', border:'none', fontWeight:800, fontSize:15, cursor:'pointer', opacity:(gcForgotLoad||gcResetCode.length<6||gcNewPwd.length<6)?0.6:1 }}>
+              style={{ width:'100%', padding:'15px', borderRadius:16, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:15, cursor:'pointer', opacity:(gcForgotLoad||gcResetCode.length<6||gcNewPwd.length<6)?0.6:1 }}>
               {gcForgotLoad ? '...' : 'Changer le mot de passe'}
             </button>
           </div>
@@ -241,10 +241,10 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
 
         {/* LOGIN / REGISTER */}
         {!gcUser && mode !== 'forgot_gc' && mode !== 'forgot_gc_code' && (
-          <div style={{ background:th.card, borderRadius:24, padding:24, border:`1px solid ${th.border}` }}>
+          <div style={{ background:th.card, borderRadius:24, padding:24, border: `0.5px solid ${th.border}` }}>
             <div style={{ display:'flex', gap:0, marginBottom:20, background:th.inputBg, borderRadius:12, padding:4 }}>
               {['login','register'].map(m => (
-                <button key={m} onClick={()=>setMode(m)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', fontWeight:700, fontSize:13, cursor:'pointer', background:mode===m?'#6366f1':'transparent', color:mode===m?'white':th.muted }}>
+                <button key={m} onClick={()=>setMode(m)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', fontWeight: 500, fontSize:13, cursor:'pointer', background:mode===m?'#6366f1':'transparent', color:mode===m?'white':th.muted }}>
                   {m==='login' ? 'Connexion' : 'Creer un compte'}
                 </button>
               ))}
@@ -266,8 +266,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
             )}
             {mode==='register' && (
               <div style={{ marginBottom:10 }}>
-                <label style={{ display:'block', fontSize:11, fontWeight:700, color:th.muted,
-                  marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                <label style={{ display:'block', fontSize:11, fontWeight: 500, color:th.muted,
+                  marginBottom:4 }}>
                   🎂 Date de naissance (optionnel)
                 </label>
                 <input type="date" value={birthDate} onChange={e=>setBirthDate(e.target.value)}
@@ -281,9 +281,9 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               <input placeholder="Mot de passe" type="password" value={pwd} onChange={e=>setPwd(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())} style={inp} />
             </div>
-            {err && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight:600 }}>{err}</p>}
+            {err && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{err}</p>}
             <button onClick={mode==='login'?handleLogin:handleRegister} disabled={loading}
-              style={{ width:'100%', padding:'15px', borderRadius:16, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white', border:'none', fontWeight:800, fontSize:15, cursor:'pointer', opacity:loading?0.7:1 }}>
+              style={{ width:'100%', padding:'15px', borderRadius:16, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:15, cursor:'pointer', opacity:loading?0.7:1 }}>
               {loading ? '...' : (mode==='login' ? 'Se connecter' : 'Creer mon compte')}
             </button>
             {mode==='login' && (
@@ -303,15 +303,15 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
         {/* DASHBOARD */}
         {gcUser && (<>
           {/* Profil */}
-          <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}`, marginBottom:16, display:'flex', alignItems:'center', gap:14 }}>
-            <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:900, fontSize:20 }}>
+          <div style={{ background:th.card, borderRadius:20, padding:20, border: `0.5px solid ${th.border}`, marginBottom:16, display:'flex', alignItems:'center', gap:14 }}>
+            <div style={{ width:52, height:52, borderRadius:16, background: th.accent, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight: 500, fontSize:20 }}>
               {(gcUser.first_name||'?').charAt(0).toUpperCase()}
             </div>
             <div style={{ flex:1 }}>
-              <p style={{ margin:'0 0 2px', fontWeight:800, fontSize:16, color:th.text }}>{gcUser.first_name} {gcUser.last_name}</p>
+              <p style={{ margin:'0 0 2px', fontWeight: 500, fontSize:16, color:th.text }}>{gcUser.first_name} {gcUser.last_name}</p>
               <p style={{ margin:0, fontSize:12, color:th.muted }}>{gcUser.email}</p>
             </div>
-            <button onClick={onLogout} style={{ padding:'6px 12px', borderRadius:10, background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)', color:'#ef4444', fontWeight:700, fontSize:12, cursor:'pointer' }}>
+            <button onClick={onLogout} style={{ padding:'6px 12px', borderRadius:10, background:'rgba(239,68,68,0.1)', border: '0.5px solid rgba(239,68,68,0.2)', color:'#ef4444', fontWeight: 500, fontSize:12, cursor:'pointer' }}>
               Déco.
             </button>
           </div>
@@ -319,7 +319,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
           {/* Tabs */}
           <div style={{ display:'flex', gap:6, marginBottom:16, overflowX:'auto' }}>
             {[['appts','📅 RDV'],['loyalty','🎫 Fidélite'],['profile','👤 Profil']].map(([t,lbl]) => (
-              <button key={t} onClick={()=>setTab(t)} style={{ flexShrink:0, padding:'9px 14px', borderRadius:14, border:'none', fontWeight:700, fontSize:12, cursor:'pointer', background:tab===t?'#6366f1':'rgba(99,102,241,0.08)', color:tab===t?'white':'#6366f1' }}>
+              <button key={t} onClick={()=>setTab(t)} style={{ flexShrink:0, padding:'9px 14px', borderRadius:14, border:'none', fontWeight: 500, fontSize:12, cursor:'pointer', background:tab===t?'#6366f1':'rgba(99,102,241,0.08)', color:tab===t?'white':'#6366f1' }}>
                 {lbl}
               </button>
             ))}
@@ -330,13 +330,13 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
             {apts.length===0 && <p style={{ textAlign:'center', color:th.muted, padding:32 }}>Aucun rendez-vous enregistré.</p>}
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               {apts.map((a,i) => (
-                <div key={i} style={{ background:th.card, borderRadius:16, padding:16, border:`1px solid ${th.border}` }}>
+                <div key={i} style={{ background:th.card, borderRadius:16, padding:16, border: `0.5px solid ${th.border}` }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
                     <div>
-                      <p style={{ margin:'0 0 2px', fontWeight:800, fontSize:14, color:th.text }}>{a.service_name||'Rendez-vous'}</p>
+                      <p style={{ margin:'0 0 2px', fontWeight: 500, fontSize:14, color:th.text }}>{a.service_name||'Rendez-vous'}</p>
                       <p style={{ margin:0, fontSize:12, color:th.muted }}>{a.business_name}</p>
                     </div>
-                    <span style={{ fontSize:11, fontWeight:700, color:statusC[a.status]||'#94a3b8', background:`${statusC[a.status]||'#94a3b8'}18`, padding:'3px 10px', borderRadius:99 }}>
+                    <span style={{ fontSize:11, fontWeight: 500, color:statusC[a.status]||'#94a3b8', background:`${statusC[a.status]||'#94a3b8'}18`, padding:'3px 10px', borderRadius:99 }}>
                       {statusL[a.status]||a.status}
                     </span>
                   </div>
@@ -344,7 +344,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                     {fmtD(a.date)} · {(a.start_time||'').slice(0,5)}
                     {a.employee_name ? ` · ${a.employee_name}` : ''}
                   </p>
-                  {a.total_amount && <p style={{ margin:'4px 0 0', fontSize:13, fontWeight:700, color:'#10b981' }}>{Number(a.total_amount).toFixed(2)} €</p>}
+                  {a.total_amount && <p style={{ margin:'4px 0 0', fontSize:13, fontWeight: 500, color:'#10b981' }}>{Number(a.total_amount).toFixed(2)} €</p>}
                 </div>
               ))}
             </div>
@@ -360,19 +360,19 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                 const required = l.stamps_required || 10;
                 const pct = Math.min(100, Math.round((current/required)*100));
                 return (
-                  <div key={i} style={{ background:th.card, borderRadius:16, padding:16, border:`1px solid ${th.border}` }}>
+                  <div key={i} style={{ background:th.card, borderRadius:16, padding:16, border: `0.5px solid ${th.border}` }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                       <div>
-                        <p style={{ margin:'0 0 2px', fontWeight:800, fontSize:14, color:th.text }}>{l.business_name}</p>
+                        <p style={{ margin:'0 0 2px', fontWeight: 500, fontSize:14, color:th.text }}>{l.business_name}</p>
                         <p style={{ margin:0, fontSize:11, color:th.muted }}>{l.reward_label}</p>
                       </div>
                       <div style={{ textAlign:'right' }}>
-                        <span style={{ fontSize:20, fontWeight:900, color:'#f59e0b', fontFamily:'monospace' }}>{current}</span>
+                        <span style={{ fontSize:20, fontWeight: 500, color:'#f59e0b', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{current}</span>
                         <span style={{ fontSize:12, color:th.muted }}>/{required} {mode==='points'?'pts':'🎫'}</span>
                       </div>
                     </div>
                     <div style={{ height:6, background:'rgba(245,158,11,0.15)', borderRadius:99, overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${pct}%`, background:'linear-gradient(90deg,#f59e0b,#f97316)', borderRadius:99, transition:'width 0.5s' }} />
+                      <div style={{ height:'100%', width:`${pct}%`, background: '#f59e0b', borderRadius:99, transition:'width 0.5s' }} />
                     </div>
                     {l.last_visit && <p style={{ margin:'8px 0 0', fontSize:11, color:th.muted }}>Dernière visite : {fmtD(l.last_visit)}</p>}
                   </div>
@@ -389,12 +389,12 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               {gcUser?.avatar_url && (
                 <div style={{ display:'flex', alignItems:'center', gap:12,
                   padding:'14px 16px', background:th.card,
-                  borderRadius:16, border:`1px solid ${th.border}` }}>
+                  borderRadius:16, border: `0.5px solid ${th.border}` }}>
                   <img src={gcUser.avatar_url} alt="avatar"
                     style={{ width:48, height:48, borderRadius:99, objectFit:'cover',
                       border:`2px solid ${th.border}` }} />
                   <div>
-                    <p style={{ margin:'0 0 2px', fontWeight:700, fontSize:14, color:th.text }}>
+                    <p style={{ margin:'0 0 2px', fontWeight: 500, fontSize:14, color:th.text }}>
                       {gcUser.first_name} {gcUser.last_name}
                     </p>
                     <p style={{ margin:0, fontSize:11, color:th.muted }}>
@@ -405,8 +405,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               )}
 
               {/* Édition du profil */}
-              <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}` }}>
-                <p style={{ margin:'0 0 14px', fontWeight:800, fontSize:15, color:th.text }}>Mes informations</p>
+              <div style={{ background:th.card, borderRadius:20, padding:20, border: `0.5px solid ${th.border}` }}>
+                <p style={{ margin:'0 0 14px', fontWeight: 500, fontSize:15, color:th.text }}>Mes informations</p>
                 <div className="bk-grid2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
                   <input placeholder="Prénom" value={editFirst||gcUser?.first_name||''}
                     onFocus={e=>{ if(!editFirst&&!editLast) initProfileEdit(); }}
@@ -425,33 +425,33 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                     onFocus={e=>{ if(!editPhone) initProfileEdit(); }}
                     onChange={e=>setEditPhone(e.target.value)} style={inp} />
                 </div>
-                {profErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight:600 }}>{profErr}</p>}
-                {profOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 10px', fontWeight:600 }}>{profOk}</p>}
+                {profErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{profErr}</p>}
+                {profOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{profOk}</p>}
                 <button onClick={saveProfile} disabled={profLoad}
-                  style={{ width:'100%', padding:'13px', borderRadius:14, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white', border:'none', fontWeight:800, fontSize:14, cursor:'pointer', opacity:profLoad?0.7:1 }}>
+                  style={{ width:'100%', padding:'13px', borderRadius:14, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:14, cursor:'pointer', opacity:profLoad?0.7:1 }}>
                   {profLoad ? '...' : 'Enregistrer les modifications'}
                 </button>
               </div>
 
               {/* Changer le mot de passe */}
-              <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}` }}>
-                <p style={{ margin:'0 0 14px', fontWeight:800, fontSize:15, color:th.text }}>Changer le mot de passe</p>
+              <div style={{ background:th.card, borderRadius:20, padding:20, border: `0.5px solid ${th.border}` }}>
+                <p style={{ margin:'0 0 14px', fontWeight: 500, fontSize:15, color:th.text }}>Changer le mot de passe</p>
                 <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:14 }}>
                   <input type="password" placeholder="Mot de passe actuel" value={curPwd} onChange={e=>setCurPwd(e.target.value)} style={inp} />
                   <input type="password" placeholder="Nouveau mot de passe (min. 6 car.)" value={newPwd2} onChange={e=>setNewPwd2(e.target.value)}
                     onKeyDown={e=>e.key==='Enter'&&savePassword()} style={inp} />
                 </div>
-                {pwdErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight:600 }}>{pwdErr}</p>}
-                {pwdOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 10px', fontWeight:600 }}>{pwdOk}</p>}
+                {pwdErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{pwdErr}</p>}
+                {pwdOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{pwdOk}</p>}
                 <button onClick={savePassword} disabled={pwdLoad || !curPwd || !newPwd2}
-                  style={{ width:'100%', padding:'13px', borderRadius:14, background:'rgba(99,102,241,0.1)', color:'#6366f1', border:'1px solid rgba(99,102,241,0.25)', fontWeight:800, fontSize:14, cursor:'pointer', opacity:(pwdLoad||!curPwd||!newPwd2)?0.5:1 }}>
+                  style={{ width:'100%', padding:'13px', borderRadius:14, background:'rgba(99,102,241,0.1)', color:'#6366f1', border: '0.5px solid rgba(99,102,241,0.25)', fontWeight: 500, fontSize:14, cursor:'pointer', opacity:(pwdLoad||!curPwd||!newPwd2)?0.5:1 }}>
                   {pwdLoad ? '...' : 'Modifier le mot de passe'}
                 </button>
               </div>
 
               {/* Export données RGPD */}
-              <div style={{ background:th.card, borderRadius:20, padding:20, border:`1px solid ${th.border}` }}>
-                <p style={{ margin:'0 0 4px', fontWeight:800, fontSize:15, color:th.text }}>📦 Mes données personnelles</p>
+              <div style={{ background:th.card, borderRadius:20, padding:20, border: `0.5px solid ${th.border}` }}>
+                <p style={{ margin:'0 0 4px', fontWeight: 500, fontSize:15, color:th.text }}>📦 Mes données personnelles</p>
                 <p style={{ margin:'0 0 14px', fontSize:12, color:th.muted, lineHeight:1.5 }}>
                   Conformément au RGPD (Art. 20), vous pouvez télécharger l'ensemble de vos données personnelles
                   stockées sur FlowIA : compte, rendez-vous, fidélité.
@@ -459,23 +459,23 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                 <button onClick={exportMyData} disabled={exportLoad}
                   style={{ width:'100%', padding:'12px', borderRadius:12,
                     background:'rgba(99,102,241,0.08)', color:'#6366f1',
-                    border:'1px solid rgba(99,102,241,0.2)',
-                    fontWeight:700, fontSize:13, cursor:'pointer',
+                    border: '0.5px solid rgba(99,102,241,0.2)',
+                    fontWeight: 500, fontSize:13, cursor:'pointer',
                     opacity:exportLoad?0.6:1, marginBottom:10 }}>
                   {exportLoad ? '⏳ Préparation...' : '⬇️ Télécharger mes données (JSON)'}
                 </button>
                 <button onClick={()=>setShowRgpd(true)}
                   style={{ width:'100%', padding:'10px', borderRadius:12,
                     background:'transparent', color:th.muted,
-                    border:`1px solid ${th.border}`,
-                    fontWeight:600, fontSize:12, cursor:'pointer' }}>
+                    border: `0.5px solid ${th.border}`,
+                    fontWeight: 500, fontSize:12, cursor:'pointer' }}>
                   📋 Politique de confidentialité
                 </button>
               </div>
 
               {/* Suppression de compte */}
-              <div style={{ background:'rgba(239,68,68,0.04)', borderRadius:20, padding:20, border:'1px solid rgba(239,68,68,0.15)' }}>
-                <p style={{ margin:'0 0 6px', fontWeight:800, fontSize:15, color:'#ef4444' }}>🗑 Supprimer mon compte</p>
+              <div style={{ background:'rgba(239,68,68,0.04)', borderRadius:20, padding:20, border: '0.5px solid rgba(239,68,68,0.15)' }}>
+                <p style={{ margin:'0 0 6px', fontWeight: 500, fontSize:15, color:'#ef4444' }}>🗑 Supprimer mon compte</p>
                 <p style={{ margin:'0 0 14px', fontSize:12, color:th.muted, lineHeight:1.5 }}>
                   Vos données personnelles (nom, email, téléphone) seront <strong>définitivement effacées</strong>.
                   Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.
@@ -483,14 +483,14 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                 <input placeholder="Tapez SUPPRIMER pour confirmer" value={delConfirm}
                   onChange={e=>{ setDelConfirm(e.target.value.toUpperCase()); setDelErr(''); }}
                   style={{ width:'100%', padding:'12px 14px', borderRadius:10, outline:'none',
-                    background:th.inputBg, border:'1px solid rgba(239,68,68,0.3)',
+                    background:th.inputBg, border: '0.5px solid rgba(239,68,68,0.3)',
                     color:th.text, fontSize:13, marginBottom:10, boxSizing:'border-box' }} />
-                {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight:600 }}>{delErr}</p>}
+                {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{delErr}</p>}
                 <button onClick={deleteAccount} disabled={delLoad || delConfirm !== 'SUPPRIMER'}
                   style={{ width:'100%', padding:'13px', borderRadius:14,
                     background:'rgba(239,68,68,0.12)', color:'#ef4444',
-                    border:'1px solid rgba(239,68,68,0.25)',
-                    fontWeight:800, fontSize:14, cursor:'pointer',
+                    border: '0.5px solid rgba(239,68,68,0.25)',
+                    fontWeight: 500, fontSize:14, cursor:'pointer',
                     opacity:(delLoad||delConfirm!=='SUPPRIMER')?0.5:1 }}>
                   {delLoad ? '...' : '🗑 Supprimer définitivement mon compte'}
                 </button>
@@ -504,10 +504,10 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                   onClick={()=>setShowRgpd(false)}>
                   <div style={{ background:th.card, borderRadius:24, padding:28,
                     maxWidth:480, width:'100%', maxHeight:'80vh', overflowY:'auto',
-                    border:`1px solid ${th.border}` }}
+                    border: `0.5px solid ${th.border}` }}
                     onClick={e=>e.stopPropagation()}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-                      <p style={{ margin:0, fontWeight:800, fontSize:16, color:th.text }}>🔒 Politique de confidentialité</p>
+                      <p style={{ margin:0, fontWeight: 500, fontSize:16, color:th.text }}>🔒 Politique de confidentialité</p>
                       <button onClick={()=>setShowRgpd(false)}
                         style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:th.muted }}>×</button>
                     </div>
@@ -520,14 +520,14 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                       ['📧 Contact', "Pour toute question relative à vos données personnelles, contactez directement le commerçant ou écrivez à l'adresse indiquée sur le site de réservation."],
                     ].map(([title, text]) => (
                       <div key={title} style={{ marginBottom:14 }}>
-                        <p style={{ margin:'0 0 4px', fontWeight:700, fontSize:13, color:th.text }}>{title}</p>
+                        <p style={{ margin:'0 0 4px', fontWeight: 500, fontSize:13, color:th.text }}>{title}</p>
                         <p style={{ margin:0, fontSize:12, color:th.muted, lineHeight:1.6 }}>{text}</p>
                       </div>
                     ))}
                     <button onClick={()=>setShowRgpd(false)}
                       style={{ width:'100%', padding:'12px', borderRadius:12, marginTop:8,
-                        background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'white',
-                        border:'none', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                        background: th.accent, color:'white',
+                        border:'none', fontWeight: 500, fontSize:13, cursor:'pointer' }}>
                       Fermer
                     </button>
                   </div>

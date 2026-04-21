@@ -19,13 +19,13 @@ export function Step5Info({
 }) {
   return (
     <div>
-      <h2 style={{fontSize:20,fontWeight:800,color:th.text,margin:'0 0 20px',letterSpacing:'-0.02em'}}>
+      <h2 style={{fontSize:20,fontWeight: 500,color:th.text,margin:'0 0 20px',letterSpacing:'-0.02em'}}>
         Vos informations
       </h2>
       {/* Récap */}
-      <div style={{background:th.cardAlt,borderRadius:12,border:`1px solid ${th.border}`,
+      <div style={{background:th.cardAlt,borderRadius:12,border: `0.5px solid ${th.border}`,
         padding:'14px 16px',marginBottom:24}}>
-        <p style={{fontSize:11,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.06em',
+        <p style={{fontSize:11,fontWeight: 500,
           color:th.dim,margin:'0 0 8px'}}>Récapitulatif</p>
         {[['Service',selSvc?.name],
           ['Avec',selEmp?._anyEmployee?'Premier disponible':selEmp?.name],
@@ -34,9 +34,9 @@ export function Step5Info({
           selSvc?.price&&Number(selSvc.price)>0?['Prix',`${Number(selSvc.price).toFixed(2)} €`]:null
         ].filter(Boolean).map(([l,v])=>(
           <div key={l} style={{display:'flex',justifyContent:'space-between',
-            padding:'5px 0',borderTop:`1px solid ${th.border}`}}>
+            padding:'5px 0',borderTop: `0.5px solid ${th.border}`}}>
             <span style={{fontSize:12,color:th.muted}}>{l}</span>
-            <span style={{fontSize:12,fontWeight:700,color:th.text}}>{v}</span>
+            <span style={{fontSize:12,fontWeight: 500,color:th.text}}>{v}</span>
           </div>
         ))}
       </div>
@@ -44,49 +44,49 @@ export function Step5Info({
       {clientUser ? (
         <div>
           <div style={{display:'flex',alignItems:'center',gap:12,
-            background:th.card,border:`1px solid ${th.border}`,
+            background:th.card,border: `0.5px solid ${th.border}`,
             borderRadius:12,padding:'14px 16px',marginBottom:16}}>
             <div style={{width:44,height:44,borderRadius:99,flexShrink:0,
               background:th.accent,display:'flex',alignItems:'center',
-              justifyContent:'center',color:th.accentText,fontWeight:800,fontSize:17}}>
+              justifyContent:'center',color:th.accentText,fontWeight: 500,fontSize:17}}>
               {(clientUser.first_name||'?').charAt(0).toUpperCase()}
             </div>
             <div style={{flex:1}}>
-              <p style={{fontWeight:700,fontSize:14,color:th.text,margin:'0 0 2px'}}>
+              <p style={{fontWeight: 500,fontSize:14,color:th.text,margin:'0 0 2px'}}>
                 {clientUser.first_name} {clientUser.last_name}
               </p>
               <p style={{fontSize:12,color:th.muted,margin:0}}>{clientUser.email}</p>
             </div>
             <button onClick={()=>{navigate(`/book/${slug}/client/profil`,{replace:false}); setMyApptsInitTab('profile');setView('myAppts');}}
-              style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:600,
-                color:th.text,background:th.cardAlt,border:`1px solid ${th.border}`,cursor:'pointer'}}>
+              style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight: 500,
+                color:th.text,background:th.cardAlt,border: `0.5px solid ${th.border}`,cursor:'pointer'}}>
               Profil
             </button>
           </div>
           {/* Champ téléphone obligatoire si manquant (ex: après Google OAuth) */}
           {!clientPhone.trim() && (
-            <div style={{background:'rgba(245,158,11,0.06)',border:'1px solid rgba(245,158,11,0.25)',
+            <div style={{background:'rgba(245,158,11,0.06)',border: '0.5px solid rgba(245,158,11,0.25)',
               borderRadius:10,padding:'12px 14px',marginBottom:14}}>
-              <p style={{fontSize:12,fontWeight:700,color:'#d97706',margin:'0 0 8px'}}>
+              <p style={{fontSize:12,fontWeight: 500,color:'#d97706',margin:'0 0 8px'}}>
                 Complétez votre profil pour continuer
               </p>
-              <label style={{display:'block',fontSize:11,fontWeight:700,
-                color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+              <label style={{display:'block',fontSize:11,fontWeight: 500,
+                color:th.muted,marginBottom:5}}>
                 Téléphone *
               </label>
               <div style={{display:'flex',gap:6,position:'relative'}}>
                 <div style={{position:'relative'}}>
                   <button type="button" onClick={()=>setPhoneDrop(!phoneDrop)}
                     style={{display:'flex',alignItems:'center',gap:4,padding:'11px 10px',
-                      borderRadius:9,background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                      borderRadius:9,background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
                       color:th.text,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',height:'100%'}}>
                     <span style={{fontSize:16}}>{phoneCC.flag}</span>
-                    <span style={{fontSize:12,fontWeight:600}}>{phoneCC.dial}</span>
+                    <span style={{fontSize:12,fontWeight: 500}}>{phoneCC.dial}</span>
                     <span style={{fontSize:9,opacity:0.5}}>▼</span>
                   </button>
                   {phoneDrop && (
                     <div style={{position:'absolute',top:'100%',left:0,zIndex:999,marginTop:4,
-                      background:th.card,border:`1px solid ${th.border}`,borderRadius:10,
+                      background:th.card,border: `0.5px solid ${th.border}`,borderRadius:10,
                       boxShadow:'0 8px 24px rgba(0,0,0,0.15)',maxHeight:200,overflowY:'auto',minWidth:200}}>
                       {PHONE_COUNTRIES.map(c=>(
                         <button key={c.code} type="button" onClick={()=>{setPhoneCC(c);setPhoneDrop(false);setPhoneErr('');}}
@@ -94,7 +94,7 @@ export function Step5Info({
                             background:phoneCC.code===c.code?'rgba(99,102,241,0.08)':'transparent',
                             border:'none',cursor:'pointer',color:th.text,fontSize:13,textAlign:'left'}}>
                           <span style={{fontSize:16}}>{c.flag}</span>
-                          <span style={{fontWeight:600}}>{c.dial}</span>
+                          <span style={{fontWeight: 500}}>{c.dial}</span>
                           <span style={{color:th.muted,fontSize:12}}>{c.label}</span>
                         </button>
                       ))}
@@ -105,20 +105,20 @@ export function Step5Info({
                   maxLength={20} pattern="[0-9+\s\-]*"
                   onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
                   style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
-                    background:th.inputBg,border:`1px solid ${phoneErr?'#ef4444':th.inputBorder}`,
+                    background:th.inputBg,border: `0.5px solid ${phoneErr?'#ef4444':th.inputBorder}`,
                     color:th.text,fontSize:13,boxSizing:'border-box'}}/>
               </div>
-              {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight:600}}>{phoneErr}</p>}
+              {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight: 500}}>{phoneErr}</p>}
             </div>
           )}
-          <label style={{display:'block',fontSize:12,fontWeight:600,color:th.muted,marginBottom:6}}>
+          <label style={{display:'block',fontSize:12,fontWeight: 500,color:th.muted,marginBottom:6}}>
             Note (optionnelle)
           </label>
           <textarea value={notes} onChange={e=>setNotes(e.target.value.slice(0,500))} rows={3}
             maxLength={500}
             placeholder="Demandes particulières…"
             style={{width:'100%',padding:'12px 14px',borderRadius:10,outline:'none',
-              background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+              background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
               color:th.text,fontSize:13,resize:'none',lineHeight:1.5}}/>
           <button onClick={async ()=>{
             // Valider et formater le téléphone si pas encore fait
@@ -146,7 +146,7 @@ export function Step5Info({
             disabled={!clientPhone.trim()&&!phoneLocal.replace(/\D/g,'')}
             style={{width:'100%',marginTop:16,padding:'15px',borderRadius:12,
               background:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?th.border:th.accent,
-              border:'none',fontWeight:800,fontSize:15,
+              border:'none',fontWeight: 500,fontSize:15,
               color:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?th.muted:th.accentText,
               cursor:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?'not-allowed':'pointer',
               opacity:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?0.5:1}}>
@@ -180,9 +180,9 @@ export function Step5Info({
             /* ── Formulaire principal : suggestion auth + form sans compte ── */
             <div>
               {/* ── Bloc suggestion auth ── */}
-              <div style={{background:th.card,border:`1px solid ${th.border}`,
+              <div style={{background:th.card,border: `0.5px solid ${th.border}`,
                 borderRadius:12,padding:16,marginBottom:16}}>
-                <p style={{fontSize:13,fontWeight:700,color:th.text,margin:'0 0 3px'}}>
+                <p style={{fontSize:13,fontWeight: 500,color:th.text,margin:'0 0 3px'}}>
                   Déjà un compte ? Connectez-vous
                 </p>
                 <p style={{fontSize:11,color:th.muted,margin:'0 0 12px',lineHeight:1.5}}>
@@ -191,12 +191,12 @@ export function Step5Info({
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
                   <button onClick={()=>setInlineAuthMode('login')}
                     style={{padding:'11px',borderRadius:10,background:th.accent,
-                      border:'none',fontWeight:700,fontSize:13,color:th.accentText,cursor:'pointer'}}>
+                      border:'none',fontWeight: 500,fontSize:13,color:th.accentText,cursor:'pointer'}}>
                     Se connecter
                   </button>
                   <button onClick={()=>setInlineAuthMode('register')}
                     style={{padding:'11px',borderRadius:10,background:th.card,
-                      border:`1px solid ${th.border}`,fontWeight:700,fontSize:13,
+                      border: `0.5px solid ${th.border}`,fontWeight: 500,fontSize:13,
                       color:th.text,cursor:'pointer'}}>
                     Créer un compte
                   </button>
@@ -205,8 +205,8 @@ export function Step5Info({
                 <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug); const popup=window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); const expectedOrigin=window.location.origin; const h=(e)=>{ if(e.origin!==expectedOrigin)return; if(e.data?.type!=='GOOGLE_AUTH_SUCCESS')return; window.removeEventListener('message',h); if(popup&&!popup.closed)popup.close(); const{token,client}=e.data; if(!token||!client)return; localStorage.setItem('ff_client_token',token); localStorage.setItem('ff_client_info',JSON.stringify(client)); handleAuth(client); }; window.addEventListener('message',h); }}
                   style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
                     padding:'11px',borderRadius:10,background:th.card,
-                    border:`1px solid ${th.border}`,cursor:'pointer',
-                    fontWeight:700,fontSize:13,color:th.text}}>
+                    border: `0.5px solid ${th.border}`,cursor:'pointer',
+                    fontWeight: 500,fontSize:13,color:th.text}}>
                   <svg width="16" height="16" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -230,34 +230,34 @@ export function Step5Info({
               <div style={{display:'flex',flexDirection:'column',gap:12}}>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
                   <div>
-                    <label style={{display:'block',fontSize:11,fontWeight:700,
-                      color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                    <label style={{display:'block',fontSize:11,fontWeight: 500,
+                      color:th.muted,marginBottom:5}}>
                       Prénom *
                     </label>
                     <input placeholder="Prénom"
                       value={clientName.split(' ')[0]||''}
                       onChange={e=>{const nom=clientName.split(' ').slice(1).join(' ');setCN(e.target.value.trim()+(nom?' '+nom:''));}}
                       style={{width:'100%',padding:'11px 12px',borderRadius:9,outline:'none',
-                        background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                        background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
                         color:th.text,fontSize:13,boxSizing:'border-box'}}/>
                   </div>
                   <div>
-                    <label style={{display:'block',fontSize:11,fontWeight:700,
-                      color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                    <label style={{display:'block',fontSize:11,fontWeight: 500,
+                      color:th.muted,marginBottom:5}}>
                       Nom *
                     </label>
                     <input placeholder="Nom"
                       value={clientName.split(' ').slice(1).join(' ')||''}
                       onChange={e=>{const prenom=clientName.split(' ')[0]||'';setCN(prenom+(e.target.value.trim()?' '+e.target.value.trim():''));}}
                       style={{width:'100%',padding:'11px 12px',borderRadius:9,outline:'none',
-                        background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                        background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
                         color:th.text,fontSize:13,boxSizing:'border-box'}}/>
                   </div>
                 </div>
 
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:700,
-                    color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <label style={{display:'block',fontSize:11,fontWeight: 500,
+                    color:th.muted,marginBottom:5}}>
                     Email *
                   </label>
                   <div style={{position:'relative'}}>
@@ -274,21 +274,21 @@ export function Step5Info({
                       }}
                       style={{width:'100%',padding:'11px 36px 11px 12px',borderRadius:9,outline:'none',
                         background:th.inputBg,
-                        border:`1px solid ${emailStatus==='exists'?'#ef4444':emailStatus==='free'?'#22c55e':th.inputBorder}`,
+                        border: `0.5px solid ${emailStatus==='exists'?'#ef4444':emailStatus==='free'?'#22c55e':th.inputBorder}`,
                         color:th.text,fontSize:13}}/>
                     {emailStatus==='checking'&&<div style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',width:13,height:13,borderRadius:'50%',border:'2px solid rgba(0,0,0,0.1)',borderTopColor:th.accent,animation:'spin .7s linear infinite'}}/>}
-                    {emailStatus==='free'&&<span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:14,color:'#22c55e',fontWeight:700}}>✓</span>}
-                    {emailStatus==='exists'&&<span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:14,color:'#ef4444',fontWeight:700}}>✕</span>}
+                    {emailStatus==='free'&&<span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:14,color:'#22c55e',fontWeight: 500}}>✓</span>}
+                    {emailStatus==='exists'&&<span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:14,color:'#ef4444',fontWeight: 500}}>✕</span>}
                   </div>
                   {emailStatus==='exists'&&(
-                    <div style={{marginTop:6,borderRadius:9,border:'1px solid rgba(239,68,68,0.2)',
+                    <div style={{marginTop:6,borderRadius:9,border: '0.5px solid rgba(239,68,68,0.2)',
                       background:'rgba(239,68,68,0.04)',overflow:'hidden'}}>
-                      <p style={{fontSize:12,fontWeight:700,color:'#dc2626',padding:'8px 12px 4px',margin:0}}>
+                      <p style={{fontSize:12,fontWeight: 500,color:'#dc2626',padding:'8px 12px 4px',margin:0}}>
                         Un compte existe — connectez-vous
                       </p>
                       <button onClick={()=>{setInlineAuthMode('login');}}
                         style={{width:'100%',padding:'9px 12px',background:'#ef4444',border:'none',
-                          color:'white',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+                          color:'white',fontWeight: 500,fontSize:12,cursor:'pointer'}}>
                         Se connecter →
                       </button>
                     </div>
@@ -296,23 +296,23 @@ export function Step5Info({
                 </div>
 
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:700,
-                    color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <label style={{display:'block',fontSize:11,fontWeight: 500,
+                    color:th.muted,marginBottom:5}}>
                     Téléphone *
                   </label>
                   <div style={{display:'flex',gap:6,position:'relative'}}>
                     <div style={{position:'relative'}}>
                       <button type="button" onClick={()=>setPhoneDrop(!phoneDrop)}
                         style={{display:'flex',alignItems:'center',gap:4,padding:'11px 10px',
-                          borderRadius:9,background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                          borderRadius:9,background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
                           color:th.text,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',height:'100%'}}>
                         <span style={{fontSize:16}}>{phoneCC.flag}</span>
-                        <span style={{fontSize:12,fontWeight:600}}>{phoneCC.dial}</span>
+                        <span style={{fontSize:12,fontWeight: 500}}>{phoneCC.dial}</span>
                         <span style={{fontSize:9,opacity:0.5}}>▼</span>
                       </button>
                       {phoneDrop && (
                         <div style={{position:'absolute',top:'100%',left:0,zIndex:999,marginTop:4,
-                          background:th.card,border:`1px solid ${th.border}`,borderRadius:10,
+                          background:th.card,border: `0.5px solid ${th.border}`,borderRadius:10,
                           boxShadow:'0 8px 24px rgba(0,0,0,0.15)',maxHeight:200,overflowY:'auto',minWidth:200}}>
                           {PHONE_COUNTRIES.map(c=>(
                             <button key={c.code} type="button" onClick={()=>{setPhoneCC(c);setPhoneDrop(false);setPhoneErr('');}}
@@ -320,7 +320,7 @@ export function Step5Info({
                                 background:phoneCC.code===c.code?'rgba(99,102,241,0.08)':'transparent',
                                 border:'none',cursor:'pointer',color:th.text,fontSize:13,textAlign:'left'}}>
                               <span style={{fontSize:16}}>{c.flag}</span>
-                              <span style={{fontWeight:600}}>{c.dial}</span>
+                              <span style={{fontWeight: 500}}>{c.dial}</span>
                               <span style={{color:th.muted,fontSize:12}}>{c.label}</span>
                             </button>
                           ))}
@@ -330,21 +330,21 @@ export function Step5Info({
                     <input type="tel" placeholder="6 03 04 46 17" value={phoneLocal}
                       onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
                       style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
-                        background:th.inputBg,border:`1px solid ${phoneErr?'#ef4444':th.inputBorder}`,
+                        background:th.inputBg,border: `0.5px solid ${phoneErr?'#ef4444':th.inputBorder}`,
                         color:th.text,fontSize:13}}/>
                   </div>
-                  {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight:600}}>{phoneErr}</p>}
+                  {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight: 500}}>{phoneErr}</p>}
                 </div>
 
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:700,
-                    color:th.muted,marginBottom:5,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <label style={{display:'block',fontSize:11,fontWeight: 500,
+                    color:th.muted,marginBottom:5}}>
                     Note <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optionnelle)</span>
                   </label>
                   <textarea placeholder="Demandes particulières…" value={notes}
                     onChange={e=>setNotes(e.target.value)} rows={2}
                     style={{width:'100%',padding:'11px 12px',borderRadius:9,outline:'none',
-                      background:th.inputBg,border:`1px solid ${th.inputBorder}`,
+                      background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
                       color:th.text,fontSize:13,resize:'none',lineHeight:1.5}}/>
                 </div>
               </div>
@@ -359,7 +359,7 @@ export function Step5Info({
                 disabled={!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,'')}
                 style={{width:'100%',marginTop:16,padding:'14px',borderRadius:12,
                   background:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?th.border:th.accent,
-                  border:'none',fontWeight:800,fontSize:14,
+                  border:'none',fontWeight: 500,fontSize:14,
                   color:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?th.muted:th.accentText,
                   cursor:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?'not-allowed':'pointer',
                   opacity:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?0.5:1}}>
@@ -369,7 +369,7 @@ export function Step5Info({
           )}
         </div>
       )}
-      {bookErr && <p style={{fontSize:12,color:'#ef4444',marginTop:10,fontWeight:600}}>{bookErr}</p>}
+      {bookErr && <p style={{fontSize:12,color:'#ef4444',marginTop:10,fontWeight: 500}}>{bookErr}</p>}
     </div>
   );
 }

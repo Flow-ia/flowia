@@ -86,18 +86,18 @@ export default function BookingPolitique({ slug }) {
 
       {/* Navbar */}
       <nav style={{ position:'sticky', top:0, zIndex:50, background:th.navBg,
-        borderBottom:`1px solid ${th.navBorder}`,
+        borderBottom: `0.5px solid ${th.navBorder}`,
         boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
         <div style={{ maxWidth:760, margin:'0 auto', padding:'0 24px', height:60,
           display:'flex', alignItems:'center', gap:16 }}>
           <a href={`/book/${slug}`}
             style={{ display:'flex', alignItems:'center', gap:6, fontSize:13,
-              fontWeight:600, color:th.muted, textDecoration:'none' }}>
+              fontWeight: 500, color:th.muted, textDecoration:'none' }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
               style={{width:16,height:16}}><polyline points="15 18 9 12 15 6"/></svg>
             Retour
           </a>
-          <span style={{ fontSize:15, fontWeight:700, color:th.text, letterSpacing:'-0.01em' }}>
+          <span style={{ fontSize:15, fontWeight: 500, color:th.text, letterSpacing:'-0.01em' }}>
             Politique de réservation
             {business && ` - ${name}`}
           </span>
@@ -109,7 +109,7 @@ export default function BookingPolitique({ slug }) {
 
         {/* En-tête */}
         <div style={{ marginBottom:40 }}>
-          <h1 style={{ fontSize:28, fontWeight:900, color:th.text,
+          <h1 style={{ fontSize:28, fontWeight: 500, color:th.text,
             margin:'0 0 12px', letterSpacing:'-0.03em' }}>
             Politique de réservation
           </h1>
@@ -126,7 +126,7 @@ export default function BookingPolitique({ slug }) {
 
         {/* Sections */}
         <div style={{ display:'flex', flexDirection:'column', gap:0,
-          border:`1px solid ${th.border}`, borderRadius:16, overflow:'hidden',
+          border: `0.5px solid ${th.border}`, borderRadius:16, overflow:'hidden',
           background:th.card }}>
           {SECTIONS.map((s, i) => (
             <SectionItem key={s.title} section={s} th={th}
@@ -140,8 +140,8 @@ export default function BookingPolitique({ slug }) {
             style={{ display:'inline-flex', alignItems:'center', gap:8,
               padding:'13px 28px', borderRadius:12, background:th.accent,
               color: saved==='dark' ? '#000' : '#fff',
-              fontWeight:800, fontSize:14, textDecoration:'none',
-              boxShadow:'0 2px 8px rgba(0,0,0,0.15)' }}>
+              fontWeight: 500, fontSize:14, textDecoration:'none',
+              boxShadow: 'none' }}>
             Réserver un rendez-vous →
           </a>
         </div>
@@ -159,7 +159,7 @@ function SectionItem({ section, th, isLast }) {
           padding:'18px 24px', background:'none', border:'none', cursor:'pointer',
           textAlign:'left' }}>
         <span style={{ fontSize:20, flexShrink:0 }}>{section.icon}</span>
-        <span style={{ fontSize:15, fontWeight:700, color:th.text, flex:1 }}>
+        <span style={{ fontSize:15, fontWeight: 500, color:th.text, flex:1 }}>
           {section.title}
         </span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"

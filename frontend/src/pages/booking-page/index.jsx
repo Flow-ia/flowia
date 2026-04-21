@@ -616,17 +616,17 @@ export default function BookingPage({ slug }) {
   // ── Vues principales ──────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{background:th.bg}}>
-      <Spinner />
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:th.bg }}>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <Spinner th={th} />
     </div>
   );
 
   if (error && !business) return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{background:th.bg}}>
-      <div className="text-center">
-        <p className="text-5xl mb-4">😕</p>
-        <h1 className="text-xl font-black mb-2" style={{color:th.text}}>Page introuvable</h1>
-        <p className="text-sm" style={{color:th.muted}}>Ce lien n&apos;existe pas ou est désactivé.</p>
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:th.bg }}>
+      <div style={{ textAlign:'center', maxWidth:360 }}>
+        <h1 style={{ fontSize:20, fontWeight:500, margin:'0 0 8px', color:th.text }}>Page introuvable</h1>
+        <p style={{ fontSize:13, color:th.muted, margin:0 }}>Ce lien n&apos;existe pas ou est désactivé.</p>
       </div>
     </div>
   );
@@ -751,22 +751,21 @@ export default function BookingPage({ slug }) {
             <div style={{ marginBottom:24, animation:'fadeIn .2s ease' }}>
               {/* Bandeau contexte parrainage — filleul incité à créer un compte */}
               {referralCode && referralInfo && !clientUser && (
-                <div style={{ marginBottom:16, padding:'14px 18px',
-                  background:'linear-gradient(135deg, rgba(139,92,246,0.14), rgba(99,102,241,0.14))',
-                  border:'1px solid rgba(139,92,246,0.35)', borderRadius:14,
-                  display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-                  <span style={{ fontSize:22 }}>🎁</span>
+                <div style={{ marginBottom:16, padding:'12px 14px',
+                  background:'#eef2ff',
+                  borderLeft:'2px solid #6366f1', borderRadius:8,
+                  display:'flex', alignItems:'flex-start', gap:12, flexWrap:'wrap' }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <p style={{ fontSize:13, fontWeight:800, color:th.text, margin:'0 0 2px' }}>
+                    <p style={{ fontSize:13, fontWeight: 500, color:'#4338ca', margin:'0 0 2px' }}>
                       Vous êtes invité par un ami — créez votre compte pour en profiter
                     </p>
-                    <p style={{ fontSize:12, color:th.muted, margin:0, lineHeight:1.5 }}>
-                      Code <strong style={{color:'#6d28d9',fontFamily:'monospace'}}>{referralCode}</strong> — remise de{' '}
-                      <strong style={{color:th.text}}>
+                    <p style={{ fontSize:12, color:'#4338ca', margin:0, lineHeight:1.5, opacity:0.85 }}>
+                      Code <span style={{fontWeight:500,fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>{referralCode}</span> — remise de{' '}
+                      <span style={{fontWeight:500}}>
                         {referralInfo.discount_type === 'percent'
                           ? `${referralInfo.discount_value}%`
                           : `${Number(referralInfo.discount_value).toFixed(2)} €`}
-                      </strong>{' '}
+                      </span>{' '}
                       appliquée selon les conditions du commerçant.
                     </p>
                   </div>
@@ -814,7 +813,7 @@ export default function BookingPage({ slug }) {
               {/* Bouton retour */}
               <button
                 onClick={()=> step===2?goToStep(1):step===3?goToStep(2):step===4?goToStep(3):step===5?goToStep(4):goToStep(5)}
-                style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:600,
+                style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight: 500,
                   color:th.muted, background:'none', border:'none', cursor:'pointer',
                   padding:'0 0 20px', marginBottom:4 }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -918,14 +917,14 @@ export default function BookingPage({ slug }) {
         <div className="bk-mo" style={{
           position:'fixed', bottom:0, left:0, right:0, zIndex:40,
           padding:'12px 16px', background:th.navBg,
-          borderTop:`1px solid ${th.border}`,
-          boxShadow:'0 -2px 12px rgba(0,0,0,0.08)',
+          borderTop: `0.5px solid ${th.border}`,
+          boxShadow: '0 -1px 3px rgba(0,0,0,0.05)',
         }}>
           <button
             onClick={()=>{ const el=document.getElementById('section-prestations');
               if(el) el.scrollIntoView({behavior:'smooth'}); }}
             style={{ width:'100%', padding:'15px', borderRadius:12,
-              background:th.accent, border:'none', fontWeight:800, fontSize:15,
+              background:th.accent, border:'none', fontWeight: 500, fontSize:15,
               color:th.accentText, cursor:'pointer' }}>
             Réserver
           </button>

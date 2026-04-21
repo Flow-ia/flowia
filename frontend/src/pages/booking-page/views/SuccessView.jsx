@@ -32,7 +32,7 @@ export function SuccessView({
           </svg>
         </div>
 
-        <h1 style={{ fontSize:24, fontWeight:900, color:th.text, margin:'0 0 8px',
+        <h1 style={{ fontSize:24, fontWeight: 500, color:th.text, margin:'0 0 8px',
           letterSpacing:'-0.03em', textAlign:'center' }}>
           Réservation confirmée !
         </h1>
@@ -41,20 +41,20 @@ export function SuccessView({
         </p>
 
         {/* Numéro de réservation */}
-        <div style={{ width:'100%', background:th.cardAlt, border:`1px solid ${th.border}`,
+        <div style={{ width:'100%', background:th.cardAlt, border: `0.5px solid ${th.border}`,
           borderRadius:14, padding:'16px 20px', textAlign:'center', marginBottom:16 }}>
-          <p style={{ fontSize:11, fontWeight:700, textTransform:'uppercase',
+          <p style={{ fontSize:11, fontWeight: 500,
             letterSpacing:'0.08em', color:th.muted, margin:'0 0 6px' }}>
             Numéro de réservation
           </p>
-          <p style={{ fontSize:24, fontWeight:900, color:th.text, fontFamily:'monospace',
-            margin:0, letterSpacing:'0.05em' }}>
+          <p style={{ fontSize:24, fontWeight: 500, color:th.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            margin:0 }}>
             #{bookedAppt.id.substring(0,8).toUpperCase()}
           </p>
         </div>
 
         {/* Récap */}
-        <div style={{ width:'100%', background:th.card, border:`1px solid ${th.border}`,
+        <div style={{ width:'100%', background:th.card, border: `0.5px solid ${th.border}`,
           borderRadius:14, overflow:'hidden', marginBottom:24 }}>
           {[
             ['Service',  selSvc?.name],
@@ -78,12 +78,12 @@ export function SuccessView({
                   <span style={{ fontSize:13, textDecoration:'line-through', color:th.dim }}>
                     {Number(selSvc.price).toFixed(2)} €
                   </span>
-                  <span style={{ fontSize:13, fontWeight:800, color:'#16a34a' }}>
+                  <span style={{ fontSize:13, fontWeight: 500, color:'#16a34a' }}>
                     {(Number(selSvc.price||0) - Number(bookedAppt.discount_amount||0)).toFixed(2)} €
                   </span>
                 </span>
               ) : (
-                <span style={{ fontSize:13, fontWeight:700, color:th.text }}>{val}</span>
+                <span style={{ fontSize:13, fontWeight: 500, color:th.text }}>{val}</span>
               )}
             </div>
           ))}
@@ -94,15 +94,15 @@ export function SuccessView({
           {clientUser && (
             <button onClick={() => { navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts'); }}
               style={{ width:'100%', padding:'15px', borderRadius:12, border:'none',
-                background:th.accent, color:th.accentText, fontWeight:800, fontSize:14,
-                cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,0.15)' }}>
+                background:th.accent, color:th.accentText, fontWeight: 500, fontSize:14,
+                cursor:'pointer', boxShadow: 'none' }}>
               Voir mes rendez-vous →
             </button>
           )}
           <button onClick={resetBooking}
             style={{ width:'100%', padding:'14px', borderRadius:12, cursor:'pointer',
-              background:th.card, border:`1px solid ${th.border}`,
-              color:th.text, fontWeight:600, fontSize:14 }}>
+              background:th.card, border: `0.5px solid ${th.border}`,
+              color:th.text, fontWeight: 500, fontSize:14 }}>
             Prendre un autre RDV
           </button>
         </div>

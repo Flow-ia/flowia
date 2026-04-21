@@ -20,7 +20,7 @@ export function DeleteAccountModal({
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
       alignItems:'center', justifyContent:'center', padding:16,
       background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-      <div className="bk-modal-inner" style={{ background:th.card, border:`1px solid ${th.border}`,
+      <div className="bk-modal-inner" style={{ background:th.card, border: `0.5px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
         <div style={{ width:52, height:52, borderRadius:14, background:'rgba(239,68,68,0.1)',
@@ -32,21 +32,21 @@ export function DeleteAccountModal({
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
         </div>
-        <p style={{ fontSize:17, fontWeight:800, color:th.text, margin:'0 0 8px' }}>
+        <p style={{ fontSize:17, fontWeight: 500, color:th.text, margin:'0 0 8px' }}>
           Supprimer mon compte ?
         </p>
         <p style={{ fontSize:13, color:th.muted, margin:'0 0 10px', lineHeight:1.6 }}>
           Cette action est <strong style={{color:th.text}}>irréversible</strong>.{' '}
           <a href={`/book/${slug}/politique`} target="_blank" rel="noreferrer"
-            style={{ color:th.text, fontWeight:700, textDecoration:'underline' }}>
+            style={{ color:th.text, fontWeight: 500, textDecoration:'underline' }}>
             Voir la politique de confidentialité
           </a>.
         </p>
         <p style={{ fontSize:13, color:th.muted, margin:'0 0 8px', lineHeight:1.5 }}>
           Pour confirmer, saisissez&nbsp;:
         </p>
-        <p style={{ fontSize:15, fontWeight:900, color:'#ef4444', margin:'0 0 10px',
-          fontFamily:'monospace', letterSpacing:1 }}>
+        <p style={{ fontSize:15, fontWeight: 500, color:'#ef4444', margin:'0 0 10px',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing:1 }}>
           {DELETE_PHRASE}
         </p>
         <input type="text" value={deleteConfirm}
@@ -54,18 +54,18 @@ export function DeleteAccountModal({
           placeholder={DELETE_PHRASE}
           autoComplete="off" autoCapitalize="none" spellCheck={false}
           disabled={deleteLoading}
-          style={{ ...inpStyle, marginBottom:10, fontFamily:'monospace', letterSpacing:1,
+          style={{ ...inpStyle, marginBottom:10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing:1,
             borderColor: deleteErr ? '#ef4444' : th.inputBorder }}/>
         {deleteErr && (
-          <p style={{ fontSize:12, color:'#ef4444', fontWeight:600, margin:'0 0 12px' }}>
+          <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
             {deleteErr}
           </p>
         )}
         <div style={{ display:'flex', gap:10, marginTop:6 }}>
           <button onClick={onClose} disabled={deleteLoading}
             style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-              background:th.cardAlt, border:`1px solid ${th.border}`,
-              color:th.muted, fontWeight:700, fontSize:13 }}>
+              background:th.cardAlt, border: `0.5px solid ${th.border}`,
+              color:th.muted, fontWeight: 500, fontSize:13 }}>
             Annuler
           </button>
           <button onClick={onConfirm}
@@ -73,7 +73,7 @@ export function DeleteAccountModal({
             style={{ flex:1, padding:'12px', borderRadius:11,
               cursor: (deleteLoading || !deleteConfirmOk) ? 'not-allowed' : 'pointer',
               background:'#ef4444', border:'none',
-              color:'white', fontWeight:800, fontSize:13,
+              color:'white', fontWeight: 500, fontSize:13,
               opacity: (deleteLoading || !deleteConfirmOk) ? 0.5 : 1 }}>
             {deleteLoading ? '...' : 'Supprimer définitivement'}
           </button>

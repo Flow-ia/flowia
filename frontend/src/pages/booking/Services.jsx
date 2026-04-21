@@ -15,8 +15,7 @@ export function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
           style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
             padding:'14px 20px', background:'none', border:'none', cursor:'pointer',
             textAlign:'left' }}>
-          <span style={{ fontSize:13, fontWeight:700, color:th.text, textTransform:'uppercase',
-            letterSpacing:'0.05em' }}>{label}</span>
+          <span style={{ fontSize:13, fontWeight: 500, color:th.text }}>{label}</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
             strokeLinecap="round" strokeLinejoin="round"
             style={{ width:16, height:16, color:th.muted,
@@ -51,7 +50,7 @@ export function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
 
                 {/* Infos */}
                 <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ fontSize:14, fontWeight:600, color:th.text, margin:'0 0 3px',
+                  <p style={{ fontSize:14, fontWeight: 500, color:th.text, margin:'0 0 3px',
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {s.name}
                   </p>
@@ -121,7 +120,7 @@ export function ServiceCard({ s, th, onClick, catColor }) {
   return (
     <button onClick={onClick}
       style={{ width:'100%', borderRadius:18, padding:0, textAlign:'left',
-        background:th.card, border:`1px solid ${th.border}`,
+        background:th.card, border: `0.5px solid ${th.border}`,
         cursor:'pointer', overflow:'hidden',
         boxShadow: th.mode==='light' ? '0 2px 10px rgba(0,0,0,0.06)' : 'none',
         transition:'transform .1s,box-shadow .1s' }}
@@ -147,7 +146,7 @@ export function ServiceCard({ s, th, onClick, catColor }) {
           </div>
         )}
         <div style={{ flex:1, minWidth:0 }}>
-          <p style={{ fontWeight:700, fontSize:14, color:th.text, margin:'0 0 2px',
+          <p style={{ fontWeight: 500, fontSize:14, color:th.text, margin:'0 0 2px',
             overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</p>
           <p style={{ fontSize:12, color:th.muted, margin:0 }}>
             ⏱ {durLabel}{s.price != null ? ` · ${Number(s.price).toFixed(2)} €` : ''}
@@ -161,7 +160,7 @@ export function ServiceCard({ s, th, onClick, catColor }) {
         </svg>
       </div>
       {/* Barre accent bas */}
-      <div style={{ height:3, background:`linear-gradient(90deg,${accentColor},${accentColor}44)` }}/>
+      <div style={{ height:2, background: accentColor, opacity: 0.9 }}/>
     </button>
   );
 }
