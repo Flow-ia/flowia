@@ -7,6 +7,13 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-21)
 
+**UI EmployeeAgenda redesign Google Calendar** — 3 vues (Jour / Semaine /
+Mois) avec navigation libre prev/next, bouton « Aujourd'hui », toggle de
+vue façon Google Calendar. Nouveaux composants `WeekView.jsx` et
+`MonthView.jsx` dans `employee-agenda/components/`. La vue Jour existante
+(colonnes employés) est préservée avec son mini-bar semaine. Cliquer sur
+un jour (semaine ou mois) bascule en vue Jour. Build OK.
+
 **Audit backend clôturé** (commits K→AA). Toutes les routes backend ont été
 auditées : error hygiene, PIN admin, bounds, normalisation email, IDOR,
 whitelists, rate-limiting dédiés, CNIL/RGPD opt-in marketing, security
