@@ -46,14 +46,12 @@ export default function OAuthCallback() {
       const userRaw = params.get('user');
       let user = null;
       try { if (userRaw) user = JSON.parse(userRaw); } catch { /* noop */ }
-      // localStorage setItem déclenche un `storage` event dans les autres
-      // fenêtres same-origin → fallback pour le cas où BroadcastChannel
-      // n'est pas supporté / n'arrive pas à temps.
-      if (user) {
-        try { localStorage.setItem('ff_oauth_user', JSON.stringify(user)); } catch {}
-      }
       localStorage.removeItem('ff_pin_token');
       localStorage.setItem('ff_token', token);
+      // Marqueur éphémère pour déclencher le `storage` event dans l'opener
+      // (même origine). Payload = { token, user } pour que l'opener puisse
+      // persister le token même si la popup était sur une autre origine.
+      try { localStorage.setItem('ff_oauth_merchant', JSON.stringify({ token, user })); } catch {}
       try { bc && bc.postMessage({ type: 'merchant_login', token, user }); } catch {}
     } else if (type === 'client') {
       const clientRaw = params.get('client');
@@ -61,6 +59,7 @@ export default function OAuthCallback() {
       try { if (clientRaw) client = JSON.parse(clientRaw); } catch { /* noop */ }
       if (client) localStorage.setItem('ff_client_info', JSON.stringify(client));
       localStorage.setItem('ff_client_token', token);
+      try { localStorage.setItem('ff_oauth_client', JSON.stringify({ token, client })); } catch {}
       try { bc && bc.postMessage({ type: 'client_login', token, client }); } catch {}
     }
 

@@ -23,33 +23,39 @@ export function AuthProvider({ children }) {
       setLoading(false);
     }
 
-    // Écoute les événements OAuth diffusés par /__oauth. Permet de
-    // recharger l'utilisateur quand la popup Google termine sans passer
-    // par window.opener (détaché par Google COOP:same-origin).
-    const applyMerchantLogin = (user) => {
+    // Écoute les événements OAuth diffusés par /__oauth. Persiste le
+    // token dans notre localStorage même si la popup avait atterri sur
+    // un autre sous-domaine (origine différente = localStorage isolé).
+    // Sans ça, les requêtes /api/* partaient sans Authorization → 401.
+    const applyMerchantLogin = (token, user) => {
+      if (token) localStorage.setItem('ff_token', token);
       localStorage.removeItem('ff_pin_token');
       if (user) setUser(user);
-      else api.me().then(d => setUser(d.user)).catch(() => {});
+      else api.me().then(d => setUser(d.user)).catch(() => {
+        // Token invalide côté backend → purger pour éviter de réutiliser.
+        localStorage.removeItem('ff_token');
+      });
     };
 
     let bc = null;
     try {
       bc = new BroadcastChannel('flowia-oauth');
       bc.onmessage = (ev) => {
-        if (ev.data?.type === 'merchant_login') applyMerchantLogin(ev.data.user);
+        if (ev.data?.type === 'merchant_login') {
+          applyMerchantLogin(ev.data.token, ev.data.user);
+        }
       };
     } catch { /* BroadcastChannel non supporté */ }
 
     // Fallback storage event : fire-and-forget dans la popup → déclenche
-    // un `storage` event dans l'opener (same-origin). Permet de survivre
-    // au cas où BroadcastChannel serait filtré (extensions, etc.).
+    // un `storage` event dans l'opener (same-origin). Le payload contient
+    // { token, user } sérialisés pour survivre au cas BroadcastChannel KO.
     const onStorage = (e) => {
-      if (e.key === 'ff_oauth_user' && e.newValue) {
-        let user = null;
-        try { user = JSON.parse(e.newValue); } catch {}
-        applyMerchantLogin(user);
-        // Nettoyer le marqueur éphémère (évite re-trigger au reload).
-        try { localStorage.removeItem('ff_oauth_user'); } catch {}
+      if (e.key === 'ff_oauth_merchant' && e.newValue) {
+        let payload = null;
+        try { payload = JSON.parse(e.newValue); } catch {}
+        if (payload?.token) applyMerchantLogin(payload.token, payload.user);
+        try { localStorage.removeItem('ff_oauth_merchant'); } catch {}
       }
     };
     window.addEventListener('storage', onStorage);

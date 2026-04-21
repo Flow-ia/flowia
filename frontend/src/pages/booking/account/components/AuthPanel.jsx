@@ -75,19 +75,39 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     );
   };
 
-  // Écoute BroadcastChannel pour capter le retour OAuth de la popup.
+  // Écoute BroadcastChannel + storage event pour capter le retour OAuth
+  // de la popup. Persiste le token + infos côté opener au cas où la popup
+  // aurait atterri sur une origine différente (localStorage isolé).
   useEffect(() => {
+    const applyClientLogin = (token, client) => {
+      if (!client) return;
+      if (token) localStorage.setItem('ff_client_token', token);
+      localStorage.setItem('ff_client_info', JSON.stringify(client));
+      onAuth(client);
+    };
+
     let bc = null;
     try {
       bc = new BroadcastChannel('flowia-oauth');
       bc.onmessage = (ev) => {
-        if (ev.data?.type !== 'client_login') return;
-        const { client } = ev.data;
-        if (!client) return;
-        onAuth(client);
+        if (ev.data?.type === 'client_login') applyClientLogin(ev.data.token, ev.data.client);
       };
     } catch { /* non supporté */ }
-    return () => { try { bc && bc.close(); } catch {} };
+
+    const onStorage = (e) => {
+      if (e.key === 'ff_oauth_client' && e.newValue) {
+        let payload = null;
+        try { payload = JSON.parse(e.newValue); } catch {}
+        if (payload) applyClientLogin(payload.token, payload.client);
+        try { localStorage.removeItem('ff_oauth_client'); } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      try { bc && bc.close(); } catch {}
+      window.removeEventListener('storage', onStorage);
+    };
   }, [onAuth]);
 
   const submit = async () => {
