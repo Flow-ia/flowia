@@ -16,12 +16,13 @@ export const STATUS_CFG = {
   no_show:   { label:'Absent',     bg:'#fff7ed', color:'#9a3412', accent:'#fb923c' },
 };
 
+// bd = accent sature utilise pour la barre verticale 2px (voir GridView)
 export const STATUS_GRID = {
-  confirmed: { bg:'#eef2ff', bd:'#c7d2fe', tx:'#4338ca' },
-  pending:   { bg:'#fffbeb', bd:'#fde68a', tx:'#92400e' },
-  cancelled: { bg:'#fef2f2', bd:'#fecaca', tx:'#991b1b' },
-  completed: { bg:'#f0fdf4', bd:'#a7f3d0', tx:'#065f46' },
-  no_show:   { bg:'#fff7ed', bd:'#fed7aa', tx:'#9a3412' },
+  confirmed: { bg:'#eef2ff', bd:'#6366f1', tx:'#4338ca' },
+  pending:   { bg:'#fffbeb', bd:'#f59e0b', tx:'#92400e' },
+  cancelled: { bg:'#fef2f2', bd:'#ef4444', tx:'#991b1b' },
+  completed: { bg:'#f0fdf4', bd:'#10b981', tx:'#065f46' },
+  no_show:   { bg:'#fff7ed', bd:'#fb923c', tx:'#9a3412' },
 };
 
 export const PAY_OPTS = [
