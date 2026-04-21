@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { I } from '../utils/icons';
 import { Toast, useToast, CodeInput } from './UI';
 import { ThemeToggle } from './ThemeToggle';
@@ -473,15 +474,31 @@ function BackButton({ onClick, children = 'Retour' }) {
 // ═══════════════════════════════════════════════════════════════════════════
 //  AuthFlow principal
 // ═══════════════════════════════════════════════════════════════════════════
-export default function AuthFlow() {
+// initialScreen vient des routes App.jsx (/login, /register, /forgot-password).
+// Permet à l'utilisateur de rafraîchir la page sur un écran précis sans être
+// renvoyé vers login. Les écrans transitoires (vreg/vreset/newpw) restent en
+// state local — refresh = retour login, c'est acceptable car le code n'est
+// pas persistant.
+const SCREEN_TO_URL = { login: '/login', register: '/register', forgot: '/forgot-password' };
+
+export default function AuthFlow({ initialScreen = 'login' }) {
   const { theme: t } = useTheme();
-  const [screen, setScreen] = useState('login');
+  const navigate = useNavigate();
+  const [screen, setScreen] = useState(initialScreen);
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingCode, setPendingCode] = useState('');
   const [toast, show] = useToast();
   const { login } = useAuth();
 
-  const go = (sc, email) => { if (email) setPendingEmail(email); setScreen(sc); };
+  // Sync quand l'utilisateur navigue via back/forward ou clique un lien
+  // vers un autre screen routable pendant que le composant est monté.
+  useEffect(() => { setScreen(initialScreen); }, [initialScreen]);
+
+  const go = (sc, email) => {
+    if (email) setPendingEmail(email);
+    setScreen(sc);
+    if (SCREEN_TO_URL[sc]) navigate(SCREEN_TO_URL[sc]);
+  };
 
   const { openGoogle, status: oauthStatus, errorMsg: oauthError, reset: resetOauth } =
     useGoogleMerchantAuth((token, user) => { login(token, user); });

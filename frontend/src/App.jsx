@@ -1668,7 +1668,16 @@ export default function App() {
 
   if (loading || checking) return <Splash theme={theme}/>;
 
-  if (!user) return <AuthFlow/>;
+  // Routes explicites pour login/register/forgot-password → rafraîchir la
+  // page reste sur l'écran en cours au lieu de retomber sur login.
+  if (!user) return (
+    <Routes>
+      <Route path="/login"           element={<AuthFlow initialScreen="login"/>}/>
+      <Route path="/register"        element={<AuthFlow initialScreen="register"/>}/>
+      <Route path="/forgot-password" element={<AuthFlow initialScreen="forgot"/>}/>
+      <Route path="*"                element={<Navigate to="/login" replace/>}/>
+    </Routes>
+  );
 
   if (user.onboardingCompleted === false) {
     return <MerchantOnboarding user={user} onComplete={(token, userData) => { login(token, userData); }}/>;

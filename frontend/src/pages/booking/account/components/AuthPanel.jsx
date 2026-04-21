@@ -6,8 +6,15 @@ import { pubApi, globalClientApi } from '../../../../utils/api';
 import { GoogleOAuthOverlay } from '../../../../components/AuthFlow';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
-export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false }) {
-  const [mode, setMode]         = useState(quickMode ? 'quick' : initialMode);
+export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false, onModeChange }) {
+  // setMode wrappé pour notifier le parent des transitions login<->register
+  // (permet à BookingPage de mettre l'URL à jour : /login <-> /register).
+  const [modeState, setModeState] = useState(quickMode ? 'quick' : initialMode);
+  const mode = modeState;
+  const setMode = (m) => {
+    setModeState(m);
+    if (onModeChange) onModeChange(m);
+  };
   const [email, setEmail]       = useState(initialEmail);
   const [pwd, setPwd]           = useState('');
   const [newPwd, setNewPwd]     = useState('');

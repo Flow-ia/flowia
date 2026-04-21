@@ -115,7 +115,7 @@ export default function BookingPage({ slug }) {
   useEffect(() => {
     const path = location.pathname;
     const hash = location.hash; // ex: #equipe, #adresse, #commentaires, #prestations
-    if (path.endsWith('/auth')) {
+    if (path.endsWith('/auth') || path.endsWith('/login') || path.endsWith('/register')) {
       // Si le client est déjà connecté, court-circuiter l'AuthPanel et
       // rediriger vers sa page de compte (ou la page booking racine si
       // on vient d'un deep-link). Évite d'imposer une reconnexion inutile.
@@ -124,6 +124,9 @@ export default function BookingPage({ slug }) {
         setView('myAppts');
         setMyApptsInitTab('profile');
       } else {
+        // /login (et /auth legacy) → mode login ; /register → mode register.
+        // Permet le refresh de la page sans perdre l'écran en cours.
+        setAuthInitMode(path.endsWith('/register') ? 'register' : 'login');
         setShowAuthPanel(true);
       }
     } else if (path.includes('/client/profil')) {
@@ -736,7 +739,7 @@ export default function BookingPage({ slug }) {
 
       {/* ══ NAVBAR — composant partagé ══ */}
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
-        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/auth`, {replace:false}); }}
+        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/login`, {replace:false}); }}
         onMyAppts={()=>{ navigate(`/book/${slug}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
         onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
         onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
@@ -785,6 +788,14 @@ export default function BookingPage({ slug }) {
                 initialMode={authInitMode}
                 referralCode={referralCode}
                 quickMode={quickMode}
+                onModeChange={(m) => {
+                  // Miroir URL : /book/:slug/login <-> /book/:slug/register
+                  // pour que le refresh garde l'écran en cours.
+                  if (m === 'login' || m === 'register') {
+                    setAuthInitMode(m);
+                    navigate(`/book/${slug}/${m}`, { replace: true });
+                  }
+                }}
                 onAuth={(u, meta) => {
                   // Si filleul avec code de parrainage → flag pour afficher
                   // la confirmation "promotion appliquée" sur la page d'accueil

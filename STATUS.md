@@ -7,6 +7,27 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**URLs login/register partagées (merchant + client)** — Refresh sur
+l'écran d'inscription ou de connexion ne renvoie plus vers login par
+défaut. Côté commerçant : `/login`, `/register`, `/forgot-password` sont
+désormais des routes explicites ; `App.jsx` monte `<AuthFlow
+initialScreen=…>` selon la route, `AuthFlow` synchronise son `screen`
+interne avec le prop et push dans l'URL via `useNavigate` quand
+l'utilisateur bascule entre écrans routables (login/register/forgot).
+Les écrans transitoires (vreg/vreset/newpw) restent en state local (le
+code de vérif n'est pas persistant, refresh = retour login acceptable).
+Côté client : `/book/:slug/login` et `/book/:slug/register` ajoutées à
+`index.jsx`, `booking-page/index.jsx` lit le path au montage pour
+initialiser `authInitMode`, `AuthPanel` expose un callback
+`onModeChange(m)` que BookingPage relie à `navigate('/book/:slug/login|register', {replace:true})`
+quand l'utilisateur tape sur les tabs Se connecter / Créer un compte.
+`/book/:slug/auth` legacy préservé (redirige vers login). NavBar et
+ParrainView adaptés pour pointer vers `/login` ou `/register`
+explicitement selon le bouton. Fichiers : `frontend/components/AuthFlow.jsx`,
+`frontend/App.jsx`, `frontend/index.jsx`, `frontend/pages/booking-page/index.jsx`,
+`frontend/pages/booking-page/views/ParrainView.jsx`,
+`frontend/pages/booking/account/components/AuthPanel.jsx`.
+
 **Deep-link notifications → RDV** — Clic sur une notification (push
 lock-screen ou cloche in-app) commerçant : on arrive directement sur
 l'agenda au bon jour avec le modal du RDV concerné ouvert, au lieu du
