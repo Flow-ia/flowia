@@ -1,82 +1,110 @@
+import { I } from '../../../../utils/icons';
+import { Button } from '../../../../components/primitives';
+
 export default function SendResultModal({ data, theme, onClose }) {
-  const isDark = theme.mode === 'dark';
-  const emailSent = data.emailResult?.sent || 0;
+  const t = theme;
+  const emailSent   = data.emailResult?.sent || 0;
   const emailFailed = data.emailResult?.failed || 0;
-  const smsSent = data.smsResult?.sent_sms || 0;
-  const smsFailed = data.smsResult?.failed || 0;
-  const hasError = !!data.error;
-  const totalSent = emailSent + smsSent;
-  const success = !hasError && totalSent > 0;
-  const accent = success ? '#10b981' : hasError ? '#ef4444' : '#f59e0b';
-  const title = success ? 'Envoi réussi' : hasError ? 'Erreur d\'envoi' : 'Aucun destinataire';
+  const smsSent     = data.smsResult?.sent_sms || 0;
+  const smsFailed   = data.smsResult?.failed || 0;
+  const hasError    = !!data.error;
+  const totalSent   = emailSent + smsSent;
+  const success     = !hasError && totalSent > 0;
+
+  const accent = success ? '#065f46' : hasError ? '#991b1b' : '#92400e';
+  const accentBg = success ? '#f0fdf4' : hasError ? '#fef2f2' : '#fffbeb';
+  const title = success ? 'Envoi reussi' : hasError ? "Erreur d'envoi" : 'Aucun destinataire';
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(12px)' }} />
-      <div style={{ position:'relative', width:'100%', maxWidth:420, background: isDark ? '#161622' : '#fff',
-        borderRadius:24, border:`1px solid ${theme.border}`, padding:'32px 28px', textAlign:'center',
-        boxShadow:'0 24px 60px rgba(0,0,0,0.35)' }}>
-        <div style={{ width:72, height:72, borderRadius:'50%', background:`${accent}18`,
-          display:'inline-flex', alignItems:'center', justifyContent:'center', marginBottom:18,
-          border:`2px solid ${accent}33` }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            {success
-              ? <polyline points="20 6 9 17 4 12"/>
-              : hasError
-                ? <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
-                : <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
-            }
-          </svg>
+    <div style={{ position:'fixed', inset:0, zIndex:400,
+                  display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={onClose}
+           style={{ position:'absolute', inset:0,
+                    background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}/>
+      <div style={{ position:'relative', width:'100%', maxWidth:420, padding:'28px 24px', textAlign:'center',
+                    background:t.elevated, borderRadius:16,
+                    border:`0.5px solid ${t.border}`,
+                    boxShadow:t.shadowModal }}>
+        <div style={{ width:56, height:56, borderRadius:'50%',
+                      background:accentBg,
+                      display:'inline-flex', alignItems:'center', justifyContent:'center',
+                      marginBottom:16 }}>
+          {success ? (
+            <I.Check style={{ width:28, height:28, color:accent }}/>
+          ) : (
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={accent}
+                 strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          )}
         </div>
-        <h2 style={{ margin:'0 0 8px', fontSize:22, fontWeight:900, color:theme.text }}>{title}</h2>
-        <p style={{ margin:'0 0 22px', fontSize:13, color:theme.muted }}>
-          Code <strong style={{ color:theme.text, fontFamily:'monospace' }}>{data.code}</strong>
+        <h2 style={{ margin:'0 0 8px', fontSize:18, fontWeight:500, color:t.text }}>{title}</h2>
+        <p style={{ margin:'0 0 20px', fontSize:13, color:t.muted }}>
+          Code <strong style={{ color:t.text, fontFamily:'monospace', fontWeight:500 }}>{data.code}</strong>
         </p>
 
         {hasError ? (
-          <div style={{ padding:'14px 16px', borderRadius:12, background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', marginBottom:18, textAlign:'left' }}>
-            <p style={{ margin:0, fontSize:13, color:'#ef4444' }}>{data.error}</p>
+          <div style={{ padding:'12px 14px', borderRadius:8,
+                        background:'#fef2f2', marginBottom:18, textAlign:'left' }}>
+            <p style={{ margin:0, fontSize:13, color:'#991b1b' }}>{data.error}</p>
           </div>
         ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:22 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:20 }}>
             {data.emailResult && (
-              <div style={{ padding:'14px 18px', borderRadius:14, background: isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
-                border:'1px solid rgba(16,185,129,0.22)', display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
-                <div style={{ width:40, height:40, borderRadius:12, background:'rgba(16,185,129,0.16)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>📧</div>
-                <div style={{ flex:1 }}>
-                  <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>
-                    {emailSent} email{emailSent > 1 ? 's' : ''} envoyé{emailSent > 1 ? 's' : ''}
-                  </p>
-                  {emailFailed > 0 && <p style={{ margin:'2px 0 0', fontSize:11, color:'#ef4444' }}>{emailFailed} échec{emailFailed > 1 ? 's' : ''}</p>}
+              <div style={{ padding:'12px 16px', borderRadius:8,
+                            background:'#f0fdf4',
+                            display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
+                <div style={{ width:36, height:36, borderRadius:8,
+                              background:'rgba(16,185,129,0.2)',
+                              display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <I.Mail style={{ width:17, height:17, color:'#065f46' }}/>
                 </div>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <div style={{ flex:1 }}>
+                  <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>
+                    {emailSent} email{emailSent > 1 ? 's' : ''} envoye{emailSent > 1 ? 's' : ''}
+                  </p>
+                  {emailFailed > 0 && (
+                    <p style={{ margin:'2px 0 0', fontSize:11, color:'#991b1b' }}>
+                      {emailFailed} echec{emailFailed > 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+                <I.Check style={{ width:18, height:18, color:'#065f46' }}/>
               </div>
             )}
             {data.smsResult && (
-              <div style={{ padding:'14px 18px', borderRadius:14, background: isDark ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)',
-                border:'1px solid rgba(139,92,246,0.22)', display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
-                <div style={{ width:40, height:40, borderRadius:12, background:'rgba(139,92,246,0.16)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>📱</div>
-                <div style={{ flex:1 }}>
-                  <p style={{ margin:0, fontSize:15, fontWeight:800, color:theme.text }}>
-                    {smsSent} SMS envoyé{smsSent > 1 ? 's' : ''}
-                  </p>
-                  {smsFailed > 0 && <p style={{ margin:'2px 0 0', fontSize:11, color:'#ef4444' }}>{smsFailed} échec{smsFailed > 1 ? 's' : ''}</p>}
+              <div style={{ padding:'12px 16px', borderRadius:8,
+                            background:'#eeedfe',
+                            display:'flex', alignItems:'center', gap:12, textAlign:'left' }}>
+                <div style={{ width:36, height:36, borderRadius:8,
+                              background:'rgba(139,92,246,0.2)',
+                              display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <I.Phone style={{ width:17, height:17, color:'#3c3489' }}/>
                 </div>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <div style={{ flex:1 }}>
+                  <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>
+                    {smsSent} SMS envoye{smsSent > 1 ? 's' : ''}
+                  </p>
+                  {smsFailed > 0 && (
+                    <p style={{ margin:'2px 0 0', fontSize:11, color:'#991b1b' }}>
+                      {smsFailed} echec{smsFailed > 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+                <I.Check style={{ width:18, height:18, color:'#3c3489' }}/>
               </div>
             )}
             {!data.emailResult && !data.smsResult && (
-              <p style={{ margin:0, fontSize:13, color:theme.muted }}>Aucun destinataire trouvé.</p>
+              <p style={{ margin:0, fontSize:13, color:t.muted }}>Aucun destinataire trouve.</p>
             )}
           </div>
         )}
 
-        <button onClick={onClose}
-          style={{ width:'100%', padding:'13px', borderRadius:12, border:'none',
-            background: accent, color:'white', fontWeight:800, fontSize:14, cursor:'pointer',
-            boxShadow:`0 4px 14px ${accent}55` }}>
+        <Button variant="primary" fullWidth type="button" onClick={onClose}>
           Fermer
-        </button>
+        </Button>
       </div>
     </div>
   );
