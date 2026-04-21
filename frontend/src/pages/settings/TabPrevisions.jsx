@@ -1,92 +1,151 @@
 import { useState, useEffect } from 'react';
 import { I } from '../../utils/icons';
 import { statsApi } from '../../utils/api';
+import { SegmentedControl } from '../../components/primitives';
 
 export default function TabPrevisions({ theme }) {
-  const isDark = theme.mode === 'dark';
-  const [data, setData]   = useState(null);
+  const t = theme;
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [months, setMonths]   = useState(3);
 
   useEffect(() => {
     setLoading(true);
-    statsApi.getForecast({ months }).then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    statsApi.getForecast({ months })
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
   }, [months]);
 
-  const fmt = v => Number(v||0).toFixed(0);
-  const fmtFull = v => Number(v||0).toFixed(2);
-  const MONTH_FR = ['Jan','Fev','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Dec'];
-  const fmtMonth = m => { if (!m) return ''; const [,mm] = m.split('-'); return MONTH_FR[parseInt(mm)-1]; };
+  const fmt = v => Number(v || 0).toFixed(0);
+  const fmtFull = v => Number(v || 0).toFixed(2);
+  const MONTH_FR = ['Jan','Fev','Mar','Avr','Mai','Juin','Juil','Aou','Sep','Oct','Nov','Dec'];
+  const fmtMonth = m => { if (!m) return ''; const [, mm] = m.split('-'); return MONTH_FR[parseInt(mm) - 1]; };
 
-  const allData = data ? [...(data.historical||[]).map(h=>({...h,type:'historical'})), ...(data.forecasts||[]).map(f=>({...f,revenue:f.projected,type:'forecast'}))] : [];
-  const maxVal  = allData.reduce((m,d)=>Math.max(m,parseFloat(d.projected_high||d.revenue)||0),1);
+  const allData = data
+    ? [...(data.historical || []).map(h => ({ ...h, type:'historical' })),
+       ...(data.forecasts  || []).map(f => ({ ...f, revenue:f.projected, type:'forecast' }))]
+    : [];
+  const maxVal = allData.reduce((m, d) => Math.max(m, parseFloat(d.projected_high || d.revenue) || 0), 1);
+
+  const positive = data && data.slope >= 0;
 
   return (
-    <div className="space-y-4">
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       {data && (
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          <div style={{ borderRadius:16, padding:'14px 16px', background:'rgba(16,185,129,0.08)', border:'1px solid rgba(16,185,129,0.2)' }}>
-            <p style={{ fontSize:10, fontWeight:800, color:'#10b981', textTransform:'uppercase', letterSpacing:'0.1em', margin:0 }}>Moyenne mensuelle</p>
-            <p style={{ fontSize:22, fontWeight:900, color:'#065f46', fontFamily:'var(--mono)', margin:'6px 0 0' }}>{fmt(data.avg_monthly)} €</p>
+          <div style={{ borderRadius:12, padding:'14px 16px', background:'#f0fdf4' }}>
+            <p style={{ fontSize:11, color:'#065f46', margin:0 }}>
+              Moyenne mensuelle
+            </p>
+            <p style={{ fontSize:20, fontWeight:500, color:'#065f46',
+                        fontFamily:'var(--mono)', margin:'6px 0 0' }}>
+              {fmt(data.avg_monthly)} €
+            </p>
           </div>
-          <div style={{ borderRadius:16, padding:'14px 16px', background: data.slope>=0?'rgba(17,24,39,0.08)':'rgba(239,68,68,0.08)', border:`1px solid ${data.slope>=0?'rgba(17,24,39,0.2)':'rgba(239,68,68,0.2)'}` }}>
-            <p style={{ fontSize:10, fontWeight:800, color: data.slope>=0?'#111827':'#ef4444', textTransform:'uppercase', letterSpacing:'0.1em', margin:0 }}>Tendance</p>
-            <p style={{ fontSize:22, fontWeight:900, color: data.slope>=0?'#312e81':'#7f1d1d', fontFamily:'var(--mono)', margin:'6px 0 0' }}>
-              {data.slope>=0?'↗':'↘'} {data.slope>=0?'+':''}{fmtFull(data.slope)} €/mois
+          <div style={{ borderRadius:12, padding:'14px 16px',
+                        background: positive ? t.cardAlt : '#fef2f2' }}>
+            <p style={{ fontSize:11, color: positive ? t.muted : '#991b1b', margin:0 }}>
+              Tendance
+            </p>
+            <p style={{ fontSize:20, fontWeight:500,
+                        color: positive ? t.text : '#991b1b',
+                        fontFamily:'var(--mono)', margin:'6px 0 0' }}>
+              {positive ? '↗' : '↘'} {positive ? '+' : ''}{fmtFull(data.slope)} €/mois
             </p>
           </div>
         </div>
       )}
 
-      <div style={{ display:'flex', gap:8 }}>
-        {[1,2,3,6].map(m => (
-          <button key={m} onClick={()=>setMonths(m)} style={{ flex:1, padding:'9px 0', borderRadius:11, fontWeight:700, fontSize:12, cursor:'pointer', border:`1px solid ${months===m?'#111827':theme.border}`, background: months===m?'rgba(17,24,39,0.12)':theme.inputBg, color: months===m?'#111827':theme.muted }}>
-            {m} mois
-          </button>
-        ))}
-      </div>
+      <SegmentedControl fullWidth value={months} onChange={setMonths}
+                        options={[1, 2, 3, 6].map(m => ({ value:m, label:`${m} mois` }))}/>
 
-      {loading ? <div className="py-16 text-center"><I.Loader className="w-6 h-6 mx-auto animate-spin" style={{ color:theme.muted }} /></div>
-      : !data || allData.length < 2 ? (
-        <div style={{ textAlign:'center', padding:'40px 20px', background:theme.card, borderRadius:18, border:`1px solid ${theme.border}` }}>
-          <I.TrendUp style={{ width:36, height:36, margin:'0 auto 10px', color:theme.dim }} />
-          <p style={{ color:theme.muted, fontSize:14 }}>Pas assez de données (min. 2 mois)</p>
+      {loading ? (
+        <div style={{ padding:'64px 0', textAlign:'center' }}>
+          <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24"
+               style={{ color:t.muted, display:'inline-block' }}>
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2"/>
+            <path d="M12 2 a10 10 0 0 1 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </div>
+      ) : !data || allData.length < 2 ? (
+        <div style={{ textAlign:'center', padding:'40px 20px',
+                      background:t.card, borderRadius:12,
+                      border:`0.5px solid ${t.border}` }}>
+          <I.TrendUp style={{ width:36, height:36, margin:'0 auto 10px', color:t.dim }}/>
+          <p style={{ color:t.muted, fontSize:14, margin:0 }}>
+            Pas assez de donnees (min. 2 mois)
+          </p>
         </div>
       ) : (
         <>
-          <div style={{ background:theme.card, borderRadius:20, border:`1px solid ${theme.border}`, padding:16 }}>
-            <p style={{ fontWeight:800, fontSize:13, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.08em', margin:'0 0 16px' }}>Historique + Prévisions</p>
+          <div style={{ background:t.card, borderRadius:12, padding:16,
+                        border:`0.5px solid ${t.border}` }}>
+            <p style={{ fontSize:12, color:t.muted, margin:'0 0 16px' }}>
+              Historique + Previsions
+            </p>
             <div style={{ display:'flex', alignItems:'flex-end', gap:4, height:120 }}>
-              {allData.map((d,i) => {
-                const h = Math.max(4, ((parseFloat(d.revenue)||0)/maxVal)*100);
-                const isForecast = d.type==='forecast';
+              {allData.map((d, i) => {
+                const h = Math.max(4, ((parseFloat(d.revenue) || 0) / maxVal) * 100);
+                const isForecast = d.type === 'forecast';
                 return (
-                  <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                  <div key={i} style={{ flex:1, display:'flex', flexDirection:'column',
+                                        alignItems:'center', gap:3 }}>
                     {isForecast && (
-                      <div style={{ width:'100%', height:Math.max(4,((d.projected_high-d.projected_low)/maxVal)*100), borderRadius:'4px 4px 0 0', background:'rgba(17,24,39,0.15)', border:'1px dashed rgba(17,24,39,0.3)', position:'relative', top: `${100-Math.max(4,(d.projected_high/maxVal)*100)}%` }} />
+                      <div style={{ width:'100%',
+                                    height: Math.max(4, ((d.projected_high - d.projected_low) / maxVal) * 100),
+                                    borderRadius:'6px 6px 0 0',
+                                    background:'rgba(67,56,202,0.12)',
+                                    position:'relative',
+                                    top: `${100 - Math.max(4, (d.projected_high / maxVal) * 100)}%` }}/>
                     )}
-                    <div style={{ width:'100%', height:`${h}%`, borderRadius: isForecast?'8px 8px 0 0':'6px 6px 0 0', background: isForecast?'linear-gradient(180deg,rgba(17,24,39,0.7),rgba(55,65,81,0.5))':'linear-gradient(180deg,#10b981,#059669)', marginTop:'auto' }} />
-                    <span style={{ fontSize:8, fontWeight:700, color: isForecast?'#111827':theme.muted }}>{fmtMonth(d.month)}</span>
+                    <div style={{ width:'100%', height:`${h}%`,
+                                  borderRadius: isForecast ? '8px 8px 0 0' : '6px 6px 0 0',
+                                  background: isForecast ? '#4338ca' : '#065f46',
+                                  marginTop:'auto' }}/>
+                    <span style={{ fontSize:9, fontWeight:500,
+                                   color: isForecast ? '#4338ca' : t.muted }}>
+                      {fmtMonth(d.month)}
+                    </span>
                   </div>
                 );
               })}
             </div>
             <div style={{ display:'flex', gap:12, marginTop:8 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:4 }}><div style={{ width:10, height:10, borderRadius:2, background:'#10b981' }} /><span style={{ fontSize:11, color:theme.muted }}>Réel</span></div>
-              <div style={{ display:'flex', alignItems:'center', gap:4 }}><div style={{ width:10, height:10, borderRadius:2, background:'rgba(17,24,39,0.6)' }} /><span style={{ fontSize:11, color:theme.muted }}>Prévision</span></div>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <div style={{ width:10, height:10, borderRadius:'50%', background:'#065f46' }}/>
+                <span style={{ fontSize:11, color:t.muted }}>Reel</span>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <div style={{ width:10, height:10, borderRadius:'50%', background:'#4338ca' }}/>
+                <span style={{ fontSize:11, color:t.muted }}>Prevision</span>
+              </div>
             </div>
           </div>
 
           {data.forecasts?.length > 0 && (
-            <div style={{ background:theme.card, borderRadius:18, border:`1px solid ${theme.border}`, overflow:'hidden' }}>
-              <p style={{ fontWeight:800, fontSize:12, color:theme.muted, textTransform:'uppercase', letterSpacing:'0.08em', margin:0, padding:'12px 16px', borderBottom:`1px solid ${theme.separator}` }}>Détail des prévisions</p>
-              {data.forecasts.map((f,i) => (
-                <div key={i} style={{ padding:'12px 16px', borderBottom: i<data.forecasts.length-1?`1px solid ${theme.separator}`:'none' }}>
+            <div style={{ background:t.card, borderRadius:12,
+                          border:`0.5px solid ${t.border}`, overflow:'hidden' }}>
+              <p style={{ fontSize:12, color:t.muted, margin:0,
+                          padding:'12px 16px',
+                          borderBottom:`0.5px solid ${t.separator}` }}>
+                Detail des previsions
+              </p>
+              {data.forecasts.map((f, i) => (
+                <div key={i} style={{ padding:'12px 16px',
+                                       borderBottom: i < data.forecasts.length - 1
+                                         ? `0.5px solid ${t.separator}` : 'none' }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                    <span style={{ fontWeight:700, fontSize:14, color:theme.text }}>{MONTH_FR[parseInt(f.month.split('-')[1])-1]} {f.month.split('-')[0]}</span>
-                    <span style={{ fontWeight:900, fontSize:16, fontFamily:'var(--mono)', color:'#111827' }}>{fmtFull(f.projected)} €</span>
+                    <span style={{ fontSize:14, fontWeight:500, color:t.text }}>
+                      {MONTH_FR[parseInt(f.month.split('-')[1]) - 1]} {f.month.split('-')[0]}
+                    </span>
+                    <span style={{ fontSize:16, fontWeight:500,
+                                   fontFamily:'var(--mono)', color:'#4338ca' }}>
+                      {fmtFull(f.projected)} €
+                    </span>
                   </div>
-                  <p style={{ fontSize:11, color:theme.muted, margin:'2px 0 0' }}>Fourchette : {fmtFull(f.projected_low)} € — {fmtFull(f.projected_high)} €</p>
+                  <p style={{ fontSize:11, color:t.muted, margin:'2px 0 0' }}>
+                    Fourchette : {fmtFull(f.projected_low)} € — {fmtFull(f.projected_high)} €
+                  </p>
                 </div>
               ))}
             </div>
