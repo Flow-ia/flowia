@@ -115,20 +115,14 @@ export function AppointmentsTab({
                         {a.business_name}
                       </p>
                     )}
-                    {/* Prestation */}
-                    <p style={{ fontWeight: 500, fontSize:13, color:th.muted, margin:'0 0 6px' }}>
+                    {/* Prestation — meme taille que le nom de commercant mais non-bold */}
+                    <p style={{ fontWeight: 400, fontSize:16, color:th.text, margin:'0 0 4px', letterSpacing:'-0.015em' }}>
                       {a.service_name || 'Service'}
                     </p>
-                    {/* Date + heure */}
-                    <p style={{ fontSize:13, color:th.muted, margin:0 }}>
+                    {/* Date + heure — idem */}
+                    <p style={{ fontWeight: 400, fontSize:16, color:th.muted, margin:0, letterSpacing:'-0.015em' }}>
                       {fmtApptDate(a.date)} à {(a.start_time||'').substring(0,5)}
                     </p>
-                    {/* Employé — agrandi pour meilleure lisibilité */}
-                    {a.employee_name && (
-                      <p style={{ fontSize:13, fontWeight:500, color:th.text, margin:'4px 0 0' }}>
-                        avec {a.employee_name}
-                      </p>
-                    )}
                   </div>
 
                   {/* ── Bloc actions + prix (droite, centré verticalement) ── */}
@@ -184,6 +178,24 @@ export function AppointmentsTab({
                     )}
                   </div>
                 </div>
+                {/* Employé — centré sous la ligne principale, bien visible
+                    dans une pastille discrète pour identifier d'un coup
+                    d'œil avec qui se passe le rendez-vous. */}
+                {a.employee_name && (
+                  <div style={{
+                    marginTop:14, paddingTop:12,
+                    borderTop:`0.5px solid ${th.border}`,
+                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                  }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:15,height:15,color:th.muted}}>
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span style={{ fontSize:15, fontWeight:500, color:th.text, letterSpacing:'-0.01em' }}>
+                      avec {a.employee_name}
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
