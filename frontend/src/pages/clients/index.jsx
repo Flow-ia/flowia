@@ -62,9 +62,30 @@ export default function ClientsPage() {
     });
   }, []);
 
-  const card = { background:theme.card, border:`1px solid ${theme.border}`, borderRadius:20 };
-  const inp  = { width:'100%', padding:'11px 14px', borderRadius:12, outline:'none', boxSizing:'border-box', border:`1px solid ${theme.border}`, fontSize:14, color:theme.text, background:isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.04)' };
-  const lbl  = { fontSize:12, fontWeight:700, color:theme.muted, display:'block', marginBottom:4 };
+  const card = {
+    background: theme.card,
+    border: `0.5px solid ${theme.border}`,
+    borderRadius: 12,
+  };
+  const inp = {
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: 8,
+    outline: 'none',
+    boxSizing: 'border-box',
+    border: `0.5px solid ${theme.borderInput}`,
+    fontSize: 14,
+    color: theme.text,
+    background: theme.inputBg,
+    fontFamily: 'inherit',
+  };
+  const lbl = {
+    fontSize: 12,
+    fontWeight: 500,
+    color: theme.muted,
+    display: 'block',
+    marginBottom: 6,
+  };
 
   // Charger 10 clients à la fois (pagination server-side)
   const loadList = useCallback(async (forceSearch = search, forcePage = page) => {
@@ -257,10 +278,13 @@ export default function ClientsPage() {
   };
 
   const stickyHeader = {
-    position:'sticky', top:0, zIndex:20,
-    background: isDark?'rgba(0,0,0,0.92)':'rgba(242,242,247,0.92)',
-    backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
-    borderBottom:`1px solid ${theme.border}`,
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+    background: theme.stickyBg || theme.bg,
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderBottom: `0.5px solid ${theme.border}`,
   };
 
   // ══ VUE LISTE ═══════════════════════════════════════════════════════════════
