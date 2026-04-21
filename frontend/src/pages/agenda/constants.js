@@ -3,12 +3,17 @@ export const DAYS_FULL  = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendre
 export const MONTHS_FR  = ['Janvier','Fevrier','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Decembre'];
 export const MONTHS_SH  = ['Janv','Fevr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Dec'];
 
+// Palette pastel (aligned on STATUS_GRID / STATUS_PALETTE) — utilisée par
+// ApptModal, ApptListCard. Chaque entrée expose :
+//   bg     → fond encart / badge
+//   color  → texte (utilisé comme couleur principale)
+//   accent → couleur de puce/barre (plus saturée)
 export const STATUS_CFG = {
-  confirmed: { label:'Confirme',   color:'#4ade80', bg:'rgba(74,222,128,0.12)'  },
-  pending:   { label:'En attente', color:'#fbbf24', bg:'rgba(251,191,36,0.12)'  },
-  cancelled: { label:'Annule',     color:'#f87171', bg:'rgba(248,113,113,0.12)' },
-  completed: { label:'Termine',    color:'#94a3b8', bg:'rgba(148,163,184,0.12)' },
-  no_show:   { label:'Absent',     color:'#fb923c', bg:'rgba(251,146,60,0.12)'  },
+  confirmed: { label:'Confirme',   bg:'#eef2ff', color:'#4338ca', accent:'#6366f1' },
+  pending:   { label:'En attente', bg:'#fffbeb', color:'#92400e', accent:'#f59e0b' },
+  cancelled: { label:'Annule',     bg:'#fef2f2', color:'#991b1b', accent:'#ef4444' },
+  completed: { label:'Termine',    bg:'#f0fdf4', color:'#065f46', accent:'#10b981' },
+  no_show:   { label:'Absent',     bg:'#fff7ed', color:'#9a3412', accent:'#fb923c' },
 };
 
 export const STATUS_GRID = {

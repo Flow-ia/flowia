@@ -1,10 +1,41 @@
 export default function InfoRow({ icon, label, value, t, border }) {
+  const topBorder = border ? { borderTop: `0.5px solid ${t.separator || t.border}` } : {};
   return (
-    <div className="flex items-center gap-3 px-4 py-3" style={border?{borderTop:`1px solid ${t.border}`}:{}}>
-      <span style={{ fontSize:16, width:22, textAlign:'center', flexShrink:0 }}>{icon}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color:t.muted }}>{label}</p>
-        <p className="text-sm font-semibold mt-0.5 break-words" style={{ color:t.text }}>{value||'-'}</p>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 16px',
+        ...topBorder,
+      }}
+    >
+      {icon && (
+        <span
+          style={{
+            fontSize: 14,
+            width: 22,
+            textAlign: 'center',
+            flexShrink: 0,
+            color: t.muted,
+          }}
+        >
+          {icon}
+        </span>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 11, color: t.muted, margin: 0 }}>{label}</p>
+        <p
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            margin: '2px 0 0',
+            color: t.text,
+            wordBreak: 'break-word',
+          }}
+        >
+          {value || '-'}
+        </p>
       </div>
     </div>
   );
