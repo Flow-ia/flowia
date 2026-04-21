@@ -7,6 +7,18 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Gate auth client sur routes `/client/*`** — Les URLs
+`/book/:slug/client/profil`, `/client/rdv`, `/client/passages`
+s'affichaient même sans `ff_client_token` → la page montrait la coquille
+vide et laissait partir des fetches non-authentifiés (401 silencieux,
+contenu vide ou cassé). Ajout d'un gate dans `booking-page/index.jsx` :
+au mount, si le path contient `/client/` ET (pas de token OU token
+localement expiré via `isJwtLocallyExpired`), purge le token + info
+client et redirige sur `/book/:slug/login`. Comportement net : soit
+authentifié → page accessible, soit pas → panel login direct.
+
+## État actuel (2026-04-22)
+
 **Hardening auth merchant — 4 couches défensives** — Renforcement
 complet de la chaîne d'auth pour éliminer les 401 parasites en console
 et garantir zéro boucle login :

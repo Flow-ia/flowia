@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { pubApi, globalClientApi, publicReferralApi } from '../../utils/api';
+import { pubApi, globalClientApi, publicReferralApi, isJwtLocallyExpired } from '../../utils/api';
 import {
   LIGHT_THEME, DARK_THEME,
   Spinner,
@@ -115,6 +115,26 @@ export default function BookingPage({ slug }) {
   useEffect(() => {
     const path = location.pathname;
     const hash = location.hash; // ex: #equipe, #adresse, #commentaires, #prestations
+
+    // Gate auth client : toutes les routes /client/* (profil, rdv, passages…)
+    // exigent un compte connecté. Sans token OU token localement expiré, on
+    // redirige vers /login au lieu de laisser s'afficher la coquille vide
+    // (qui faisait tourner des fetches authentifiés sans token et renvoyait
+    // du contenu partiel/cassé).
+    if (path.includes('/client/')) {
+      const clientToken = localStorage.getItem('ff_client_token');
+      if (!clientToken || isJwtLocallyExpired(clientToken)) {
+        if (clientToken) {
+          localStorage.removeItem('ff_client_token');
+          localStorage.removeItem('ff_client_info');
+        }
+        setAuthInitMode('login');
+        setShowAuthPanel(true);
+        navigate(`/book/${slug}/login`, { replace: true });
+        return;
+      }
+    }
+
     if (path.endsWith('/auth') || path.endsWith('/login') || path.endsWith('/register')) {
       // Si le client est déjà connecté, court-circuiter l'AuthPanel et
       // rediriger vers sa page de compte (ou la page booking racine si
