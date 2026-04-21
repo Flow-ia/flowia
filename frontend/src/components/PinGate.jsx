@@ -9,42 +9,69 @@ import { CodeInput } from './UI';
 // ── Composants UI ─────────────────────────────────────────────────────────────
 
 function PinDots({ count, shake, theme }) {
-  const isDark = theme.mode === 'dark';
   return (
-    <div className={`flex justify-center gap-5 my-8 ${shake ? 'shake' : ''}`}>
-      {[0,1,2,3].map(i => (
-        <div key={i} className="transition-all duration-200" style={{
-          width: 14, height: 14, borderRadius: '50%',
-          background: i < count ? 'linear-gradient(135deg, #6c63ff, #3ec6e0)' : 'transparent',
-          border: i < count ? 'none' : `2px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}`,
-          transform: i < count ? 'scale(1.15)' : 'scale(1)',
-          boxShadow: i < count ? '0 0 10px rgba(108,99,255,0.6)' : 'none',
-        }} />
+    <div
+      className={shake ? 'shake' : ''}
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: 18,
+        margin: '28px 0',
+      }}
+    >
+      {[0, 1, 2, 3].map(i => (
+        <div
+          key={i}
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            background: i < count ? theme.text : 'transparent',
+            border: i < count ? 'none' : `0.5px solid ${theme.borderStrong}`,
+            transition: 'background 0.15s, transform 0.15s',
+            transform: i < count ? 'scale(1.1)' : 'scale(1)',
+          }}
+        />
       ))}
     </div>
   );
 }
 
 function PinKeypad({ onPress, theme }) {
-  const isDark = theme.mode === 'dark';
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
   return (
-    <div className="grid grid-cols-3 gap-3 px-4 max-w-[300px] mx-auto">
-      {keys.map((k, i) => (
-        k === '' ? <div key={i} /> : (
-          <button key={k + i} onClick={() => onPress(k)}
-            className="h-[68px] rounded-2xl text-2xl font-medium select-none transition-all active:scale-90"
-            style={{
-              background: k === '⌫'
-                ? (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)')
-                : (isDark ? 'rgba(255,255,255,0.07)' : '#ffffff'),
-              border: `1px solid ${theme.border}`,
-              color: k === '⌫' ? theme.muted : theme.text,
-              boxShadow: isDark ? 'none' : '0 2px 8px rgba(0,0,0,0.06)',
-            }}>
-            {k}
-          </button>
-        )
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, 1fr)',
+      gap: 10,
+      padding: '0 16px',
+      maxWidth: 300,
+      margin: '0 auto',
+    }}>
+      {keys.map((k, i) => k === '' ? <div key={i} /> : (
+        <button
+          key={k + i}
+          type="button"
+          onClick={() => onPress(k)}
+          style={{
+            height: 60,
+            borderRadius: 12,
+            fontSize: 22,
+            fontWeight: 500,
+            userSelect: 'none',
+            transition: 'transform 0.1s',
+            background: k === '⌫' ? 'transparent' : theme.card,
+            border: `0.5px solid ${theme.border}`,
+            color: k === '⌫' ? theme.muted : theme.text,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          {k}
+        </button>
       ))}
     </div>
   );
@@ -52,16 +79,26 @@ function PinKeypad({ onPress, theme }) {
 
 function ThemedScreen({ children, theme }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center pb-20 px-6 relative"
-      style={{ background: theme.bg }}>
-      <div className="absolute top-12 right-5"><ThemeToggle /></div>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingBottom: 80,
+      padding: '0 24px',
+      position: 'relative',
+      background: theme.bg,
+    }}>
+      <div style={{ position: 'absolute', top: 24, right: 20 }}>
+        <ThemeToggle />
+      </div>
       {children}
     </div>
   );
 }
 
 // ── Flux "code PIN oublié" ────────────────────────────────────────────────────
-// Utilise changePin de useAdmin → sauvegarde en BDD via API
 
 function ForgotPinFlow({ onBack, onSuccess, theme }) {
   const { changePin } = useAdmin();
@@ -82,7 +119,7 @@ function ForgotPinFlow({ onBack, onSuccess, theme }) {
       const r = await api.pinForgotRequest({ email: email.trim() });
       setMasked(r.emailMasked || email.trim());
       setStep('otp');
-    } catch(e) { setErr(e.message || 'Erreur, verifiez votre email'); }
+    } catch (e) { setErr(e.message || 'Erreur, verifiez votre email'); }
     finally { setLoading(false); }
   };
 
@@ -92,24 +129,23 @@ function ForgotPinFlow({ onBack, onSuccess, theme }) {
     try {
       await api.pinForgotVerify({ email: email.trim(), code });
       setStep('newpin');
-    } catch(e) { setErr(e.message || 'Code invalide'); setCode(''); }
+    } catch (e) { setErr(e.message || 'Code invalide'); setCode(''); }
     finally { setLoading(false); }
   };
 
   const pressNewPin = (k) => {
-    if (k === '⌫') { setPin1(p => p.slice(0,-1)); return; }
+    if (k === '⌫') { setPin1(p => p.slice(0, -1)); return; }
     if (pin1.length >= 4) return;
     const next = pin1 + k; setPin1(next);
     if (next.length === 4) setTimeout(() => setStep('confirm'), 200);
   };
 
   const pressConfirm = async (k) => {
-    if (k === '⌫') { setPin2(p => p.slice(0,-1)); return; }
+    if (k === '⌫') { setPin2(p => p.slice(0, -1)); return; }
     if (pin2.length >= 4) return;
     const next = pin2 + k; setPin2(next);
     if (next.length === 4) {
       if (next === pin1) {
-        // ✅ changePin appelle l'API → sauvegarde en BDD
         await changePin(pin1);
         onSuccess?.();
       } else {
@@ -120,33 +156,89 @@ function ForgotPinFlow({ onBack, onSuccess, theme }) {
   };
 
   const backBtn = (onClick) => (
-    <button onClick={onClick} className="flex items-center gap-2 text-sm mb-8 transition-colors" style={{ color: theme.muted }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="15 18 9 12 15 6"/></svg>
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 13,
+        fontWeight: 500,
+        marginBottom: 24,
+        color: theme.muted,
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 0,
+        fontFamily: 'inherit',
+      }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
       Retour
     </button>
   );
 
+  const inputStyle = {
+    width: '100%',
+    padding: '12px 14px',
+    borderRadius: 8,
+    fontSize: 14,
+    background: theme.inputBg,
+    color: theme.text,
+    outline: 'none',
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  };
+
+  const primaryBtnStyle = {
+    width: '100%',
+    padding: '12px',
+    borderRadius: 8,
+    fontWeight: 500,
+    fontSize: 14,
+    background: theme.text,
+    color: theme.bg,
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  };
+
   if (step === 'email') return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs">
+      <div style={{ width: '100%', maxWidth: 320 }}>
         {backBtn(onBack)}
-        <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mx-auto mb-6"
-          style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)', boxShadow: '0 16px 40px rgba(245,158,11,0.3)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-          </svg>
-        </div>
-        <h2 className="text-2xl font-bold text-center mb-2" style={{ color: theme.text }}>Code oublié ?</h2>
-        <p className="text-center text-sm mb-8" style={{ color: theme.muted }}>Entrez votre email pour recevoir un code de réinitialisation</p>
-        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+        <h2 style={{ fontSize: 22, fontWeight: 500, textAlign: 'center', color: theme.text, margin: '0 0 6px' }}>
+          Code oublie ?
+        </h2>
+        <p style={{ textAlign: 'center', fontSize: 13, color: theme.muted, margin: '0 0 24px', lineHeight: 1.5 }}>
+          Entrez votre email pour recevoir un code de reinitialisation
+        </p>
+        <input
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && sendCode()}
           placeholder="votre@email.com"
-          className="w-full px-4 py-4 rounded-2xl text-sm focus:outline-none mb-3"
-          style={{ background: theme.inputBg, border: `1px solid ${err ? 'rgba(239,68,68,0.5)' : theme.inputBorder}`, color: theme.text }} />
-        {err && <p className="text-red-500 text-xs text-center mb-3 font-medium">{err}</p>}
-        <button onClick={sendCode} disabled={!email.trim() || loading}
-          className="w-full py-4 rounded-2xl font-semibold text-white disabled:opacity-30"
-          style={{ background: 'linear-gradient(135deg, #f59e0b, #f97316)', boxShadow: '0 8px 24px rgba(245,158,11,0.3)' }}>
+          style={{
+            ...inputStyle,
+            border: `0.5px solid ${err ? 'rgba(239,68,68,0.5)' : theme.borderInput}`,
+            marginBottom: 12,
+          }}
+        />
+        {err && (
+          <p style={{ fontSize: 11, color: '#991b1b', textAlign: 'center', marginBottom: 12, fontWeight: 500 }}>
+            {err}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={sendCode}
+          disabled={!email.trim() || loading}
+          style={{ ...primaryBtnStyle, opacity: !email.trim() || loading ? 0.4 : 1 }}
+        >
           {loading ? 'Envoi...' : 'Envoyer le code'}
         </button>
       </div>
@@ -155,26 +247,44 @@ function ForgotPinFlow({ onBack, onSuccess, theme }) {
 
   if (step === 'otp') return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs">
+      <div style={{ width: '100%', maxWidth: 320 }}>
         {backBtn(() => { setStep('email'); setCode(''); })}
-        <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mx-auto mb-6"
-          style={{ background: 'linear-gradient(135deg, #6c63ff, #3ec6e0)', boxShadow: '0 16px 40px rgba(108,99,255,0.35)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
-            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-        <h2 className="text-2xl font-bold text-center mb-2" style={{ color: theme.text }}>Vérification</h2>
-        <p className="text-center text-sm mb-8" style={{ color: theme.muted }}>
-          Code envoyé à <strong style={{ color: theme.subtext }}>{masked}</strong>
+        <h2 style={{ fontSize: 22, fontWeight: 500, textAlign: 'center', color: theme.text, margin: '0 0 6px' }}>
+          Verification
+        </h2>
+        <p style={{ textAlign: 'center', fontSize: 13, color: theme.muted, margin: '0 0 24px', lineHeight: 1.5 }}>
+          Code envoye a <span style={{ fontWeight: 500, color: theme.text }}>{masked}</span>
         </p>
         <CodeInput value={code} onChange={setCode} theme={theme} />
-        {err && <p className="text-red-500 text-xs text-center mt-3 font-medium">{err}</p>}
-        <button onClick={verifyCode} disabled={code.length !== 6 || loading}
-          className="w-full py-4 rounded-2xl font-semibold text-white disabled:opacity-30 mt-6"
-          style={{ background: 'linear-gradient(135deg, #6c63ff, #3ec6e0)' }}>
+        {err && (
+          <p style={{ fontSize: 11, color: '#991b1b', textAlign: 'center', marginTop: 12, fontWeight: 500 }}>
+            {err}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={verifyCode}
+          disabled={code.length !== 6 || loading}
+          style={{ ...primaryBtnStyle, opacity: code.length !== 6 || loading ? 0.4 : 1, marginTop: 20 }}
+        >
           {loading ? 'Verification...' : 'Confirmer'}
         </button>
-        <button onClick={sendCode} className="w-full mt-3 text-xs text-center underline" style={{ color: theme.muted }}>
+        <button
+          type="button"
+          onClick={sendCode}
+          style={{
+            width: '100%',
+            marginTop: 12,
+            fontSize: 12,
+            textAlign: 'center',
+            color: theme.muted,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+          }}
+        >
           Renvoyer le code
         </button>
       </div>
@@ -183,9 +293,11 @@ function ForgotPinFlow({ onBack, onSuccess, theme }) {
 
   if (step === 'newpin') return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs text-center">
-        <h2 className="text-2xl font-bold mb-2" style={{ color: theme.text }}>Nouveau code PIN</h2>
-        <p className="text-sm mb-2" style={{ color: theme.muted }}>Choisissez 4 chiffres</p>
+      <div style={{ width: '100%', maxWidth: 320, textAlign: 'center' }}>
+        <h2 style={{ fontSize: 22, fontWeight: 500, color: theme.text, margin: '0 0 6px' }}>
+          Nouveau code PIN
+        </h2>
+        <p style={{ fontSize: 13, color: theme.muted, margin: 0 }}>Choisissez 4 chiffres</p>
         <PinDots count={pin1.length} shake={false} theme={theme} />
         <PinKeypad onPress={pressNewPin} theme={theme} />
       </div>
@@ -194,22 +306,38 @@ function ForgotPinFlow({ onBack, onSuccess, theme }) {
 
   return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs text-center">
-        <h2 className="text-2xl font-bold mb-2" style={{ color: theme.text }}>Confirmer le code</h2>
-        <p className="text-sm mb-2" style={{ color: theme.muted }}>Entrez à nouveau votre code</p>
+      <div style={{ width: '100%', maxWidth: 320, textAlign: 'center' }}>
+        <h2 style={{ fontSize: 22, fontWeight: 500, color: theme.text, margin: '0 0 6px' }}>
+          Confirmer le code
+        </h2>
+        <p style={{ fontSize: 13, color: theme.muted, margin: 0 }}>Entrez a nouveau votre code</p>
         <PinDots count={pin2.length} shake={shake} theme={theme} />
-        {err && <p className="text-red-500 text-xs font-medium mb-2">{err}</p>}
+        {err && (
+          <p style={{ fontSize: 12, color: '#991b1b', fontWeight: 500, marginBottom: 8 }}>{err}</p>
+        )}
         <PinKeypad onPress={pressConfirm} theme={theme} />
-        <button onClick={() => { setPin1(''); setPin2(''); setStep('newpin'); }}
-          className="mt-6 text-xs underline" style={{ color: theme.muted }}>Recommencer</button>
+        <button
+          type="button"
+          onClick={() => { setPin1(''); setPin2(''); setStep('newpin'); }}
+          style={{
+            marginTop: 24,
+            fontSize: 12,
+            color: theme.muted,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+          }}
+        >
+          Recommencer
+        </button>
       </div>
     </ThemedScreen>
   );
 }
 
-// ── PinEntry — Écran de saisie PIN ────────────────────────────────────────────
-// verifyPin → appelle le backend → compare avec hash BDD → reçoit pinSessionToken
-// AUCUNE comparaison locale, AUCUN hash en localStorage
+// ── PinEntry — Ecran de saisie PIN ────────────────────────────────────────────
 
 export function PinEntry({ onSuccess }) {
   const { verifyPin } = useAdmin();
@@ -223,11 +351,12 @@ export function PinEntry({ onSuccess }) {
   const [locked, setLocked] = useState(false);
 
   if (forgot) return (
-    <ForgotPinFlow theme={theme}
+    <ForgotPinFlow
+      theme={theme}
       onBack={() => setForgot(false)}
       onSuccess={() => {
         setForgot(false);
-        setErr('Nouveau PIN crée ! Saisissez-le.');
+        setErr('Nouveau PIN cree ! Saisissez-le.');
         setPin(''); setAttempts(0); setLocked(false);
       }}
     />
@@ -235,19 +364,39 @@ export function PinEntry({ onSuccess }) {
 
   if (locked) return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs text-center">
-        <div className="w-20 h-20 rounded-[28px] flex items-center justify-center mx-auto mb-6"
-          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
+      <div style={{ width: '100%', maxWidth: 320, textAlign: 'center' }}>
+        <div style={{
+          padding: '14px 16px',
+          borderRadius: 8,
+          background: '#fef2f2',
+          borderLeft: '2px solid #ef4444',
+          marginBottom: 20,
+          textAlign: 'left',
+        }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#991b1b' }}>
+            Acces bloque
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: '#991b1b', lineHeight: 1.5 }}>
+            Trop de tentatives echouees. L{"'"}administrateur a ete notifie.
+          </p>
         </div>
-        <h2 className="text-2xl font-bold mb-2" style={{ color: theme.text }}>Accès bloqué</h2>
-        <p className="text-sm mb-6" style={{ color: theme.muted }}>Trop de tentatives échouées. L'administrateur a été notifié.</p>
-        <button onClick={() => setForgot(true)} className="w-full py-4 rounded-2xl font-semibold text-white"
-          style={{ background: 'linear-gradient(135deg, #6c63ff, #3ec6e0)' }}>
-          Réinitialiser le PIN
+        <button
+          type="button"
+          onClick={() => setForgot(true)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: 8,
+            fontWeight: 500,
+            fontSize: 14,
+            background: theme.text,
+            color: theme.bg,
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Reinitialiser le PIN
         </button>
       </div>
     </ThemedScreen>
@@ -255,7 +404,7 @@ export function PinEntry({ onSuccess }) {
 
   const press = async (k) => {
     if (busy) return;
-    if (k === '⌫') { setPin(p => p.slice(0,-1)); setErr(''); return; }
+    if (k === '⌫') { setPin(p => p.slice(0, -1)); setErr(''); return; }
     if (pin.length >= 4) return;
     const next = pin + k;
     setPin(next); setErr('');
@@ -264,7 +413,6 @@ export function PinEntry({ onSuccess }) {
       setBusy(true);
       await new Promise(r => setTimeout(r, 80));
 
-      // ✅ Vérification 100% backend — compare avec hash en BDD
       const ok = await verifyPin(next);
 
       if (ok) {
@@ -286,29 +434,50 @@ export function PinEntry({ onSuccess }) {
 
   return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs text-center px-4">
-        <div className="w-20 h-20 rounded-[28px] flex items-center justify-center mx-auto mb-6"
-          style={{ background: 'linear-gradient(135deg, #6c63ff 0%, #3ec6e0 100%)', boxShadow: '0 20px 60px rgba(108,99,255,0.4)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
-            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold mb-1" style={{ color: theme.text }}>Espace Admin</h1>
-        <p className="text-sm mb-2" style={{ color: theme.muted }}>Code PIN requis</p>
+      <div style={{ width: '100%', maxWidth: 320, textAlign: 'center', padding: '0 16px' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 500, color: theme.text, margin: '0 0 4px' }}>
+          Espace admin
+        </h1>
+        <p style={{ fontSize: 13, color: theme.muted, margin: 0 }}>Code PIN requis</p>
         <PinDots count={pin.length} shake={shake} theme={theme} />
-        <p className="text-sm font-medium mb-5 h-4" style={{ color: err ? '#f87171' : 'transparent' }}>{err || '·'}</p>
+        <p style={{
+          fontSize: 12,
+          fontWeight: 500,
+          marginBottom: 20,
+          height: 14,
+          color: err ? '#991b1b' : 'transparent',
+        }}>{err || '·'}</p>
         <PinKeypad onPress={press} theme={theme} />
-        <button onClick={() => setForgot(true)} className="mt-8 text-sm underline" style={{ color: theme.muted }}>
-          Code oublié ?
+        <button
+          type="button"
+          onClick={() => setForgot(true)}
+          style={{
+            marginTop: 32,
+            fontSize: 13,
+            color: theme.muted,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+          }}
+        >
+          Code oublie ?
         </button>
       </div>
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+        .shake { animation: shake 0.4s ease-in-out; }
+      `}</style>
     </ThemedScreen>
   );
 }
 
-// ── PinSetup — Création du PIN ────────────────────────────────────────────────
-// onDone(pin) → appelé avec le PIN confirmé
-// Le parent doit appeler changePin(pin) de useAdmin → sauvegarde en BDD
+// ── PinSetup — Creation du PIN ────────────────────────────────────────────────
 
 export function PinSetup({ onDone, title = 'Creer votre code PIN' }) {
   const { theme } = useTheme();
@@ -323,14 +492,13 @@ export function PinSetup({ onDone, title = 'Creer votre code PIN' }) {
   const setCur = isEnter ? setPin1 : setPin2;
 
   const press = async (k) => {
-    if (k === '⌫') { setCur(p => p.slice(0,-1)); setErr(''); return; }
+    if (k === '⌫') { setCur(p => p.slice(0, -1)); setErr(''); return; }
     if (cur.length >= 4) return;
     const next = cur + k; setCur(next); setErr('');
     if (next.length === 4) {
       if (step === 'enter') { setTimeout(() => setStep('confirm'), 200); }
       else {
         if (next === pin1) {
-          // ✅ onDone reçoit le PIN → le parent appelle changePin → BDD
           await onDone(pin1);
         } else {
           setShake(true); setErr('Les codes ne correspondent pas');
@@ -341,34 +509,59 @@ export function PinSetup({ onDone, title = 'Creer votre code PIN' }) {
   };
 
   const labels = {
-    enter:   { h: title,             s: 'Choisissez 4 chiffres' },
+    enter:   { h: title,              s: 'Choisissez 4 chiffres' },
     confirm: { h: 'Confirmer le code', s: 'Entrez votre code a nouveau' },
   };
   const { h, s } = labels[step];
 
   return (
     <ThemedScreen theme={theme}>
-      <div className="w-full max-w-xs text-center px-4">
-        <div className="w-20 h-20 rounded-[28px] flex items-center justify-center mx-auto mb-6"
-          style={{ background: 'linear-gradient(135deg, #6c63ff 0%, #3ec6e0 100%)', boxShadow: '0 20px 60px rgba(108,99,255,0.4)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
-            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-          </svg>
+      <div style={{ width: '100%', maxWidth: 320, textAlign: 'center', padding: '0 16px' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 500, color: theme.text, margin: '0 0 4px' }}>{h}</h1>
+        <p style={{ fontSize: 13, color: theme.muted, margin: '0 0 16px' }}>{s}</p>
+
+        {/* Barre de progression 2 etapes */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 6 }}>
+          <div style={{ width: 32, height: 2, borderRadius: 99, background: theme.text }} />
+          <div style={{ width: 32, height: 2, borderRadius: 99, background: step === 'confirm' ? theme.text : theme.border }} />
         </div>
-        <h1 className="text-2xl font-bold" style={{ color: theme.text }}>{h}</h1>
-        <p className="text-sm mt-1 mb-4" style={{ color: theme.muted }}>{s}</p>
-        <div className="flex justify-center gap-2 mt-2">
-          <div className="w-8 h-1 rounded-full" style={{ background: 'linear-gradient(90deg, #6c63ff, #3ec6e0)' }} />
-          <div className="w-8 h-1 rounded-full transition-all" style={{ background: step === 'confirm' ? 'linear-gradient(90deg, #6c63ff, #3ec6e0)' : theme.border }} />
-        </div>
+
         <PinDots count={cur.length} shake={shake} theme={theme} />
-        <p className="text-sm font-medium mb-5 h-4" style={{ color: err ? '#f87171' : 'transparent' }}>{err || '·'}</p>
+        <p style={{
+          fontSize: 12,
+          fontWeight: 500,
+          marginBottom: 20,
+          height: 14,
+          color: err ? '#991b1b' : 'transparent',
+        }}>{err || '·'}</p>
         <PinKeypad onPress={press} theme={theme} />
         {step === 'confirm' && (
-          <button onClick={() => { setStep('enter'); setPin1(''); setPin2(''); setErr(''); }}
-            className="mt-8 text-sm underline" style={{ color: theme.muted }}>Recommencer</button>
+          <button
+            type="button"
+            onClick={() => { setStep('enter'); setPin1(''); setPin2(''); setErr(''); }}
+            style={{
+              marginTop: 32,
+              fontSize: 13,
+              color: theme.muted,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              fontFamily: 'inherit',
+            }}
+          >
+            Recommencer
+          </button>
         )}
       </div>
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+        .shake { animation: shake 0.4s ease-in-out; }
+      `}</style>
     </ThemedScreen>
   );
 }
