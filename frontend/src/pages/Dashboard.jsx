@@ -4,7 +4,7 @@ import { todayStr } from '../utils/dates';
 import { useTheme } from '../hooks/useTheme';
 import { useEmployeePin } from '../hooks/useEmployeePin';
 import { bookingApi, notifApi } from '../utils/api';
-import { StatusBadge } from '../components/ui/StatusBadge';
+import { StatusBadge } from '../components/primitives/StatusBadge';
 
 const nd   = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
 const fmtN = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
