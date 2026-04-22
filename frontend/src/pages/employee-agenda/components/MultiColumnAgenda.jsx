@@ -1,5 +1,6 @@
 // src/pages/employee-agenda/components/MultiColumnAgenda.jsx
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { bookingApi } from '../../../utils/api';
 import { playSound } from '../../../hooks/useNotifications';
 import { Toast, useToast } from '../../../components/UI';
@@ -15,6 +16,8 @@ import QuickAddApptModal from '../modals/QuickAddApptModal';
 
 export default function MultiColumnAgenda({ employees, services, onTxCreated, onSelectEmployee, theme: t }) {
   const isDark = t.mode === 'dark';
+  const location = useLocation();
+  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode]         = useState('day');
   const [allAppts, setAllAppts]         = useState([]);
@@ -26,6 +29,7 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
   const [toast, showToast]              = useToast();
   const [gridStartMin, setGridStartMin] = useState(8*60);
   const [gridEndMin,   setGridEndMin]   = useState(20*60);
+  const pendingApptRef = useRef(null);
 
   const today = new Date();
 
@@ -79,6 +83,33 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
   }, [fromStr, toStr]);
 
   useEffect(()=>{ loadAppts(); }, [loadAppts]);
+
+  // Deep-link notif : /agenda?date=YYYY-MM-DD&appt=<id> → on bascule en vue
+  // Jour au bon jour, on garde l'id pour ouvrir le modal dès chargement des
+  // RDV. Params strippés après usage pour éviter la ré-ouverture au remount.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const dateParam = params.get('date');
+    const apptParam = params.get('appt');
+    if (!apptParam && !dateParam) return;
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const d = new Date(dateParam + 'T00:00:00');
+      if (!isNaN(d.getTime())) { setSelectedDate(d); setViewMode('day'); }
+    }
+    if (apptParam) pendingApptRef.current = apptParam;
+    navigate(location.pathname, { replace: true });
+  }, [location.search]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!pendingApptRef.current || !allAppts.length) return;
+    const found = allAppts.find(a => String(a.id) === String(pendingApptRef.current));
+    if (found) {
+      setEditAppt(found);
+      const emp = employees.find(e => e.id === found.employee_id);
+      if (emp) setActiveEmployee(emp);
+      pendingApptRef.current = null;
+    }
+  }, [allAppts, employees]);
 
   const apptsByDay = useMemo(() => {
     const map = {};

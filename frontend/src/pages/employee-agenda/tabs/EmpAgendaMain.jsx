@@ -1,5 +1,6 @@
 // src/pages/employee-agenda/tabs/EmpAgendaMain.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { bookingApi } from '../../../utils/api';
 import { Toast, useToast } from '../../../components/UI';
 import { Button, SegmentedControl } from '../../../components/primitives';
@@ -9,7 +10,7 @@ import { svLocal } from '../helpers';
 import Spin from '../components/Spin';
 import ApptCard from '../components/ApptCard';
 import ApptActionModal from '../modals/ApptActionModal';
-import NewApptModal from '../modals/NewApptModal';
+import QuickAddApptModal from '../modals/QuickAddApptModal';
 import ClientsTab from './ClientsTab';
 
 export default function EmpAgendaMain({ employee, services, allEmployees, onBack, onTxCreated, theme: t }) {
@@ -24,6 +25,9 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
   const [filterEmpId, setFilterEmpId]  = useState(employee.id);
   const [mainTab, setMainTab]          = useState('agenda');
   const refreshRef = useRef(null);
+  const location   = useLocation();
+  const navigate   = useNavigate();
+  const pendingApptRef = useRef(null);
 
   const today = new Date();
   const startOfWeek = new Date(today);
@@ -54,6 +58,35 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
     refreshRef.current = setInterval(loadAppts, 30000);
     return () => clearInterval(refreshRef.current);
   }, [loadAppts]);
+
+  // Deep-link depuis une notif : ?date=YYYY-MM-DD&appt=<id> → bascule sur le
+  // bon jour + ouvre le modal détails du RDV dès qu'il est chargé. Params
+  // strippés après usage pour éviter la ré-ouverture au remount.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const dateParam = params.get('date');
+    const apptParam = params.get('appt');
+    if (!apptParam && !dateParam) return;
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      const d = new Date(dateParam + 'T00:00:00');
+      if (!isNaN(d.getTime())) {
+        setSelectedDate(d);
+        const today = new Date(); today.setHours(0,0,0,0);
+        const target = new Date(d); target.setHours(0,0,0,0);
+        const mondayOf = (x) => { const m = new Date(x); m.setDate(x.getDate() - ((x.getDay()+6)%7)); m.setHours(0,0,0,0); return m; };
+        const diffWeeks = Math.round((mondayOf(target) - mondayOf(today)) / (7*86400000));
+        setWeekOffset(diffWeeks);
+      }
+    }
+    if (apptParam) pendingApptRef.current = apptParam;
+    navigate(location.pathname, { replace: true });
+  }, [location.search]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!pendingApptRef.current || !allAppts.length) return;
+    const found = allAppts.find(a => String(a.id) === String(pendingApptRef.current));
+    if (found) { setDetailAppt(found); pendingApptRef.current = null; }
+  }, [allAppts]);
 
   const selStr   = svLocal(selectedDate);
   const dayAppts = allAppts.filter(a => {
@@ -515,15 +548,17 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
       )}
 
       {newApptOpen && (
-        <NewApptModal
-          empId={employee.id}
+        <QuickAddApptModal
+          employees={allEmployees}
+          defaultEmpId={employee.id}
           services={services}
           theme={t}
           onClose={() => setNewApptOpen(false)}
           onSave={async form => {
-            await bookingApi.createEmpAppt(form);
+            const appt = await bookingApi.createEmpAppt(form);
             await loadAppts();
             showToast('RDV cree ✓');
+            return appt;
           }}
         />
       )}

@@ -6,7 +6,7 @@ import { Button, Label, SegmentedControl } from '../../../components/primitives'
 import { I } from '../../../utils/icons';
 import { svLocal, toMin, fromMin } from '../helpers';
 
-export default function QuickAddApptModal({ employees, services, onSave, onClose, theme: t }) {
+export default function QuickAddApptModal({ employees, services, onSave, onClose, theme: t, defaultEmpId = null }) {
   const [clientSearch,      setClientSearch]      = useState('');
   const [clientResults,     setClientResults]     = useState([]);
   const [clientSearchBusy,  setClientSearchBusy]  = useState(false);
@@ -19,7 +19,7 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
   const [date,              setDate]              = useState(svLocal(new Date()));
   const [startTime,         setStartTime]         = useState('09:00');
   const [notes,             setNotes]             = useState('');
-  const [selEmpId,          setSelEmpId]          = useState('');
+  const [selEmpId,          setSelEmpId]          = useState(defaultEmpId || '');
   const [saving,            setSaving]            = useState(false);
   const [confirmed,         setConfirmed]         = useState(null);
   const [conflictError,     setConflictError]     = useState('');
@@ -27,8 +27,15 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
 
   const activeEmps = (employees||[]).filter(e => e.is_active !== false);
   useEffect(() => {
-    if (activeEmps.length > 0 && !selEmpId) setSelEmpId(activeEmps[0].id);
-  }, [employees]); // eslint-disable-line
+    // defaultEmpId prioritaire (vient de la page "agenda d'un employé") ;
+    // sinon 1er employé actif par défaut.
+    if (selEmpId) return;
+    if (defaultEmpId && activeEmps.some(e => e.id === defaultEmpId)) {
+      setSelEmpId(defaultEmpId);
+    } else if (activeEmps.length > 0) {
+      setSelEmpId(activeEmps[0].id);
+    }
+  }, [employees, defaultEmpId]); // eslint-disable-line
 
   useEffect(() => {
     bookingApi.getServiceCategories().then(setBookingCats).catch(()=>{});

@@ -7,6 +7,48 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Agenda employé : URL persistante + popup mutualisée + deep-link
+notif** — Onboarding.md points 1/2/4 livrés.
+
+1. **Routes paramétrées** : vue employé seul n'est plus en state local
+   (`selectedEmp`/`view`). Nouvelles routes dans `App.jsx` :
+   - `/agenda` (inchangé) → `MultiColumnAgenda`
+   - `/agenda/views` → idem (alias)
+   - `/agenda/views/:employeeId` → `EmpAgendaMain` de cet employé
+   `EmployeeAgenda` (`pages/employee-agenda/index.jsx`) lit
+   `useParams().employeeId` et rend la bonne vue. Clic sur un employé
+   dans la vue multi → `navigate('/agenda/views/:id')`. Bouton retour →
+   `navigate('/agenda')`. Refresh = état préservé, lien partageable,
+   `employeeId` introuvable → redirect propre vers `/agenda`.
+
+2. **Popup « Nouveau RDV » unifiée** : `EmpAgendaMain` utilisait son
+   propre `NewApptModal` (plus limité : pas de recherche client, pas de
+   prestations groupées). Remplacé par `QuickAddApptModal` (déjà en
+   place dans la vue multi), avec nouvelle prop `defaultEmpId` qui
+   pré-sélectionne l'employé courant. Plus de duplication. Fichier
+   `NewApptModal.jsx` supprimé (code mort).
+
+3. **Deep-link notif `?appt=<id>` branché sur la route active** :
+   l'ancien `pages/agenda/index.jsx` qui gérait les params n'est pas
+   monté. Logique portée dans `MultiColumnAgenda` et `EmpAgendaMain` :
+   lecture de `?date=` + `?appt=` via `useLocation`, bascule vue Jour
+   au bon jour/semaine, `pendingApptRef` ouvre le modal détails dès
+   que les RDV sont chargés, puis `navigate(pathname, {replace:true})`
+   strippe les params. Fonctionne sur `/agenda?date=…&appt=…` (déjà
+   produit par le backend) et supporte aussi
+   `/agenda/views/:employeeId?appt=…` pour la page employé.
+
+Fichiers : `frontend/src/App.jsx`,
+`frontend/src/pages/employee-agenda/index.jsx`,
+`frontend/src/pages/employee-agenda/tabs/EmpAgendaMain.jsx`,
+`frontend/src/pages/employee-agenda/components/MultiColumnAgenda.jsx`,
+`frontend/src/pages/employee-agenda/modals/QuickAddApptModal.jsx`
+(ajout `defaultEmpId`),
+`frontend/src/pages/employee-agenda/modals/NewApptModal.jsx` (supprimé).
+Build OK.
+
+## État actuel (2026-04-22)
+
 **Deep-link notifications popup Dashboard → RDV** — La popup
 `NotifModal` du Dashboard (tuile « Notifs ») ouvrait auparavant juste la
 liste : clic sur une notif marquait lue et rien d'autre. Alignée avec la
