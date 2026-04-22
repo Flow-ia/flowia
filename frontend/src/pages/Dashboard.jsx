@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useEmployeePin } from '../hooks/useEmployeePin';
 import { bookingApi, notifApi } from '../utils/api';
 import { StatusBadge } from '../components/primitives/StatusBadge';
+import { I } from '../utils/icons';
 
 const nd   = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
 const fmtN = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -389,6 +390,39 @@ function PinAccessModal({ open, onClose, onSuccess, employees, theme: t, title =
 }
 
 // ── NotifModal ───────────────────────────────────────────────────────────────
+// FDS-2026 : cartes pastel + borderLeft 2px accent, icônes Lucide, employé
+// concerné + date + heure affichés en grand pour lecture rapide. Distinction
+// visuelle claire : Nouveau RDV (indigo) · Rappel (ambre) · Caisse (vert).
+const NOTIF_CFG = {
+  new_appointment:      { Icon: I.Calendar, label: 'Nouveau RDV', bg: '#eef2ff', accent: '#6366f1', text: '#4338ca' },
+  appointment_reminder: { Icon: I.Clock,    label: 'Rappel RDV',  bg: '#fffbeb', accent: '#f59e0b', text: '#92400e' },
+  caisse:               { Icon: I.Wallet,   label: 'Caisse',      bg: '#f0fdf4', accent: '#10b981', text: '#065f46' },
+};
+
+const stripLeadingEmoji = (s = '') =>
+  String(s).replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\s*(?:—\s*)?/u, '').trim();
+
+const fmtApptDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const today  = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(d); target.setHours(0, 0, 0, 0);
+  const diff = Math.round((target - today) / 86400000);
+  if (diff === 0)  return "Aujourd'hui";
+  if (diff === 1)  return 'Demain';
+  if (diff === -1) return 'Hier';
+  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+};
+
+const fmtRelative = (iso) => {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60000)    return "A l'instant";
+  if (diff < 3600000)  return `Il y a ${Math.floor(diff / 60000)} min`;
+  if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)}h`;
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+
 function NotifModal({ open, onClose, theme: t }) {
   const [notifs, setNotifs]   = useState([]);
   const [loading, setLoading] = useState(false);
@@ -423,15 +457,6 @@ function NotifModal({ open, onClose, theme: t }) {
     if (target) { onClose(); navigate(target); }
   };
 
-  // Icones data metier (identifiants de type de notification) — conserves
-  const ICON = { new_appointment:'📅', appointment_reminder:'⏰', caisse:'🧾' };
-  const fmtTime = iso => {
-    const diff = Date.now() - new Date(iso).getTime();
-    if (diff < 60000)    return "A l'instant";
-    if (diff < 3600000)  return `Il y a ${Math.floor(diff / 60000)} min`;
-    if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)}h`;
-    return new Date(iso).toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
-  };
   const unread = notifs.filter(n => !n.is_read).length;
   const sep = `0.5px solid ${t.separator}`;
 
@@ -453,36 +478,136 @@ function NotifModal({ open, onClose, theme: t }) {
         <div style={{ padding:'48px 20px', textAlign:'center' }}>
           <p style={{ fontSize:13, color:t.muted, margin:0 }}>Aucune notification</p>
         </div>
-      ) : notifs.map((n, i) => (
-        <div key={n.id} onClick={() => openNotif(n)}
-             style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'13px 16px',
-                      borderBottom: i < notifs.length - 1 ? sep : 'none',
-                      background: n.is_read ? 'transparent' : t.cardAlt,
-                      cursor:'pointer' }}>
-          <div style={{ width:34, height:34, borderRadius:8, flexShrink:0, fontSize:16,
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                        background:t.cardAlt }}>
-            {ICON[n.type] || '📌'}
-          </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
-              {!n.is_read && <span style={{ width:6, height:6, borderRadius:'50%', background:t.text, flexShrink:0 }}/>}
-              <p style={{ fontWeight:500, fontSize:13, color:t.text,
-                          margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {n.title}
-              </p>
-            </div>
-            {n.body && <p style={{ fontSize:11, color:t.muted, margin:'0 0 3px', lineHeight:1.4 }}>{n.body}</p>}
-            <p style={{ fontSize:10, color:t.dim, margin:0 }}>{fmtTime(n.created_at)}</p>
-          </div>
-          <button onClick={e => { e.stopPropagation(); del(n.id); }}
-                  style={{ width:22, height:22, borderRadius:6, border:'none', cursor:'pointer', flexShrink:0,
-                           background:'rgba(239,68,68,0.1)', color:'#991b1b', fontSize:13,
-                           display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'inherit' }}>
-            ×
-          </button>
+      ) : (
+        <div style={{ padding:'8px 0 14px' }}>
+          {notifs.map((n) => {
+            const cfg = NOTIF_CFG[n.type] || {
+              Icon: I.Bell, label: 'Info', bg: t.cardAlt, accent: t.muted, text: t.textSub,
+            };
+            const d = n.data || {};
+            const empName = d.employee_name || null;
+            const dateStr = fmtApptDate(d.appt_date);
+            const timeStr = d.start_time || '';
+            const hasRich = !!(empName || dateStr || timeStr);
+            const Icon    = cfg.Icon;
+
+            return (
+              <div key={n.id} onClick={() => openNotif(n)}
+                   style={{ margin:'10px 16px', padding:'14px 16px',
+                            borderRadius:12,
+                            background: n.is_read ? t.cardAlt : cfg.bg,
+                            border:`0.5px solid ${t.border}`,
+                            borderLeft:`2px solid ${cfg.accent}`,
+                            cursor:'pointer',
+                            display:'flex', gap:12, alignItems:'flex-start' }}>
+                <div style={{ width:44, height:44, borderRadius:8,
+                              background: n.is_read ? t.card : '#ffffff',
+                              border:`0.5px solid ${t.border}`,
+                              display:'flex', alignItems:'center', justifyContent:'center',
+                              flexShrink:0 }}>
+                  <Icon style={{ width:20, height:20, color:cfg.accent }} />
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                    <span style={{ fontSize:10, fontWeight:500, letterSpacing:0.4,
+                                   padding:'3px 8px', borderRadius:99,
+                                   background: n.is_read ? t.card : '#ffffff',
+                                   border:`0.5px solid ${cfg.accent}33`,
+                                   color:cfg.text, textTransform:'uppercase' }}>
+                      {cfg.label}
+                    </span>
+                    {!n.is_read && (
+                      <span style={{ width:7, height:7, borderRadius:'50%', background:cfg.accent }} />
+                    )}
+                    <span style={{ marginLeft:'auto', fontSize:11, color:t.dim }}>
+                      {fmtRelative(n.created_at)}
+                    </span>
+                  </div>
+
+                  {hasRich ? (
+                    <>
+                      <div style={{ display:'flex', alignItems:'center', gap:6,
+                                    marginBottom:2, minWidth:0 }}>
+                        <I.User style={{ width:14, height:14, color:t.muted, flexShrink:0 }} />
+                        <p style={{ margin:0, fontSize:18, fontWeight:500, color:t.text,
+                                    lineHeight:1.2, overflow:'hidden',
+                                    textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {empName || '— employé non renseigné —'}
+                        </p>
+                      </div>
+                      {(d.client_name || d.service_name) && (
+                        <p style={{ margin:'4px 0 0', fontSize:13, color:t.textSub,
+                                    lineHeight:1.35, overflow:'hidden',
+                                    textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {d.client_name || ''}
+                          {d.client_name && d.service_name ? ' · ' : ''}
+                          {d.service_name || ''}
+                        </p>
+                      )}
+                      {(dateStr || timeStr) && (
+                        <div style={{ display:'flex', alignItems:'baseline', gap:12,
+                                      marginTop:10, flexWrap:'wrap' }}>
+                          {dateStr && (
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:6,
+                                           fontSize:15, fontWeight:500, color:t.text,
+                                           textTransform:'capitalize' }}>
+                              <I.Calendar style={{ width:14, height:14, color:t.muted }} />
+                              {dateStr}
+                            </span>
+                          )}
+                          {timeStr && (
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:6,
+                                           fontSize:22, fontWeight:500, color:cfg.text,
+                                           fontFamily:'monospace', letterSpacing:0.5, lineHeight:1 }}>
+                              <I.Clock style={{ width:15, height:15, color:cfg.accent }} />
+                              {timeStr}
+                            </span>
+                          )}
+                          {n.type === 'appointment_reminder' && d.minutes_before != null && (
+                            <span style={{ fontSize:11, color:cfg.text,
+                                           padding:'3px 9px', borderRadius:99,
+                                           background:cfg.bg,
+                                           border:`0.5px solid ${cfg.accent}55` }}>
+                              dans {d.minutes_before < 60
+                                ? `${d.minutes_before} min`
+                                : d.minutes_before < 1440
+                                  ? `${d.minutes_before / 60}h`
+                                  : `${Math.round(d.minutes_before / 1440)} j`}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ margin:0, fontWeight:500, fontSize:14, color:t.text,
+                                  lineHeight:1.3 }}>
+                        {stripLeadingEmoji(n.title)}
+                      </p>
+                      {n.body && (
+                        <p style={{ margin:'4px 0 0', fontSize:12, color:t.textSub,
+                                    lineHeight:1.4 }}>
+                          {stripLeadingEmoji(n.body)}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <button onClick={e => { e.stopPropagation(); del(n.id); }}
+                        aria-label="Supprimer la notification"
+                        style={{ width:28, height:28, borderRadius:8,
+                                 border:`0.5px solid ${t.border}`,
+                                 cursor:'pointer', flexShrink:0,
+                                 background:'transparent', color:t.muted,
+                                 display:'flex', alignItems:'center', justifyContent:'center',
+                                 fontFamily:'inherit' }}>
+                  <I.Trash style={{ width:14, height:14 }} />
+                </button>
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
     </Modal>
   );
 }

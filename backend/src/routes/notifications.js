@@ -201,9 +201,10 @@ async function runRdvReminders() {
         // #10 : dedup via meta (delay_min + appointment_id) au lieu du filtre
         // type littéral qui ne matchait jamais (type réel contient un uuid).
         const { rows: appts } = await pool.query(
-          `SELECT a.*, bs.name as service_name
+          `SELECT a.*, bs.name as service_name, e.name as employee_name
            FROM appointments a
            LEFT JOIN booking_services bs ON bs.id=a.service_id
+           LEFT JOIN employees e ON e.id=a.employee_id
            WHERE a.user_id=$1 AND a.status='confirmed'
              AND a.client_email IS NOT NULL
              AND (a.date::text || ' ' || a.start_time::text)::timestamptz

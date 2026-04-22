@@ -7,6 +7,41 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Notifications commerçant : FDS-2026 + employé/date/heure en grand** —
+Refonte complète de la cloche `NotificationCenter` (App.jsx) et de la
+popup `NotifModal` (Dashboard.jsx). Chaque notif s'affiche comme une
+carte pastel + `borderLeft: 2px` accent colorée selon le type, pour
+distinguer d'un coup d'œil :
+- **Nouveau RDV** — palette info indigo (`#eef2ff` + `#6366f1`) +
+  icône `I.Calendar`
+- **Rappel RDV** — palette warning ambre (`#fffbeb` + `#f59e0b`) +
+  icône `I.Clock` + chip "dans X min"
+- **Caisse** — palette success vert (`#f0fdf4` + `#10b981`) + icône
+  `I.Wallet`
+
+Emojis retirés de l'UI (FDS-2026 rule #6) : icônes Lucide (`I.*`) dans
+la pastille carrée à gauche, plus pictogrammes `I.User` / `I.Calendar`
+/ `I.Clock` dans la ligne détail. Employé concerné affiché en
+**16-18px** fontWeight 500, date lisible ("Aujourd'hui", "Demain",
+"lundi 22 avril") en 14-15px, heure en **20-22px** monospace sur
+l'accent du type — tout visible d'un seul coup d'œil. Nom client +
+prestation en ligne secondaire 12-13px. Chip du type en pill pastel
+majuscule avec border `accent33`.
+
+Backend `push.js` enrichit `data` avec `employee_id`, `employee_name`,
+`client_name`, `service_name`, `appt_date`, `start_time`,
+`minutes_before` — résolution automatique du nom employé via DB si
+absent du caller. Title/body in-app sans emoji (emoji conservé
+uniquement pour le push lock-screen OS). Cron `notifications.js` :
+`LEFT JOIN employees` ajouté au SQL pour livrer `employee_name` sans
+requête séparée. Strip emoji fallback côté frontend pour les anciennes
+notifs en DB. Fichiers : `backend/src/utils/push.js`,
+`backend/src/routes/notifications.js`, `frontend/src/App.jsx`
+(NotificationCenter + NotifCard), `frontend/src/pages/Dashboard.jsx`
+(NotifModal). Build OK.
+
+## État précédent (2026-04-22)
+
 **Agenda employé : URL persistante + popup mutualisée + deep-link
 notif** — Onboarding.md points 1/2/4 livrés.
 

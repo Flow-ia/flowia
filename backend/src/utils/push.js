@@ -132,20 +132,50 @@ function apptDeepLink(appt) {
   return `/agenda?date=${dateStr}&appt=${id}`;
 }
 
+// Résout le nom de l'employé si non fourni dans le payload. Non bloquant :
+// en cas d'échec DB, on renvoie null (le frontend affichera "— employé non
+// renseigné —" côté UI).
+async function resolveEmployeeName(appt) {
+  if (appt.employee_name) return appt.employee_name;
+  if (!appt.employee_id) return null;
+  try {
+    const { rows } = await pool.query('SELECT name FROM employees WHERE id=$1', [appt.employee_id]);
+    return rows[0]?.name || null;
+  } catch { return null; }
+}
+
+function apptDateStr(appt) {
+  if (typeof appt.date === 'string') return appt.date.substring(0, 10);
+  if (appt.date instanceof Date)     return appt.date.toISOString().substring(0, 10);
+  return null;
+}
+
 async function notifyNewAppointment(userId, appt) {
-  const timeStr = String(appt.start_time || '').substring(0, 5);
-  const deepLink = apptDeepLink(appt);
-  // Titre in-app (complet, affiché dans l'app loggée)
-  const appTitle = `📅 Nouveau RDV — ${appt.client_name || 'Client'}`;
-  const appBody  = `${appt.service_name || 'RDV'} le ${appt.date} à ${timeStr}`;
-  // Titre push (minifié pour lock-screen, pas d'info perso)
+  const timeStr   = String(appt.start_time || '').substring(0, 5);
+  const deepLink  = apptDeepLink(appt);
+  const empName   = await resolveEmployeeName(appt);
+  const dateStr   = apptDateStr(appt);
+  // Titre in-app sans emoji (FDS-2026 : l'UI porte l'icône via I.Calendar).
+  // Titre compact, le rendu affiche employé/date/heure en grand via `data`.
+  const appTitle = `Nouveau rendez-vous — ${appt.client_name || 'Client'}`;
+  const appBody  = `${appt.service_name || 'RDV'}${empName ? ` · ${empName}` : ''}`;
+  // Push (lock-screen OS, hors périmètre FDS-2026) — emoji conservé pour repérage.
   const pushTitle = '📅 Nouveau rendez-vous';
   const pushBody  = timeStr ? `Créneau ${timeStr} — ouvrez l'agenda pour les détails` : 'Ouvrez l\'agenda pour les détails';
 
-  // 1. In-app (détails complets) — inclut url pour deep-link depuis le bell
-  await createAppNotification(userId, { type: 'new_appointment', title: appTitle, body: appBody, data: { appointment_id: appt.id, url: deepLink } });
+  const data = {
+    appointment_id: appt.id,
+    url: deepLink,
+    employee_id:    appt.employee_id || null,
+    employee_name:  empName,
+    client_name:    appt.client_name || null,
+    service_name:   appt.service_name || null,
+    appt_date:      dateStr,
+    start_time:     timeStr || null,
+  };
 
-  // 2. Push (minifié)
+  await createAppNotification(userId, { type: 'new_appointment', title: appTitle, body: appBody, data });
+
   try {
     await sendPushToUser(userId, {
       type: 'new_appointment',
@@ -153,10 +183,10 @@ async function notifyNewAppointment(userId, appt) {
       body:  pushBody,
       icon: '/icon-192.png',
       badge: '/badge-72.png',
-      data: { appointment_id: appt.id, url: deepLink },
+      data,
       sound: 'new_appointment',
     });
-  } catch {} // silencieux si pas d'abonnements
+  } catch {}
 }
 
 // ── Notifier : rappel RDV ────────────────────────────────────────────────────
@@ -164,14 +194,28 @@ async function notifyAppointmentReminder(userId, appt, minutesBefore) {
   const label = minutesBefore < 60
     ? `dans ${minutesBefore} min`
     : minutesBefore < 1440 ? `dans ${minutesBefore / 60}h` : `demain`;
-  const timeStr = String(appt.start_time || '').substring(0, 5);
-  const deepLink = apptDeepLink(appt);
-  const appTitle = `⏰ Rappel RDV ${label}`;
-  const appBody  = `${appt.client_name || 'Client'} — ${appt.service_name || 'RDV'} à ${timeStr}`;
+  const timeStr   = String(appt.start_time || '').substring(0, 5);
+  const deepLink  = apptDeepLink(appt);
+  const empName   = await resolveEmployeeName(appt);
+  const dateStr   = apptDateStr(appt);
+  const appTitle  = `Rappel rendez-vous ${label}`;
+  const appBody   = `${appt.client_name || 'Client'} — ${appt.service_name || 'RDV'}${empName ? ` · ${empName}` : ''}`;
   const pushTitle = `⏰ Rendez-vous ${label}`;
   const pushBody  = timeStr ? `Créneau ${timeStr} — détails dans l'agenda` : "Détails dans l'agenda";
 
-  await createAppNotification(userId, { type: 'appointment_reminder', title: appTitle, body: appBody, data: { appointment_id: appt.id, url: deepLink } });
+  const data = {
+    appointment_id: appt.id,
+    url: deepLink,
+    employee_id:    appt.employee_id || null,
+    employee_name:  empName,
+    client_name:    appt.client_name || null,
+    service_name:   appt.service_name || null,
+    appt_date:      dateStr,
+    start_time:     timeStr || null,
+    minutes_before: minutesBefore,
+  };
+
+  await createAppNotification(userId, { type: 'appointment_reminder', title: appTitle, body: appBody, data });
 
   try {
     await sendPushToUser(userId, {
@@ -179,7 +223,7 @@ async function notifyAppointmentReminder(userId, appt, minutesBefore) {
       title: pushTitle,
       body:  pushBody,
       icon: '/icon-192.png',
-      data: { appointment_id: appt.id, url: deepLink },
+      data,
       sound: 'reminder',
     });
   } catch {}

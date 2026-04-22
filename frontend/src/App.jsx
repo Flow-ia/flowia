@@ -1334,6 +1334,167 @@ function PinOnboarding({ onSetupNow, theme: t }) {
 }
 
 // ── NotificationCenter ──────────────────────────────────────────────────────
+// FDS-2026 : icônes Lucide (I.*), pastels + borderLeft 2px par type, employé
+// concerné + date + heure affichés en grand pour lecture rapide. Types
+// différenciés visuellement (Nouveau RDV = info indigo, Rappel = warning
+// ambre, Caisse = success vert).
+const NOTIF_TYPE_CFG = {
+  new_appointment:      { Icon: I.Calendar, label: 'Nouveau RDV', bg: '#eef2ff', accent: '#6366f1', text: '#4338ca' },
+  appointment_reminder: { Icon: I.Clock,    label: 'Rappel RDV',  bg: '#fffbeb', accent: '#f59e0b', text: '#92400e' },
+  caisse:               { Icon: I.Wallet,   label: 'Caisse',      bg: '#f0fdf4', accent: '#10b981', text: '#065f46' },
+};
+
+// Retire un emoji de tête éventuel (lignes DB historiques, avant FDS-2026).
+const stripLeadingEmoji = (s = '') =>
+  String(s).replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\s*(?:—\s*)?/u, '').trim();
+
+// Format date relative humaine pour le RDV (Aujourd'hui / Demain / Lun 22 avr).
+const fmtApptDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const today  = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(d); target.setHours(0, 0, 0, 0);
+  const diff = Math.round((target - today) / 86400000);
+  if (diff === 0)  return "Aujourd'hui";
+  if (diff === 1)  return 'Demain';
+  if (diff === -1) return 'Hier';
+  return d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+const fmtRelative = (iso) => {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000)    return "A l'instant";
+  if (diff < 3600000)  return `Il y a ${Math.floor(diff / 60000)} min`;
+  if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)}h`;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+
+function NotifCard({ n, t, cfg, onOpen, onDelete, compact = false }) {
+  const d       = n.data || {};
+  const empName = d.employee_name || null;
+  const dateStr = fmtApptDate(d.appt_date);
+  const timeStr = d.start_time || '';
+  const hasRich = !!(empName || dateStr || timeStr);
+  const Icon    = cfg.Icon;
+  const pad     = compact ? '12px 14px' : '14px 16px';
+  const iconSz  = compact ? 36 : 40;
+  const nameSz  = compact ? 15 : 16;
+  const timeSz  = compact ? 18 : 20;
+  const dateSz  = compact ? 13 : 14;
+
+  return (
+    <div
+      onClick={() => onOpen(n)}
+      style={{
+        margin: compact ? '8px 12px' : '10px 14px',
+        padding: pad,
+        borderRadius: 8,
+        background: n.is_read ? t.cardAlt : cfg.bg,
+        border: `0.5px solid ${t.border}`,
+        borderLeft: `2px solid ${cfg.accent}`,
+        cursor: 'pointer',
+        display: 'flex',
+        gap: 12,
+        alignItems: 'flex-start',
+        transition: 'background 0.1s',
+      }}
+    >
+      <div style={{
+        width: iconSz, height: iconSz, borderRadius: 8,
+        background: n.is_read ? t.card : '#ffffff',
+        border: `0.5px solid ${t.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <Icon style={{ width: 18, height: 18, color: cfg.accent }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <span style={{
+            fontSize: 10, fontWeight: 500, letterSpacing: 0.4,
+            padding: '2px 7px', borderRadius: 99,
+            background: n.is_read ? t.card : '#ffffff',
+            border: `0.5px solid ${cfg.accent}33`,
+            color: cfg.text,
+            textTransform: 'uppercase',
+          }}>{cfg.label}</span>
+          {!n.is_read && (
+            <span style={{ width: 6, height: 6, borderRadius: '50%',
+                           background: cfg.accent, flexShrink: 0 }} />
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: t.dim, flexShrink: 0 }}>
+            {fmtRelative(n.created_at)}
+          </span>
+        </div>
+
+        {hasRich ? (
+          <>
+            <p style={{ margin: 0, fontSize: nameSz, fontWeight: 500, color: t.text, lineHeight: 1.2,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {empName || '— employé non renseigné —'}
+            </p>
+            {(d.client_name || d.service_name) && (
+              <p style={{ margin: '3px 0 0', fontSize: 12, color: t.textSub, lineHeight: 1.35,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {d.client_name || ''}{d.client_name && d.service_name ? ' · ' : ''}{d.service_name || ''}
+              </p>
+            )}
+            {(dateStr || timeStr) && (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 8 }}>
+                {dateStr && (
+                  <span style={{ fontSize: dateSz, fontWeight: 500, color: t.text }}>{dateStr}</span>
+                )}
+                {timeStr && (
+                  <span style={{ fontSize: timeSz, fontWeight: 500, color: cfg.text,
+                                 fontFamily: 'monospace', letterSpacing: 0.5 }}>
+                    {timeStr}
+                  </span>
+                )}
+                {n.type === 'appointment_reminder' && d.minutes_before != null && (
+                  <span style={{ fontSize: 11, color: cfg.text, padding: '2px 7px', borderRadius: 99,
+                                 background: cfg.bg, border: `0.5px solid ${cfg.accent}55` }}>
+                    dans {d.minutes_before < 60
+                      ? `${d.minutes_before} min`
+                      : d.minutes_before < 1440
+                        ? `${d.minutes_before / 60}h`
+                        : `${Math.round(d.minutes_before / 1440)} j`}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p style={{ margin: 0, fontWeight: 500, fontSize: 14, color: t.text, lineHeight: 1.3 }}>
+              {stripLeadingEmoji(n.title)}
+            </p>
+            {n.body && (
+              <p style={{ margin: '3px 0 0', fontSize: 12, color: t.textSub, lineHeight: 1.4 }}>
+                {stripLeadingEmoji(n.body)}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(n.id); }}
+        aria-label="Supprimer la notification"
+        style={{
+          width: 26, height: 26, borderRadius: 8,
+          background: 'transparent',
+          border: `0.5px solid ${t.border}`,
+          cursor: 'pointer', color: t.muted,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, fontFamily: 'inherit',
+        }}>
+        <I.Trash style={{ width: 13, height: 13 }} />
+      </button>
+    </div>
+  );
+}
+
 function NotificationCenter({ theme: t }) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef(null);
@@ -1346,9 +1507,6 @@ function NotificationCenter({ theme: t }) {
     reload,
   } = useNotifications({ enabled: true });
 
-  // Clic sur une notif : marque lue + deep-link vers le RDV concerné
-  // (ou /agenda générique si pas d'url). Valide le path pour ne router
-  // que sur des chemins relatifs internes (même règle que le SW).
   const openNotification = (n) => {
     if (!n.is_read) markRead(n.id);
     const raw = n?.data?.url;
@@ -1372,72 +1530,51 @@ function NotificationCenter({ theme: t }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  // Icones data metier (identifient le type de notification)
-  const TYPE_CFG = {
-    new_appointment:      { icon: '📅', color: '#4338ca', label: 'Nouveau RDV' },
-    appointment_reminder: { icon: '⏰', color: '#92400e', label: 'Rappel RDV' },
-    caisse:               { icon: '🧾', color: '#065f46', label: 'Caisse' },
-  };
-
-  const fmtTime = (iso) => {
-    const d = new Date(iso);
-    const diff = Date.now() - d.getTime();
-    if (diff < 60000)    return "A l'instant";
-    if (diff < 3600000)  return `Il y a ${Math.floor(diff / 60000)} min`;
-    if (diff < 86400000) return `Il y a ${Math.floor(diff / 3600000)}h`;
-    return d.toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
-  };
-
   return (
-    <div style={{ position:'relative' }} ref={drawerRef}>
+    <div style={{ position: 'relative' }} ref={drawerRef}>
       <button onClick={() => { setOpen(p => !p); if (!open) reload(); }}
-              style={{ position:'relative', width:34, height:34, borderRadius:8,
+              style={{ position: 'relative', width: 34, height: 34, borderRadius: 8,
                        background: open ? t.cardAlt : 'transparent',
-                       border:`0.5px solid ${t.border}`,
-                       cursor:'pointer',
-                       display:'flex', alignItems:'center', justifyContent:'center',
-                       transition:'background 0.15s ease', fontFamily:'inherit' }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-             strokeLinecap="round" strokeLinejoin="round"
-             style={{ width:15, height:15, color: open ? t.text : t.muted }}>
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
+                       border: `0.5px solid ${t.border}`,
+                       cursor: 'pointer',
+                       display: 'flex', alignItems: 'center', justifyContent: 'center',
+                       transition: 'background 0.15s ease', fontFamily: 'inherit' }}>
+        <I.Bell style={{ width: 15, height: 15, color: open ? t.text : t.muted }} />
         {unreadCount > 0 && (
-          <span style={{ position:'absolute', top:-4, right:-4,
-                         minWidth:14, height:14, borderRadius:99,
-                         background:'#991b1b', color:'white',
-                         fontSize:9, fontWeight:500,
-                         display:'flex', alignItems:'center', justifyContent:'center',
-                         padding:'0 3px' }}>
+          <span style={{ position: 'absolute', top: -4, right: -4,
+                         minWidth: 14, height: 14, borderRadius: 99,
+                         background: '#991b1b', color: 'white',
+                         fontSize: 9, fontWeight: 500,
+                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         padding: '0 3px' }}>
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div style={{ position:'absolute', top:42, right:0,
-                      width:340, maxWidth:'calc(100vw - 32px)',
-                      background:t.elevated, borderRadius:12,
-                      border:`0.5px solid ${t.border}`,
-                      boxShadow:t.shadowModal, zIndex:1000, overflow:'hidden' }}>
-          <div style={{ padding:'14px 16px', borderBottom:`0.5px solid ${t.separator}`,
-                        display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <span style={{ fontWeight:500, fontSize:14, color:t.text }}>
+        <div style={{ position: 'absolute', top: 42, right: 0,
+                      width: 380, maxWidth: 'calc(100vw - 32px)',
+                      background: t.elevated, borderRadius: 12,
+                      border: `0.5px solid ${t.border}`,
+                      boxShadow: t.shadowModal, zIndex: 1000, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${t.separator}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 500, fontSize: 14, color: t.text }}>
               Notifications
               {unreadCount > 0 && (
-                <span style={{ marginLeft:6, padding:'2px 7px', borderRadius:99,
-                               background:'#fef2f2', color:'#991b1b', fontSize:11, fontWeight:500 }}>
+                <span style={{ marginLeft: 6, padding: '2px 7px', borderRadius: 99,
+                               background: '#fef2f2', color: '#991b1b', fontSize: 11, fontWeight: 500 }}>
                   {unreadCount} non lues
                 </span>
               )}
             </span>
-            <div style={{ display:'flex', gap:6 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
               {unreadCount > 0 && (
                 <button onClick={markAllRead}
-                        style={{ fontSize:11, color:t.muted,
-                                 background:'none', border:'none', cursor:'pointer',
-                                 fontFamily:'inherit' }}>
+                        style={{ fontSize: 11, color: t.muted,
+                                 background: 'none', border: 'none', cursor: 'pointer',
+                                 fontFamily: 'inherit' }}>
                   Tout lire
                 </button>
               )}
@@ -1458,57 +1595,31 @@ function NotificationCenter({ theme: t }) {
                             alert(msg);
                           }
                         }}
-                        style={{ fontSize:11, padding:'3px 8px', borderRadius:8,
-                                 border:`0.5px solid ${t.border}`,
+                        style={{ fontSize: 11, padding: '3px 8px', borderRadius: 8,
+                                 border: `0.5px solid ${t.border}`,
                                  background: pushEnabled ? '#f0fdf4' : 'transparent',
                                  color: pushEnabled ? '#065f46' : t.muted,
-                                 fontWeight:500, cursor:'pointer',
-                                 fontFamily:'inherit' }}>
+                                 fontWeight: 500, cursor: 'pointer',
+                                 fontFamily: 'inherit' }}>
                   {pushEnabled ? 'Push ON' : 'Push OFF'}
                 </button>
               )}
             </div>
           </div>
 
-          <div style={{ maxHeight:420, overflowY:'auto' }}>
+          <div style={{ maxHeight: 480, overflowY: 'auto', padding: '4px 0 8px' }}>
             {notifications.length === 0 ? (
-              <div style={{ padding:'32px 16px', textAlign:'center' }}>
-                <p style={{ fontSize:13, color:t.muted, margin:0 }}>Aucune notification</p>
+              <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Aucune notification</p>
               </div>
             ) : notifications.map((n) => {
-              const cfg = TYPE_CFG[n.type] || { icon:'📌', color:t.muted, label:n.type };
+              const cfg = NOTIF_TYPE_CFG[n.type] || {
+                Icon: I.Bell, label: 'Info', bg: t.cardAlt, accent: t.muted, text: t.textSub,
+              };
               return (
-                <div key={n.id}
-                     style={{ padding:'12px 16px', borderBottom:`0.5px solid ${t.separator}`,
-                              display:'flex', gap:10, alignItems:'flex-start',
-                              background: n.is_read ? 'transparent' : t.cardAlt,
-                              cursor:'pointer', transition:'background 0.1s' }}
-                     onClick={() => openNotification(n)}>
-                  <div style={{ width:32, height:32, borderRadius:8,
-                                background:`${cfg.color}18`,
-                                display:'flex', alignItems:'center', justifyContent:'center',
-                                fontSize:15, flexShrink:0 }}>
-                    {cfg.icon}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
-                      {!n.is_read && <span style={{ width:6, height:6, borderRadius:'50%',
-                                                    background:t.text, flexShrink:0 }}/>}
-                      <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text,
-                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {n.title}
-                      </p>
-                    </div>
-                    {n.body && <p style={{ margin:0, fontSize:11, color:t.muted, lineHeight:1.4 }}>{n.body}</p>}
-                    <p style={{ margin:'4px 0 0', fontSize:10, color:t.dim }}>{fmtTime(n.created_at)}</p>
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteNotif(n.id); }}
-                          style={{ width:22, height:22, borderRadius:6,
-                                   background:'rgba(239,68,68,0.1)', border:'none', cursor:'pointer',
-                                   color:'#991b1b', fontSize:12,
-                                   display:'flex', alignItems:'center', justifyContent:'center',
-                                   flexShrink:0, fontFamily:'inherit' }}>×</button>
-                </div>
+                <NotifCard key={n.id} n={n} t={t} cfg={cfg}
+                           onOpen={openNotification} onDelete={deleteNotif}
+                           compact />
               );
             })}
           </div>
