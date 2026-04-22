@@ -7,6 +7,27 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-22)
 
+**Client /client/rdv : statut repositionné au-dessus du prix + FDS-2026**
+— Carte RDV de l'onglet "Mes RDV" nettoyée selon la recommandation de
+`onboarding.md`. Retrait de la pastille icône 40×40 à droite (croix
+rouge / horloge / check / calendrier) qui dupliquait le statut déjà
+affiché en haut de carte. Retrait aussi de la pill statut en haut (trop
+redondante). Une seule indication de statut désormais, placée **au-dessus
+du prix** (pill 11px fontWeight 500 avec bordure `accent33` + bg pastel),
+hiérarchie visuelle plus claire.
+
+Carte conformée FDS-2026 : `borderLeft: 2px solid st.color` pour repère
+visuel du statut (annulé rouge / passé gris / futur accent), `border`
+global 0.5px, `borderRadius: 12` (au lieu de 18 hors tokens), fontWeight
+ramenés à 500 max (avant 600 sur commerçant et prix), SVG inline
+remplacés par `I.X` (bouton Annuler) et `I.User` (ligne employé). Ref
+`#ID` déplacée en bas de la colonne info, très discrète. Bouton Annuler
+disparaît simplement pour les RDV non annulables (au lieu d'afficher
+une pastille décorative). Fichier : `frontend/src/pages/booking/my-appointments/tabs/AppointmentsTab.jsx`.
+Build OK.
+
+## État précédent (2026-04-22)
+
 **Notifications commerçant : FDS-2026 + employé/date/heure en grand** —
 Refonte complète de la cloche `NotificationCenter` (App.jsx) et de la
 popup `NotifModal` (Dashboard.jsx). Chaque notif s'affiche comme une

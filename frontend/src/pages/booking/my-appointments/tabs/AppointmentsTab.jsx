@@ -2,6 +2,7 @@
 // Onglet "Mes RDV" : sous-onglets Futurs / Passés / Annulés + liste des RDV.
 import { Spinner } from '../../shared';
 import { getDisplayStatus, fmtApptDate } from '../helpers';
+import { I } from '../../../../utils/icons';
 
 export function AppointmentsTab({
   th,
@@ -88,110 +89,90 @@ export function AppointmentsTab({
             const st = getDisplayStatus(a);
             return (
               <div key={a.id} style={{
-                background: th.card, border: `0.5px solid ${th.border}`,
-                borderRadius:18, padding:16,
-                opacity: st.group !== 'futurs' ? 0.88 : 1,
+                background: th.card,
+                border: `0.5px solid ${th.border}`,
+                borderLeft: `2px solid ${st.color}`,
+                borderRadius: 12, padding: 16,
+                opacity: st.group !== 'futurs' ? 0.92 : 1,
               }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:14 }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14 }}>
                   {/* ── Bloc info (gauche) ── */}
                   <div style={{ flex:1, minWidth:0 }}>
-                    {/* Badge statut + ref */}
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:8 }}>
-                      <span style={{
-                        fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight: 500,
-                        background:st.bg, color:st.color,
-                        display:'flex', alignItems:'center', gap:4,
-                      }}>
-                        <span style={{ fontSize:9 }}>{st.icon}</span>
-                        {st.label}
-                      </span>
-                      <span style={{ fontSize:10, fontWeight: 500, color:th.dim, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                        #{a.id.substring(0,8).toUpperCase()}
-                      </span>
-                    </div>
                     {/* Commerçant — titre principal */}
                     {a.business_name && (
-                      <p style={{ fontWeight: 600, fontSize:16, color: st.group !== 'futurs' ? th.muted : th.text, margin:'0 0 4px', letterSpacing:'-0.015em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      <p style={{ fontWeight: 500, fontSize:16, color: st.group !== 'futurs' ? th.muted : th.text, margin:'0 0 4px', letterSpacing:'-0.015em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {a.business_name}
                       </p>
                     )}
-                    {/* Prestation — meme taille que le nom de commercant mais non-bold */}
-                    <p style={{ fontWeight: 400, fontSize:16, color:th.text, margin:'0 0 4px', letterSpacing:'-0.015em' }}>
+                    {/* Prestation */}
+                    <p style={{ fontWeight: 400, fontSize:15, color:th.text, margin:'0 0 4px', letterSpacing:'-0.015em' }}>
                       {a.service_name || 'Service'}
                     </p>
-                    {/* Date + heure — idem */}
-                    <p style={{ fontWeight: 400, fontSize:16, color:th.muted, margin:0, letterSpacing:'-0.015em' }}>
+                    {/* Date + heure */}
+                    <p style={{ fontWeight: 400, fontSize:14, color:th.muted, margin:0, letterSpacing:'-0.015em' }}>
                       {fmtApptDate(a.date)} à {(a.start_time||'').substring(0,5)}
+                    </p>
+                    {/* Ref en bas à gauche, très discret */}
+                    <p style={{ fontSize:10, fontWeight:500, color:th.dim,
+                      fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      margin:'8px 0 0', letterSpacing:0.3 }}>
+                      #{a.id.substring(0,8).toUpperCase()}
                     </p>
                   </div>
 
-                  {/* ── Bloc actions + prix (droite, centré verticalement) ── */}
+                  {/* ── Bloc statut + prix + action (droite) ── */}
                   <div style={{
                     display:'flex', flexDirection:'column', alignItems:'flex-end',
-                    justifyContent:'center', gap:10, flexShrink:0,
+                    gap:8, flexShrink:0,
                   }}>
-                    {/* Prix à droite, style cohérent avec VisitsTab (monospace) */}
+                    {/* Statut — juste au-dessus du prix (recommandation) */}
+                    <span style={{
+                      fontSize:11, fontWeight:500, padding:'3px 9px', borderRadius:99,
+                      background: st.bg, color: st.color,
+                      border: `0.5px solid ${st.color}33`,
+                      whiteSpace:'nowrap',
+                    }}>
+                      {st.label}
+                    </span>
+                    {/* Prix sous le statut */}
                     {a.service_price > 0 && (
-                      <p style={{ fontSize:16, fontWeight:600, color:th.text, margin:0,
+                      <p style={{ fontSize:16, fontWeight:500, color:th.text, margin:0,
                         fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                         letterSpacing:'-0.01em', whiteSpace:'nowrap' }}>
                         {Number(a.service_price).toFixed(2)} €
                       </p>
                     )}
-                    {/* Action : bouton Annuler (N/B) si annulable, sinon
-                        pastille statut visuelle (check / horloge / croix). */}
-                    {st.canCancel ? (
+                    {/* Action : Annuler uniquement si le RDV est annulable */}
+                    {st.canCancel && (
                       <button onClick={() => onCancel(a)} style={{
                         display:'flex', alignItems:'center', gap:6,
-                        padding:'8px 12px', borderRadius:10,
+                        padding:'7px 11px', borderRadius:8,
                         background:th.card, color:th.text,
-                        border: `0.5px solid ${th.border}`,
+                        border:`0.5px solid ${th.border}`,
                         cursor:'pointer', fontFamily:'inherit',
                         fontSize:12, fontWeight:500, letterSpacing:'-0.01em',
                         transition:'background .15s, border-color .15s',
+                        marginTop:2,
                       }}
                       onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; e.currentTarget.style.borderColor = th.borderStrong || th.border; }}
                       onMouseLeave={e => { e.currentTarget.style.background = th.card; e.currentTarget.style.borderColor = th.border; }}
                       >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}>
-                          <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                        </svg>
+                        <I.X style={{ width:13, height:13 }} />
                         Annuler
                       </button>
-                    ) : (
-                      <div style={{
-                        width:40, height:40, borderRadius:12, background:st.bg,
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                      }}>
-                        {a.status === 'cancelled' ? (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:17,height:17,color:st.color}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        ) : a.paid || a.status === 'completed' ? (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{width:17,height:17,color:st.color}}><polyline points="20 6 9 17 4 12"/></svg>
-                        ) : a.status === 'no_show' ? (
-                          <span style={{ fontSize:16, fontWeight:600, color:st.color }}>–</span>
-                        ) : st.group === 'passes' ? (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:17,height:17,color:st.color}}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.43"/></svg>
-                        ) : (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:17,height:17,color:st.color}}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        )}
-                      </div>
                     )}
                   </div>
                 </div>
-                {/* Employé — centré sous la ligne principale, bien visible
-                    dans une pastille discrète pour identifier d'un coup
-                    d'œil avec qui se passe le rendez-vous. */}
+                {/* Employé — centré sous la ligne principale, séparateur fin
+                    pour identifier d'un coup d'œil avec qui se passe le RDV. */}
                 {a.employee_name && (
                   <div style={{
                     marginTop:14, paddingTop:12,
                     borderTop:`0.5px solid ${th.border}`,
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                   }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:15,height:15,color:th.muted}}>
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    <span style={{ fontSize:15, fontWeight:500, color:th.text, letterSpacing:'-0.01em' }}>
+                    <I.User style={{ width:15, height:15, color:th.muted }} />
+                    <span style={{ fontSize:14, fontWeight:500, color:th.text, letterSpacing:'-0.01em' }}>
                       avec {a.employee_name}
                     </span>
                   </div>
