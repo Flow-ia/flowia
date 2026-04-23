@@ -11,15 +11,36 @@ import { fmtTime, svLocal } from '../helpers';
 import Spin from './Spin';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
+import ListView from './ListView';
 import ApptActionModal from '../modals/ApptActionModal';
 import QuickAddApptModal from '../modals/QuickAddApptModal';
+
+// Persistance du mode de vue entre sessions (demande user onboarding) —
+// la préférence est conservée après refresh ou navigation, jusqu'à ce que
+// l'utilisateur change de vue explicitement.
+const VIEW_MODE_KEY  = 'ff_agenda_view_mode';
+const VALID_VIEWS    = ['day', 'week', 'month', 'list'];
+const readSavedView  = () => {
+  try {
+    const saved = localStorage.getItem(VIEW_MODE_KEY);
+    return VALID_VIEWS.includes(saved) ? saved : 'day';
+  } catch { return 'day'; }
+};
 
 export default function MultiColumnAgenda({ employees, services, onTxCreated, onSelectEmployee, theme: t }) {
   const isDark = t.mode === 'dark';
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode]         = useState('day');
+  const [viewMode, setViewMode]         = useState(readSavedView);
+
+  // Sauvegarde à chaque changement de vue. Note : on garde quand même
+  // la possibilité d'override temporaire via ?date=... (deep-link notif
+  // bascule en vue Jour sans persister — cf. useEffect deep-link plus bas).
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch {}
+  }, [viewMode]);
+
   const [allAppts, setAllAppts]         = useState([]);
   const [loading, setLoading]           = useState(false);
   const [editAppt, setEditAppt]         = useState(null);
@@ -35,7 +56,8 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
   const { fromDate, toDate } = useMemo(() => {
     const d = new Date(selectedDate);
-    if (viewMode === 'day') {
+    // List partage le scope d'un jour (même rangée d'API que day).
+    if (viewMode === 'day' || viewMode === 'list') {
       return { fromDate: new Date(d), toDate: new Date(d) };
     }
     if (viewMode === 'week') {
@@ -155,23 +177,23 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
   const navigatePrev = () => setSelectedDate(prev => {
     const n = new Date(prev);
-    if (viewMode === 'day')   n.setDate(n.getDate() - 1);
-    if (viewMode === 'week')  n.setDate(n.getDate() - 7);
-    if (viewMode === 'month') n.setMonth(n.getMonth() - 1);
+    if (viewMode === 'day' || viewMode === 'list') n.setDate(n.getDate() - 1);
+    if (viewMode === 'week')                       n.setDate(n.getDate() - 7);
+    if (viewMode === 'month')                      n.setMonth(n.getMonth() - 1);
     return n;
   });
   const navigateNext = () => setSelectedDate(prev => {
     const n = new Date(prev);
-    if (viewMode === 'day')   n.setDate(n.getDate() + 1);
-    if (viewMode === 'week')  n.setDate(n.getDate() + 7);
-    if (viewMode === 'month') n.setMonth(n.getMonth() + 1);
+    if (viewMode === 'day' || viewMode === 'list') n.setDate(n.getDate() + 1);
+    if (viewMode === 'week')                       n.setDate(n.getDate() + 7);
+    if (viewMode === 'month')                      n.setMonth(n.getMonth() + 1);
     return n;
   });
   const goToday = () => setSelectedDate(new Date());
 
   const headerTitle = useMemo(() => {
     const d = selectedDate;
-    if (viewMode === 'day') {
+    if (viewMode === 'day' || viewMode === 'list') {
       if (d.toDateString() === today.toDateString()) return "Aujourd'hui";
       return `${DAYS_FR[d.getDay()]} ${d.getDate()} ${MONTHS_SH[d.getMonth()]} ${d.getFullYear()}`;
     }
@@ -206,7 +228,9 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
   const miniWeek = Array.from({length:7},(_,i)=>{ const d=new Date(miniWeekBase); d.setDate(miniWeekBase.getDate()+i); return d; });
 
   const dayKey = svLocal(selectedDate);
-  const dayAppts = viewMode === 'day' ? allAppts : (apptsByDay[dayKey] || []);
+  const dayAppts = (viewMode === 'day' || viewMode === 'list')
+    ? allAppts
+    : (apptsByDay[dayKey] || []);
   const confirmed = dayAppts.filter(a=>a.status==='confirmed').length;
   const encaissed = dayAppts.filter(a=>a.paid).length;
 
@@ -250,7 +274,7 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          marginBottom: viewMode === 'day' ? 10 : 0,
+          marginBottom: (viewMode === 'day' || viewMode === 'list') ? 10 : 0,
           flexWrap: 'wrap',
         }}>
           {/* Aujourd'hui */}
@@ -301,7 +325,7 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
           {loading && <Spin size={14} />}
 
-          {/* Toggle vue */}
+          {/* Toggle vue — sauvegardé en localStorage (ff_agenda_view_mode) */}
           <SegmentedControl
             value={viewMode}
             onChange={setViewMode}
@@ -309,6 +333,7 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
               { value: 'day',   label: 'Jour' },
               { value: 'week',  label: 'Semaine' },
               { value: 'month', label: 'Mois' },
+              { value: 'list',  label: 'Liste' },
             ]}
           />
 
@@ -323,8 +348,8 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
           </Button>
         </div>
 
-        {/* Mini-semaine : vue Jour */}
-        {viewMode === 'day' && (
+        {/* Mini-semaine : vue Jour + Liste (même scope d'1 jour) */}
+        {(viewMode === 'day' || viewMode === 'list') && (
           <div style={{ display:'flex', gap:2, marginTop:8 }}>
             {miniWeek.map((d, i) => {
               const isSel = d.toDateString() === selectedDate.toDateString();
@@ -369,8 +394,8 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
           </div>
         )}
 
-        {/* Stats (vue Jour) */}
-        {viewMode === 'day' && dayAppts.length > 0 && (
+        {/* Stats (vue Jour + Liste) */}
+        {(viewMode === 'day' || viewMode === 'list') && dayAppts.length > 0 && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -639,6 +664,16 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
             isDark={isDark}
             t={t}
             onSelectDay={d => { setSelectedDate(new Date(d)); setViewMode('day'); }}
+            onOpenAppt={openApptModal}
+          />
+        )}
+
+        {viewMode === 'list' && (
+          <ListView
+            employees={employees}
+            dayAppts={dayAppts}
+            isToday={isToday}
+            t={t}
             onOpenAppt={openApptModal}
           />
         )}

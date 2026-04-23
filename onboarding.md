@@ -1,48 +1,44 @@
-## 2026-04-24 — Catégories fermées + format/taille + erreurs inline
+## 2026-04-24 — Agenda : nouvelle vue Liste par employé + persistance localStorage
 
-### Bug A — Catégories "Caisse" et "Site de réservation" ouvertes par défaut
-Les deux composants (`CaisseCategories.jsx` et `BookingServices.jsx`)
-auto-ouvraient toutes les catégories au 1er chargement via un flag
-`didInitOpen`. Retiré → `openCats` initialisé à `new Set()` vide →
-catégories repliées par défaut. L'utilisateur clique sur l'en-tête pour
-déplier. Le comportement "nouvelle catégorie = ouverte" est conservé
-dans `BookingServices` (après `createServiceCategory` on ajoute l'id au
-Set). Fichiers : `CaisseCategories.jsx`, `BookingServices.jsx`.
+### Vue Liste
+Ajout d'un 4e bouton `Liste` dans le toggle Jour / Semaine / Mois /
+**Liste** de l'agenda multi-colonnes (`MultiColumnAgenda.jsx`). La vue
+Liste affiche les RDV du jour sélectionné sous forme d'une colonne par
+employé, chaque RDV en ligne verticale triée par heure (au lieu de la
+grille heures de la vue Jour).
 
-### Bug B — Formats + taille max photo + erreurs inline
-Avant : alert/toast global "Erreur upload", pas d'indication de format
-attendu, et `EmployeeForm` rejetait silencieusement un fichier non
-conforme (aucun retour visuel).
+Chaque carte RDV en mode liste :
+- Heure début + fin en monospace à gauche
+- Nom client, prestation, durée
+- Pill statut pastel (confirmé / en attente / annulé / terminé / absent)
+- Pill `Encaisse` si `appt.paid` vrai
+- Barre accent 2px à gauche dans la couleur du statut (FDS-2026)
+- Clic → ouvre `ApptActionModal` (même comportement que les autres vues)
 
-Harmonisation sur les 3 emplacements qui acceptent des photos :
+### Responsive mobile
+Layout via CSS Grid natif : `repeat(auto-fit, minmax(240px, 1fr))`.
+- Desktop large : toutes les colonnes employés côte à côte
+- Tablette : 2-3 colonnes qui wrappent
+- Mobile (< 520 px) : 1 colonne unique empilée
+Pas de media query nécessaire, purement CSS.
 
-1. **TabImages.jsx (logo, profil, galerie salon)** :
-   - Hint `JPG, PNG, WEBP ou GIF · 5 Mo max` sous chaque libellé.
-   - `accept="image/jpeg,image/png,image/webp,image/gif"` (au lieu de
-     `image/*` qui laissait passer HEIC/SVG).
-   - État `errors.{logo,profile,cover}` dédié par emplacement ; message
-     en rouge sous l'élément concerné + bordure rouge sur le bloc.
-   - Les erreurs serveur (413/401/403/etc.) remontent sur ce même
-     emplacement inline (plus de toast bloquant).
+### Persistance de la préférence
+Nouveau helper `VIEW_MODE_KEY = 'ff_agenda_view_mode'` + `readSavedView()`
+dans `MultiColumnAgenda.jsx` :
+- `useState(readSavedView)` lit au mount (défaut `'day'` si rien de
+  sauvegardé ou valeur invalide)
+- `useEffect([viewMode])` écrit dans `localStorage` à chaque changement
+- Validation whitelist `['day', 'week', 'month', 'list']` au read —
+  pas de corruption si quelqu'un modifie le localStorage à la main.
+Le choix reste même après F5, navigation vers une autre route et retour,
+ou redémarrage du navigateur. Pour changer, il suffit que l'utilisateur
+sélectionne une autre vue → écrasement immédiat.
 
-2. **Forms.jsx EmployeeForm (photo employé)** :
-   - Auparavant : fichier rejeté en silence (`return;` nu).
-   - Ajout d'un state `imgErr` + message inline sous le bouton
-     "Ajouter une photo" + bordure rouge quand erreur.
-   - Hint `JPG, PNG, WEBP ou GIF · 5 Mo max` en bas du bloc.
-   - Même whitelist MIME côté picker.
+### Fichiers
+- `frontend/src/pages/employee-agenda/components/ListView.jsx` (nouveau)
+- `frontend/src/pages/employee-agenda/components/MultiColumnAgenda.jsx` :
+  import ListView, persistance localStorage, branchement du mode `list`
+  sur le même scope de chargement que `day` (`fromDate==toDate`), mini
+  semaine + stats visibles en mode Liste aussi.
 
-3. **SvcFormModal.jsx (photo service)** :
-   - Séparation de `err` (nom requis) et `imgErr` (image). L'erreur
-     image s'affiche désormais SOUS le bloc upload, pas en haut du
-     modal (plus contextuel).
-   - Hint `JPG, PNG, WEBP ou GIF · 5 Mo max` visible en permanence
-     (dans le bouton camera si vide, sous les boutons
-     Remplacer/Supprimer sinon).
-   - Whitelist MIME côté picker.
-
-Note : `image/*` sur un `<input type="file">` n'est qu'un filtre UX
-(l'utilisateur peut toujours "forcer" tous fichiers). La vraie
-validation reste côté backend (`fileFilter` multer + magic-bytes).
-Les constantes frontend reflètent la whitelist backend identique
-(jpeg/png/webp/gif).
+Build OK (252 modules, +1 ListView).

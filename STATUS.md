@@ -7,6 +7,37 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-24)
 
+**Agenda : nouvelle vue Liste par employé + persistance localStorage**
+— Ajout d'un 4e mode dans le toggle de `MultiColumnAgenda.jsx`
+(Jour / Semaine / Mois / **Liste**). La vue Liste affiche les RDV du
+jour en colonnes (une par employé), chaque RDV en ligne verticale
+triée par heure — alternative à la grille heures pour les salons à
+gros volume.
+
+- **Composant** : nouveau `ListView.jsx` dans `employee-agenda/components/`.
+  Carte RDV : heure début/fin monospace à gauche, client/service/durée,
+  pill statut pastel + pill `Encaisse`, barre accent 2px à gauche
+  (FDS-2026). Clic ouvre `ApptActionModal`.
+- **Responsive** : CSS Grid natif `repeat(auto-fit, minmax(240px,
+  1fr))` — desktop 5+ colonnes, tablette 2-3 qui wrappent, mobile 1
+  colonne empilée. Aucune media query.
+- **Persistance** : helper `VIEW_MODE_KEY='ff_agenda_view_mode'` +
+  `readSavedView()` avec whitelist `['day','week','month','list']`.
+  `useState(readSavedView)` au mount + `useEffect` qui écrit
+  localStorage à chaque changement. Choix conservé après F5, nav
+  interne, redémarrage navigateur.
+- **Integration** : mode `list` partage le scope d'1 jour (`fromDate ==
+  toDate`) avec la vue Jour — mêmes API call, même mini-semaine, mêmes
+  stats (N RDV · confirmés · encaissés). `navigatePrev/Next` avancent
+  d'1 jour. Header title `"Aujourd'hui"` / `"lundi 22 avril…"` comme
+  en vue Jour.
+
+Fichiers : `frontend/src/pages/employee-agenda/components/ListView.jsx`
+(nouveau), `MultiColumnAgenda.jsx` (import + persistance + branchement).
+Build OK (13 s, 252 modules = +1 ListView).
+
+## État précédent (2026-04-24)
+
 **Catégories Caisse+Booking fermées par défaut + hints format/taille
 photo + erreurs inline** — UX photos harmonisée :
 
