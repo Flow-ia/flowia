@@ -489,7 +489,9 @@ export const commissionsApi = {
 // ── Fidélité (Feature 9) ──────────────────────────────────────────────────────
 export const loyaltyApi = {
   getProgram:     ()   => request('/loyalty/program'),
-  saveProgram:    (b)  => request('/loyalty/program', { method: 'PUT', body: JSON.stringify(b) }),
+  // Backend exige PIN admin (pinAdminMiddleware) sur PUT /loyalty/program
+  // (audit X). adminRequest joint automatiquement x-pin-session.
+  saveProgram:    (b)  => adminRequest('/loyalty/program', { method: 'PUT', body: JSON.stringify(b) }),
   getClients:     (q)  => request('/loyalty/clients?' + new URLSearchParams(q||{})),
   addStamp:       (b)  => request('/loyalty/stamp',        { method: 'POST', body: JSON.stringify(b) }),
   addService:     (b)  => request('/loyalty/add-service',  { method: 'POST', body: JSON.stringify(b) }),
@@ -557,13 +559,15 @@ export const campaignsApi = {
 // ── Anniversaires clients ────────────────────────────────────────────────────
 export const birthdayApi = {
   get:    ()  => request('/birthday-campaign'),
-  update: (b) => request('/birthday-campaign', { method:'PUT', body: JSON.stringify(b) }),
+  // PUT /birthday-campaign exige PIN admin (audit AA) → adminRequest.
+  update: (b) => adminRequest('/birthday-campaign', { method:'PUT', body: JSON.stringify(b) }),
 };
 
 // ── Parrainage clients ───────────────────────────────────────────────────────
 export const referralsApi = {
   getProgram:    ()  => request('/referrals/program'),
-  updateProgram: (b) => request('/referrals/program', { method:'PUT', body: JSON.stringify(b) }),
+  // PUT /referrals/program exige PIN admin (audit W) → adminRequest.
+  updateProgram: (b) => adminRequest('/referrals/program', { method:'PUT', body: JSON.stringify(b) }),
   listCodes:     ()  => request('/referrals/codes'),
   checkCode:     (b) => request('/referrals/check', { method:'POST', body: JSON.stringify(b) }),
   getStats:      ()  => request('/referrals/stats'),

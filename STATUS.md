@@ -5,7 +5,47 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
-## État actuel (2026-04-22)
+## État actuel (2026-04-23)
+
+**Fix 3 bugs prod — PIN admin manquant, Cloudinary local fallback, URL publique
+sous-domaine commercant.** — Trois correctifs chirurgicaux :
+
+1. **403 Forbidden sur PUT `/loyalty/program`, `/referrals/program`,
+   `/birthday-campaign`** — Ces 3 routes sont gardées côté backend par
+   `pinAdminMiddleware` (audit W/X/AA) mais `loyaltyApi.saveProgram`,
+   `birthdayApi.update` et `referralsApi.updateProgram` appelaient
+   `request()` qui n'envoie pas le header `x-pin-session`. Switch sur
+   `adminRequest()` qui joint automatiquement le token PIN présent en
+   `localStorage.ff_pin_token` (déjà en place dès que le commerçant a
+   déverrouillé via `PinEntry` au boot). Les 3 activations/désactivations
+   passent maintenant à 200. Fichier : `frontend/src/utils/api.js`.
+
+2. **Upload Cloudinary silencieusement fallback `local` en prod** — `media.js`
+   lisait `process.env.MEDIA_PROVIDER` et fallbackait sur `'local'` sans
+   regarder si les credentials Cloudinary étaient fournis. Sur Render
+   (disque éphémère), les images finissaient sur le FS temporaire et
+   disparaissaient au redéploy → logos/couvertures/photos employés jamais
+   sur Cloudinary, jamais affichés sur les sites clients après restart.
+   Ajout de `resolveProvider()` : si `MEDIA_PROVIDER` non défini mais que
+   les 3 `CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET` sont présents → provider
+   auto `'cloudinary'`. Log `[MEDIA] provider = …` au boot pour vérifier
+   visuellement en prod. Fichier : `backend/src/routes/media.js`.
+
+3. **Lien public `commercant.nomdomaine.fr/book/slug` au lieu de
+   `nomdomaine.fr/book/slug`** — Quand l'admin tourne sur le sous-domaine
+   privé `commercant.*`, `${window.location.origin}/book/${slug}` produit
+   une URL qui renvoie le client sur le dashboard au lieu de la page
+   publique. Nouveau helper `frontend/src/utils/publicUrl.js` exportant
+   `publicOrigin()` + `bookingUrl(slug)` : respecte `VITE_BOOKING_DOMAIN`
+   en priorité, sinon strippe uniquement le premier label `commercant.`
+   de `window.location.hostname` (conserve `www.`, `app.`, etc.). Branché
+   dans `ConfigTab.jsx` (badge lien actif + copie presse-papier) et
+   `settings/QRCard.jsx` (QR inscription rapide). Fichiers :
+   `frontend/src/utils/publicUrl.js` (nouveau),
+   `frontend/src/pages/agenda/tabs/ConfigTab.jsx`,
+   `frontend/src/pages/settings/QRCard.jsx`. Build OK.
+
+## État précédent (2026-04-22)
 
 **Client /client/rdv : statut repositionné au-dessus du prix + FDS-2026**
 — Carte RDV de l'onglet "Mes RDV" nettoyée selon la recommandation de

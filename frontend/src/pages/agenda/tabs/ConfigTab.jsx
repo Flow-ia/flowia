@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { bookingApi } from '../../../utils/api';
+import { bookingUrl as buildBookingUrl } from '../../../utils/publicUrl';
 import { DAYS_FR } from '../constants';
 import { Button, Label } from '../../../components/primitives';
 import { I } from '../../../utils/icons';
@@ -106,7 +107,10 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
 
   const slugOk     = slugStatus === 'ok' && form.slug.length >= 3;
   const canEnable  = slugOk;
-  const bookingUrl = form.slug && slugOk ? `${window.location.origin}/book/${form.slug}` : '';
+  // URL partageable : on passe par publicOrigin() qui strippe le sous-domaine
+  // `commercant.` quand l'admin tourne dessus (sinon le lien envoyé au client
+  // le ramène sur le dashboard au lieu de la page de réservation publique).
+  const bookingUrl = form.slug && slugOk ? buildBookingUrl(form.slug) : '';
 
   const handleToggleEnabled = () => {
     if (!form.is_enabled && !canEnable) {

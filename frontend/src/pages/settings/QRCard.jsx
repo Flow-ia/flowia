@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { bookingApi } from '../../utils/api';
+import { publicOrigin } from '../../utils/publicUrl';
 
 export default function QRCard({ theme, showToast }) {
   const canvasRef = useRef(null);
@@ -16,15 +17,11 @@ export default function QRCard({ theme, showToast }) {
   const [loading, setLoading] = useState(true);
   const [copied,  setCopied]  = useState(false);
 
-  // URL partageable : on privilégie VITE_BOOKING_DOMAIN si dispo (QR plus
-  // court = plus dense = scan plus fiable de loin), sinon origin courant.
-  const buildUrl = (s) => {
-    const bookingDomain = (import.meta.env.VITE_BOOKING_DOMAIN || '').trim();
-    if (bookingDomain) return `https://${bookingDomain}/j/${s}`;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${origin}/j/${s}`;
-  };
-  const joinUrl = slug ? buildUrl(slug) : '';
+  // URL partageable : publicOrigin() privilégie VITE_BOOKING_DOMAIN si dispo
+  // (QR plus court = plus dense = scan plus fiable de loin), sinon origin
+  // courant MAIS en strippant le sous-domaine `commercant.` (admin privé) →
+  // le QR renvoie bien sur le domaine public et non sur le dashboard.
+  const joinUrl = slug ? `${publicOrigin()}/j/${slug}` : '';
 
   useEffect(() => {
     let cancelled = false;

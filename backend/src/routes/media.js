@@ -8,7 +8,23 @@ const { authMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
 // ── Helpers provider ──────────────────────────────────────────────────────────
-const PROVIDER = process.env.MEDIA_PROVIDER || 'local'; // 'local' | 'cloudinary' | 's3'
+// Détection auto : si MEDIA_PROVIDER non défini mais que les 3 credentials
+// Cloudinary sont présents, on utilise cloudinary (cas prod Render typique).
+// Sinon fallback 'local' (dev). Avant : MEDIA_PROVIDER manquant → 'local' →
+// upload sur disque éphémère Render → fichiers perdus au redéploy + jamais
+// écrits sur Cloudinary. Ici : dès que les credentials sont là, on les utilise.
+function resolveProvider() {
+  const explicit = (process.env.MEDIA_PROVIDER || '').trim().toLowerCase();
+  if (explicit === 'cloudinary' || explicit === 's3' || explicit === 'local') return explicit;
+  if (process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET) {
+    return 'cloudinary';
+  }
+  return 'local';
+}
+const PROVIDER = resolveProvider();
+console.log('[MEDIA] provider =', PROVIDER);
 
 async function fetchImageBuffer(path, provider) {
   if (provider === 'cloudinary') {
