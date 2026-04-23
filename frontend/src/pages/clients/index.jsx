@@ -176,6 +176,10 @@ export default function ClientsPage() {
           showToast(r.message || 'Paiement enregistre ✓', 'ok');
           setRepayAmt(''); setRepayNote(''); setRepayEmpId(''); setRepayMethod('cash'); setCreditMode(null);
           await loadCredit(fiche.id);
+          // Le backend crée une transaction 'revenue' en parallèle : on notifie
+          // App.jsx pour qu'il recharge `transactions` sans attendre un reload
+          // manuel (sinon Dashboard/Historique affichent état périmé).
+          try { window.dispatchEvent(new Event('ff-tx-refresh')); } catch {}
         } catch(e) { showToast(e.message || 'Erreur', 'error'); }
         finally { setCreditBusy(false); }
       }

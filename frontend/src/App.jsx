@@ -8,6 +8,7 @@ import { useNotifications, playSound } from './hooks/useNotifications';
 import { PinEntry, PinSetup } from './components/PinGate';
 import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
 import Dashboard from './pages/Dashboard';
+import Historique from './pages/Historique';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
 import { api, loyaltyApi, promoApi, notifApi, referralsApi } from './utils/api';
@@ -1703,6 +1704,21 @@ export default function App() {
   const [categories, setCats]     = useState([]);
   const [dataLoading, setDl]      = useState(false);
 
+  // Recharge les transactions sans toucher aux autres states (catégories /
+  // employés), utilisé par l'event `ff-tx-refresh` quand un encaissement est
+  // créé ailleurs qu'à travers `addTx` (ex : remboursement crédit depuis la
+  // page Clients — la tx apparaît en DB mais le state React local du
+  // Dashboard l'ignorait jusqu'au prochain reload manuel de l'app).
+  const reloadTxs = useCallback(async () => {
+    if (!user) return;
+    try {
+      const _from = new Date(); _from.setMonth(_from.getMonth() - 3);
+      const _fromStr = _from.toISOString().split('T')[0];
+      const txs = await api.getTransactions({ from: _fromStr });
+      setTxs(txs);
+    } catch { /* silencieux — reload opportuniste */ }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     checkSession();
@@ -1714,9 +1730,20 @@ export default function App() {
       api.getEmployees(),
       api.getTransactions({ from: _fromStr }),
     ]).then(([cats, emps, txs]) => { setCats(cats); setEmps(emps); setTxs(txs); })
-      .catch(console.error)
+      .catch(() => { /* erreur chargement initial — l'UI retombe sur data vide */ })
       .finally(() => setDl(false));
   }, [user]);
+
+  // Bus global : tout code qui crée/modifie une transaction via une API qui
+  // ne passe pas par `addTx`/`updTx` (credits.repay, checkout, etc.) peut
+  // faire `window.dispatchEvent(new Event('ff-tx-refresh'))` pour forcer le
+  // rafraîchissement de l'historique/stats sans reload de la page.
+  useEffect(() => {
+    if (!user) return;
+    const onRefresh = () => reloadTxs();
+    window.addEventListener('ff-tx-refresh', onRefresh);
+    return () => window.removeEventListener('ff-tx-refresh', onRefresh);
+  }, [user, reloadTxs]);
 
   useEffect(() => {
     if (checking) return;
@@ -1832,6 +1859,7 @@ export default function App() {
   return shell(
     <Routes>
       <Route path="/dashboard"    element={<Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={() => setQuickEntryOpen(true)} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/>}/>
+      <Route path="/historique"   element={<Historique transactions={transactions} employees={employees}/>}/>
       <Route path="/transactions" element={<Transactions transactions={transactions} employees={employees} categories={categories} onAdd={addTx} onUpdate={updTx} onDelete={delTx} isAdmin={unlocked}/>}/>
       <Route path="/clients"      element={<ClientsPage/>}/>
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>

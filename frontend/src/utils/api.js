@@ -452,14 +452,32 @@ export const notifApi = {
 };
 
 // ── Export comptable (Feature 4) ──────────────────────────────────────────────
+// Les routes /export/csv et /export/pdf sont gardées par pinAdminMiddleware
+// côté backend (audit export #9) → il faut envoyer x-pin-session en plus du
+// JWT principal. Avant : download sans ce header → 403 → "Erreur export"
+// visible côté UI sans moyen de diagnostiquer.
 export const exportApi = {
   getSummary:  (q)    => request('/export/summary?' + new URLSearchParams(q)),
   getCsvUrl:   (q)    => `${BASE}/export/csv?`  + new URLSearchParams(q),
   getPdfUrl:   (q)    => `${BASE}/export/pdf?`  + new URLSearchParams(q),
   downloadFile: async (url, filename) => {
-    const token = localStorage.getItem('ff_token');
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!r.ok) throw new Error('Erreur export');
+    const token    = localStorage.getItem('ff_token');
+    const pinToken = localStorage.getItem('ff_pin_token');
+    const headers  = {};
+    if (token)    headers['Authorization']  = `Bearer ${token}`;
+    if (pinToken) headers['x-pin-session']  = pinToken;
+    const r = await fetch(url, { headers });
+    if (!r.ok) {
+      // Remonter le vrai message backend pour affichage popup côté UI
+      let msg = 'Erreur export';
+      try {
+        const j = await r.json();
+        if (j?.error)   msg = j.error;
+        if (j?.message) msg = j.message;
+      } catch {}
+      if (r.status === 403) msg = 'Session admin expirée. Déverrouillez avec votre PIN puis réessayez.';
+      throw new Error(msg);
+    }
     const blob = await r.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

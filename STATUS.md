@@ -7,6 +7,63 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-23)
 
+**Page /historique unifiée + fix 4 bugs (media 500, export 403, refresh crédit,
+popup export)** — Refonte Stats+Historique et correctifs critiques :
+
+1. **Page `/historique` dédiée (remplace les 2 popups Dashboard)** — Fusion de
+   `StatsModal` et `HistoriqueModal` en une seule route `/historique`
+   (`frontend/src/pages/Historique.jsx`). Accès gardé par `PinAccessModal`
+   (exporté depuis `Dashboard.jsx`) — tant que le PIN n'est pas validé, le
+   contenu est masqué et Annuler retourne au Dashboard. Filtre employé en
+   tête (défaut "Tous les employés") qui recalcule en direct via `useMemo` :
+   CA total, nb prestations, répartition par moyen de paiement (éclate les
+   tx `multi` par sous-paiement), liste ligne-par-ligne avec heure, employé,
+   moyen de paiement. La tuile Dashboard `TileHistorique` (label "Historique
+   & Stats") pointe désormais vers `/historique` et la tuile `TileStats`
+   séparée a été retirée (layout simplifié : 2×2 + 1 au lieu de 2×3).
+
+2. **Fix 500 upload employé → Cloudinary** — `POST /api/media/employee/:id/image`
+   plantait silencieusement en 500 car `quality:'auto'` + `fetch_format:'auto'`
+   étaient passés à `cld.uploader.upload_stream` alors que ce sont des
+   paramètres de DELIVERY (pas d'upload — ils requièrent `eager` pour être
+   traités à l'upload). Cloudinary renvoyait 400, on catchait en 500 avec
+   "Erreur serveur." générique empêchant tout diagnostic UI. Fix :
+   - Options upload réduites à `{ folder, resource_type: 'image' }` (idem
+     pour `persistUpload` et `uploadToProvider`).
+   - Transformation `f_auto,q_auto/` appliquée à la delivery URL dans
+     `fetchImageBuffer` (→ même résultat côté CDN, sans risque d'erreur).
+   - Tous les `catch` media renvoient désormais le message réel de l'erreur
+     (`Erreur upload image : <message Cloudinary>`) — diagnostic immédiat
+     côté commerçant (credentials invalides, quota, etc.).
+   Fichier : `backend/src/routes/media.js`.
+
+3. **Fix 403 export PDF/CSV** — `exportApi.downloadFile` ne joignait que
+   `Authorization`, mais `/export/csv` et `/export/pdf` exigent aussi
+   `x-pin-session` (audit export #9). Résultat : 403 → message générique
+   "Erreur export" → `alert()` natif bloquant. Fix : `downloadFile` lit
+   `ff_pin_token` et l'envoie comme `x-pin-session`; si la réponse n'est
+   pas OK, on parse le JSON d'erreur backend pour remonter le vrai message
+   (403 devient "Session admin expirée. Déverrouillez avec votre PIN puis
+   réessayez."). Côté UI `TabExport.jsx` : nouveau composant `ErrorModal`
+   (pastel rouge + borderLeft 2px + bouton OK) remplace `alert()` — FDS-2026.
+   Fichiers : `frontend/src/utils/api.js`,
+   `frontend/src/pages/settings/TabExport.jsx`.
+
+4. **Refresh Dashboard après remboursement crédit** — Après
+   `creditsApi.repay()` (Clients > Crédit > Encaisser remboursement), le
+   backend créait la transaction revenue mais le state React local de
+   `App.jsx` (`transactions`) n'était jamais mis à jour → Historique du jour
+   ne montrait rien jusqu'à F5. Fix : nouvelle fonction `reloadTxs()` dans
+   App.jsx qui rafraîchit `transactions` sans toucher catégories/employés +
+   event listener `window.addEventListener('ff-tx-refresh')`. Dispatch
+   ajouté dans `handleRepayCredit` (`clients/index.jsx`). Bus réutilisable
+   par n'importe quel code qui crée une tx hors du flow `addTx`/`updTx`.
+   Fichiers : `frontend/src/App.jsx`, `frontend/src/pages/clients/index.jsx`.
+
+Build OK (11 s, 251 modules).
+
+## État précédent (2026-04-23)
+
 **Fix 3 bugs prod — PIN admin manquant, Cloudinary local fallback, URL publique
 sous-domaine commercant.** — Trois correctifs chirurgicaux :
 

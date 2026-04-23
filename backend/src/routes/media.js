@@ -29,11 +29,12 @@ console.log('[MEDIA] provider =', PROVIDER);
 async function fetchImageBuffer(path, provider) {
   if (provider === 'cloudinary') {
     // Cloudinary : path = public_id (ex: "flowia/commercant_123/profile")
+    // Delivery transformation `f_auto,q_auto` = format + quality automatiques
+    // côté CDN (évite de passer ces params à l'upload, qui cause des 400
+    // sur certains comptes quand ils sont envoyés sans `eager`).
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey    = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
     const https = require('https');
-    const url = `https://res.cloudinary.com/${cloudName}/image/upload/${path}`;
+    const url = `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto/${path}`;
     const buf = await new Promise((resolve, reject) => {
       https.get(url, (res) => {
         if (res.statusCode !== 200) { reject(new Error('Image introuvable')); return; }
@@ -228,8 +229,6 @@ async function uploadToProvider(filePath, folder) {
     const result = await cld.uploader.upload(filePath, {
       folder: `flowia/${folder}`,
       resource_type: 'image',
-      quality: 'auto',
-      fetch_format: 'auto',
     });
     return result.public_id; // ex: "flowia/commercant_xxx/profile"
   }
@@ -327,7 +326,11 @@ async function persistUpload(req, folder) {
     const cld = getCloudinary();
     return await new Promise((resolve, reject) => {
       const stream = cld.uploader.upload_stream(
-        { folder: `flowia/${folder}`, resource_type: 'image', quality: 'auto', fetch_format: 'auto' },
+        // quality:auto + fetch_format:auto sont des params de DELIVERY, pas
+      // d'upload — on les applique via la transformation `f_auto,q_auto` dans
+      // l'URL de proxy (fetchImageBuffer). Passer ces params à upload_stream
+      // déclenche un 400 Cloudinary qui remonte en 500 côté client.
+      { folder: `flowia/${folder}`, resource_type: 'image' },
         (err, result) => err ? reject(err) : resolve(result.public_id)
       );
       stream.end(req.file.buffer);
@@ -358,7 +361,10 @@ router.post('/commercant/profile', upload.single('image'), async (req, res) => {
       [req.user.userId, 'profile', filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/profile` });
-  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) {
+    const msg = e?.message || 'Erreur serveur.';
+    res.status(500).json({ error: `Erreur upload image : ${msg}` });
+  }
 });
 
 // POST /api/media/commercant/logo — Upload logo commerçant (remplace l'ancien)
@@ -379,7 +385,10 @@ router.post('/commercant/logo', upload.single('image'), async (req, res) => {
       [req.user.userId, 'logo', filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/logo` });
-  } catch (e) { console.error('[POST logo]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) {
+    const msg = e?.message || 'Erreur serveur.';
+    res.status(500).json({ error: `Erreur upload image : ${msg}` });
+  }
 });
 
 // POST /api/media/commercant/cover — Ajouter une photo galerie (max 4)
@@ -398,7 +407,10 @@ router.post('/commercant/cover', upload.single('image'), async (req, res) => {
       [req.user.userId, 'cover', filePath, PROVIDER, existing.length]
     );
     res.json({ id: rows[0].id, url: `/api/media/commercant/${req.user.userId}/cover/${rows[0].id}` });
-  } catch (e) { console.error('[MEDIA]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) {
+    const msg = e?.message || 'Erreur serveur.';
+    res.status(500).json({ error: `Erreur upload image : ${msg}` });
+  }
 });
 
 // DELETE /api/media/:id — Supprimer une image
@@ -442,7 +454,10 @@ router.post('/service/:serviceId/image', upload.single('image'), async (req, res
       [req.user.userId, 'service', req.params.serviceId, filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/service/${req.params.serviceId}/image` });
-  } catch (e) { console.error('[POST service/image]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) {
+    const msg = e?.message || 'Erreur serveur.';
+    res.status(500).json({ error: `Erreur upload image : ${msg}` });
+  }
 });
 
 // POST /api/media/employee/:employeeId/image — Image d'un employé
@@ -473,7 +488,13 @@ router.post('/employee/:employeeId/image', upload.single('image'), async (req, r
       [req.user.userId, 'employee', req.params.employeeId, filePath, PROVIDER]
     );
     res.json({ id: rows[0].id, url: `/api/media/employee/${req.params.employeeId}/image` });
-  } catch (e) { console.error('[POST employee/image]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) {
+    // Remonter le message réel de l'erreur au client pour diagnostic rapide
+    // (auparavant "Erreur serveur." générique masquait les erreurs Cloudinary
+    // type credentials invalides / quota dépassé → debug impossible côté UI).
+    const msg = e?.message || 'Erreur serveur.';
+    res.status(500).json({ error: `Erreur upload image : ${msg}` });
+  }
 });
 
 // DELETE /api/media/employee/:employeeId/image — Supprimer l'image d'un employé

@@ -2,6 +2,36 @@ import { useState, useEffect } from 'react';
 import { exportApi } from '../../utils/api';
 import { Button, SegmentedControl } from '../../components/primitives';
 
+// Popup d'erreur inline (pas d'alert() natif — FDS-2026 : toasts + modals
+// uniquement, jamais la box du navigateur qui bloque l'interaction + gêne
+// visuellement sur mobile).
+function ErrorModal({ open, message, onClose, theme: t }) {
+  if (!open) return null;
+  return (
+    <div onClick={onClose}
+         style={{ position:'fixed', inset:0, zIndex:1000, display:'flex',
+                  alignItems:'center', justifyContent:'center', padding:20,
+                  background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width:'100%', maxWidth:360, borderRadius:14, padding:20,
+                    background:t.elevated,
+                    border:`0.5px solid ${t.border}`,
+                    borderLeft:'2px solid #ef4444',
+                    boxShadow:t.shadowModal }}>
+        <p style={{ margin:'0 0 8px', fontSize:14, fontWeight:500, color:'#991b1b' }}>
+          Export impossible
+        </p>
+        <p style={{ margin:'0 0 14px', fontSize:12, color:t.muted, lineHeight:1.5 }}>
+          {message}
+        </p>
+        <Button variant="primary" type="button" onClick={onClose} style={{ width:'100%' }}>
+          OK
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function TabExport({ employees, categories, theme }) {
   const t = theme;
   const [from,   setFrom]   = useState(() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toLocaleDateString('sv-SE'); });
@@ -13,6 +43,7 @@ export default function TabExport({ employees, categories, theme }) {
   const [inclEmployees, setInclEmployees] = useState(true);
   const [summary, setSummary] = useState(null);
   const [loadSum, setLS]      = useState(false);
+  const [errMsg,  setErrMsg]  = useState('');
 
   const fmt = n => Number(n || 0).toFixed(2);
 
@@ -40,7 +71,10 @@ export default function TabExport({ employees, categories, theme }) {
       const q = buildQuery();
       const url = fmt_ === 'csv' ? exportApi.getCsvUrl(q) : exportApi.getPdfUrl(q);
       await exportApi.downloadFile(url, `export-FlowIA-${from}-${to}.${fmt_}`);
-    } catch (e) { alert('Erreur export : ' + e.message); }
+    } catch (e) {
+      // Popup inline (FDS-2026) — jamais alert() natif (bloquant + disgracieux).
+      setErrMsg(e?.message || 'Erreur inconnue lors de l\'export.');
+    }
   };
 
   const inp = {
@@ -181,6 +215,8 @@ export default function TabExport({ employees, categories, theme }) {
       <p style={{ margin:0, fontSize:11, color:t.muted, textAlign:'center' }}>
         Propulse par FlowIA
       </p>
+
+      <ErrorModal open={!!errMsg} message={errMsg} onClose={() => setErrMsg('')} theme={t}/>
     </div>
   );
 }

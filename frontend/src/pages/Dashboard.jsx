@@ -217,7 +217,8 @@ function PinDots({ count, shake, theme: t }) {
 }
 
 // ── PinAccessModal — selection employe + clavier PIN ────────────────────────
-function PinAccessModal({ open, onClose, onSuccess, employees, theme: t, title = 'Acces protege', actionLabel = 'Acceder' }) {
+// Exporté pour être réutilisé par la page Historique (gate PIN à l'entrée).
+export function PinAccessModal({ open, onClose, onSuccess, employees, theme: t, title = 'Acces protege', actionLabel = 'Acceder' }) {
   const { requiresPin, isSessionValid, verifyPin } = useEmployeePin();
 
   const [step, setStep]         = useState('select');
@@ -903,8 +904,8 @@ function TileHistorique({ theme: t, onClick }) {
             <line x1="12" y1="7" x2="12" y2="12"/>
             <line x1="12" y1="12" x2="15" y2="14"/>
           </>}
-          title="Historique"
-          sub="Ventes du jour · Acces PIN"/>
+          title="Historique & Stats"
+          sub="CA du jour · filtre employé · PIN"/>
   );
 }
 
@@ -933,15 +934,16 @@ function TileAdmin({ theme: t, onClick }) {
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
-export default function Dashboard({ transactions, employees, categories, onAdd, onNavigate, unreadNotifCount = 0 }) {
-  const { theme: t } = useTheme();
+// Stats/Historique : les 2 anciennes popups ont été fusionnées dans la page
+// /historique (accès PIN au chargement, filtre employé qui recalcule tout le
+// CA/stats en direct). Les tuiles Dashboard pointent maintenant vers cette
+// page unique.
+export default function Dashboard({ transactions, employees, onAdd, onNavigate, unreadNotifCount = 0 }) {
+  const { theme: t }    = useTheme();
+  const navigate        = useNavigate();
 
-  const [todayAppts,      setTodayAppts]      = useState([]);
-  const [showNotifs,      setShowNotifs]      = useState(false);
-  const [showStats,       setShowStats]       = useState(false);
-  const [showStatsAccess, setShowStatsAccess] = useState(false);
-  const [showHisto,       setShowHisto]       = useState(false);
-  const [showHistoAccess, setShowHistoAccess] = useState(false);
+  const [todayAppts, setTodayAppts] = useState([]);
+  const [showNotifs, setShowNotifs] = useState(false);
 
   const today = todayStr();
   const now   = new Date();
@@ -960,15 +962,6 @@ export default function Dashboard({ transactions, employees, categories, onAdd, 
   });
 
   const dateStr = now.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-
-  const openStats = () => {
-    if (employees.filter(e => e.is_active !== false).length === 0) { setShowStats(true); return; }
-    setShowStatsAccess(true);
-  };
-  const openHisto = () => {
-    if (employees.filter(e => e.is_active !== false).length === 0) { setShowHisto(true); return; }
-    setShowHistoAccess(true);
-  };
 
   return (
     <div style={{ minHeight:'100vh', background:t.bg }}>
@@ -996,20 +989,15 @@ export default function Dashboard({ transactions, employees, categories, onAdd, 
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
           <TileClients theme={t} onClick={() => onNavigate?.('clients')}/>
-          <TileStats   theme={t} onClick={openStats}/>
+          <TileHistorique theme={t} onClick={() => navigate('/historique')}/>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-          <TileHistorique theme={t} onClick={openHisto}/>
-          <TileAdmin      theme={t} onClick={() => onNavigate?.('settings')}/>
+        <div style={{ marginBottom:12 }}>
+          <TileAdmin theme={t} onClick={() => onNavigate?.('settings')}/>
         </div>
       </div>
 
       <NotifModal open={showNotifs} onClose={() => setShowNotifs(false)} theme={t}/>
-      <PinAccessModal open={showStatsAccess} onClose={() => setShowStatsAccess(false)} onSuccess={() => setShowStats(true)} employees={employees} theme={t} title="Stats du jour" actionLabel="Voir les stats du jour"/>
-      <StatsModal open={showStats} onClose={() => setShowStats(false)} theme={t} transactions={transactions} employees={employees} categories={categories}/>
-      <PinAccessModal open={showHistoAccess} onClose={() => setShowHistoAccess(false)} onSuccess={() => setShowHisto(true)} employees={employees} theme={t} title="Historique du jour" actionLabel="Voir l'historique du jour"/>
-      <HistoriqueModal open={showHisto} onClose={() => setShowHisto(false)} theme={t} transactions={transactions} employees={employees}/>
     </div>
   );
 }
