@@ -330,57 +330,38 @@ export const mediaApi = {
   getMeta:     (userId)            => request(`/media/commercant/${userId}/meta`),
 
   // Upload (multipart/form-data — pas de JSON)
-  uploadProfile: async (file) => {
+  // Helper tolérant : si le backend renvoie du HTML (Express default handler,
+  // page d'erreur Render sur crash, etc.) on évite "Unexpected token '<'" et
+  // on remonte un message lisible basé sur le status HTTP.
+  _uploadImage: async (url, file) => {
     const token = localStorage.getItem('ff_token');
     const fd = new FormData(); fd.append('image', file);
-    const res = await fetch(`${BASE}/media/commercant/profile`, {
+    const res = await fetch(url, {
       method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur upload');
+    const ct = res.headers.get('content-type') || '';
+    let data = {};
+    if (ct.includes('application/json')) {
+      try { data = await res.json(); } catch { /* corps vide */ }
+    } else {
+      await res.text().catch(() => {}); // drain
+    }
+    if (!res.ok) {
+      const msg = data.error
+        || (res.status === 413 ? 'Image trop lourde (max 5 Mo).'
+          : res.status === 401 ? 'Session expirée, reconnectez-vous.'
+          : res.status === 403 ? 'Accès refusé.'
+          : `Erreur upload (${res.status}). Réessayez dans un instant.`);
+      throw new Error(msg);
+    }
     return data;
   },
-  uploadLogo: async (file) => {
-    const token = localStorage.getItem('ff_token');
-    const fd = new FormData(); fd.append('image', file);
-    const res = await fetch(`${BASE}/media/commercant/logo`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur upload');
-    return data;
-  },
-  uploadCover: async (file) => {
-    const token = localStorage.getItem('ff_token');
-    const fd = new FormData(); fd.append('image', file);
-    const res = await fetch(`${BASE}/media/commercant/cover`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur upload');
-    return data;
-  },
-  uploadServiceImage: async (serviceId, file) => {
-    const token = localStorage.getItem('ff_token');
-    const fd = new FormData(); fd.append('image', file);
-    const res = await fetch(`${BASE}/media/service/${serviceId}/image`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur upload');
-    return data;
-  },
+  uploadProfile:       (file)                 => mediaApi._uploadImage(`${BASE}/media/commercant/profile`, file),
+  uploadLogo:          (file)                 => mediaApi._uploadImage(`${BASE}/media/commercant/logo`,    file),
+  uploadCover:         (file)                 => mediaApi._uploadImage(`${BASE}/media/commercant/cover`,   file),
+  uploadServiceImage:  (serviceId, file)      => mediaApi._uploadImage(`${BASE}/media/service/${serviceId}/image`,   file),
+  uploadEmployeeImage: (employeeId, file)     => mediaApi._uploadImage(`${BASE}/media/employee/${employeeId}/image`, file),
   deleteServiceImage: (serviceId) => request(`/media/service/${serviceId}/image`, { method: 'DELETE' }),
-  uploadEmployeeImage: async (employeeId, file) => {
-    const token = localStorage.getItem('ff_token');
-    const fd = new FormData(); fd.append('image', file);
-    const res = await fetch(`${BASE}/media/employee/${employeeId}/image`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur upload');
-    return data;
-  },
   deleteEmployeeImage: (employeeId) => request(`/media/employee/${employeeId}/image`, { method: 'DELETE' }),
   deleteMedia: (id) => request(`/media/${id}`, { method: 'DELETE' }),
 };

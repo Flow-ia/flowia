@@ -303,6 +303,22 @@ function startServer() {
     res.sendFile(indexHtml, { root: '/' }, err => { if (err) next(); });
   });
 
+  // ── Error handler JSON pour /api ─────────────────────────────────────────
+  // Sans ce middleware, une erreur passée à next(err) (ex: multer qui
+  // rejette un type MIME ou une taille, body-parser qui refuse un JSON
+  // malformé) tombait dans le handler par défaut d'Express → réponse HTML
+  // "<!DOCTYPE…". Côté frontend, `await res.json()` plantait sur
+  // "Unexpected token '<'". On renvoie maintenant toujours un JSON sur
+  // /api pour que le client puisse parser proprement le message.
+  app.use((err, req, res, next) => {
+    if (!req.path.startsWith('/api/')) return next(err);
+    const status = err.status || err.statusCode
+      || (err.code === 'LIMIT_FILE_SIZE' ? 400 : 500);
+    console.error('[API-ERR]', req.method, req.path, status, err.code || '', err.message);
+    if (res.headersSent) return;
+    res.status(status).json({ error: err.message || 'Erreur serveur.' });
+  });
+
   // ── Protection Brevo gratuit — compteur global emails ────────────────────
   // J3 : remplacé par un compteur DB-backed (table email_global_daily) pour
   // être cluster-safe. Les helpers getGlobalEmailCount / incrGlobalEmailCount

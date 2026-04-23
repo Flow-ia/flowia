@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { I, ICON_MAP } from '../../../../utils/icons';
 import { MODAL_COLORS, CAT_ICONS_LIST } from '../constants';
 import { Button, Label } from '../../../../components/primitives';
@@ -6,10 +6,22 @@ import { Button, Label } from '../../../../components/primitives';
 // Modal Categorie booking — creer/editer une categorie de services
 export default function CatFormModal({ open, onClose, onSubmit, init, theme }) {
   const t = theme;
-  const [name,  setName]  = useState(init?.name  || '');
-  const [color, setColor] = useState(init?.color || '#111827');
-  const [icon,  setIcon]  = useState(init?.icon  || 'Scissors');
+  const [name,  setName]  = useState('');
+  const [color, setColor] = useState('#111827');
+  const [icon,  setIcon]  = useState('Scissors');
   const [err,   setErr]   = useState('');
+
+  // Sync state avec init à chaque réouverture — sinon la modale réutilisée
+  // pour éditer garde les valeurs du 1er mount.
+  useEffect(() => {
+    if (open) {
+      setName(init?.name   || '');
+      setColor(init?.color || '#111827');
+      setIcon(init?.icon   || 'Scissors');
+      setErr('');
+    }
+  }, [open, init?.id]);
+
   if (!open) return null;
 
   const inp = {

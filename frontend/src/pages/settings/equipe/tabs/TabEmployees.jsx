@@ -2,20 +2,26 @@ import { useState } from 'react';
 import { I } from '../../../../utils/icons';
 import { api, mediaApi } from '../../../../utils/api';
 import { EmployeeForm } from '../../../../components/Forms';
-import { Card, fmt, PAY_KEYS, PAY_INFO } from '../../shared';
+import { Card } from '../../shared';
 import EmployeePinManager from '../modals/EmployeePinManager';
 import Toggle from '../components/Toggle';
 import { Button } from '../../../../components/primitives';
 
-export default function TabEmployees({ employees, transactions, onAdd, onUpd, onDel, onPatchEmp, showToast, theme }) {
+export default function TabEmployees({ employees, onAdd, onUpd, onDel, onPatchEmp, showToast, theme }) {
   const t = theme;
   const [form, setForm]         = useState({ open:false, init:null });
-  const [delId, setDelId]       = useState(null);
   const [pinModal, setPinModal] = useState(null);
   const [smartDelModal, setSmartDelModal] = useState(null);
   const [futureAppts, setFutureAppts]     = useState([]);
   const [smartDelLoading, setSmartDelLoading] = useState(false);
   const [smartDelResult,  setSmartDelResult]  = useState(null);
+  // Accordion : fermé par défaut, on garde un Set des IDs ouverts.
+  const [openIds, setOpenIds] = useState(() => new Set());
+  const toggleOpen = (id) => setOpenIds(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
 
   const openSmartDelete = async (emp) => {
     setSmartDelModal(emp);
@@ -78,21 +84,14 @@ export default function TabEmployees({ employees, transactions, onAdd, onUpd, on
           </div>
         </Card>
       ) : employees.map(emp => {
-        const er = transactions.filter(tx => tx.employee_id === emp.id && tx.type === 'revenue');
-        const tot = er.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-        const byPay = {};
-        PAY_KEYS.forEach(k => {
-          byPay[k] = er.filter(tx => tx.payment_method === k)
-                       .reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-        });
-        const rvCaRdv = er.filter(tx => tx.source === 'rdv').reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-
+        const isOpen = openIds.has(emp.id);
         return (
           <Card key={emp.id} theme={theme}>
-            {/* Header : avatar + nom + actions */}
-            <div style={{ display:'flex', alignItems:'center', gap:12,
-                          padding:'14px 16px',
-                          borderBottom:`0.5px solid ${t.separator}` }}>
+            {/* Header : avatar + nom + actions — clic = toggle accordion */}
+            <div onClick={() => toggleOpen(emp.id)}
+                 style={{ display:'flex', alignItems:'center', gap:12,
+                          padding:'14px 16px', cursor:'pointer', userSelect:'none',
+                          borderBottom: isOpen ? `0.5px solid ${t.separator}` : 'none' }}>
               {emp.has_image ? (
                 <div style={{ width:46, height:46, borderRadius:8, flexShrink:0, overflow:'hidden',
                               border:`0.5px solid ${t.border}` }}>
@@ -113,7 +112,7 @@ export default function TabEmployees({ employees, transactions, onAdd, onUpd, on
                 <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0 }}>{emp.name}</p>
                 {emp.role && <p style={{ fontSize:11, color:t.muted, margin:0 }}>{emp.role}</p>}
               </div>
-              <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+              <div style={{ display:'flex', gap:4, flexShrink:0 }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => setPinModal(emp)} title="Gerer le code PIN"
                         style={{ width:34, height:34, borderRadius:8, border:'none', cursor:'pointer',
                                  background:t.cardAlt,
@@ -136,36 +135,16 @@ export default function TabEmployees({ employees, transactions, onAdd, onUpd, on
                   <I.Trash style={{ width:14, height:14, color:'#991b1b' }}/>
                 </button>
               </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round"
+                   style={{ width:14, height:14, flexShrink:0,
+                            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition:'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
             </div>
 
-            {/* Grille stats : CA + RDV + 4 modes paiement */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(6, 1fr)',
-                          borderBottom:`0.5px solid ${t.separator}` }}>
-              <div style={{ padding:'12px 8px', textAlign:'center',
-                            borderRight:`0.5px solid ${t.separator}` }}>
-                <p style={{ fontSize:10, color:'#065f46', margin:'0 0 2px' }}>CA</p>
-                <p style={{ fontSize:13, fontWeight:500, color:'#065f46', margin:0 }}>{fmt(tot)} €</p>
-              </div>
-              <div style={{ padding:'12px 8px', textAlign:'center',
-                            borderRight:`0.5px solid ${t.separator}` }}>
-                <I.Calendar style={{ width:12, height:12, color:'#4338ca', margin:'0 auto 2px', display:'block' }}/>
-                {rvCaRdv > 0
-                  ? <p style={{ fontSize:13, fontWeight:500, color:'#4338ca', margin:0 }}>{fmt(rvCaRdv)} €</p>
-                  : <p style={{ fontSize:13, color:t.dim, margin:0 }}>—</p>}
-              </div>
-              {PAY_KEYS.map(k => {
-                const p = PAY_INFO[k]; const PmIc = p.Ic;
-                return (
-                  <div key={k}
-                       style={{ padding:'12px 8px', textAlign:'center',
-                                borderRight: k !== 'other' ? `0.5px solid ${t.separator}` : 'none' }}>
-                    <PmIc style={{ width:12, height:12, color:p.color, margin:'0 auto 2px', display:'block' }}/>
-                    <p style={{ fontSize:13, fontWeight:500, color:p.color, margin:0 }}>{fmt(byPay[k])} €</p>
-                  </div>
-                );
-              })}
-            </div>
-
+            {isOpen && (<>
             {/* Visibilite site/caisse */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr',
                           borderBottom:`0.5px solid ${t.separator}` }}>
@@ -260,6 +239,7 @@ export default function TabEmployees({ employees, transactions, onAdd, onUpd, on
                          if (updated) showToast('Permission mise a jour');
                        }}/>
             </div>
+            </>)}
           </Card>
         );
       })}

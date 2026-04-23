@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { mediaApi } from '../../../../utils/api';
 import { MODAL_COLORS } from '../constants';
 import { I } from '../../../../utils/icons';
@@ -7,20 +7,40 @@ import { Button, Label } from '../../../../components/primitives';
 // Modal Service booking — creer/editer un service
 export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, cats: catList, theme }) {
   const t = theme;
-  const [name,      setName]      = useState(init?.name || '');
-  const [desc,      setDesc]      = useState(init?.description || '');
-  const [duration,  setDuration]  = useState(init?.duration_minutes || 30);
-  const [price,     setPrice]     = useState(init?.price != null ? String(init.price) : '');
-  const [freePrice, setFreePrice] = useState(init?.is_free_price || false);
-  const [color,     setColor]     = useState(init?.color || '#111827');
-  const [catId,     setCatId]     = useState(init?.booking_category_id || parentId || '');
-  const [visible,   setVisible]   = useState(init ? (init.is_active !== false) : true);
+  const [name,      setName]      = useState('');
+  const [desc,      setDesc]      = useState('');
+  const [duration,  setDuration]  = useState(30);
+  const [price,     setPrice]     = useState('');
+  const [freePrice, setFreePrice] = useState(false);
+  const [color,     setColor]     = useState('#111827');
+  const [catId,     setCatId]     = useState('');
+  const [visible,   setVisible]   = useState(true);
   const [err,       setErr]       = useState('');
   const [imgFile,    setImgFile]    = useState(null);
   const [imgPreview, setImgPreview] = useState(null);
   const [imgDel,     setImgDel]     = useState(false);
   const fileInputRef = useRef(null);
   const initHasImage = !!init?.has_image;
+
+  // Sync state avec init quand la modale s'ouvre. Sans ce useEffect, les
+  // hooks useState ne lisent init que sur le 1er mount → la modale
+  // réutilisée pour éditer un service affiche les champs vides.
+  useEffect(() => {
+    if (open) {
+      setName(init?.name || '');
+      setDesc(init?.description || '');
+      setDuration(init?.duration_minutes || 30);
+      setPrice(init?.price != null ? String(init.price) : '');
+      setFreePrice(init?.is_free_price || false);
+      setColor(init?.color || '#111827');
+      setCatId(init?.booking_category_id || parentId || '');
+      setVisible(init ? (init.is_active !== false) : true);
+      setErr('');
+      setImgFile(null);
+      setImgPreview(null);
+      setImgDel(false);
+    }
+  }, [open, init?.id, parentId]);
   const showCurrent  = initHasImage && !imgDel && !imgPreview;
   const showPreview  = !!imgPreview;
   const showNone     = !showCurrent && !showPreview;

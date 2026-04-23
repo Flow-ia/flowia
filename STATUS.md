@@ -7,6 +7,50 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-24)
 
+**Fix 4 bugs onboarding — upload photo employé HTML 500, modif service
+vide, stats CA à retirer de /equipe, accordion fermé par défaut** —
+Batch de correctifs UI + backend :
+
+1. **Upload photo employé : 500 HTML → "Unexpected token '<'"** —
+   Aucun handler d'erreur JSON global pour `/api/*`. Quand multer
+   (`LIMIT_FILE_SIZE`, fileFilter rejet) ou tout middleware appelait
+   `next(err)`, Express servait une page HTML `<!DOCTYPE>` → frontend
+   crashait sur `res.json()`. Ajout dans `backend/src/index.js` d'un
+   middleware `(err, req, res, next)` qui n'agit que sur `/api/*` et
+   renvoie toujours du JSON `{ error }` avec le bon status (400 pour
+   `LIMIT_FILE_SIZE`, 500 par défaut). Côté frontend : nouveau helper
+   `mediaApi._uploadImage` tolérant aux réponses non-JSON (lit
+   `content-type`, fallback sur message basé sur status 413/401/403).
+   Tous les `uploadProfile/Logo/Cover/ServiceImage/EmployeeImage`
+   passent par ce helper. Fichiers : `backend/src/index.js`,
+   `frontend/src/utils/api.js`.
+
+2. **Modification service : champs vides** — `SvcFormModal` et
+   `CatFormModal` initialisaient leurs `useState` avec `init?.name`
+   etc. Mais `useState(x)` n'utilise `x` qu'au 1er mount, et ces
+   modales restent montées même avec `open=false`. Changer `init`
+   (nouveau service → edit service existant) → state inchangé →
+   champs vides. Fix : ajout d'un `useEffect([open, init?.id])`
+   qui resync tous les champs à chaque ouverture (même pattern qu'
+   `EmployeeForm.jsx` qui était déjà correct). Fichiers :
+   `frontend/src/pages/settings/categories/modals/SvcFormModal.jsx`,
+   `CatFormModal.jsx`.
+
+3. **Stats CA individuelles retirées de /settings/equipe** — La grille
+   6 colonnes (CA total, RDV, especes/carte/virement/autre) doublonnait
+   le module `/historique` et alourdissait la fiche. Retirée. La prop
+   `transactions` est retirée du composant. Fichier :
+   `frontend/src/pages/settings/equipe/tabs/TabEmployees.jsx`.
+
+4. **Fiches employés : accordion fermé par défaut** — Chaque fiche
+   (visibilité site/caisse + permissions agenda + permissions crédit)
+   est désormais repliée au chargement. Clic sur l'en-tête (avatar +
+   nom) toggle le contenu avec chevron animé. Les boutons action (PIN,
+   edit, trash) gardent leurs clics isolés via `stopPropagation`.
+   Fichier : `TabEmployees.jsx`. Build OK (12 s, 251 modules).
+
+## État précédent (2026-04-24)
+
 **Fix map booking bloquée par CSP + DELETE compte client 500** — Deux
 correctifs :
 
