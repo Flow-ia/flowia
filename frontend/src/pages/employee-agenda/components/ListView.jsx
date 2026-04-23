@@ -21,6 +21,17 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
 
   return (
     <div style={{ padding:12 }}>
+      {/* Titre de la vue — aligné à gauche, en tête */}
+      <p style={{
+        margin: '0 0 10px',
+        fontSize: 13,
+        fontWeight: 500,
+        color: t.muted,
+        textAlign: 'left',
+        letterSpacing: '-0.01em',
+      }}>
+        Agenda mode liste
+      </p>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
