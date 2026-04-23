@@ -1,36 +1,36 @@
-Sur la partie client, dans la page de ses rendez-vous (`/client/rdv`) :
+## 2026-04-24 — Fix upload photo employé + accès page Historique
 
-* ✅ Supprimer l'icône (croix rouge ou indicateur de rendez-vous passé) affichée à gauche de chaque carte.
-  👉 Le statut est déjà affiché en haut au niveau du commerçant, donc cette icône est inutile.
+### Bug 1 — Toast "Modifié" affiché malgré un 500 Cloudinary
+Symptôme : `POST /api/media/employee/:id/image` renvoie 500, la photo
+n'arrive jamais sur Cloudinary, mais l'UI affiche "Modifié" et masque
+l'erreur. Cause : dans `TabEmployees.jsx` l'appel `mediaApi.uploadEmployeeImage`
+était dans un try/catch qui n'arrêtait pas le flow — après `catch`, le code
+continuait et appelait `showToast('Modifié')`.
+Fix :
+- `catch (e)` capture le message backend (au lieu de générique "Erreur upload")
+  et ajoute un `return` pour ne pas afficher le toast de succès derrière.
+- Même traitement pour la suppression d'image.
+- Fichier : `frontend/src/pages/settings/equipe/tabs/TabEmployees.jsx`.
 
-* ✅ À la place :
-  👉 déplacer le statut actuellement affiché en haut (au niveau du commerçant) vers une position plus pertinente dans la carte.
+Effet côté commerçant : en cas d'échec Cloudinary (credentials invalides,
+quota, etc.) il voit directement le vrai message d'erreur renvoyé par le
+backend (format `Erreur upload image : <cause>`) au lieu d'un faux "Modifié"
+qui masquait le problème. Idem pour l'upload image service (`BookingServices.jsx`).
 
-* ✅ Recommandation appliquée :
-  👉 afficher le **statut au-dessus du prix**, pour une meilleure lisibilité et une hiérarchie plus claire des informations.
+### Bug 2 — Page Historique inaccessible après validation PIN employé
+Symptôme : tuile "Historique" du dashboard → modal PIN → saisie OK → retour
+immédiat sur `/dashboard` au lieu d'afficher `/historique`. Impossible
+d'accéder à la page des ventes du jour après validation.
+Cause : `PinAccessModal` appelle `onSuccess()` PUIS `onClose()` lors d'une
+validation réussie (Dashboard.jsx:262). Dans `Historique.jsx`, la prop
+`onClose` était `() => { setPinOpen(false); navigate('/dashboard'); }` —
+donc après succès, le handler navigait malgré tout vers `/dashboard`.
+Fix : ajout d'un `successRef` dans `Historique.jsx` passé à `true` dans
+`onSuccess`. Le `onClose` ne redirige plus vers `/dashboard` si un succès
+a déjà été enregistré (distinction annulation vs validation OK).
+Fichier : `frontend/src/pages/Historique.jsx`.
 
----
-sinon fait ta recommandation a toi et soit correct et respecte la refonte acteuele de fds 2026 design_system.md
-
-## Livré (2026-04-22)
-
-Refonte appliquée dans `AppointmentsTab.jsx` :
-
-- **Retiré** : pastille 40×40 à droite (croix / horloge / check /
-  calendrier) qui dupliquait le statut. Plus aucune icône décorative de
-  statut — la couleur de la `borderLeft: 2px` de la carte porte la
-  sémantique visuelle (rouge = annulé, gris = passé, accent = futur).
-- **Retiré** : pill statut en haut de carte (près du commerçant), trop
-  redondante avec la nouvelle position.
-- **Déplacé** : une seule pill de statut (11px, bg pastel + bord
-  `accent33`), placée **juste au-dessus du prix** comme recommandé.
-- **FDS-2026 appliqué** :
-  - `borderRadius` passé de 18 → 12 (tokens autorisés)
-  - `fontWeight` ramené à 500 max (commerçant + prix étaient à 600)
-  - SVG inline remplacés par icônes Lucide (`I.X`, `I.User`)
-  - Bordure de carte en `0.5px` + accent gauche `2px` (seule exception
-    tolérée par le FDS-2026 règle #3)
-  - Ref `#ID` déplacée en bas de colonne info, très discrète (10px,
-    `th.dim`)
-- **Bouton Annuler** : n'apparaît que si le RDV est annulable (règle 2h),
-  sinon espace simplement vide — plus de décoration inutile.
+URL dédiée déjà en place (`/historique`, routée dans `App.jsx:1862`) — le
+commerçant peut désormais y accéder en direct + refresh → la page reste
+sur `/historique` après validation du PIN (gate re-demandé à chaque
+refresh, normal).

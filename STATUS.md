@@ -5,7 +5,39 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
-## État actuel (2026-04-23)
+## État actuel (2026-04-24)
+
+**Fix 2 bugs onboarding — upload photo employé silencieux + PIN bloque
+accès /historique** — Deux correctifs chirurgicaux :
+
+1. **Toast "Modifié" affiché malgré un 500 Cloudinary** — `TabEmployees.jsx`
+   (form submit employé) catchait l'erreur d'upload image mais continuait
+   le flow → `showToast('Modifié')` s'exécutait derrière, masquant
+   complètement l'échec Cloudinary. Le commerçant voyait "Modifié" alors
+   que la photo n'arrivait jamais sur Cloudinary. Fix : `catch (e)` capture
+   `e.message` (au lieu du "Erreur upload image" générique) pour remonter
+   le vrai message backend (format `Erreur upload image : <cause
+   Cloudinary>`), et `return` après le toast d'erreur pour stopper le flow
+   → plus de faux succès derrière un upload cassé. Même pattern corrigé
+   pour la suppression d'image employé et l'upload/erreur service dans
+   `BookingServices.jsx`. Fichiers : `frontend/src/pages/settings/equipe/tabs/TabEmployees.jsx`,
+   `frontend/src/pages/settings/categories/components/BookingServices.jsx`.
+
+2. **Page `/historique` inaccessible après validation PIN** — Tuile
+   "Historique" du Dashboard → modal PIN → saisie correcte → retour
+   immédiat sur `/dashboard` au lieu d'afficher la page. Cause :
+   `PinAccessModal` appelle `onSuccess()` PUIS `onClose()` en cas de succès
+   (Dashboard.jsx:262). Dans `Historique.jsx`, la prop `onClose` était
+   `() => { setPinOpen(false); navigate('/dashboard'); }` → navigation
+   exécutée même après succès. Fix : ajout d'un `successRef` dans
+   `Historique.jsx` posé à `true` dans `onSuccess`. Le `onClose` ne
+   redirige vers `/dashboard` que si `!successRef.current` (distinction
+   annulation vs validation OK). L'URL dédiée `/historique` était déjà
+   routée dans `App.jsx:1862` — accès direct + refresh fonctionnels, gate
+   PIN normalement re-demandé au refresh. Fichier :
+   `frontend/src/pages/Historique.jsx`. Build OK (22 s, 251 modules).
+
+## État précédent (2026-04-23)
 
 **Page /historique unifiée + fix 4 bugs (media 500, export 403, refresh crédit,
 popup export)** — Refonte Stats+Historique et correctifs critiques :

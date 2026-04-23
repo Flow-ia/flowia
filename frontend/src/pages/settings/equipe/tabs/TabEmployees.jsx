@@ -272,12 +272,18 @@ export default function TabEmployees({ employees, transactions, onAdd, onUpd, on
                         try {
                           await mediaApi.uploadEmployeeImage(saved.id, _imageFile);
                           onPatchEmp?.(saved.id, { has_image:true, _imgV:Date.now() });
-                        } catch { showToast('Erreur upload image', 'error'); }
+                        } catch (e) {
+                          showToast(e?.message || 'Erreur upload image', 'error');
+                          return;
+                        }
                       } else if (_imageAction === 'delete' && saved?.id) {
                         try {
                           await mediaApi.deleteEmployeeImage(saved.id);
                           onPatchEmp?.(saved.id, { has_image:false });
-                        } catch { showToast('Erreur suppression image', 'error'); }
+                        } catch (e) {
+                          showToast(e?.message || 'Erreur suppression image', 'error');
+                          return;
+                        }
                       }
                       showToast(form.init ? 'Modifie' : 'Ajoute');
                     }}

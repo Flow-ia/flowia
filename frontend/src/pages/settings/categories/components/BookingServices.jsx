@@ -97,7 +97,7 @@ export default function BookingServices({ theme, showToast }) {
         setServices(prev => prev.map(s => s.id === saved.id ? { ...s, has_image:false } : s));
       }
       showToast(svcForm.init ? 'Service modifie' : 'Service cree');
-    } catch { showToast('Erreur', 'error'); }
+    } catch (e) { showToast(e?.message || 'Erreur', 'error'); }
     setSvcForm({ open:false, init:null, parentId:null });
   };
 

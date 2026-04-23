@@ -6,7 +6,7 @@
 // Filtre employé en tête : "Tous" par défaut. Changer le filtre recalcule
 // à la volée : CA total, prestations, répartition par moyen de paiement,
 // liste ligne-par-ligne (sans F5).
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { todayStr } from '../utils/dates';
@@ -29,8 +29,12 @@ export default function Historique({ transactions, employees }) {
   const today        = todayStr();
 
   // Gate PIN : page blanche tant que pas validé. Annuler = retour Dashboard.
+  // PinAccessModal appelle onSuccess() PUIS onClose() à la validation — on
+  // garde un flag via ref pour ne PAS rediriger vers /dashboard dans ce cas
+  // (sinon l'utilisateur valide son PIN et repart aussitôt sur le dashboard).
   const [unlocked, setUnlocked] = useState(false);
   const [pinOpen,  setPinOpen]  = useState(true);
+  const successRef = useRef(false);
 
   // Filtre employé — defaut "all" (toutes les ventes du jour)
   const [empFilter, setEmpFilter] = useState('all');
@@ -122,8 +126,11 @@ export default function Historique({ transactions, employees }) {
       <div style={{ minHeight:'100vh', background:t.bg }}>
         <PinAccessModal
           open={pinOpen}
-          onClose={() => { setPinOpen(false); navigate('/dashboard'); }}
-          onSuccess={() => { setUnlocked(true); setPinOpen(false); }}
+          onClose={() => {
+            setPinOpen(false);
+            if (!successRef.current) navigate('/dashboard');
+          }}
+          onSuccess={() => { successRef.current = true; setUnlocked(true); setPinOpen(false); }}
           employees={employees}
           theme={t}
           title="Historique & Stats"
