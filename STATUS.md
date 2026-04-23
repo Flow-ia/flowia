@@ -7,6 +7,40 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-24)
 
+**Catégories Caisse+Booking fermées par défaut + hints format/taille
+photo + erreurs inline** — UX photos harmonisée :
+
+1. **Catégories repliées par défaut** — `CaisseCategories.jsx` et
+   `BookingServices.jsx` auto-ouvraient toutes les catégories via un
+   flag `didInitOpen`. Retiré → `openCats` initialisé vide. Nouvelle
+   catégorie créée reste auto-ouverte (pour voir l'ajout).
+
+2. **Format + taille max visibles partout** — Libellé `JPG, PNG, WEBP
+   ou GIF · 5 Mo max` ajouté sous chaque bloc d'upload (TabImages —
+   logo/profil/galerie, EmployeeForm, SvcFormModal). `accept` des
+   `<input type="file">` restreint au MIME whitelist (jpeg/png/webp/gif)
+   — plus de `image/*` qui laissait passer HEIC/SVG.
+
+3. **Erreurs inline remplacent les toasts** — Format invalide ou
+   fichier > 5 Mo → message rouge (11px, fontWeight 500) directement
+   sous l'élément concerné + bordure rouge du bloc upload. Les erreurs
+   serveur (413/401/403) passent par le même canal.
+   - `TabImages.jsx` : state `errors.{logo,profile,cover}` par
+     emplacement.
+   - `Forms.jsx EmployeeForm` : state `imgErr`. Avant, un fichier non
+     conforme était rejeté silencieusement (`return;` nu) → bug UX.
+   - `SvcFormModal.jsx` : séparation `err` (nom) / `imgErr` (image).
+     L'erreur image s'affiche désormais sous le bloc upload, pas en
+     haut du modal.
+
+Fichiers : `frontend/src/pages/settings/categories/components/CaisseCategories.jsx`,
+`BookingServices.jsx`, `frontend/src/pages/settings/TabImages.jsx`,
+`frontend/src/components/Forms.jsx`,
+`frontend/src/pages/settings/categories/modals/SvcFormModal.jsx`. Build
+OK (13 s, 251 modules).
+
+## État précédent (2026-04-24)
+
 **Fix 4 bugs onboarding — upload photo employé HTML 500, modif service
 vide, stats CA à retirer de /equipe, accordion fermé par défaut** —
 Batch de correctifs UI + backend :

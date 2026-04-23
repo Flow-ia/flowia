@@ -275,6 +275,9 @@ export function CategoryForm({ open, onClose, onSubmit, init, allCategories = []
 }
 
 // ─── EmployeeForm ────────────────────────────────────────────────────────────
+const ALLOWED_IMG_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const IMG_FORMATS_HINT = 'JPG, PNG, WEBP ou GIF · 5 Mo max';
+
 export function EmployeeForm({ open, onClose, onSubmit, init }) {
   const { theme } = useTheme();
   const t = theme;
@@ -286,13 +289,14 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
   const [imgFile,    setImgFile]    = useState(null);
   const [imgPreview, setImgPreview] = useState(null);
   const [imgDel,     setImgDel]     = useState(false);
+  const [imgErr,     setImgErr]     = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (open) {
       setF(init ? { name:init.name||'', role:init.role||'', phone:init.phone||'',
                     email:init.email||'', avatar_color:init.avatar_color||COLORS[0] } : blank);
-      setImgFile(null); setImgPreview(null); setImgDel(false);
+      setImgFile(null); setImgPreview(null); setImgDel(false); setImgErr('');
     }
   }, [open, init?.id]);
 
@@ -302,9 +306,16 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
   const currentUrl   = init?.id ? mediaApi.employeeUrl(init.id) + `?v=${init._imgV || init.image_version || 1}` : null;
 
   const onPickFile = (e) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    if (!file.type?.startsWith('image/')) return;
-    if (file.size > 5 * 1024 * 1024) return;
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_IMG_MIME.has(file.type)) {
+      setImgErr(`Format non supporte. ${IMG_FORMATS_HINT}.`); return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImgErr(`Image trop lourde (${(file.size / 1024 / 1024).toFixed(1)} Mo). Max 5 Mo.`); return;
+    }
+    setImgErr('');
     setImgFile(file);
     setImgPreview(URL.createObjectURL(file));
     setImgDel(false);
@@ -348,7 +359,9 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
         {/* Image : upload / remplacer / supprimer */}
         <div>
           <FormLabel>{"Photo de l'employe"}</FormLabel>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={onPickFile} style={{ display:'none' }}/>
+          <input ref={fileInputRef} type="file"
+                 accept="image/jpeg,image/png,image/webp,image/gif"
+                 onChange={onPickFile} style={{ display:'none' }}/>
           {(showCurrent || showPreview) ? (
             <div style={{ display:'flex', gap:8 }}>
               <Button variant="secondary" size="small" type="button"
@@ -363,12 +376,16 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
           ) : (
             <button type="button" onClick={() => fileInputRef.current?.click()}
                     style={{ width:'100%', padding:'14px 10px', borderRadius:8,
-                             border:`0.5px solid ${t.borderStrong}`, cursor:'pointer',
+                             border:`0.5px solid ${imgErr ? '#fca5a5' : t.borderStrong}`, cursor:'pointer',
                              background:t.cardAlt,
                              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                              color:t.muted, fontSize:13, fontWeight:500, fontFamily:'inherit' }}>
               Ajouter une photo
             </button>
+          )}
+          <p style={{ margin:'6px 2px 0', fontSize:11, color:t.muted }}>{IMG_FORMATS_HINT}</p>
+          {imgErr && (
+            <p style={{ margin:'4px 2px 0', fontSize:11, color:'#991b1b', fontWeight:500 }}>{imgErr}</p>
           )}
         </div>
 

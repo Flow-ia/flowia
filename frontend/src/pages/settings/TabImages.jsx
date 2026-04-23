@@ -4,6 +4,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { I } from '../../utils/icons';
 
 const MAX_SIZE = 5 * 1024 * 1024;
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const FORMATS_HINT = 'JPG, PNG, WEBP ou GIF · 5 Mo max';
 const withVersion = (url, v) => v ? `${url}?v=${v}` : url;
 
 export default function TabImages({ theme, showToast }) {
@@ -13,6 +15,10 @@ export default function TabImages({ theme, showToast }) {
   const [loading, setLoading] = useState(true);
   const [busy,    setBusy]    = useState(false);
   const [open,    setOpen]    = useState(false);
+  // Erreurs inline par emplacement (logo / profile / cover) — affichées
+  // directement sous l'élément concerné au lieu d'un toast global.
+  const [errors, setErrors]   = useState({ logo: '', profile: '', cover: '' });
+  const setError = (k, v) => setErrors(prev => ({ ...prev, [k]: v }));
 
   const logoInputRef    = useRef(null);
   const profileInputRef = useRef(null);
@@ -31,23 +37,25 @@ export default function TabImages({ theme, showToast }) {
   useEffect(() => { load(); }, [load]);
 
   const validate = (file) => {
-    if (!file) return null;
-    if (!file.type?.startsWith('image/')) { showToast('Fichier non valide — image requise', 'error'); return null; }
-    if (file.size > MAX_SIZE)             { showToast('Image trop lourde — 5 Mo max', 'error');      return null; }
-    return file;
+    if (!file) return { ok: false, error: '' };
+    if (!ALLOWED_MIME.has(file.type)) return { ok: false, error: `Format non supporte. ${FORMATS_HINT}.` };
+    if (file.size > MAX_SIZE)          return { ok: false, error: `Image trop lourde (${(file.size / 1024 / 1024).toFixed(1)} Mo). Max 5 Mo.` };
+    return { ok: true, file };
   };
 
-  const upload = (fn, successMsg) => async (e) => {
-    const file = validate(e.target.files?.[0]); if (!file) { e.target.value = ''; return; }
+  const upload = (fn, successMsg, errKey) => async (e) => {
+    const check = validate(e.target.files?.[0]);
+    if (!check.ok) { setError(errKey, check.error); e.target.value = ''; return; }
+    setError(errKey, '');
     setBusy(true);
-    try { await fn(file); await load(); showToast(successMsg); }
-    catch (err) { showToast(err.message || 'Erreur upload', 'error'); }
+    try { await fn(check.file); await load(); showToast(successMsg); }
+    catch (err) { setError(errKey, err.message || 'Erreur upload'); }
     finally { setBusy(false); e.target.value = ''; }
   };
 
-  const uploadLogo    = upload(mediaApi.uploadLogo,    'Logo mis a jour');
-  const uploadProfile = upload(mediaApi.uploadProfile, 'Photo de profil mise a jour');
-  const uploadCover   = upload(mediaApi.uploadCover,   'Photo ajoutee');
+  const uploadLogo    = upload(mediaApi.uploadLogo,    'Logo mis a jour',              'logo');
+  const uploadProfile = upload(mediaApi.uploadProfile, 'Photo de profil mise a jour',  'profile');
+  const uploadCover   = upload(mediaApi.uploadCover,   'Photo ajoutee',                'cover');
 
   const deleteMedia = async (id) => {
     if (!id) return;
@@ -68,28 +76,36 @@ export default function TabImages({ theme, showToast }) {
     </button>
   );
 
-  const SingleRow = ({ title, hint, url, mediaId, onPick, inputRef }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px',
-                  borderRadius:8, background:t.cardAlt,
-                  border:`0.5px solid ${t.border}`, flexWrap:'wrap' }}>
-      <input ref={inputRef} type="file" accept="image/*" onChange={onPick} style={{ display:'none' }}/>
-      <div style={{ width:56, height:56, borderRadius:8, flexShrink:0, overflow:'hidden',
-                    background: url ? 'transparent' : t.cardAlt,
-                    border:`0.5px solid ${t.borderStrong}`,
-                    display:'flex', alignItems:'center', justifyContent:'center' }}>
-        {url
-          ? <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-          : <I.Camera style={{ width:18, height:18, color:t.dim }}/>}
+  const SingleRow = ({ title, hint, url, mediaId, onPick, inputRef, error }) => (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px',
+                    borderRadius:8, background:t.cardAlt,
+                    border:`0.5px solid ${error ? '#fca5a5' : t.border}`, flexWrap:'wrap' }}>
+        <input ref={inputRef} type="file"
+               accept="image/jpeg,image/png,image/webp,image/gif"
+               onChange={onPick} style={{ display:'none' }}/>
+        <div style={{ width:56, height:56, borderRadius:8, flexShrink:0, overflow:'hidden',
+                      background: url ? 'transparent' : t.cardAlt,
+                      border:`0.5px solid ${t.borderStrong}`,
+                      display:'flex', alignItems:'center', justifyContent:'center' }}>
+          {url
+            ? <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+            : <I.Camera style={{ width:18, height:18, color:t.dim }}/>}
+        </div>
+        <div style={{ flex:1, minWidth:120 }}>
+          <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>{title}</p>
+          {hint && <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>{hint}</p>}
+          <p style={{ margin:'2px 0 0', fontSize:10, color:t.dim }}>{FORMATS_HINT}</p>
+        </div>
+        <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+          {iconBtn(() => inputRef.current?.click(), I.Edit, '#4338ca', '#eef2ff', busy)}
+          {iconBtn(() => deleteMedia(mediaId), I.Trash, '#991b1b',
+                   'rgba(239,68,68,0.12)', busy || !mediaId)}
+        </div>
       </div>
-      <div style={{ flex:1, minWidth:120 }}>
-        <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>{title}</p>
-        {hint && <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>{hint}</p>}
-      </div>
-      <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-        {iconBtn(() => inputRef.current?.click(), I.Edit, '#4338ca', '#eef2ff', busy)}
-        {iconBtn(() => deleteMedia(mediaId), I.Trash, '#991b1b',
-                 'rgba(239,68,68,0.12)', busy || !mediaId)}
-      </div>
+      {error && (
+        <p style={{ margin:'4px 2px 0', fontSize:11, color:'#991b1b', fontWeight:500 }}>{error}</p>
+      )}
     </div>
   );
 
@@ -138,24 +154,28 @@ export default function TabImages({ theme, showToast }) {
             </div>
           ) : (
             <>
-              <SingleRow title="Logo" hint="Petit carre PNG (fond transparent)"
+              <SingleRow title="Logo" hint="Petit carre (fond transparent conseille)"
                          url={logoUrl} mediaId={meta?.logo_id}
-                         onPick={uploadLogo} inputRef={logoInputRef}/>
-              <SingleRow title="Photo de profil" hint="Carre 400x400 — JPG ou PNG"
+                         onPick={uploadLogo} inputRef={logoInputRef}
+                         error={errors.logo}/>
+              <SingleRow title="Photo de profil" hint="Carre 400x400"
                          url={profileUrl} mediaId={meta?.profile_id}
-                         onPick={uploadProfile} inputRef={profileInputRef}/>
+                         onPick={uploadProfile} inputRef={profileInputRef}
+                         error={errors.profile}/>
 
               <div style={{ padding:'10px 12px', borderRadius:8,
                             background:t.cardAlt,
-                            border:`0.5px solid ${t.border}` }}>
+                            border:`0.5px solid ${errors.cover ? '#fca5a5' : t.border}` }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                   <div>
                     <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>Photos du salon</p>
                     <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>{coverCount}/4 photos</p>
+                    <p style={{ margin:'2px 0 0', fontSize:10, color:t.dim }}>{FORMATS_HINT}</p>
                   </div>
                   {coverCount < 4 && iconBtn(
                     () => coverInputRef.current?.click(), I.Edit, '#4338ca', '#eef2ff', busy)}
-                  <input ref={coverInputRef} type="file" accept="image/*"
+                  <input ref={coverInputRef} type="file"
+                         accept="image/jpeg,image/png,image/webp,image/gif"
                          onChange={uploadCover} style={{ display:'none' }}/>
                 </div>
 
@@ -203,6 +223,9 @@ export default function TabImages({ theme, showToast }) {
                       </button>
                     )}
                   </div>
+                )}
+                {errors.cover && (
+                  <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', fontWeight:500 }}>{errors.cover}</p>
                 )}
               </div>
             </>

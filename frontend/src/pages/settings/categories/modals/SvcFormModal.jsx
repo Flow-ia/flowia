@@ -4,6 +4,9 @@ import { MODAL_COLORS } from '../constants';
 import { I } from '../../../../utils/icons';
 import { Button, Label } from '../../../../components/primitives';
 
+const ALLOWED_IMG_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const IMG_FORMATS_HINT = 'JPG, PNG, WEBP ou GIF · 5 Mo max';
+
 // Modal Service booking — creer/editer un service
 export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, cats: catList, theme }) {
   const t = theme;
@@ -16,6 +19,7 @@ export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, 
   const [catId,     setCatId]     = useState('');
   const [visible,   setVisible]   = useState(true);
   const [err,       setErr]       = useState('');
+  const [imgErr,    setImgErr]    = useState('');
   const [imgFile,    setImgFile]    = useState(null);
   const [imgPreview, setImgPreview] = useState(null);
   const [imgDel,     setImgDel]     = useState(false);
@@ -36,6 +40,7 @@ export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, 
       setCatId(init?.booking_category_id || parentId || '');
       setVisible(init ? (init.is_active !== false) : true);
       setErr('');
+      setImgErr('');
       setImgFile(null);
       setImgPreview(null);
       setImgDel(false);
@@ -47,10 +52,16 @@ export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, 
   const currentUrl   = init?.id ? mediaApi.serviceUrl(init.id) + `?v=${init._imgV || init.image_version || 1}` : null;
 
   const onPickFile = (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    if (!f.type.startsWith('image/')) { setErr('Fichier non valide — image requise.'); return; }
-    if (f.size > 5 * 1024 * 1024)     { setErr('Image trop lourde — 5 Mo max.'); return; }
-    setErr('');
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (!ALLOWED_IMG_MIME.has(f.type)) {
+      setImgErr(`Format non supporte. ${IMG_FORMATS_HINT}.`); return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setImgErr(`Image trop lourde (${(f.size / 1024 / 1024).toFixed(1)} Mo). Max 5 Mo.`); return;
+    }
+    setImgErr('');
     setImgFile(f);
     setImgPreview(URL.createObjectURL(f));
     setImgDel(false);
@@ -128,18 +139,19 @@ export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, 
           {/* Image principale du service */}
           <div>
             <Label>Image du service</Label>
-            <input ref={fileInputRef} type="file" accept="image/*"
+            <input ref={fileInputRef} type="file"
+                   accept="image/jpeg,image/png,image/webp,image/gif"
                    onChange={onPickFile} style={{ display:'none' }}/>
             {showNone && (
               <button type="button" onClick={() => fileInputRef.current?.click()}
                       style={{ width:'100%', padding:'22px 14px', borderRadius:8,
-                               border:`0.5px solid ${t.borderStrong}`,
+                               border:`0.5px solid ${imgErr ? '#fca5a5' : t.borderStrong}`,
                                background:t.cardAlt, cursor:'pointer',
                                display:'flex', flexDirection:'column', alignItems:'center', gap:6,
                                fontFamily:'inherit' }}>
                 <I.Camera style={{ width:20, height:20, color:t.muted }}/>
                 <span style={{ fontSize:13, fontWeight:500, color:t.muted }}>Ajouter une photo</span>
-                <span style={{ fontSize:10, color:t.dim }}>JPG / PNG — 5 Mo max</span>
+                <span style={{ fontSize:10, color:t.dim }}>{IMG_FORMATS_HINT}</span>
               </button>
             )}
             {(showCurrent || showPreview) && (
@@ -161,6 +173,12 @@ export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, 
                   </Button>
                 </div>
               </div>
+            )}
+            {!showNone && (
+              <p style={{ margin:'6px 2px 0', fontSize:11, color:t.muted }}>{IMG_FORMATS_HINT}</p>
+            )}
+            {imgErr && (
+              <p style={{ margin:'4px 2px 0', fontSize:11, color:'#991b1b', fontWeight:500 }}>{imgErr}</p>
             )}
           </div>
 

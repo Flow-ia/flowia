@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { I, ICON_MAP } from '../../../../utils/icons';
 import { Confirm } from '../../../../components/UI';
 import { CategoryForm } from '../../../../components/Forms';
@@ -16,14 +16,9 @@ export default function CaisseCategories({ categories, transactions, onAdd, onUp
   const [formParent, setFormParent] = useState(null);
   const [delId,      setDelId]      = useState(null);
 
-  const [openCats, setOpenCats] = useState(new Set());
-  const didInitOpen = useState(false);
-  useEffect(() => {
-    if (!didInitOpen[0] && categories.length > 0) {
-      didInitOpen[1](true);
-      setOpenCats(new Set(categories.filter(c => !c.parent_id).map(c => c.id)));
-    }
-  }, [categories]);
+  // Accordion : fermé par défaut (user onboarding feedback). L'utilisateur
+  // clique sur une catégorie pour la déplier.
+  const [openCats, setOpenCats] = useState(() => new Set());
 
   const toggleCat = (id) => setOpenCats(prev => {
     const next = new Set(prev);

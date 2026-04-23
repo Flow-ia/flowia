@@ -19,8 +19,9 @@ export default function BookingServices({ theme, showToast }) {
   const [svcForm,  setSvcForm]  = useState({ open:false, init:null, parentId:null });
   const [delCatId, setDelCatId] = useState(null);
   const [delSvcId, setDelSvcId] = useState(null);
-  const [openCats, setOpenCats] = useState(new Set());
-  const didInitOpen = useRef(false);
+  // Accordion : fermé par défaut (user onboarding feedback). L'utilisateur
+  // clique sur une catégorie pour la déplier.
+  const [openCats, setOpenCats] = useState(() => new Set());
   const dragId      = useRef(null);
   const [dragIdVis, setDragIdVis] = useState(null);
   const [dragOver,  setDragOver]  = useState(null);
@@ -34,10 +35,6 @@ export default function BookingServices({ theme, showToast }) {
       ]);
       setCats(c);
       setServices(s);
-      if (!didInitOpen.current && c.length > 0) {
-        didInitOpen.current = true;
-        setOpenCats(new Set(c.map(x => x.id)));
-      }
     } catch { showToast('Erreur de chargement', 'error'); }
     finally { setLoading(false); }
   }, []);
