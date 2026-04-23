@@ -7,6 +7,31 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-24)
 
+**Fix map booking bloquée par CSP + DELETE compte client 500** — Deux
+correctifs :
+
+1. **Iframe Google Maps bloqué par CSP** — Section Adresse du site de
+   réservation : iframe vide, CSP violation `Framing
+   'https://maps.google.com/' violates … frame-src`. La CSP déclarée dans
+   `frontend/vercel.json` autorisait uniquement Stripe et Google OAuth.
+   Ajout de `https://www.google.com https://maps.google.com` à `frame-src`.
+   En complément, `Step1Home.jsx` bascule l'embed URL de `maps.google.com`
+   vers `www.google.com` (évite le 301 qui fait échouer l'iframe sur
+   certains navigateurs mobiles). Fichiers : `frontend/vercel.json`,
+   `frontend/src/pages/booking-page/steps/Step1Home.jsx`.
+
+2. **500 sur DELETE /api/global-clients/me (suppression RGPD)** — Le
+   handler anonymise `client_credits.client_email=NULL` et
+   `client_notes.client_email=NULL`, mais les 2 colonnes étaient créées
+   `NOT NULL` → PostgreSQL rejette l'UPDATE dans la transaction → catch
+   global → 500. Fix : 2 migrations `ALTER TABLE … ALTER COLUMN
+   client_email DROP NOT NULL` ajoutées dans `backend/src/db/index.js`.
+   UNIQUE(user_id, client_email) reste valide (PG autorise plusieurs NULL
+   dans un unique). Au prochain boot Render, la suppression RGPD passe.
+   Fichier : `backend/src/db/index.js`. Build frontend OK (16 s, 251 modules).
+
+## État précédent (2026-04-24)
+
 **Fix 2 bugs onboarding — upload photo employé silencieux + PIN bloque
 accès /historique** — Deux correctifs chirurgicaux :
 

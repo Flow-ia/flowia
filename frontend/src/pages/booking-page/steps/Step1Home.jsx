@@ -307,7 +307,10 @@ export function Step1Home({
             .filter(Boolean).join(' ')
           );
           const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
-          const embedUrl = `https://maps.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
+          // Embed direct via www.google.com (au lieu de maps.google.com qui
+          // redirige) pour limiter la surface CSP frame-src et éviter que
+          // certains navigateurs mobiles refusent l'iframe sur redirect.
+          const embedUrl = `https://www.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
           return (
             <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
               border: `0.5px solid ${th.border}` }}>

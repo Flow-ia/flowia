@@ -699,6 +699,14 @@ async function initDB() {
   `);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_credits_user_email ON client_credits(user_id, client_email)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_credit_tx_credit_id ON credit_transactions(credit_id)`);
+  // RGPD : la suppression de compte client (DELETE /global-clients/me)
+  // anonymise client_email/client_name en les mettant à NULL pour garder
+  // l'historique financier sans données personnelles. Les colonnes étaient
+  // NOT NULL à la création → l'anonymisation plantait (violation contrainte)
+  // → 500 côté client. On relâche la contrainte sur les 2 tables concernées.
+  // UNIQUE(user_id, client_email) reste valide (PG autorise plusieurs NULL).
+  await runMigration(`ALTER TABLE client_credits ALTER COLUMN client_email DROP NOT NULL`);
+  await runMigration(`ALTER TABLE client_notes   ALTER COLUMN client_email DROP NOT NULL`);
   // Permissions crédit sur les employés
   await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_grant_credit BOOLEAN DEFAULT FALSE`);
   await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_repay_credit BOOLEAN DEFAULT FALSE`);

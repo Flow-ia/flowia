@@ -1,36 +1,34 @@
-## 2026-04-24 — Fix upload photo employé + accès page Historique
+## 2026-04-24 — Fix map adresse site booking + DELETE compte client 500
 
-### Bug 1 — Toast "Modifié" affiché malgré un 500 Cloudinary
-Symptôme : `POST /api/media/employee/:id/image` renvoie 500, la photo
-n'arrive jamais sur Cloudinary, mais l'UI affiche "Modifié" et masque
-l'erreur. Cause : dans `TabEmployees.jsx` l'appel `mediaApi.uploadEmployeeImage`
-était dans un try/catch qui n'arrêtait pas le flow — après `catch`, le code
-continuait et appelait `showToast('Modifié')`.
-Fix :
-- `catch (e)` capture le message backend (au lieu de générique "Erreur upload")
-  et ajoute un `return` pour ne pas afficher le toast de succès derrière.
-- Même traitement pour la suppression d'image.
-- Fichier : `frontend/src/pages/settings/equipe/tabs/TabEmployees.jsx`.
+### Bug 1 — Google Maps iframe bloqué par CSP
+Symptôme : section Adresse du site de réservation → iframe vide, console :
+`Framing 'https://maps.google.com/' violates … frame-src 'self'
+https://js.stripe.com https://accounts.google.com https://hooks.stripe.com`.
+Cause : la CSP déclarée dans `frontend/vercel.json` n'incluait pas les hosts
+Google Maps dans `frame-src`. Fix :
+- Ajout de `https://www.google.com https://maps.google.com` à `frame-src`.
+- Step1Home.jsx : l'URL d'embed passe de `maps.google.com` → `www.google.com`
+  (évite la redirection 301 que certains navigateurs mobiles refusent dans
+  un iframe).
+Fichiers : `frontend/vercel.json`, `frontend/src/pages/booking-page/steps/Step1Home.jsx`.
 
-Effet côté commerçant : en cas d'échec Cloudinary (credentials invalides,
-quota, etc.) il voit directement le vrai message d'erreur renvoyé par le
-backend (format `Erreur upload image : <cause>`) au lieu d'un faux "Modifié"
-qui masquait le problème. Idem pour l'upload image service (`BookingServices.jsx`).
+### Bug 2 — DELETE /api/global-clients/me → 500 (suppression compte RGPD)
+Symptôme : bouton "Supprimer mon compte" côté espace client → 500 Internal
+Server Error, compte jamais supprimé.
+Cause : le handler RGPD anonymise `client_credits.client_email = NULL` et
+`client_notes.client_email = NULL`, mais ces deux colonnes ont été créées
+avec la contrainte `NOT NULL`. PostgreSQL rejette l'UPDATE →
+`null value in column "client_email" violates not-null constraint` →
+le handler tombait dans le catch global → 500 générique.
+Fix : 2 migrations non destructives dans `backend/src/db/index.js` :
+- `ALTER TABLE client_credits ALTER COLUMN client_email DROP NOT NULL`
+- `ALTER TABLE client_notes   ALTER COLUMN client_email DROP NOT NULL`
+UNIQUE(user_id, client_email) reste valide (PostgreSQL autorise plusieurs
+NULL dans un index unique). Au prochain boot Render, les contraintes sont
+relâchées → la suppression RGPD passe (les 9 opérations + COMMIT).
+Fichier : `backend/src/db/index.js`.
 
-### Bug 2 — Page Historique inaccessible après validation PIN employé
-Symptôme : tuile "Historique" du dashboard → modal PIN → saisie OK → retour
-immédiat sur `/dashboard` au lieu d'afficher `/historique`. Impossible
-d'accéder à la page des ventes du jour après validation.
-Cause : `PinAccessModal` appelle `onSuccess()` PUIS `onClose()` lors d'une
-validation réussie (Dashboard.jsx:262). Dans `Historique.jsx`, la prop
-`onClose` était `() => { setPinOpen(false); navigate('/dashboard'); }` —
-donc après succès, le handler navigait malgré tout vers `/dashboard`.
-Fix : ajout d'un `successRef` dans `Historique.jsx` passé à `true` dans
-`onSuccess`. Le `onClose` ne redirige plus vers `/dashboard` si un succès
-a déjà été enregistré (distinction annulation vs validation OK).
-Fichier : `frontend/src/pages/Historique.jsx`.
-
-URL dédiée déjà en place (`/historique`, routée dans `App.jsx:1862`) — le
-commerçant peut désormais y accéder en direct + refresh → la page reste
-sur `/historique` après validation du PIN (gate re-demandé à chaque
-refresh, normal).
+Les warnings console `SendActivationMesToFrame` et `A listener indicated
+an asynchronous response by returning true, …` sont émis par une extension
+navigateur (typiquement un translate/antivirus) — pas du code FlowIA, à
+ignorer.
