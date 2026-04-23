@@ -82,7 +82,8 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
                 </div>
               </div>
 
-              {/* Liste des RDV */}
+              {/* Liste des RDV — heure et prestations en grand pour que
+                  l'employé voie directement ce qu'il a sans ouvrir la popup. */}
               {empAppts.length === 0 ? (
                 <div style={{ padding: '24px 12px', textAlign: 'center' }}>
                   <p style={{ margin: 0, fontSize: 12, color: t.dim }}>Aucun RDV</p>
@@ -91,6 +92,8 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {empAppts.map((appt, idx) => {
                     const st = STATUS_CFG[appt.status] || STATUS_CFG.confirmed;
+                    const items = Array.isArray(appt.items) ? appt.items.filter(i => i?.service_name) : [];
+                    const totalMin = appt.total_duration || appt.duration_minutes;
                     return (
                       <button
                         key={appt.id}
@@ -99,13 +102,13 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
                         style={{
                           display: 'flex',
                           alignItems: 'stretch',
-                          gap: 10,
-                          padding: '10px 12px',
+                          gap: 12,
+                          padding: '12px 12px 14px',
                           borderTop: idx > 0 ? `0.5px solid ${t.separator}` : 'none',
-                          borderLeft: `2px solid ${st.accent}`,
+                          borderLeft: `3px solid ${st.accent}`,
                           background: 'transparent',
                           border: 'none',
-                          borderLeftWidth: 2,
+                          borderLeftWidth: 3,
                           borderLeftStyle: 'solid',
                           borderLeftColor: st.accent,
                           cursor: 'pointer',
@@ -116,42 +119,66 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
                         onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                       >
+                        {/* Heure en grand */}
                         <div style={{
-                          minWidth: 48,
+                          minWidth: 62,
                           display: 'flex',
                           flexDirection: 'column',
                           alignItems: 'flex-start',
-                          justifyContent: 'center',
+                          justifyContent: 'flex-start',
+                          paddingTop: 2,
                         }}>
                           <span style={{
-                            fontSize: 13, fontWeight: 500, color: t.text,
-                            fontFamily: 'monospace',
+                            fontSize: 22, fontWeight: 500, color: t.text,
+                            fontFamily: 'monospace', lineHeight: 1,
                           }}>
                             {fmtTime(appt.start_time)}
                           </span>
                           {appt.end_time && (
-                            <span style={{ fontSize: 10, color: t.dim, fontFamily: 'monospace' }}>
-                              {fmtTime(appt.end_time)}
+                            <span style={{
+                              fontSize: 12, color: t.muted, fontFamily: 'monospace',
+                              marginTop: 4, lineHeight: 1,
+                            }}>
+                              → {fmtTime(appt.end_time)}
+                            </span>
+                          )}
+                          {totalMin && (
+                            <span style={{
+                              fontSize: 10, color: t.dim, marginTop: 3, fontWeight: 500,
+                            }}>
+                              {totalMin} min
                             </span>
                           )}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{
-                            margin: 0, fontSize: 13, fontWeight: 500, color: t.text,
+                            margin: 0, fontSize: 13, fontWeight: 500, color: t.muted,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>
                             {appt.client_name || 'Client'}
                           </p>
-                          <p style={{
-                            margin: '2px 0 0', fontSize: 11, color: t.muted,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>
-                            {appt.service_name || 'RDV'}
-                            {appt.total_duration || appt.duration_minutes
-                              ? ` · ${appt.total_duration || appt.duration_minutes} min`
-                              : ''}
-                          </p>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                          {/* Prestations en grand : 1 ligne par prestation si
+                              multiple, sinon 1 seule ligne avec le nom du service */}
+                          {items.length > 1 ? (
+                            <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              {items.map((it, i) => (
+                                <p key={i} style={{
+                                  margin: 0, fontSize: 15, fontWeight: 500, color: t.text,
+                                  lineHeight: 1.3,
+                                }}>
+                                  • {it.service_name}{it.qty > 1 ? ` ×${it.qty}` : ''}
+                                </p>
+                              ))}
+                            </div>
+                          ) : (
+                            <p style={{
+                              margin: '4px 0 0', fontSize: 16, fontWeight: 500, color: t.text,
+                              lineHeight: 1.3,
+                            }}>
+                              {items[0]?.service_name || appt.service_name || 'RDV'}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                             <span style={{
                               fontSize: 10, fontWeight: 500,
                               padding: '2px 8px', borderRadius: 99,

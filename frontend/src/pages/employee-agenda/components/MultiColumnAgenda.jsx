@@ -559,6 +559,9 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
                         const accent = isDark ? (emp.avatar_color || sc.bd) : sc.bd;
                         const bg     = isDark ? `${emp.avatar_color || t.text}22` : sc.bg;
                         const tx     = isDark ? (emp.avatar_color || t.text) : sc.tx;
+                        const items  = Array.isArray(appt.items) ? appt.items.filter(i => i?.service_name) : [];
+                        const primarySvc = items[0]?.service_name || appt.service_name || 'RDV';
+                        const totalMin   = appt.total_duration || appt.duration_minutes;
                         return (
                           <button
                             key={appt.id}
@@ -586,41 +589,54 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
                               left: 0,
                               top: 0,
                               bottom: 0,
-                              width: 2,
+                              width: 3,
                               background: accent,
                             }} />
-                            <div style={{ paddingLeft: 10, paddingRight: 6, paddingTop: 6 }}>
+                            {/* Heure + prestations agrandies pour lecture
+                                directe sans ouvrir le modal (feedback user). */}
+                            <div style={{ paddingLeft: 11, paddingRight: 6, paddingTop: 5, paddingBottom: 4 }}>
                               <p style={{
                                 margin: 0,
-                                fontSize: 13,
+                                fontSize: 15,
+                                fontWeight: 500,
+                                color: tx,
+                                fontFamily: 'monospace',
+                                lineHeight: 1.1,
+                              }}>{fmtTime(appt.start_time)}</p>
+                              <p style={{
+                                margin: '3px 0 0',
+                                fontSize: 14,
                                 fontWeight: 500,
                                 color: tx,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
-                              }}>{appt.client_name}</p>
-                              {height > 40 && (
-                                <p style={{
-                                  margin: '2px 0 0',
-                                  fontSize: 11,
+                                lineHeight: 1.2,
+                              }}>{primarySvc}</p>
+                              {height > 64 && items.length > 1 && items.slice(1, 4).map((it, i) => (
+                                <p key={i} style={{
+                                  margin: '1px 0 0',
+                                  fontSize: 12,
                                   fontWeight: 500,
                                   color: tx,
                                   opacity: 0.85,
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
-                                }}>{fmtTime(appt.start_time)} · {appt.service_name || 'RDV'}</p>
-                              )}
-                              {height > 65 && (
+                                  lineHeight: 1.2,
+                                }}>• {it.service_name}{it.qty > 1 ? ` ×${it.qty}` : ''}</p>
+                              ))}
+                              {height > 58 && (
                                 <p style={{
-                                  margin: '1px 0 0',
+                                  margin: '3px 0 0',
                                   fontSize: 11,
+                                  fontWeight: 500,
                                   color: tx,
-                                  opacity: 0.65,
+                                  opacity: 0.7,
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
                                   whiteSpace: 'nowrap',
-                                }}>{fmtTime(appt.end_time)} · {appt.total_duration || appt.duration_minutes}min</p>
+                                }}>{appt.client_name}{totalMin ? ` · ${totalMin} min` : ''}</p>
                               )}
                               {height > 80 && appt.paid && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
