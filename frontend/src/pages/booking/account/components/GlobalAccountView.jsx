@@ -512,12 +512,12 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                         style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:th.muted }}>×</button>
                     </div>
                     {[
-                      ['📋 Données collectées', 'Lors de votre inscription et de vos réservations, nous collectons : prénom, nom, email, téléphone. Ces données sont nécessaires pour gérer vos rendez-vous.'],
-                      ['🎯 Finalité', "Vos données sont utilisées exclusivement pour : la gestion de vos réservations, l'envoi de confirmations et rappels, le programme de fidélité."],
-                      ['⏱ Durée de conservation', 'Vos données personnelles sont conservées le temps de votre inscription. Les historiques de transactions sont conservés de façon anonyme à des fins comptables.'],
-                      ['✅ Vos droits (Art. 15-22 RGPD)', "Vous disposez d'un droit d'accès, de rectification, d'effacement, de portabilité et d'opposition. Exercez-les depuis votre profil ou en contactant le commerçant."],
-                      ['🔐 Sécurité', "Vos mots de passe sont chiffrés (bcrypt). Les communications sont sécurisées par SSL/TLS. Aucune donnée n'est vendue à des tiers."],
-                      ['📧 Contact', "Pour toute question relative à vos données personnelles, contactez directement le commerçant ou écrivez à l'adresse indiquée sur le site de réservation."],
+                      ['Données collectées', 'Lors de votre inscription et de vos réservations, nous collectons : prénom, nom, email, téléphone. Ces données sont nécessaires pour gérer vos rendez-vous.'],
+                      ['Finalité', "Vos données sont utilisées exclusivement pour : la gestion de vos réservations, l'envoi de confirmations et rappels, le programme de fidélité."],
+                      ['Durée de conservation', 'Vos données personnelles sont conservées le temps de votre inscription. Les historiques de transactions sont conservés de façon anonyme à des fins comptables.'],
+                      ['Vos droits (Art. 15-22 RGPD)', "Vous disposez d'un droit d'accès, de rectification, d'effacement, de portabilité et d'opposition. Exercez-les depuis votre profil ou en contactant le commerçant."],
+                      ['Sécurité', "Vos mots de passe sont chiffrés (bcrypt). Les communications sont sécurisées par SSL/TLS. Aucune donnée n'est vendue à des tiers."],
+                      ['Contact', "Pour toute question relative à vos données personnelles, contactez directement le commerçant ou écrivez à l'adresse indiquée sur le site de réservation."],
                     ].map(([title, text]) => (
                       <div key={title} style={{ marginBottom:14 }}>
                         <p style={{ margin:'0 0 4px', fontWeight: 500, fontSize:13, color:th.text }}>{title}</p>

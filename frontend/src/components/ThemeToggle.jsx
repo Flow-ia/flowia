@@ -10,7 +10,7 @@ export function ThemeToggle({ size = 10 }) {
       style={{
         width: size * 4, height: size * 4,
         background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
-        border: `1px solid ${theme.border}`,
+        border: `0.5px solid ${theme.border}`,
       }}
       title={isLight ? 'Passer en mode sombre' : 'Passer en mode clair'}
     >

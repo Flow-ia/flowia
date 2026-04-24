@@ -233,7 +233,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     if (!emailType || emailType === 'free') return null;
     if (emailType === 'global' || emailType === 'both') return (
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(16,185,129,0.07)', border: '0.5px solid rgba(16,185,129,0.2)', marginTop:4 }}>
-        <span style={{ fontSize:14 }}>✅</span>
+        <span style={{ width:6, height:6, borderRadius:99, background:'#10b981', flexShrink:0 }}/>
         <div>
           <p style={{ margin:0, fontSize:12, fontWeight: 500, color:'#10b981' }}>Compte plateforme reconnu</p>
           <p style={{ margin:0, fontSize:11, color:'rgba(16,185,129,0.8)' }}>Connectez-vous avec votre mot de passe habituel</p>

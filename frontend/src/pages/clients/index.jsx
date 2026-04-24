@@ -248,7 +248,7 @@ export default function ClientsPage() {
       setFiche(prev => ({ ...prev, is_booking_blocked: updated.is_booking_blocked, blocked_at: updated.blocked_at }));
       // Mettre à jour la liste si visible
       setClients(prev => prev.map(c => c.id === fiche.id ? { ...c, is_booking_blocked: updated.is_booking_blocked } : c));
-      showToast(newBlocked ? '🚫 Client bloqué - plus de reservation possible' : '✅ Client débloque', newBlocked ? 'error' : 'ok');
+      showToast(newBlocked ? 'Client bloqué · plus de réservation possible' : 'Client débloqué', newBlocked ? 'error' : 'ok');
     } catch { showToast('Erreur lors du blocage', 'error'); }
     finally { setBlockBusy(false); setConfirmBlock(false); }
   };
