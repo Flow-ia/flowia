@@ -12,6 +12,7 @@ import Historique from './pages/Historique';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
 import Reglages from './pages/reglages';
+import Marketing from './pages/marketing';
 import { api, loyaltyApi, promoApi, notifApi, referralsApi } from './utils/api';
 import EmployeeAgenda from './pages/EmployeeAgenda';
 import ClientsPage from './pages/ClientsPage';
@@ -2005,6 +2006,16 @@ export default function App() {
       onUpdTx={updTx} onDelTx={delTx} onLock={handleLock}/>;
   };
 
+  // Refonte FDS-2026 commit 5 : Page Marketing. Même gate PIN que Réglages
+  // (mutations programme fidélité/anniv/parrainage et send-emails exigent
+  // pinAdminMiddleware côté back).
+  const marketingContent = () => {
+    if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
+    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('entry'); }}/>;
+    if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')}/>;
+    return <Marketing/>;
+  };
+
   const shell = (content) => (
     <div style={{ fontFamily:"'Inter',-apple-system,sans-serif",
                   background:theme.bg, minHeight:'100vh' }}>
@@ -2041,11 +2052,13 @@ export default function App() {
       <Route path="/settings/*"   element={settingsContent()}/>
       <Route path="/settings"     element={settingsContent()}/>
       {/* Refonte FDS-2026 commit 3 : nouvelles URLs sidebar. Redirects
-          temporaires vers les pages legacy en attendant les commits 5-9
-          (Marketing, Statistiques, Caisse éclatés). */}
+          temporaires vers les pages legacy en attendant les commits 6 et 7
+          (Statistiques, Caisse éclatés). */}
       <Route path="/caisse"       element={<Navigate to="/settings/historique" replace/>}/>
-      <Route path="/marketing"    element={<Navigate to="/settings/marketing" replace/>}/>
       <Route path="/statistiques" element={<Navigate to="/settings" replace/>}/>
+      {/* Refonte FDS-2026 commit 5 : Marketing éclaté en /marketing/*. */}
+      <Route path="/marketing/*"  element={marketingContent()}/>
+      <Route path="/marketing"    element={marketingContent()}/>
       {/* Refonte FDS-2026 commit 4 : la page Réglages éclatée est maintenant
           la destination canonique. /settings reste accessible avec bannière. */}
       <Route path="/reglages/*"   element={reglagesContent()}/>
