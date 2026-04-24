@@ -556,6 +556,37 @@ export function ReferralPage({
           </div>
         )}
 
+        {/* Conditions — affichées aussi pour le client connecté (feedback
+            onboarding) mais sous forme de phrase, pas de tableau comme
+            pour le client non-authentifié. */}
+        {(() => {
+          const limitLabel = limitPeriodLabel(refProgram);
+          const validityLabel = refProgram.validity_days
+            ? `${refProgram.validity_days} jours après validation`
+            : '60 jours après validation';
+          const limitSentence = limitLabel === 'Illimité'
+            ? 'Aucune limite sur le nombre de parrainages.'
+            : `Limite par parrain : ${limitLabel.toLowerCase()}.`;
+          return (
+            <div style={{
+              background: surfaceAlt, borderRadius: 8,
+              padding: '14px 16px', marginBottom: '1.5rem',
+              lineHeight: 1.6,
+            }}>
+              <p style={{ fontSize: 12, color: th.muted, margin: '0 0 6px',
+                textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 500 }}>
+                Les conditions chez {businessName}
+              </p>
+              <p style={{ fontSize: 13, color: th.text, margin: 0 }}>
+                Vous gagnez <strong style={{ fontWeight: 500 }}>{parrainRewardStr}</strong>
+                {' '}à chaque filleul validé, utilisable en caisse sur prestation.
+                {' '}{limitSentence}
+                {' '}Validité de la récompense : <strong style={{ fontWeight: 500 }}>{validityLabel}</strong>.
+              </p>
+            </div>
+          );
+        })()}
+
         {/* Stats — 3 cards */}
         <div className="rp-grid3" style={{
           display: "grid", gridTemplateColumns: "repeat(3, 1fr)",

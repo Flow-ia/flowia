@@ -7,6 +7,46 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ## État actuel (2026-04-24)
 
+**Fix 5 bugs onboarding : horaires save, absences confirm modal,
+permissions employé preservées, bouton Liste déplacé, conditions
+parrainage en phrase pour client connecté**
+
+1. **`/settings/horaires` : plages invisibles après save** — `TeamTab.jsx`
+   garde cache `loadEmp` bypass maintenant via flag `force=true` appelé
+   après save. Avant : `setEmpSlots(undefined)` + loadEmp avec garde
+   empSlots !== undefined sur closure stale → fetch jamais déclenché →
+   affichage vide jusqu'à F5.
+
+2. **`/settings/absences` : window.confirm natif → modale** — Remplacé
+   par le composant `Confirm` (components/UI.jsx). State `cancelId` +
+   handler `doCancel`. Pattern cohérent avec les autres suppressions.
+
+3. **Pop-up "Modifier l'employé" réinitialisait les permissions** —
+   `EmployeeForm` soumettait uniquement `{name, role, phone, email,
+   avatar_color}`. Le backend PUT coerçait `!!can_cancel`, `!!can_modify`,
+   etc. → `!!undefined === false` → toutes permissions écrasées. Fix :
+   payload = `{ ...init, ...f }` pour préserver les colonnes non éditées
+   (permissions, is_active, show_on_booking/show_in_caisse).
+
+4. **Bouton "Liste" déplacé en haut-centre + renommé** — Retiré du
+   SegmentedControl Jour/Semaine/Mois, transformé en bouton pill dédié
+   centré au-dessus du header. Intitulé "Agenda en liste" avec icône
+   lignes. Toggle entre `list` et `day`. Préférence toujours persistée
+   dans `ff_agenda_view_mode`.
+
+5. **Conditions parrainage affichées pour client connecté (en phrase)**
+   — Avant uniquement en tableau pour client non-auth. Ajout pour
+   gcConnected d'un bloc prose : "Vous gagnez X à chaque filleul validé,
+   utilisable en caisse sur prestation. [Limite]. Validité : N jours
+   après validation." S'adapte à la config percent/euro + limite
+   illimitée/mois/3mois/an.
+
+Fichiers : `TeamTab.jsx`, `TabAbsences.jsx`, `components/Forms.jsx`,
+`employee-agenda/components/MultiColumnAgenda.jsx`,
+`booking/ReferralPage.jsx`. Build OK.
+
+## État précédent (2026-04-24)
+
 **Agenda : nouvelle vue Liste par employé + persistance localStorage**
 — Ajout d'un 4e mode dans le toggle de `MultiColumnAgenda.jsx`
 (Jour / Semaine / Mois / **Liste**). La vue Liste affiche les RDV du

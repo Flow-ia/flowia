@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { absencesApi } from '../../../../utils/api';
 import { Button, Label } from '../../../../components/primitives';
+import { Confirm } from '../../../../components/UI';
 
 export default function TabAbsences({ employees, theme }) {
   const t = theme;
@@ -9,6 +10,7 @@ export default function TabAbsences({ employees, theme }) {
   const [error,    setError]    = useState('');
   const [showForm, setShowForm] = useState(false);
   const [saving,   setSaving]   = useState(false);
+  const [cancelId, setCancelId] = useState(null);
   const [form, setForm] = useState({
     employee_id:'', type:'conges', start_date:'', end_date:'', reason:'',
   });
@@ -43,10 +45,12 @@ export default function TabAbsences({ employees, theme }) {
     finally { setSaving(false); }
   };
 
-  const cancel = async (id) => {
-    if (!window.confirm('Annuler cette absence ?')) return;
-    try { await absencesApi.cancel(id); load(); }
+  // Confirmation via modal Confirm (au lieu de window.confirm natif).
+  const doCancel = async () => {
+    if (!cancelId) return;
+    try { await absencesApi.cancel(cancelId); load(); }
     catch (e) { setError(e.message || 'Erreur'); }
+    finally { setCancelId(null); }
   };
 
   const inp = {
@@ -164,7 +168,7 @@ export default function TabAbsences({ employees, theme }) {
                   {a.reason && <p style={{ fontSize:11, color:t.dim, margin:'2px 0 0' }}>{a.reason}</p>}
                 </div>
                 {!a.cancelled_at && (
-                  <button onClick={() => cancel(a.id)}
+                  <button onClick={() => setCancelId(a.id)}
                           style={{ padding:'6px 12px', borderRadius:8, border:'none', cursor:'pointer',
                                    background:'rgba(239,68,68,0.1)', color:'#991b1b',
                                    fontWeight:500, fontSize:12, fontFamily:'inherit' }}>
@@ -179,6 +183,14 @@ export default function TabAbsences({ employees, theme }) {
           })}
         </div>
       )}
+
+      <Confirm
+        open={!!cancelId}
+        onClose={() => setCancelId(null)}
+        onConfirm={doCancel}
+        title="Annuler cette absence ?"
+        message="L'absence sera marquee comme annulee. Cette action est irreversible."
+        theme={theme}/>
     </div>
   );
 }

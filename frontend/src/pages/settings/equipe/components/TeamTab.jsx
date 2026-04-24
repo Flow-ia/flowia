@@ -25,8 +25,11 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
     return slots;
   }, [businessHours]);
 
-  const loadEmp = async (empId) => {
-    if (empSlots[empId] !== undefined) return;
+  // force=true → ignore le cache (utilisé après save pour rafraîchir).
+  // Sans force, le 1er load d'un accordéon utilise le cache pour ne pas
+  // refaire d'appels réseau à chaque ouverture/fermeture.
+  const loadEmp = async (empId, force = false) => {
+    if (!force && empSlots[empId] !== undefined) return;
     setLoading(p => ({ ...p, [empId]: true }));
     try {
       const slots = await bookingApi.getEmpSlots(empId);
@@ -95,8 +98,10 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
         })) });
       }
       showToast('Horaires sauvegardes');
-      setEmpSlots(p => ({ ...p, [empId]: undefined }));
-      await loadEmp(empId);
+      // Reload depuis le backend en bypassant le cache → les plages
+      // mises à jour s'affichent immédiatement (avant : cache rendait
+      // obligatoire un F5 pour voir le résultat).
+      await loadEmp(empId, true);
     } catch (e) { showToast(e.message || 'Erreur', 'err'); }
     finally { setSaving(false); }
   };

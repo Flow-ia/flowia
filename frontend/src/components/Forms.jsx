@@ -332,7 +332,14 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
     let _imageAction = null;
     if (imgFile) _imageAction = 'upload';
     else if (imgDel && initHasImage) _imageAction = 'delete';
-    await onSubmit({ ...f, _imageAction, _imageFile: imgFile });
+    // IMPORTANT : on préserve les permissions existantes de l'employé
+    // (can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse,
+    // can_use_promo, can_grant_credit, can_repay_credit, is_active) — le
+    // formulaire n'édite QUE les infos de contact + avatar. Sans `...init`,
+    // ces champs remontaient undefined → le backend coerçait en false via
+    // `!!can_cancel` etc. → toutes les permissions écrasées à chaque édition.
+    const payload = init ? { ...init, ...f } : { ...f };
+    await onSubmit({ ...payload, _imageAction, _imageFile: imgFile });
     setLd(false); onClose();
   };
 

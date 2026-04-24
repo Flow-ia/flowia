@@ -269,6 +269,37 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
         flexShrink: 0,
         borderBottom: `0.5px solid ${t.border}`,
       }}>
+        {/* Bouton "Agenda en liste" — centré en haut pour meilleure
+            visibilité (feedback user onboarding). Toggle entre mode liste
+            et le dernier mode calendrier (day/week/month). */}
+        <div style={{ display:'flex', justifyContent:'center', marginBottom:8 }}>
+          <button
+            type="button"
+            onClick={() => setViewMode(viewMode === 'list' ? 'day' : 'list')}
+            style={{
+              display:'inline-flex', alignItems:'center', gap:8,
+              padding:'7px 16px', borderRadius:99,
+              border:`0.5px solid ${viewMode === 'list' ? 'transparent' : t.borderStrong}`,
+              background: viewMode === 'list' ? t.text : 'transparent',
+              color: viewMode === 'list' ? t.bg : t.text,
+              cursor:'pointer',
+              fontSize:12, fontWeight:500, fontFamily:'inherit',
+              transition:'background .15s, color .15s',
+            }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                 strokeLinecap="round" strokeLinejoin="round"
+                 style={{ width:13, height:13 }}>
+              <line x1="8"  y1="6"  x2="21" y2="6"/>
+              <line x1="8"  y1="12" x2="21" y2="12"/>
+              <line x1="8"  y1="18" x2="21" y2="18"/>
+              <line x1="3"  y1="6"  x2="3.01" y2="6"/>
+              <line x1="3"  y1="12" x2="3.01" y2="12"/>
+              <line x1="3"  y1="18" x2="3.01" y2="18"/>
+            </svg>
+            Agenda en liste
+          </button>
+        </div>
+
         {/* Ligne 1 */}
         <div style={{
           display: 'flex',
@@ -325,15 +356,16 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
           {loading && <Spin size={14} />}
 
-          {/* Toggle vue — sauvegardé en localStorage (ff_agenda_view_mode) */}
+          {/* Toggle vue — sauvegardé en localStorage (ff_agenda_view_mode).
+              Le mode Liste a son propre bouton centré au-dessus (plus visible
+              pour l'employé, cf. feedback onboarding). */}
           <SegmentedControl
-            value={viewMode}
+            value={viewMode === 'list' ? 'day' : viewMode}
             onChange={setViewMode}
             options={[
               { value: 'day',   label: 'Jour' },
               { value: 'week',  label: 'Semaine' },
               { value: 'month', label: 'Mois' },
-              { value: 'list',  label: 'Liste' },
             ]}
           />
 
