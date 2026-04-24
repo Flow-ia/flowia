@@ -19,6 +19,7 @@ import { I, ICON_MAP } from './utils/icons';
 import { todayStr, nowStr } from './utils/dates';
 import { useEmployeePinGate } from './components/EmployeePinModal';
 import { Button } from './components/primitives';
+import { Icon } from './components/Icon';
 
 // Palette paiements — pastels sobres (unifie avec Dashboard/Forms/Transactions)
 const PM_CFG = {
@@ -1076,111 +1077,268 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
   );
 }
 
-// ── DesktopSidebar ──────────────────────────────────────────────────────────
-function DesktopSidebar({ onHome, onLogout, theme: t, toggle, isLight }) {
-  const NavBtn = ({ onClick, label, icon, danger }) => (
-    <button onClick={onClick}
-            style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
-                     padding:'10px 14px', borderRadius:8,
-                     border:`0.5px solid ${t.border}`,
-                     background: t.cardAlt,
-                     cursor:'pointer', transition:'background 0.15s ease, transform 0.15s ease',
-                     fontFamily:'inherit' }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = danger
-                ? 'rgba(239,68,68,0.08)'
-                : t.card;
-              e.currentTarget.style.transform = 'translateX(2px)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = t.cardAlt;
-              e.currentTarget.style.transform = 'none';
-            }}>
-      <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
-                    background: danger ? 'rgba(239,68,68,0.12)' : t.cardAlt,
-                    display:'flex', alignItems:'center', justifyContent:'center' }}>
-        {icon}
-      </div>
-      <span style={{ fontSize:13, fontWeight:500, whiteSpace:'nowrap',
-                     color: danger ? '#991b1b' : t.text }}>
-        {label}
-      </span>
-    </button>
-  );
+// ── DesktopSidebar (refonte FDS-2026 commit 3 : 7 items en 3 sections) ─────
+// PRINCIPAL : Dashboard · Agenda · Caisse · Clients
+// CROISSANCE : Marketing · Statistiques
+// PARAMETRAGE : Reglages
+// Footer : Mode sombre + Deconnexion
+//
+// Les URLs cibles (/caisse, /marketing, /statistiques, /reglages) sont
+// pour l'instant des redirects vers les pages legacy (voir Routes plus bas).
+// Le match actif reconnaît AUSSI les URLs legacy (/settings/historique,
+// /settings/marketing, etc.) pour que l'état actif survive au redirect.
+function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const NAV_SECTIONS = [
+    {
+      label: 'Principal',
+      items: [
+        { id:'dashboard', label:'Dashboard',    icon:'home',     to:'/dashboard',   match:['/dashboard'] },
+        { id:'agenda',    label:'Agenda',       icon:'calendar', to:'/agenda',      match:['/agenda'] },
+        { id:'caisse',    label:'Caisse',       icon:'cash',     to:'/caisse',      match:['/caisse','/historique','/transactions','/settings/historique'] },
+        { id:'clients',   label:'Clients',      icon:'users',    to:'/clients',     match:['/clients'] },
+      ],
+    },
+    {
+      label: 'Croissance',
+      items: [
+        { id:'marketing', label:'Marketing',    icon:'megaphone', to:'/marketing',   match:['/marketing','/settings/marketing'] },
+        { id:'stats',     label:'Statistiques', icon:'chart',     to:'/statistiques', match:['/statistiques','/settings/previsions','/settings/heures','/settings/export'] },
+      ],
+    },
+    {
+      label: 'Paramétrage',
+      items: [
+        { id:'reglages',  label:'Réglages',     icon:'settings', to:'/reglages',    match:['/reglages','/settings'] },
+      ],
+    },
+  ];
+
+  // Match actif : exact /pathname === route.to OU pathname commence par l'un
+  // des préfixes de `match`. L'ordre des items évite le conflit /reglages vs
+  // /settings/marketing (les plus spécifiques sont évalués d'abord via le
+  // ranking par longueur de préfixe).
+  const activeId = (() => {
+    const p = location.pathname;
+    let best = { id: null, len: 0 };
+    for (const sec of NAV_SECTIONS) {
+      for (const it of sec.items) {
+        for (const pref of it.match) {
+          if (p === pref || p.startsWith(pref + '/') || p === pref + '/') {
+            if (pref.length > best.len) best = { id: it.id, len: pref.length };
+          }
+        }
+      }
+    }
+    return best.id;
+  })();
+
+  const sectionLabelStyle = {
+    fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em',
+    color: t.muted, margin: '14px 10px 4px', fontWeight: 500,
+  };
+
+  const NavRow = ({ it }) => {
+    const active = activeId === it.id;
+    return (
+      <button onClick={() => navigate(it.to)}
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                       padding:'9px 12px', borderRadius:8, border:'none',
+                       background: active ? t.card : 'transparent',
+                       color: active ? t.text : t.muted,
+                       cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                       transition:'background 0.15s ease, color 0.15s ease',
+                       borderLeft: active ? "2px solid " + t.text : '2px solid transparent' }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.background = t.cardAlt; }}
+              onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
+        <Icon name={it.icon} size={15} color={active ? t.text : t.muted}/>
+        <span style={{ fontSize:13, fontWeight: active ? 500 : 400, whiteSpace:'nowrap' }}>
+          {it.label}
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <div style={{ width:200, minHeight:'100vh', display:'flex', flexDirection:'column',
-                  padding:'20px 12px', gap:8,
+    <div style={{ width:220, minHeight:'100vh', display:'flex', flexDirection:'column',
+                  padding:'16px 10px',
                   position:'sticky', top:0, height:'100vh', flexShrink:0,
                   background:t.canvas,
                   borderRight:`0.5px solid ${t.border}` }}>
 
-      {/* Logo */}
+      {/* Header : logo + nom salon */}
       <div style={{ display:'flex', alignItems:'center', gap:10,
-                    padding:'4px 4px 16px',
+                    padding:'4px 6px 14px',
                     borderBottom:`0.5px solid ${t.separator}`,
-                    marginBottom:8 }}>
+                    marginBottom:4 }}>
         <img src="/images/logo-app.png" alt="FlowIA"
              style={{ width:34, height:34, borderRadius:8, flexShrink:0, objectFit:'contain' }}/>
-        <div>
-          <p style={{ fontWeight:500, fontSize:13, color:t.text, margin:0, lineHeight:1.2 }}>FlowIA</p>
-          <p style={{ fontSize:11, color:t.muted, margin:0 }}>Gestion pro</p>
+        <div style={{ minWidth:0 }}>
+          <p style={{ fontWeight:500, fontSize:13, color:t.text, margin:0, lineHeight:1.2,
+                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {user?.businessName || 'FlowIA'}
+          </p>
+          <p style={{ fontSize:11, color:t.muted, margin:0 }}>{"Commerçant"}</p>
         </div>
       </div>
 
-      <NavBtn onClick={onHome} label="Accueil" icon={
-        <svg viewBox="0 0 24 24" fill="none" stroke={t.text} strokeWidth="2"
-             strokeLinecap="round" strokeLinejoin="round" style={{ width:15, height:15 }}>
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
-      }/>
-
-      {/* Toggle theme */}
-      <button onClick={toggle}
-              style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
-                       padding:'10px 14px', borderRadius:8,
-                       border:`0.5px solid ${t.border}`,
-                       background:t.cardAlt,
-                       cursor:'pointer', transition:'background 0.15s ease',
-                       fontFamily:'inherit' }}
-              onMouseEnter={e => { e.currentTarget.style.background = t.card; }}
-              onMouseLeave={e => { e.currentTarget.style.background = t.cardAlt; }}>
-        <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
-                      background:t.cardAlt,
-                      display:'flex', alignItems:'center', justifyContent:'center' }}>
-          {isLight
-            ? <svg viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2"
-                   strokeLinecap="round" strokeLinejoin="round" style={{ width:14, height:14 }}>
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            : <svg viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2"
-                   strokeLinecap="round" strokeLinejoin="round" style={{ width:14, height:14 }}>
-                <circle cx="12" cy="12" r="5"/>
-                <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-              </svg>}
+      {NAV_SECTIONS.map((sec, i) => (
+        <div key={i}>
+          <div style={sectionLabelStyle}>{sec.label}</div>
+          {sec.items.map(it => <NavRow key={it.id} it={it}/>)}
         </div>
-        <span style={{ fontSize:13, fontWeight:500, color:t.text, whiteSpace:'nowrap' }}>
-          {isLight ? 'Mode sombre' : 'Mode clair'}
-        </span>
-      </button>
+      ))}
 
       <div style={{ flex:1 }}/>
 
-      <div style={{ height:'0.5px', background:t.separator, margin:'4px 0' }}/>
-
-      <NavBtn onClick={onLogout} label="Deconnexion" danger icon={
-        <svg viewBox="0 0 24 24" fill="none" stroke="#991b1b" strokeWidth="2"
-             strokeLinecap="round" strokeLinejoin="round" style={{ width:15, height:15 }}>
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-      }/>
+      <div style={{ paddingTop:10, borderTop:`0.5px solid ${t.separator}`, display:'flex', flexDirection:'column', gap:2 }}>
+        <button onClick={toggle}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                         padding:'9px 12px', borderRadius:8, border:'none',
+                         background:'transparent', color:t.muted,
+                         cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                         transition:'background 0.15s ease' }}
+                onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+          <Icon name={isLight ? 'moon' : 'sun'} size={15} color={t.muted}/>
+          <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>
+            {isLight ? 'Mode sombre' : 'Mode clair'}
+          </span>
+        </button>
+        <button onClick={onLogout}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                         padding:'9px 12px', borderRadius:8, border:'none',
+                         background:'transparent', color:'#991b1b',
+                         cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                         transition:'background 0.15s ease' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+          <Icon name="logout" size={15} color="#991b1b"/>
+          <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
+        </button>
+      </div>
     </div>
+  );
+}
+
+// ── BottomNav mobile (refonte FDS-2026 commit 3) ────────────────────────────
+// 5 items : Home · Agenda · Caisse · Clients · Plus (menu overlay).
+// Menu "Plus" : Marketing · Statistiques · Reglages · Mode sombre · Deconnexion.
+function BottomNav({ theme: t, toggle, isLight, onLogout }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [plusOpen, setPlusOpen] = useState(false);
+
+  const ITEMS = [
+    { id:'home',    label:'Home',    icon:'home',     to:'/dashboard', match:['/dashboard'] },
+    { id:'agenda',  label:'Agenda',  icon:'calendar', to:'/agenda',    match:['/agenda'] },
+    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/historique','/transactions','/settings/historique'] },
+    { id:'clients', label:'Clients', icon:'users',    to:'/clients',   match:['/clients'] },
+  ];
+
+  const activeId = (() => {
+    const p = location.pathname;
+    let best = { id:null, len:0 };
+    for (const it of ITEMS) {
+      for (const pref of it.match) {
+        if (p === pref || p.startsWith(pref + '/')) {
+          if (pref.length > best.len) best = { id: it.id, len: pref.length };
+        }
+      }
+    }
+    return best.id;
+  })();
+
+  const navItemStyle = (active) => ({
+    flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+    gap:3, padding:'6px 2px', border:'none', background:'transparent', cursor:'pointer',
+    color: active ? t.text : t.muted, fontFamily:'inherit',
+  });
+
+  return (
+    <>
+      <nav style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:30,
+                    display:'flex', alignItems:'stretch',
+                    background: t.canvas,
+                    borderTop: `0.5px solid ${t.border}`,
+                    paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
+        {ITEMS.map(it => {
+          const active = activeId === it.id;
+          return (
+            <button key={it.id} onClick={() => navigate(it.to)} style={navItemStyle(active)}>
+              <Icon name={it.icon} size={18} color={active ? t.text : t.muted}/>
+              <span style={{ fontSize:10, fontWeight: active ? 500 : 400 }}>{it.label}</span>
+            </button>
+          );
+        })}
+        <button onClick={() => setPlusOpen(true)} style={navItemStyle(false)}>
+          <Icon name="more" size={18} color={t.muted}/>
+          <span style={{ fontSize:10, fontWeight:400 }}>Plus</span>
+        </button>
+      </nav>
+
+      {plusOpen && (
+        <div onClick={() => setPlusOpen(false)}
+             style={{ position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,0.45)',
+                      backdropFilter:'blur(4px)', display:'flex', alignItems:'flex-end' }}>
+          <div onClick={e => e.stopPropagation()}
+               style={{ width:'100%', background:t.canvas,
+                        borderTopLeftRadius:16, borderTopRightRadius:16,
+                        borderTop:`0.5px solid ${t.border}`,
+                        padding:'12px 14px 20px',
+                        paddingBottom:'calc(20px + env(safe-area-inset-bottom, 0))',
+                        display:'flex', flexDirection:'column', gap:2 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                          padding:'2px 6px 10px' }}>
+              <span style={{ fontSize:12, fontWeight:500, color:t.muted,
+                             textTransform:'uppercase', letterSpacing:'0.05em' }}>Plus</span>
+              <button onClick={() => setPlusOpen(false)}
+                      style={{ border:'none', background:'transparent', cursor:'pointer',
+                               padding:6, color:t.muted, fontFamily:'inherit' }}>
+                <Icon name="x" size={16} color={t.muted}/>
+              </button>
+            </div>
+            {[
+              { label:'Marketing',    icon:'megaphone', to:'/marketing'    },
+              { label:'Statistiques', icon:'chart',     to:'/statistiques' },
+              { label:'Reglages',     icon:'settings',  to:'/reglages'     },
+            ].map(it => (
+              <button key={it.to}
+                      onClick={() => { setPlusOpen(false); navigate(it.to); }}
+                      style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
+                               padding:'12px', borderRadius:10, border:'none',
+                               background:'transparent', color:t.text,
+                               cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                <Icon name={it.icon} size={16} color={t.muted}/>
+                <span style={{ flex:1, fontSize:13, fontWeight:500 }}>{it.label}</span>
+                <Icon name="chevronRight" size={14} color={t.muted}/>
+              </button>
+            ))}
+            <div style={{ height:'0.5px', background:t.separator, margin:'6px 6px' }}/>
+            <button onClick={() => { toggle(); }}
+                    style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
+                             padding:'12px', borderRadius:10, border:'none',
+                             background:'transparent', color:t.text,
+                             cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+              <Icon name={isLight ? 'moon' : 'sun'} size={16} color={t.muted}/>
+              <span style={{ flex:1, fontSize:13, fontWeight:500 }}>
+                {isLight ? 'Mode sombre' : 'Mode clair'}
+              </span>
+            </button>
+            <button onClick={() => { setPlusOpen(false); onLogout(); }}
+                    style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
+                             padding:'12px', borderRadius:10, border:'none',
+                             background:'transparent', color:'#991b1b',
+                             cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+              <Icon name="logout" size={16} color="#991b1b"/>
+              <span style={{ flex:1, fontSize:13, fontWeight:500 }}>{"Déconnexion"}</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1840,12 +1998,13 @@ export default function App() {
       <div className="lg:hidden" style={{ minHeight:'100vh' }}>
         <TopBar onHome={() => { handleTab('dashboard'); navigate('/dashboard'); }}
                 onLogout={handleLogout} theme={theme} toggle={toggle} isLight={isLight}/>
-        {content}
+        <div style={{ paddingBottom: 64 }}>{content}</div>
+        <BottomNav theme={theme} toggle={toggle} isLight={isLight} onLogout={handleLogout}/>
       </div>
       {/* Desktop */}
       <div className="hidden lg:flex" style={{ minHeight:'100vh' }}>
-        <DesktopSidebar onHome={() => { handleTab('dashboard'); navigate('/dashboard'); }}
-                        onLogout={handleLogout} theme={theme} toggle={toggle} isLight={isLight}/>
+        <DesktopSidebar user={user} theme={theme} toggle={toggle} isLight={isLight}
+                        onLogout={handleLogout}/>
         <div className="flex-1 min-w-0 overflow-y-auto" style={{ maxHeight:'100vh' }}>
           {content}
         </div>
@@ -1867,6 +2026,13 @@ export default function App() {
       <Route path="/agenda/views/:employeeId" element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/settings/*"   element={settingsContent()}/>
       <Route path="/settings"     element={settingsContent()}/>
+      {/* Refonte FDS-2026 commit 3 : nouvelles URLs sidebar. Redirects
+          temporaires vers les pages legacy en attendant les commits 5-9
+          (Marketing, Statistiques, Caisse, Reglages éclatés). */}
+      <Route path="/caisse"       element={<Navigate to="/settings/historique" replace/>}/>
+      <Route path="/marketing"    element={<Navigate to="/settings/marketing" replace/>}/>
+      <Route path="/statistiques" element={<Navigate to="/settings" replace/>}/>
+      <Route path="/reglages"     element={<Navigate to="/settings" replace/>}/>
       <Route path="/"             element={<Navigate to="/dashboard" replace/>}/>
       <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
     </Routes>
