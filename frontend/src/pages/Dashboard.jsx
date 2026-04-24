@@ -1,10 +1,11 @@
 // src/pages/Dashboard.jsx — Refonte visuelle 2026, logique intacte (PIN, stats, historique)
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { todayStr } from '../utils/dates';
 import { useTheme } from '../hooks/useTheme';
+import { useAuth } from '../hooks/useAuth';
 import { useEmployeePin } from '../hooks/useEmployeePin';
-import { bookingApi, notifApi } from '../utils/api';
+import { bookingApi, notifApi, paymentsApi, userSettingsApi } from '../utils/api';
 import { StatusBadge } from '../components/primitives/StatusBadge';
 import { I } from '../utils/icons';
 
@@ -938,62 +939,374 @@ function TileAdmin({ theme: t, onClick }) {
 // /historique (accès PIN au chargement, filtre employé qui recalcule tout le
 // CA/stats en direct). Les tuiles Dashboard pointent maintenant vers cette
 // page unique.
+// Refonte FDS-2026 commit 9 : Dashboard orienté métier.
+// - 4 KPIs (CA jour, RDV, ventes caisse, SMS restants)
+// - Alertes proactives (SMS bas, notifications non lues)
+// - 2 colonnes Prochains RDV / Activité équipe
+// - 2 colonnes Moyens paiement pastel / CA 7j bars
+// - 4 raccourcis (Encaisser, Nouveau RDV, Créer promo, Nouveau client)
+// PinAccessModal + NotifModal + useNotifications + Tile* exports préservés
+// intacts pour ne pas casser pages/Historique, pages/caisse/Historique, App.jsx.
 export default function Dashboard({ transactions, employees, onAdd, onNavigate, unreadNotifCount = 0 }) {
-  const { theme: t }    = useTheme();
-  const navigate        = useNavigate();
+  const { theme: t } = useTheme();
+  const { user }     = useAuth();
+  const navigate     = useNavigate();
 
-  const [todayAppts, setTodayAppts] = useState([]);
-  const [showNotifs, setShowNotifs] = useState(false);
+  const [todayAppts,    setTodayAppts]    = useState([]);
+  const [showNotifs,    setShowNotifs]    = useState(false);
+  const [smsBalance,    setSmsBalance]    = useState(null);
+  const [smsThreshold,  setSmsThreshold]  = useState(20);
 
   const today = todayStr();
   const now   = new Date();
 
   useEffect(() => {
-    bookingApi.getAppointments({ from:today, to:today })
+    bookingApi.getAppointments({ from: today, to: today })
       .then(d => setTodayAppts(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    paymentsApi.getSMSBalance()
+      .then(r => setSmsBalance(parseFloat(r?.balance ?? 0)))
+      .catch(() => setSmsBalance(null));
+    userSettingsApi.get()
+      .then(r => setSmsThreshold(Number(r?.sms_low_balance_threshold ?? 20)))
       .catch(() => {});
   }, [today]);
 
-  const nowMin   = now.getHours() * 60 + now.getMinutes();
-  const upcoming = todayAppts.filter(a => {
-    if (a.status !== 'confirmed') return false;
-    const [h, m] = String(a.start_time || '').substring(0, 5).split(':').map(Number);
-    return h * 60 + m > nowMin;
-  });
+  // ── Calculs dérivés depuis `transactions` (déjà scoped user_id côté back).
+  const { caToday, nbSales, byPM, ca7j, maxCA7, empActivity } = useMemo(() => {
+    const todayTx = transactions.filter(tx => nd(tx.date) === today && tx.type === 'revenue');
+    const caToday = todayTx.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
 
-  const dateStr = now.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+    // Ventilation par moyen de paiement : 'multi' éclaté par sous-ligne.
+    const byPM = { cash:0, card:0, transfer:0, other:0, multi:0 };
+    todayTx.forEach(tx => {
+      if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
+        tx.payments.forEach(p => {
+          const k = p.payment_method || 'other';
+          byPM[k in byPM ? k : 'other'] += parseFloat(p.amount) || 0;
+        });
+      } else {
+        const k = tx.payment_method || 'other';
+        byPM[k in byPM ? k : 'other'] += parseFloat(tx.amount) || 0;
+      }
+    });
+
+    // CA 7 derniers jours (J-6 → J).
+    const ca7j = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const amount = transactions
+        .filter(tx => nd(tx.date) === key && tx.type === 'revenue')
+        .reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
+      ca7j.push({ date: key, day: d.toLocaleDateString('fr-FR', { weekday: 'short' }), amount });
+    }
+    const maxCA7 = Math.max(1, ...ca7j.map(d => d.amount));
+
+    // Activité équipe (tx aujourd'hui par employé actif, tri CA desc).
+    const empActivity = employees
+      .filter(e => e.is_active !== false)
+      .map(e => {
+        const tx = todayTx.filter(x => x.employee_id === e.id);
+        return { ...e, count: tx.length, ca: tx.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0) };
+      })
+      .sort((a, b) => b.ca - a.ca);
+
+    return { caToday, nbSales: todayTx.length, byPM, ca7j, maxCA7, empActivity };
+  }, [transactions, today, employees]);
+
+  // Prochains RDV aujourd'hui (heure > maintenant, non annulés).
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
+  const upcoming = todayAppts
+    .filter(a => {
+      if (a.status === 'cancelled' || a.status === 'completed') return false;
+      const [h, m] = String(a.start_time || '').substring(0, 5).split(':').map(Number);
+      return (h * 60 + m) > nowMin;
+    })
+    .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
+    .slice(0, 6);
+
+  // Alertes proactives.
+  const alerts = [];
+  if (smsBalance !== null && smsBalance < smsThreshold) {
+    alerts.push({
+      id: 'sms', level: 'warn',
+      label: "Solde SMS bas · " + smsBalance.toFixed(2) + " € (seuil " + smsThreshold + " €)",
+      onClick: () => navigate('/marketing/sms'),
+    });
+  }
+  if (unreadNotifCount > 0) {
+    alerts.push({
+      id: 'notifs', level: 'info',
+      label: unreadNotifCount + " notification" + (unreadNotifCount > 1 ? "s" : "") + " non lue" + (unreadNotifCount > 1 ? "s" : ""),
+      onClick: () => setShowNotifs(true),
+    });
+  }
+
+  const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // ── Styles partagés ─────────────────────────────────────────────────────
+  const card = { borderRadius: 12, background: t.card, border: "0.5px solid " + t.border, padding: 16 };
 
   return (
-    <div style={{ minHeight:'100vh', background:t.bg }}>
+    <div style={{ minHeight:'100vh', background: t.bg, paddingBottom: 32 }}>
+      <div style={{ maxWidth: 1120, margin:'0 auto', padding:'20px 16px',
+                    display:'flex', flexDirection:'column', gap: 14 }}>
 
-      {/* Header */}
-      <div style={{ padding:'24px 24px 16px' }}>
-        <p style={{ fontSize:12, color:t.muted, textTransform:'capitalize', margin:'0 0 4px' }}>
-          {dateStr}
-        </p>
-        <h1 style={{ fontSize:22, fontWeight:500, color:t.text, margin:0 }}>
-          Tableau de bord
-        </h1>
-      </div>
-
-      {/* Grille tuiles */}
-      <div style={{ padding:'0 16px 32px', maxWidth:900, margin:'0 auto' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-          <TileAgenda theme={t} upcomingCount={upcoming.length} onClick={() => onNavigate?.('agenda')}/>
-          <TileNotifications theme={t} unreadCount={unreadNotifCount} onClick={() => setShowNotifs(true)}/>
+        {/* ── TopBar page : identité + date + cloche + Encaisser ── */}
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
+                      gap: 12, flexWrap:'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin:0, fontSize: 11, color: t.muted, textTransform:'uppercase',
+                        letterSpacing:'0.05em', fontWeight: 500 }}>{"Dashboard"}</p>
+            <h1 style={{ margin:'2px 0 4px', fontSize: 22, fontWeight: 500, color: t.text,
+                         letterSpacing:'-0.01em' }}>
+              {user?.businessName || "Tableau de bord"}
+            </h1>
+            <p style={{ margin: 0, fontSize: 12, color: t.muted, textTransform:'capitalize' }}>
+              {dateStr}
+            </p>
+          </div>
+          <div style={{ display:'flex', gap: 8, alignItems:'center' }}>
+            <button onClick={() => setShowNotifs(true)}
+                    aria-label="Notifications"
+                    style={{ position:'relative', padding:'8px 10px', borderRadius: 8,
+                             border: "0.5px solid " + t.border, background: t.cardAlt,
+                             color: t.text, cursor:'pointer', fontFamily:'inherit' }}>
+              <I.Bell style={{ width: 14, height: 14 }}/>
+              {unreadNotifCount > 0 && (
+                <span style={{ position:'absolute', top: -4, right: -4,
+                               background:'#ef4444', color:'#fff',
+                               fontSize: 9, fontWeight: 500,
+                               padding:'1px 5px', borderRadius: 99, minWidth: 14 }}>
+                  {unreadNotifCount}
+                </span>
+              )}
+            </button>
+            <button onClick={onAdd}
+                    style={{ display:'inline-flex', alignItems:'center', gap: 6,
+                             padding:'9px 14px', borderRadius: 8, border:'none',
+                             background:'#10b981', color:'#fff',
+                             cursor:'pointer', fontFamily:'inherit',
+                             fontSize: 13, fontWeight: 500 }}>
+              <I.Zap style={{ width: 13, height: 13 }}/> {"Encaisser"}
+            </button>
+          </div>
         </div>
 
-        <div style={{ marginBottom:12 }}>
-          <TileEncaisser theme={t} onClick={onAdd}/>
+        {/* ── Alertes proactives ── */}
+        {alerts.length > 0 && (
+          <div style={{ display:'flex', flexDirection:'column', gap: 6 }}>
+            {alerts.map(a => (
+              <button key={a.id} onClick={a.onClick}
+                      style={{ textAlign:'left', padding:'10px 14px', borderRadius: 10,
+                               border: "0.5px solid " + (a.level === 'warn' ? '#fed7aa' : '#e0e7ff'),
+                               borderLeft: "2px solid " + (a.level === 'warn' ? '#f97316' : '#4338ca'),
+                               background: a.level === 'warn' ? '#fff7ed' : '#eef2ff',
+                               color: a.level === 'warn' ? '#9a3412' : '#3c3489',
+                               fontSize: 12, fontWeight: 500, cursor:'pointer',
+                               fontFamily:'inherit',
+                               display:'flex', alignItems:'center', gap: 8 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99,
+                               background: a.level === 'warn' ? '#f97316' : '#4338ca' }}/>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── 4 KPIs ── */}
+        <div style={{ display:'grid',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',
+                      gap: 10 }}>
+          {[
+            { label:"CA jour",     value: fmt(caToday) + " €", color:'#065f46', bg:'#f0fdf4' },
+            { label:"RDV jour",    value: String(todayAppts.length), color:'#4338ca', bg:'#eef2ff' },
+            { label:"Ventes caisse", value: String(nbSales), color:'#0e7490', bg:'#ecfeff' },
+            { label:"SMS restants",  value: smsBalance === null ? "…" : fmt(smsBalance) + " €",
+              color: (smsBalance !== null && smsBalance < smsThreshold) ? '#9a3412' : '#92400e',
+              bg:   (smsBalance !== null && smsBalance < smsThreshold) ? '#fff7ed' : '#fffbeb' },
+          ].map((k, i) => (
+            <div key={i} style={{ ...card, padding:'14px 16px',
+                                  borderLeft: "2px solid " + k.color }}>
+              <p style={{ margin: 0, fontSize: 10, color: k.color, textTransform:'uppercase',
+                          letterSpacing:'0.04em', fontWeight: 500 }}>{k.label}</p>
+              <p style={{ margin:'6px 0 0', fontSize: 20, fontWeight: 500,
+                          color: t.text, fontFamily:'monospace' }}>{k.value}</p>
+            </div>
+          ))}
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-          <TileClients theme={t} onClick={() => onNavigate?.('clients')}/>
-          <TileHistorique theme={t} onClick={() => navigate('/historique')}/>
+        {/* ── 2 colonnes : Prochains RDV / Activité équipe ── */}
+        <div style={{ display:'grid',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))',
+                      gap: 12 }}>
+          <div style={card}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                          marginBottom: 10 }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: t.text }}>
+                {"Prochains RDV"}
+              </p>
+              <button onClick={() => navigate('/agenda')}
+                      style={{ border:'none', background:'transparent', cursor:'pointer',
+                               fontSize: 11, color: t.muted, fontFamily:'inherit' }}>
+                {"Voir l'agenda →"}
+              </button>
+            </div>
+            {upcoming.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
+                {"Aucun RDV restant aujourd'hui."}
+              </p>
+            ) : upcoming.map(a => (
+              <div key={a.id}
+                   style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap: 10,
+                            padding:'8px 0',
+                            borderBottom: "0.5px solid " + t.separator,
+                            alignItems:'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: t.text,
+                               fontFamily:'monospace' }}>
+                  {String(a.start_time || '').substring(0, 5)}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: t.text,
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {a.client_name || a.client_email || "Sans nom"}
+                  </p>
+                  <p style={{ margin:'1px 0 0', fontSize: 11, color: t.muted,
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {a.service_name || ""}
+                  </p>
+                </div>
+                <StatusBadge
+                  status={a.status === 'confirmed' ? 'success' : (a.status === 'pending' ? 'warning' : 'info')}
+                  label={a.status}/>
+              </div>
+            ))}
+          </div>
+
+          <div style={card}>
+            <p style={{ margin:'0 0 10px', fontSize: 14, fontWeight: 500, color: t.text }}>
+              {"Activité équipe"}
+            </p>
+            {empActivity.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
+                {"Aucun employé actif."}
+              </p>
+            ) : empActivity.slice(0, 6).map(e => (
+              <div key={e.id}
+                   style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap: 10,
+                            padding:'8px 0',
+                            borderBottom: "0.5px solid " + t.separator,
+                            alignItems:'center' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 99,
+                               background: e.avatar_color || '#6b7280' }}/>
+                <p style={{ margin: 0, fontSize: 13, color: t.text,
+                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {e.name}
+                </p>
+                <span style={{ fontSize: 11, color: t.muted }}>
+                  {e.count} {e.count === 1 ? "tx" : "tx"}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: t.text,
+                               fontFamily:'monospace' }}>
+                  {fmt(e.ca)} €
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div style={{ marginBottom:12 }}>
-          <TileAdmin theme={t} onClick={() => onNavigate?.('settings')}/>
+        {/* ── 2 colonnes : Moyens paiement / CA 7j ── */}
+        <div style={{ display:'grid',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))',
+                      gap: 12 }}>
+          <div style={card}>
+            <p style={{ margin:'0 0 10px', fontSize: 14, fontWeight: 500, color: t.text }}>
+              {"Encaissements du jour"}
+            </p>
+            <div style={{ display:'grid',
+                          gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))',
+                          gap: 6 }}>
+              {Object.entries(PM_CFG).map(([id, cfg]) => (
+                <div key={id}
+                     style={{ padding:'10px 12px', borderRadius: 8,
+                              background: cfg.bg,
+                              border:'0.5px solid rgba(0,0,0,0.04)' }}>
+                  <p style={{ margin: 0, fontSize: 10, color: cfg.color,
+                              fontWeight: 500, textTransform:'uppercase',
+                              letterSpacing:'0.04em' }}>{cfg.label}</p>
+                  <p style={{ margin:'3px 0 0', fontSize: 15, fontWeight: 500,
+                              color: cfg.color, fontFamily:'monospace' }}>
+                    {fmt(byPM[id] || 0)} €
+                  </p>
+                </div>
+              ))}
+              <div style={{ padding:'10px 12px', borderRadius: 8,
+                            background:'#eeedfe',
+                            border:'0.5px solid rgba(0,0,0,0.04)' }}>
+                <p style={{ margin: 0, fontSize: 10, color:'#3c3489',
+                            fontWeight: 500, textTransform:'uppercase',
+                            letterSpacing:'0.04em' }}>{"Multi"}</p>
+                <p style={{ margin:'3px 0 0', fontSize: 15, fontWeight: 500,
+                            color:'#3c3489', fontFamily:'monospace' }}>
+                  {fmt(byPM.multi || 0)} €
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div style={card}>
+            <p style={{ margin:'0 0 14px', fontSize: 14, fontWeight: 500, color: t.text }}>
+              {"Évolution CA · 7 derniers jours"}
+            </p>
+            <div style={{ display:'flex', alignItems:'flex-end', gap: 6, height: 120 }}>
+              {ca7j.map(d => {
+                const h = Math.max(2, Math.round((d.amount / maxCA7) * 100));
+                const isToday = d.date === today;
+                return (
+                  <div key={d.date}
+                       style={{ flex: 1, display:'flex', flexDirection:'column',
+                                alignItems:'center', gap: 4 }}>
+                    <div style={{ width:'100%', height: h + '%', borderRadius: 4,
+                                  background: isToday ? t.text : t.borderInput,
+                                  transition:'height 0.3s' }}
+                         title={fmt(d.amount) + " € · " + d.date}/>
+                    <span style={{ fontSize: 10, color: t.muted, textTransform:'capitalize' }}>
+                      {d.day}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ margin:'10px 0 0', fontSize: 11, color: t.muted }}>
+              {"Max : " + fmt(maxCA7) + " € · Aujourd'hui : " + fmt(caToday) + " €"}
+            </p>
+          </div>
+        </div>
+
+        {/* ── 4 raccourcis ── */}
+        <div style={{ display:'grid',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))',
+                      gap: 8 }}>
+          {[
+            { label:"Encaisser",     icon:<I.Zap style={{ width:14, height:14 }}/>,     onClick: onAdd },
+            { label:"Nouveau RDV",   icon:<I.Calendar style={{ width:14, height:14 }}/>, onClick: () => navigate('/agenda') },
+            { label:"Créer promo",   icon:<I.Gift style={{ width:14, height:14 }}/>,     onClick: () => navigate('/marketing/promotions/create') },
+            { label:"Nouveau client", icon:<I.Users style={{ width:14, height:14 }}/>,    onClick: () => navigate('/clients') },
+          ].map((s, i) => (
+            <button key={i} onClick={s.onClick}
+                    style={{ padding:'12px 14px', borderRadius: 10,
+                             border: "0.5px solid " + t.border,
+                             background: t.card, color: t.text,
+                             cursor:'pointer', fontFamily:'inherit',
+                             fontSize: 13, fontWeight: 500,
+                             display:'flex', alignItems:'center', gap: 8,
+                             transition:'background 0.15s ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = t.card; }}>
+              {s.icon} {s.label}
+            </button>
+          ))}
         </div>
       </div>
 
