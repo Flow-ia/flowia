@@ -6,6 +6,46 @@ import { Button } from '../../../components/primitives';
 import { I } from '../../../utils/icons';
 import { PAGE_SIZE } from '../constants';
 
+// Refonte FDS-2026 commit 8 : filtres segmentés côté front.
+// Chaque id mappe un predicate sur les colonnes exposées par GET /api/clients :
+// tx_count, has_credit, birth_date, is_booking_blocked, created_at, last_visit.
+const FILTERS = [
+  { id: 'all',            label: 'Tous'        },
+  { id: 'loyal',          label: 'Fidèles'     },
+  { id: 'birthday_month', label: 'Anniv. mois' },
+  { id: 'with_credit',    label: 'Avec crédit' },
+  { id: 'new',            label: 'Nouveaux'    },
+  { id: 'inactive',       label: 'Inactifs'    },
+  { id: 'blocked',        label: 'Bloqués'     },
+];
+
+function applyFilter(list, filter) {
+  if (filter === 'all') return list;
+  const now = Date.now();
+  const MS_DAY = 86400000;
+  return list.filter(cl => {
+    switch (filter) {
+      case 'loyal':
+        return (cl.tx_count || 0) >= 3 || (cl.stamps || 0) > 0 || (cl.points || 0) > 0;
+      case 'birthday_month': {
+        if (!cl.birth_date) return false;
+        const m = new Date(cl.birth_date).getUTCMonth();
+        return m === new Date().getUTCMonth();
+      }
+      case 'with_credit':
+        return !!cl.has_credit;
+      case 'new':
+        return cl.created_at && (now - new Date(cl.created_at).getTime()) < 30 * MS_DAY;
+      case 'inactive':
+        return cl.last_visit && (now - new Date(cl.last_visit).getTime()) > 90 * MS_DAY;
+      case 'blocked':
+        return !!cl.is_booking_blocked;
+      default:
+        return true;
+    }
+  });
+}
+
 // ══ VUE LISTE ═══════════════════════════════════════════════════════════════
 export default function ListView({
   theme, isDark, toast,
@@ -15,6 +55,7 @@ export default function ListView({
   page, setPage,
   hasSearched, setHasSearched,
   loadList, openFiche, setView, setForm,
+  filter = 'all', setFilter = () => {},
 }) {
   const doSearch = () => {
     setHasSearched(true);
@@ -22,7 +63,10 @@ export default function ListView({
     loadList(search, 0);
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const isFiltered    = filter !== 'all';
+  const visibleList   = isFiltered ? applyFilter(clients, filter) : clients;
+  const visibleCount  = isFiltered ? visibleList.length : total;
+  const totalPages    = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div style={{ background: theme.bg, minHeight: '100vh', paddingBottom: 96 }}>
@@ -39,7 +83,7 @@ export default function ListView({
               color: theme.text,
             }}>Clients</h1>
             <p style={{ margin: '2px 0 0', fontSize: 11, color: theme.muted }}>
-              {loading ? '...' : `${total} client${total !== 1 ? 's' : ''}${search.trim() ? ` pour "${search}"` : ''}`}
+              {loading ? '...' : `${visibleCount} client${visibleCount !== 1 ? 's' : ''}${search.trim() ? ` pour "${search}"` : ''}${isFiltered ? ' (filtre)' : ''}`}
             </p>
           </div>
           <Button
@@ -97,6 +141,26 @@ export default function ListView({
           </div>
           <SortDropdown value={sort} onChange={v => setSort(v)} theme={theme} />
         </div>
+
+        {/* Refonte FDS-2026 commit 8 : filtres segmentés.
+            Scroll horizontal si trop de chips pour tenir sur mobile. */}
+        <div style={{ display:'flex', gap:6, marginTop:10, overflowX:'auto',
+                      paddingBottom:2 }}>
+          {FILTERS.map(f => {
+            const active = filter === f.id;
+            return (
+              <button key={f.id} type="button" onClick={() => setFilter(f.id)}
+                      style={{ padding:'6px 10px', borderRadius:999, border:'none',
+                               background: active ? theme.text : theme.cardAlt,
+                               color: active ? theme.bg : theme.muted,
+                               fontSize:11, fontWeight: active ? 500 : 400,
+                               cursor:'pointer', fontFamily:'inherit',
+                               whiteSpace:'nowrap', flexShrink:0 }}>
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Corps ── */}
@@ -118,7 +182,7 @@ export default function ListView({
         )}
 
         {/* Aucun resultat */}
-        {!loading && clients.length === 0 && (
+        {!loading && visibleList.length === 0 && (
           <div style={{
             textAlign: 'center',
             padding: '48px 16px',
@@ -143,9 +207,9 @@ export default function ListView({
         )}
 
         {/* Liste des clients */}
-        {!loading && clients.length > 0 && (
+        {!loading && visibleList.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {clients.map(cl => {
+            {visibleList.map(cl => {
               const visits = cl.total_visits || cl.tx_count || 0;
               const hasLoyalty = cl.stamps > 0 || cl.points > 0;
               return (
@@ -257,8 +321,9 @@ export default function ListView({
           </div>
         )}
 
-        {/* Pagination */}
-        {!loading && total > 0 && (
+        {/* Pagination — masquée quand un filtre segmenté est actif
+            (mode exploration, limit 500 côté fetch). */}
+        {!loading && total > 0 && !isFiltered && (
           <div style={{
             display: 'flex',
             alignItems: 'center',

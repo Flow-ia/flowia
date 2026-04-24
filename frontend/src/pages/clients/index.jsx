@@ -38,6 +38,12 @@ export default function ClientsPage() {
   const [blockBusy,    setBlockBusy]    = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [page, setPage] = useState(0);
+  // Refonte FDS-2026 commit 8 : filtres segmentés
+  // (Tous / Fidèles / Anniv. mois / Avec crédit / Nouveaux / Inactifs / Bloqués).
+  // Un filtre actif (≠ 'all') force un fetch large (limit 500) et désactive
+  // la pagination serveur : le predicate s'applique côté front. Pour "Tous"
+  // on conserve PAGE_SIZE + pagination serveur (zéro régression).
+  const [filter, setFilter] = useState('all');
 
   // ── Crédit ──
   const [creditData,    setCreditData]    = useState(null);
@@ -87,30 +93,33 @@ export default function ClientsPage() {
     marginBottom: 6,
   };
 
-  // Charger 10 clients à la fois (pagination server-side)
+  // Charger 10 clients à la fois (pagination server-side). Quand un filtre
+  // segmenté est actif (filter != 'all'), on charge jusqu'à 500 clients
+  // pour que le predicate front ait la main sur un corpus complet.
   const loadList = useCallback(async (forceSearch = search, forcePage = page) => {
     setLoading(true);
     try {
+      const isFiltered = filter !== 'all';
       const r = await clientsApi.list({
         search: forceSearch,
         sort,
-        limit:  PAGE_SIZE,
-        offset: forcePage * PAGE_SIZE,
+        limit:  isFiltered ? 500 : PAGE_SIZE,
+        offset: isFiltered ? 0   : forcePage * PAGE_SIZE,
       });
       setClients(r.clients || []);
       setTotal(r.total || 0);
     } catch { showToast('Impossible de charger les clients', 'error'); }
     finally { setLoading(false); }
-  }, [search, sort, page]);
+  }, [search, sort, page, filter]);
 
-  // Reset page quand la recherche ou le tri change
-  useEffect(() => { setPage(0); }, [search, sort]);
+  // Reset page quand la recherche, le tri ou le filtre change
+  useEffect(() => { setPage(0); }, [search, sort, filter]);
 
-  // Chargement auto (mount + changement page/tri) + debounce sur recherche
+  // Chargement auto (mount + changement page/tri/filter) + debounce sur recherche
   useEffect(() => {
     const t = setTimeout(() => { setHasSearched(true); loadList(); }, search.trim() ? 350 : 0);
     return () => clearTimeout(t);
-  }, [search, sort, page]);
+  }, [search, sort, page, filter]);
 
   const openFiche = async (cl) => {
     setFiche(null); setFicheLoad(true); setEditMode(false); setTab('info');
@@ -302,6 +311,7 @@ export default function ClientsPage() {
       hasSearched={hasSearched} setHasSearched={setHasSearched}
       loadList={loadList} openFiche={openFiche}
       setView={setView} setForm={setForm}
+      filter={filter} setFilter={setFilter}
     />
   );
 

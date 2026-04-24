@@ -1,6 +1,15 @@
 // src/pages/clients/tabs/NotesTab.jsx
+import { useEffect, useRef } from 'react';
 import { fmtDate } from '../helpers';
 import { Button } from '../../../components/primitives';
+
+// Refonte FDS-2026 commit 8 : brouillon auto-save sessionStorage (2 s).
+// Le modèle DB `client_notes` stocke plusieurs notes horodatées, chacune
+// avec PIN employé pour validation. On NE fait PAS un POST toutes les 2 s
+// (créerait des dizaines de notes par pause). À la place : on sauvegarde
+// le texte en cours dans sessionStorage pour survivre à un refresh
+// accidentel, puis on efface après envoi validé.
+const DRAFT_KEY = (clientId) => 'ff_client_note_draft_' + clientId;
 
 // ─── Onglet Notes ─────────────────────────────────────────────────────────────
 export default function NotesTab({
@@ -11,6 +20,35 @@ export default function NotesTab({
   noteLoad, handleNote,
 }) {
   const list = fiche.notes_list || [];
+  const hydrated = useRef(false);
+
+  // Restauration du brouillon au mount (une seule fois par fiche).
+  useEffect(() => {
+    if (hydrated.current || !fiche?.id) return;
+    hydrated.current = true;
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY(fiche.id));
+      if (saved && !noteText) setNoteText(saved);
+    } catch { /* sessionStorage indisponible (mode privé) */ }
+  }, [fiche?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save brouillon : debounce 2 s après la dernière frappe.
+  useEffect(() => {
+    if (!fiche?.id) return;
+    const tm = setTimeout(() => {
+      try {
+        if (noteText) sessionStorage.setItem(DRAFT_KEY(fiche.id), noteText);
+        else          sessionStorage.removeItem(DRAFT_KEY(fiche.id));
+      } catch { /* noop */ }
+    }, 2000);
+    return () => clearTimeout(tm);
+  }, [noteText, fiche?.id]);
+
+  const onSubmit = async () => {
+    await handleNote();
+    // handleNote vide noteText en cas de succès — on purge le brouillon.
+    try { sessionStorage.removeItem(DRAFT_KEY(fiche.id)); } catch { /* noop */ }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
@@ -44,9 +82,12 @@ export default function NotesTab({
           rows={3}
           style={{ ...inp, resize: 'vertical', marginBottom: 10, lineHeight: 1.5 }}
         />
-        <Button fullWidth onClick={handleNote} disabled={noteLoad || !noteText.trim()}>
+        <Button fullWidth onClick={onSubmit} disabled={noteLoad || !noteText.trim()}>
           {noteLoad ? 'Ajout...' : 'Ajouter la note'}
         </Button>
+        <p style={{ margin:'6px 0 0', fontSize:10, color:theme.muted }}>
+          {"Brouillon sauvegardé localement toutes les 2 s."}
+        </p>
       </div>
       {list.length === 0 ? (
         <div style={{

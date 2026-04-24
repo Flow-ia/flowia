@@ -149,6 +149,7 @@ router.get('/', async (req, res) => {
       SELECT
         ca.id, ca.email, ca.first_name, ca.last_name, ca.phone,
         ca.notes AS account_notes, ca.created_at,
+        ca.birth_date, ca.is_booking_blocked,
         COALESCE(ca.first_name||' '||ca.last_name, ca.email) AS full_name,
         CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
         cl.id AS loyalty_id, cl.stamps, cl.points, cl.total_stamps_ever,
@@ -167,6 +168,11 @@ router.get('/', async (req, res) => {
         COALESCE(
           (SELECT COUNT(*) FROM client_notes cn WHERE cn.user_id=$1 AND cn.client_email=ca.email), 0
         )::int AS notes_count,
+        -- Refonte FDS-2026 commit 8 : flag pour filtre "Avec crédit" côté front.
+        EXISTS(
+          SELECT 1 FROM client_credits cc
+           WHERE cc.user_id=$1 AND LOWER(cc.client_email)=LOWER(ca.email) AND cc.balance > 0
+        ) AS has_credit,
         ca.global_client_id,
         gc.is_verified AS has_global_account,
         gc.invite_sent_at
