@@ -300,11 +300,17 @@ export default function Credit({ employees = [], theme, showToast, transactions 
   const [loading, setLoading]   = useState(true);
   const [detailId, setDetailId] = useState(null);
 
-  const load = () => {
+  // BUG FIX commit 7c : la recherche passe désormais par le back
+  // (GET /api/credits?search=...). Debounce 350 ms sur q. Vide =
+  // liste complète (only_active=true). Le back gère le LIKE sur
+  // client_email / client_name / first_name+last_name / phone (routes/credits.js).
+  const load = (searchQ) => {
     setLoading(true);
-    // Liste TOUS les crédits (actifs + soldés) pour l'historique ; filtre UI
-    // ensuite sur balance > 0 côté client pour la colonne "actifs".
-    creditsApi.list({})
+    const params = {};
+    const qt = (searchQ ?? '').trim();
+    if (qt) params.search = qt;
+    else    params.only_active = 'true';
+    return creditsApi.list(params)
       .then(r => { setList(Array.isArray(r) ? r : []); setLoading(false); })
       .catch(e => {
         setList([]); setLoading(false);
@@ -312,22 +318,23 @@ export default function Credit({ employees = [], theme, showToast, transactions 
       });
   };
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Debounce 350 ms sur q. Chargement initial = q vide → only_active.
   useEffect(() => {
-    const onRefresh = () => load();
+    const tm = setTimeout(() => { load(q); }, q.trim() ? 350 : 0);
+    return () => clearTimeout(tm);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onRefresh = () => load(q);
     window.addEventListener('ff-tx-refresh', onRefresh);
     return () => window.removeEventListener('ff-tx-refresh', onRefresh);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Quand une recherche est active, on affiche aussi les clients au solde 0
+  // (pour retrouver un ancien bénéficiaire). KPIs se calculent uniquement
+  // sur les crédits actifs (balance > 0).
   const activeList = list.filter(c => parseFloat(c.balance || 0) > 0);
-  const filtered = q.trim()
-    ? activeList.filter(c => {
-        const s = q.trim().toLowerCase();
-        return (c.full_name || '').toLowerCase().includes(s)
-            || (c.client_email || '').toLowerCase().includes(s)
-            || (c.client_name  || '').toLowerCase().includes(s);
-      })
-    : activeList;
+  const filtered   = q.trim() ? list : activeList;
 
   const kpiTotalGranted = activeList.reduce((s, c) => s + parseFloat(c.balance || 0), 0);
   const kpiClientsActive = activeList.length;
