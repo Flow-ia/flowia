@@ -988,6 +988,9 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
   const [showNotifs,    setShowNotifs]    = useState(false);
   const [smsBalance,    setSmsBalance]    = useState(null);
   const [smsThreshold,  setSmsThreshold]  = useState(20);
+  // UX commit 7d : filtre employé commun à Prochains RDV / Activité équipe
+  // / Historique du jour. 'all' = tous. Les chips passent actif bg #111827.
+  const [empFilter,     setEmpFilter]     = useState('all');
 
   const today = todayStr();
   const now   = new Date();
@@ -1005,8 +1008,9 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
   }, [today]);
 
   // ── Calculs dérivés depuis `transactions` (déjà scoped user_id côté back).
-  const { caToday, nbSales, byPM, ca7j, maxCA7, empActivity } = useMemo(() => {
-    const todayTx = transactions.filter(tx => nd(tx.date) === today && tx.type === 'revenue');
+  const { caToday, nbSales, byPM, ca7j, maxCA7, empActivity, todayTxAll } = useMemo(() => {
+    const todayTxAll = transactions.filter(tx => nd(tx.date) === today && tx.type === 'revenue');
+    const todayTx = todayTxAll;
     const caToday = todayTx.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
 
     // Ventilation par moyen de paiement : 'multi' éclaté par sous-ligne.
@@ -1044,19 +1048,36 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
       })
       .sort((a, b) => b.ca - a.ca);
 
-    return { caToday, nbSales: todayTx.length, byPM, ca7j, maxCA7, empActivity };
+    return { caToday, nbSales: todayTx.length, byPM, ca7j, maxCA7, empActivity, todayTxAll };
   }, [transactions, today, employees]);
 
   // Prochains RDV aujourd'hui (heure > maintenant, non annulés).
+  // Filtré par empFilter si chip actif.
   const nowMin   = now.getHours() * 60 + now.getMinutes();
   const upcoming = todayAppts
     .filter(a => {
       if (a.status === 'cancelled' || a.status === 'completed') return false;
+      if (empFilter !== 'all' && a.employee_id !== empFilter) return false;
       const [h, m] = String(a.start_time || '').substring(0, 5).split(':').map(Number);
       return (h * 60 + m) > nowMin;
     })
     .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)))
     .slice(0, 6);
+
+  // UX commit 7d : activité équipe filtrée par chip (ou tous si 'all').
+  const empActivityFiltered = empFilter === 'all'
+    ? empActivity
+    : empActivity.filter(e => e.id === empFilter);
+
+  // UX commit 7d : historique du jour ligne par ligne, filtrable par employé.
+  const todayTxFiltered = (todayTxAll || [])
+    .filter(tx => empFilter === 'all' || tx.employee_id === empFilter)
+    .slice()
+    .sort((a, b) => {
+      const ta = String(a.time || '').padStart(5, '0');
+      const tb = String(b.time || '').padStart(5, '0');
+      return tb.localeCompare(ta); // desc (dernier encaissé en haut)
+    });
 
   // Alertes proactives.
   const alerts = [];
@@ -1169,6 +1190,30 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
           ))}
         </div>
 
+        {/* ── UX commit 7d : chips filtre employé (commun aux 3 blocs). ── */}
+        {(employees || []).filter(e => e.is_active !== false).length > 1 && (
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {[
+              { id: 'all', label: 'Tous', color: t.text },
+              ...employees.filter(e => e.is_active !== false)
+                          .map(e => ({ id: e.id, label: e.name, color: e.avatar_color || t.text })),
+            ].map(chip => {
+              const active = empFilter === chip.id;
+              return (
+                <button key={chip.id} onClick={() => setEmpFilter(chip.id)}
+                        style={{ padding:'6px 12px', borderRadius: 99, border:'none',
+                                 background: active ? '#111827' : t.cardAlt,
+                                 color: active ? '#fff' : t.muted,
+                                 fontSize: 11, fontWeight: active ? 500 : 400,
+                                 cursor:'pointer', fontFamily:'inherit',
+                                 whiteSpace:'nowrap' }}>
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* ── 2 colonnes : Prochains RDV / Activité équipe ── */}
         <div style={{ display:'grid',
                       gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))',
@@ -1220,11 +1265,11 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
             <p style={{ margin:'0 0 10px', fontSize: 14, fontWeight: 500, color: t.text }}>
               {"Activité équipe"}
             </p>
-            {empActivity.length === 0 ? (
+            {empActivityFiltered.length === 0 ? (
               <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
                 {"Aucun employé actif."}
               </p>
-            ) : empActivity.slice(0, 6).map(e => (
+            ) : empActivityFiltered.slice(0, 6).map(e => (
               <div key={e.id}
                    style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap: 10,
                             padding:'8px 0',
@@ -1246,6 +1291,106 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── UX commit 7d : Historique du jour · ligne par ligne
+            (filtrable par empFilter, multi éclatés en badges pastel §15). ── */}
+        <div style={{ ...card, padding: 16, borderRadius: 10 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                        marginBottom: 10 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: t.text }}>
+                {"Historique du jour"}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+                {todayTxFiltered.length + (todayTxFiltered.length > 1 ? ' encaissements' : ' encaissement')
+                  + (empFilter !== 'all' ? ' · filtré' : '')}
+              </p>
+            </div>
+            <button onClick={() => navigate('/caisse/historique')}
+                    style={{ border:'none', background:'transparent', cursor:'pointer',
+                             fontSize: 11, color: t.muted, fontFamily:'inherit' }}>
+              {"Détail complet →"}
+            </button>
+          </div>
+          {todayTxFiltered.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
+              {"Aucun encaissement aujourd'hui."}
+            </p>
+          ) : (
+            <div>
+              {todayTxFiltered.slice(0, 12).map(tx => {
+                const emp = employees.find(e => e.id === tx.employee_id);
+                const empColor = emp?.avatar_color || '#6b7280';
+                const empInitial = (emp?.name || '?').charAt(0).toUpperCase();
+                const svc = Array.isArray(tx.items) && tx.items[0]
+                              ? tx.items[0].service_name
+                              : (tx.description || '—');
+                // Multi éclaté : si plusieurs paiements, plusieurs badges pastel.
+                const isMulti = tx.payment_method === 'multi'
+                  && Array.isArray(tx.payments) && tx.payments.length > 0;
+                return (
+                  <div key={tx.id}
+                       style={{ display:'grid',
+                                gridTemplateColumns:'60px 1fr auto auto auto',
+                                gap: 10, padding:'8px 0',
+                                borderBottom: "0.5px solid " + t.separator,
+                                alignItems:'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: t.text,
+                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                      {String(tx.time || '').substring(0, 5) || '—'}
+                    </span>
+                    <div style={{ minWidth:0 }}>
+                      <p style={{ margin: 0, fontSize: 13, color: t.text, fontWeight: 500,
+                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {svc}
+                      </p>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap: 6, minWidth: 0 }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 99,
+                                     background: empColor, color: '#fff',
+                                     display:'flex', alignItems:'center', justifyContent:'center',
+                                     fontSize: 9, fontWeight: 500, flexShrink: 0 }}>
+                        {empInitial}
+                      </span>
+                      <span style={{ fontSize: 11, color: t.muted,
+                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {emp?.name || '—'}
+                      </span>
+                    </div>
+                    <div style={{ display:'flex', gap: 4, flexShrink: 0 }}>
+                      {isMulti ? tx.payments.map((p, i) => {
+                        const cfg = PM_CFG[p.payment_method] || PM_CFG.other;
+                        return (
+                          <span key={i}
+                                style={{ fontSize: 10, fontWeight: 500,
+                                         padding: '2px 7px', borderRadius: 99,
+                                         background: cfg.bg, color: cfg.color,
+                                         whiteSpace: 'nowrap' }}>
+                            {cfg.label.substring(0, 3)} {fmt(p.amount)}
+                          </span>
+                        );
+                      }) : (() => {
+                        const cfg = PM_CFG[tx.payment_method] || PM_CFG.other;
+                        return (
+                          <span style={{ fontSize: 10, fontWeight: 500,
+                                         padding: '2px 7px', borderRadius: 99,
+                                         background: cfg.bg, color: cfg.color,
+                                         whiteSpace: 'nowrap' }}>
+                            {cfg.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: t.text, textAlign: 'right',
+                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                      {fmt(tx.amount)} €
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── 2 colonnes : Moyens paiement / CA 7j ── */}

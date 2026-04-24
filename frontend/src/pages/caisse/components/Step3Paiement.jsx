@@ -4,8 +4,8 @@
 // disponible affiché si email saisi. Cartes réductions anniversaire/
 // parrainage via referralsApi.getClientRewards (pendingRefs + rewards).
 // Respect §15 INVENTAIRE : couleurs pastel moyens paiement + Multi.
-import { useEffect, useState } from 'react';
-import { promoApi, referralsApi, creditsApi } from '../../../utils/api';
+import { useEffect, useRef, useState } from 'react';
+import { promoApi, referralsApi, creditsApi, clientsApi } from '../../../utils/api';
 import { Icon } from '../../../components/Icon';
 
 const PM_CFG = {
@@ -36,9 +36,52 @@ export default function Step3Paiement({
   const [clientRewards, setClientRewards] = useState([]);
   const [clientCredit, setClientCredit] = useState(null);
 
+  // UX commit 7d : recherche client multi-champs (nom/prénom/email/téléphone)
+  // via clientsApi.search (GET /api/clients/search?q= — ILIKE back sur les
+  // 3 colonnes : (first_name||' '||last_name), email, phone). Debounce 350 ms,
+  // minimum 2 caractères, max 5 suggestions en dropdown.
+  const [clientSearch,    setClientSearch]    = useState('');
+  const [clientSuggests,  setClientSuggests]  = useState([]);
+  const [clientSearchBusy, setClientSearchBusy] = useState(false);
+  const [suggestsOpen,    setSuggestsOpen]    = useState(false);
+  const searchSeqRef = useRef(0);
+
   const total = cart.reduce((s, it) => s + (it.price || 0) * (it.qty || 1), 0);
   const discount = parseFloat(promoData?.discount || 0);
   const finalTotal = Math.max(0, total - discount);
+
+  // Debounce 350 ms sur la recherche client multi-champs.
+  useEffect(() => {
+    const q = clientSearch.trim();
+    if (q.length < 2) { setClientSuggests([]); return; }
+    const seq = ++searchSeqRef.current;
+    setClientSearchBusy(true);
+    const tm = setTimeout(() => {
+      clientsApi.search(q)
+        .then(list => {
+          if (seq !== searchSeqRef.current) return; // réponse périmée
+          setClientSuggests(Array.isArray(list) ? list.slice(0, 5) : []);
+          setSuggestsOpen(true);
+        })
+        .catch(() => { if (seq === searchSeqRef.current) setClientSuggests([]); })
+        .finally(() => { if (seq === searchSeqRef.current) setClientSearchBusy(false); });
+    }, 350);
+    return () => clearTimeout(tm);
+  }, [clientSearch]);
+
+  const pickClient = (c) => {
+    const display = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.client_name || '';
+    setClientName(display);
+    setClientEmail(c.email || '');
+    setClientSearch(display || c.email || '');
+    setSuggestsOpen(false);
+  };
+
+  const clearClient = () => {
+    setClientName(''); setClientEmail('');
+    setClientSearch(''); setClientSuggests([]);
+    setSuggestsOpen(false);
+  };
 
   // Crédit client dispo + rewards (rechargé à chaque changement d'email).
   useEffect(() => {
@@ -126,6 +169,72 @@ export default function Step3Paiement({
       <div style={{ display:'flex', flexDirection:'column', gap: 14 }}>
         <div style={card}>
           <p style={title}>{"Client (optionnel)"}</p>
+
+          {/* Barre de recherche multi-champs (nom / prénom / email / téléphone). */}
+          <div style={{ position:'relative' }}>
+            <input value={clientSearch}
+                   onChange={e => { setClientSearch(e.target.value); setSuggestsOpen(true); }}
+                   onFocus={() => { if (clientSuggests.length > 0) setSuggestsOpen(true); }}
+                   onBlur={() => { setTimeout(() => setSuggestsOpen(false), 150); }}
+                   placeholder="Rechercher un client (nom, email, téléphone)…"
+                   style={inp}/>
+            {(clientSearch || clientName || clientEmail) && (
+              <button onClick={clearClient}
+                      style={{ position:'absolute', right: 8, top: '50%',
+                               transform: 'translateY(-50%)',
+                               border: 'none', background: 'transparent',
+                               cursor: 'pointer', color: t.muted,
+                               padding: 4, fontFamily:'inherit' }}
+                      aria-label="Effacer">
+                <Icon name="x" size={12} color={t.muted}/>
+              </button>
+            )}
+            {suggestsOpen && clientSuggests.length > 0 && (
+              <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
+                            zIndex: 10, background: t.card,
+                            border: `0.5px solid ${t.border}`, borderRadius: 10,
+                            boxShadow: t.shadowSm || '0 4px 16px rgba(0,0,0,0.08)',
+                            overflow: 'hidden' }}>
+                {clientSuggests.map(c => {
+                  const name = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.client_name || '—';
+                  const sub  = c.email || c.phone || '';
+                  return (
+                    <button key={c.id}
+                            onMouseDown={() => pickClient(c)}
+                            style={{ width:'100%', textAlign:'left',
+                                     padding:'10px 12px', border:'none',
+                                     background: 'transparent', color: t.text,
+                                     cursor:'pointer', fontFamily:'inherit',
+                                     borderBottom: `0.5px solid ${t.separator}`,
+                                     display:'flex', flexDirection:'column', gap:2 }}
+                            onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: t.text,
+                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {name}
+                      </span>
+                      {sub && (
+                        <span style={{ fontSize: 11, color: t.muted,
+                                       overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {sub}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {suggestsOpen && clientSearch.trim().length >= 2 && clientSuggests.length === 0 && !clientSearchBusy && (
+              <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
+                            zIndex: 10, background: t.card,
+                            border: `0.5px solid ${t.border}`, borderRadius: 10,
+                            padding: '10px 12px', fontSize: 12, color: t.muted }}>
+                {"Aucun client trouvé. Les champs ci-dessous restent éditables pour créer un nouveau client."}
+              </div>
+            )}
+          </div>
+
+          {/* Champs éditables : pré-remplis par la recherche, libres sinon. */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: 8 }}>
             <input placeholder="Prénom Nom" value={clientName}
                    onChange={e => setClientName(e.target.value)} style={inp}/>

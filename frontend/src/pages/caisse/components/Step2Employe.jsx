@@ -5,6 +5,10 @@
 // (Confirm) via useEmployeePinGate pour valider la transaction. Source
 // de vérité anti-spoofing : employeePinOptional côté back substitue
 // req.employee.id à body.employee_id quand le PIN est fourni.
+//
+// UX commit 7d : auto-advance — clic sur un avatar = setEmpId + onContinue()
+// après 50 ms (feedback visuel). Le bouton "Continuer" est retiré de cette
+// étape, "Précédent" reste. Les étapes 1 et 3 gardent leur bouton Continuer.
 import { Icon } from '../../../components/Icon';
 
 export default function Step2Employe({ employees = [], empId, setEmpId, theme: t, onBack, onContinue }) {
@@ -39,8 +43,14 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
           {eligible.map(e => {
             const active = empId === e.id;
             const accent = e.avatar_color || '#6b7280';
+            const pick = () => {
+              setEmpId(e.id);
+              // Petit délai pour que l'utilisateur perçoive la sélection
+              // avant de basculer sur l'étape 3 (confort UX).
+              setTimeout(() => { onContinue && onContinue(); }, 80);
+            };
             return (
-              <button key={e.id} onClick={() => setEmpId(e.id)}
+              <button key={e.id} onClick={pick}
                       style={{ padding: 14, borderRadius: 10,
                                border: `0.5px solid ${active ? accent : t.border}`,
                                borderLeft: `2px solid ${active ? accent : 'transparent'}`,
@@ -76,7 +86,8 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+      {/* Auto-advance : pas de bouton "Continuer", seul "Retour" est visible. */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
         <button onClick={onBack}
                 style={{ padding: '10px 14px', borderRadius: 8,
                          border: `0.5px solid ${t.border}`,
@@ -86,17 +97,6 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
                          display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <Icon name="chevronLeft" size={13} color={t.text}/>
           {"Retour"}
-        </button>
-        <button onClick={onContinue}
-                disabled={!empId}
-                style={{ padding: '10px 16px', borderRadius: 8, border: 'none',
-                         background: empId ? '#10b981' : t.cardAlt,
-                         color: empId ? '#fff' : t.muted,
-                         cursor: empId ? 'pointer' : 'not-allowed',
-                         fontFamily: 'inherit', fontSize: 13, fontWeight: 500,
-                         display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          {"Continuer"}
-          <Icon name="chevronRight" size={13} color={empId ? '#fff' : t.muted}/>
         </button>
       </div>
     </div>
