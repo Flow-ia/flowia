@@ -24,6 +24,8 @@ import { todayStr, nowStr } from './utils/dates';
 import { useEmployeePinGate } from './components/EmployeePinModal';
 import { Button } from './components/primitives';
 import { Icon } from './components/Icon';
+import { TabletModeProvider, useTabletMode } from './contexts/TabletModeProvider';
+import WhoEncashesModal from './components/WhoEncashesModal';
 
 // Palette paiements — pastels sobres (unifie avec Dashboard/Forms/Transactions)
 const PM_CFG = {
@@ -124,10 +126,10 @@ function FreePriceModal({ catName, isCustom, theme: t, onCancel, onConfirm }) {
 }
 
 // ── EncaisserSheet ──────────────────────────────────────────────────────────
-function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t, soundCfg: sc = {} }) {
+function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t, soundCfg: sc = {}, defaultEmpId = '' }) {
   const [cart, setCart]       = useState([]);
   const [step, setStep]       = useState('products');
-  const [empId, setEmpId]     = useState('');
+  const [empId, setEmpId]     = useState(defaultEmpId || '');
   const [payMethod, setPay]   = useState('cash');
   const [splitMode, setSplitMode] = useState(false);
   const [splitAmts, setSplitAmts] = useState({ cash:'', card:'', transfer:'', other:'' });
@@ -165,8 +167,12 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
         setDtOpen(false); setEditPrice(null); setOpenCat(null);
         setPendingRefs([]); setClientRewards([]); setSelectedRewardId(null); setRefValidating(null);
       }, 300);
+    } else if (defaultEmpId) {
+      // Refonte FDS-2026 commit 11 : pré-sélection employé venant de
+      // WhoEncashesModal (mode tablette). Appliqué à l'ouverture uniquement.
+      setEmpId(defaultEmpId);
     }
-  }, [open]);
+  }, [open, defaultEmpId]);
 
   const refreshClientContext = async (email) => {
     const low = (email || '').trim().toLowerCase();
@@ -1091,11 +1097,25 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
 // pour l'instant des redirects vers les pages legacy (voir Routes plus bas).
 // Le match actif reconnaît AUSSI les URLs legacy (/settings/historique,
 // /settings/marketing, etc.) pour que l'état actif survive au redirect.
-function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout }) {
+function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAdmin }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isTabletMode, adminBypass } = useTabletMode();
 
-  const NAV_SECTIONS = [
+  // Refonte FDS-2026 commit 11 : en mode tablette sans admin bypass, sidebar
+  // neutre 3 items (Agenda global, Encaisser, Clients) + bouton Accès admin.
+  const tabletNeutral = isTabletMode && !adminBypass;
+
+  const NAV_SECTIONS = tabletNeutral ? [
+    {
+      label: 'Tablette partagée',
+      items: [
+        { id:'agenda',    label:'Agenda global', icon:'calendar', to:'/agenda',  match:['/agenda'] },
+        { id:'caisse',    label:'Encaisser',     icon:'cash',     to:'/caisse',  match:['/caisse','/historique','/transactions','/settings/historique'] },
+        { id:'clients',   label:'Clients',       icon:'users',    to:'/clients', match:['/clients'] },
+      ],
+    },
+  ] : [
     {
       label: 'Principal',
       items: [
@@ -1172,7 +1192,7 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout }) {
                   background:t.canvas,
                   borderRight:`0.5px solid ${t.border}` }}>
 
-      {/* Header : logo + nom salon */}
+      {/* Header : logo + nom salon (libellé adapté au mode). */}
       <div style={{ display:'flex', alignItems:'center', gap:10,
                     padding:'4px 6px 14px',
                     borderBottom:`0.5px solid ${t.separator}`,
@@ -1184,7 +1204,9 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout }) {
                       overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {user?.businessName || 'FlowIA'}
           </p>
-          <p style={{ fontSize:11, color:t.muted, margin:0 }}>{"Commerçant"}</p>
+          <p style={{ fontSize:11, color:t.muted, margin:0 }}>
+            {tabletNeutral ? "Mode tablette partagée" : "Commerçant"}
+          </p>
         </div>
       </div>
 
@@ -1198,30 +1220,50 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout }) {
       <div style={{ flex:1 }}/>
 
       <div style={{ paddingTop:10, borderTop:`0.5px solid ${t.separator}`, display:'flex', flexDirection:'column', gap:2 }}>
-        <button onClick={toggle}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
-                         padding:'9px 12px', borderRadius:8, border:'none',
-                         background:'transparent', color:t.muted,
-                         cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                         transition:'background 0.15s ease' }}
-                onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-          <Icon name={isLight ? 'moon' : 'sun'} size={15} color={t.muted}/>
-          <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>
-            {isLight ? 'Mode sombre' : 'Mode clair'}
-          </span>
-        </button>
-        <button onClick={onLogout}
-                style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
-                         padding:'9px 12px', borderRadius:8, border:'none',
-                         background:'transparent', color:'#991b1b',
-                         cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                         transition:'background 0.15s ease' }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-          <Icon name="logout" size={15} color="#991b1b"/>
-          <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
-        </button>
+        {/* Mode tablette neutre : bouton "Accès admin" au lieu du toggle thème. */}
+        {tabletNeutral ? (
+          <button onClick={() => onRequestAdmin && onRequestAdmin()}
+                  style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                           padding:'9px 12px', borderRadius:8,
+                           border:`0.5px solid ${t.border}`,
+                           background: t.cardAlt, color: t.text,
+                           cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                           transition:'background 0.15s ease' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = t.card; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = t.cardAlt; }}>
+            <Icon name="lock" size={14} color={t.text}/>
+            <span style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap' }}>
+              {"Accès admin (PIN)"}
+            </span>
+          </button>
+        ) : (
+          <>
+            <button onClick={toggle}
+                    style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                             padding:'9px 12px', borderRadius:8, border:'none',
+                             background:'transparent', color:t.muted,
+                             cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                             transition:'background 0.15s ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+              <Icon name={isLight ? 'moon' : 'sun'} size={15} color={t.muted}/>
+              <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>
+                {isLight ? 'Mode sombre' : 'Mode clair'}
+              </span>
+            </button>
+            <button onClick={onLogout}
+                    style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                             padding:'9px 12px', borderRadius:8, border:'none',
+                             background:'transparent', color:'#991b1b',
+                             cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                             transition:'background 0.15s ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+              <Icon name="logout" size={15} color="#991b1b"/>
+              <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1797,8 +1839,16 @@ export default function App() {
   const { user, loading, logout, login }                                = useAuth();
   const { unlocked, hasPin, checking, changePin, lock, checkSession }   = useAdmin();
   const { theme, toggle, isLight }                                      = useTheme();
+  // Refonte FDS-2026 commit 11 : état du mode tablette partagée (provider global).
+  const tabletCtx = useTabletMode();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Flow tablette : WhoEncashesModal intercalée avant EncaisserSheet, empId
+  // pré-sélectionné ensuite. Modale PIN admin pour la bascule temporaire.
+  const [whoEncashesOpen, setWhoEncashesOpen]       = useState(false);
+  const [quickEntryEmpId, setQuickEntryEmpId]       = useState('');
+  const [tabletAdminPinOpen, setTabletAdminPinOpen] = useState(false);
 
   const [soundCfg, setSoundCfg] = useState({
     caisse: true, new_appointment: true, reminder: true, repeat: 2, rdvBefore: 15
@@ -1860,6 +1910,17 @@ export default function App() {
   const page = location.pathname.replace(/^\//, '').split('/')[0] || 'dashboard';
 
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+
+  // Refonte FDS-2026 commit 11 : point d'entrée unique pour "Encaisser".
+  // En mode tablette sans admin bypass, intercale WhoEncashesModal.
+  const openEncaisser = () => {
+    if (tabletCtx.isTabletMode && !tabletCtx.adminBypass) {
+      setWhoEncashesOpen(true);
+    } else {
+      setQuickEntryEmpId('');
+      setQuickEntryOpen(true);
+    }
+  };
   const [adminStep, setAdminStep] = useState('entry');
   const [transactions, setTxs]    = useState([]);
   const [employees, setEmps]      = useState([]);
@@ -2044,13 +2105,44 @@ export default function App() {
       categories={categories}
       onUpdTx={updTx}
       onDelTx={delTx}
-      onEncaisser={() => setQuickEntryOpen(true)}
+      onEncaisser={openEncaisser}
     />
   );
 
-  const shell = (content) => (
+  const shell = (content) => {
+    const mmSs = (secs) => {
+      const m = Math.floor(secs / 60), s = secs % 60;
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    };
+
+    return (
     <div style={{ fontFamily:"'Inter',-apple-system,sans-serif",
                   background:theme.bg, minHeight:'100vh' }}>
+      {/* Refonte FDS-2026 commit 11 : bandeau admin temporaire mode tablette. */}
+      {tabletCtx.isTabletMode && tabletCtx.adminBypass && (
+        <div style={{ position:'sticky', top: 0, zIndex: 50,
+                      background:'#fff7ed', borderBottom:'0.5px solid #fed7aa',
+                      padding:'8px 14px',
+                      display:'flex', alignItems:'center', gap: 10,
+                      color:'#9a3412', fontSize: 12, fontWeight: 500 }}>
+          <Icon name="lock" size={13} color="#9a3412"/>
+          <span>{"Mode admin temporaire"}</span>
+          <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                         background:'#fff', borderRadius: 6, padding:'2px 8px',
+                         border:'0.5px solid #fed7aa' }}>
+            {mmSs(tabletCtx.remainingSec)}
+          </span>
+          <span style={{ flex: 1 }}/>
+          <button onClick={tabletCtx.quitAdmin}
+                  style={{ padding:'5px 10px', borderRadius: 6, border:'0.5px solid #fed7aa',
+                           background:'#fff', color:'#9a3412',
+                           fontSize: 11, fontWeight: 500, cursor:'pointer',
+                           fontFamily:'inherit' }}>
+            {"Quitter mode admin"}
+          </button>
+        </div>
+      )}
+
       {/* Mobile */}
       <div className="lg:hidden" style={{ minHeight:'100vh' }}>
         <TopBar onHome={() => { handleTab('dashboard'); navigate('/dashboard'); }}
@@ -2061,20 +2153,66 @@ export default function App() {
       {/* Desktop */}
       <div className="hidden lg:flex" style={{ minHeight:'100vh' }}>
         <DesktopSidebar user={user} theme={theme} toggle={toggle} isLight={isLight}
-                        onLogout={handleLogout}/>
+                        onLogout={handleLogout}
+                        onRequestAdmin={() => setTabletAdminPinOpen(true)}/>
         <div className="flex-1 min-w-0 overflow-y-auto" style={{ maxHeight:'100vh' }}>
           {content}
         </div>
       </div>
+
       <EncaisserSheet open={quickEntryOpen} onClose={() => setQuickEntryOpen(false)}
                       employees={employees} categories={categories} onAdd={addTx}
-                      theme={theme} soundCfg={soundCfg}/>
+                      theme={theme} soundCfg={soundCfg}
+                      defaultEmpId={quickEntryEmpId}/>
+
+      {/* Mode tablette : "Qui encaisse ?" avant d'ouvrir EncaisserSheet. */}
+      <WhoEncashesModal
+        open={whoEncashesOpen}
+        employees={employees}
+        onClose={() => setWhoEncashesOpen(false)}
+        onSelect={(empId) => {
+          setWhoEncashesOpen(false);
+          setQuickEntryEmpId(empId);
+          setQuickEntryOpen(true);
+        }}
+      />
+
+      {/* Mode tablette : saisie PIN admin pour basculer en mode admin temporaire. */}
+      {tabletAdminPinOpen && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setTabletAdminPinOpen(false); }}
+             style={{ position:'fixed', inset: 0, zIndex: 1200,
+                      background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)',
+                      display:'flex', alignItems:'center', justifyContent:'center', padding: 20 }}>
+          <div style={{ width:'100%', maxWidth: 400, borderRadius: 16,
+                        background: theme.card, color: theme.text,
+                        border: '0.5px solid ' + theme.border,
+                        padding: 20, display:'flex', flexDirection:'column', gap: 14 }}>
+            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: theme.text }}>
+                  {"Accès admin temporaire"}
+                </p>
+                <p style={{ margin:'3px 0 0', fontSize: 11, color: theme.muted }}>
+                  {"Saisissez votre PIN admin · session " + tabletCtx.sessionTimeoutMin + " min"}
+                </p>
+              </div>
+              <button onClick={() => setTabletAdminPinOpen(false)}
+                      style={{ border:'none', background:'transparent', cursor:'pointer',
+                               padding: 6, color: theme.muted, fontFamily:'inherit' }}>
+                <Icon name="x" size={15} color={theme.muted}/>
+              </button>
+            </div>
+            <PinEntry onSuccess={() => setTabletAdminPinOpen(false)}/>
+          </div>
+        </div>
+      )}
     </div>
-  );
+    );
+  };
 
   return shell(
     <Routes>
-      <Route path="/dashboard"    element={<Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={() => setQuickEntryOpen(true)} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/>}/>
+      <Route path="/dashboard"    element={<Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={openEncaisser} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/>}/>
       {/* Refonte FDS-2026 commit 7 : /historique et /transactions redirigent
           vers /caisse/historique (brief). Les composants Historique.jsx /
           Transactions.jsx restent dans le code pour import direct éventuel. */}

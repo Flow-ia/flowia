@@ -8,6 +8,7 @@ import OAuthCallback from './pages/OAuthCallback';
 import { AuthProvider } from './hooks/useAuth';
 import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
+import { TabletModeProvider } from './contexts/TabletModeProvider';
 import './index.css';
 
 // ── Détection du domaine au montage ──────────────────────────────────────────
@@ -63,6 +64,7 @@ root.render(
       <ThemeProvider>
         <AuthProvider>
           <AdminProvider>
+            <TabletModeProvider>
             <Routes>
               {/* ── Callback OAuth (popup retour Google → ferme + broadcast) ── */}
               <Route path="/__oauth" element={<OAuthCallback />} />
@@ -89,6 +91,7 @@ root.render(
               {/* ── Racine : BookingPage sur domaine public, app commerçant ailleurs ── */}
               <Route path="/*" element={<RootSwitch />} />
             </Routes>
+            </TabletModeProvider>
           </AdminProvider>
         </AuthProvider>
       </ThemeProvider>

@@ -312,25 +312,33 @@ router.post('/', async (req, res) => {
     // INSERT avec ON CONFLICT sur (user_id, idempotency_key) — si le client
     // a envoyé la même clé en race (double-clic), la 2e tentative ne crée pas
     // de doublon. RETURNING vide → on SELECT l'existant et retourne.
+    // Refonte FDS-2026 commit 11 : audit trail mode tablette partagée.
+    // signed_by_employee_id = employé identifié par son PIN (x-employee-pin
+    // valide → req.employee.id), distinct de employee_id (celui assigné au
+    // RDV / à la ligne). Permet de retrouver QUI a encaissé physiquement
+    // en mode tablette, même si la transaction est créée "au nom de" un
+    // autre employé. Null si merchant PIN admin ou création direct merchant.
+    const signedByEmployeeId = req.employee ? req.employee.id : null;
+
     const insertResult = await pool.query(
       `INSERT INTO transactions
         (user_id, type, amount, description, category_id, employee_id,
          payment_method, date, time, datetime_iso, appointment_id, source, locked,
          promo_code_id, discount_amount, original_amount, client_email, client_note,
-         qty_total, global_client_id, idempotency_key)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19,$20)
+         qty_total, global_client_id, idempotency_key, signed_by_employee_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT (user_id, idempotency_key) DO NOTHING
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
          payment_method, locked, client_email, client_note, qty_total,
          TO_CHAR(date, 'YYYY-MM-DD') as date,
          TO_CHAR(time, 'HH24:MI') as time,
-         datetime_iso, appointment_id, source, created_at`,
+         datetime_iso, appointment_id, source, signed_by_employee_id, created_at`,
       [req.user.userId, type, amt, description || null, category_id || null,
        effectiveEmployeeId, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
        clientEmailNorm, client_note || null, qtyTotal, globalClientId,
-       idemKey]
+       idemKey, signedByEmployeeId]
     );
     if (!insertResult.rows.length && idemKey) {
       // Race idempotency : un autre process a gagné. Retourner sa transaction.
