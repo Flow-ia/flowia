@@ -395,10 +395,12 @@ export function PinAccessModal({ open, onClose, onSuccess, employees, theme: t, 
 // FDS-2026 : cartes pastel + borderLeft 2px accent, icônes Lucide, employé
 // concerné + date + heure affichés en grand pour lecture rapide. Distinction
 // visuelle claire : Nouveau RDV (indigo) · Rappel (ambre) · Caisse (vert).
+// Refonte FDS-2026 commit 13 : type daily_recap ajouté (carte neutre).
 const NOTIF_CFG = {
   new_appointment:      { Icon: I.Calendar, label: 'Nouveau RDV', bg: '#eef2ff', accent: '#6366f1', text: '#4338ca' },
   appointment_reminder: { Icon: I.Clock,    label: 'Rappel RDV',  bg: '#fffbeb', accent: '#f59e0b', text: '#92400e' },
   caisse:               { Icon: I.Wallet,   label: 'Caisse',      bg: '#f0fdf4', accent: '#10b981', text: '#065f46' },
+  daily_recap:          { Icon: I.BarCh,    label: 'Récap jour',  bg: '#f9fafb', accent: '#6b7280', text: '#374151' },
 };
 
 const stripLeadingEmoji = (s = '') =>
@@ -439,9 +441,15 @@ function NotifModal({ open, onClose, theme: t }) {
       .finally(() => setLoading(false));
   }, [open]);
 
-  const markRead = async id => { await notifApi.markRead({ id }).catch(() => {}); setNotifs(p => p.map(n => n.id === id ? { ...n, is_read:true } : n)); };
-  const del      = async id => { await notifApi.deleteInApp(id).catch(() => {}); setNotifs(p => p.filter(n => n.id !== id)); };
-  const clearAll = async ()  => { await Promise.all(notifs.map(n => notifApi.deleteInApp(n.id))).catch(() => {}); setNotifs([]); };
+  const markRead    = async id => { await notifApi.markRead({ id }).catch(() => {}); setNotifs(p => p.map(n => n.id === id ? { ...n, is_read:true } : n)); };
+  const del         = async id => { await notifApi.deleteInApp(id).catch(() => {}); setNotifs(p => p.filter(n => n.id !== id)); };
+  const clearAll    = async ()  => { await Promise.all(notifs.map(n => notifApi.deleteInApp(n.id))).catch(() => {}); setNotifs([]); };
+  // Refonte FDS-2026 commit 13 : "Tout marquer lu" côté serveur
+  // (PATCH /api/notifications/inapp/read {all:true}), pas de DELETE.
+  const markAllRead = async ()  => {
+    await notifApi.markRead({ all: true }).catch(() => {});
+    setNotifs(p => p.map(n => ({ ...n, is_read: true })));
+  };
 
   // Clic sur une notif : marque lue + deep-link vers le RDV concerné
   // (ou /agenda générique si pas d'url). Même validation path interne que le SW
@@ -465,7 +473,16 @@ function NotifModal({ open, onClose, theme: t }) {
   return (
     <Modal open={open} onClose={onClose} theme={t} title={`Notifications${unread > 0 ? ` · ${unread} non lues` : ''}`}>
       {notifs.length > 0 && (
-        <div style={{ padding:'10px 16px 8px', borderBottom:sep, display:'flex', justifyContent:'flex-end' }}>
+        <div style={{ padding:'10px 16px 8px', borderBottom:sep, display:'flex',
+                      justifyContent:'flex-end', gap: 8 }}>
+          {unread > 0 && (
+            <button onClick={markAllRead}
+                    style={{ fontSize:12, color: t.text,
+                             background: t.cardAlt, border:'none', cursor:'pointer',
+                             padding:'5px 10px', borderRadius:8, fontFamily:'inherit', fontWeight:500 }}>
+              {"Tout marquer lu"}
+            </button>
+          )}
           <button onClick={clearAll}
                   style={{ fontSize:12, color:'#991b1b',
                            background:'rgba(239,68,68,0.08)', border:'none', cursor:'pointer',
@@ -511,7 +528,7 @@ function NotifModal({ open, onClose, theme: t }) {
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                    <span style={{ fontSize:10, fontWeight:500, letterSpacing:0.4,
+                    <span style={{ fontSize:10, fontWeight:500, letterSpacing:'0.05em',
                                    padding:'3px 8px', borderRadius:99,
                                    background: n.is_read ? t.card : '#ffffff',
                                    border:`0.5px solid ${cfg.accent}33`,
@@ -608,6 +625,21 @@ function NotifModal({ open, onClose, theme: t }) {
               </div>
             );
           })}
+        </div>
+      )}
+      {/* Refonte FDS-2026 commit 13 : pied "Voir tout l'historique".
+          Les notifs sont liées aux RDV, on renvoie vers l'agenda qui
+          montre les RDV du jour + passés via sa vue Liste. */}
+      {notifs.length > 0 && (
+        <div style={{ padding:'10px 16px 14px', borderTop:sep,
+                      display:'flex', justifyContent:'center' }}>
+          <button onClick={() => { onClose(); navigate('/agenda'); }}
+                  style={{ fontSize:12, color: t.muted,
+                           background:'transparent', border:'none', cursor:'pointer',
+                           fontFamily:'inherit', fontWeight:500,
+                           padding:'6px 10px', borderRadius:8 }}>
+            {"Voir tout l'historique →"}
+          </button>
         </div>
       )}
     </Modal>
