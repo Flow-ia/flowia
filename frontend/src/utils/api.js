@@ -677,3 +677,10 @@ export const publicReferralApi = {
       return d;
     }),
 };
+
+// Préférences compte commerçant — mode tablette, timeout session employé,
+// lock on tab close, seuil SMS bas. PUT exige x-pin-session (adminRequest).
+export const userSettingsApi = {
+  get:    ()     => request('/user-settings'),
+  update: (body) => adminRequest('/user-settings', { method: 'PUT', body: JSON.stringify(body) }),
+};

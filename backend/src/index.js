@@ -251,6 +251,9 @@ function startServer() {
     require('./routes/notifications');
   app.use('/api/notifications',  notifLimiter, notifRouter);
 
+  // Refonte FDS-2026 commit 2 : préférences compte (mode tablette, etc.).
+  app.use('/api/user-settings',  apiLimiter,  require('./routes/user-settings'));
+
   // ── Health ───────────────────────────────────────────────────────────────
   app.get('/api/health', (req, res) => {
     res.json({ ok: true, pid: process.pid, uptime: process.uptime(), time: new Date() });
