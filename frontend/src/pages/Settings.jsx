@@ -99,6 +99,24 @@ export default function Settings({ transactions, employees, categories, onAddCat
     <div className="min-h-screen pb-24 lg:pb-8" style={{ background: theme.bg }}>
       <Toast msg={t?.msg} type={t?.type} />
 
+      {/* Refonte FDS-2026 commit 4 : cette interface Settings monolithique
+          est conservée pendant la transition (anciennes URLs préservées).
+          La nouvelle navigation est sur /reglages (4 pages thématiques). */}
+      <div style={{ padding:'10px 16px', background:'#eef2ff',
+                    borderBottom:`0.5px solid ${theme.border}`,
+                    display:'flex', alignItems:'center', gap:10 }}>
+        <p style={{ margin:0, fontSize:12, color:'#4338ca', flex:1 }}>
+          {"Nouvelle interface disponible : utilisez Réglages pour gérer commerce, équipe, réservations et caisse."}
+        </p>
+        <button onClick={() => navigate('/reglages')}
+                style={{ padding:'5px 10px', borderRadius:6, border:'none',
+                         background:'#4338ca', color:'#fff', cursor:'pointer',
+                         fontSize:11, fontWeight:500, fontFamily:'inherit',
+                         flexShrink:0 }}>
+          {"Ouvrir /reglages"}
+        </button>
+      </div>
+
       <div className="px-5 pt-12 pb-5" style={{ background: theme.headerGrad }}>
         <div className="flex items-center justify-between">
           <div>
