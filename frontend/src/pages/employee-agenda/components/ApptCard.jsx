@@ -38,7 +38,8 @@ export default function ApptCard({ appt, onClick, theme: t }) {
       {/* Contenu */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 500, color: t.text }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: t.text,
+                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
             {fmtTime(appt.start_time)} — {fmtTime(appt.end_time)}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>

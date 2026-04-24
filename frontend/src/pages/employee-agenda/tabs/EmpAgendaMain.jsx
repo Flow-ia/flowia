@@ -106,10 +106,14 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
   weekDays.forEach(d => {
     const ds = svLocal(d);
     const ap = allAppts.filter(a => a.date?.substring(0, 10) === ds);
-    dayCounts[ds] = { total: ap.length, paid: ap.filter(a => a.paid).length };
+    dayCounts[ds] = {
+      total:     ap.length,
+      paid:      ap.filter(a => a.paid).length,
+      confirmed: ap.filter(a => a.status === 'confirmed').length,
+    };
   });
 
-  const todayStats = dayCounts[selStr] || { total:0, paid:0 };
+  const todayStats = dayCounts[selStr] || { total:0, paid:0, confirmed:0 };
 
   const perms = [
     employee.can_cancel && { label: 'Annulation', dot: '#ef4444' },
@@ -337,15 +341,18 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
               <div style={{ display:'flex', gap:8 }}>
                 <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
                   <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>RDV du jour</p>
-                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:t.text }}>{todayStats.total}</p>
+                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:t.text,
+                              fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{todayStats.total}</p>
+                </div>
+                <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
+                  <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>Confirmes</p>
+                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:'#4338ca',
+                              fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{todayStats.confirmed}</p>
                 </div>
                 <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
                   <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>Encaisses</p>
-                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:'#065f46' }}>{todayStats.paid}</p>
-                </div>
-                <div style={{ flex:1, ...sectionCard, padding:'10px 14px' }}>
-                  <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted }}>Restants</p>
-                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:'#92400e' }}>{todayStats.total - todayStats.paid}</p>
+                  <p style={{ margin:'4px 0 0', fontSize:20, fontWeight:500, color:'#065f46',
+                              fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{todayStats.paid}</p>
                 </div>
               </div>
             </div>

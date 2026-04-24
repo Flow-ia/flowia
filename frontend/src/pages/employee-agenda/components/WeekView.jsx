@@ -194,6 +194,7 @@ export default function WeekView({
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                       }}>{fmtTime(appt.start_time)}</p>
                       {height > 28 && (
                         <p style={{

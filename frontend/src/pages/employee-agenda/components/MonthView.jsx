@@ -129,6 +129,7 @@ export default function MonthView({
                         fontWeight: 500,
                         color: t.text,
                         flexShrink: 0,
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                       }}>{fmtTime(appt.start_time)}</span>
                       <span style={{
                         fontSize: 10,

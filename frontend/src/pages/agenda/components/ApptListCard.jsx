@@ -28,7 +28,8 @@ export default function ApptListCard({ a, onOpen, isDark, t }) {
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 500, fontSize: 13, color: t.text }}>
+              <span style={{ fontWeight: 500, fontSize: 13, color: t.text,
+                             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                 {fmtTime(a.start_time)}–{fmtTime(a.end_time)}
               </span>
               {a.paid && (
