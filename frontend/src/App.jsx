@@ -14,6 +14,7 @@ import Settings from './pages/Settings';
 import Reglages from './pages/reglages';
 import Marketing from './pages/marketing';
 import Statistiques from './pages/statistiques';
+import Caisse from './pages/caisse';
 import { api, loyaltyApi, promoApi, notifApi, referralsApi } from './utils/api';
 import EmployeeAgenda from './pages/EmployeeAgenda';
 import ClientsPage from './pages/ClientsPage';
@@ -2028,6 +2029,25 @@ export default function App() {
     return <Statistiques employees={employees} categories={categories} transactions={transactions}/>;
   };
 
+  // Refonte FDS-2026 commit 7 : Page Caisse. PAS de gate PIN à l'entrée
+  // (encaisser = workflow quotidien employé). Gate PIN front conservé au
+  // niveau de l'onglet Historique via PinAccessModal. Les actions sensibles
+  // (edit/delete transaction, grant crédit) sont gated côté back par
+  // pinAdminMiddleware et employeePinOptional (can_grant/can_repay/can_encash).
+  // onEncaisser ouvre la même EncaisserSheet que le FAB Dashboard : flow 4
+  // étapes intact, idempotency_key UUID, multi-items, multi-paiements,
+  // signed_by_employee_id et audit trail transaction_audit_log préservés.
+  const caisseContent = () => (
+    <Caisse
+      transactions={transactions}
+      employees={employees}
+      categories={categories}
+      onUpdTx={updTx}
+      onDelTx={delTx}
+      onEncaisser={() => setQuickEntryOpen(true)}
+    />
+  );
+
   const shell = (content) => (
     <div style={{ fontFamily:"'Inter',-apple-system,sans-serif",
                   background:theme.bg, minHeight:'100vh' }}>
@@ -2055,17 +2075,22 @@ export default function App() {
   return shell(
     <Routes>
       <Route path="/dashboard"    element={<Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={() => setQuickEntryOpen(true)} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/>}/>
-      <Route path="/historique"   element={<Historique transactions={transactions} employees={employees}/>}/>
-      <Route path="/transactions" element={<Transactions transactions={transactions} employees={employees} categories={categories} onAdd={addTx} onUpdate={updTx} onDelete={delTx} isAdmin={unlocked}/>}/>
+      {/* Refonte FDS-2026 commit 7 : /historique et /transactions redirigent
+          vers /caisse/historique (brief). Les composants Historique.jsx /
+          Transactions.jsx restent dans le code pour import direct éventuel. */}
+      <Route path="/historique"   element={<Navigate to="/caisse/historique" replace/>}/>
+      <Route path="/transactions" element={<Navigate to="/caisse/historique" replace/>}/>
       <Route path="/clients"      element={<ClientsPage/>}/>
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views"             element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views/:employeeId" element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/settings/*"   element={settingsContent()}/>
       <Route path="/settings"     element={settingsContent()}/>
-      {/* Refonte FDS-2026 commit 3 : redirect temporaire restant pour /caisse
-          (sera remplacé au commit 7). */}
-      <Route path="/caisse"       element={<Navigate to="/settings/historique" replace/>}/>
+      {/* Refonte FDS-2026 commit 7 : Caisse éclatée en /caisse/* (Encaisser
+          / Historique / Crédit). EncaisserSheet reste monté globalement via
+          `shell()` pour que l'onglet Encaisser puisse l'ouvrir. */}
+      <Route path="/caisse/*"     element={caisseContent()}/>
+      <Route path="/caisse"       element={caisseContent()}/>
       {/* Refonte FDS-2026 commit 5 : Marketing éclaté en /marketing/*. */}
       <Route path="/marketing/*"  element={marketingContent()}/>
       <Route path="/marketing"    element={marketingContent()}/>
