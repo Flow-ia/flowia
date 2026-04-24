@@ -261,17 +261,16 @@ export function ReferralPage({
             </div>
           </div>
 
-          {/* Bloc auth — même UX que /info : suggestion + 3 boutons */}
+          {/* Bloc auth — même UX que /info : suggestion + 3 boutons (FDS-2026). */}
           <div style={{
-            background: th.card, border: `1px solid ${th.border || dashedBorder}`,
+            background: th.card, border: `0.5px solid ${th.border || dashedBorder}`,
             borderRadius: 12, padding: 16,
           }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: th.text, margin: "0 0 3px" }}>
-              Déjà un compte ? Connectez-vous
+            <p style={{ fontSize: 13, fontWeight: 500, color: th.text, margin: "0 0 3px" }}>
+              {"Déjà un compte ? Connectez-vous"}
             </p>
             <p style={{ fontSize: 11, color: th.muted, margin: "0 0 12px", lineHeight: 1.5 }}>
-              Récupérez votre code de parrainage et suivez vos filleuls.
-              Seuls les clients déjà venus peuvent parrainer.
+              {"Récupérez votre code de parrainage et suivez vos filleuls. Seuls les clients déjà venus peuvent parrainer."}
             </p>
             <div style={{
               display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10,
@@ -279,7 +278,7 @@ export function ReferralPage({
               <button onClick={onLogin}
                 style={{
                   padding: "11px", borderRadius: 10, background: th.accent,
-                  border: "none", fontWeight: 700, fontSize: 13,
+                  border: "none", fontWeight: 500, fontSize: 13,
                   color: th.accentText, cursor: "pointer",
                 }}>
                 Se connecter
@@ -287,10 +286,10 @@ export function ReferralPage({
               <button onClick={onRegister || onLogin}
                 style={{
                   padding: "11px", borderRadius: 10, background: th.card,
-                  border: `1px solid ${th.border || dashedBorder}`,
-                  fontWeight: 700, fontSize: 13, color: th.text, cursor: "pointer",
+                  border: `0.5px solid ${th.border || dashedBorder}`,
+                  fontWeight: 500, fontSize: 13, color: th.text, cursor: "pointer",
                 }}>
-                Créer un compte
+                {"Créer un compte"}
               </button>
             </div>
             {/* Google OAuth — popup + BroadcastChannel (Google COOP détache
@@ -314,8 +313,8 @@ export function ReferralPage({
               style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 8, padding: "11px", borderRadius: 10, background: th.card,
-                border: `1px solid ${th.border || dashedBorder}`,
-                cursor: "pointer", fontWeight: 700, fontSize: 13, color: th.text,
+                border: `0.5px solid ${th.border || dashedBorder}`,
+                cursor: "pointer", fontWeight: 500, fontSize: 13, color: th.text,
               }}>
               <svg width="16" height="16" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

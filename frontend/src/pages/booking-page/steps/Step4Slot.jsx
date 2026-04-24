@@ -17,7 +17,7 @@ export function Step4Slot({
       </p>
       {slotsLoading ? <div style={{padding:'40px 0',textAlign:'center'}}><Spinner color={th.accent}/></div>
       : visibleSlots.length === 0 ? (
-        <div style={{textAlign:'center',padding:'40px 20px',border:`1px dashed ${th.border}`,borderRadius:12}}>
+        <div style={{textAlign:'center',padding:'40px 20px',border:`0.5px dashed ${th.border}`,borderRadius:12}}>
           <p style={{fontSize:14,color:th.muted,marginBottom:12}}>Aucun créneau disponible</p>
           <button onClick={()=>goToStep(3)}
             style={{fontSize:13,fontWeight: 500,color:'#2563eb',background:'none',border:'none',cursor:'pointer'}}>
