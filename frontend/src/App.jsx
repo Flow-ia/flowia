@@ -2103,6 +2103,7 @@ export default function App() {
       transactions={transactions}
       employees={employees}
       categories={categories}
+      onAdd={addTx}
       onUpdTx={updTx}
       onDelTx={delTx}
       onEncaisser={openEncaisser}
