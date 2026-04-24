@@ -13,6 +13,7 @@ import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
 import Reglages from './pages/reglages';
 import Marketing from './pages/marketing';
+import Statistiques from './pages/statistiques';
 import { api, loyaltyApi, promoApi, notifApi, referralsApi } from './utils/api';
 import EmployeeAgenda from './pages/EmployeeAgenda';
 import ClientsPage from './pages/ClientsPage';
@@ -2016,6 +2017,17 @@ export default function App() {
     return <Marketing/>;
   };
 
+  // Refonte FDS-2026 commit 6 : Page Statistiques. Gate PIN admin car
+  // l'onglet Export joint x-pin-session via adminRequest (téléchargement
+  // CSV/PDF). Les autres onglets (Performance/Forecast/Heatmap/Products)
+  // sont des consultations mais on garde la cohérence avec Réglages.
+  const statistiquesContent = () => {
+    if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
+    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('entry'); }}/>;
+    if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')}/>;
+    return <Statistiques employees={employees} categories={categories} transactions={transactions}/>;
+  };
+
   const shell = (content) => (
     <div style={{ fontFamily:"'Inter',-apple-system,sans-serif",
                   background:theme.bg, minHeight:'100vh' }}>
@@ -2051,14 +2063,15 @@ export default function App() {
       <Route path="/agenda/views/:employeeId" element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/settings/*"   element={settingsContent()}/>
       <Route path="/settings"     element={settingsContent()}/>
-      {/* Refonte FDS-2026 commit 3 : nouvelles URLs sidebar. Redirects
-          temporaires vers les pages legacy en attendant les commits 6 et 7
-          (Statistiques, Caisse éclatés). */}
+      {/* Refonte FDS-2026 commit 3 : redirect temporaire restant pour /caisse
+          (sera remplacé au commit 7). */}
       <Route path="/caisse"       element={<Navigate to="/settings/historique" replace/>}/>
-      <Route path="/statistiques" element={<Navigate to="/settings" replace/>}/>
       {/* Refonte FDS-2026 commit 5 : Marketing éclaté en /marketing/*. */}
       <Route path="/marketing/*"  element={marketingContent()}/>
       <Route path="/marketing"    element={marketingContent()}/>
+      {/* Refonte FDS-2026 commit 6 : Statistiques éclatées en /statistiques/*. */}
+      <Route path="/statistiques/*" element={statistiquesContent()}/>
+      <Route path="/statistiques"   element={statistiquesContent()}/>
       {/* Refonte FDS-2026 commit 4 : la page Réglages éclatée est maintenant
           la destination canonique. /settings reste accessible avec bannière. */}
       <Route path="/reglages/*"   element={reglagesContent()}/>

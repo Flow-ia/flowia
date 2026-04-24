@@ -516,6 +516,8 @@ export const statsApi = {
   getForecast:     (q) => request('/stats/forecast?' + new URLSearchParams(q||{})),
   getHeatmap:      (q) => request('/stats/heatmap?' + new URLSearchParams(q||{})),
   getToday:        ()  => request('/stats/today'),
+  // Refonte FDS-2026 commit 6 — ventilation par moyen de paiement.
+  getByPaymentMethod: (period) => request('/stats/by-payment-method?period=' + encodeURIComponent(period || 'today')),
 };
 
 export const clientNotesApi = {

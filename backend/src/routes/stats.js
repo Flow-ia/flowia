@@ -309,4 +309,81 @@ router.get('/today', async (req, res) => {
   }
 });
 
+// ── GET /api/stats/by-payment-method?period=today|week|month ─────────────────
+// Refonte FDS-2026 commit 6 : ventilation du CA par moyen de paiement pour
+// la page Statistiques. Les 5 méthodes renvoyées correspondent aux cards
+// pastel définies dans INVENTAIRE §14 : cash / card / transfer / other / multi.
+// Le payment_method `check` (historique, whitelisté en back) est agrégé dans
+// `other` pour rester aligné sur l'UI (5 cards, pas 6). Cache 2 min.
+router.get('/by-payment-method', async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const period = String(req.query.period || 'today');
+    if (!['today', 'week', 'month'].includes(period))
+      return res.status(400).json({ error: 'period invalide (today|week|month).' });
+
+    const today = await merchantToday(userId);
+    let from = today;
+    if (period === 'week')  {
+      const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 6);
+      from = d.toISOString().slice(0, 10);
+    } else if (period === 'month') {
+      const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 29);
+      from = d.toISOString().slice(0, 10);
+    }
+    const to = today;
+
+    const _k = `stats:bypm:${userId}:${period}:${from}:${to}`;
+    const _h = global.memCache?.get(_k);
+    if (_h) return res.json(_h);
+
+    const { rows } = await pool.query(
+      `SELECT payment_method,
+              COALESCE(SUM(amount), 0)::numeric AS amount,
+              COUNT(*)                          AS count
+         FROM transactions
+        WHERE user_id=$1 AND type='revenue'
+          AND date BETWEEN $2 AND $3
+        GROUP BY payment_method`,
+      [userId, from, to]
+    );
+
+    const EMPTY = { amount: 0, count: 0 };
+    const by_method = {
+      cash:     { ...EMPTY },
+      card:     { ...EMPTY },
+      transfer: { ...EMPTY },
+      other:    { ...EMPTY },
+      multi:    { ...EMPTY },
+    };
+    let total = 0;
+    for (const r of rows) {
+      const amt = parseFloat(r.amount) || 0;
+      const cnt = parseInt(r.count, 10) || 0;
+      total += amt;
+      // `check` (whitelisté historique) agrégé dans `other` pour matcher l'UI 5 cards.
+      const key = (r.payment_method === 'check') ? 'other' : r.payment_method;
+      if (by_method[key]) {
+        by_method[key].amount += amt;
+        by_method[key].count  += cnt;
+      } else {
+        by_method.other.amount += amt;
+        by_method.other.count  += cnt;
+      }
+    }
+    // Arrondir 2 décimales à la sortie (flottants JS).
+    for (const k of Object.keys(by_method)) {
+      by_method[k].amount = Math.round(by_method[k].amount * 100) / 100;
+    }
+    total = Math.round(total * 100) / 100;
+
+    const result = { period, from, to, by_method, total };
+    global.memCache?.set(_k, result, 2 * 60 * 1000); // cache 2 min
+    res.json(result);
+  } catch (e) {
+    console.error('[STATS BY-PM]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 module.exports = router;
