@@ -1220,6 +1220,43 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_accounts_optin ON client_accounts(user_id, marketing_opt_in) WHERE marketing_opt_in = TRUE`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_global_clients_optin ON global_clients(marketing_opt_in) WHERE marketing_opt_in = TRUE`);
 
+  // ── Refonte FDS-2026 commit 1 : permissions granulaires + user_settings ────
+  // Permissions employés : 5 déjà présentes dans la CREATE TABLE initiale
+  // (can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse).
+  // On ajoute les 3 manquantes. Les IF NOT EXISTS rendent les 8 lignes
+  // idempotentes — no-op en prod sur les colonnes déjà créées.
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_cancel       BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_modify       BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_encash       BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_use_promo    BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_grant_credit BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_repay_credit BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS show_on_booking  BOOLEAN DEFAULT TRUE`);
+  await runMigration(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS show_in_caisse   BOOLEAN DEFAULT TRUE`);
+
+  // user_settings — mode tablette partagée, timeout session, lock on close,
+  // seuil SMS bas. Types UUID pour user_id (users.id est UUID, pas SERIAL).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      id                           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id                      UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      tablet_mode_enabled          BOOLEAN      DEFAULT FALSE,
+      employee_session_timeout_min INT          DEFAULT 15,
+      lock_on_tab_close            BOOLEAN      DEFAULT TRUE,
+      sms_low_balance_threshold    NUMERIC(10,2) DEFAULT 20,
+      created_at                   TIMESTAMPTZ  DEFAULT NOW(),
+      updated_at                   TIMESTAMPTZ  DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)`);
+
+  // Audit trail encaissement via PIN employé : trace quel employé a signé la
+  // transaction en mode tablette partagée (commit 11). UUID pour matcher employees.id.
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS signed_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL`);
+
+  // Seed : une ligne user_settings par merchant existant, defaults DB appliqués.
+  await runMigration(`INSERT INTO user_settings (user_id) SELECT id FROM users ON CONFLICT (user_id) DO NOTHING`);
+
 console.log('[DB] Tables initialisées');
 }
 
