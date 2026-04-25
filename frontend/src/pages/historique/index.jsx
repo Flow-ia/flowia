@@ -192,8 +192,7 @@ export default function HistoriqueAdmin({
 
       <div style={{ maxWidth: 960, margin:'0 auto', padding:'18px 16px',
                     display:'flex', flexDirection:'column', gap:14 }}>
-        <PageHeader title="Historique"
-                    subtitle="Toutes les transactions, toutes dates · admin"/>
+        <PageHeader title="Historique"/>
 
         {/* ── Filtres période (présets + personnalisé) ────────────────────── */}
         <div style={card}>
