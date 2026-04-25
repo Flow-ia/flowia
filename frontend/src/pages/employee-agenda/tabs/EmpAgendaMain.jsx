@@ -12,6 +12,8 @@ import ApptCard from '../components/ApptCard';
 import ApptActionModal from '../modals/ApptActionModal';
 import QuickAddApptModal from '../modals/QuickAddApptModal';
 import ClientsTab from './ClientsTab';
+import NotificationsTab from './NotificationsTab';
+import { useNotifications } from '../../../hooks/useNotifications';
 
 export default function EmpAgendaMain({ employee, services, allEmployees, onBack, onTxCreated, theme: t }) {
   const [toast, showToast]             = useToast();
@@ -28,6 +30,11 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
   const location   = useLocation();
   const navigate   = useNavigate();
   const pendingApptRef = useRef(null);
+  // Hook notifications partage entre le badge de l'onglet et le contenu
+  // de NotificationsTab (un seul poller 30s sur la page). Source identique
+  // a la cloche admin (notifApi.getInApp).
+  const notif = useNotifications({ enabled: true });
+  const notifUnread = notif.unreadCount;
 
   const today = new Date();
   const startOfWeek = new Date(today);
@@ -211,6 +218,12 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
           options={[
             { value: 'agenda',  label: 'Mon agenda' },
             { value: 'clients', label: 'Clients & notes' },
+            {
+              value: 'notifs',
+              label: notifUnread > 0
+                ? `Notifs (${notifUnread > 99 ? '99+' : notifUnread})`
+                : 'Notifs',
+            },
           ]}
         />
       </div>
@@ -534,6 +547,23 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
       )}
 
       {mainTab === 'clients' && <ClientsTab employee={employee} theme={t} />}
+
+      {mainTab === 'notifs' && (
+        <NotificationsTab
+          theme={t}
+          notif={notif}
+          onOpenAppt={({ apptId, date }) => {
+            // Bascule sur "Mon agenda" et reuse le deep-link existant
+            // (?date=YYYY-MM-DD&appt=<id>) pour positionner la semaine et
+            // ouvrir le modal du RDV des chargement.
+            setMainTab('agenda');
+            const sp = new URLSearchParams();
+            if (date)   sp.set('date', date);
+            if (apptId) sp.set('appt', apptId);
+            navigate(`${location.pathname}?${sp.toString()}`, { replace: false });
+          }}
+        />
+      )}
 
       {detailAppt && (
         <ApptActionModal
