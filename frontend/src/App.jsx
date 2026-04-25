@@ -9,6 +9,7 @@ import { PinEntry, PinSetup } from './components/PinGate';
 import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
 import Dashboard from './pages/Dashboard';
 import Historique from './pages/Historique';
+import HistoriqueAdmin from './pages/historique';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
 import Reglages from './pages/reglages';
@@ -1111,7 +1112,7 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
       label: 'Tablette partagée',
       items: [
         { id:'agenda',    label:'Agenda global', icon:'calendar', to:'/agenda',  match:['/agenda'] },
-        { id:'caisse',    label:'Encaisser',     icon:'cash',     to:'/caisse',  match:['/caisse','/historique','/transactions','/settings/historique'] },
+        { id:'caisse',    label:'Encaisser',     icon:'cash',     to:'/caisse',  match:['/caisse','/transactions','/settings/historique'] },
         { id:'clients',   label:'Clients',       icon:'users',    to:'/clients', match:['/clients'] },
       ],
     },
@@ -1121,7 +1122,11 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
       items: [
         { id:'dashboard', label:'Dashboard',    icon:'home',     to:'/dashboard',   match:['/dashboard'] },
         { id:'agenda',    label:'Agenda',       icon:'calendar', to:'/agenda',      match:['/agenda'] },
-        { id:'caisse',    label:'Caisse',       icon:'cash',     to:'/caisse',      match:['/caisse','/historique','/transactions','/settings/historique'] },
+        { id:'caisse',    label:'Caisse',       icon:'cash',     to:'/caisse',      match:['/caisse','/transactions','/settings/historique'] },
+        // Refonte FDS-2026 commit 7h : Historique admin dédié — page distincte
+        // de /caisse/historique (qui reste lecture seule jour courant pour les
+        // employés). Visible uniquement en mode admin (pas tabletNeutral).
+        { id:'historique',label:'Historique',   icon:'history',  to:'/historique',  match:['/historique'] },
         { id:'clients',   label:'Clients',      icon:'users',    to:'/clients',     match:['/clients'] },
       ],
     },
@@ -2214,11 +2219,14 @@ export default function App() {
   return shell(
     <Routes>
       <Route path="/dashboard"    element={<Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={openEncaisser} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/>}/>
-      {/* Refonte FDS-2026 commit 7 : /historique et /transactions redirigent
-          vers /caisse/historique (brief). Les composants Historique.jsx /
-          Transactions.jsx restent dans le code pour import direct éventuel. */}
-      <Route path="/historique"   element={<Navigate to="/caisse/historique" replace/>}/>
-      <Route path="/transactions" element={<Navigate to="/caisse/historique" replace/>}/>
+      {/* Refonte FDS-2026 commit 7h : /historique = page admin dédiée
+          (consultation/édition/suppression toutes dates, gate PIN au mount,
+          actions edit/delete gated PIN admin via adminRequest côté back).
+          /caisse/historique reste lecture seule, jour courant, gate PIN
+          employé. /transactions redirige vers /historique pour les anciens
+          liens. */}
+      <Route path="/historique"   element={<HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={updTx} onDelTx={delTx}/>}/>
+      <Route path="/transactions" element={<Navigate to="/historique" replace/>}/>
       <Route path="/clients"      element={<ClientsPage/>}/>
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views"             element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
