@@ -66,7 +66,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
           Tablette confort : padding 12×18, font 13/500, min-height 44.
           Étape complétée = icône check vert. État actif = #111827 + blanc.
           Cliquable sur une étape passée pour revenir en arrière. */}
-      <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 10,
+      <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 8,
                     background: t.cardAlt, overflowX: 'auto' }}>
         {STEPS.map(s => {
           const active     = step === s.id;
@@ -81,18 +81,18 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
             <button key={s.id}
                     onClick={() => reachable && go(s.id)}
                     disabled={!reachable}
-                    style={{ flex: 1, minWidth: 'fit-content', minHeight: 44,
-                             padding: '12px 18px', borderRadius: 8, border: 'none',
+                    style={{ flex: 1, minWidth: 'fit-content', minHeight: 36,
+                             padding: '8px 12px', borderRadius: 6, border: 'none',
                              cursor: reachable ? 'pointer' : 'not-allowed',
                              background: active ? '#111827' : 'transparent',
                              color: active ? '#fff' : (reachable ? t.muted : t.dim || t.muted),
-                             fontWeight: 500, fontSize: 13,
+                             fontWeight: 500, fontSize: 12,
                              whiteSpace: 'nowrap', fontFamily: 'inherit',
                              opacity: reachable ? 1 : 0.55,
                              display: 'inline-flex', alignItems: 'center',
-                             justifyContent: 'center', gap: 6 }}>
+                             justifyContent: 'center', gap: 5 }}>
               {completed && !active && (
-                <Icon name="check" size={14} color="#10b981" strokeWidth={2.5}/>
+                <Icon name="check" size={12} color="#10b981" strokeWidth={2.5}/>
               )}
               {s.id + '. ' + s.label}
             </button>

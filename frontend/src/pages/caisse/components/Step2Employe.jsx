@@ -32,31 +32,31 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
   };
 
   const card = {
-    padding: 16, borderRadius: 12, background: t.card,
+    padding: 14, borderRadius: 12, background: t.card,
     border: `0.5px solid ${t.border}`,
-    display: 'flex', flexDirection: 'column', gap: 14,
+    display: 'flex', flexDirection: 'column', gap: 12,
   };
 
   return (
     <div style={card}>
       <div>
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text }}>
           {"Qui encaisse ?"}
         </p>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: t.muted }}>
+        <p style={{ margin: '3px 0 0', fontSize: 11, color: t.muted }}>
           {"Seuls les employés avec la permission can_encash apparaissent. Le PIN employé sera demandé à la validation."}
         </p>
       </div>
 
       {eligible.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 14, color: t.muted,
-                    padding: 20, borderRadius: 10, background: t.cardAlt }}>
+        <p style={{ margin: 0, fontSize: 12, color: t.muted,
+                    padding: 16, borderRadius: 8, background: t.cardAlt }}>
           {"Aucun employé actif avec la permission can_encash. Configurez-les depuis Réglages > Équipe > Membres."}
         </p>
       ) : (
         <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: 12 }}>
+                      gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))',
+                      gap: 10 }}>
           {eligible.map(e => {
             const isPicked = pickedId === e.id;
             const active = empId === e.id || isPicked;
@@ -71,40 +71,40 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
             };
             return (
               <button key={e.id} onClick={pick}
-                      style={{ padding: 20, borderRadius: 12,
-                               minHeight: 140,
+                      style={{ padding: 14, borderRadius: 10,
+                               minHeight: 110,
                                border: active
-                                 ? '3px solid ' + accent
+                                 ? '2px solid ' + accent
                                  : `0.5px solid ${t.border}`,
                                background: active ? pastelOf(accent) : t.card,
                                color: t.text, cursor: 'pointer', fontFamily: 'inherit',
                                display: 'flex', flexDirection: 'column',
                                alignItems: 'center', justifyContent: 'center',
-                               gap: 10, position: 'relative',
-                               boxShadow: active ? '0 4px 14px rgba(0,0,0,0.08)' : 'none',
+                               gap: 8, position: 'relative',
+                               boxShadow: active ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
                                transform: isPicked ? 'scale(1.03)' : 'scale(1)',
                                transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease' }}>
                 {isPicked && (
-                  <span style={{ position: 'absolute', top: 10, right: 10,
-                                 width: 24, height: 24, borderRadius: 99,
+                  <span style={{ position: 'absolute', top: 6, right: 6,
+                                 width: 20, height: 20, borderRadius: 99,
                                  background: accent, color: '#fff',
                                  display: 'inline-flex', alignItems: 'center',
                                  justifyContent: 'center' }}>
-                    <Icon name="check" size={14} color="#fff" strokeWidth={2.5}/>
+                    <Icon name="check" size={12} color="#fff" strokeWidth={2.5}/>
                   </span>
                 )}
-                <div style={{ width: 80, height: 80, borderRadius: 99,
+                <div style={{ width: 56, height: 56, borderRadius: 99,
                               background: accent, color: '#fff',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 24, fontWeight: 500 }}>
+                              fontSize: 18, fontWeight: 500 }}>
                   {(e.name || '?').charAt(0).toUpperCase()}
                 </div>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text,
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text,
                             textAlign: 'center', wordBreak: 'break-word' }}>
                   {e.name}
                 </p>
                 {e.role && (
-                  <p style={{ margin: 0, fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 11, color: '#6b7280', textAlign: 'center' }}>
                     {e.role}
                   </p>
                 )}
@@ -115,15 +115,15 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
       )}
 
       {/* Auto-advance : pas de bouton "Continuer", seul "Retour" est visible. */}
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
         <button onClick={onBack}
-                style={{ minHeight: 48, padding: '14px 20px', borderRadius: 10,
+                style={{ minHeight: 42, padding: '11px 16px', borderRadius: 8,
                          border: `0.5px solid ${t.border}`,
                          background: t.cardAlt, color: t.text,
                          cursor: 'pointer', fontFamily: 'inherit',
-                         fontSize: 14, fontWeight: 500,
-                         display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <Icon name="chevronLeft" size={16} color={t.text}/>
+                         fontSize: 13, fontWeight: 500,
+                         display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="chevronLeft" size={14} color={t.text}/>
           {"Retour"}
         </button>
       </div>

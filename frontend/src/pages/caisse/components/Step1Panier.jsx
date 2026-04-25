@@ -162,25 +162,25 @@ export default function Step1Panier({
                 </button>
                 {isOpen && kids.length > 0 && (
                   <div style={{ display:'grid',
-                                gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',
-                                gap: 10, marginTop: 12 }}>
+                                gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',
+                                gap: 8, marginTop: 10 }}>
                     {kids.map(k => (
                       <button key={k.id} onClick={() => addToCart(k)}
-                              style={{ padding:16, borderRadius:10,
-                                       minHeight: 90,
+                              style={{ padding:12, borderRadius:8,
+                                       minHeight: 72,
                                        border:`0.5px solid ${t.border}`,
                                        background:t.card, color:t.text,
                                        cursor:'pointer', fontFamily:'inherit',
                                        display:'flex', flexDirection:'column',
                                        justifyContent:'space-between',
-                                       alignItems:'center', gap:8 }}>
-                        <span style={{ textAlign:'center', fontSize:14, fontWeight:500,
+                                       alignItems:'center', gap:6 }}>
+                        <span style={{ textAlign:'center', fontSize:13, fontWeight:500,
                                        color:t.text,
                                        overflow:'hidden', textOverflow:'ellipsis',
                                        whiteSpace:'nowrap', width:'100%' }}>
                           {k.name}
                         </span>
-                        <strong style={{ fontSize:18, fontWeight:500, color:t.text,
+                        <strong style={{ fontSize:15, fontWeight:500, color:t.text,
                                          fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {k.is_free_price || !k.price ? 'Libre' : fmt(k.price) + ' €'}
                         </strong>
@@ -197,15 +197,15 @@ export default function Step1Panier({
             );
           })}
           <button onClick={addCustom}
-                  style={{ width:'100%', minHeight:48,
-                           padding:'14px 20px', borderRadius:10,
+                  style={{ width:'100%', minHeight:42,
+                           padding:'11px 16px', borderRadius:8,
                            border:`0.5px solid ${t.border}`,
                            background:t.cardAlt, color:t.text,
                            cursor:'pointer', fontFamily:'inherit',
-                           fontSize:14, fontWeight:500,
+                           fontSize:13, fontWeight:500,
                            display:'inline-flex', alignItems:'center',
-                           justifyContent:'center', gap:8 }}>
-            <Icon name="plus" size={16} color={t.text}/>
+                           justifyContent:'center', gap:6 }}>
+            <Icon name="plus" size={14} color={t.text}/>
             {"Montant libre"}
           </button>
         </div>
@@ -231,39 +231,39 @@ export default function Step1Panier({
           ) : cart.map((it, idx) => (
             <div key={idx}
                  style={{ display:'flex', justifyContent:'space-between',
-                          alignItems:'center', padding:'14px 0', gap:12,
+                          alignItems:'center', padding:'10px 0', gap:10,
                           borderBottom:`0.5px solid ${t.separator}` }}>
               <div style={{ minWidth:0, flex:1 }}>
-                <p style={{ margin:0, fontSize:15, fontWeight:500, color:t.text,
+                <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text,
                             overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                   {it.name}
                 </p>
-                <p style={{ margin:'3px 0 0', fontSize:12, color:t.muted }}>
+                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
                   {fmt(it.price)} €
                 </p>
               </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
+              <div style={{ display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
                 <button onClick={() => changeQty(idx, -1)}
-                        style={{ width:40, height:40, borderRadius:8,
+                        style={{ width:32, height:32, borderRadius:6,
                                  border:`0.5px solid ${t.border}`,
                                  background:t.cardAlt, color:t.text,
                                  cursor:'pointer', fontFamily:'inherit',
-                                 fontSize:18, fontWeight:500 }}>
+                                 fontSize:15, fontWeight:500 }}>
                   {"−"}
                 </button>
-                <span style={{ fontWeight:500, fontSize:18, color:t.text,
-                               minWidth:32, textAlign:'center' }}>
+                <span style={{ fontWeight:500, fontSize:15, color:t.text,
+                               minWidth:24, textAlign:'center' }}>
                   {it.qty}
                 </span>
                 <button onClick={() => changeQty(idx, +1)}
-                        style={{ width:40, height:40, borderRadius:8,
+                        style={{ width:32, height:32, borderRadius:6,
                                  border:`0.5px solid ${t.border}`,
                                  background:t.cardAlt, color:t.text,
                                  cursor:'pointer', fontFamily:'inherit',
-                                 fontSize:18, fontWeight:500 }}>
+                                 fontSize:15, fontWeight:500 }}>
                   {"+"}
                 </button>
-                <div style={{ minWidth:78, textAlign:'right', fontWeight:500, fontSize:15, color:t.text,
+                <div style={{ minWidth:68, textAlign:'right', fontWeight:500, fontSize:13, color:t.text,
                               fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                   {fmt(it.price * it.qty)} €
                 </div>
@@ -273,7 +273,7 @@ export default function Step1Panier({
 
           {cart.length > 0 && (
             <div style={{ display:'flex', justifyContent:'space-between',
-                          padding:'14px 0 0', fontSize:22, fontWeight:500,
+                          padding:'10px 0 0', fontSize:17, fontWeight:500,
                           color:t.text, borderTop:`0.5px solid ${t.separator}` }}>
               <span>{"Total"}</span>
               <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
@@ -284,16 +284,16 @@ export default function Step1Panier({
 
           <button onClick={onContinue}
                   disabled={cart.length === 0}
-                  style={{ width:'100%', minHeight:56,
-                           padding:'18px 24px', borderRadius:10, border:'none',
+                  style={{ width:'100%', minHeight:48,
+                           padding:'13px 18px', borderRadius:8, border:'none',
                            background: cart.length === 0 ? t.cardAlt : '#10b981',
                            color: cart.length === 0 ? t.muted : '#fff',
                            cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
-                           fontFamily:'inherit', fontSize:16, fontWeight:500,
+                           fontFamily:'inherit', fontSize:14, fontWeight:500,
                            display:'inline-flex', alignItems:'center',
-                           justifyContent:'center', gap:8 }}>
+                           justifyContent:'center', gap:6 }}>
             {"Continuer"}
-            <Icon name="chevronRight" size={16} color={cart.length === 0 ? t.muted : '#fff'}/>
+            <Icon name="chevronRight" size={14} color={cart.length === 0 ? t.muted : '#fff'}/>
           </button>
         </div>
       </div>
