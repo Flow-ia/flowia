@@ -20,9 +20,10 @@ export default function OAuthCallback() {
       ? window.location.hash.slice(1)
       : window.location.hash;
     const params = new URLSearchParams(hash);
-    const type   = params.get('type');
-    const token  = params.get('token');
-    const err    = params.get('error');
+    const type     = params.get('type');
+    const token    = params.get('token');
+    const preToken = params.get('pre_token');
+    const err      = params.get('error');
 
     // Helper : broadcast + fallback via `storage` event (localStorage setItem
     // déclenche un `storage` event dans les autres onglets/fenêtres de la
@@ -32,6 +33,26 @@ export default function OAuthCallback() {
     // dropper. window.close() nettoiera tout de toute façon.
     let bc = null;
     try { bc = new BroadcastChannel('flowia-oauth'); } catch {}
+
+    // RGPD commit 19 : nouveau type=oauth_pending — pas de login (pas de token
+    // final), juste un pre_token JWT à transmettre à l'opener qui navigue vers
+    // la page de confirmation google-confirm pour cocher CGU + marketing.
+    if (type === 'oauth_pending') {
+      const slug = params.get('slug') || '';
+      try { localStorage.setItem('ff_oauth_pre_register', JSON.stringify({ pre_token: preToken, slug })); } catch {}
+      try { bc && bc.postMessage({ type: 'oauth_pre_register', pre_token: preToken, slug }); } catch {}
+      setTimeout(() => {
+        try { bc && bc.close(); } catch {}
+        try { window.close(); } catch {}
+        if (!window.closed) {
+          // Fallback : popup non-fermable (onglet) → on navigue ici aussi.
+          window.location.replace(slug
+            ? `/book/${slug}/auth/google-confirm?pre_token=${encodeURIComponent(preToken || '')}`
+            : '/');
+        }
+      }, 400);
+      return;
+    }
 
     if (err || !token) {
       try { bc && bc.postMessage({ type: 'oauth_error', error: err || 'missing_token' }); } catch {}

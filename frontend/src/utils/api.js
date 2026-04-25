@@ -422,6 +422,13 @@ export const pubApi = {
   },
   updateClientProfile: (slug, body) => pubRequest(`/${slug}/client/profile`, { method: 'PUT', body: JSON.stringify(body) }),
   checkEmail:     (slug, email) => pubRequest(`/${slug}/client/check-email?email=${encodeURIComponent(email)}`),
+  // RGPD commit 19 : finalisation création OAuth Google différée.
+  // Body : { pre_token, contract_accepted, marketing_accepted, phone? }.
+  // Réponses : 200 { token, client } | 400 CGU_REQUIRED | 401 invalid | 410 expired.
+  oauthGoogleFinalize: (slug, body) =>
+    pubRequest(`/${slug}/oauth-google/finalize`, {
+      method: 'POST', body: JSON.stringify(body),
+    }),
   googleAuthUrl:  (slug, ref, marketingOptIn) => {
     const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
     // origin = sous-domaine de l'opener, relayé dans `state` par le

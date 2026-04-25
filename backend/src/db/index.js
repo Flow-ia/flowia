@@ -1220,6 +1220,14 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_accounts_optin ON client_accounts(user_id, marketing_opt_in) WHERE marketing_opt_in = TRUE`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_global_clients_optin ON global_clients(marketing_opt_in) WHERE marketing_opt_in = TRUE`);
 
+  // ── Refonte FDS-2026 commit 19 : trace l'origine du opt-in marketing ─────
+  // Permet de distinguer les inscriptions email/password (= 'register'),
+  // OAuth Google avec création différée (= 'oauth_google'), résa rapide
+  // sans compte (= 'public_book'), import historique (= 'legacy'), etc.
+  // Optionnel (NULL = avant traçage). Idempotent : IF NOT EXISTS.
+  await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS marketing_opt_in_source TEXT`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS marketing_opt_in_source TEXT`);
+
   // ── Refonte FDS-2026 commit 1 : permissions granulaires + user_settings ────
   // Permissions employés : 5 déjà présentes dans la CREATE TABLE initiale
   // (can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse).

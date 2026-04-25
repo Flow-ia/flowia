@@ -402,4 +402,167 @@ module.exports = function attachClientAuthRoutes(router) {
 
     res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  GOOGLE OAUTH — Finalisation de la création différée (RGPD commit 19)
+  //
+  //  Le callback /api/auth/google/callback détecte qu'aucun compte n'existe
+  //  pour cet email/google_id et redirige le client vers une page de
+  //  confirmation avec un JWT temporaire (scope=oauth_pending, exp=10min).
+  //  Cette route concrétise la création UNIQUEMENT après que le client a
+  //  coché les cases CGU + (optionnel) marketing.
+  //
+  //  Rate limiter strict 10/5min (cf. backend/src/index.js).
+  // ═══════════════════════════════════════════════════════════════════════
+  router.post('/:slug/oauth-google/finalize', async (req, res) => {
+    try {
+      const { rows: biz } = await pool.query(
+        'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+        [req.params.slug]
+      );
+      if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+      const userId = biz[0].user_id;
+
+      const { pre_token, contract_accepted, marketing_accepted, phone } = req.body || {};
+      if (!pre_token) {
+        return res.status(401).json({ error: 'Session OAuth manquante.', code: 'OAUTH_PRE_TOKEN_INVALID' });
+      }
+      if (contract_accepted !== true) {
+        return res.status(400).json({
+          error: "L'acceptation des conditions générales et de la politique de confidentialité est obligatoire.",
+          code: 'CGU_REQUIRED',
+        });
+      }
+
+      // 1. Vérifier le pre_token (scope + expiration)
+      let payload;
+      try {
+        payload = jwt.verify(pre_token, process.env.JWT_SECRET);
+      } catch (e) {
+        if (e.name === 'TokenExpiredError') {
+          return res.status(410).json({
+            error: 'Le délai de confirmation est dépassé. Recommencez la connexion Google.',
+            code: 'OAUTH_PRE_TOKEN_EXPIRED',
+          });
+        }
+        return res.status(401).json({ error: 'Session OAuth invalide.', code: 'OAUTH_PRE_TOKEN_INVALID' });
+      }
+      if (payload.scope !== 'oauth_pending') {
+        return res.status(401).json({ error: 'Session OAuth invalide.', code: 'OAUTH_PRE_TOKEN_INVALID' });
+      }
+      if (payload.slug !== req.params.slug) {
+        return res.status(401).json({ error: 'Session OAuth invalide pour ce commerce.', code: 'OAUTH_PRE_TOKEN_INVALID' });
+      }
+
+      const optIn   = marketing_accepted === true;
+      const emailLow = String(payload.email || '').toLowerCase().trim();
+      const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+
+      // 2. Idempotency : si entre-temps un compte global a été créé pour ce
+      //    google_id ou cet email (race condition double-clic ou autre flow),
+      //    on récupère le compte existant sans dupliquer.
+      let gc = null;
+      const { rows: existing } = await pool.query(
+        'SELECT * FROM global_clients WHERE google_id=$1 OR LOWER(email)=$2 LIMIT 1',
+        [payload.google_id, emailLow]
+      );
+      if (existing.length) {
+        gc = existing[0];
+        // Si le compte existait sans google_id (créé via email/password puis
+        // login OAuth) on le rattache, sans toucher l'opt-in marketing existant.
+        if (!gc.google_id) {
+          await pool.query(
+            'UPDATE global_clients SET google_id=$1, is_verified=TRUE, updated_at=NOW() WHERE id=$2',
+            [payload.google_id, gc.id]
+          );
+          gc.google_id = payload.google_id;
+        }
+      } else {
+        const { rows: created } = await pool.query(
+          `INSERT INTO global_clients
+             (email, google_id, first_name, last_name, phone, avatar_url,
+              is_verified, consent_at, consent_ip,
+              marketing_opt_in, marketing_opt_in_at, marketing_opt_in_source)
+           VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW(),$7,$8,
+                   CASE WHEN $8 THEN NOW() ELSE NULL END,
+                   CASE WHEN $8 THEN 'oauth_google' ELSE NULL END)
+           RETURNING *`,
+          [emailLow, payload.google_id, payload.first_name || '', payload.last_name || '',
+           phone ? String(phone).trim() : null, payload.picture || null, consentIp, optIn]
+        );
+        gc = created[0];
+      }
+
+      // 3. Créer la fiche locale chez ce commerçant.
+      const { rows: localRows } = await pool.query(
+        `INSERT INTO client_accounts
+           (user_id, email, first_name, last_name, phone,
+            global_client_id, source,
+            marketing_opt_in, marketing_opt_in_at, marketing_opt_in_source)
+         VALUES ($1,$2,$3,$4,$5,$6,'google',$7,
+                 CASE WHEN $7 THEN NOW() ELSE NULL END,
+                 CASE WHEN $7 THEN 'oauth_google' ELSE NULL END)
+         ON CONFLICT (user_id, email) DO UPDATE SET
+           global_client_id = EXCLUDED.global_client_id,
+           first_name = COALESCE(NULLIF(client_accounts.first_name,''), EXCLUDED.first_name),
+           last_name  = COALESCE(NULLIF(client_accounts.last_name,''),  EXCLUDED.last_name),
+           phone      = COALESCE(NULLIF(client_accounts.phone,''),      EXCLUDED.phone)
+         RETURNING *`,
+        [userId, emailLow, gc.first_name, gc.last_name || '',
+         phone ? String(phone).trim() : null, gc.id, optIn]
+      );
+      const local = localRows[0];
+
+      // 3bis. Fan-out fiches locales pré-existantes du même email chez d'autres
+      // commerçants (cohérent avec /client/register classique et OAuth callback).
+      await pool.query(
+        `UPDATE client_accounts SET global_client_id=$1, source='platform'
+          WHERE LOWER(email)=LOWER($2) AND global_client_id IS NULL`,
+        [gc.id, emailLow]
+      ).catch(e => console.warn('[oauth finalize fan-out]', e.message));
+
+      // 4. Welcome parrainage si ref_code présent dans le pre_token.
+      if (payload.ref_code) {
+        setImmediate(async () => {
+          try {
+            const { resolveReferralForFilleul } = require('../referrals');
+            const resolved = await resolveReferralForFilleul(userId, payload.ref_code, emailLow, 0);
+            if (!resolved.ok) return;
+            const { rows: bizInfo } = await pool.query(
+              'SELECT business_name FROM users WHERE id=$1', [userId]
+            );
+            await sendReferralWelcome({
+              to:           emailLow,
+              filleulName:  gc.first_name,
+              businessName: bizInfo[0]?.business_name || 'votre commerçant',
+              code:         payload.ref_code,
+              type:         resolved.filleul_type,
+              value:        resolved.filleul_value,
+            });
+          } catch (e) { console.warn('[oauth finalize referral welcome]', e.message); }
+        });
+      }
+
+      // 5. JWT final scope='client' (cohérent avec le callback OAuth pour login).
+      const token = jwt.sign(
+        { clientId: local.id, merchantId: userId, globalClientId: gc.id, scope: 'client' },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+
+      const clientObj = {
+        id: local.id, email: gc.email,
+        first_name: gc.first_name, last_name: gc.last_name,
+        phone: local.phone || null,
+        birth_date: local.birth_date || gc.birth_date || null,
+        avatar_url: gc.avatar_url || null,
+        global_client_id: gc.id, has_global_account: true,
+      };
+
+      res.json({ token, client: clientObj });
+    } catch (e) {
+      console.error('[OAUTH FINALIZE]', e.message);
+      res.status(500).json({ error: 'Erreur serveur.' });
+    }
+  });
 };

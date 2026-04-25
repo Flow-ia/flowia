@@ -86,10 +86,11 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   };
 
   const loginWithGoogle = () => {
-    // RGPD commit 17 : en mode register/quick, le consent CGU est obligatoire
-    // avant d'enclencher le flow OAuth (le bouton est aussi disabled
-    // visuellement). marketingOptIn est transmis via le state OAuth (m1/m0).
-    if ((mode === 'register' || mode === 'quick') && !consent) return;
+    // RGPD commit 19 : pour le flow Google, le consentement CGU + marketing
+    // est demandé sur la page de confirmation /google-confirm APRÈS retour
+    // OAuth (uniquement si nouveau client). Le bouton est donc actif quel que
+    // soit l'état des cases. marketingOptIn (state) est ignoré côté back pour
+    // la création (commit 19) ; on le passe par compat tokens en cache.
     cleanupGoogle();
     setGError(''); setGStatus('loading');
     const url = pubApi.googleAuthUrl(slug, referralCode || undefined, marketingOptIn);
@@ -123,11 +124,22 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       onAuth(client);
     };
 
+    // RGPD commit 19 : si la popup OAuth signale un nouveau client (pas encore
+    // en BDD), on navigue vers la page de confirmation où l'utilisateur cochera
+    // explicitement CGU + marketing avant la création du compte.
+    const handlePreRegister = (preToken, slugFromOauth) => {
+      cleanupGoogle();
+      setGStatus('idle'); setGError('');
+      const targetSlug = slugFromOauth || slug;
+      window.location.assign(`/book/${targetSlug}/auth/google-confirm?pre_token=${encodeURIComponent(preToken || '')}`);
+    };
+
     let bc = null;
     try {
       bc = new BroadcastChannel('flowia-oauth');
       bc.onmessage = (ev) => {
         if (ev.data?.type === 'client_login') applyClientLogin(ev.data.token, ev.data.client);
+        else if (ev.data?.type === 'oauth_pre_register') handlePreRegister(ev.data.pre_token, ev.data.slug);
         else if (ev.data?.type === 'oauth_error') {
           cleanupGoogle();
           setGError(ev.data.error || 'Erreur Google');
@@ -142,6 +154,12 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         try { payload = JSON.parse(e.newValue); } catch {}
         if (payload) applyClientLogin(payload.token, payload.client);
         try { localStorage.removeItem('ff_oauth_client'); } catch {}
+      }
+      if (e.key === 'ff_oauth_pre_register' && e.newValue) {
+        let payload = null;
+        try { payload = JSON.parse(e.newValue); } catch {}
+        if (payload) handlePreRegister(payload.pre_token, payload.slug);
+        try { localStorage.removeItem('ff_oauth_pre_register'); } catch {}
       }
     };
     window.addEventListener('storage', onStorage);
@@ -530,27 +548,29 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
               <span style={{fontSize:11,color:th.dim,whiteSpace:'nowrap',padding:'0 6px'}}>ou</span>
               <div style={{flex:1,height:1,background:th.border}}/>
             </div>
-            {/* RGPD commit 17 : disabled en mode register si CGU pas cochées */}
-            {(() => {
-              const googleDisabled = mode === 'register' && !consent;
-              return (
-                <button onClick={loginWithGoogle} disabled={googleDisabled}
-                  style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-                    padding:'11px',borderRadius:10,background:th.card,
-                    border: `0.5px solid ${th.border}`,
-                    cursor: googleDisabled ? 'not-allowed' : 'pointer',
-                    opacity: googleDisabled ? 0.5 : 1,
-                    fontWeight: 500,fontSize:13,color:th.text}}>
-                  <svg width="16" height="16" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  Continuer avec Google
-                </button>
-              );
-            })()}
+            {/* RGPD commit 19 : bouton Google toujours actif. Pour un NOUVEAU
+                client, le consentement CGU + marketing est demandé sur la page
+                /google-confirm après retour OAuth. Pour un client déjà inscrit,
+                login direct comme avant (consentement déjà signé). */}
+            <button onClick={loginWithGoogle}
+              style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
+                padding:'11px',borderRadius:10,background:th.card,
+                border: `0.5px solid ${th.border}`,cursor:'pointer',
+                fontWeight: 500,fontSize:13,color:th.text}}>
+              <svg width="16" height="16" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continuer avec Google
+            </button>
+            {mode === 'register' && (
+              <p style={{ margin:'-2px 0 0', fontSize:11, color:th.muted, lineHeight:1.5,
+                textAlign:'center' }}>
+                {"Vous accepterez les conditions et choisirez vos préférences à l'étape suivante."}
+              </p>
+            )}
 
             {/* Mot de passe oublié */}
             {mode === 'login' && (

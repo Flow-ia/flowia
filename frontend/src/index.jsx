@@ -5,6 +5,7 @@ import App from './App';
 import BookingPage from './pages/BookingPage';
 import BookingPolitique from './pages/BookingPolitique';
 import OAuthCallback from './pages/OAuthCallback';
+import GoogleConfirm from './pages/booking-page/auth/GoogleConfirm';
 import { AuthProvider } from './hooks/useAuth';
 import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
@@ -83,6 +84,8 @@ root.render(
               <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date"                                     element={<BookingPageWrapper />} />
               <Route path="/book/:slug/employe/:employeeId"                                                          element={<BookingPageWrapper />} />
               <Route path="/book/:slug/service/:serviceId/employe"                                                      element={<BookingPageWrapper />} />
+              {/* RGPD commit 19 — page de confirmation OAuth Google (création différée) */}
+              <Route path="/book/:slug/auth/google-confirm"                                                                    element={<GoogleConfirm />} />
               <Route path="/book/:slug/auth"                                                                                    element={<BookingPageWrapper />} />
               <Route path="/book/:slug/login"                                                                                   element={<BookingPageWrapper />} />
               <Route path="/book/:slug/register"                                                                                element={<BookingPageWrapper />} />

@@ -186,6 +186,15 @@ function startServer() {
     message: { error: 'Trop de tentatives de recharge. Réessayez dans quelques minutes.' },
     standardHeaders: true, legacyHeaders: false,
   });
+  // RGPD commit 19 : finalisation OAuth Google différée. Le pre_token JWT
+  // expire à 10 min, donc 10 tentatives / 5 min suffit largement à un usage
+  // normal et bloque un attaquant qui aurait volé un pre_token (timing court
+  // + cap strict évite le brute-force des champs body).
+  const oauthFinalizeLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, max: 10,
+    message: { error: 'Trop de tentatives de finalisation. Réessayez dans quelques minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
   // AUDIT perms commit B : anti-brute-force sur /employee-pins/:id/verify.
   // PIN 4 chiffres = 10000 combinaisons. 5 tentatives / 5 min / IP + lockout
   // DB-level par employeeId (30 min apres 5 echecs). Empeche le crack local
@@ -205,6 +214,8 @@ function startServer() {
   // Cap dédié AVANT le pubLimiter général (express évalue dans l'ordre).
   // Matche sur le path — /pub/:slug/client/quick-register en POST.
   app.use('/api/pub/:slug/client/quick-register', quickRegisterLimiter);
+  // RGPD commit 19 : finalisation OAuth Google (création différée).
+  app.use('/api/pub/:slug/oauth-google/finalize', oauthFinalizeLimiter);
   app.use('/api/pub',            pubLimiter,  require('./routes/public-booking'));
   app.use('/api/categories',     apiLimiter,  require('./routes/categories'));
   app.use('/api/employees',      apiLimiter,  require('./routes/employees'));

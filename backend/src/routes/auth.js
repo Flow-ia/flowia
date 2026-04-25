@@ -899,6 +899,12 @@ router.get('/google/callback', async (req, res) => {
     const { id: googleId, email, given_name, family_name, picture } = profile;
     if (!email) throw new Error('Email non fourni par Google');
 
+    // RGPD commit 19 : refuser un email Google non vérifié — l'identité ne
+    // serait pas garantie côté Google, on ne crée pas de compte sur ce signal.
+    if (profile.verified_email === false) {
+      return res.redirect(`${TARGET_ORIGIN}?auth_error=oauth_email_not_verified`);
+    }
+
     const emailLow = email.toLowerCase().trim();
 
     // 3. Récupérer le user_id du commerçant via le slug
@@ -930,25 +936,41 @@ router.get('/google/callback', async (req, res) => {
         );
         gc = { ...byEmail[0], google_id: googleId, avatar_url: picture };
       } else {
-        const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
-        // RGPD commit 17 : marketing_opt_in transmis via state OAuth (m1/m0).
-        // marketing_opt_in_at = NOW() si opté, NULL sinon.
-        const { rows: created } = await pool.query(
-          `INSERT INTO global_clients
-             (email, google_id, first_name, last_name, avatar_url, is_verified,
-              consent_at, consent_ip, marketing_opt_in, marketing_opt_in_at)
-           VALUES ($1,$2,$3,$4,$5,TRUE,NOW(),$6,$7,
-                   CASE WHEN $7 THEN NOW() ELSE NULL END) RETURNING *`,
-          [emailLow, googleId, given_name || '', family_name || '', picture || null, consentIp, marketingOptIn]
-        );
-        gc = created[0];
+        // RGPD commit 19 : NOUVEAU client (ni google_id ni email match) →
+        // création différée. On ne touche PAS la BDD ; on encode le profil
+        // Google + le contexte (slug, ref, origin) dans un JWT temporaire
+        // (10 min, scope=oauth_pending) et on redirige vers la page de
+        // confirmation où le user choisira explicitement ses cases CGU +
+        // marketing. Le m1/m0 du state OAuth est ignoré ici (commit 17) : on
+        // redemande le consentement de manière explicite côté UI.
+        const preToken = jwt.sign({
+          scope:      'oauth_pending',
+          google_id:  googleId,
+          email:      emailLow,
+          first_name: given_name  || '',
+          last_name:  family_name || '',
+          picture:    picture || null,
+          slug,
+          ref_code:   incomingRef || null,
+          origin:     requestedOriginRaw || null,
+        }, process.env.JWT_SECRET, { expiresIn: '10m' });
+
+        const hashParams = new URLSearchParams();
+        hashParams.set('type',      'oauth_pending');
+        hashParams.set('pre_token', preToken);
+        hashParams.set('slug',      slug);
+        res.redirect(`${TARGET_ORIGIN}/__oauth#${hashParams.toString()}`);
+        console.log(`[GOOGLE OAUTH] ${emailLow} pre-register pending sur slug=${slug}`);
+        return;
       }
     }
 
-    // 5. Créer/mettre à jour la fiche locale chez ce commerçant
-    // RGPD commit 17 : sur INSERT (nouvelle fiche locale), on persiste
-    // marketing_opt_in. ON CONFLICT (fiche existante) ne touche pas l'opt-in
-    // existant — c'est l'admin qui pourra le modifier via la fiche client.
+    // 5. Créer/mettre à jour la fiche locale chez ce commerçant.
+    // RGPD commit 19 : on récupère l'opt-in marketing du compte global
+    // (déjà existant ici car CAS 1 — login). Le m1/m0 du state OAuth n'est
+    // plus utilisé ; le consentement marketing est posé une fois pour toutes
+    // à la création du compte et géré ensuite via le profil client/admin.
+    const localOptIn = gc.marketing_opt_in === true;
     const { rows: localRows } = await pool.query(
       `INSERT INTO client_accounts
          (user_id, email, first_name, last_name, global_client_id, source,
@@ -960,7 +982,7 @@ router.get('/google/callback', async (req, res) => {
          first_name = COALESCE(NULLIF(client_accounts.first_name,''), EXCLUDED.first_name),
          last_name  = COALESCE(NULLIF(client_accounts.last_name,''),  EXCLUDED.last_name)
        RETURNING *`,
-      [userId, emailLow, gc.first_name, gc.last_name || '', gc.id, marketingOptIn]
+      [userId, emailLow, gc.first_name, gc.last_name || '', gc.id, localOptIn]
     );
     const local = localRows[0];
 
