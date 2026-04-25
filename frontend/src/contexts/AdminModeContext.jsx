@@ -1,4 +1,4 @@
-// AdminModeContext — refonte FDS-2026 commit 15.
+// AdminModeContext — refonte FDS-2026 commit 15 (étendu commit 16).
 //
 // Mode admin UX-only (front pur). Source de vérité : localStorage clé
 // 'ff_admin_mode_active'. Ne dépend PAS de user_settings.tablet_mode_enabled
@@ -16,9 +16,16 @@
 //
 // Pas de timer auto. La bascule reste tant que l'utilisateur ne clique pas
 // « Quitter ». Le localStorage est purgé sur disable.
+//
+// Commit 16 : disableAdminMode purge aussi `ff_pin_token` (le PIN session JWT
+// stocké par useAdmin.verifyPin lors de la saisie initiale du PIN admin).
+// Côté requête, api.js ré-ouvre la modale PIN admin via requestAdminPin() si
+// une route admin retourne 403 ACTION_ADMIN_ONLY (token expiré côté serveur)
+// — sans toucher isAdminMode (l'utilisateur reste en mode admin).
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
-const STORAGE_KEY = 'ff_admin_mode_active';
+const STORAGE_KEY  = 'ff_admin_mode_active';
+const PIN_TOKEN_KEY = 'ff_pin_token';
 
 const AdminModeContext = createContext(null);
 
@@ -48,7 +55,12 @@ export function AdminModeProvider({ children }) {
   }, []);
 
   const disableAdminMode = useCallback(() => {
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      // Purge propre du token PIN admin : la prochaine route admin redemandera
+      // le PIN (cohérent avec « Quitter le mode admin = repartir de zéro »).
+      window.localStorage.removeItem(PIN_TOKEN_KEY);
+    } catch { /* noop */ }
     setIsAdminMode(false);
   }, []);
 

@@ -5,7 +5,7 @@ import { useAuth } from './hooks/useAuth';
 import { useAdmin } from './hooks/useAdmin';
 import { useTheme } from './hooks/useTheme';
 import { useNotifications, playSound } from './hooks/useNotifications';
-import { PinEntry, PinSetup } from './components/PinGate';
+import { PinSetup } from './components/PinGate';
 import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
 import Dashboard from './pages/Dashboard';
 import Historique from './pages/Historique';
@@ -28,6 +28,8 @@ import { Icon } from './components/Icon';
 import { TabletModeProvider, useTabletMode } from './contexts/TabletModeProvider';
 import { useAdminMode } from './contexts/AdminModeContext';
 import WhoEncashesModal from './components/WhoEncashesModal';
+import AdminPinModal from './components/AdminPinModal';
+import { registerAdminPinHandler, resolveAdminPinPrompt } from './utils/adminPinPrompt';
 
 // Palette paiements — pastels sobres (unifie avec Dashboard/Forms/Transactions)
 const PM_CFG = {
@@ -1929,6 +1931,18 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Refonte FDS-2026 commit 16 : api.js déclenche requestAdminPin() quand une
+  // route admin retourne 403 (ff_pin_token expiré). On enregistre un handler
+  // qui ouvre la modale PIN admin en mode « refresh » (pas de bascule), résout
+  // la promise pendante au succès pour que la requête soit retryée.
+  useEffect(() => {
+    const unregister = registerAdminPinHandler(() => {
+      setPinPromptMode('refresh');
+      setTabletAdminPinOpen(true);
+    });
+    return unregister;
+  }, []);
+
   // Quitter le mode admin = bascule directe (pas de PIN). Si l'utilisateur
   // était sur une route protégée admin (/dashboard, /historique, /marketing,
   // /statistiques, /reglages, /settings), on redirige vers /agenda. Le wrapper
@@ -1949,6 +1963,10 @@ export default function App() {
   const [whoEncashesOpen, setWhoEncashesOpen]       = useState(false);
   const [quickEntryEmpId, setQuickEntryEmpId]       = useState('');
   const [tabletAdminPinOpen, setTabletAdminPinOpen] = useState(false);
+  // Refonte FDS-2026 commit 16 : ouverture programmatique de la modale PIN
+  // admin (depuis api.js sur 403 ACTION_ADMIN_ONLY). Distingue le « retry après
+  // expiration » (mode admin reste actif) du « bascule mode admin » initial.
+  const [pinPromptMode, setPinPromptMode] = useState('toggle'); // 'toggle' | 'refresh'
 
   const [soundCfg, setSoundCfg] = useState({
     caisse: true, new_appointment: true, reminder: true, repeat: 2, rdvBefore: 15
@@ -2145,47 +2163,42 @@ export default function App() {
 
   if (dataLoading) return <Splash text="Chargement..." theme={theme}/>;
 
+  // Refonte FDS-2026 commit 16 : plus de gate PIN au montage des pages admin.
+  // La saisie du PIN admin se fait UNIQUEMENT via la sidebar (bouton « Convertir
+  // en mode admin »). Une fois en mode admin, toutes les pages /settings,
+  // /reglages, /marketing, /statistiques s'ouvrent directement. RequireAdminMode
+  // (cf. plus bas) garde l'accès en mode normal en redirigeant vers /agenda.
+  // Les actions sensibles utilisent toujours adminRequest qui injecte
+  // x-pin-session ; sur 403 le retry réouvre la modale PIN automatiquement
+  // (cf. utils/adminPinPrompt.js + api.js).
+  // L'onboarding/setup reste rendu si le compte n'a pas encore de PIN du tout.
   const settingsContent = () => {
     if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
-    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('entry'); }}/>;
-    if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')}/>;
+    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('open'); }}/>;
     return <Settings transactions={transactions} employees={employees} categories={categories}
       onAddCat={addCat} onUpdCat={updCat} onDelCat={delCat} onReorderCat={reorderCat}
       onAddEmp={addEmp} onUpdEmp={updEmp} onDelEmp={delEmp} onPatchEmp={patchEmp}
       onUpdTx={updTx} onDelTx={delTx} onLock={handleLock}/>;
   };
 
-  // Refonte FDS-2026 commit 4 : même gate PIN que settingsContent(), mais rend
-  // la nouvelle page Reglages (4 cartes + sous-domaines). Reglages lit sa
-  // sous-route via useLocation, donc un seul path wildcard suffit.
   const reglagesContent = () => {
     if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
-    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('entry'); }}/>;
-    if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')}/>;
+    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('open'); }}/>;
     return <Reglages transactions={transactions} employees={employees} categories={categories}
       onAddCat={addCat} onUpdCat={updCat} onDelCat={delCat} onReorderCat={reorderCat}
       onAddEmp={addEmp} onUpdEmp={updEmp} onDelEmp={delEmp} onPatchEmp={patchEmp}
       onUpdTx={updTx} onDelTx={delTx} onLock={handleLock}/>;
   };
 
-  // Refonte FDS-2026 commit 5 : Page Marketing. Même gate PIN que Réglages
-  // (mutations programme fidélité/anniv/parrainage et send-emails exigent
-  // pinAdminMiddleware côté back).
   const marketingContent = () => {
     if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
-    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('entry'); }}/>;
-    if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')}/>;
+    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('open'); }}/>;
     return <Marketing/>;
   };
 
-  // Refonte FDS-2026 commit 6 : Page Statistiques. Gate PIN admin car
-  // l'onglet Export joint x-pin-session via adminRequest (téléchargement
-  // CSV/PDF). Les autres onglets (Performance/Forecast/Heatmap/Products)
-  // sont des consultations mais on garde la cohérence avec Réglages.
   const statistiquesContent = () => {
     if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
-    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('entry'); }}/>;
-    if (adminStep === 'entry')      return <PinEntry onSuccess={() => setAdminStep('open')}/>;
+    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('open'); }}/>;
     return <Statistiques employees={employees} categories={categories} transactions={transactions}/>;
   };
 
@@ -2256,37 +2269,39 @@ export default function App() {
         }}
       />
 
-      {/* Modale PIN admin pour basculer en mode admin (commit 15).
-          Conserve PinEntry (3 tentatives + reset PIN si oublié), mais
-          enableAdminMode() au succès pour persister la bascule en localStorage. */}
-      {tabletAdminPinOpen && (
-        <div onClick={(e) => { if (e.target === e.currentTarget) setTabletAdminPinOpen(false); }}
-             style={{ position:'fixed', inset: 0, zIndex: 1200,
-                      background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)',
-                      display:'flex', alignItems:'center', justifyContent:'center', padding: 20 }}>
-          <div style={{ width:'100%', maxWidth: 400, borderRadius: 16,
-                        background: theme.card, color: theme.text,
-                        border: '0.5px solid ' + theme.border,
-                        padding: 20, display:'flex', flexDirection:'column', gap: 14 }}>
-            <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
-              <div>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: theme.text }}>
-                  {"Convertir en mode admin"}
-                </p>
-                <p style={{ margin:'3px 0 0', fontSize: 11, color: theme.muted }}>
-                  {"Saisissez votre PIN admin · accès à toutes les pages"}
-                </p>
-              </div>
-              <button onClick={() => setTabletAdminPinOpen(false)}
-                      style={{ border:'none', background:'transparent', cursor:'pointer',
-                               padding: 6, color: theme.muted, fontFamily:'inherit' }}>
-                <Icon name="x" size={15} color={theme.muted}/>
-              </button>
-            </div>
-            <PinEntry onSuccess={() => { enableAdminMode(); setTabletAdminPinOpen(false); }}/>
-          </div>
-        </div>
-      )}
+      {/* Refonte FDS-2026 commit 16 : modale PIN admin cohérente avec la
+          modale PIN employé (PinAccessModal Dashboard). Deux modes :
+          - 'toggle'  : bouton sidebar « Convertir en mode admin » → succès =
+            enableAdminMode() (qui persiste la bascule + ff_pin_token est déjà
+            stocké par useAdmin.verifyPin via /auth/pin/verify).
+          - 'refresh' : api.js a intercepté un 403 ACTION_ADMIN_ONLY (ff_pin_token
+            expiré). Succès = juste résoudre la promise pendante pour que la
+            requête en attente puisse retry. PAS de bascule mode admin → mode
+            normal (l'utilisateur reste admin, son token a juste été rafraîchi). */}
+      <AdminPinModal
+        open={tabletAdminPinOpen}
+        theme={theme}
+        title={pinPromptMode === 'refresh'
+          ? "Session admin à rafraîchir"
+          : "Convertir en mode admin"}
+        subtitle={pinPromptMode === 'refresh'
+          ? "Saisissez à nouveau votre PIN admin pour continuer"
+          : "Saisissez votre PIN admin · accès à toutes les pages"}
+        onSuccess={() => {
+          if (pinPromptMode === 'refresh') {
+            resolveAdminPinPrompt(true);
+          } else {
+            enableAdminMode();
+          }
+          setTabletAdminPinOpen(false);
+          setPinPromptMode('toggle');
+        }}
+        onClose={() => {
+          if (pinPromptMode === 'refresh') resolveAdminPinPrompt(false);
+          setTabletAdminPinOpen(false);
+          setPinPromptMode('toggle');
+        }}
+      />
     </div>
     );
   };

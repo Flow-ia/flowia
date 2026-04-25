@@ -1,14 +1,17 @@
-// Historique admin — refonte FDS-2026 commit 7h.
+// Historique admin — refonte FDS-2026 commit 7h, simplifié au commit 16.
 //
 // Page dédiée à la consultation/édition/suppression de TOUTES les transactions,
 // toutes dates. Accessible depuis la sidebar Principal (entre Caisse et Clients).
 //
-// Gate au montage = PinAccessModal (PIN employé, identique au /caisse/historique
-// actuel). Les actions sensibles (edit/delete) restent gated côté back par
-// pinAdminMiddleware via les helpers `adminRequest` derrière onUpdTx/onDelTx
-// (cf. App.jsx). On ne casse PAS la logique de TabHistorique : on en reprend
-// la structure (search, segmented type, edit/delete avec audit trail, pagination)
-// et on l'étend avec :
+// Commit 16 : plus de gate PIN au montage. Cette page n'est accessible qu'en
+// mode admin (RequireAdminMode redirige sinon vers /agenda), et le PIN admin
+// a déjà été saisi via la sidebar — re-saisir ici serait redondant. Les
+// actions sensibles (edit/delete) passent par adminRequest qui injecte
+// x-pin-session automatiquement, et sur 403 ACTION_ADMIN_ONLY le retry réouvre
+// la modale PIN admin (cf. utils/adminPinPrompt.js + api.js + AdminPinModal).
+//
+// On ne casse PAS la logique de TabHistorique : structure identique (search,
+// segmented type, edit/delete avec audit trail, pagination) + extensions :
 //   - date range from/to (défaut : 30 derniers jours)
 //   - filtre employé (chips)
 //   - filtre moyen de paiement (chips)
@@ -17,17 +20,14 @@
 //
 // Les calculs (multi éclatés en sous-paiements, items vs description, RDV vs
 // caisse) sont identiques à TabHistorique pour ne pas diverger côté audit.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
 import { TransactionForm } from '../../components/Forms';
 import { disp } from '../../utils/dates';
 import { Card, nd, fmt, PAY_INFO, PAY_KEYS } from '../settings/shared';
 import { Button, SegmentedControl } from '../../components/primitives';
-import { Icon } from '../../components/Icon';
 import { PageHeader } from '../reglages/shared';
-import { PinAccessModal } from '../Dashboard';
 import { useTheme } from '../../hooks/useTheme';
 import { Toast, useToast } from '../../components/UI';
 
@@ -55,19 +55,11 @@ export default function HistoriqueAdmin({
   const { theme } = useTheme();
   const t = theme;
   const [toast, showToast] = useToast();
-  const navigate = useNavigate();
 
-  // ── Gate PIN employé au montage (même UX que /caisse/historique legacy). ──
-  const [unlocked, setUnlocked] = useState(false);
-  const [pinOpen,  setPinOpen]  = useState(true);
-  const successRef = useRef(false);
-
-  // Si aucun employé actif, on saute le gate (cohérent avec Dashboard legacy).
-  useEffect(() => {
-    if (employees.filter(e => e.is_active !== false).length === 0) {
-      setUnlocked(true); setPinOpen(false);
-    }
-  }, [employees]);
+  // Commit 16 : plus de gate PIN au montage. Accès gardé par RequireAdminMode
+  // (mode admin ⇒ PIN admin déjà saisi via sidebar). Les boutons Éditer /
+  // Supprimer continuent d'utiliser onUpdTx/onDelTx → adminRequest qui joint
+  // x-pin-session, et retry auto sur 403 ACTION_ADMIN_ONLY.
 
   // ── Filtres ───────────────────────────────────────────────────────────────
   const [from,    setFrom]    = useState(isoDaysAgo(30));
@@ -150,26 +142,6 @@ export default function HistoriqueAdmin({
   const pageSafe   = Math.min(page, totalPages - 1);
   const pagedItems = filtered.slice(pageSafe * PAGE_SIZE, (pageSafe + 1) * PAGE_SIZE);
 
-  // ── Gate ──────────────────────────────────────────────────────────────────
-  if (!unlocked) {
-    return (
-      <div style={{ minHeight:'100vh', background: t.bg }}>
-        <PinAccessModal
-          open={pinOpen}
-          employees={employees}
-          theme={t}
-          title="Historique"
-          actionLabel="Voir l'historique complet"
-          onSuccess={() => { successRef.current = true; setUnlocked(true); setPinOpen(false); }}
-          onClose={() => {
-            setPinOpen(false);
-            if (!successRef.current) navigate('/dashboard');
-          }}
-        />
-      </div>
-    );
-  }
-
   const inp = {
     width:'100%', padding:'10px 12px', borderRadius:8, outline:'none',
     background:t.inputBg, border:`0.5px solid ${t.borderInput}`,
@@ -210,16 +182,6 @@ export default function HistoriqueAdmin({
                     display:'flex', flexDirection:'column', gap:14 }}>
         <PageHeader title="Historique"
                     subtitle="Toutes les transactions, toutes dates · admin"/>
-
-        {/* Bandeau zone admin */}
-        <div style={{ padding:'12px 14px', borderRadius:8,
-                      display:'flex', alignItems:'flex-start', gap:10,
-                      background:'#fffbeb' }}>
-          <I.Key style={{ width:14, height:14, flexShrink:0, marginTop:2, color:'#92400e' }}/>
-          <p style={{ fontSize:12, fontWeight:500, color:'#92400e', margin:0 }}>
-            Zone admin — édition et suppression sécurisées par PIN admin (audit trail)
-          </p>
-        </div>
 
         {/* ── Filtres dates ───────────────────────────────────────────────── */}
         <div style={card}>
@@ -582,8 +544,10 @@ export default function HistoriqueAdmin({
                            try {
                              if (edit) { await onUpdTx(edit.id, d); showToast('Transaction modifiée'); }
                            } catch (e) {
+                             // Le retry automatique 403 est géré par adminRequest ;
+                             // si on arrive ici c'est une erreur effective.
                              if (e.code === 'ACTION_ADMIN_ONLY')
-                               showToast('Session admin expirée — re-saisissez votre PIN', 'error');
+                               showToast("Erreur d'autorisation, reconnectez-vous", 'error');
                              else showToast('Erreur lors de la modification', 'error');
                            }
                            setEdit(null); setModal(false);
@@ -596,13 +560,13 @@ export default function HistoriqueAdmin({
                      showToast('Transaction supprimée');
                    } catch (e) {
                      if (e.code === 'ACTION_ADMIN_ONLY')
-                       showToast('Session admin expirée — re-saisissez votre PIN', 'error');
+                       showToast("Erreur d'autorisation, reconnectez-vous", 'error');
                      else showToast('Erreur lors de la suppression', 'error');
                    }
                    setDelId(null);
                  }}
                  title="Supprimer cette transaction ?"
-                 message={"Action admin irréversible — enregistrée dans l'audit trail."}
+                 message="Confirmer la suppression — action enregistrée dans l'audit trail."
                  theme={t}/>
       </div>
     </div>

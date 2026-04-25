@@ -36,16 +36,6 @@ export default function TabHistorique({ transactions, employees, categories, onU
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      {/* Bandeau zone admin */}
-      <div style={{ padding:'12px 14px', borderRadius:8,
-                    display:'flex', alignItems:'flex-start', gap:10,
-                    background:'#fffbeb' }}>
-        <I.Key style={{ width:14, height:14, flexShrink:0, marginTop:2, color:'#92400e' }}/>
-        <p style={{ fontSize:12, fontWeight:500, color:'#92400e', margin:0 }}>
-          Zone admin — modification et suppression des transactions
-        </p>
-      </div>
-
       {/* Recherche */}
       <div style={{ position:'relative' }}>
         <I.Search style={{ width:14, height:14, position:'absolute', left:12, top:'50%',
@@ -279,7 +269,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
                          try {
                            if (edit) { await onUpdate(edit.id, d); showToast('Transaction modifiee'); }
                          } catch (e) {
-                           if (e.code === 'ACTION_ADMIN_ONLY') showToast('Session admin expiree - re-saisissez votre PIN', 'error');
+                           if (e.code === 'ACTION_ADMIN_ONLY') showToast("Erreur d'autorisation, reconnectez-vous", 'error');
                            else showToast('Erreur lors de la modification', 'error');
                          }
                          setEdit(null); setModal(false);
@@ -291,7 +281,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
                    await onDelete(delId);
                    showToast('Transaction supprimee');
                  } catch (e) {
-                   if (e.code === 'ACTION_ADMIN_ONLY') showToast('Session admin expiree - re-saisissez votre PIN', 'error');
+                   if (e.code === 'ACTION_ADMIN_ONLY') showToast("Erreur d'autorisation, reconnectez-vous", 'error');
                    else showToast('Erreur lors de la suppression', 'error');
                  }
                  setDelId(null);

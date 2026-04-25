@@ -1,4 +1,6 @@
 // src/utils/api.js
+import { requestAdminPin } from './adminPinPrompt';
+
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Garde contre les dispatchs répétés : plusieurs requêtes parallèles qui
@@ -103,16 +105,33 @@ function getToken() {
 function getPinToken() {
   return localStorage.getItem('ff_pin_token');
 }
-// Requête avec PIN admin (pour PUT/DELETE transactions)
+// Requête avec PIN admin (pour PUT/DELETE transactions, etc.).
+//
+// Refonte FDS-2026 commit 16 : si le serveur retourne 403 ACTION_ADMIN_ONLY
+// (typiquement parce que ff_pin_token a expiré, JWT 2h ≪ session admin
+// localStorage qui peut durer plusieurs heures), on ouvre la modale PIN admin
+// (registerAdminPinHandler côté App.jsx), on attend la nouvelle saisie, puis
+// on retry UNE fois la requête avec le nouveau token. Pas de bascule en mode
+// normal — l'utilisateur reste « admin », il rafraîchit juste son token.
 async function adminRequest(path, options = {}) {
-  const token    = getToken();
-  const pinToken = getPinToken();
-  const headers  = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  if (token)    headers['Authorization'] = `Bearer ${token}`;
-  if (pinToken) headers['x-pin-session'] = pinToken;
-  const res  = await fetch(`${BASE}${path}`, { ...options, headers });
-  handleMerchant401(res, path);
-  const data = await res.json();
+  const exec = async () => {
+    const token    = getToken();
+    const pinToken = getPinToken();
+    const headers  = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    if (token)    headers['Authorization'] = `Bearer ${token}`;
+    if (pinToken) headers['x-pin-session'] = pinToken;
+    const res  = await fetch(`${BASE}${path}`, { ...options, headers });
+    handleMerchant401(res, path);
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  };
+  let { res, data } = await exec();
+  if (res.status === 403 && data?.error === 'ACTION_ADMIN_ONLY') {
+    try {
+      await requestAdminPin();
+      ({ res, data } = await exec());
+    } catch { /* modal annulée → on remonte le 403 d'origine */ }
+  }
   if (!res.ok) throw Object.assign(new Error(data.message || data.error || 'Erreur serveur'), { code: data.error });
   return data;
 }
@@ -441,13 +460,24 @@ export const exportApi = {
   getSummary:  (q)    => request('/export/summary?' + new URLSearchParams(q)),
   getCsvUrl:   (q)    => `${BASE}/export/csv?`  + new URLSearchParams(q),
   getPdfUrl:   (q)    => `${BASE}/export/pdf?`  + new URLSearchParams(q),
+  // Refonte FDS-2026 commit 16 : sur 403 (token PIN expiré), on ré-ouvre la
+  // modale admin via requestAdminPin() puis on retry UNE fois (cohérent avec
+  // adminRequest). Évite « Session admin expirée. Déverrouillez avec votre PIN
+  // puis réessayez. » qui forçait l'utilisateur à quitter/réentrer le mode.
   downloadFile: async (url, filename) => {
-    const token    = localStorage.getItem('ff_token');
-    const pinToken = localStorage.getItem('ff_pin_token');
-    const headers  = {};
-    if (token)    headers['Authorization']  = `Bearer ${token}`;
-    if (pinToken) headers['x-pin-session']  = pinToken;
-    const r = await fetch(url, { headers });
+    const fetchOnce = () => {
+      const token    = localStorage.getItem('ff_token');
+      const pinToken = localStorage.getItem('ff_pin_token');
+      const headers  = {};
+      if (token)    headers['Authorization'] = `Bearer ${token}`;
+      if (pinToken) headers['x-pin-session'] = pinToken;
+      return fetch(url, { headers });
+    };
+    let r = await fetchOnce();
+    if (r.status === 403) {
+      try { await requestAdminPin(); r = await fetchOnce(); }
+      catch { /* modal annulée → on retombe sur le 403 d'origine */ }
+    }
     if (!r.ok) {
       // Remonter le vrai message backend pour affichage popup côté UI
       let msg = 'Erreur export';
@@ -456,7 +486,7 @@ export const exportApi = {
         if (j?.error)   msg = j.error;
         if (j?.message) msg = j.message;
       } catch {}
-      if (r.status === 403) msg = 'Session admin expirée. Déverrouillez avec votre PIN puis réessayez.';
+      if (r.status === 403) msg = "Erreur d'autorisation, reconnectez-vous.";
       throw new Error(msg);
     }
     const blob = await r.blob();

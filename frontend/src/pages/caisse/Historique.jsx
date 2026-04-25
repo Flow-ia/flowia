@@ -1,4 +1,4 @@
-// Caisse > Historique du jour — refonte commit 7h.
+// Caisse > Historique du jour — refonte commit 7h, bypass admin commit 16.
 //
 // Page LECTURE SEULE destinée à l'employé sur tablette pour vérifier ce qui a
 // été encaissé AUJOURD'HUI. Toute édition/suppression passe par /historique
@@ -7,6 +7,11 @@
 // Gate au montage = PinAccessModal (PIN employé). Une fois validé, session
 // 5 min. Les actions sensibles edit/delete ne sont JAMAIS proposées ici, on
 // retire complètement les boutons d'action sur les lignes.
+//
+// Commit 16 : si l'utilisateur est en mode admin (isAdminMode === true), on
+// bypass la gate PIN employé — un admin doit pouvoir consulter l'historique
+// du jour sans saisir le PIN d'un employé en plus du sien (déjà saisi via
+// la sidebar). En mode normal (employé tablette), la gate reste en place.
 //
 // Filtre date FORCÉ : aujourd'hui uniquement (UTC stable comme nd()). Le
 // filtre employé chips reste utile pour qu'un barbier voie sa propre journée.
@@ -19,6 +24,7 @@ import { todayStr } from '../../utils/dates';
 import { Card, nd, fmt, PAY_KEYS } from '../settings/shared';
 import { PinAccessModal } from '../Dashboard';
 import { Icon } from '../../components/Icon';
+import { useAdminMode } from '../../contexts/AdminModeContext';
 
 const PM_GRID_CFG = {
   cash:     { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
@@ -38,17 +44,20 @@ export default function Historique({
   const txs  = Array.isArray(transactions) ? transactions : [];
   const emps = Array.isArray(employees)    ? employees    : [];
 
-  // ── Gate PIN employé au montage ──────────────────────────────────────────
-  const [unlocked, setUnlocked] = useState(false);
-  const [pinOpen,  setPinOpen]  = useState(true);
-  const successRef = useRef(false);
+  // ── Gate PIN employé au montage (commit 16 : bypass si mode admin) ────────
+  // Le PIN admin saisi via la sidebar suffit ; ne pas redemander un PIN employé
+  // par-dessus.
+  const { isAdminMode } = useAdminMode();
+  const [unlocked, setUnlocked] = useState(isAdminMode);
+  const [pinOpen,  setPinOpen]  = useState(!isAdminMode);
+  const successRef = useRef(isAdminMode);
 
   // Si aucun employé actif, on saute le gate (cohérent avec legacy Historique).
   useEffect(() => {
-    if (emps.filter(e => e.is_active !== false).length === 0) {
+    if (isAdminMode || emps.filter(e => e.is_active !== false).length === 0) {
       setUnlocked(true); setPinOpen(false);
     }
-  }, [emps]);
+  }, [emps, isAdminMode]);
 
   // ── Filtre employé (chips) ───────────────────────────────────────────────
   const [empF, setEmpF] = useState('all');
