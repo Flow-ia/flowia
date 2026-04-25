@@ -6,13 +6,19 @@
 // de vérité anti-spoofing : employeePinOptional côté back substitue
 // req.employee.id à body.employee_id quand le PIN est fourni.
 //
-// UX commit 7d : auto-advance — clic sur un avatar = setEmpId + onContinue()
-// après 50 ms (feedback visuel). Le bouton "Continuer" est retiré de cette
-// étape, "Précédent" reste. Les étapes 1 et 3 gardent leur bouton Continuer.
+// UX commit 7e : auto-advance en 1 seul clic. Auparavant Encaisser.jsx
+// passait `onContinue={() => go(3)}` qui re-vérifiait `!empId` depuis une
+// closure stale (empId encore '' à ce moment, le re-render n'avait pas eu
+// lieu) → le passage step 3 était bloqué et il fallait re-cliquer. On
+// remplace par `onPickEmployee(id)` qui fait setEmpId+setStep en un seul
+// callback côté parent. Petit feedback visuel via `pickedId` local pendant
+// 120 ms (border accent + scale) avant que le DOM bascule sur l'étape 3.
+import { useState } from 'react';
 import { Icon } from '../../../components/Icon';
 
-export default function Step2Employe({ employees = [], empId, setEmpId, theme: t, onBack, onContinue }) {
+export default function Step2Employe({ employees = [], empId, setEmpId, theme: t, onBack, onPickEmployee }) {
   const eligible = employees.filter(e => e.is_active !== false && e.can_encash === true);
+  const [pickedId, setPickedId] = useState(null);
 
   const card = {
     padding: 14, borderRadius: 12, background: t.card,
@@ -41,13 +47,16 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
                       gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',
                       gap: 8 }}>
           {eligible.map(e => {
-            const active = empId === e.id;
+            const isPicked = pickedId === e.id;
+            const active = empId === e.id || isPicked;
             const accent = e.avatar_color || '#6b7280';
             const pick = () => {
+              if (pickedId) return; // anti double-clic pendant l'animation
+              setPickedId(e.id);
               setEmpId(e.id);
-              // Petit délai pour que l'utilisateur perçoive la sélection
-              // avant de basculer sur l'étape 3 (confort UX).
-              setTimeout(() => { onContinue && onContinue(); }, 80);
+              // 120 ms de feedback visuel avant le switch d'étape, pour que
+              // l'utilisateur voie clairement quel employé il a choisi.
+              setTimeout(() => { onPickEmployee && onPickEmployee(e.id); }, 120);
             };
             return (
               <button key={e.id} onClick={pick}
@@ -57,8 +66,18 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
                                background: active ? t.cardAlt : t.card,
                                color: t.text, cursor: 'pointer', fontFamily: 'inherit',
                                display: 'flex', flexDirection: 'column',
-                               alignItems: 'center', gap: 8,
-                               transition: 'border-color 0.15s ease, background 0.15s ease' }}>
+                               alignItems: 'center', gap: 8, position: 'relative',
+                               transform: isPicked ? 'scale(1.03)' : 'scale(1)',
+                               transition: 'border-color 0.15s ease, background 0.15s ease, transform 0.12s ease' }}>
+                {isPicked && (
+                  <span style={{ position: 'absolute', top: 6, right: 6,
+                                 width: 18, height: 18, borderRadius: 99,
+                                 background: accent, color: '#fff',
+                                 display: 'inline-flex', alignItems: 'center',
+                                 justifyContent: 'center' }}>
+                    <Icon name="check" size={11} color="#fff" strokeWidth={2.5}/>
+                  </span>
+                )}
                 <div style={{ width: 42, height: 42, borderRadius: 99,
                               background: accent, color: '#fff',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -73,12 +92,6 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
                   <p style={{ margin: 0, fontSize: 11, color: t.muted, textAlign: 'center' }}>
                     {e.role}
                   </p>
-                )}
-                {active && (
-                  <span style={{ fontSize: 10, color: accent, fontWeight: 500,
-                                 textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {"Sélectionné"}
-                  </span>
                 )}
               </button>
             );

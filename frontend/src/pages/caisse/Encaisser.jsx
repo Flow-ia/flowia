@@ -103,7 +103,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
           empId={empId} setEmpId={setEmpId}
           theme={t}
           onBack={() => go(1)}
-          onContinue={() => go(3)}
+          onPickEmployee={(id) => { setEmpId(id); setStep(3); }}
         />
       )}
 

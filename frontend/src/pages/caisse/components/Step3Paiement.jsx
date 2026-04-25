@@ -9,10 +9,10 @@ import { promoApi, referralsApi, creditsApi, clientsApi } from '../../../utils/a
 import { Icon } from '../../../components/Icon';
 
 const PM_CFG = {
-  cash:     { label: 'Espèces',  text: '#065f46', bg: '#f0fdf4' },
-  card:     { label: 'Carte',    text: '#4338ca', bg: '#eef2ff' },
-  transfer: { label: 'Virement', text: '#0e7490', bg: '#ecfeff' },
-  other:    { label: 'Autre',    text: '#92400e', bg: '#fffbeb' },
+  cash:     { label: 'Espèces',  text: '#065f46', bg: '#f0fdf4', icon: 'wallet'     },
+  card:     { label: 'Carte',    text: '#4338ca', bg: '#eef2ff', icon: 'creditCard' },
+  transfer: { label: 'Virement', text: '#0e7490', bg: '#ecfeff', icon: 'send'       },
+  other:    { label: 'Autre',    text: '#92400e', bg: '#fffbeb', icon: 'more'       },
 };
 
 function fmt(n) { return Number(n || 0).toFixed(2); }
@@ -366,24 +366,39 @@ export default function Step3Paiement({
 
         {!splitMode ? (
           <div style={{ display:'grid',
-                        gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))',
-                        gap: 6 }}>
+                        gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',
+                        gap: 8 }}>
             {Object.entries(PM_CFG).map(([id, cfg]) => {
               const active = payMethod === id;
               return (
                 <button key={id} onClick={() => setPayMethod(id)}
-                        style={{ padding:10, borderRadius:8,
-                                 background: cfg.bg,
-                                 border:'0.5px solid rgba(0,0,0,0.04)',
-                                 borderLeft: active ? '2px solid ' + cfg.text : '2px solid transparent',
-                                 color: cfg.text, cursor:'pointer', fontFamily:'inherit',
+                        style={{ position:'relative',
+                                 padding:'14px 10px', borderRadius:10,
+                                 background: active ? cfg.bg : '#fff',
+                                 border: active
+                                   ? '0.5px solid rgba(0,0,0,0.04)'
+                                   : '0.5px solid #e5e7eb',
+                                 borderLeft: active
+                                   ? '3px solid ' + cfg.text
+                                   : '3px solid transparent',
+                                 opacity: active ? 1 : 0.7,
+                                 color: active ? cfg.text : '#6b7280',
+                                 cursor:'pointer', fontFamily:'inherit',
                                  display:'flex', flexDirection:'column',
-                                 alignItems:'center', gap:4 }}>
-                  <span style={{ fontSize:10, fontWeight:500, textTransform:'uppercase',
-                                 letterSpacing:'0.04em' }}>{cfg.label}</span>
+                                 alignItems:'center', gap:6,
+                                 transition: 'opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease' }}>
                   {active && (
-                    <span style={{ fontSize:10, fontWeight:500 }}>{"✓"}</span>
+                    <span style={{ position:'absolute', top:6, right:6,
+                                   display:'inline-flex' }}>
+                      <Icon name="checkCircle" size={16} color={cfg.text} strokeWidth={2}/>
+                    </span>
                   )}
+                  <Icon name={cfg.icon} size={22}
+                        color={active ? cfg.text : '#9ca3af'}/>
+                  <span style={{ fontSize:14, fontWeight:500,
+                                 color: active ? cfg.text : '#6b7280' }}>
+                    {cfg.label}
+                  </span>
                 </button>
               );
             })}
