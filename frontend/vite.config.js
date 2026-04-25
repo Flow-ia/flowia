@@ -18,11 +18,28 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Vendor React (chargé en premier)
-          if (id.includes('node_modules/react') ||
-              id.includes('node_modules/react-dom') ||
-              id.includes('node_modules/react-router-dom')) {
+          // Vendor React (chargé en premier).
+          // Slash trailing OBLIGATOIRE — sinon "node_modules/react" matche
+          // accidentellement react-phone-number-input et toute autre lib
+          // commençant par "react-" (cf. fix commit 20a : la lib finissait
+          // dans vendor-react alors que ses sous-deps libphonenumber-js /
+          // country-flag-icons restaient ailleurs → circular chunk + crash
+          // "Cannot read properties of undefined (reading 'createContext')").
+          if (id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router-dom/') ||
+              id.includes('node_modules/scheduler/')) {
             return 'vendor-react';
+          }
+          // Vendor téléphone — react-phone-number-input + ses sous-deps
+          // (libphonenumber-js, country-flag-icons, classnames) regroupés
+          // dans un même chunk, chargé à la demande quand un écran utilise
+          // <PhoneInput/>. Évite la circularité avec vendor-react.
+          if (id.includes('node_modules/react-phone-number-input') ||
+              id.includes('node_modules/libphonenumber-js') ||
+              id.includes('node_modules/country-flag-icons') ||
+              id.includes('node_modules/classnames')) {
+            return 'vendor-phone';
           }
           // Pages lourdes — chargées à la demande
           if (id.includes('pages/BookingPage'))    return 'page-booking';
