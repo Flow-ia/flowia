@@ -20,32 +20,43 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
   const eligible = employees.filter(e => e.is_active !== false && e.can_encash === true);
   const [pickedId, setPickedId] = useState(null);
 
+  // Mélange une couleur accent vers du blanc pour obtenir un pastel léger
+  // utilisable en background de la card sélectionnée.
+  const pastelOf = (hex) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return '#f3f4f6';
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const mix = (c) => Math.round(c + (255 - c) * 0.88);
+    return 'rgb(' + mix(r) + ',' + mix(g) + ',' + mix(b) + ')';
+  };
+
   const card = {
-    padding: 14, borderRadius: 12, background: t.card,
+    padding: 16, borderRadius: 12, background: t.card,
     border: `0.5px solid ${t.border}`,
-    display: 'flex', flexDirection: 'column', gap: 12,
+    display: 'flex', flexDirection: 'column', gap: 14,
   };
 
   return (
     <div style={card}>
       <div>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text }}>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text }}>
           {"Qui encaisse ?"}
         </p>
-        <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: t.muted }}>
           {"Seuls les employés avec la permission can_encash apparaissent. Le PIN employé sera demandé à la validation."}
         </p>
       </div>
 
       {eligible.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 12, color: t.muted,
-                    padding: 16, borderRadius: 8, background: t.cardAlt }}>
+        <p style={{ margin: 0, fontSize: 14, color: t.muted,
+                    padding: 20, borderRadius: 10, background: t.cardAlt }}>
           {"Aucun employé actif avec la permission can_encash. Configurez-les depuis Réglages > Équipe > Membres."}
         </p>
       ) : (
         <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',
-                      gap: 8 }}>
+                      gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: 12 }}>
           {eligible.map(e => {
             const isPicked = pickedId === e.id;
             const active = empId === e.id || isPicked;
@@ -60,36 +71,40 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
             };
             return (
               <button key={e.id} onClick={pick}
-                      style={{ padding: 14, borderRadius: 10,
-                               border: `0.5px solid ${active ? accent : t.border}`,
-                               borderLeft: `2px solid ${active ? accent : 'transparent'}`,
-                               background: active ? t.cardAlt : t.card,
+                      style={{ padding: 20, borderRadius: 12,
+                               minHeight: 140,
+                               border: active
+                                 ? '3px solid ' + accent
+                                 : `0.5px solid ${t.border}`,
+                               background: active ? pastelOf(accent) : t.card,
                                color: t.text, cursor: 'pointer', fontFamily: 'inherit',
                                display: 'flex', flexDirection: 'column',
-                               alignItems: 'center', gap: 8, position: 'relative',
+                               alignItems: 'center', justifyContent: 'center',
+                               gap: 10, position: 'relative',
+                               boxShadow: active ? '0 4px 14px rgba(0,0,0,0.08)' : 'none',
                                transform: isPicked ? 'scale(1.03)' : 'scale(1)',
-                               transition: 'border-color 0.15s ease, background 0.15s ease, transform 0.12s ease' }}>
+                               transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease' }}>
                 {isPicked && (
-                  <span style={{ position: 'absolute', top: 6, right: 6,
-                                 width: 18, height: 18, borderRadius: 99,
+                  <span style={{ position: 'absolute', top: 10, right: 10,
+                                 width: 24, height: 24, borderRadius: 99,
                                  background: accent, color: '#fff',
                                  display: 'inline-flex', alignItems: 'center',
                                  justifyContent: 'center' }}>
-                    <Icon name="check" size={11} color="#fff" strokeWidth={2.5}/>
+                    <Icon name="check" size={14} color="#fff" strokeWidth={2.5}/>
                   </span>
                 )}
-                <div style={{ width: 42, height: 42, borderRadius: 99,
+                <div style={{ width: 80, height: 80, borderRadius: 99,
                               background: accent, color: '#fff',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 16, fontWeight: 500 }}>
+                              fontSize: 24, fontWeight: 500 }}>
                   {(e.name || '?').charAt(0).toUpperCase()}
                 </div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text,
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text,
                             textAlign: 'center', wordBreak: 'break-word' }}>
                   {e.name}
                 </p>
                 {e.role && (
-                  <p style={{ margin: 0, fontSize: 11, color: t.muted, textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 12, color: '#6b7280', textAlign: 'center' }}>
                     {e.role}
                   </p>
                 )}
@@ -100,15 +115,15 @@ export default function Step2Employe({ employees = [], empId, setEmpId, theme: t
       )}
 
       {/* Auto-advance : pas de bouton "Continuer", seul "Retour" est visible. */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-start' }}>
         <button onClick={onBack}
-                style={{ padding: '10px 14px', borderRadius: 8,
+                style={{ minHeight: 48, padding: '14px 20px', borderRadius: 10,
                          border: `0.5px solid ${t.border}`,
                          background: t.cardAlt, color: t.text,
                          cursor: 'pointer', fontFamily: 'inherit',
-                         fontSize: 12, fontWeight: 500,
-                         display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <Icon name="chevronLeft" size={13} color={t.text}/>
+                         fontSize: 14, fontWeight: 500,
+                         display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="chevronLeft" size={16} color={t.text}/>
           {"Retour"}
         </button>
       </div>

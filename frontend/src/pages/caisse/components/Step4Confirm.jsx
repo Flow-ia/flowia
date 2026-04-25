@@ -162,19 +162,19 @@ export default function Step4Confirm({
                         border: `0.5px solid ${t.border}`, borderRadius: 12,
                         padding: 40,
                         display:'flex', flexDirection:'column',
-                        alignItems:'center', gap: 18 }}>
-            <div style={{ width: 80, height: 80, borderRadius: 99,
+                        alignItems:'center', gap: 20 }}>
+            <div style={{ width: 96, height: 96, borderRadius: 99,
                           background: '#10b981',
                           display:'flex', alignItems:'center', justifyContent:'center',
                           animation: 'ff-success-pop 280ms ease-out' }}>
-              <Icon name="check" size={36} color="#fff" strokeWidth={2.5}/>
+              <Icon name="check" size={44} color="#fff" strokeWidth={2.5}/>
             </div>
 
             <div style={{ textAlign:'center' }}>
-              <p style={{ margin:0, fontSize:22, fontWeight:500, color: t.text }}>
+              <p style={{ margin:0, fontSize:24, fontWeight:500, color: t.text }}>
                 {"Encaissement enregistré"}
               </p>
-              <p style={{ margin:'6px 0 0', fontSize:14, color:'#6b7280' }}>
+              <p style={{ margin:'8px 0 0', fontSize:15, color:'#6b7280' }}>
                 {fmt(done.finalTotal) + " € · " + done.methodLabel + " · " + done.empName}
               </p>
             </div>
@@ -235,29 +235,29 @@ export default function Step4Confirm({
                         if (countdownRef.current) clearInterval(countdownRef.current);
                         onSuccess && onSuccess();
                       }}
-                      style={{ flex:'1 1 200px',
-                               padding:'12px 18px', borderRadius:8, border:'none',
+                      style={{ flex:'1 1 220px', minHeight:56,
+                               padding:'18px 24px', borderRadius:10, border:'none',
                                background:'#10b981', color:'#fff',
                                cursor:'pointer', fontFamily:'inherit',
-                               fontSize:13, fontWeight:500,
+                               fontSize:16, fontWeight:500,
                                display:'inline-flex', alignItems:'center',
-                               justifyContent:'center', gap:6 }}>
-                <Icon name="plus" size={13} color="#fff"/>
+                               justifyContent:'center', gap:8 }}>
+                <Icon name="plus" size={16} color="#fff"/>
                 {"Nouvel encaissement"}
               </button>
               <button onClick={() => {
                         if (countdownRef.current) clearInterval(countdownRef.current);
                         navigate('/caisse/historique');
                       }}
-                      style={{ flex:'1 1 200px',
-                               padding:'12px 18px', borderRadius:8,
+                      style={{ flex:'1 1 220px', minHeight:56,
+                               padding:'18px 24px', borderRadius:10,
                                border:`0.5px solid ${t.border}`,
                                background: t.cardAlt, color: t.text,
                                cursor:'pointer', fontFamily:'inherit',
-                               fontSize:13, fontWeight:500,
+                               fontSize:16, fontWeight:500,
                                display:'inline-flex', alignItems:'center',
-                               justifyContent:'center', gap:6 }}>
-                <Icon name="chart" size={13} color={t.text}/>
+                               justifyContent:'center', gap:8 }}>
+                <Icon name="chart" size={16} color={t.text}/>
                 {"Voir l'historique"}
               </button>
             </div>

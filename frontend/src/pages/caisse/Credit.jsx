@@ -387,12 +387,13 @@ export default function Credit({ employees = [], theme, showToast, transactions 
       </div>
 
       {/* Search */}
-      <div style={{ ...card, display:'flex', gap:10, alignItems:'center', padding:'10px 14px' }}>
-        <Icon name="more" size={14} color={t.muted} style={{ transform:'rotate(90deg)' }}/>
+      <div style={{ ...card, display:'flex', gap:12, alignItems:'center',
+                    padding:'14px 16px', minHeight:56 }}>
+        <Icon name="more" size={16} color={t.muted} style={{ transform:'rotate(90deg)' }}/>
         <input value={q} onChange={e => setQ(e.target.value)}
                placeholder="Rechercher un client…"
                style={{ flex:1, padding:0, border:'none', background:'transparent',
-                        outline:'none', fontFamily:'inherit', fontSize:13, color:t.text }}/>
+                        outline:'none', fontFamily:'inherit', fontSize:16, color:t.text }}/>
       </div>
 
       {/* ── Layout 2 colonnes : liste | form grant ── */}
@@ -422,39 +423,40 @@ export default function Credit({ employees = [], theme, showToast, transactions 
             ].filter(Boolean).join(' · ') || '—';
             return (
               <div key={c.id}
-                   style={{ display:'flex', gap:10, alignItems:'center',
-                            padding:'10px 0',
+                   style={{ display:'flex', gap:14, alignItems:'center',
+                            padding:'14px 16px', minHeight:56,
                             borderBottom:`0.5px solid ${t.separator}` }}>
-                <div style={{ width:36, height:36, borderRadius:99,
+                <div style={{ width:40, height:40, borderRadius:99,
                               background: isAnonymous ? '#9ca3af' : avatarColorFor(email),
                               color:'#fff', display:'flex',
                               alignItems:'center', justifyContent:'center',
-                              fontSize:13, fontWeight:500, flexShrink:0 }}>
+                              fontSize:14, fontWeight:500, flexShrink:0 }}>
                   {isAnonymous ? '?' : initialsOf(displayName, email)}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ margin:0, fontSize:13, fontWeight:500,
+                  <p style={{ margin:0, fontSize:14, fontWeight:500,
                               color: isAnonymous ? t.muted : t.text,
                               fontStyle: isAnonymous ? 'italic' : 'normal',
                               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {isAnonymous ? 'Client anonyme' : displayName}
                   </p>
-                  <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted,
+                  <p style={{ margin:'3px 0 0', fontSize:12, color:t.muted,
                               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {isAnonymous ? 'Email anonymisé RGPD' : (email || summary)}
                   </p>
                 </div>
                 <div style={{ textAlign:'right', flexShrink:0 }}>
-                  <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#065f46',
+                  <p style={{ margin:0, fontSize:15, fontWeight:500, color:'#065f46',
                               fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                     {fmt(c.balance)}
                   </p>
                   <button onClick={() => setDetailId(c.client_id || c.id)}
                           disabled={!c.client_id}
-                          style={{ marginTop:3, padding:0, border:'none',
+                          style={{ marginTop:4, minHeight:36, padding:'4px 8px',
+                                   border:'none',
                                    background:'transparent', cursor: c.client_id ? 'pointer' : 'not-allowed',
                                    color: c.client_id ? t.muted : t.dim || t.muted,
-                                   fontFamily:'inherit', fontSize:11 }}>
+                                   fontFamily:'inherit', fontSize:12 }}>
                     {c.client_id ? 'Voir détail →' : '—'}
                   </button>
                 </div>

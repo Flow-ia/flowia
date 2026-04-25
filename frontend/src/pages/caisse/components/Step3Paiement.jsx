@@ -149,15 +149,16 @@ export default function Step3Paiement({
   const paymentsOk   = !splitMode || Math.abs(paymentsDiff) < 0.01;
 
   const card = {
-    padding: 14, borderRadius: 12, background: t.card,
+    padding: 16, borderRadius: 12, background: t.card,
     border: `0.5px solid ${t.border}`,
-    display: 'flex', flexDirection: 'column', gap: 10,
+    display: 'flex', flexDirection: 'column', gap: 12,
   };
-  const title = { margin: 0, fontSize: 13, fontWeight: 500, color: t.text };
+  const title = { margin: 0, fontSize: 15, fontWeight: 500, color: t.text };
+  // Inputs tablette : padding 14×16, font 16, min-height 52.
   const inp = {
-    width: '100%', padding: '8px 10px', borderRadius: 8,
+    width: '100%', minHeight: 52, padding: '14px 16px', borderRadius: 10,
     background: t.inputBg, border: `0.5px solid ${t.borderInput}`,
-    color: t.text, fontSize: 13, fontFamily: 'inherit',
+    color: t.text, fontSize: 16, fontFamily: 'inherit',
     outline: 'none', boxSizing: 'border-box',
   };
 
@@ -176,17 +177,19 @@ export default function Step3Paiement({
                    onChange={e => { setClientSearch(e.target.value); setSuggestsOpen(true); }}
                    onFocus={() => { if (clientSuggests.length > 0) setSuggestsOpen(true); }}
                    onBlur={() => { setTimeout(() => setSuggestsOpen(false), 150); }}
-                   placeholder="Rechercher un client (nom, email, téléphone)…"
-                   style={inp}/>
+                   placeholder="Nom, téléphone, email…"
+                   style={{ ...inp, minHeight: 56, paddingRight: 44 }}/>
             {(clientSearch || clientName || clientEmail) && (
               <button onClick={clearClient}
-                      style={{ position:'absolute', right: 8, top: '50%',
+                      style={{ position:'absolute', right: 10, top: '50%',
                                transform: 'translateY(-50%)',
+                               width: 36, height: 36, borderRadius: 99,
                                border: 'none', background: 'transparent',
                                cursor: 'pointer', color: t.muted,
-                               padding: 4, fontFamily:'inherit' }}
+                               display: 'inline-flex', alignItems: 'center',
+                               justifyContent: 'center', fontFamily:'inherit' }}
                       aria-label="Effacer">
-                <Icon name="x" size={12} color={t.muted}/>
+                <Icon name="x" size={16} color={t.muted}/>
               </button>
             )}
             {suggestsOpen && clientSuggests.length > 0 && (
@@ -242,18 +245,22 @@ export default function Step3Paiement({
                    onChange={e => setClientEmail(e.target.value)} style={inp}/>
           </div>
           {clientCredit && (
-            <div style={{ padding:10, borderRadius:8,
+            <div style={{ padding:14, borderRadius:10,
                           background:'#f0fdf4',
-                          borderLeft:'2px solid #10b981',
-                          display:'flex', gap:8, alignItems:'center',
-                          fontSize:12, color:'#065f46' }}>
-              <Icon name="wallet" size={14} color="#065f46"/>
+                          borderLeft:'4px solid #10b981',
+                          display:'flex', gap:12, alignItems:'center',
+                          color:'#065f46' }}>
+              <Icon name="wallet" size={20} color="#065f46"/>
               <div style={{ flex:1 }}>
-                <strong style={{ fontWeight:500 }}>
-                  {"Crédit disponible : " + fmt(clientCredit.balance) + " €"}
-                </strong>
-                <p style={{ margin:'2px 0 0', fontSize:11, color:'#065f46', opacity:0.75 }}>
-                  {"L'utiliser se fait en ajoutant une ligne de paiement « Autre » avec le montant du crédit."}
+                <p style={{ margin:0, fontSize:14, fontWeight:500 }}>
+                  {"Crédit disponible"}
+                </p>
+                <p style={{ margin:'4px 0 0', fontSize:18, fontWeight:500,
+                            fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  {fmt(clientCredit.balance) + " €"}
+                </p>
+                <p style={{ margin:'4px 0 0', fontSize:11, color:'#065f46', opacity:0.75 }}>
+                  {"À utiliser via une ligne « Autre » en mode Multi-paiements."}
                 </p>
               </div>
             </div>
@@ -345,35 +352,35 @@ export default function Step3Paiement({
       <div style={card}>
         <p style={title}>{"Mode de paiement"}</p>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
           <button onClick={() => setSplitMode(false)}
-                  style={{ padding:'9px 10px', borderRadius:8,
+                  style={{ minHeight:56, padding:'14px 16px', borderRadius:10,
                            border:`0.5px solid ${!splitMode ? t.text : t.border}`,
                            background: !splitMode ? t.cardAlt : t.card,
                            color: t.text, cursor:'pointer', fontFamily:'inherit',
-                           fontSize:12, fontWeight: !splitMode ? 500 : 400 }}>
+                           fontSize:14, fontWeight:500 }}>
             {"Simple"}
           </button>
           <button onClick={() => setSplitMode(true)}
-                  style={{ padding:'9px 10px', borderRadius:8,
+                  style={{ minHeight:56, padding:'14px 16px', borderRadius:10,
                            border:`0.5px solid ${splitMode ? t.text : t.border}`,
                            background: splitMode ? t.cardAlt : t.card,
                            color: t.text, cursor:'pointer', fontFamily:'inherit',
-                           fontSize:12, fontWeight: splitMode ? 500 : 400 }}>
+                           fontSize:14, fontWeight:500 }}>
             {"Multi-paiements"}
           </button>
         </div>
 
         {!splitMode ? (
           <div style={{ display:'grid',
-                        gridTemplateColumns:'repeat(auto-fit, minmax(120px, 1fr))',
-                        gap: 8 }}>
+                        gridTemplateColumns:'repeat(2, 1fr)',
+                        gap: 10 }}>
             {Object.entries(PM_CFG).map(([id, cfg]) => {
               const active = payMethod === id;
               return (
                 <button key={id} onClick={() => setPayMethod(id)}
                         style={{ position:'relative',
-                                 padding:'14px 10px', borderRadius:10,
+                                 minHeight:100, padding:20, borderRadius:12,
                                  background: active ? cfg.bg : '#fff',
                                  border: active
                                    ? '0.5px solid rgba(0,0,0,0.04)'
@@ -385,17 +392,17 @@ export default function Step3Paiement({
                                  color: active ? cfg.text : '#6b7280',
                                  cursor:'pointer', fontFamily:'inherit',
                                  display:'flex', flexDirection:'column',
-                                 alignItems:'center', gap:6,
+                                 alignItems:'center', justifyContent:'center', gap:8,
                                  transition: 'opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease' }}>
                   {active && (
-                    <span style={{ position:'absolute', top:6, right:6,
+                    <span style={{ position:'absolute', top:10, right:10,
                                    display:'inline-flex' }}>
-                      <Icon name="checkCircle" size={16} color={cfg.text} strokeWidth={2}/>
+                      <Icon name="checkCircle" size={22} color={cfg.text} strokeWidth={2}/>
                     </span>
                   )}
-                  <Icon name={cfg.icon} size={22}
+                  <Icon name={cfg.icon} size={28}
                         color={active ? cfg.text : '#9ca3af'}/>
-                  <span style={{ fontSize:14, fontWeight:500,
+                  <span style={{ fontSize:16, fontWeight:500,
                                  color: active ? cfg.text : '#6b7280' }}>
                     {cfg.label}
                   </span>
@@ -404,25 +411,31 @@ export default function Step3Paiement({
             })}
           </div>
         ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {Object.entries(PM_CFG).map(([id, cfg]) => (
               <div key={id}
-                   style={{ padding:10, borderRadius:8,
+                   style={{ padding:14, borderRadius:10,
                             background: cfg.bg, borderLeft: '2px solid ' + cfg.text,
                             display:'flex', justifyContent:'space-between',
-                            alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:12, fontWeight:500, color: cfg.text }}>{cfg.label}</span>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                            alignItems:'center', gap:12 }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:10,
+                               fontSize:15, fontWeight:500, color: cfg.text }}>
+                  <Icon name={cfg.icon} size={20} color={cfg.text}/>
+                  {cfg.label}
+                </span>
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                   <input type="number" step="0.01" min="0"
                          value={splitAmts[id] || ''}
                          onChange={e => setSplitAmts({ ...splitAmts, [id]: e.target.value })}
                          placeholder="0"
-                         style={{ width:80, padding:'4px 8px', borderRadius:6,
+                         style={{ width:120, minHeight:52, padding:'14px 14px',
+                                  borderRadius:10,
                                   border:`0.5px solid ${t.borderInput}`,
                                   background:t.inputBg, color: cfg.text,
                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                  fontSize:12, textAlign:'right', outline:'none' }}/>
-                  <span style={{ fontSize:11, fontWeight:500, color: cfg.text }}>{"€"}</span>
+                                  fontSize:18, fontWeight:500,
+                                  textAlign:'right', outline:'none', boxSizing:'border-box' }}/>
+                  <span style={{ fontSize:16, fontWeight:500, color: cfg.text }}>{"€"}</span>
                 </div>
               </div>
             ))}
@@ -430,8 +443,8 @@ export default function Step3Paiement({
         )}
 
         {/* Récap total / remise / écart. */}
-        <div style={{ marginTop:6, padding:12, borderRadius:8, background: t.cardAlt,
-                      display:'flex', flexDirection:'column', gap:4, fontSize:11 }}>
+        <div style={{ marginTop:6, padding:14, borderRadius:10, background: t.cardAlt,
+                      display:'flex', flexDirection:'column', gap:6, fontSize:13 }}>
           <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
             <span>{"Total panier"}</span>
             <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(total)} €</span>
@@ -442,12 +455,6 @@ export default function Step3Paiement({
               <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmt(discount)} €</span>
             </div>
           )}
-          <div style={{ display:'flex', justifyContent:'space-between',
-                        fontSize:13, fontWeight:500, color:t.text,
-                        borderTop:`0.5px solid ${t.separator}`, paddingTop:6, marginTop:4 }}>
-            <span>{"À encaisser"}</span>
-            <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(finalTotal)} €</span>
-          </div>
           {splitMode && (
             <>
               <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
@@ -469,28 +476,47 @@ export default function Step3Paiement({
                   value={clientNote}
                   onChange={e => setClientNote(e.target.value)}
                   rows={2}
-                  style={{ ...inp, resize:'vertical' }}/>
+                  style={{ ...inp, minHeight: 64, padding: 14, resize:'vertical' }}/>
 
-        <div style={{ display:'flex', gap:8, justifyContent:'space-between' }}>
+        {/* Bandeau « Total à encaisser » sticky en bas — visible d'un coup d'œil
+            même quand le formulaire est long. */}
+        <div style={{ marginTop:6, padding:'18px 24px', borderRadius:12,
+                      background:'#111827', color:'#fff',
+                      display:'flex', justifyContent:'space-between',
+                      alignItems:'center', gap:12,
+                      position:'sticky', bottom:0, zIndex:5 }}>
+          <span style={{ fontSize:14, fontWeight:500, color:'rgba(255,255,255,0.8)' }}>
+            {"Total à encaisser"}
+          </span>
+          <span style={{ fontSize:28, fontWeight:500,
+                         fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+            {fmt(finalTotal) + " €"}
+          </span>
+        </div>
+
+        <div style={{ display:'flex', gap:10, alignItems:'stretch' }}>
           <button onClick={onBack}
-                  style={{ padding:'10px 14px', borderRadius:8,
+                  style={{ minHeight:56, padding:'14px 20px', borderRadius:10,
                            border:`0.5px solid ${t.border}`,
                            background:t.cardAlt, color:t.text,
                            cursor:'pointer', fontFamily:'inherit',
-                           fontSize:12, fontWeight:500,
-                           display:'inline-flex', alignItems:'center', gap:6 }}>
-            <Icon name="chevronLeft" size={13} color={t.text}/>
+                           fontSize:14, fontWeight:500,
+                           display:'inline-flex', alignItems:'center', gap:8,
+                           flexShrink:0 }}>
+            <Icon name="chevronLeft" size={16} color={t.text}/>
             {"Retour"}
           </button>
           <button onClick={onContinue} disabled={!paymentsOk}
-                  style={{ padding:'10px 16px', borderRadius:8, border:'none',
+                  style={{ flex:1, minHeight:60, padding:'20px 24px',
+                           borderRadius:10, border:'none',
                            background: paymentsOk ? '#10b981' : t.cardAlt,
                            color: paymentsOk ? '#fff' : t.muted,
                            cursor: paymentsOk ? 'pointer' : 'not-allowed',
-                           fontFamily:'inherit', fontSize:13, fontWeight:500,
-                           display:'inline-flex', alignItems:'center', gap:6 }}>
+                           fontFamily:'inherit', fontSize:18, fontWeight:500,
+                           display:'inline-flex', alignItems:'center',
+                           justifyContent:'center', gap:8 }}>
             {"Continuer"}
-            <Icon name="chevronRight" size={13} color={paymentsOk ? '#fff' : t.muted}/>
+            <Icon name="chevronRight" size={18} color={paymentsOk ? '#fff' : t.muted}/>
           </button>
         </div>
       </div>

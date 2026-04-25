@@ -12,6 +12,7 @@ import Step1Panier   from './components/Step1Panier';
 import Step2Employe  from './components/Step2Employe';
 import Step3Paiement from './components/Step3Paiement';
 import Step4Confirm  from './components/Step4Confirm';
+import { Icon } from '../../components/Icon';
 
 const STEPS = [
   { id: 1, label: 'Panier'   },
@@ -61,27 +62,38 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Barre de sous-tabs 1.Panier / 2.Employé / 3.Paiement / 4.OK */}
-      <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 8,
+      {/* Barre de sous-tabs 1.Panier / 2.Employé / 3.Paiement / 4.OK
+          Tablette confort : padding 12×18, font 13/500, min-height 44.
+          Étape complétée = icône check vert. État actif = #111827 + blanc.
+          Cliquable sur une étape passée pour revenir en arrière. */}
+      <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 10,
                     background: t.cardAlt, overflowX: 'auto' }}>
         {STEPS.map(s => {
-          const active   = step === s.id;
-          const reachable = s.id === 1
-                        || (s.id === 2 && cart.length > 0)
-                        || (s.id === 3 && cart.length > 0 && empId)
-                        || (s.id === 4 && cart.length > 0 && empId);
+          const active     = step === s.id;
+          const completed  = s.id < step
+                          && (s.id !== 2 || empId)
+                          && (s.id !== 1 || cart.length > 0);
+          const reachable  = s.id === 1
+                          || (s.id === 2 && cart.length > 0)
+                          || (s.id === 3 && cart.length > 0 && empId)
+                          || (s.id === 4 && cart.length > 0 && empId);
           return (
             <button key={s.id}
                     onClick={() => reachable && go(s.id)}
                     disabled={!reachable}
-                    style={{ flex: 1, minWidth: 'fit-content',
-                             padding: '8px 12px', borderRadius: 6, border: 'none',
+                    style={{ flex: 1, minWidth: 'fit-content', minHeight: 44,
+                             padding: '12px 18px', borderRadius: 8, border: 'none',
                              cursor: reachable ? 'pointer' : 'not-allowed',
-                             background: active ? t.card : 'transparent',
-                             color: active ? t.text : (reachable ? t.muted : t.dim || t.muted),
-                             fontWeight: active ? 500 : 400, fontSize: 13,
+                             background: active ? '#111827' : 'transparent',
+                             color: active ? '#fff' : (reachable ? t.muted : t.dim || t.muted),
+                             fontWeight: 500, fontSize: 13,
                              whiteSpace: 'nowrap', fontFamily: 'inherit',
-                             opacity: reachable ? 1 : 0.55 }}>
+                             opacity: reachable ? 1 : 0.55,
+                             display: 'inline-flex', alignItems: 'center',
+                             justifyContent: 'center', gap: 6 }}>
+              {completed && !active && (
+                <Icon name="check" size={14} color="#10b981" strokeWidth={2.5}/>
+              )}
               {s.id + '. ' + s.label}
             </button>
           );
