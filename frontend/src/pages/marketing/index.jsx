@@ -9,7 +9,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Toast, useToast } from '../../components/UI';
 import { useTheme } from '../../hooks/useTheme';
-import OptInBanner from '../settings/marketing/OptInBanner';
 import { PageHeader, SubTabs } from '../reglages/shared';
 import Loyalty from './fidelite/Loyalty';
 import Birthday from './fidelite/Birthday';
@@ -88,7 +87,8 @@ export default function Marketing(props) {
                     display:'flex', flexDirection:'column', gap:14 }}>
         <PageHeader title="Marketing"
                     subtitle="Fidélité, promotions, SMS, campagnes IA"/>
-        <OptInBanner theme={theme} showToast={show}/>
+        {/* OptInBanner RGPD retiré commit 17 : ton accusateur. L'info
+            opt-in/total est désormais consultable côté fiche client. */}
         <SubTabs tabs={TOP_TABS} active={topId}
                  onChange={id => {
                    const tab = TOP_TABS.find(x => x.id === id);

@@ -4,6 +4,7 @@
 
 import { pubApi } from '../../../utils/api';
 import { AuthPanel } from '../../booking/Account';
+import { ConsentCheckboxes } from '../../../components/ConsentCheckboxes';
 import { PHONE_COUNTRIES } from '../constants';
 import { formatPhone, validatePhone } from '../helpers';
 
@@ -16,6 +17,7 @@ export function Step5Info({
   emailStatus, setEmailStatus, emailCheckTimer,
   requireAccount, inlineAuthMode, setInlineAuthMode,
   referralCode, handleAuth, navigate, setMyApptsInitTab, setView, goToStep,
+  noAcctConsent, setNoAcctConsent,
 }) {
   return (
     <div>
@@ -201,8 +203,11 @@ export function Step5Info({
                     Créer un compte
                   </button>
                 </div>
-                {/* Bouton Google */}
-                <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug); window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); try { const bc=new BroadcastChannel('flowia-oauth'); bc.onmessage=(ev)=>{ if(ev.data?.type!=='client_login')return; const{client}=ev.data; if(client) handleAuth(client); bc.close(); }; setTimeout(()=>{ try{bc.close();}catch{} }, 5*60*1000); } catch{} }}
+                {/* Bouton Google — RGPD commit 17 : marketing_opt_in transmis
+                    via state OAuth (m1/m0). Ce flow n'oblige pas le consent
+                    CGU car l'utilisateur peut aussi se LOGIN ; le consent est
+                    déjà signé pour les comptes existants. */}
+                <button onClick={()=>{ const url=pubApi.googleAuthUrl(slug, undefined, !!noAcctConsent?.marketingAccepted); window.open(url,'google_auth','width=500,height=600,scrollbars=yes,top=100,left='+Math.round((window.screen.width-500)/2)); try { const bc=new BroadcastChannel('flowia-oauth'); bc.onmessage=(ev)=>{ if(ev.data?.type!=='client_login')return; const{client}=ev.data; if(client) handleAuth(client); bc.close(); }; setTimeout(()=>{ try{bc.close();}catch{} }, 5*60*1000); } catch{} }}
                   style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
                     padding:'11px',borderRadius:10,background:th.card,
                     border: `0.5px solid ${th.border}`,cursor:'pointer',
@@ -349,22 +354,36 @@ export function Step5Info({
                 </div>
               </div>
 
-              <button
-                onClick={()=>{
-                  const err=validatePhone(phoneCC,phoneLocal);
-                  if(err){setPhoneErr(err);return;}
-                  setCP(formatPhone(phoneCC,phoneLocal));
-                  goToStep(6);
-                }}
-                disabled={!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,'')}
-                style={{width:'100%',marginTop:16,padding:'14px',borderRadius:12,
-                  background:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?th.border:th.accent,
-                  border:'none',fontWeight: 500,fontSize:14,
-                  color:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?th.muted:th.accentText,
-                  cursor:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?'not-allowed':'pointer',
-                  opacity:(!clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,''))?0.5:1}}>
-                {emailStatus==='exists' ? "Connectez-vous d'abord" : 'Continuer →'}
-              </button>
+              {/* RGPD commit 17 : 2 cases CGU (cochée par défaut) + marketing
+                  (libre, non cochée par défaut). Le bouton "Continuer" est
+                  bloqué tant que la case obligatoire n'est pas cochée. */}
+              {setNoAcctConsent && (
+                <div style={{ marginTop:14 }}>
+                  <ConsentCheckboxes slug={slug} th={th} onChange={setNoAcctConsent}/>
+                </div>
+              )}
+              {(() => {
+                const contractOk = !setNoAcctConsent || noAcctConsent?.contractAccepted;
+                const blocked = !clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,'')||!contractOk;
+                return (
+                  <button
+                    onClick={()=>{
+                      const err=validatePhone(phoneCC,phoneLocal);
+                      if(err){setPhoneErr(err);return;}
+                      setCP(formatPhone(phoneCC,phoneLocal));
+                      goToStep(6);
+                    }}
+                    disabled={blocked}
+                    style={{width:'100%',marginTop:16,padding:'14px',borderRadius:12,
+                      background: blocked ? th.border : th.accent,
+                      border:'none',fontWeight: 500,fontSize:14,
+                      color: blocked ? th.muted : th.accentText,
+                      cursor: blocked ? 'not-allowed' : 'pointer',
+                      opacity: blocked ? 0.5 : 1}}>
+                    {emailStatus==='exists' ? "Connectez-vous d'abord" : 'Continuer →'}
+                  </button>
+                );
+              })()}
             </div>
           )}
         </div>

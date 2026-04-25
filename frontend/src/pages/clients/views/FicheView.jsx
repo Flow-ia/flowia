@@ -406,7 +406,7 @@ export default function FicheView({
           </div>
 
           {activeTab === 'info' && (
-            <InfoTab fiche={fiche} theme={theme} card={card} />
+            <InfoTab fiche={fiche} theme={theme} card={card} setFiche={setFiche}/>
           )}
 
           {activeTab === 'credit' && (

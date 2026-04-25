@@ -35,6 +35,11 @@ export default function Step3Paiement({
   const [pendingRefs, setPendingRefs]   = useState([]);
   const [clientRewards, setClientRewards] = useState([]);
   const [clientCredit, setClientCredit] = useState(null);
+  // RGPD commit 17 : opt-in marketing du client encaissé.
+  // null = inconnu (pas d'email saisi), false = client connu sans opt-in,
+  // true = client connu et opté.
+  const [clientMarketingOptIn, setClientMarketingOptIn] = useState(null);
+  const [clientKnown, setClientKnown] = useState(false);
 
   // UX commit 7d : recherche client multi-champs (nom/prénom/email/téléphone)
   // via clientsApi.search (GET /api/clients/search?q= — ILIKE back sur les
@@ -88,6 +93,7 @@ export default function Step3Paiement({
     const low = (clientEmail || '').trim().toLowerCase();
     if (!low) {
       setPendingRefs([]); setClientRewards([]); setClientCredit(null); setSelectedRewardId(null);
+      setClientMarketingOptIn(null); setClientKnown(false);
       return;
     }
     let cancelled = false;
@@ -95,8 +101,13 @@ export default function Step3Paiement({
       .then(r => {
         if (cancelled) return;
         setPendingRefs(r.pending || []); setClientRewards(r.rewards || []);
+        setClientMarketingOptIn(r.client_marketing_opt_in === true);
+        setClientKnown(r.client_known === true);
       })
-      .catch(() => { setPendingRefs([]); setClientRewards([]); });
+      .catch(() => {
+        setPendingRefs([]); setClientRewards([]);
+        setClientMarketingOptIn(null); setClientKnown(false);
+      });
     creditsApi.list({ search: low })
       .then(list => {
         if (cancelled) return;
@@ -265,6 +276,18 @@ export default function Step3Paiement({
               </div>
             </div>
           )}
+
+          {/* RGPD commit 17 : bandeau ambre si client connu sans opt-in marketing.
+              Le tampon fidélité reste cumulé en caisse pour tous les clients ;
+              seuls anniversaire et parrainage nécessitent l'opt-in. */}
+          {clientKnown && clientMarketingOptIn === false && (
+            <div style={{ padding:'8px 11px', borderRadius:9,
+                          background:'#fffbeb',
+                          borderLeft:'3px solid #f59e0b',
+                          fontSize:11, color:'#92400e', lineHeight:1.5 }}>
+              {"Programme fidélité actif (boutique uniquement). Anniversaire et parrainage non disponibles : le client n'a pas activé les notifications marketing."}
+            </div>
+          )}
         </div>
 
         <div style={card}>
@@ -322,29 +345,47 @@ export default function Step3Paiement({
             </div>
           ))}
 
-          {/* Parrainages pending (violet). */}
-          {pendingRefs.map(ref => (
-            <div key={ref.id}
-                 style={{ padding:10, borderRadius:8,
-                          background:'#eeedfe', borderLeft:'2px solid #8b5cf6',
-                          display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-              <div style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
-                <Icon name="users" size={14} color="#3c3489"/>
-                <div style={{ minWidth:0 }}>
-                  <p style={{ margin:0, fontSize:12, fontWeight:500, color:'#3c3489' }}>
-                    {"Parrainage en attente"}
-                  </p>
-                  <p style={{ margin:0, fontSize:11, color:t.muted,
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {ref.parrain_label || ref.code || 'Filleul'}
+          {/* Parrainages pending (violet). RGPD commit 17 : si parrain ou
+              filleul n'a pas opt-in marketing, bandeau ambre + indication
+              "non validable" — la validation back lèvera REFERRAL_OPT_IN_REQUIRED. */}
+          {pendingRefs.map(ref => {
+            const needsOptIn = ref.parrain_opt_in === false || ref.filleul_opt_in === false;
+            return (
+              <div key={ref.id}
+                   style={{ padding:10, borderRadius:8,
+                            background:'#eeedfe', borderLeft:'2px solid #8b5cf6',
+                            display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
+                    <Icon name="users" size={14} color="#3c3489"/>
+                    <div style={{ minWidth:0 }}>
+                      <p style={{ margin:0, fontSize:12, fontWeight:500, color:'#3c3489' }}>
+                        {"Parrainage en attente"}
+                      </p>
+                      <p style={{ margin:0, fontSize:11, color:t.muted,
+                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {ref.parrain_label || ref.code || 'Filleul'}
+                      </p>
+                    </div>
+                  </div>
+                  <p style={{ margin:0, fontSize:11, color: needsOptIn ? '#92400e' : t.muted,
+                              flexShrink:0, opacity: needsOptIn ? 0.7 : 1 }}>
+                    {needsOptIn ? 'Non validable' : 'À valider à la caisse'}
                   </p>
                 </div>
+                {needsOptIn && (
+                  <div style={{ padding:'6px 9px', borderRadius:7,
+                                background:'#fffbeb',
+                                borderLeft:'2px solid #f59e0b',
+                                fontSize:10, color:'#92400e', lineHeight:1.5 }}>
+                    {"Parrainage non validable : marketing_opt_in manquant pour "}
+                    {ref.parrain_opt_in === false && ref.filleul_opt_in === false ? 'le parrain et le filleul.'
+                      : ref.parrain_opt_in === false ? 'le parrain.' : 'le filleul.'}
+                  </div>
+                )}
               </div>
-              <p style={{ margin:0, fontSize:11, color:t.muted, flexShrink:0 }}>
-                {"À valider à la caisse"}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

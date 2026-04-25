@@ -249,6 +249,11 @@ export default function BookingPage({ slug }) {
   const [booking, setBooking] = useState(false);
   const [bookErr, setBookErr] = useState('');
 
+  // RGPD commit 17 : consentement pour résa "sans compte" (clientUser absent).
+  // Si clientUser présent, l'opt-in est lu depuis le compte ; sinon transmis
+  // au POST /book pour persister à la création de la fiche locale.
+  const [noAcctConsent, setNoAcctConsent] = useState({ contractAccepted: true, marketingAccepted: false });
+
   // Téléphone avec indicatif pays
   const [phoneCC, setPhoneCC]       = useState(PHONE_COUNTRIES[0]); // pays sélectionné
   const [phoneLocal, setPhoneLocal] = useState(''); // numéro local brut
@@ -595,6 +600,9 @@ export default function BookingPage({ slug }) {
         discount_amount: finalDiscount,
         promo_code:      finalPromoCode,
         referral_code:   referralCode || undefined,
+        // RGPD commit 17 : opt-in marketing transmis seulement en mode "sans
+        // compte" (le back ignore le champ si client_token + clientId valide).
+        marketing_opt_in: clientUser ? undefined : noAcctConsent.marketingAccepted,
       });
       // Code parrainage consommé → on le retire pour éviter une seconde utilisation
       if (referralCode) {
@@ -925,6 +933,7 @@ export default function BookingPage({ slug }) {
                   referralCode={referralCode} handleAuth={handleAuth}
                   navigate={navigate} setMyApptsInitTab={setMyApptsInitTab}
                   setView={setView} goToStep={goToStep}
+                  noAcctConsent={noAcctConsent} setNoAcctConsent={setNoAcctConsent}
                 />
               )}
 

@@ -73,6 +73,8 @@ root.render(
               {/* ── Routes PUBLIQUES booking ── */}
               <Route path="/j/:slug"                                                                       element={<QuickJoinRedirect />} />
               <Route path="/book/:slug/politique"                                                          element={<BookingPolitiqueWrapper />} />
+              {/* Alias commit 17 (RGPD) — /conditions pointe vers la même page que /politique. */}
+              <Route path="/book/:slug/conditions"                                                         element={<BookingPolitiqueWrapper />} />
               {/* Toutes les sous-routes du flow de réservation → même composant BookingPage */}
               {/* Le composant gère lui-même la lecture et l'ecriture de l'URL via useNavigate  */}
               <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/confirmation" element={<BookingPageWrapper />} />

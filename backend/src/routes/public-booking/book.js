@@ -25,6 +25,9 @@ module.exports = function attachBookRoute(router) {
 
       const { service_id, employee_id, date, start_time,
               client_name, client_email, client_phone, notes, client_token } = req.body;
+      // RGPD commit 17 : opt-in marketing transmis par le front en mode "résa
+      // sans compte" (sinon pour un user connecté, l'opt-in vient de son compte).
+      const marketingOptInBody = req.body?.marketing_opt_in === true || req.body?.marketing_opt_in === 'true';
       if (!service_id || !date || !start_time || !client_name || !client_phone)
         return res.status(400).json({ error: 'Données manquantes (nom et téléphone obligatoires).' });
 
@@ -426,15 +429,20 @@ module.exports = function attachBookRoute(router) {
           }
 
           if (!localClient) {
-            // 2. Créer la fiche locale (premier RDV de ce client chez ce commerçant)
+            // 2. Créer la fiche locale (premier RDV de ce client chez ce commerçant).
+            // RGPD commit 17 : marketing_opt_in transmis par le front en mode
+            // résa sans compte ; ON CONFLICT ne touche pas l'opt-in existant.
             const { rows: created } = await pool.query(
-              `INSERT INTO client_accounts (user_id, email, first_name, last_name, phone)
-               VALUES ($1,$2,$3,$4,$5)
+              `INSERT INTO client_accounts
+                 (user_id, email, first_name, last_name, phone,
+                  marketing_opt_in, marketing_opt_in_at)
+               VALUES ($1,$2,$3,$4,$5,$6,
+                       CASE WHEN $6 THEN NOW() ELSE NULL END)
                ON CONFLICT (user_id, email) DO UPDATE SET
                  first_name = COALESCE(NULLIF(EXCLUDED.first_name,''), client_accounts.first_name),
                  phone      = COALESCE(NULLIF(EXCLUDED.phone,''), client_accounts.phone)
                RETURNING *`,
-              [userId, emailLow, firstName, lastName, client_phone || null]
+              [userId, emailLow, firstName, lastName, client_phone || null, marketingOptInBody]
             );
             localClient = created[0] || null;
           }

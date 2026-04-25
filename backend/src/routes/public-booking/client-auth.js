@@ -375,16 +375,20 @@ module.exports = function attachClientAuthRoutes(router) {
     // (ex: haircoifflille.fr vs commercant.haircoifflille.fr). Validé
     // côté callback contre l'allowlist FRONTEND_URL.
     const origin = String(req.query.origin || '').trim();
+    // RGPD commit 17 : opt-in marketing transmis via le state OAuth.
+    // m=1 → m1 (opté), m=0 ou absent → m0 (refusé, défaut safe).
+    const marketingFlag = String(req.query.m || '').trim() === '1' ? 'm1' : 'm0';
     const clientId    = process.env.GOOGLE_CLIENT_ID;
     const BACKEND_URL = process.env.BACKEND_URL || 'https://flowia-backend.onrender.com';
     // Callback générique — 1 seule URL enregistrée chez Google
     const redirectUri = `${BACKEND_URL}/api/auth/google/callback`;
 
-    // state = slug | REFCODE? | origin?
+    // state = slug | REFCODE? | origin? | m1|m0?
     // — séparateur | car ni slug ni code ne peuvent en contenir. Origine
-    //   encodée URL pour supporter les caractères spéciaux.
+    //   encodée URL pour supporter les caractères spéciaux. Le 4e segment
+    //   (marketingFlag) est rétro-compatible : si absent, défaut = m0 (refus).
     const encodedOrigin = origin ? encodeURIComponent(origin) : '';
-    const stateVal = `${slug}|${ref || ''}|${encodedOrigin}`;
+    const stateVal = `${slug}|${ref || ''}|${encodedOrigin}|${marketingFlag}`;
 
     const params = new URLSearchParams({
       client_id:     clientId,

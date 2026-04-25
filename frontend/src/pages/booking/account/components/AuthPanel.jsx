@@ -1,9 +1,10 @@
 // src/pages/booking/account/components/AuthPanel.jsx
 // Panneau Auth client (login / register / quick register / forgot / reset).
 // Extrait inchangé depuis booking/Account.jsx.
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { pubApi, globalClientApi } from '../../../../utils/api';
 import { GoogleOAuthOverlay } from '../../../../components/AuthFlow';
+import { ConsentCheckboxes } from '../../../../components/ConsentCheckboxes';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false, onModeChange }) {
@@ -25,12 +26,15 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   const [err, setErr]           = useState('');
   const [ok, setOk]             = useState('');
   const [loading, setLoading]   = useState(false);
-  const [consent, setConsent]   = useState(false);
-  const [showRgpdModal, setShowRgpdModal] = useState(false);
-  // Audit Z (RGPD) : opt-in marketing séparé du consentement RGPD général.
-  // Par défaut FALSE. Client doit cocher explicitement pour recevoir SMS/email
-  // promo.
+  // RGPD commit 17 : Case 1 (consent CGU+confidentialité+fidélité) cochée
+  // par défaut, Case 2 (marketing opt-in) jamais cochée par défaut (CNIL).
+  // Tous deux pilotés par le composant ConsentCheckboxes mounted plus bas.
+  const [consent, setConsent]   = useState(true);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const handleConsents = useCallback((c) => {
+    setConsent(!!c.contractAccepted);
+    setMarketingOptIn(!!c.marketingAccepted);
+  }, []);
 
   // Détection intelligente du type de compte à la saisie email
   const [emailType, setEmailType]   = useState(null);   // null | 'free' | 'local' | 'global' | 'both'
@@ -82,9 +86,13 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   };
 
   const loginWithGoogle = () => {
+    // RGPD commit 17 : en mode register/quick, le consent CGU est obligatoire
+    // avant d'enclencher le flow OAuth (le bouton est aussi disabled
+    // visuellement). marketingOptIn est transmis via le state OAuth (m1/m0).
+    if ((mode === 'register' || mode === 'quick') && !consent) return;
     cleanupGoogle();
     setGError(''); setGStatus('loading');
-    const url = pubApi.googleAuthUrl(slug, referralCode || undefined);
+    const url = pubApi.googleAuthUrl(slug, referralCode || undefined, marketingOptIn);
     gPopupRef.current = window.open(url, 'google_auth',
       'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
       Math.round((window.screen.width - 500) / 2)
@@ -325,17 +333,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                 onKeyDown={e=>e.key==='Enter'&&quickSubmit()}
                 style={S.inp}/>
             </div>
-            {/* Audit Z (RGPD) : opt-in marketing explicite */}
-            <label style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
-              borderRadius:9, background:'rgba(99,102,241,0.04)',
-              border: '0.5px solid rgba(99,102,241,0.15)', cursor:'pointer' }}>
-              <input type="checkbox" checked={marketingOptIn}
-                onChange={e=>setMarketingOptIn(e.target.checked)}
-                style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer' }}/>
-              <span style={{ fontSize:11, color:th.muted, lineHeight:1.5 }}>
-                J'accepte de recevoir des offres commerciales par SMS/email. Désabonnement à tout moment (lien dans chaque message).
-              </span>
-            </label>
+            {/* RGPD commit 17 : 2 cases (CGU obligatoire + marketing optionnel),
+                version compacte adaptée au flow rapide QR. */}
+            <ConsentCheckboxes slug={slug} th={th} onChange={handleConsents} compact/>
             {err && (
               <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
                 borderRadius:9, background:'rgba(239,68,68,0.06)',
@@ -345,9 +345,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
               </div>
             )}
             <button onClick={quickSubmit}
-              disabled={loading||!first.trim()||phone.replace(/\D/g,'').length<6}
+              disabled={loading||!first.trim()||phone.replace(/\D/g,'').length<6||!consent}
               style={{...S.btnPrimary,
-                opacity:loading||!first.trim()||phone.replace(/\D/g,'').length<6?0.5:1}}>
+                opacity:loading||!first.trim()||phone.replace(/\D/g,'').length<6||!consent?0.5:1}}>
               {loading ? '...' : '→ Créer ma fiche'}
             </button>
             <button onClick={()=>{ setMode('login'); setErr(''); }}
@@ -510,37 +510,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             )}
             {ok && <p style={{fontSize:12,color:'#16a34a',fontWeight: 500}}>{ok}</p>}
 
-            {/* Consentement RGPD — uniquement à l'inscription */}
+            {/* RGPD commit 17 : 2 cases (CGU obligatoire + marketing optionnel) */}
             {mode === 'register' && (
-              <>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
-                  borderRadius:9, background:'rgba(99,102,241,0.04)',
-                  border: '0.5px solid rgba(99,102,241,0.15)' }}>
-                  <input type="checkbox" id="consent-rgpd" checked={consent}
-                    onChange={e=>setConsent(e.target.checked)}
-                    style={{ marginTop:2, flexShrink:0, accentColor:'#6366f1', cursor:'pointer' }} />
-                  <label htmlFor="consent-rgpd" style={{ fontSize:11, color:th.muted, lineHeight:1.5, cursor:'pointer' }}>
-                    J'accepte que mes données personnelles (nom, email, téléphone) soient utilisées
-                    pour gérer mes réservations, conformément au{' '}
-                    <a href="#rgpd-policy" onClick={e=>{e.preventDefault();setShowRgpdModal(true);}}
-                      style={{ color:'#6366f1', textDecoration:'underline' }}>
-                      règlement RGPD
-                    </a>. Vous pouvez supprimer votre compte à tout moment.
-                  </label>
-                </div>
-                {/* Audit Z : opt-in marketing (séparé du consentement RGPD) */}
-                <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
-                  borderRadius:9, background:'rgba(16,185,129,0.04)',
-                  border: '0.5px solid rgba(16,185,129,0.15)' }}>
-                  <input type="checkbox" id="consent-marketing" checked={marketingOptIn}
-                    onChange={e=>setMarketingOptIn(e.target.checked)}
-                    style={{ marginTop:2, flexShrink:0, accentColor:'#10b981', cursor:'pointer' }} />
-                  <label htmlFor="consent-marketing" style={{ fontSize:11, color:th.muted, lineHeight:1.5, cursor:'pointer' }}>
-                    J'accepte de recevoir des offres commerciales (SMS, email) — optionnel.
-                    Désabonnement à tout moment via le lien présent dans chaque message.
-                  </label>
-                </div>
-              </>
+              <ConsentCheckboxes slug={slug} th={th} onChange={handleConsents}/>
             )}
 
             {/* Bouton principal */}
@@ -558,19 +530,27 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
               <span style={{fontSize:11,color:th.dim,whiteSpace:'nowrap',padding:'0 6px'}}>ou</span>
               <div style={{flex:1,height:1,background:th.border}}/>
             </div>
-            <button onClick={loginWithGoogle}
-              style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-                padding:'11px',borderRadius:10,background:th.card,
-                border: `0.5px solid ${th.border}`,cursor:'pointer',
-                fontWeight: 500,fontSize:13,color:th.text}}>
-              <svg width="16" height="16" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Continuer avec Google
-            </button>
+            {/* RGPD commit 17 : disabled en mode register si CGU pas cochées */}
+            {(() => {
+              const googleDisabled = mode === 'register' && !consent;
+              return (
+                <button onClick={loginWithGoogle} disabled={googleDisabled}
+                  style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,
+                    padding:'11px',borderRadius:10,background:th.card,
+                    border: `0.5px solid ${th.border}`,
+                    cursor: googleDisabled ? 'not-allowed' : 'pointer',
+                    opacity: googleDisabled ? 0.5 : 1,
+                    fontWeight: 500,fontSize:13,color:th.text}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  Continuer avec Google
+                </button>
+              );
+            })()}
 
             {/* Mot de passe oublié */}
             {mode === 'login' && (
@@ -579,37 +559,6 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                   color:th.muted, textAlign:'center', padding:'2px 0' }}>
                 Mot de passe oublié ?
               </button>
-            )}
-
-            {/* Modal RGPD depuis inscription */}
-            {showRgpdModal && (
-              <div style={{ position:'fixed', inset:0, zIndex:2000,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                padding:16, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)' }}
-                onClick={()=>setShowRgpdModal(false)}>
-                <div style={{ background:th.card||'#fff', borderRadius:20, padding:24,
-                  maxWidth:420, width:'100%', maxHeight:'75vh', overflowY:'auto' }}
-                  onClick={e=>e.stopPropagation()}>
-                  <p style={{ margin:'0 0 12px', fontWeight: 500, fontSize:15, color:'#111' }}>🔒 Politique de confidentialité</p>
-                  {[
-                    ['Données collectées','Prénom, nom, email, téléphone — utilisés pour gérer vos réservations.'],
-                    ['Finalité','Gestion des rendez-vous, confirmations, rappels, fidélité.'],
-                    ['Conservation','Données supprimées sur demande. Historiques conservés anonymement.'],
-                    ['Vos droits','Accès, rectification, effacement, portabilité depuis votre profil.'],
-                    ['Sécurité','Mots de passe chiffrés (bcrypt). Communications SSL/TLS.'],
-                  ].map(([t,d])=>(
-                    <div key={t} style={{ marginBottom:10 }}>
-                      <p style={{ margin:'0 0 2px', fontWeight: 500, fontSize:12, color:'#374151' }}>{t}</p>
-                      <p style={{ margin:0, fontSize:11, color:'#6b7280', lineHeight:1.5 }}>{d}</p>
-                    </div>
-                  ))}
-                  <button onClick={()=>setShowRgpdModal(false)}
-                    style={{ width:'100%', padding:'11px', borderRadius:10, marginTop:8,
-                      background:'#6366f1', color:'white', border:'none', fontWeight: 500, fontSize:13, cursor:'pointer' }}>
-                    Fermer
-                  </button>
-                </div>
-              </div>
             )}
 
             {/* Continuer sans compte */}

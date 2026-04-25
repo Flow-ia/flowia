@@ -859,13 +859,16 @@ router.get('/google/callback', async (req, res) => {
   const BACKEND_URL  = process.env.BACKEND_URL  || 'https://flowia-backend.onrender.com';
   const redirectUri  = `${BACKEND_URL}/api/auth/google/callback`;
 
-  // state = "slug" OU "slug|REFCODE" OU "slug|REFCODE|<origin>"
+  // state = "slug" OU "slug|REFCODE" OU "slug|REFCODE|<origin>" OU "slug|REFCODE|<origin>|m1|m0"
   // L'origin (3e champ optionnel) est validé contre l'allowlist expansée
   // (cf. callback merchant) — indispensable pour le BroadcastChannel.
+  // RGPD commit 17 : 4e champ optionnel (m1 = opt-in marketing, m0 = refus,
+  // absent = m0 par défaut safe pour anciens tokens en cache).
   const stateParts = String(stateRaw || '').split('|');
   const slug = stateParts[0];
   const incomingRef = (stateParts[1] || '').trim().toUpperCase();
   const requestedOriginRaw = stateParts[2] ? decodeURIComponent(stateParts[2]) : '';
+  const marketingOptIn = (stateParts[3] || '').trim() === 'm1';
   const TARGET_ORIGIN = resolveOAuthTarget(requestedOriginRaw);
 
   if (error || !code || !slug) {
@@ -928,27 +931,36 @@ router.get('/google/callback', async (req, res) => {
         gc = { ...byEmail[0], google_id: googleId, avatar_url: picture };
       } else {
         const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+        // RGPD commit 17 : marketing_opt_in transmis via state OAuth (m1/m0).
+        // marketing_opt_in_at = NOW() si opté, NULL sinon.
         const { rows: created } = await pool.query(
           `INSERT INTO global_clients
-             (email, google_id, first_name, last_name, avatar_url, is_verified, consent_at, consent_ip)
-           VALUES ($1,$2,$3,$4,$5,TRUE,NOW(),$6) RETURNING *`,
-          [emailLow, googleId, given_name || '', family_name || '', picture || null, consentIp]
+             (email, google_id, first_name, last_name, avatar_url, is_verified,
+              consent_at, consent_ip, marketing_opt_in, marketing_opt_in_at)
+           VALUES ($1,$2,$3,$4,$5,TRUE,NOW(),$6,$7,
+                   CASE WHEN $7 THEN NOW() ELSE NULL END) RETURNING *`,
+          [emailLow, googleId, given_name || '', family_name || '', picture || null, consentIp, marketingOptIn]
         );
         gc = created[0];
       }
     }
 
     // 5. Créer/mettre à jour la fiche locale chez ce commerçant
+    // RGPD commit 17 : sur INSERT (nouvelle fiche locale), on persiste
+    // marketing_opt_in. ON CONFLICT (fiche existante) ne touche pas l'opt-in
+    // existant — c'est l'admin qui pourra le modifier via la fiche client.
     const { rows: localRows } = await pool.query(
       `INSERT INTO client_accounts
-         (user_id, email, first_name, last_name, global_client_id, source)
-       VALUES ($1,$2,$3,$4,$5,'google')
+         (user_id, email, first_name, last_name, global_client_id, source,
+          marketing_opt_in, marketing_opt_in_at)
+       VALUES ($1,$2,$3,$4,$5,'google',$6,
+               CASE WHEN $6 THEN NOW() ELSE NULL END)
        ON CONFLICT (user_id, email) DO UPDATE SET
          global_client_id = EXCLUDED.global_client_id,
          first_name = COALESCE(NULLIF(client_accounts.first_name,''), EXCLUDED.first_name),
          last_name  = COALESCE(NULLIF(client_accounts.last_name,''),  EXCLUDED.last_name)
        RETURNING *`,
-      [userId, emailLow, gc.first_name, gc.last_name || '', gc.id]
+      [userId, emailLow, gc.first_name, gc.last_name || '', gc.id, marketingOptIn]
     );
     const local = localRows[0];
 

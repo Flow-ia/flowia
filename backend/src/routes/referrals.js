@@ -153,17 +153,31 @@ merchantRouter.get('/rewards', async (req, res) => {
     const email = (req.query.email || '').trim().toLowerCase();
     if (!email) return res.json({ pending: [], rewards: [] });
 
+    // RGPD commit 17 : opt-in du client encaissé (pour bandeau caisse).
+    const clientOptR = pool.query(
+      `SELECT COALESCE(marketing_opt_in, FALSE) AS marketing_opt_in
+         FROM client_accounts
+        WHERE user_id=$1 AND LOWER(email)=$2
+        LIMIT 1`,
+      [req.user.userId, email]
+    );
+
     const [pendingR, rewardsR] = await Promise.all([
       pool.query(
         `SELECT ru.id, ru.filleul_email, ru.created_at, ru.appointment_id,
                 rc.code AS referral_code, rc.owner_client_email AS parrain_email,
-                ca.first_name AS parrain_first_name,
-                ca.last_name  AS parrain_last_name
+                parrain_ca.first_name AS parrain_first_name,
+                parrain_ca.last_name  AS parrain_last_name,
+                COALESCE(parrain_ca.marketing_opt_in, FALSE) AS parrain_opt_in,
+                COALESCE(filleul_ca.marketing_opt_in, FALSE) AS filleul_opt_in
            FROM referral_uses ru
            JOIN referral_codes rc ON rc.id = ru.referral_code_id
-           LEFT JOIN client_accounts ca
-             ON ca.user_id = ru.user_id
-            AND LOWER(ca.email) = LOWER(rc.owner_client_email)
+           LEFT JOIN client_accounts parrain_ca
+             ON parrain_ca.user_id = ru.user_id
+            AND LOWER(parrain_ca.email) = LOWER(rc.owner_client_email)
+           LEFT JOIN client_accounts filleul_ca
+             ON filleul_ca.user_id = ru.user_id
+            AND LOWER(filleul_ca.email) = LOWER(ru.filleul_email)
           WHERE ru.user_id=$1
             AND LOWER(ru.filleul_email)=$2
             AND ru.status='pending'
@@ -186,7 +200,13 @@ merchantRouter.get('/rewards', async (req, res) => {
         [req.user.userId, email]
       ),
     ]);
-    res.json({ pending: pendingR.rows, rewards: rewardsR.rows });
+    const clientOptResolved = await clientOptR;
+    res.json({
+      pending: pendingR.rows,
+      rewards: rewardsR.rows,
+      client_marketing_opt_in: clientOptResolved.rows[0]?.marketing_opt_in === true,
+      client_known: clientOptResolved.rows.length > 0,
+    });
   } catch (e) { console.error('[REF REWARDS GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -195,7 +215,7 @@ merchantRouter.get('/rewards', async (req, res) => {
 // déclenché à l'encaissement d'un RDV filleul (booking.js checkout).
 // Opens its own transaction — ne PAS appeler dans un pool.query déjà en cours.
 // Renvoie { ok, code, promo_id } ou lance une Error typée (.code in
-// 'NOT_FOUND' | 'ALREADY_HANDLED' | 'NO_PROGRAM').
+// 'NOT_FOUND' | 'ALREADY_HANDLED' | 'NO_PROGRAM' | 'REFERRAL_OPT_IN_REQUIRED').
 async function validateReferralUse(useId, userId) {
   const client = await pool.connect();
   try {
@@ -231,6 +251,29 @@ async function validateReferralUse(useId, userId) {
     const prog = progRows[0];
     // Un programme désactivé n'empêche pas de valider un parrainage initié
     // avant la désactivation (scénario 4 onboarding).
+
+    // RGPD commit 17 : parrain ET filleul doivent avoir marketing_opt_in=TRUE.
+    // Sans ça, on n'envoie pas d'email parrain et on ne crée pas la promo —
+    // le parrainage est conditionné à l'opt-in marketing des deux participants.
+    const { rows: optRows } = await client.query(
+      `SELECT LOWER(email) AS email_low,
+              COALESCE(marketing_opt_in, FALSE) AS marketing_opt_in
+         FROM client_accounts
+        WHERE user_id=$1
+          AND LOWER(email) IN (LOWER($2), LOWER($3))`,
+      [userId, use.parrain_email, use.filleul_email]
+    );
+    const optMap = new Map(optRows.map(r => [r.email_low, r.marketing_opt_in === true]));
+    const parrainOpt = optMap.get(String(use.parrain_email).toLowerCase()) === true;
+    const filleulOpt = optMap.get(String(use.filleul_email).toLowerCase()) === true;
+    if (!parrainOpt || !filleulOpt) {
+      await client.query('ROLLBACK');
+      const err = new Error('Le parrainage nécessite que les deux participants aient accepté les notifications marketing à leur inscription.');
+      err.code = 'REFERRAL_OPT_IN_REQUIRED';
+      err.parrainOptIn = parrainOpt;
+      err.filleulOptIn = filleulOpt;
+      throw err;
+    }
 
     // Lire durée de validité (par défaut 60 jours, configurable si besoin futur)
     const validityDays = 60;
@@ -418,6 +461,12 @@ merchantRouter.post('/uses/:id/validate', async (req, res) => {
     if (e.code === 'NOT_FOUND')       return res.status(404).json({ error: e.message });
     if (e.code === 'ALREADY_HANDLED') return res.status(409).json({ error: e.message });
     if (e.code === 'NO_PROGRAM')      return res.status(409).json({ error: e.message });
+    if (e.code === 'REFERRAL_OPT_IN_REQUIRED') return res.status(400).json({
+      error: e.message,
+      code: 'REFERRAL_OPT_IN_REQUIRED',
+      parrain_opt_in: e.parrainOptIn,
+      filleul_opt_in: e.filleulOptIn,
+    });
     console.error('[REF VALIDATE]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
   }

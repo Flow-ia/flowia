@@ -422,14 +422,16 @@ export const pubApi = {
   },
   updateClientProfile: (slug, body) => pubRequest(`/${slug}/client/profile`, { method: 'PUT', body: JSON.stringify(body) }),
   checkEmail:     (slug, email) => pubRequest(`/${slug}/client/check-email?email=${encodeURIComponent(email)}`),
-  googleAuthUrl:  (slug, ref) => {
+  googleAuthUrl:  (slug, ref, marketingOptIn) => {
     const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
     // origin = sous-domaine de l'opener, relayé dans `state` par le
     // /client/auth/google pour router correctement le postMessage du
     // callback vers le bon sous-domaine frontend (validation allowlist).
+    // RGPD commit 17 : m=1 → opt-in marketing transmis via state OAuth.
     const params = new URLSearchParams();
     if (ref) params.set('ref', ref);
     params.set('origin', window.location.origin);
+    if (marketingOptIn === true) params.set('m', '1');
     return `${BASE}/api/pub/${slug}/client/auth/google?${params}`;
   },
   // Note Google Business réelle (Places API) — silent fail si non configuré
@@ -568,6 +570,11 @@ export const clientsApi = {
   invite:  (id)       => request('/clients/' + id + '/invite', { method:'POST' }),
   addNote: (id, data) => request('/clients/' + id + '/note', { method:'POST', body: JSON.stringify(data) }),
   block:   (id, blocked) => request('/clients/' + id + '/block', { method:'PATCH', body: JSON.stringify({ blocked }) }),
+  // PATCH marketing-opt-in exige PIN admin (audit RGPD commit 17) → adminRequest.
+  setMarketingOptIn: (id, marketing_opt_in) =>
+    adminRequest('/clients/' + id + '/marketing-opt-in', {
+      method:'PATCH', body: JSON.stringify({ marketing_opt_in }),
+    }),
 };
 
 // ── Campagnes SMS/Email ───────────────────────────────────────────────────────

@@ -14,6 +14,7 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { sendClientInvite } = require('../utils/email');
 const crypto   = require('crypto');
 const router   = express.Router();
@@ -286,6 +287,8 @@ router.get('/:id', async (req, res) => {
       `SELECT
          ca.id, ca.user_id, ca.email, ca.first_name, ca.last_name, ca.phone,
          ca.notes, ca.created_at, ca.global_client_id,
+         COALESCE(ca.marketing_opt_in, FALSE) AS marketing_opt_in,
+         ca.marketing_opt_in_at,
          CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
          COALESCE(ca.first_name||' '||ca.last_name, ca.email) AS full_name,
          gc.is_verified AS has_global_account,
@@ -570,6 +573,48 @@ module.exports.associateGlobalClient = async (localId, email, phone) => linkToGl
 
 // ─── PATCH /:id/block — Bloquer / débloquer les réservations d'un client ───────
 // body: { blocked: true | false }
+// ─── PATCH /:id/marketing-opt-in — toggle opt-in marketing (gate PIN admin) ──
+// RGPD commit 17 : l'admin peut activer/désactiver l'opt-in marketing depuis
+// la fiche client. Met à jour client_accounts ET propage sur global_clients
+// si le client a un compte plateforme (cohérence multi-commerce).
+// marketing_opt_in_at = NOW() si activation, NULL si désactivation.
+router.patch('/:id/marketing-opt-in', pinAdminMiddleware, async (req, res) => {
+  try {
+    const uid = req.user.userId;
+    const optIn = req.body?.marketing_opt_in === true;
+
+    const { rows: ex } = await pool.query(
+      'SELECT id, global_client_id FROM client_accounts WHERE id=$1 AND user_id=$2',
+      [req.params.id, uid]
+    );
+    if (!ex[0]) return res.status(404).json({ error: 'Client introuvable.' });
+
+    const { rows } = await pool.query(
+      `UPDATE client_accounts
+          SET marketing_opt_in    = $3,
+              marketing_opt_in_at = CASE WHEN $3 THEN NOW() ELSE NULL END
+        WHERE id=$1 AND user_id=$2
+        RETURNING *`,
+      [req.params.id, uid, optIn]
+    );
+
+    if (ex[0].global_client_id) {
+      await pool.query(
+        `UPDATE global_clients
+            SET marketing_opt_in    = $2,
+                marketing_opt_in_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+          WHERE id=$1`,
+        [ex[0].global_client_id, optIn]
+      ).catch(e => console.warn('[marketing-opt-in fan-out gc]', e.message));
+    }
+
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[CLIENTS marketing-opt-in]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 router.patch('/:id/block', async (req, res) => {
   try {
     const uid     = req.user.userId;
