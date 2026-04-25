@@ -39,11 +39,16 @@ export default function Historique({
   }, [emps]);
 
   if (!unlocked) {
+    // BUG FIX commit 7e : PinAccessModal fait employees.filter() et lit
+    // theme.elevated/border/… — sans ces 2 props, page blanche + crash
+    // « Cannot read properties of undefined (reading 'filter') » dès qu'on
+    // navigue vers /caisse/historique avec au moins un employé actif.
     return (
       <PinAccessModal
         open={pinOpen}
+        employees={emps}
+        theme={theme}
         title="Acces historique"
-        subtitle="Entrez votre PIN pour consulter les ventes du jour"
         onSuccess={() => { successRef.current = true; setUnlocked(true); }}
         onClose={() => { if (!successRef.current) setPinOpen(false); }}
       />
