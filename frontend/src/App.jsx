@@ -1200,8 +1200,9 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
                   background:t.canvas,
                   borderRight:`0.5px solid ${t.border}` }}>
 
-      {/* Header : logo + nom salon. Badge orange « Admin » uniquement en
-          mode admin pour signaler à l'utilisateur l'élévation des droits. */}
+      {/* Header : logo + nom salon + cloche notifications. Badge orange
+          « Admin » uniquement en mode admin pour signaler à l'utilisateur
+          l'élévation des droits. */}
       <div style={{ display:'flex', alignItems:'center', gap:10,
                     padding:'4px 6px 14px',
                     borderBottom:`0.5px solid ${t.separator}`,
@@ -1226,6 +1227,10 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
             <p style={{ fontSize:11, color:t.muted, margin:0 }}>{"Navigation"}</p>
           )}
         </div>
+        {/* Cloche notifications globale : visible sur toutes les pages
+            desktop (employes inclus). Badge rouge = nb non lues, clic = drawer
+            qui s'ouvre vers la droite (sidebar collee a gauche de l'ecran). */}
+        <NotificationCenter theme={t} drawerSide="left" />
       </div>
 
       {NAV_SECTIONS.map((sec, i) => (
@@ -1476,6 +1481,9 @@ function TopBar({ onHome, onLogout, theme: t, toggle, isLight }) {
         <span style={{ fontWeight:500, fontSize:14, color:t.text }}>FlowIA</span>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        {/* Cloche notifications globale : visible sur toutes les pages mobiles
+            (employes inclus). Badge rouge = nb non lues, clic = drawer. */}
+        <NotificationCenter theme={t} />
         <button onClick={toggle}
                 style={{ display:'flex', alignItems:'center', gap:5,
                          padding:'6px 10px', borderRadius:8,
@@ -1773,7 +1781,7 @@ function NotifCard({ n, t, cfg, onOpen, onDelete, compact = false }) {
   );
 }
 
-function NotificationCenter({ theme: t }) {
+function NotificationCenter({ theme: t, drawerSide = 'right' }) {
   const [open, setOpen] = useState(false);
   const drawerRef = useRef(null);
   const navigate  = useNavigate();
@@ -1831,7 +1839,8 @@ function NotificationCenter({ theme: t }) {
       </button>
 
       {open && (
-        <div style={{ position: 'absolute', top: 42, right: 0,
+        <div style={{ position: 'absolute', top: 42,
+                      ...(drawerSide === 'left' ? { left: 0 } : { right: 0 }),
                       width: 380, maxWidth: 'calc(100vw - 32px)',
                       background: t.elevated, borderRadius: 12,
                       border: `0.5px solid ${t.border}`,
