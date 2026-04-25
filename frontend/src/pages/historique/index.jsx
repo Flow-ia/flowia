@@ -148,21 +148,34 @@ export default function HistoriqueAdmin({
     color:t.text, fontSize:13, fontFamily:'inherit',
     boxSizing:'border-box',
   };
+  const sel = {
+    width:'100%', padding:'9px 30px 9px 12px', borderRadius:8, outline:'none',
+    background:t.inputBg, border:`0.5px solid ${t.borderInput}`,
+    color:t.text, fontSize:13, fontFamily:'inherit',
+    boxSizing:'border-box', cursor:'pointer',
+    appearance:'none', WebkitAppearance:'none', MozAppearance:'none',
+  };
   const card = {
     padding:14, borderRadius:12, background:t.card,
     border:`0.5px solid ${t.border}`,
     display:'flex', flexDirection:'column', gap:10,
   };
-  const chip = (active, accent) => ({
-    padding:'7px 12px', borderRadius:99,
-    border:`0.5px solid ${active ? (accent || t.text) : t.border}`,
-    background: active ? (accent ? accent + '15' : t.cardAlt) : t.card,
-    color: active ? (accent || t.text) : t.muted,
-    cursor:'pointer', fontFamily:'inherit',
-    fontSize:12, fontWeight:500,
-    display:'inline-flex', alignItems:'center', gap:6,
-    whiteSpace:'nowrap',
-  });
+  const lblFilter = {
+    margin:'0 0 6px', fontSize:10, color:t.muted, fontWeight:500,
+    textTransform:'uppercase', letterSpacing:'0.04em',
+  };
+  const optBg    = t.mode === 'dark' ? '#1e1e30' : '#f8f8ff';
+  const optColor = t.mode === 'dark' ? 'rgba(255,255,255,0.9)' : '#0c0c10';
+  const SelectWrap = ({ children, value, onChange }) => (
+    <div style={{ position:'relative' }}>
+      <select value={value} onChange={onChange} style={sel}>
+        {children}
+      </select>
+      <I.ChevD style={{ width:14, height:14, position:'absolute', right:10,
+                        top:'50%', transform:'translateY(-50%)',
+                        pointerEvents:'none', color:t.muted }}/>
+    </div>
+  );
 
   const activeEmps = employees.filter(e => e.is_active !== false);
 
@@ -194,31 +207,58 @@ export default function HistoriqueAdmin({
                     display:'flex', flexDirection:'column', gap:14 }}>
         <PageHeader title="Historique"/>
 
-        {/* ── Filtres période (présets + personnalisé) ────────────────────── */}
+        {/* ── Filtres compacts : 3 selects côte à côte (Période/Paiement/Employé)
+              + ligne custom (Du/Au) seulement si "Personnaliser" ──────────── */}
         <div style={card}>
-          <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>
-            {"Période"}
-          </p>
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            <button onClick={() => applyPreset('today')}
-                    style={chip(preset === 'today')}>{"Aujourd'hui"}</button>
-            <button onClick={() => applyPreset('week')}
-                    style={chip(preset === 'week')}>{"Cette semaine"}</button>
-            <button onClick={() => applyPreset('month')}
-                    style={chip(preset === 'month')}>{"Ce mois"}</button>
-            <button onClick={() => applyPreset('custom')}
-                    style={chip(preset === 'custom')}>{"Personnaliser"}</button>
+          <div style={{ display:'grid',
+                        gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap:10 }}>
+            <div>
+              <p style={lblFilter}>{"Période"}</p>
+              <SelectWrap value={preset}
+                          onChange={e => applyPreset(e.target.value)}>
+                <option value="today"  style={{ background:optBg, color:optColor }}>{"Aujourd'hui"}</option>
+                <option value="week"   style={{ background:optBg, color:optColor }}>{"Cette semaine"}</option>
+                <option value="month"  style={{ background:optBg, color:optColor }}>{"Ce mois"}</option>
+                <option value="custom" style={{ background:optBg, color:optColor }}>{"Personnaliser…"}</option>
+              </SelectWrap>
+            </div>
+            <div>
+              <p style={lblFilter}>{"Moyen de paiement"}</p>
+              <SelectWrap value={pmF} onChange={e => setPmF(e.target.value)}>
+                <option value="all"      style={{ background:optBg, color:optColor }}>{"Tous"}</option>
+                <option value="cash"     style={{ background:optBg, color:optColor }}>{"Espèces"}</option>
+                <option value="card"     style={{ background:optBg, color:optColor }}>{"Carte"}</option>
+                <option value="transfer" style={{ background:optBg, color:optColor }}>{"Virement"}</option>
+                <option value="other"    style={{ background:optBg, color:optColor }}>{"Autre"}</option>
+                <option value="multi"    style={{ background:optBg, color:optColor }}>{"Mixte"}</option>
+              </SelectWrap>
+            </div>
+            {activeEmps.length > 0 && (
+              <div>
+                <p style={lblFilter}>{"Employé"}</p>
+                <SelectWrap value={empF} onChange={e => setEmpF(e.target.value)}>
+                  <option value="all" style={{ background:optBg, color:optColor }}>{"Tous"}</option>
+                  {activeEmps.map(e => (
+                    <option key={e.id} value={e.id}
+                            style={{ background:optBg, color:optColor }}>
+                      {e.name}
+                    </option>
+                  ))}
+                </SelectWrap>
+              </div>
+            )}
           </div>
           {preset === 'custom' && (
             <div style={{ display:'grid',
                           gridTemplateColumns:'1fr 1fr auto', gap:8, alignItems:'end' }}>
               <div>
-                <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Du"}</p>
+                <p style={{ ...lblFilter, margin:'0 0 4px' }}>{"Du"}</p>
                 <input type="date" value={customFrom}
                        onChange={e => setCustomFrom(e.target.value)} style={inp}/>
               </div>
               <div>
-                <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Au"}</p>
+                <p style={{ ...lblFilter, margin:'0 0 4px' }}>{"Au"}</p>
                 <input type="date" value={customTo}
                        onChange={e => setCustomTo(e.target.value)} style={inp}/>
               </div>
@@ -230,118 +270,49 @@ export default function HistoriqueAdmin({
           )}
         </div>
 
-        {/* ── Filtres : Moyen de paiement + Employé (1 carte, 2 colonnes) ── */}
-        <div style={card}>
-          <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>
-            {"Filtres"}
-          </p>
-          <div style={{ display:'grid',
-                        gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))',
-                        gap:14 }}>
-            <div>
-              <p style={{ margin:'0 0 8px', fontSize:11, color:t.muted, fontWeight:500,
-                          textTransform:'uppercase', letterSpacing:'0.04em' }}>
-                {"Moyen de paiement"}
-              </p>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                <button onClick={() => setPmF('all')} style={chip(pmF === 'all')}>{"Tous"}</button>
-                {Object.entries(PM_GRID_CFG).map(([id, cfg]) => (
-                  <button key={id} onClick={() => setPmF(id)}
-                          style={chip(pmF === id, cfg.color)}>
-                    {cfg.label}
-                  </button>
-                ))}
-                <button onClick={() => setPmF('multi')} style={chip(pmF === 'multi', '#7c3aed')}>
-                  {"Mixte"}
-                </button>
-              </div>
-            </div>
-
-            {activeEmps.length > 0 && (
-              <div>
-                <p style={{ margin:'0 0 8px', fontSize:11, color:t.muted, fontWeight:500,
-                            textTransform:'uppercase', letterSpacing:'0.04em' }}>
-                  {"Employé"}
-                </p>
-                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                  <button onClick={() => setEmpF('all')} style={chip(empF === 'all')}>
-                    {"Tous"}
-                  </button>
-                  {activeEmps.map(e => (
-                    <button key={e.id} onClick={() => setEmpF(e.id)}
-                            style={chip(empF === e.id, e.avatar_color)}>
-                      <span style={{ width:14, height:14, borderRadius:99,
-                                     background: e.avatar_color || t.text, color:'#fff',
-                                     display:'inline-flex', alignItems:'center',
-                                     justifyContent:'center',
-                                     fontSize:9, fontWeight:500 }}>
-                        {(e.name || '?').charAt(0).toUpperCase()}
-                      </span>
-                      {e.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── KPIs (CA, prestations, panier moyen) ───────────────────────── */}
-        <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))',
-                      gap:10 }}>
-          <div style={{ ...card, gap:6 }}>
-            <p style={{ margin:0, fontSize:10, color:t.muted, textTransform:'uppercase',
-                        letterSpacing:'0.04em', fontWeight:500 }}>{"CA total"}</p>
-            <p style={{ margin:0, fontSize:20, fontWeight:500, color:t.text,
-                        fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+        {/* ── Résumé compact : KPIs inline + chips paiement pastel (2 lignes) */}
+        <div style={{ ...card, gap:10 }}>
+          <div style={{ display:'flex', alignItems:'baseline',
+                        flexWrap:'wrap', gap:'4px 14px' }}>
+            <span style={{ fontSize:20, fontWeight:500, color:t.text,
+                           fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
               {fmt(kpiCA)} €
-            </p>
-            <p style={{ margin:0, fontSize:11, color:t.muted }}>
-              {revs.length + (revs.length > 1 ? ' transactions' : ' transaction')}
-            </p>
+            </span>
+            <span style={{ fontSize:10, color:t.muted, fontWeight:500,
+                           textTransform:'uppercase', letterSpacing:'0.04em' }}>
+              {"CA · " + revs.length + (revs.length > 1 ? ' transactions' : ' transaction')}
+            </span>
+            <span style={{ color:t.dim, fontSize:12 }}>{"·"}</span>
+            <span style={{ fontSize:12, color:t.text }}>
+              <span style={{ color:t.muted }}>{"Prestations "}</span>
+              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                             fontWeight:500 }}>{kpiPrest}</span>
+            </span>
+            <span style={{ color:t.dim, fontSize:12 }}>{"·"}</span>
+            <span style={{ fontSize:12, color:t.text }}>
+              <span style={{ color:t.muted }}>{"Panier "}</span>
+              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                             fontWeight:500 }}>{fmt(kpiPanier)} €</span>
+            </span>
           </div>
-          <div style={{ ...card, gap:6 }}>
-            <p style={{ margin:0, fontSize:10, color:t.muted, textTransform:'uppercase',
-                        letterSpacing:'0.04em', fontWeight:500 }}>{"Prestations"}</p>
-            <p style={{ margin:0, fontSize:20, fontWeight:500, color:t.text,
-                        fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {kpiPrest}
-            </p>
-          </div>
-          <div style={{ ...card, gap:6 }}>
-            <p style={{ margin:0, fontSize:10, color:t.muted, textTransform:'uppercase',
-                        letterSpacing:'0.04em', fontWeight:500 }}>{"Panier moyen"}</p>
-            <p style={{ margin:0, fontSize:20, fontWeight:500, color:t.text,
-                        fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {fmt(kpiPanier)} €
-            </p>
-          </div>
-        </div>
-
-        {/* ── Grille 4 moyens pastel (multi éclatés). ───────────────────── */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8 }}>
-          {Object.entries(PM_GRID_CFG).map(([id, cfg]) => {
-            const v = byPM[id] || { count: 0, total: 0 };
-            return (
-              <div key={id} style={{ padding:'12px 10px', borderRadius:10,
-                                     background:cfg.bg, textAlign:'center' }}>
-                <p style={{ fontSize:10, color:cfg.color, margin:'0 0 4px',
-                            textTransform:'uppercase', letterSpacing:'0.04em',
-                            fontWeight:500 }}>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {Object.entries(PM_GRID_CFG).map(([id, cfg]) => {
+              const v = byPM[id] || { count: 0, total: 0 };
+              return (
+                <span key={id}
+                      style={{ display:'inline-flex', alignItems:'center', gap:6,
+                               padding:'4px 10px', borderRadius:99,
+                               background:cfg.bg, color:cfg.color,
+                               fontSize:11, fontWeight:500 }}>
                   {cfg.label}
-                </p>
-                <p style={{ fontSize:15, fontWeight:500, color:cfg.color,
-                            fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                            margin:'0 0 2px', lineHeight:1.1 }}>
-                  {fmt(v.total)} €
-                </p>
-                <p style={{ fontSize:10, color:cfg.color, opacity:0.7, margin:0 }}>
-                  {v.count + (v.count > 1 ? ' transactions' : ' transaction')}
-                </p>
-              </div>
-            );
-          })}
+                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    {fmt(v.total)} €
+                  </span>
+                  <span style={{ opacity:0.7 }}>{"· " + v.count}</span>
+                </span>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Recherche + segment type ───────────────────────────────────── */}
