@@ -1228,6 +1228,17 @@ async function initDB() {
   await runMigration(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS marketing_opt_in_source TEXT`);
   await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS marketing_opt_in_source TEXT`);
 
+  // ── Refonte FDS-2026 commit 20 : téléphone E.164 (libphonenumber-js) ─────
+  // Migration douce : on ne touche PAS le champ `phone` historique (formats
+  // hétérogènes), on ajoute `phone_e164` rempli à chaque nouvelle saisie/
+  // édition validée. Les SMS lisent `COALESCE(phone_e164, phone)`. Les index
+  // partiels accélèrent la recherche par téléphone normalisé (Brevo attend
+  // déjà du E.164 — délivrabilité améliorée au passage).
+  await runMigration(`ALTER TABLE global_clients  ADD COLUMN IF NOT EXISTS phone_e164 TEXT`);
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS phone_e164 TEXT`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_global_clients_phone_e164  ON global_clients(phone_e164)  WHERE phone_e164 IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_accounts_phone_e164 ON client_accounts(user_id, phone_e164) WHERE phone_e164 IS NOT NULL`);
+
   // ── Refonte FDS-2026 commit 1 : permissions granulaires + user_settings ────
   // Permissions employés : 5 déjà présentes dans la CREATE TABLE initiale
   // (can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse).

@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt    = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { sendReferralWelcome } = require('../../utils/email');
+const { validatePhone } = require('../../utils/phone');
 
 module.exports = function attachClientAuthRoutes(router) {
   // GET /:slug/client/check-email?email=xx
@@ -49,6 +50,16 @@ module.exports = function attachClientAuthRoutes(router) {
         return res.status(400).json({ error: 'Champs requis.' });
       if (password.length < 6)
         return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
+      // RGPD commit 20 : téléphone obligatoire + validé E.164.
+      const phoneCheck = validatePhone(phone, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
+          code:  phoneCheck.error,
+        });
+      }
+      const phoneRaw  = phoneCheck.raw;
+      const phoneE164 = phoneCheck.e164;
       // Audit Z : opt-in marketing explicite. Par défaut FALSE.
       const optIn = marketing_opt_in === true || marketing_opt_in === 'true';
 
@@ -91,10 +102,11 @@ module.exports = function attachClientAuthRoutes(router) {
              first_name=COALESCE(NULLIF($3,''), first_name),
              last_name=COALESCE(NULLIF($4,''), last_name),
              phone=COALESCE(NULLIF($5,''), phone),
-             birth_date=COALESCE($6, birth_date),
+             phone_e164=COALESCE(NULLIF($6,''), phone_e164),
+             birth_date=COALESCE($7, birth_date),
              updated_at=NOW()
            WHERE LOWER(email)=$1 RETURNING id`,
-          [emailLow, hash, first_name, last_name||'', phone||'', bd]
+          [emailLow, hash, first_name, last_name||'', phoneRaw||'', phoneE164||'', bd]
         );
         gcId = updated[0].id;
       } else {
@@ -102,25 +114,27 @@ module.exports = function attachClientAuthRoutes(router) {
         const consentIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
         const { rows: newGc } = await pool.query(
           `INSERT INTO global_clients
-             (email, password_hash, first_name, last_name, phone, birth_date, is_verified, consent_at, consent_ip, marketing_opt_in, marketing_opt_in_at)
-           VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW(),$7,$8, CASE WHEN $8 THEN NOW() ELSE NULL END) RETURNING id`,
-          [emailLow, hash, first_name, last_name||'', phone||null, bd, consentIp, optIn]
+             (email, password_hash, first_name, last_name, phone, phone_e164, birth_date, is_verified, consent_at, consent_ip, marketing_opt_in, marketing_opt_in_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,NOW(),$8,$9, CASE WHEN $9 THEN NOW() ELSE NULL END) RETURNING id`,
+          [emailLow, hash, first_name, last_name||'', phoneRaw||null, phoneE164||null, bd, consentIp, optIn]
         );
         gcId = newGc[0].id;
       }
 
       // 4. Créer la fiche locale liée au compte global
       const { rows } = await pool.query(
-        `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, birth_date, global_client_id, marketing_opt_in, marketing_opt_in_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $9 THEN NOW() ELSE NULL END)
+        `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, phone_e164, birth_date, global_client_id, marketing_opt_in, marketing_opt_in_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, CASE WHEN $10 THEN NOW() ELSE NULL END)
          ON CONFLICT (user_id, email) DO UPDATE SET
            global_client_id = EXCLUDED.global_client_id,
            password_hash    = EXCLUDED.password_hash,
+           phone            = COALESCE(NULLIF(EXCLUDED.phone,''),      client_accounts.phone),
+           phone_e164       = COALESCE(NULLIF(EXCLUDED.phone_e164,''), client_accounts.phone_e164),
            birth_date       = COALESCE(EXCLUDED.birth_date, client_accounts.birth_date),
            marketing_opt_in = EXCLUDED.marketing_opt_in,
            marketing_opt_in_at = CASE WHEN EXCLUDED.marketing_opt_in THEN NOW() ELSE NULL END
-         RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id, marketing_opt_in`,
-        [userId, emailLow, hash, first_name, last_name||'', phone||null, bd, gcId, optIn]
+         RETURNING id, email, first_name, last_name, phone, phone_e164, birth_date, postal_code, city, global_client_id, marketing_opt_in`,
+        [userId, emailLow, hash, first_name, last_name||'', phoneRaw||null, phoneE164||null, bd, gcId, optIn]
       );
       const client = rows[0];
 
@@ -184,32 +198,37 @@ module.exports = function attachClientAuthRoutes(router) {
 
       const first = String(req.body?.first_name || '').trim();
       const last  = String(req.body?.last_name  || '').trim();
-      const phoneRaw = String(req.body?.phone || '').trim();
+      const phoneRawInput = String(req.body?.phone || '').trim();
       if (!first) return res.status(400).json({ error: 'Prénom requis.' });
       if (first.length > 100) return res.status(400).json({ error: 'Prénom trop long.' });
       if (last.length  > 100) return res.status(400).json({ error: 'Nom trop long.' });
 
-      // Normalisation téléphone : garder + et chiffres, puis ne conserver que les
-      // chiffres pour la clé d'idempotence. +33 6 12… et 06 12… restent distincts.
-      const phoneDigits = phoneRaw.replace(/\D/g, '');
-      if (phoneDigits.length < 6 || phoneDigits.length > 20)
-        return res.status(400).json({ error: 'Téléphone invalide.' });
-      // Anti-bot : rejet des numéros manifestement fake (tous chiffres
-      // identiques : 0000000000, 1111111111, séquences 0123456789 /
-      // 9876543210). Sans ce garde, un bot peut créer des fiches variées en
-      // changeant 1 digit (l'idempotence sur phone n'aide que sur répétition
-      // exacte).
+      // RGPD commit 20 : validation libphonenumber-js (remplace l'ancienne
+      // validation custom basée sur longueur/répétitions). Anti-bot conservé
+      // sur la version digits-only (séquences évidentes).
+      const phoneCheck = validatePhone(phoneRawInput, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
+          code:  phoneCheck.error,
+        });
+      }
+      const phoneRaw  = phoneCheck.raw;
+      const phoneE164 = phoneCheck.e164;
+      const phoneDigits = phoneE164.replace(/\D/g, '');
       if (/^(\d)\1+$/.test(phoneDigits) || phoneDigits === '0123456789' || phoneDigits === '9876543210')
         return res.status(400).json({ error: 'Téléphone invalide.' });
 
       // Idempotence : retrouver fiche existante pour ce marchand via téléphone
-      // (comparaison sur chiffres uniquement côté SQL via regexp_replace).
+      // E.164 (priorité) ou fallback sur digits-only de l'ancien champ phone.
       const { rows: existing } = await pool.query(
-        `SELECT id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id
+        `SELECT id, email, first_name, last_name, phone, phone_e164, birth_date, postal_code, city, global_client_id
          FROM client_accounts
-         WHERE user_id=$1 AND regexp_replace(COALESCE(phone,''), '\\D', '', 'g') = $2
+         WHERE user_id=$1
+           AND (phone_e164 = $2
+                OR regexp_replace(COALESCE(phone,''), '\\D', '', 'g') = $3)
          LIMIT 1`,
-        [userId, phoneDigits]
+        [userId, phoneE164, phoneDigits]
       );
 
       // Audit Z : opt-in marketing explicite (par défaut FALSE même en QR,
@@ -234,10 +253,10 @@ module.exports = function attachClientAuthRoutes(router) {
         const hash  = await bcrypt.hash(rand + Date.now(), 10);
         const { rows } = await pool.query(
           `INSERT INTO client_accounts
-             (user_id, email, password_hash, first_name, last_name, phone, source, marketing_opt_in, marketing_opt_in_at)
-           VALUES ($1,$2,$3,$4,$5,$6,'qr',$7, CASE WHEN $7 THEN NOW() ELSE NULL END)
-           RETURNING id, email, first_name, last_name, phone, birth_date, postal_code, city, global_client_id`,
-          [userId, email, hash, first, last || '', phoneRaw, optIn]
+             (user_id, email, password_hash, first_name, last_name, phone, phone_e164, source, marketing_opt_in, marketing_opt_in_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'qr',$8, CASE WHEN $8 THEN NOW() ELSE NULL END)
+           RETURNING id, email, first_name, last_name, phone, phone_e164, birth_date, postal_code, city, global_client_id`,
+          [userId, email, hash, first, last || '', phoneRaw, phoneE164, optIn]
         );
         client = rows[0];
       }
@@ -433,6 +452,16 @@ module.exports = function attachClientAuthRoutes(router) {
           code: 'CGU_REQUIRED',
         });
       }
+      // RGPD commit 20 : téléphone obligatoire + validé E.164.
+      const phoneCheck = validatePhone(phone, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
+          code:  phoneCheck.error,
+        });
+      }
+      const phoneRaw  = phoneCheck.raw;
+      const phoneE164 = phoneCheck.e164;
 
       // 1. Vérifier le pre_token (scope + expiration)
       let payload;
@@ -480,15 +509,15 @@ module.exports = function attachClientAuthRoutes(router) {
       } else {
         const { rows: created } = await pool.query(
           `INSERT INTO global_clients
-             (email, google_id, first_name, last_name, phone, avatar_url,
+             (email, google_id, first_name, last_name, phone, phone_e164, avatar_url,
               is_verified, consent_at, consent_ip,
               marketing_opt_in, marketing_opt_in_at, marketing_opt_in_source)
-           VALUES ($1,$2,$3,$4,$5,$6,TRUE,NOW(),$7,$8,
-                   CASE WHEN $8 THEN NOW() ELSE NULL END,
-                   CASE WHEN $8 THEN 'oauth_google' ELSE NULL END)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,NOW(),$8,$9,
+                   CASE WHEN $9 THEN NOW() ELSE NULL END,
+                   CASE WHEN $9 THEN 'oauth_google' ELSE NULL END)
            RETURNING *`,
           [emailLow, payload.google_id, payload.first_name || '', payload.last_name || '',
-           phone ? String(phone).trim() : null, payload.picture || null, consentIp, optIn]
+           phoneRaw, phoneE164, payload.picture || null, consentIp, optIn]
         );
         gc = created[0];
       }
@@ -496,20 +525,21 @@ module.exports = function attachClientAuthRoutes(router) {
       // 3. Créer la fiche locale chez ce commerçant.
       const { rows: localRows } = await pool.query(
         `INSERT INTO client_accounts
-           (user_id, email, first_name, last_name, phone,
+           (user_id, email, first_name, last_name, phone, phone_e164,
             global_client_id, source,
             marketing_opt_in, marketing_opt_in_at, marketing_opt_in_source)
-         VALUES ($1,$2,$3,$4,$5,$6,'google',$7,
-                 CASE WHEN $7 THEN NOW() ELSE NULL END,
-                 CASE WHEN $7 THEN 'oauth_google' ELSE NULL END)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'google',$8,
+                 CASE WHEN $8 THEN NOW() ELSE NULL END,
+                 CASE WHEN $8 THEN 'oauth_google' ELSE NULL END)
          ON CONFLICT (user_id, email) DO UPDATE SET
            global_client_id = EXCLUDED.global_client_id,
            first_name = COALESCE(NULLIF(client_accounts.first_name,''), EXCLUDED.first_name),
            last_name  = COALESCE(NULLIF(client_accounts.last_name,''),  EXCLUDED.last_name),
-           phone      = COALESCE(NULLIF(client_accounts.phone,''),      EXCLUDED.phone)
+           phone      = COALESCE(NULLIF(client_accounts.phone,''),      EXCLUDED.phone),
+           phone_e164 = COALESCE(NULLIF(client_accounts.phone_e164,''), EXCLUDED.phone_e164)
          RETURNING *`,
         [userId, emailLow, gc.first_name, gc.last_name || '',
-         phone ? String(phone).trim() : null, gc.id, optIn]
+         phoneRaw, phoneE164, gc.id, optIn]
       );
       const local = localRows[0];
 

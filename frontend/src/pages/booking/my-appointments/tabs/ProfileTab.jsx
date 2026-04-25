@@ -1,6 +1,7 @@
 // src/pages/booking/my-appointments/tabs/ProfileTab.jsx
 // Onglet "Mon profil" : affichage + mode édition + sécurité (email/mdp) + suppression.
 import { ymd } from '../helpers';
+import { PhoneInput } from '../../../../components/PhoneInput';
 
 export function ProfileTab({
   th,
@@ -72,14 +73,11 @@ export function ProfileTab({
                   placeholder="Nom" style={inpStyle}/>
               </div>
             </div>
-            <div>
-              <label style={{ display:'block', fontSize:11, fontWeight: 500,
-                color:th.muted, marginBottom:6 }}>
-                Téléphone
-              </label>
-              <input type="tel" value={editPhone} onChange={e=>setEditPhone(e.target.value)}
-                placeholder="06 00 00 00 00" style={inpStyle}/>
-            </div>
+            {/* RGPD commit 20 : PhoneInput E.164 + validation libphonenumber-js. */}
+            <PhoneInput value={editPhone} onChange={setEditPhone}
+              label="Téléphone *" required
+              theme={{ text: th.text, muted: th.muted, dim: th.dim,
+                border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
             <div>
               <label style={{ display:'block', fontSize:11, fontWeight: 500,
                 color:th.muted, marginBottom:6 }}>

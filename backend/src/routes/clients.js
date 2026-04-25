@@ -16,6 +16,7 @@ const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { sendClientInvite } = require('../utils/email');
+const { validatePhone } = require('../utils/phone');
 const crypto   = require('crypto');
 const router   = express.Router();
 router.use(authMiddleware);
@@ -28,7 +29,8 @@ function isValidEmail(e) {
 }
 
 // ─── Helper : upsert fiche locale ────────────────────────────────────────────
-async function upsertLocalClient(userId, { email, first_name, last_name, phone, notes }) {
+// RGPD commit 20 : phone_e164 stocké en parallèle du phone (raw).
+async function upsertLocalClient(userId, { email, first_name, last_name, phone, phone_e164, notes }) {
   if (!email && !phone && !first_name) return null;
   const emailLow = email ? email.toLowerCase().trim() : '';
 
@@ -41,11 +43,15 @@ async function upsertLocalClient(userId, { email, first_name, last_name, phone, 
     );
     existing = r.rows[0] || null;
   }
-  // 2. Chercher par téléphone si pas trouvé
-  if (!existing && phone) {
+  // 2. Chercher par téléphone si pas trouvé (priorité E.164, fallback raw).
+  if (!existing && (phone_e164 || phone)) {
     const r = await pool.query(
-      "SELECT * FROM client_accounts WHERE user_id=$1 AND phone=$2 AND (email IS NULL OR email='')",
-      [userId, phone]
+      `SELECT * FROM client_accounts
+        WHERE user_id=$1
+          AND (email IS NULL OR email='')
+          AND (phone_e164=$2 OR phone=$3)
+        LIMIT 1`,
+      [userId, phone_e164 || null, phone || null]
     );
     existing = r.rows[0] || null;
   }
@@ -67,13 +73,13 @@ async function upsertLocalClient(userId, { email, first_name, last_name, phone, 
            first_name = COALESCE(NULLIF($3,''), first_name),
            last_name  = COALESCE(NULLIF($4,''), last_name),
            phone      = COALESCE(NULLIF($5,''), phone),
-           notes      = COALESCE(NULLIF($6,''), notes),
-           email      = CASE WHEN (email IS NULL OR email='') AND $7<>'' THEN $7 ELSE email END
+           phone_e164 = COALESCE(NULLIF($6,''), phone_e164),
+           notes      = COALESCE(NULLIF($7,''), notes),
+           email      = CASE WHEN (email IS NULL OR email='') AND $8<>'' THEN $8 ELSE email END
          WHERE id=$1 AND user_id=$2`,
-        [existing.id, userId, first_name||'', last_name||'', phone||'', notes||'', emailLow]
+        [existing.id, userId, first_name||'', last_name||'', phone||'', phone_e164||'', notes||'', emailLow]
       );
-      // Tenter liaison global
-      await linkToGlobal(existing.id, emailLow, phone);
+      await linkToGlobal(existing.id, emailLow, phone_e164 || phone);
     }
     const r = await pool.query('SELECT * FROM client_accounts WHERE id=$1', [existing.id]);
     return r.rows[0];
@@ -82,18 +88,19 @@ async function upsertLocalClient(userId, { email, first_name, last_name, phone, 
   // 3. Créer
   const fn = first_name || (emailLow ? emailLow.split('@')[0] : 'Client');
   const { rows } = await pool.query(
-    `INSERT INTO client_accounts (user_id, email, first_name, last_name, phone, notes)
-     VALUES ($1,$2,$3,$4,$5,$6)
+    `INSERT INTO client_accounts (user_id, email, first_name, last_name, phone, phone_e164, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
      ON CONFLICT (user_id, email) DO UPDATE SET
        first_name = COALESCE(NULLIF(EXCLUDED.first_name,''), client_accounts.first_name),
        phone      = COALESCE(NULLIF(EXCLUDED.phone,''), client_accounts.phone),
+       phone_e164 = COALESCE(NULLIF(EXCLUDED.phone_e164,''), client_accounts.phone_e164),
        last_name  = COALESCE(NULLIF(EXCLUDED.last_name,''), client_accounts.last_name)
      RETURNING *`,
-    [userId, emailLow, fn, last_name||'', phone||null, notes||null]
+    [userId, emailLow, fn, last_name||'', phone||null, phone_e164||null, notes||null]
   );
   const created = rows[0];
   if (created?.id) {
-    await linkToGlobal(created.id, emailLow, phone);
+    await linkToGlobal(created.id, emailLow, phone_e164 || phone);
     const r = await pool.query('SELECT * FROM client_accounts WHERE id=$1', [created.id]);
     return r.rows[0];
   }
@@ -255,7 +262,20 @@ router.post('/', async (req, res) => {
     const { email, first_name, last_name, phone, notes } = req.body;
     if (!first_name && !email) return res.status(400).json({ error: 'Nom ou email requis.' });
     if (email && !isValidEmail(email)) return res.status(400).json({ error: 'Email invalide.' });
-    const client = await upsertLocalClient(uid, { email, first_name, last_name, phone, notes });
+    // RGPD commit 20 : téléphone obligatoire + validé E.164.
+    const phoneCheck = validatePhone(phone, { required: true });
+    if (!phoneCheck.valid) {
+      return res.status(400).json({
+        error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
+        code:  phoneCheck.error,
+      });
+    }
+    const client = await upsertLocalClient(uid, {
+      email, first_name, last_name,
+      phone:      phoneCheck.raw,
+      phone_e164: phoneCheck.e164,
+      notes,
+    });
     res.json(client);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Ce client existe déjà.' });
@@ -370,6 +390,21 @@ router.put('/:id', async (req, res) => {
   try {
     const uid = req.user.userId;
     const { first_name, last_name, email, phone, notes } = req.body;
+    // RGPD commit 20 : si phone fourni, valider en E.164. PUT est partiel ;
+    // un phone vide/null laisse la valeur existante (required:false).
+    let phoneRaw  = null;
+    let phoneE164 = null;
+    if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+      const phoneCheck = validatePhone(phone, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: 'Numéro de téléphone invalide pour le pays.',
+          code:  phoneCheck.error,
+        });
+      }
+      phoneRaw  = phoneCheck.raw;
+      phoneE164 = phoneCheck.e164;
+    }
 
     const { rows: ex } = await pool.query(
       `SELECT ca.id, ca.global_client_id,
@@ -416,9 +451,11 @@ router.put('/:id', async (req, res) => {
          last_name  = COALESCE(NULLIF($4,''), last_name),
          email      = COALESCE(NULLIF($5,''), email),
          phone      = COALESCE(NULLIF($6,''), phone),
-         notes      = $7
+         phone_e164 = COALESCE(NULLIF($7,''), phone_e164),
+         notes      = $8
        WHERE id=$1 AND user_id=$2 RETURNING *`,
-      [req.params.id, uid, first_name||'', last_name||'', emailNorm, phone||'', notes??null]
+      [req.params.id, uid, first_name||'', last_name||'', emailNorm,
+       phoneRaw||'', phoneE164||'', notes??null]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Client introuvable.' });
 

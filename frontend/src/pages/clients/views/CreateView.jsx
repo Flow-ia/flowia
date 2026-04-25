@@ -2,6 +2,7 @@
 import BackBtn from '../components/BackBtn';
 import { Toast } from '../../../components/UI';
 import { Button } from '../../../components/primitives';
+import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 
 // ══ VUE CREER ═══════════════════════════════════════════════════════════════
 export default function CreateView({
@@ -51,15 +52,13 @@ export default function CreateView({
             style={inp}
           />
         </div>
-        <div>
-          <label style={lbl}>Telephone</label>
-          <input
-            value={form.phone}
-            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-            placeholder="+33 6 00 00 00 00"
-            style={inp}
-          />
-        </div>
+        <PhoneInput
+          value={form.phone}
+          onChange={v => setForm(f => ({ ...f, phone: v }))}
+          label="Telephone *" required
+          theme={{ text: theme.text, muted: theme.muted, dim: theme.dim,
+            border: theme.border, inputBg: theme.inputBg, inputBorder: theme.inputBorder }}
+        />
         <div>
           <label style={lbl}>Notes internes</label>
           <textarea
@@ -70,7 +69,8 @@ export default function CreateView({
             style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }}
           />
         </div>
-        <Button fullWidth size="large" onClick={handleCreate} disabled={busy}>
+        <Button fullWidth size="large" onClick={handleCreate}
+          disabled={busy || !isValidPhoneNumber(form.phone || '')}>
           {busy ? 'Creation...' : 'Creer le client'}
         </Button>
       </div>

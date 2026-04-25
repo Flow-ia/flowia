@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { pubApi } from '../../../../utils/api';
 import { MONTHS } from '../helpers';
+import { PhoneInput, isValidPhoneNumber } from '../../../../components/PhoneInput';
 
 export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
   const thisYear = new Date().getFullYear();
@@ -30,13 +31,18 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
         return;
       }
     }
+    // RGPD commit 20 : si phone saisi, vérifier qu'il est valide E.164.
+    if (phone && !isValidPhoneNumber(phone)) {
+      setErr('Numéro invalide pour le pays sélectionné.');
+      return;
+    }
     setLoading(true); setErr('');
     try {
       const body = {
         first_name: client.first_name,
         last_name:  client.last_name || '',
         email:      client.email,
-        phone:      phone.trim() || undefined,
+        phone:      phone || undefined,
       };
       if (month && year) body.birth_date = `${year}-${month}`; // backend convertit en YYYY-MM-01
       await pubApi.updateClientProfile(slug, body);
@@ -95,18 +101,13 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Téléphone */}
+        {/* Téléphone — RGPD commit 20 : PhoneInput, optionnel dans ce popup. */}
         {!client?.phone && (
           <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: th.muted,
-              marginBottom: 5 }}>
-              Téléphone (optionnel)
-            </label>
-            <input type="tel" placeholder="06 00 00 00 00" value={phone}
-              onChange={e => setPhone(e.target.value)}
-              style={{ width: '100%', padding: '11px 12px', borderRadius: 10,
-                background: th.inputBg, border: `0.5px solid ${th.inputBorder}`,
-                color: th.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}/>
+            <PhoneInput value={phone} onChange={setPhone}
+              label="Téléphone (optionnel)" required={false}
+              theme={{ text: th.text, muted: th.muted, dim: th.dim,
+                border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
           </div>
         )}
 

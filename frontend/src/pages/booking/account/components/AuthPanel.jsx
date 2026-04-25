@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { pubApi, globalClientApi } from '../../../../utils/api';
 import { GoogleOAuthOverlay } from '../../../../components/AuthFlow';
 import { ConsentCheckboxes } from '../../../../components/ConsentCheckboxes';
+import { PhoneInput, isValidPhoneNumber } from '../../../../components/PhoneInput';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false, onModeChange }) {
@@ -214,8 +215,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   // Backend idempotent sur (user_id, phone normalisé) : re-scan = même compte.
   const quickSubmit = async () => {
     if (!first.trim())           { setErr('Prénom requis.'); return; }
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 6)       { setErr('Téléphone invalide.'); return; }
+    if (!isValidPhoneNumber(phone||'')) { setErr('Numéro invalide pour le pays sélectionné.'); return; }
     setLoading(true); setErr(''); setOk('');
     try {
       const r = await pubApi.quickRegister(slug, {
@@ -343,14 +343,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                   onChange={e=>setLast(e.target.value)} style={S.inp}/>
               </div>
             </div>
-            <div>
-              <label style={S.label}>Téléphone *</label>
-              <input type="tel" inputMode="tel" placeholder="06 00 00 00 00" value={phone}
-                maxLength={20} pattern="[0-9+\s\-]*"
-                onChange={e=>setPhone(e.target.value)}
-                onKeyDown={e=>e.key==='Enter'&&quickSubmit()}
-                style={S.inp}/>
-            </div>
+            <PhoneInput value={phone} onChange={setPhone}
+              label="Téléphone *" required
+              theme={{ text: th.text, muted: th.muted, dim: th.dim,
+                border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
             {/* RGPD commit 17 : 2 cases (CGU obligatoire + marketing optionnel),
                 version compacte adaptée au flow rapide QR. */}
             <ConsentCheckboxes slug={slug} th={th} onChange={handleConsents} compact/>
@@ -363,9 +359,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
               </div>
             )}
             <button onClick={quickSubmit}
-              disabled={loading||!first.trim()||phone.replace(/\D/g,'').length<6||!consent}
+              disabled={loading||!first.trim()||!isValidPhoneNumber(phone||'')||!consent}
               style={{...S.btnPrimary,
-                opacity:loading||!first.trim()||phone.replace(/\D/g,'').length<6||!consent?0.5:1}}>
+                opacity:loading||!first.trim()||!isValidPhoneNumber(phone||'')||!consent?0.5:1}}>
               {loading ? '...' : '→ Créer ma fiche'}
             </button>
             <button onClick={()=>{ setMode('login'); setErr(''); }}
@@ -500,11 +496,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                       onChange={e=>setLast(e.target.value)} style={S.inp}/>
                   </div>
                 </div>
-                <div>
-                  <label style={S.label}>Téléphone</label>
-                  <input placeholder="06 00 00 00 00" value={phone}
-                    onChange={e=>setPhone(e.target.value)} style={S.inp}/>
-                </div>
+                <PhoneInput value={phone} onChange={setPhone}
+                  label="Téléphone *" required
+                  theme={{ text: th.text, muted: th.muted, dim: th.dim,
+                    border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
               </>
             )}
 
@@ -533,11 +528,11 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
               <ConsentCheckboxes slug={slug} th={th} onChange={handleConsents}/>
             )}
 
-            {/* Bouton principal */}
+            {/* Bouton principal — RGPD commit 20 : phone valide obligatoire en register */}
             <button onClick={submit}
-              disabled={loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()||!consent))}
+              disabled={loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()||!consent||!isValidPhoneNumber(phone||'')))}
               style={{...S.btnPrimary,
-                opacity:loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()||!consent))?0.5:1,
+                opacity:loading||!email.trim()||!pwd||(mode==='register'&&(!first.trim()||!last.trim()||!consent||!isValidPhoneNumber(phone||'')))?0.5:1,
                 marginTop:4}}>
               {loading ? '...' : mode==='login' ? '→ Se connecter' : '→ Creer mon compte'}
             </button>

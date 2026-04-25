@@ -1,0 +1,85 @@
+/* src/components/PhoneInput.css
+   FDS-2026 overrides pour react-phone-number-input. Les variables CSS
+   (--ff-phone-*) sont injectées par le composant via style attribute,
+   ce qui permet d'adapter au thème light/dark sans cibler chaque enfant.
+*/
+
+.ff-phone-wrap .PhoneInput {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: var(--ff-phone-padding, 11px 14px);
+  border-radius: var(--ff-phone-radius, 10px);
+  background: var(--ff-phone-bg, #fff);
+  border: 0.5px solid var(--ff-phone-border, #e5e7eb);
+  box-sizing: border-box;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ff-phone-wrap.ff-phone-err .PhoneInput {
+  background: var(--ff-phone-bg-error, #fef2f2);
+}
+
+.ff-phone-wrap .PhoneInputCountry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+}
+
+.ff-phone-wrap .PhoneInputCountryIcon {
+  width: 22px;
+  height: 16px;
+  border-radius: 2px;
+  box-shadow: none;
+  background: transparent;
+}
+.ff-phone-wrap .PhoneInputCountryIcon--border {
+  box-shadow: none;
+}
+.ff-phone-wrap .PhoneInputCountryIconImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ff-phone-wrap .PhoneInputCountrySelectArrow {
+  margin-left: 4px;
+  width: 0.3em;
+  height: 0.3em;
+  border-color: var(--ff-phone-muted, #6b7280);
+  opacity: 1;
+}
+
+.ff-phone-wrap .PhoneInputInput {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ff-phone-text, #1a1a1a);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: -0.005em;
+}
+.ff-phone-wrap .PhoneInputInput::placeholder {
+  color: var(--ff-phone-muted, #6b7280);
+  font-weight: 400;
+  opacity: 1;
+}
+.ff-phone-wrap .PhoneInputInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ff-phone-wrap .PhoneInputCountrySelect {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}

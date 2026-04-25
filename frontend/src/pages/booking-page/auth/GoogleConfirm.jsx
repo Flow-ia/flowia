@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { pubApi } from '../../../utils/api';
 import { ConsentCheckboxes } from '../../../components/ConsentCheckboxes';
+import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 import { Icon } from '../../../components/Icon';
 
 const LIGHT = {
@@ -77,13 +78,17 @@ export default function GoogleConfirm() {
       setErr("L'acceptation des conditions est obligatoire.");
       return;
     }
+    if (!isValidPhoneNumber(phone || '')) {
+      setErr('Numéro de téléphone invalide pour le pays.');
+      return;
+    }
     setBusy(true);
     try {
       const res = await pubApi.oauthGoogleFinalize(slug, {
         pre_token:          preToken,
         contract_accepted:  consents.contractAccepted,
         marketing_accepted: consents.marketingAccepted,
-        phone:              phone.trim() || undefined,
+        phone:              phone || undefined,
       });
       if (!res?.token || !res?.client) throw new Error('Réponse invalide');
       // Persistance cohérente avec AuthPanel.applyClientLogin.
@@ -210,18 +215,13 @@ export default function GoogleConfirm() {
         </div>
       </div>
 
-      {/* Téléphone optionnel */}
-      <label style={{ display:'block', fontSize:11, fontWeight:500,
-        color:th.muted, marginBottom:5 }}>
-        {"Téléphone (optionnel)"}
-      </label>
-      <input type="tel" inputMode="tel" placeholder="06 12 34 56 78"
-        value={phone} maxLength={20}
-        onChange={e => setPhone(e.target.value)}
-        style={{ width:'100%', padding:'11px 14px', borderRadius:10,
-          background:th.inputBg, border:`0.5px solid ${th.inputBorder}`,
-          color:th.text, fontSize:13, fontFamily:'inherit', outline:'none',
-          boxSizing:'border-box', marginBottom:14 }}/>
+      {/* RGPD commit 20 : téléphone obligatoire + validé E.164 */}
+      <div style={{ marginBottom:14 }}>
+        <PhoneInput value={phone} onChange={setPhone}
+          label="Téléphone *" required
+          theme={{ text: th.text, muted: th.muted, dim: th.dim,
+            border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
+      </div>
 
       {/* ConsentCheckboxes (commit 17) */}
       <div style={{
@@ -236,17 +236,23 @@ export default function GoogleConfirm() {
           fontWeight:500 }}>{err}</p>
       )}
 
-      {/* Bouton finaliser */}
-      <button onClick={submit} disabled={busy || !consents.contractAccepted}
-        style={{ width:'100%', marginTop:16, padding:'14px',
-          borderRadius:12, border:'none',
-          background: (busy || !consents.contractAccepted) ? th.border : th.accent,
-          color: (busy || !consents.contractAccepted) ? th.muted : th.accentText,
-          fontWeight:500, fontSize:14, fontFamily:'inherit',
-          cursor: (busy || !consents.contractAccepted) ? 'not-allowed' : 'pointer',
-          opacity: busy ? 0.7 : 1 }}>
-        {busy ? "..." : "Finaliser mon inscription →"}
-      </button>
+      {/* Bouton finaliser — RGPD commit 20 : phone valide aussi obligatoire */}
+      {(() => {
+        const phoneOk = isValidPhoneNumber(phone || '');
+        const blocked = busy || !consents.contractAccepted || !phoneOk;
+        return (
+          <button onClick={submit} disabled={blocked}
+            style={{ width:'100%', marginTop:16, padding:'14px',
+              borderRadius:12, border:'none',
+              background: blocked ? th.border : th.accent,
+              color:      blocked ? th.muted  : th.accentText,
+              fontWeight:500, fontSize:14, fontFamily:'inherit',
+              cursor: blocked ? 'not-allowed' : 'pointer',
+              opacity: busy ? 0.7 : 1 }}>
+            {busy ? "..." : "Finaliser mon inscription →"}
+          </button>
+        );
+      })()}
 
       {/* Lien annuler */}
       <button onClick={cancel} disabled={busy}

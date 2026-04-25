@@ -5,8 +5,7 @@
 import { pubApi } from '../../../utils/api';
 import { AuthPanel } from '../../booking/Account';
 import { ConsentCheckboxes } from '../../../components/ConsentCheckboxes';
-import { PHONE_COUNTRIES } from '../constants';
-import { formatPhone, validatePhone } from '../helpers';
+import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 
 export function Step5Info({
   th, slug, selSvc, selEmp, selDate, selSlot,
@@ -65,52 +64,18 @@ export function Step5Info({
               Profil
             </button>
           </div>
-          {/* Champ téléphone obligatoire si manquant (ex: après Google OAuth) */}
+          {/* Champ téléphone obligatoire si manquant (ex: après Google OAuth).
+              RGPD commit 20 : PhoneInput avec validation libphonenumber-js. */}
           {!clientPhone.trim() && (
             <div style={{background:'rgba(245,158,11,0.06)',border: '0.5px solid rgba(245,158,11,0.25)',
               borderRadius:10,padding:'12px 14px',marginBottom:14}}>
               <p style={{fontSize:12,fontWeight: 500,color:'#d97706',margin:'0 0 8px'}}>
                 Complétez votre profil pour continuer
               </p>
-              <label style={{display:'block',fontSize:11,fontWeight: 500,
-                color:th.muted,marginBottom:5}}>
-                Téléphone *
-              </label>
-              <div style={{display:'flex',gap:6,position:'relative'}}>
-                <div style={{position:'relative'}}>
-                  <button type="button" onClick={()=>setPhoneDrop(!phoneDrop)}
-                    style={{display:'flex',alignItems:'center',gap:4,padding:'11px 10px',
-                      borderRadius:9,background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
-                      color:th.text,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',height:'100%'}}>
-                    <span style={{fontSize:16}}>{phoneCC.flag}</span>
-                    <span style={{fontSize:12,fontWeight: 500}}>{phoneCC.dial}</span>
-                    <span style={{fontSize:9,opacity:0.5}}>▼</span>
-                  </button>
-                  {phoneDrop && (
-                    <div style={{position:'absolute',top:'100%',left:0,zIndex:999,marginTop:4,
-                      background:th.card,border: `0.5px solid ${th.border}`,borderRadius:10,
-                      boxShadow:'0 8px 24px rgba(0,0,0,0.15)',maxHeight:200,overflowY:'auto',minWidth:200}}>
-                      {PHONE_COUNTRIES.map(c=>(
-                        <button key={c.code} type="button" onClick={()=>{setPhoneCC(c);setPhoneDrop(false);setPhoneErr('');}}
-                          style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'9px 12px',
-                            background:phoneCC.code===c.code?'rgba(99,102,241,0.08)':'transparent',
-                            border:'none',cursor:'pointer',color:th.text,fontSize:13,textAlign:'left'}}>
-                          <span style={{fontSize:16}}>{c.flag}</span>
-                          <span style={{fontWeight: 500}}>{c.dial}</span>
-                          <span style={{color:th.muted,fontSize:12}}>{c.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <input type="tel" inputMode="tel" placeholder="6 03 04 46 17" value={phoneLocal}
-                  maxLength={20} pattern="[0-9+\s\-]*"
-                  onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
-                  style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
-                    background:th.inputBg,border: `0.5px solid ${phoneErr?'#ef4444':th.inputBorder}`,
-                    color:th.text,fontSize:13,boxSizing:'border-box'}}/>
-              </div>
-              {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight: 500}}>{phoneErr}</p>}
+              <PhoneInput value={clientPhone} onChange={setCP}
+                label="Téléphone *" required
+                theme={{ text: th.text, muted: th.muted, dim: th.dim,
+                  border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
             </div>
           )}
           <label style={{display:'block',fontSize:12,fontWeight: 500,color:th.muted,marginBottom:6}}>
@@ -122,38 +87,37 @@ export function Step5Info({
             style={{width:'100%',padding:'12px 14px',borderRadius:10,outline:'none',
               background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
               color:th.text,fontSize:13,resize:'none',lineHeight:1.5}}/>
-          <button onClick={async ()=>{
-            // Valider et formater le téléphone si pas encore fait
-            if(!clientPhone.trim()){
-              const err=validatePhone(phoneCC,phoneLocal);
-              if(err){setPhoneErr(err);return;}
-              const formatted=formatPhone(phoneCC,phoneLocal);
-              setCP(formatted);
-              // Sauvegarder dans le profil backend
-              if(clientUser && !clientUser.phone){
-                try{
-                  const tk=localStorage.getItem('ff_client_token');
-                  if(tk) await pubApi.updateClientProfile(slug,{
-                    first_name:clientUser.first_name,last_name:clientUser.last_name,
-                    email:clientUser.email,phone:formatted
-                  });
-                  const updated={...clientUser,phone:formatted};
-                  setClientUser(updated);
-                  localStorage.setItem('ff_client_info',JSON.stringify(updated));
-                }catch{}
-              }
-            }
-            goToStep(6);
-          }}
-            disabled={!clientPhone.trim()&&!phoneLocal.replace(/\D/g,'')}
-            style={{width:'100%',marginTop:16,padding:'15px',borderRadius:12,
-              background:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?th.border:th.accent,
-              border:'none',fontWeight: 500,fontSize:15,
-              color:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?th.muted:th.accentText,
-              cursor:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?'not-allowed':'pointer',
-              opacity:(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,''))?0.5:1}}>
-            {(!clientPhone.trim()&&!phoneLocal.replace(/\D/g,'')) ? 'Téléphone requis' : 'Continuer →'}
-          </button>
+          {(() => {
+            const phoneOk = isValidPhoneNumber(clientPhone || '');
+            return (
+              <button onClick={async ()=>{
+                // RGPD commit 20 : phone déjà en E.164 dans clientPhone, validé par PhoneInput.
+                if (!phoneOk) { setPhoneErr('Numéro invalide pour le pays sélectionné.'); return; }
+                if (clientUser && !clientUser.phone) {
+                  try{
+                    const tk = localStorage.getItem('ff_client_token');
+                    if (tk) await pubApi.updateClientProfile(slug, {
+                      first_name: clientUser.first_name, last_name: clientUser.last_name,
+                      email: clientUser.email, phone: clientPhone,
+                    });
+                    const updated = { ...clientUser, phone: clientPhone };
+                    setClientUser(updated);
+                    localStorage.setItem('ff_client_info', JSON.stringify(updated));
+                  } catch {}
+                }
+                goToStep(6);
+              }}
+                disabled={!phoneOk}
+                style={{width:'100%',marginTop:16,padding:'15px',borderRadius:12,
+                  background: phoneOk ? th.accent : th.border,
+                  border:'none',fontWeight: 500,fontSize:15,
+                  color: phoneOk ? th.accentText : th.muted,
+                  cursor: phoneOk ? 'pointer' : 'not-allowed',
+                  opacity: phoneOk ? 1 : 0.5}}>
+                {phoneOk ? 'Continuer →' : 'Téléphone requis'}
+              </button>
+            );
+          })()}
         </div>
       ) : (
         <div>
@@ -300,46 +264,11 @@ export function Step5Info({
                   )}
                 </div>
 
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight: 500,
-                    color:th.muted,marginBottom:5}}>
-                    Téléphone *
-                  </label>
-                  <div style={{display:'flex',gap:6,position:'relative'}}>
-                    <div style={{position:'relative'}}>
-                      <button type="button" onClick={()=>setPhoneDrop(!phoneDrop)}
-                        style={{display:'flex',alignItems:'center',gap:4,padding:'11px 10px',
-                          borderRadius:9,background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
-                          color:th.text,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',height:'100%'}}>
-                        <span style={{fontSize:16}}>{phoneCC.flag}</span>
-                        <span style={{fontSize:12,fontWeight: 500}}>{phoneCC.dial}</span>
-                        <span style={{fontSize:9,opacity:0.5}}>▼</span>
-                      </button>
-                      {phoneDrop && (
-                        <div style={{position:'absolute',top:'100%',left:0,zIndex:999,marginTop:4,
-                          background:th.card,border: `0.5px solid ${th.border}`,borderRadius:10,
-                          boxShadow:'0 8px 24px rgba(0,0,0,0.15)',maxHeight:200,overflowY:'auto',minWidth:200}}>
-                          {PHONE_COUNTRIES.map(c=>(
-                            <button key={c.code} type="button" onClick={()=>{setPhoneCC(c);setPhoneDrop(false);setPhoneErr('');}}
-                              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'9px 12px',
-                                background:phoneCC.code===c.code?'rgba(99,102,241,0.08)':'transparent',
-                                border:'none',cursor:'pointer',color:th.text,fontSize:13,textAlign:'left'}}>
-                              <span style={{fontSize:16}}>{c.flag}</span>
-                              <span style={{fontWeight: 500}}>{c.dial}</span>
-                              <span style={{color:th.muted,fontSize:12}}>{c.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <input type="tel" placeholder="6 03 04 46 17" value={phoneLocal}
-                      onChange={e=>{setPhoneLocal(e.target.value);setPhoneErr('');}}
-                      style={{flex:1,padding:'11px 12px',borderRadius:9,outline:'none',
-                        background:th.inputBg,border: `0.5px solid ${phoneErr?'#ef4444':th.inputBorder}`,
-                        color:th.text,fontSize:13}}/>
-                  </div>
-                  {phoneErr && <p style={{fontSize:11,color:'#ef4444',marginTop:4,fontWeight: 500}}>{phoneErr}</p>}
-                </div>
+                {/* RGPD commit 20 : PhoneInput unique pour le téléphone. */}
+                <PhoneInput value={clientPhone} onChange={setCP}
+                  label="Téléphone *" required
+                  theme={{ text: th.text, muted: th.muted, dim: th.dim,
+                    border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
 
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight: 500,
@@ -364,13 +293,13 @@ export function Step5Info({
               )}
               {(() => {
                 const contractOk = !setNoAcctConsent || noAcctConsent?.contractAccepted;
-                const blocked = !clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneLocal.replace(/\D/g,'')||!contractOk;
+                const phoneOk = isValidPhoneNumber(clientPhone || '');
+                const blocked = !clientName.trim()||emailStatus==='exists'||!clientEmail.trim()||!phoneOk||!contractOk;
                 return (
                   <button
                     onClick={()=>{
-                      const err=validatePhone(phoneCC,phoneLocal);
-                      if(err){setPhoneErr(err);return;}
-                      setCP(formatPhone(phoneCC,phoneLocal));
+                      // RGPD commit 20 : clientPhone déjà en E.164 via PhoneInput.
+                      if (!phoneOk) { setPhoneErr('Numéro invalide pour le pays sélectionné.'); return; }
                       goToStep(6);
                     }}
                     disabled={blocked}

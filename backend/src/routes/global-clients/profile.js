@@ -3,6 +3,7 @@
 const { pool } = require('../../db');
 const bcrypt   = require('bcryptjs');
 const { globalClientAuth } = require('./helpers');
+const { validatePhone } = require('../../utils/phone');
 
 module.exports = function attachProfileRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -43,6 +44,23 @@ module.exports = function attachProfileRoutes(router) {
   router.patch('/me', globalClientAuth, async (req, res) => {
     try {
       const { birth_date, phone, first_name, last_name, postal_code, city } = req.body;
+      // RGPD commit 20 : si phone fourni, valider en E.164 (PATCH partiel).
+      let phoneRawForUpdate  = undefined;
+      let phoneE164ForUpdate = undefined;
+      if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+        const phoneCheck = validatePhone(phone, { required: true });
+        if (!phoneCheck.valid) {
+          return res.status(400).json({
+            error: 'Numéro de téléphone invalide pour le pays.',
+            code:  phoneCheck.error,
+          });
+        }
+        phoneRawForUpdate  = phoneCheck.raw;
+        phoneE164ForUpdate = phoneCheck.e164;
+      } else if (phone === '' || phone === null) {
+        phoneRawForUpdate  = null;
+        phoneE164ForUpdate = null;
+      }
       // Accepte YYYY-MM-DD, YYYY-MM (1er du mois), '' / null (effacer), undefined (ne pas toucher)
       let bd;
       if (birth_date === '' || birth_date === null) bd = null;
@@ -62,7 +80,10 @@ module.exports = function attachProfileRoutes(router) {
       const vals   = [];
       let i = 1;
       if (bd !== undefined) { fields.push(`birth_date=$${i++}`);  vals.push(bd); }
-      if (phone     != null) { fields.push(`phone=$${i++}`);      vals.push(phone || null); }
+      if (phoneRawForUpdate !== undefined) {
+        fields.push(`phone=$${i++}`);      vals.push(phoneRawForUpdate);
+        fields.push(`phone_e164=$${i++}`); vals.push(phoneE164ForUpdate);
+      }
       if (first_name!= null && first_name.trim()) { fields.push(`first_name=$${i++}`); vals.push(first_name.trim()); }
       if (last_name != null) { fields.push(`last_name=$${i++}`);  vals.push(last_name || ''); }
       if (pc !== undefined) { fields.push(`postal_code=$${i++}`); vals.push(pc); }
@@ -85,10 +106,10 @@ module.exports = function attachProfileRoutes(router) {
           [bd, gcId]
         ).catch(e => console.warn('[GC PATCH /me propagate birth]', e.message));
       }
-      if (phone != null) {
+      if (phoneRawForUpdate !== undefined) {
         await pool.query(
-          `UPDATE client_accounts SET phone=$1 WHERE global_client_id=$2`,
-          [phone || null, gcId]
+          `UPDATE client_accounts SET phone=$1, phone_e164=$2 WHERE global_client_id=$3`,
+          [phoneRawForUpdate, phoneE164ForUpdate, gcId]
         ).catch(() => {});
       }
       if (first_name != null && first_name.trim()) {
@@ -128,24 +149,41 @@ module.exports = function attachProfileRoutes(router) {
       // POST /me/change-email + /confirm (code envoyé à l'email actuel).
       const { first_name, last_name, phone } = req.body;
       const gid = req.globalClient.globalClientId;
+      // RGPD commit 20 : si phone fourni, valider en E.164.
+      let phoneRaw  = '';
+      let phoneE164 = '';
+      if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+        const phoneCheck = validatePhone(phone, { required: true });
+        if (!phoneCheck.valid) {
+          return res.status(400).json({
+            error: 'Numéro de téléphone invalide pour le pays.',
+            code:  phoneCheck.error,
+          });
+        }
+        phoneRaw  = phoneCheck.raw  || '';
+        phoneE164 = phoneCheck.e164 || '';
+      }
 
       const { rows } = await pool.query(
         `UPDATE global_clients SET
            first_name=COALESCE(NULLIF($2,''), first_name),
            last_name=COALESCE(NULLIF($3,''), last_name),
            phone=COALESCE(NULLIF($4,''), phone),
+           phone_e164=COALESCE(NULLIF($5,''), phone_e164),
            updated_at=NOW()
-         WHERE id=$1 RETURNING id, email, first_name, last_name, phone`,
-        [gid, first_name||'', last_name||'', phone||'']
+         WHERE id=$1 RETURNING id, email, first_name, last_name, phone, phone_e164`,
+        [gid, first_name||'', last_name||'', phoneRaw, phoneE164]
       );
       if (!rows[0]) return res.status(404).json({ error: 'Compte introuvable.' });
 
       // Synchroniser dans toutes les fiches locales liées
       await pool.query(
         `UPDATE client_accounts SET
-           first_name=$2, last_name=$3, phone=COALESCE(NULLIF($4,''), phone)
+           first_name=$2, last_name=$3,
+           phone=COALESCE(NULLIF($4,''), phone),
+           phone_e164=COALESCE(NULLIF($5,''), phone_e164)
          WHERE global_client_id=$1`,
-        [rows[0].id, rows[0].first_name, rows[0].last_name, rows[0].phone||'']
+        [rows[0].id, rows[0].first_name, rows[0].last_name, rows[0].phone||'', rows[0].phone_e164||'']
       );
 
       res.json(rows[0]);

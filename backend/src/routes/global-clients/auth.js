@@ -5,6 +5,7 @@ const jwt      = require('jsonwebtoken');
 const crypto   = require('crypto');
 const { sendPasswordReset } = require('../../utils/email');
 const { isValidEmail, isRealDate, saveCode, getCode, deleteCode } = require('./helpers');
+const { validatePhone } = require('../../utils/phone');
 
 module.exports = function attachAuthRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +20,16 @@ module.exports = function attachAuthRoutes(router) {
         return res.status(400).json({ error: 'Email invalide.' });
       if (password.length < 6)
         return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
+      // RGPD commit 20 : téléphone obligatoire + validé E.164.
+      const phoneCheck = validatePhone(phone, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
+          code:  phoneCheck.error,
+        });
+      }
+      const phoneRaw  = phoneCheck.raw;
+      const phoneE164 = phoneCheck.e164;
 
       const emailLow = email.toLowerCase().trim();
       // Accepte YYYY-MM-DD et YYYY-MM (= 1er du mois). Cohérent avec
@@ -46,19 +57,19 @@ module.exports = function attachAuthRoutes(router) {
         // Compte pré-créé par invitation → activer avec les vraies coordonnées
         const { rows } = await pool.query(
           `UPDATE global_clients SET
-             first_name=$2, last_name=$3, phone=$4, password_hash=$5,
-             birth_date=COALESCE($6, birth_date),
+             first_name=$2, last_name=$3, phone=$4, phone_e164=$5, password_hash=$6,
+             birth_date=COALESCE($7, birth_date),
              is_verified=TRUE, invite_token=NULL, updated_at=NOW()
            WHERE LOWER(email)=$1 RETURNING *`,
-          [emailLow, first_name, last_name || '', phone || null, hash, bd]
+          [emailLow, first_name, last_name || '', phoneRaw, phoneE164, hash, bd]
         );
         gc = rows[0];
       } else {
         // Nouveau compte global (s'inscrit sans invitation)
         const { rows } = await pool.query(
-          `INSERT INTO global_clients (email, password_hash, first_name, last_name, phone, birth_date, is_verified)
-           VALUES ($1,$2,$3,$4,$5,$6,TRUE) RETURNING *`,
-          [emailLow, hash, first_name, last_name || '', phone || null, bd]
+          `INSERT INTO global_clients (email, password_hash, first_name, last_name, phone, phone_e164, birth_date, is_verified)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE) RETURNING *`,
+          [emailLow, hash, first_name, last_name || '', phoneRaw, phoneE164, bd]
         );
         gc = rows[0];
       }
@@ -71,23 +82,25 @@ module.exports = function attachAuthRoutes(router) {
            source           = 'platform',
            first_name       = $2,
            last_name        = COALESCE(NULLIF($3,''), last_name),
-           phone            = COALESCE(NULLIF($4,''), phone)
-         WHERE LOWER(email) = LOWER($5)`,
-        [gc.id, gc.first_name, gc.last_name || '', gc.phone || '', emailLow]
+           phone            = COALESCE(NULLIF($4,''), phone),
+           phone_e164       = COALESCE(NULLIF($5,''), phone_e164)
+         WHERE LOWER(email) = LOWER($6)`,
+        [gc.id, gc.first_name, gc.last_name || '', gc.phone || '', gc.phone_e164 || '', emailLow]
       );
 
-      // Lier aussi par téléphone (fiches sans email mais même téléphone)
-      if (phone) {
+      // Lier aussi par téléphone (fiches sans email mais même téléphone E.164).
+      if (phoneE164) {
         await pool.query(
           `UPDATE client_accounts SET
              global_client_id = $1,
              source           = 'platform',
              first_name       = $2,
-             last_name        = COALESCE(NULLIF($3,''), last_name)
-           WHERE phone = $4
+             last_name        = COALESCE(NULLIF($3,''), last_name),
+             phone_e164       = COALESCE(NULLIF($4,''), phone_e164)
+           WHERE (phone_e164 = $4 OR phone = $5)
              AND global_client_id IS NULL
-             AND (email IS NULL OR email = '' OR LOWER(email) != LOWER($5))`,
-          [gc.id, gc.first_name, gc.last_name || '', phone, emailLow]
+             AND (email IS NULL OR email = '' OR LOWER(email) != LOWER($6))`,
+          [gc.id, gc.first_name, gc.last_name || '', phoneE164, phoneRaw, emailLow]
         );
       }
 

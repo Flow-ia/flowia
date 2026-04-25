@@ -4,6 +4,7 @@ const { notifyNewAppointment } = require('../../utils/push');
 const { sendAppointmentConfirmation } = require('../../utils/email');
 const { resolveReferralForFilleul } = require('../referrals');
 const { associateGlobalClient } = require('../clients');
+const { validatePhone } = require('../../utils/phone');
 const { toMin, toStr, getSlots, getEmployeeRanges } = require('./helpers');
 
 module.exports = function attachBookRoute(router) {
@@ -28,8 +29,18 @@ module.exports = function attachBookRoute(router) {
       // RGPD commit 17 : opt-in marketing transmis par le front en mode "résa
       // sans compte" (sinon pour un user connecté, l'opt-in vient de son compte).
       const marketingOptInBody = req.body?.marketing_opt_in === true || req.body?.marketing_opt_in === 'true';
-      if (!service_id || !date || !start_time || !client_name || !client_phone)
-        return res.status(400).json({ error: 'Données manquantes (nom et téléphone obligatoires).' });
+      if (!service_id || !date || !start_time || !client_name)
+        return res.status(400).json({ error: 'Données manquantes (nom obligatoire).' });
+      // RGPD commit 20 : téléphone obligatoire + validé E.164.
+      const phoneCheck = validatePhone(client_phone, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
+          code:  phoneCheck.error,
+        });
+      }
+      const clientPhoneRaw  = phoneCheck.raw;
+      const clientPhoneE164 = phoneCheck.e164;
 
       // Vérif compte obligatoire
       let clientId = null;
@@ -314,7 +325,7 @@ module.exports = function attachBookRoute(router) {
            duration_minutes, status, notes, created_at,
            total_amount, original_amount, promo_code_id, promo_code, discount_amount`,
         [userId, service_id, finalEmpId, clientId, client_name, client_email||null,
-         client_phone||null, date, start_time, end_time, duration, notes||null,
+         clientPhoneE164, date, start_time, end_time, duration, notes||null,
          finalPrice, originalAmt, promoCodeId, promoCodeStr, discountAmt]
       );
       if (!rows.length) {
@@ -420,10 +431,14 @@ module.exports = function attachBookRoute(router) {
             );
             localClient = r.rows[0] || null;
           }
-          if (!localClient && client_phone) {
+          if (!localClient && clientPhoneE164) {
+            // Lookup priorité phone_e164 (E.164 normalisé). Fallback sur phone
+            // (raw) pour matcher les fiches anciennes pas encore migrées.
             const r = await pool.query(
-              'SELECT * FROM client_accounts WHERE user_id=$1 AND phone=$2',
-              [userId, client_phone]
+              `SELECT * FROM client_accounts
+                WHERE user_id=$1 AND (phone_e164=$2 OR phone=$3)
+                LIMIT 1`,
+              [userId, clientPhoneE164, clientPhoneRaw]
             );
             localClient = r.rows[0] || null;
           }
@@ -432,24 +447,26 @@ module.exports = function attachBookRoute(router) {
             // 2. Créer la fiche locale (premier RDV de ce client chez ce commerçant).
             // RGPD commit 17 : marketing_opt_in transmis par le front en mode
             // résa sans compte ; ON CONFLICT ne touche pas l'opt-in existant.
+            // Commit 20 : phone_e164 stocké en parallèle du phone (raw).
             const { rows: created } = await pool.query(
               `INSERT INTO client_accounts
-                 (user_id, email, first_name, last_name, phone,
+                 (user_id, email, first_name, last_name, phone, phone_e164,
                   marketing_opt_in, marketing_opt_in_at)
-               VALUES ($1,$2,$3,$4,$5,$6,
-                       CASE WHEN $6 THEN NOW() ELSE NULL END)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,
+                       CASE WHEN $7 THEN NOW() ELSE NULL END)
                ON CONFLICT (user_id, email) DO UPDATE SET
                  first_name = COALESCE(NULLIF(EXCLUDED.first_name,''), client_accounts.first_name),
-                 phone      = COALESCE(NULLIF(EXCLUDED.phone,''), client_accounts.phone)
+                 phone      = COALESCE(NULLIF(EXCLUDED.phone,''),      client_accounts.phone),
+                 phone_e164 = COALESCE(NULLIF(EXCLUDED.phone_e164,''), client_accounts.phone_e164)
                RETURNING *`,
-              [userId, emailLow, firstName, lastName, client_phone || null, marketingOptInBody]
+              [userId, emailLow, firstName, lastName, clientPhoneRaw, clientPhoneE164, marketingOptInBody]
             );
             localClient = created[0] || null;
           }
 
           // 3. Si fiche locale sans compte global → tenter liaison (étapes 3+4)
           if (localClient && !localClient.global_client_id) {
-            await associateGlobalClient(localClient.id, emailLow, client_phone);
+            await associateGlobalClient(localClient.id, emailLow, clientPhoneE164);
           }
 
           // 4. Si client connecté (clientId) → mettre à jour l'appointment avec son client_id local
