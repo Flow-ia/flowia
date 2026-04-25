@@ -1,5 +1,6 @@
 // src/App.jsx — Racine routing + layout + EncaisserSheet. Refonte visuelle 2026.
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { useAdmin } from './hooks/useAdmin';
@@ -1783,7 +1784,9 @@ function NotifCard({ n, t, cfg, onOpen, onDelete, compact = false }) {
 
 function NotificationCenter({ theme: t, drawerSide = 'right' }) {
   const [open, setOpen] = useState(false);
-  const drawerRef = useRef(null);
+  const [drawerPos, setDrawerPos] = useState({ top: 0, left: 0 });
+  const bellWrapRef     = useRef(null);
+  const drawerContentRef = useRef(null);
   const navigate  = useNavigate();
   const {
     notifications, unreadCount,
@@ -1792,6 +1795,38 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
     markRead, markAllRead, deleteNotif,
     reload,
   } = useNotifications({ enabled: true });
+
+  // Le bouton clignote tant qu'il y a des non-lues ET que le drawer est ferme.
+  // Ouvrir le drawer = "j'ai vu" -> markAllRead -> unreadCount=0 -> stop pulse.
+  const blinking = unreadCount > 0 && !open;
+
+  // Position fixed calculee depuis la cloche : evite tout pb de stacking
+  // context (sidebar sticky / overflow content) qui faisait que le drawer
+  // semblait passer derriere d'autres elements.
+  const computeDrawerPos = () => {
+    if (!bellWrapRef.current) return;
+    const rect = bellWrapRef.current.getBoundingClientRect();
+    const W = 380;
+    const top = rect.bottom + 8;
+    let left = drawerSide === 'left' ? rect.left : rect.right - W;
+    // Clamp dans la viewport (evite overflow horizontal a droite ou gauche).
+    left = Math.max(8, Math.min(left, window.innerWidth - W - 8));
+    setDrawerPos({ top, left });
+  };
+
+  const handleToggle = () => {
+    setOpen(prev => {
+      const next = !prev;
+      if (next) {
+        computeDrawerPos();
+        reload();
+        // markAllRead a l'ouverture : badge se reinitialise et clignotement
+        // s'arrete. Conforme au feedback user : "apres avoir vu la pop up".
+        if (unreadCount > 0) markAllRead().catch(() => {});
+      }
+      return next;
+    });
+  };
 
   const openNotification = (n) => {
     if (!n.is_read) markRead(n.id);
@@ -1809,62 +1844,93 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
     }
   };
 
+  // Suppression de toutes les notifs : Promise.all sur deleteNotif (le hook
+  // gere le state local + l'API individuellement). Rapide et coherent.
+  const clearAll = async () => {
+    if (!notifications.length) return;
+    const ids = notifications.map(n => n.id);
+    await Promise.all(ids.map(id => deleteNotif(id))).catch(() => {});
+  };
+
+  // Click outside : ferme le drawer si on clique hors de la cloche ET hors
+  // du contenu du drawer. Necessaire car le drawer est rendu en position
+  // fixed (donc hors du wrapper de la cloche).
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (drawerRef.current && !drawerRef.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (bellWrapRef.current?.contains(e.target)) return;
+      if (drawerContentRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     setTimeout(() => document.addEventListener('mousedown', handler), 0);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  return (
-    <div style={{ position: 'relative' }} ref={drawerRef}>
-      <button onClick={() => { setOpen(p => !p); if (!open) reload(); }}
-              style={{ position: 'relative', width: 34, height: 34, borderRadius: 8,
-                       background: open ? t.cardAlt : 'transparent',
-                       border: `0.5px solid ${t.border}`,
-                       cursor: 'pointer',
-                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                       transition: 'background 0.15s ease', fontFamily: 'inherit' }}>
-        <I.Bell style={{ width: 15, height: 15, color: open ? t.text : t.muted }} />
-        {unreadCount > 0 && (
-          <span style={{ position: 'absolute', top: -4, right: -4,
-                         minWidth: 14, height: 14, borderRadius: 99,
-                         background: '#991b1b', color: 'white',
-                         fontSize: 9, fontWeight: 500,
-                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                         padding: '0 3px' }}>
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+  // Repositionne sur resize quand le drawer est ouvert (evite que la
+  // popup reste a la mauvaise place si l'utilisateur redimensionne).
+  useEffect(() => {
+    if (!open) return;
+    const onResize = () => computeDrawerPos();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, drawerSide]);
 
-      {open && (
-        <div style={{ position: 'absolute', top: 42,
-                      ...(drawerSide === 'left' ? { left: 0 } : { right: 0 }),
-                      width: 380, maxWidth: 'calc(100vw - 32px)',
+  return (
+    <>
+      <style>{`
+        @keyframes ffNotifPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+          50%      { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+        }
+        @keyframes ffBadgePulse {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.18); }
+        }
+      `}</style>
+      <div ref={bellWrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
+        <button onClick={handleToggle}
+                style={{ position: 'relative', width: 34, height: 34, borderRadius: 8,
+                         background: open ? t.cardAlt : 'transparent',
+                         border: `0.5px solid ${blinking ? '#fca5a5' : t.border}`,
+                         cursor: 'pointer',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         transition: 'background 0.15s ease, border-color 0.2s ease',
+                         fontFamily: 'inherit',
+                         animation: blinking ? 'ffNotifPulse 1.6s ease-in-out infinite' : 'none' }}>
+          <I.Bell style={{ width: 15, height: 15,
+                           color: open ? t.text : (blinking ? '#991b1b' : t.muted) }} />
+          {unreadCount > 0 && (
+            <span style={{ position: 'absolute', top: -4, right: -4,
+                           minWidth: 14, height: 14, borderRadius: 99,
+                           background: '#991b1b', color: 'white',
+                           fontSize: 9, fontWeight: 500,
+                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                           padding: '0 3px',
+                           animation: blinking ? 'ffBadgePulse 1.6s ease-in-out infinite' : 'none' }}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {open && createPortal(
+        <div ref={drawerContentRef}
+             style={{ position: 'fixed',
+                      top: drawerPos.top, left: drawerPos.left,
+                      width: 380, maxWidth: 'calc(100vw - 16px)',
+                      maxHeight: 'calc(100vh - 80px)',
+                      display: 'flex', flexDirection: 'column',
                       background: t.elevated, borderRadius: 12,
                       border: `0.5px solid ${t.border}`,
-                      boxShadow: t.shadowModal, zIndex: 1000, overflow: 'hidden' }}>
+                      boxShadow: t.shadowModal, zIndex: 9999, overflow: 'hidden' }}>
           <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${t.separator}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        gap: 8, flexShrink: 0 }}>
             <span style={{ fontWeight: 500, fontSize: 14, color: t.text }}>
               Notifications
-              {unreadCount > 0 && (
-                <span style={{ marginLeft: 6, padding: '2px 7px', borderRadius: 99,
-                               background: '#fef2f2', color: '#991b1b', fontSize: 11, fontWeight: 500 }}>
-                  {unreadCount} non lues
-                </span>
-              )}
             </span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {unreadCount > 0 && (
-                <button onClick={markAllRead}
-                        style={{ fontSize: 11, color: t.muted,
-                                 background: 'none', border: 'none', cursor: 'pointer',
-                                 fontFamily: 'inherit' }}>
-                  Tout lire
-                </button>
-              )}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               {pushSupported && (
                 <button onClick={async () => {
                           if (pushEnabled) return disablePush();
@@ -1891,10 +1957,21 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
                   {pushEnabled ? 'Push ON' : 'Push OFF'}
                 </button>
               )}
+              {notifications.length > 0 && (
+                <button onClick={clearAll}
+                        style={{ fontSize: 11, padding: '3px 8px', borderRadius: 8,
+                                 border: '0.5px solid rgba(239,68,68,0.25)',
+                                 background: 'rgba(239,68,68,0.08)',
+                                 color: '#991b1b',
+                                 fontWeight: 500, cursor: 'pointer',
+                                 fontFamily: 'inherit' }}>
+                  Effacer tout
+                </button>
+              )}
             </div>
           </div>
 
-          <div style={{ maxHeight: 480, overflowY: 'auto', padding: '4px 0 8px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 8px' }}>
             {notifications.length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center' }}>
                 <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Aucune notification</p>
@@ -1910,9 +1987,10 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
