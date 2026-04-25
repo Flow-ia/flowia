@@ -130,9 +130,15 @@ export default function Securite({ theme, showToast }) {
       </div>
 
       <div>
+        {/* Refonte FDS-2026 commit 15 : ce toggle est conservé pour persister
+            la valeur en BDD (rétro-compat) mais le système commit 11
+            (sidebar neutre + timer 15 min + écran « Qui encaisse ? ») est
+            désactivé temporairement côté front. La bascule UX est désormais
+            le bouton « Convertir en mode admin » dans la sidebar (basé sur
+            useAdminMode → localStorage, pas sur user_settings). */}
         <Row theme={t}
              title="Mode tablette partagée"
-             desc="Sidebar neutre 3 items et PIN exigé à chaque action sensible. Active le workflow tablette au salon (commit 11).">
+             desc="Désactivé temporairement, voir bouton « Convertir en mode admin » dans la sidebar. Le toggle reste sauvegardé en BDD pour usage futur.">
           <Toggle value={state.tablet_mode_enabled} theme={t}
                   onChange={v => setState(s => ({ ...s, tablet_mode_enabled: v }))}/>
         </Row>

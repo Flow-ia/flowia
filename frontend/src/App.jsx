@@ -26,6 +26,7 @@ import { useEmployeePinGate } from './components/EmployeePinModal';
 import { Button } from './components/primitives';
 import { Icon } from './components/Icon';
 import { TabletModeProvider, useTabletMode } from './contexts/TabletModeProvider';
+import { useAdminMode } from './contexts/AdminModeContext';
 import WhoEncashesModal from './components/WhoEncashesModal';
 
 // Palette paiements — pastels sobres (unifie avec Dashboard/Forms/Transactions)
@@ -1088,32 +1089,32 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
   );
 }
 
-// ── DesktopSidebar (refonte FDS-2026 commit 3 : 7 items en 3 sections) ─────
-// PRINCIPAL : Dashboard · Agenda · Caisse · Clients
-// CROISSANCE : Marketing · Statistiques
-// PARAMETRAGE : Reglages
-// Footer : Mode sombre + Deconnexion
+// ── DesktopSidebar (refonte FDS-2026 commit 15 : bascule simple) ───────────
+// Mode normal (isAdminMode=false, défaut) : 3 items Agenda · Caisse · Clients
+// + bouton « Convertir en mode admin » qui demande le PIN admin via
+// PinAccessModal puis enableAdminMode().
+// Mode admin (isAdminMode=true) : sections complètes (PRINCIPAL ·
+// CROISSANCE · PARAMÉTRAGE) + badge « Admin » + bouton « Quitter le mode
+// admin » (disable direct, sans PIN).
 //
-// Les URLs cibles (/caisse, /marketing, /statistiques, /reglages) sont
-// pour l'instant des redirects vers les pages legacy (voir Routes plus bas).
-// Le match actif reconnaît AUSSI les URLs legacy (/settings/historique,
-// /settings/marketing, etc.) pour que l'état actif survive au redirect.
-function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAdmin }) {
+// L'état isAdminMode est purement UX (localStorage). pinAdminMiddleware côté
+// back reste la barrière de sécurité réelle (les actions sensibles exigent
+// toujours le PIN, indépendamment du flag).
+//
+// Le système commit 11 (user_settings.tablet_mode_enabled, timer 15 min,
+// adminBypass) est court-circuité ici : la sidebar n'utilise QUE isAdminMode.
+function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuitAdmin }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isTabletMode, adminBypass } = useTabletMode();
+  const { isAdminMode } = useAdminMode();
 
-  // Refonte FDS-2026 commit 11 : en mode tablette sans admin bypass, sidebar
-  // neutre 3 items (Agenda global, Encaisser, Clients) + bouton Accès admin.
-  const tabletNeutral = isTabletMode && !adminBypass;
-
-  const NAV_SECTIONS = tabletNeutral ? [
+  const NAV_SECTIONS = !isAdminMode ? [
     {
-      label: 'Tablette partagée',
+      label: 'Navigation',
       items: [
-        { id:'agenda',    label:'Agenda global', icon:'calendar', to:'/agenda',  match:['/agenda'] },
-        { id:'caisse',    label:'Encaisser',     icon:'cash',     to:'/caisse',  match:['/caisse','/transactions','/settings/historique'] },
-        { id:'clients',   label:'Clients',       icon:'users',    to:'/clients', match:['/clients'] },
+        { id:'agenda',    label:'Agenda',  icon:'calendar', to:'/agenda',  match:['/agenda'] },
+        { id:'caisse',    label:'Caisse',  icon:'cash',     to:'/caisse',  match:['/caisse','/transactions','/settings/historique'] },
+        { id:'clients',   label:'Clients', icon:'users',    to:'/clients', match:['/clients'] },
       ],
     },
   ] : [
@@ -1197,21 +1198,31 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
                   background:t.canvas,
                   borderRight:`0.5px solid ${t.border}` }}>
 
-      {/* Header : logo + nom salon (libellé adapté au mode). */}
+      {/* Header : logo + nom salon. Badge orange « Admin » uniquement en
+          mode admin pour signaler à l'utilisateur l'élévation des droits. */}
       <div style={{ display:'flex', alignItems:'center', gap:10,
                     padding:'4px 6px 14px',
                     borderBottom:`0.5px solid ${t.separator}`,
                     marginBottom:4 }}>
         <img src="/images/logo-app.png" alt="FlowIA"
              style={{ width:34, height:34, borderRadius:8, flexShrink:0, objectFit:'contain' }}/>
-        <div style={{ minWidth:0 }}>
+        <div style={{ minWidth:0, flex:1 }}>
           <p style={{ fontWeight:500, fontSize:13, color:t.text, margin:0, lineHeight:1.2,
                       overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {user?.businessName || 'FlowIA'}
           </p>
-          <p style={{ fontSize:11, color:t.muted, margin:0 }}>
-            {tabletNeutral ? "Mode tablette partagée" : "Commerçant"}
-          </p>
+          {isAdminMode ? (
+            <span style={{ display:'inline-block', marginTop:3,
+                           padding:'2px 8px', borderRadius:99,
+                           background:'#fff7ed', color:'#9a3412',
+                           border:'0.5px solid #fed7aa',
+                           fontSize:10, fontWeight:500,
+                           textTransform:'uppercase', letterSpacing:'0.04em' }}>
+              {"Admin"}
+            </span>
+          ) : (
+            <p style={{ fontSize:11, color:t.muted, margin:0 }}>{"Navigation"}</p>
+          )}
         </div>
       </div>
 
@@ -1225,11 +1236,13 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
       <div style={{ flex:1 }}/>
 
       <div style={{ paddingTop:10, borderTop:`0.5px solid ${t.separator}`, display:'flex', flexDirection:'column', gap:2 }}>
-        {/* Mode tablette neutre : bouton "Accès admin" au lieu du toggle thème. */}
-        {tabletNeutral ? (
+        {/* Bouton de bascule mode admin : pleine largeur, bien visible.
+            « Convertir » en mode normal = ouvre PinAccessModal admin.
+            « Quitter » en mode admin = bascule directe sans PIN. */}
+        {!isAdminMode ? (
           <button onClick={() => onRequestAdmin && onRequestAdmin()}
                   style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
-                           padding:'9px 12px', borderRadius:8,
+                           padding:'10px 12px', borderRadius:8, marginBottom:6,
                            border:`0.5px solid ${t.border}`,
                            background: t.cardAlt, color: t.text,
                            cursor:'pointer', fontFamily:'inherit', textAlign:'left',
@@ -1238,54 +1251,75 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
                   onMouseLeave={e => { e.currentTarget.style.background = t.cardAlt; }}>
             <Icon name="lock" size={14} color={t.text}/>
             <span style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap' }}>
-              {"Accès admin (PIN)"}
+              {"Convertir en mode admin"}
             </span>
           </button>
         ) : (
-          <>
-            <button onClick={toggle}
-                    style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
-                             padding:'9px 12px', borderRadius:8, border:'none',
-                             background:'transparent', color:t.muted,
-                             cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                             transition:'background 0.15s ease' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-              <Icon name={isLight ? 'moon' : 'sun'} size={15} color={t.muted}/>
-              <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>
-                {isLight ? 'Mode sombre' : 'Mode clair'}
-              </span>
-            </button>
-            <button onClick={onLogout}
-                    style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
-                             padding:'9px 12px', borderRadius:8, border:'none',
-                             background:'transparent', color:'#991b1b',
-                             cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                             transition:'background 0.15s ease' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-              <Icon name="logout" size={15} color="#991b1b"/>
-              <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
-            </button>
-          </>
+          <button onClick={() => onQuitAdmin && onQuitAdmin()}
+                  style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                           padding:'10px 12px', borderRadius:8, marginBottom:6,
+                           border:'0.5px solid #fed7aa',
+                           background:'#fff7ed', color:'#9a3412',
+                           cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                           transition:'background 0.15s ease' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#ffedd5'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; }}>
+            <Icon name="logout" size={14} color="#9a3412"/>
+            <span style={{ fontSize:12, fontWeight:500, whiteSpace:'nowrap' }}>
+              {"Quitter le mode admin"}
+            </span>
+          </button>
         )}
+
+        <button onClick={toggle}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                         padding:'9px 12px', borderRadius:8, border:'none',
+                         background:'transparent', color:t.muted,
+                         cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                         transition:'background 0.15s ease' }}
+                onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+          <Icon name={isLight ? 'moon' : 'sun'} size={15} color={t.muted}/>
+          <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>
+            {isLight ? 'Mode sombre' : 'Mode clair'}
+          </span>
+        </button>
+        <button onClick={onLogout}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+                         padding:'9px 12px', borderRadius:8, border:'none',
+                         background:'transparent', color:'#991b1b',
+                         cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                         transition:'background 0.15s ease' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+          <Icon name="logout" size={15} color="#991b1b"/>
+          <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
+        </button>
       </div>
     </div>
   );
 }
 
-// ── BottomNav mobile (refonte FDS-2026 commit 3) ────────────────────────────
-// 5 items : Home · Agenda · Caisse · Clients · Plus (menu overlay).
-// Menu "Plus" : Marketing · Statistiques · Reglages · Mode sombre · Deconnexion.
-function BottomNav({ theme: t, toggle, isLight, onLogout }) {
+// ── BottomNav mobile (refonte FDS-2026 commit 15) ──────────────────────────
+// Mode normal (3+1 items) : Agenda · Caisse · Clients · Plus
+// Mode admin (4+1 items)  : Dashboard · Agenda · Caisse · Clients · Plus
+// Menu « Plus » :
+//   - normal : Convertir en admin · Mode sombre · Déconnexion
+//   - admin  : Historique · Marketing · Statistiques · Réglages · Quitter mode admin · Mode sombre · Déconnexion
+function BottomNav({ theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuitAdmin }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdminMode } = useAdminMode();
   const [plusOpen, setPlusOpen] = useState(false);
 
-  const ITEMS = [
+  const ITEMS = isAdminMode ? [
     { id:'home',    label:'Home',    icon:'home',     to:'/dashboard', match:['/dashboard'] },
     { id:'agenda',  label:'Agenda',  icon:'calendar', to:'/agenda',    match:['/agenda'] },
-    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/historique','/transactions','/settings/historique'] },
+    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/transactions','/settings/historique'] },
+    { id:'clients', label:'Clients', icon:'users',    to:'/clients',   match:['/clients'] },
+  ] : [
+    { id:'agenda',  label:'Agenda',  icon:'calendar', to:'/agenda',    match:['/agenda'] },
+    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/transactions','/settings/historique'] },
     { id:'clients', label:'Clients', icon:'users',    to:'/clients',   match:['/clients'] },
   ];
 
@@ -1351,10 +1385,11 @@ function BottomNav({ theme: t, toggle, isLight, onLogout }) {
                 <Icon name="x" size={16} color={t.muted}/>
               </button>
             </div>
-            {[
+            {isAdminMode && [
+              { label:'Historique',   icon:'history',   to:'/historique'   },
               { label:'Marketing',    icon:'megaphone', to:'/marketing'    },
               { label:'Statistiques', icon:'chart',     to:'/statistiques' },
-              { label:'Reglages',     icon:'settings',  to:'/reglages'     },
+              { label:'Réglages',     icon:'settings',  to:'/reglages'     },
             ].map(it => (
               <button key={it.to}
                       onClick={() => { setPlusOpen(false); navigate(it.to); }}
@@ -1367,6 +1402,37 @@ function BottomNav({ theme: t, toggle, isLight, onLogout }) {
                 <Icon name="chevronRight" size={14} color={t.muted}/>
               </button>
             ))}
+            {isAdminMode && (
+              <div style={{ height:'0.5px', background:t.separator, margin:'6px 6px' }}/>
+            )}
+            {/* Bascule mode admin (cohérent avec sidebar desktop). */}
+            {!isAdminMode ? (
+              <button onClick={() => { setPlusOpen(false); onRequestAdmin && onRequestAdmin(); }}
+                      style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
+                               padding:'12px', borderRadius:10,
+                               border:`0.5px solid ${t.border}`,
+                               background:t.cardAlt, color:t.text,
+                               cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                               marginBottom:6 }}>
+                <Icon name="lock" size={16} color={t.text}/>
+                <span style={{ flex:1, fontSize:13, fontWeight:500 }}>
+                  {"Convertir en mode admin"}
+                </span>
+              </button>
+            ) : (
+              <button onClick={() => { setPlusOpen(false); onQuitAdmin && onQuitAdmin(); }}
+                      style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
+                               padding:'12px', borderRadius:10,
+                               border:'0.5px solid #fed7aa',
+                               background:'#fff7ed', color:'#9a3412',
+                               cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                               marginBottom:6 }}>
+                <Icon name="logout" size={16} color="#9a3412"/>
+                <span style={{ flex:1, fontSize:13, fontWeight:500 }}>
+                  {"Quitter le mode admin"}
+                </span>
+              </button>
+            )}
             <div style={{ height:'0.5px', background:t.separator, margin:'6px 6px' }}/>
             <button onClick={() => { toggle(); }}
                     style={{ width:'100%', display:'flex', alignItems:'center', gap:12,
@@ -1839,15 +1905,44 @@ function NotificationCenter({ theme: t }) {
   );
 }
 
+// ── RequireAdminMode (commit 15) ────────────────────────────────────────────
+// Wrapper pour les routes accessibles uniquement en mode admin (sidebar
+// complète). En mode normal, redirige vers /agenda. Sécurité UX seulement —
+// pinAdminMiddleware côté back reste la barrière effective sur les actions.
+function RequireAdminMode({ children }) {
+  const { isAdminMode } = useAdminMode();
+  if (!isAdminMode) return <Navigate to="/agenda" replace/>;
+  return children;
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, loading, logout, login }                                = useAuth();
   const { unlocked, hasPin, checking, changePin, lock, checkSession }   = useAdmin();
   const { theme, toggle, isLight }                                      = useTheme();
   // Refonte FDS-2026 commit 11 : état du mode tablette partagée (provider global).
+  // Conservé pour rétro-compat ; le commit 15 court-circuite ce flag (sidebar
+  // utilise UNIQUEMENT useAdminMode désormais).
   const tabletCtx = useTabletMode();
+  // Refonte FDS-2026 commit 15 : bascule UX simple Convertir/Quitter mode admin.
+  const { isAdminMode, enableAdminMode, disableAdminMode } = useAdminMode();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Quitter le mode admin = bascule directe (pas de PIN). Si l'utilisateur
+  // était sur une route protégée admin (/dashboard, /historique, /marketing,
+  // /statistiques, /reglages, /settings), on redirige vers /agenda. Le wrapper
+  // RequireAdminMode le ferait aussi automatiquement à la prochaine render mais
+  // le navigate explicite évite un flicker visuel sur la page protégée.
+  const handleQuitAdminMode = useCallback(() => {
+    disableAdminMode();
+    const adminPaths = ['/dashboard', '/historique', '/marketing',
+                        '/statistiques', '/reglages', '/settings'];
+    const p = location.pathname;
+    if (adminPaths.some(ap => p === ap || p.startsWith(ap + '/'))) {
+      navigate('/agenda');
+    }
+  }, [disableAdminMode, location.pathname, navigate]);
 
   // Flow tablette : WhoEncashesModal intercalée avant EncaisserSheet, empId
   // pré-sélectionné ensuite. Modale PIN admin pour la bascule temporaire.
@@ -1917,14 +2012,13 @@ export default function App() {
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
 
   // Refonte FDS-2026 commit 11 : point d'entrée unique pour "Encaisser".
-  // En mode tablette sans admin bypass, intercale WhoEncashesModal.
+  // Commit 15 : court-circuite l'intercalage WhoEncashesModal (le système
+  // tablette commit 11 n'est plus piloté par tablet_mode_enabled, la sidebar
+  // utilise UNIQUEMENT useAdminMode). EncaisserSheet gère lui-même la sélection
+  // d'employé via Step2Employe.
   const openEncaisser = () => {
-    if (tabletCtx.isTabletMode && !tabletCtx.adminBypass) {
-      setWhoEncashesOpen(true);
-    } else {
-      setQuickEntryEmpId('');
-      setQuickEntryOpen(true);
-    }
+    setQuickEntryEmpId('');
+    setQuickEntryOpen(true);
   };
   const [adminStep, setAdminStep] = useState('entry');
   const [transactions, setTxs]    = useState([]);
@@ -2116,51 +2210,30 @@ export default function App() {
   );
 
   const shell = (content) => {
-    const mmSs = (secs) => {
-      const m = Math.floor(secs / 60), s = secs % 60;
-      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-    };
-
     return (
     <div style={{ fontFamily:"'Inter',-apple-system,sans-serif",
                   background:theme.bg, minHeight:'100vh' }}>
-      {/* Refonte FDS-2026 commit 11 : bandeau admin temporaire mode tablette. */}
-      {tabletCtx.isTabletMode && tabletCtx.adminBypass && (
-        <div style={{ position:'sticky', top: 0, zIndex: 50,
-                      background:'#fff7ed', borderBottom:'0.5px solid #fed7aa',
-                      padding:'8px 14px',
-                      display:'flex', alignItems:'center', gap: 10,
-                      color:'#9a3412', fontSize: 12, fontWeight: 500 }}>
-          <Icon name="lock" size={13} color="#9a3412"/>
-          <span>{"Mode admin temporaire"}</span>
-          <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                         background:'#fff', borderRadius: 6, padding:'2px 8px',
-                         border:'0.5px solid #fed7aa' }}>
-            {mmSs(tabletCtx.remainingSec)}
-          </span>
-          <span style={{ flex: 1 }}/>
-          <button onClick={tabletCtx.quitAdmin}
-                  style={{ padding:'5px 10px', borderRadius: 6, border:'0.5px solid #fed7aa',
-                           background:'#fff', color:'#9a3412',
-                           fontSize: 11, fontWeight: 500, cursor:'pointer',
-                           fontFamily:'inherit' }}>
-            {"Quitter mode admin"}
-          </button>
-        </div>
-      )}
+      {/* Refonte FDS-2026 commit 15 : le bandeau orange « Mode admin
+          temporaire » du commit 11 est court-circuité — la nouvelle bascule
+          (sidebar) ne pose pas de timer auto. Le badge « Admin » dans la
+          sidebar suffit comme indicateur visuel. mmSs/tabletCtx restent
+          pour rétro-compatibilité si besoin futur. */}
 
       {/* Mobile */}
       <div className="lg:hidden" style={{ minHeight:'100vh' }}>
         <TopBar onHome={() => { handleTab('dashboard'); navigate('/dashboard'); }}
                 onLogout={handleLogout} theme={theme} toggle={toggle} isLight={isLight}/>
         <div style={{ paddingBottom: 64 }}>{content}</div>
-        <BottomNav theme={theme} toggle={toggle} isLight={isLight} onLogout={handleLogout}/>
+        <BottomNav theme={theme} toggle={toggle} isLight={isLight} onLogout={handleLogout}
+                   onRequestAdmin={() => setTabletAdminPinOpen(true)}
+                   onQuitAdmin={handleQuitAdminMode}/>
       </div>
       {/* Desktop */}
       <div className="hidden lg:flex" style={{ minHeight:'100vh' }}>
         <DesktopSidebar user={user} theme={theme} toggle={toggle} isLight={isLight}
                         onLogout={handleLogout}
-                        onRequestAdmin={() => setTabletAdminPinOpen(true)}/>
+                        onRequestAdmin={() => setTabletAdminPinOpen(true)}
+                        onQuitAdmin={handleQuitAdminMode}/>
         <div className="flex-1 min-w-0 overflow-y-auto" style={{ maxHeight:'100vh' }}>
           {content}
         </div>
@@ -2183,7 +2256,9 @@ export default function App() {
         }}
       />
 
-      {/* Mode tablette : saisie PIN admin pour basculer en mode admin temporaire. */}
+      {/* Modale PIN admin pour basculer en mode admin (commit 15).
+          Conserve PinEntry (3 tentatives + reset PIN si oublié), mais
+          enableAdminMode() au succès pour persister la bascule en localStorage. */}
       {tabletAdminPinOpen && (
         <div onClick={(e) => { if (e.target === e.currentTarget) setTabletAdminPinOpen(false); }}
              style={{ position:'fixed', inset: 0, zIndex: 1200,
@@ -2196,10 +2271,10 @@ export default function App() {
             <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
               <div>
                 <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: theme.text }}>
-                  {"Accès admin temporaire"}
+                  {"Convertir en mode admin"}
                 </p>
                 <p style={{ margin:'3px 0 0', fontSize: 11, color: theme.muted }}>
-                  {"Saisissez votre PIN admin · session " + tabletCtx.sessionTimeoutMin + " min"}
+                  {"Saisissez votre PIN admin · accès à toutes les pages"}
                 </p>
               </div>
               <button onClick={() => setTabletAdminPinOpen(false)}
@@ -2208,7 +2283,7 @@ export default function App() {
                 <Icon name="x" size={15} color={theme.muted}/>
               </button>
             </div>
-            <PinEntry onSuccess={() => setTabletAdminPinOpen(false)}/>
+            <PinEntry onSuccess={() => { enableAdminMode(); setTabletAdminPinOpen(false); }}/>
           </div>
         </div>
       )}
@@ -2218,38 +2293,43 @@ export default function App() {
 
   return shell(
     <Routes>
-      <Route path="/dashboard"    element={<Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={openEncaisser} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/>}/>
+      {/* Refonte FDS-2026 commit 15 : routes protégées par RequireAdminMode.
+          En mode normal, /dashboard, /historique, /marketing, /statistiques,
+          /reglages, /settings redirigent vers /agenda. /agenda, /caisse, /clients
+          restent accessibles sans bascule. */}
+      <Route path="/dashboard"    element={<RequireAdminMode><Dashboard transactions={transactions} employees={employees} categories={categories} onAdd={openEncaisser} onNavigate={handleTab} unreadNotifCount={appUnreadCount}/></RequireAdminMode>}/>
       {/* Refonte FDS-2026 commit 7h : /historique = page admin dédiée
           (consultation/édition/suppression toutes dates, gate PIN au mount,
           actions edit/delete gated PIN admin via adminRequest côté back).
           /caisse/historique reste lecture seule, jour courant, gate PIN
           employé. /transactions redirige vers /historique pour les anciens
           liens. */}
-      <Route path="/historique"   element={<HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={updTx} onDelTx={delTx}/>}/>
+      <Route path="/historique"   element={<RequireAdminMode><HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={updTx} onDelTx={delTx}/></RequireAdminMode>}/>
       <Route path="/transactions" element={<Navigate to="/historique" replace/>}/>
       <Route path="/clients"      element={<ClientsPage/>}/>
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views"             element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views/:employeeId" element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
-      <Route path="/settings/*"   element={settingsContent()}/>
-      <Route path="/settings"     element={settingsContent()}/>
+      <Route path="/settings/*"   element={<RequireAdminMode>{settingsContent()}</RequireAdminMode>}/>
+      <Route path="/settings"     element={<RequireAdminMode>{settingsContent()}</RequireAdminMode>}/>
       {/* Refonte FDS-2026 commit 7 : Caisse éclatée en /caisse/* (Encaisser
           / Historique / Crédit). EncaisserSheet reste monté globalement via
           `shell()` pour que l'onglet Encaisser puisse l'ouvrir. */}
       <Route path="/caisse/*"     element={caisseContent()}/>
       <Route path="/caisse"       element={caisseContent()}/>
       {/* Refonte FDS-2026 commit 5 : Marketing éclaté en /marketing/*. */}
-      <Route path="/marketing/*"  element={marketingContent()}/>
-      <Route path="/marketing"    element={marketingContent()}/>
+      <Route path="/marketing/*"  element={<RequireAdminMode>{marketingContent()}</RequireAdminMode>}/>
+      <Route path="/marketing"    element={<RequireAdminMode>{marketingContent()}</RequireAdminMode>}/>
       {/* Refonte FDS-2026 commit 6 : Statistiques éclatées en /statistiques/*. */}
-      <Route path="/statistiques/*" element={statistiquesContent()}/>
-      <Route path="/statistiques"   element={statistiquesContent()}/>
+      <Route path="/statistiques/*" element={<RequireAdminMode>{statistiquesContent()}</RequireAdminMode>}/>
+      <Route path="/statistiques"   element={<RequireAdminMode>{statistiquesContent()}</RequireAdminMode>}/>
       {/* Refonte FDS-2026 commit 4 : la page Réglages éclatée est maintenant
           la destination canonique. /settings reste accessible avec bannière. */}
-      <Route path="/reglages/*"   element={reglagesContent()}/>
-      <Route path="/reglages"     element={reglagesContent()}/>
-      <Route path="/"             element={<Navigate to="/dashboard" replace/>}/>
-      <Route path="*"             element={<Navigate to="/dashboard" replace/>}/>
+      <Route path="/reglages/*"   element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
+      <Route path="/reglages"     element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
+      {/* Racine : en mode admin → /dashboard, sinon /agenda. Catch-all idem. */}
+      <Route path="/"             element={<Navigate to={isAdminMode ? '/dashboard' : '/agenda'} replace/>}/>
+      <Route path="*"             element={<Navigate to={isAdminMode ? '/dashboard' : '/agenda'} replace/>}/>
     </Routes>
   );
 }
