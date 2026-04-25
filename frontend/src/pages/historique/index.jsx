@@ -271,44 +271,45 @@ export default function HistoriqueAdmin({
         </div>
 
         {/* ── Résumé compact : KPIs inline + chips paiement pastel (2 lignes) */}
-        <div style={{ ...card, gap:10 }}>
+        <div style={{ ...card, gap:12 }}>
           <div style={{ display:'flex', alignItems:'baseline',
-                        flexWrap:'wrap', gap:'4px 14px' }}>
-            <span style={{ fontSize:20, fontWeight:500, color:t.text,
+                        flexWrap:'wrap', gap:'6px 16px' }}>
+            <span style={{ fontSize:24, fontWeight:500, color:t.text,
                            fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
               {fmt(kpiCA)} €
             </span>
-            <span style={{ fontSize:10, color:t.muted, fontWeight:500,
+            <span style={{ fontSize:11, color:t.muted, fontWeight:500,
                            textTransform:'uppercase', letterSpacing:'0.04em' }}>
               {"CA · " + revs.length + (revs.length > 1 ? ' transactions' : ' transaction')}
             </span>
-            <span style={{ color:t.dim, fontSize:12 }}>{"·"}</span>
-            <span style={{ fontSize:12, color:t.text }}>
-              <span style={{ color:t.muted }}>{"Prestations "}</span>
+            <span style={{ color:t.dim, fontSize:14 }}>{"·"}</span>
+            <span style={{ fontSize:14, color:t.text, fontWeight:500 }}>
+              <span style={{ color:t.muted, fontWeight:500 }}>{"Prestations "}</span>
               <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                              fontWeight:500 }}>{kpiPrest}</span>
             </span>
-            <span style={{ color:t.dim, fontSize:12 }}>{"·"}</span>
-            <span style={{ fontSize:12, color:t.text }}>
-              <span style={{ color:t.muted }}>{"Panier "}</span>
+            <span style={{ color:t.dim, fontSize:14 }}>{"·"}</span>
+            <span style={{ fontSize:14, color:t.text, fontWeight:500 }}>
+              <span style={{ color:t.muted, fontWeight:500 }}>{"Panier "}</span>
               <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                              fontWeight:500 }}>{fmt(kpiPanier)} €</span>
             </span>
           </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {Object.entries(PM_GRID_CFG).map(([id, cfg]) => {
               const v = byPM[id] || { count: 0, total: 0 };
               return (
                 <span key={id}
-                      style={{ display:'inline-flex', alignItems:'center', gap:6,
-                               padding:'4px 10px', borderRadius:99,
+                      style={{ display:'inline-flex', alignItems:'center', gap:8,
+                               padding:'7px 14px', borderRadius:99,
                                background:cfg.bg, color:cfg.color,
-                               fontSize:11, fontWeight:500 }}>
+                               fontSize:13, fontWeight:500 }}>
                   {cfg.label}
-                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                 fontWeight:500 }}>
                     {fmt(v.total)} €
                   </span>
-                  <span style={{ opacity:0.7 }}>{"· " + v.count}</span>
+                  <span style={{ opacity:0.75, fontSize:12 }}>{"· " + v.count}</span>
                 </span>
               );
             })}
