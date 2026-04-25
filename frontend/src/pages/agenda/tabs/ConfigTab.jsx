@@ -16,7 +16,6 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
     advance_booking_days: initSettings?.advance_booking_days??30,
     min_notice_hours:     initSettings?.min_notice_hours??1,
     cancellation_policy_hours: initSettings?.cancellation_policy_hours??2,
-    require_account:      initSettings?.require_account??false,
     google_business_url:  initSettings?.google_business_url||'',
   });
   const [hrs, setHrs] = useState(
@@ -461,15 +460,6 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
           <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>salon-marie</span>,{' '}
           <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>barbershop-leo</span>).
         </p>
-      </div>
-
-      {/* ── COMPTE CLIENT OBLIGATOIRE ── */}
-      <div style={{ ...sectionCard, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-        <div>
-          <p style={sectionTitle}>Compte client obligatoire</p>
-          <p style={sectionSubtitle}>Les clients doivent creer un compte pour reserver</p>
-        </div>
-        <Toggle on={form.require_account} onChange={()=>setForm(f=>({...f,require_account:!f.require_account}))} />
       </div>
 
       {/* ── DESCRIPTION DE L'ACTIVITE ── */}

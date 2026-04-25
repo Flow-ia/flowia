@@ -13,7 +13,7 @@ module.exports = function attachBookRoute(router) {
     try {
       const { rows: biz } = await pool.query(
         `SELECT bs.user_id, bs.min_notice_hours, bs.advance_booking_days,
-                bs.require_account, COALESCE(bs.timezone, 'Europe/Paris') AS timezone,
+                COALESCE(bs.timezone, 'Europe/Paris') AS timezone,
                 u.business_name
          FROM booking_settings bs
          JOIN users u ON u.id = bs.user_id
@@ -22,27 +22,17 @@ module.exports = function attachBookRoute(router) {
       );
       if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
       const { user_id: userId, min_notice_hours, advance_booking_days,
-              require_account, timezone: bizTz, business_name } = biz[0];
+              timezone: bizTz, business_name } = biz[0];
 
-      const { service_id, employee_id, date, start_time,
-              client_name, client_email, client_phone, notes, client_token } = req.body;
-      // RGPD commit 17 : opt-in marketing transmis par le front en mode "résa
-      // sans compte" (sinon pour un user connecté, l'opt-in vient de son compte).
-      const marketingOptInBody = req.body?.marketing_opt_in === true || req.body?.marketing_opt_in === 'true';
-      if (!service_id || !date || !start_time || !client_name)
-        return res.status(400).json({ error: 'Données manquantes (nom obligatoire).' });
-      // RGPD commit 20 : téléphone obligatoire + validé E.164.
-      const phoneCheck = validatePhone(client_phone, { required: true });
-      if (!phoneCheck.valid) {
-        return res.status(400).json({
-          error: phoneCheck.error === 'PHONE_REQUIRED' ? 'Téléphone requis.' : 'Numéro de téléphone invalide pour le pays.',
-          code:  phoneCheck.error,
-        });
-      }
-      const clientPhoneRaw  = phoneCheck.raw;
-      const clientPhoneE164 = phoneCheck.e164;
+      const { service_id, employee_id, date, start_time, notes, client_token } = req.body;
+      if (!service_id || !date || !start_time)
+        return res.status(400).json({ error: 'Données manquantes.' });
 
-      // Vérif compte obligatoire
+      // ── Commit 22 : compte client OBLIGATOIRE pour toute réservation ─────
+      // Le toggle admin "require_account" est ignoré : comportement non-configurable.
+      // La route exige un JWT scope='client' valide pour ce commerce.
+      // Les champs nom/email/téléphone du body sont ignorés ; on lit la fiche
+      // depuis client_accounts (source de vérité du compte connecté).
       let clientId = null;
       let tokenGlobalClientId = null;
       if (client_token) {
@@ -54,45 +44,76 @@ module.exports = function attachBookRoute(router) {
           }
         } catch {}
       }
-      if (require_account && !clientId)
-        return res.status(403).json({ error: 'Un compte client est requis.', requireAccount: true });
+      if (!clientId) {
+        return res.status(401).json({
+          error: 'Veuillez créer un compte ou vous connecter pour réserver.',
+          code: 'BOOKING_REQUIRES_ACCOUNT',
+          requireAccount: true,
+        });
+      }
 
-      // ── Validation FK : le clientId du token pointe-t-il vers un client_accounts existant ?
-      // Le merchant peut avoir supprimé la fiche locale (bouton "Supprimer client"),
-      // auquel cas le token est obsolète. On recrée la fiche via globalClientId si possible,
-      // sinon on passe en booking invité (clientId=null).
-      if (clientId) {
-        const { rows: chkLocal } = await pool.query(
-          'SELECT id FROM client_accounts WHERE id=$1 AND user_id=$2',
+      // ── Récupérer la fiche client autoritative (nom/email/téléphone) ─────
+      // Le merchant a pu supprimer la fiche locale (bouton "Supprimer client"),
+      // auquel cas on tente de la recréer depuis global_clients via le token,
+      // pour ne pas déconnecter un client encore valide.
+      let clientRow = null;
+      const fetchLocal = async () => {
+        const { rows } = await pool.query(
+          `SELECT id, email, first_name, last_name, phone, phone_e164,
+                  COALESCE(marketing_opt_in, FALSE) AS marketing_opt_in
+             FROM client_accounts WHERE id=$1 AND user_id=$2`,
           [clientId, userId]
         );
-        if (!chkLocal.length) {
-          console.warn('[BOOKING] client_token clientId obsolète:', clientId, '— tentative de re-création locale');
-          clientId = null;
-          // Tenter de recréer la fiche locale à partir du compte global
-          if (tokenGlobalClientId) {
-            try {
-              const { rows: gc } = await pool.query(
-                'SELECT id, email, password_hash, first_name, last_name, phone FROM global_clients WHERE id=$1',
-                [tokenGlobalClientId]
-              );
-              if (gc.length) {
-                const g = gc[0];
-                const { rows: created } = await pool.query(
-                  `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, global_client_id, source)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, 'platform')
-                   ON CONFLICT (user_id, email) DO UPDATE SET global_client_id = EXCLUDED.global_client_id
-                   RETURNING id`,
-                  [userId, g.email, g.password_hash, g.first_name, g.last_name, g.phone, g.id]
-                );
-                if (created.length) clientId = created[0].id;
-              }
-            } catch (e) {
-              console.error('[BOOKING] échec re-création locale:', e.message);
+        return rows[0] || null;
+      };
+      clientRow = await fetchLocal();
+      if (!clientRow && tokenGlobalClientId) {
+        // Tenter de recréer la fiche locale depuis le compte global
+        try {
+          const { rows: gc } = await pool.query(
+            'SELECT id, email, password_hash, first_name, last_name, phone FROM global_clients WHERE id=$1',
+            [tokenGlobalClientId]
+          );
+          if (gc.length) {
+            const g = gc[0];
+            const { rows: created } = await pool.query(
+              `INSERT INTO client_accounts (user_id, email, password_hash, first_name, last_name, phone, global_client_id, source)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, 'platform')
+               ON CONFLICT (user_id, email) DO UPDATE SET global_client_id = EXCLUDED.global_client_id
+               RETURNING id`,
+              [userId, g.email, g.password_hash, g.first_name, g.last_name, g.phone, g.id]
+            );
+            if (created.length) {
+              clientId = created[0].id;
+              clientRow = await fetchLocal();
             }
           }
+        } catch (e) {
+          console.error('[BOOKING] échec re-création locale:', e.message);
         }
       }
+      if (!clientRow) {
+        return res.status(401).json({
+          error: 'Veuillez vous reconnecter à votre compte.',
+          code: 'BOOKING_REQUIRES_ACCOUNT',
+          requireAccount: true,
+        });
+      }
+      const client_name  = `${clientRow.first_name || ''} ${clientRow.last_name || ''}`.trim() || clientRow.first_name || 'Client';
+      const client_email = clientRow.email || null;
+
+      // RGPD commit 20 : téléphone obligatoire + validé E.164.
+      const phoneCheck = validatePhone(clientRow.phone_e164 || clientRow.phone, { required: true });
+      if (!phoneCheck.valid) {
+        return res.status(400).json({
+          error: 'Téléphone requis sur votre profil. Merci de le compléter avant de réserver.',
+          code:  'PROFILE_PHONE_REQUIRED',
+        });
+      }
+      const clientPhoneRaw  = phoneCheck.raw;
+      const clientPhoneE164 = phoneCheck.e164;
+      // L'opt-in marketing vient du compte (plus de body, le client est connecté).
+      const marketingOptInBody = clientRow.marketing_opt_in === true;
 
       // ── Vérif blocage client ────────────────────────────────────────────
       // Vérifie si ce client (identifié par email ou clientId) est bloqué chez ce commerçant

@@ -442,7 +442,9 @@ export default function BookingPage({ slug }) {
         setBiz(biz.business);
         setSvcs(svcs);
         setEmps(emps);
-        setRequire(biz.business?.require_account ?? false);
+        // Commit 22 : compte client TOUJOURS obligatoire pour réserver.
+        // La colonne require_account est ignorée — comportement non-configurable.
+        setRequire(true);
         setClosed(cd?.closedDays || []);
         // Récupère la note Google réelle si un lien Google Business est configuré
         if (biz.business?.google_business_url) {
@@ -912,28 +914,18 @@ export default function BookingPage({ slug }) {
                 />
               )}
 
-              {/* ── ÉTAPE 5 : Infos client (auth-first) ── */}
+              {/* ── ÉTAPE 5 : Infos client (compte obligatoire commit 22) ── */}
               {step === 5 && (
                 <Step5Info
                   th={th} slug={slug}
                   selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
                   clientUser={clientUser} setClientUser={setClientUser}
-                  clientName={clientName} setCN={setCN}
-                  clientEmail={clientEmail} setCE={setCE}
                   clientPhone={clientPhone} setCP={setCP}
                   notes={notes} setNotes={setNotes} bookErr={bookErr}
-                  phoneCC={phoneCC} setPhoneCC={setPhoneCC}
-                  phoneLocal={phoneLocal} setPhoneLocal={setPhoneLocal}
-                  phoneDrop={phoneDrop} setPhoneDrop={setPhoneDrop}
                   phoneErr={phoneErr} setPhoneErr={setPhoneErr}
-                  emailStatus={emailStatus} setEmailStatus={setEmailStatus}
-                  emailCheckTimer={emailCheckTimer}
-                  requireAccount={requireAccount}
-                  inlineAuthMode={inlineAuthMode} setInlineAuthMode={setInlineAuthMode}
                   referralCode={referralCode} handleAuth={handleAuth}
                   navigate={navigate} setMyApptsInitTab={setMyApptsInitTab}
                   setView={setView} goToStep={goToStep}
-                  noAcctConsent={noAcctConsent} setNoAcctConsent={setNoAcctConsent}
                 />
               )}
 
