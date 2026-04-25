@@ -435,8 +435,54 @@ export function EmployeeForm({ open, onClose, onSubmit, init }) {
   );
 }
 
+// Détecte la "famille" pastel pour le snapshot Modifier transaction (commit 21).
+// On regarde, dans l'ordre : type expense, nom de catégorie, libellé du
+// premier item, description. Pas de match → "autre".
+function snapshotFamily(init, categories) {
+  if (!init) return 'autre';
+  if (init.type === 'expense') return 'autre';
+  const cat = (Array.isArray(categories) ? categories : []).find(c => c.id === init.category_id);
+  const blob = [
+    cat?.name,
+    Array.isArray(init.items) && init.items[0]?.service_name,
+    init.description,
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (/coiff|coupe|barbe|barb|cheveu|color/.test(blob)) return 'coiffure';
+  if (/soin|massage|spa|gommage|épilation|epilation/.test(blob)) return 'soin';
+  if (/produit|vente|boutique|article|shampoo|baume|cire|gel/.test(blob)) return 'produit';
+  return 'autre';
+}
+
+const SNAP_PALETTE = {
+  coiffure: { bg:'#fff7ed', accent:'#f97316' },
+  soin:     { bg:'#f0fdf4', accent:'#10b981' },
+  produit:  { bg:'#faf5ff', accent:'#8b5cf6' },
+  autre:    { bg:'#fafafa', accent:'#6b7280' },
+};
+
+const SNAP_PAY_PASTEL = {
+  cash:     { label:'Especes',  color:'#065f46', bg:'#f0fdf4' },
+  card:     { label:'Carte',    color:'#4338ca', bg:'#eef2ff' },
+  transfer: { label:'Virement', color:'#0e7490', bg:'#ecfeff' },
+  other:    { label:'Autre',    color:'#92400e', bg:'#fffbeb' },
+  multi:    { label:'Mixte',    color:'#7c3aed', bg:'#faf5ff' },
+};
+
+function snapshotDateLabel(init) {
+  if (!init?.date) return '';
+  const iso = typeof init.date === 'string' ? init.date : new Date(init.date).toISOString();
+  const ymd = iso.substring(0, 10);
+  const [y, m, d] = ymd.split('-');
+  const dateStr = `${d}/${m}/${y}`;
+  return init.time ? `${dateStr} ${init.time}` : dateStr;
+}
+
 // ─── TransactionForm ─────────────────────────────────────────────────────────
-export function TransactionForm({ open, onClose, onSubmit, employees, categories, init }) {
+// `snapshot` (commit 21) : si truthy, affiche en haut une carte pastel
+// lecture-seule figée à l'ouverture (basée sur `init`). Permet de comparer
+// visuellement "avant ↔ après" pendant l'édition. N'impacte pas les autres
+// usages (TabHistorique, Transactions) qui ne passent pas la prop.
+export function TransactionForm({ open, onClose, onSubmit, employees, categories, init, snapshot = false }) {
   const { theme } = useTheme();
   const t = theme;
 
@@ -451,6 +497,15 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
   };
   const [f, setF]   = useState(blank);
   const [ld, setLd] = useState(false);
+  // Snapshot figé à l'ouverture (commit 21) : on gèle init pour que la carte
+  // pastel du haut reste l'état AVANT édition, même quand l'utilisateur
+  // modifie le formulaire en bas.
+  const [frozenInit, setFrozenInit] = useState(null);
+
+  useEffect(() => {
+    if (open && snapshot && init) setFrozenInit(init);
+    if (!open) setFrozenInit(null);
+  }, [open, init?.id, snapshot]);
 
   useEffect(() => {
     if (open) setF(init ? {
@@ -562,10 +617,94 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
   const optBg    = t.mode === 'dark' ? '#1e1e30' : '#f8f8ff';
   const optColor = t.mode === 'dark' ? 'rgba(255,255,255,0.9)' : '#0c0c10';
 
+  // Snapshot lecture seule (commit 21). Affiché si snapshot=true et init.
+  // Utilise `frozenInit` figé à l'ouverture pour rester l'état AVANT édition.
+  const renderSnapshot = () => {
+    const src = frozenInit;
+    if (!snapshot || !src) return null;
+    const fam   = snapshotFamily(src, categories);
+    const pal   = SNAP_PALETTE[fam] || SNAP_PALETTE.autre;
+    const emp   = (employees || []).find(e => e.id === src.employee_id);
+    const cat   = (categories || []).find(c => c.id === src.category_id);
+    const items = Array.isArray(src.items) ? src.items : [];
+    const itemsLabel = items.length > 0
+      ? items.map(it => `${it.service_name || 'Article'} (${parseInt(it.qty) || 1})`).join(' · ')
+      : (cat?.name || src.description || (src.type === 'expense' ? 'Depense' : 'Transaction'));
+    const isMulti = src.payment_method === 'multi' && Array.isArray(src.payments) && src.payments.length > 0;
+    const amountStr = `${(src.type === 'expense' ? '-' : '+')}${Number(src.amount || 0).toFixed(2)} €`;
+
+    return (
+      <div style={{ padding:16, borderRadius:10,
+                    background: pal.bg,
+                    borderLeft: `3px solid ${pal.accent}` }}>
+        <p style={{ margin:0, fontSize:11, color:'#6b7280', fontWeight:500,
+                    letterSpacing:'0.05em', textTransform:'uppercase' }}>
+          {`Réf : T-${src.id || '—'}`}
+          {snapshotDateLabel(src) ? ` · ${snapshotDateLabel(src)}` : ''}
+        </p>
+
+        <p style={{ margin:'8px 0 0', fontSize:14, fontWeight:500, color:'#111827',
+                    overflow:'hidden', textOverflow:'ellipsis' }}>
+          {itemsLabel}
+        </p>
+
+        <div style={{ marginTop:6, display:'flex', alignItems:'center',
+                      gap:8, flexWrap:'wrap' }}>
+          {emp && (
+            <span style={{ display:'inline-flex', alignItems:'center', gap:5,
+                           fontSize:12, color:'#374151', fontWeight:500 }}>
+              <span style={{ width:14, height:14, borderRadius:99,
+                             background: emp.avatar_color || '#111827', color:'#fff',
+                             display:'inline-flex', alignItems:'center',
+                             justifyContent:'center',
+                             fontSize:9, fontWeight:500 }}>
+                {(emp.name || '?').charAt(0).toUpperCase()}
+              </span>
+              {emp.name}
+            </span>
+          )}
+          {emp && <span style={{ color:'#9ca3af', fontSize:12 }}>·</span>}
+
+          {isMulti
+            ? src.payments.map((p, idx) => {
+                const pi = SNAP_PAY_PASTEL[p.method] || SNAP_PAY_PASTEL.other;
+                return (
+                  <span key={idx}
+                        style={{ display:'inline-flex', alignItems:'center', gap:4,
+                                 padding:'2px 8px', borderRadius:99,
+                                 background:pi.bg, color:pi.color,
+                                 fontSize:11, fontWeight:500 }}>
+                    {pi.label} {Number(p.amount || 0).toFixed(2)} €
+                  </span>
+                );
+              })
+            : (() => {
+                const pi = SNAP_PAY_PASTEL[src.payment_method] || SNAP_PAY_PASTEL.other;
+                return (
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:4,
+                                 padding:'2px 8px', borderRadius:99,
+                                 background:pi.bg, color:pi.color,
+                                 fontSize:11, fontWeight:500 }}>
+                    {pi.label}
+                  </span>
+                );
+              })()}
+
+          <span style={{ marginLeft:'auto', fontSize:16, fontWeight:500, color:'#111827',
+                         fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+            {amountStr}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Modal open={open} onClose={onClose} theme={theme}
            title={init ? 'Modifier la transaction' : 'Nouvelle transaction'}>
       <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:18 }}>
+
+        {renderSnapshot()}
 
         <SegmentedControl fullWidth
                           value={f.type}

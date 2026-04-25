@@ -1,25 +1,15 @@
-// Historique admin — refonte FDS-2026 commit 7h, simplifié au commit 16.
+// Historique admin — refonte FDS-2026 commit 7h, simplifié au commit 16,
+// affiné UX au commit 21.
 //
 // Page dédiée à la consultation/édition/suppression de TOUTES les transactions,
 // toutes dates. Accessible depuis la sidebar Principal (entre Caisse et Clients).
 //
-// Commit 16 : plus de gate PIN au montage. Cette page n'est accessible qu'en
-// mode admin (RequireAdminMode redirige sinon vers /agenda), et le PIN admin
-// a déjà été saisi via la sidebar — re-saisir ici serait redondant. Les
-// actions sensibles (edit/delete) passent par adminRequest qui injecte
-// x-pin-session automatiquement, et sur 403 ACTION_ADMIN_ONLY le retry réouvre
-// la modale PIN admin (cf. utils/adminPinPrompt.js + api.js + AdminPinModal).
-//
-// On ne casse PAS la logique de TabHistorique : structure identique (search,
-// segmented type, edit/delete avec audit trail, pagination) + extensions :
-//   - date range from/to (défaut : 30 derniers jours)
-//   - filtre employé (chips)
-//   - filtre moyen de paiement (chips)
-//   - KPIs (CA total, prestations, panier moyen)
-//   - grille 4 moyens de paiement pastel (multi éclatés)
-//
-// Les calculs (multi éclatés en sous-paiements, items vs description, RDV vs
-// caisse) sont identiques à TabHistorique pour ne pas diverger côté audit.
+// Commit 21 :
+//   - Filtre période par défaut : Aujourd'hui (au lieu de 30 jours)
+//   - Présets "Aujourd'hui / Cette semaine / Ce mois / Personnaliser"
+//   - Filtres "Moyen de paiement" + "Employé" regroupés dans 1 carte 2 colonnes
+//   - Renommage textes "tx" → "Transaction" / "Réf : T-…"
+//   - Snapshot pastel en haut de la modale Modifier (figé à l'ouverture)
 import { useEffect, useMemo, useState } from 'react';
 import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
@@ -47,6 +37,11 @@ function isoDaysAgo(n) {
   return d.toISOString().substring(0, 10);
 }
 function isoToday() { return new Date().toISOString().substring(0, 10); }
+function isoFirstOfMonth() {
+  const d = new Date();
+  d.setUTCDate(1);
+  return d.toISOString().substring(0, 10);
+}
 
 export default function HistoriqueAdmin({
   transactions = [], employees = [], categories = [],
@@ -62,8 +57,13 @@ export default function HistoriqueAdmin({
   // x-pin-session, et retry auto sur 403 ACTION_ADMIN_ONLY.
 
   // ── Filtres ───────────────────────────────────────────────────────────────
-  const [from,    setFrom]    = useState(isoDaysAgo(30));
+  // Défaut au mount : "Aujourd'hui". Pas de mémorisation localStorage : on
+  // retombe toujours sur Aujourd'hui à chaque entrée sur /historique.
+  const [from,    setFrom]    = useState(isoToday());
   const [to,      setTo]      = useState(isoToday());
+  const [preset,  setPreset]  = useState('today'); // 'today' | 'week' | 'month' | 'custom'
+  const [customFrom, setCustomFrom] = useState(isoToday());
+  const [customTo,   setCustomTo]   = useState(isoToday());
   const [empF,    setEmpF]    = useState('all');
   const [pmF,     setPmF]     = useState('all'); // 'all' | 'cash' | 'card' | 'transfer' | 'other' | 'multi'
   const [search,  setSearch]  = useState('');
@@ -166,12 +166,24 @@ export default function HistoriqueAdmin({
 
   const activeEmps = employees.filter(e => e.is_active !== false);
 
-  const setRange = (kind) => {
-    if (kind === '7')   { setFrom(isoDaysAgo(7));   setTo(isoToday()); }
-    if (kind === '30')  { setFrom(isoDaysAgo(30));  setTo(isoToday()); }
-    if (kind === '90')  { setFrom(isoDaysAgo(90));  setTo(isoToday()); }
-    if (kind === 'all') { setFrom(''); setTo(''); }
+  // Présets période : applique IMMÉDIATEMENT pour today/week/month.
+  // Pour 'custom', on déplie une rangée avec inputs Du/Au + bouton Appliquer
+  // (le filtre ne change qu'au clic Appliquer).
+  const applyPreset = (kind) => {
+    setPreset(kind);
     if (kind === 'today') { const d = isoToday(); setFrom(d); setTo(d); }
+    else if (kind === 'week')  { setFrom(isoDaysAgo(7)); setTo(isoToday()); }
+    else if (kind === 'month') { setFrom(isoFirstOfMonth()); setTo(isoToday()); }
+    else if (kind === 'custom') {
+      // initialise les inputs custom à la plage active actuelle
+      setCustomFrom(from || isoToday());
+      setCustomTo(to || isoToday());
+    }
+  };
+
+  const applyCustomRange = () => {
+    setFrom(customFrom);
+    setTo(customTo);
   };
 
   return (
@@ -183,72 +195,95 @@ export default function HistoriqueAdmin({
         <PageHeader title="Historique"
                     subtitle="Toutes les transactions, toutes dates · admin"/>
 
-        {/* ── Filtres dates ───────────────────────────────────────────────── */}
+        {/* ── Filtres période (présets + personnalisé) ────────────────────── */}
         <div style={card}>
           <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>
             {"Période"}
           </p>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            <button onClick={() => setRange('today')} style={chip(false)}>{"Aujourd'hui"}</button>
-            <button onClick={() => setRange('7')}   style={chip(false)}>{"7 jours"}</button>
-            <button onClick={() => setRange('30')}  style={chip(false)}>{"30 jours"}</button>
-            <button onClick={() => setRange('90')}  style={chip(false)}>{"90 jours"}</button>
-            <button onClick={() => setRange('all')} style={chip(!from && !to)}>{"Tout"}</button>
+            <button onClick={() => applyPreset('today')}
+                    style={chip(preset === 'today')}>{"Aujourd'hui"}</button>
+            <button onClick={() => applyPreset('week')}
+                    style={chip(preset === 'week')}>{"Cette semaine"}</button>
+            <button onClick={() => applyPreset('month')}
+                    style={chip(preset === 'month')}>{"Ce mois"}</button>
+            <button onClick={() => applyPreset('custom')}
+                    style={chip(preset === 'custom')}>{"Personnaliser"}</button>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-            <div>
-              <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Du"}</p>
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={inp}/>
+          {preset === 'custom' && (
+            <div style={{ display:'grid',
+                          gridTemplateColumns:'1fr 1fr auto', gap:8, alignItems:'end' }}>
+              <div>
+                <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Du"}</p>
+                <input type="date" value={customFrom}
+                       onChange={e => setCustomFrom(e.target.value)} style={inp}/>
+              </div>
+              <div>
+                <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Au"}</p>
+                <input type="date" value={customTo}
+                       onChange={e => setCustomTo(e.target.value)} style={inp}/>
+              </div>
+              <Button variant="primary" size="small" type="button"
+                      onClick={applyCustomRange}>
+                {"Appliquer"}
+              </Button>
             </div>
-            <div>
-              <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Au"}</p>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)} style={inp}/>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* ── Filtres employé / moyen de paiement ─────────────────────────── */}
-        {activeEmps.length > 0 && (
-          <div style={card}>
-            <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>
-              {"Employé"}
-            </p>
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-              <button onClick={() => setEmpF('all')} style={chip(empF === 'all')}>
-                {"Tous"}
-              </button>
-              {activeEmps.map(e => (
-                <button key={e.id} onClick={() => setEmpF(e.id)}
-                        style={chip(empF === e.id, e.avatar_color)}>
-                  <span style={{ width:14, height:14, borderRadius:99,
-                                 background: e.avatar_color || t.text, color:'#fff',
-                                 display:'inline-flex', alignItems:'center',
-                                 justifyContent:'center',
-                                 fontSize:9, fontWeight:500 }}>
-                    {(e.name || '?').charAt(0).toUpperCase()}
-                  </span>
-                  {e.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* ── Filtres : Moyen de paiement + Employé (1 carte, 2 colonnes) ── */}
         <div style={card}>
           <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>
-            {"Moyen de paiement"}
+            {"Filtres"}
           </p>
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-            <button onClick={() => setPmF('all')} style={chip(pmF === 'all')}>{"Tous"}</button>
-            {Object.entries(PM_GRID_CFG).map(([id, cfg]) => (
-              <button key={id} onClick={() => setPmF(id)}
-                      style={chip(pmF === id, cfg.color)}>
-                {cfg.label}
-              </button>
-            ))}
-            <button onClick={() => setPmF('multi')} style={chip(pmF === 'multi', '#7c3aed')}>
-              {"Mixte"}
-            </button>
+          <div style={{ display:'grid',
+                        gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))',
+                        gap:14 }}>
+            <div>
+              <p style={{ margin:'0 0 8px', fontSize:11, color:t.muted, fontWeight:500,
+                          textTransform:'uppercase', letterSpacing:'0.04em' }}>
+                {"Moyen de paiement"}
+              </p>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <button onClick={() => setPmF('all')} style={chip(pmF === 'all')}>{"Tous"}</button>
+                {Object.entries(PM_GRID_CFG).map(([id, cfg]) => (
+                  <button key={id} onClick={() => setPmF(id)}
+                          style={chip(pmF === id, cfg.color)}>
+                    {cfg.label}
+                  </button>
+                ))}
+                <button onClick={() => setPmF('multi')} style={chip(pmF === 'multi', '#7c3aed')}>
+                  {"Mixte"}
+                </button>
+              </div>
+            </div>
+
+            {activeEmps.length > 0 && (
+              <div>
+                <p style={{ margin:'0 0 8px', fontSize:11, color:t.muted, fontWeight:500,
+                            textTransform:'uppercase', letterSpacing:'0.04em' }}>
+                  {"Employé"}
+                </p>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  <button onClick={() => setEmpF('all')} style={chip(empF === 'all')}>
+                    {"Tous"}
+                  </button>
+                  {activeEmps.map(e => (
+                    <button key={e.id} onClick={() => setEmpF(e.id)}
+                            style={chip(empF === e.id, e.avatar_color)}>
+                      <span style={{ width:14, height:14, borderRadius:99,
+                                     background: e.avatar_color || t.text, color:'#fff',
+                                     display:'inline-flex', alignItems:'center',
+                                     justifyContent:'center',
+                                     fontSize:9, fontWeight:500 }}>
+                        {(e.name || '?').charAt(0).toUpperCase()}
+                      </span>
+                      {e.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -303,7 +338,7 @@ export default function HistoriqueAdmin({
                   {fmt(v.total)} €
                 </p>
                 <p style={{ fontSize:10, color:cfg.color, opacity:0.7, margin:0 }}>
-                  {v.count} tx
+                  {v.count + (v.count > 1 ? ' transactions' : ' transaction')}
                 </p>
               </div>
             );
@@ -552,7 +587,8 @@ export default function HistoriqueAdmin({
                            }
                            setEdit(null); setModal(false);
                          }}
-                         employees={employees} categories={categories} init={edit}/>
+                         employees={employees} categories={categories} init={edit}
+                         snapshot/>
         <Confirm open={!!delId} onClose={() => setDelId(null)}
                  onConfirm={async () => {
                    try {
