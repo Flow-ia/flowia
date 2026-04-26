@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { getMe, setup2fa, enable2fa, disable2fa, logout } from '../lib/auth.js';
+import { useNavigate } from 'react-router-dom';
+import { getMe, setup2fa, enable2fa, disable2fa } from '../lib/auth.js';
+import AppShell from '../components/AppShell.jsx';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -68,24 +69,9 @@ export default function SettingsPage() {
     }
   }
 
-  async function onLogout() {
-    try { await logout(); } catch { /* noop */ }
-    navigate('/login', { replace: true });
-  }
-
   return (
-    <div className="dash-wrap">
-      <header className="dash-header">
-        <div className="dash-brand">FlowIA Admin</div>
-        <div className="dash-meta">
-          <Link to="/dashboard" className="btn-ghost">{"Dashboard"}</Link>
-          {me && <span className="dash-user">{me.name}</span>}
-          <button className="btn-ghost" onClick={onLogout}>{"Deconnexion"}</button>
-        </div>
-      </header>
-
-      <main className="dash-main">
-        <h1 className="dash-title">{"Reglages compte"}</h1>
+    <AppShell me={me} footer="FlowIA Admin — Reglages">
+      <h1 className="dash-title">{"Reglages compte"}</h1>
 
         <section className="card">
           <div className="card-head">
@@ -175,9 +161,6 @@ export default function SettingsPage() {
             <li><span className="k">{"Derniere connexion"}</span><span className="v">{me?.last_login_at ? new Date(me.last_login_at).toLocaleString('fr-FR') : '—'}</span></li>
           </ul>
         </section>
-      </main>
-
-      <footer className="dash-footer">{"v1.0.0 — Commit #2"}</footer>
-    </div>
+    </AppShell>
   );
 }

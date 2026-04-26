@@ -255,6 +255,7 @@ router.post('/login', async (req, res) => {
     const user = rows[0] || null;
     const valid = await bcrypt.compare(String(password), user?.password_hash || DUMMY_BCRYPT);
     if (!user || !valid) return res.status(401).json({ error: INVALID });
+    if (user.is_frozen) return res.status(403).json({ error: 'Compte temporairement suspendu. Contactez le support FlowIA.' });
     const tokenExpiry = await getMerchantSessionDuration(user.id);
     const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },

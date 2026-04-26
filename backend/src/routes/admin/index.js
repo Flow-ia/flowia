@@ -35,5 +35,6 @@ router.use(cors({
 }));
 
 router.use('/auth', require('./auth'));
+router.use('/merchants', require('./merchants'));
 
 module.exports = router;

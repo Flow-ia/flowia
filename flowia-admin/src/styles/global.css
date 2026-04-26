@@ -303,3 +303,148 @@ input::placeholder { color: var(--fg-muted); }
   color: var(--fg);
   letter-spacing: 0.04em;
 }
+
+/* ── Navigation ────────────────────────────────────────────────────────── */
+
+.dash-nav {
+  display: flex;
+  gap: 4px;
+  margin: 0 24px;
+}
+.nav-link {
+  text-decoration: none;
+  color: var(--fg-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+  border: 0.5px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.nav-link:hover { color: var(--fg); }
+.nav-link-active {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+/* ── Page head + filtres ───────────────────────────────────────────────── */
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+.page-count {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+.page-sub {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.filters input {
+  flex: 1;
+}
+.filters select {
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  padding: 10px 12px;
+  color: var(--fg);
+  outline: none;
+}
+.filters select:focus { border-color: var(--fg); }
+
+/* ── Tables ────────────────────────────────────────────────────────────── */
+
+.table-wrap {
+  border: 0.5px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid var(--border);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  font-size: 10px;
+}
+.table td {
+  padding: 12px;
+  border-bottom: 0.5px solid var(--border);
+  vertical-align: top;
+}
+.table tr:last-child td { border-bottom: none; }
+.row-link { cursor: pointer; transition: background 0.15s ease; }
+.row-link:hover { background: var(--surface-2); }
+.cell-primary   { font-weight: 500; }
+.cell-secondary { color: var(--fg-muted); font-size: 11px; margin-top: 2px; }
+.mono           { font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace; font-size: 11px; }
+.td-loading     { color: var(--fg-muted); text-align: center; padding: 24px !important; }
+
+.badge-frozen { color: var(--error); border-color: var(--error); }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 16px 0 32px 0;
+}
+.page-info {
+  color: var(--fg-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Card variants ─────────────────────────────────────────────────────── */
+
+.card-warning {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+.card-danger {
+  border-color: var(--error);
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Card grid (Dashboard) ─────────────────────────────────────────────── */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+.card-link {
+  text-decoration: none;
+  color: var(--fg);
+  display: block;
+  margin-bottom: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.card-link:hover { border-color: var(--fg); background: var(--surface-2); }
+.card-link-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.card-link-sub   { font-size: 11px; color: var(--fg-muted); }

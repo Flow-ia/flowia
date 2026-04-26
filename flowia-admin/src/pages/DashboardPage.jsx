@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { getMe, logout } from '../lib/auth.js';
+import { getMe } from '../lib/auth.js';
+import AppShell from '../components/AppShell.jsx';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -20,41 +20,37 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [navigate]);
 
-  async function onLogout() {
-    try { await logout(); } catch { /* noop */ }
-    navigate('/login', { replace: true });
-  }
-
   return (
-    <div className="dash-wrap">
-      <header className="dash-header">
-        <div className="dash-brand">FlowIA Admin</div>
-        <div className="dash-meta">
-          <Link to="/settings" className="btn-ghost">{"Reglages"}</Link>
-          {me && <span className="dash-user">{me.name}</span>}
-          <button className="btn-ghost" onClick={onLogout}>{"Deconnexion"}</button>
-        </div>
-      </header>
+    <AppShell me={me} footer="FlowIA Admin">
+      {me ? (
+        <>
+          <h1 className="dash-title">{"Bienvenue " + me.name + "."}</h1>
+          <p className="dash-text">
+            {"Le panel admin couvre la gestion des commercants, le blocage de clients globaux, les statistiques et l'audit."}
+          </p>
 
-      <main className="dash-main">
-        {me ? (
-          <>
-            <h1 className="dash-title">{"Bienvenue " + me.name + "."}</h1>
-            <p className="dash-text">
-              {"Le panel admin est en cours de construction. Les fonctionnalites de gestion (commercants, clients, audit, dashboard global) arrivent dans les commits suivants."}
-            </p>
-            <ul className="dash-list">
-              <li><span className="k">Email</span><span className="v">{me.email}</span></li>
-              <li><span className="k">{"Role"}</span><span className="v">{me.role}</span></li>
-              <li><span className="k">{"Derniere connexion"}</span><span className="v">{me.last_login_at ? new Date(me.last_login_at).toLocaleString('fr-FR') : "—"}</span></li>
-            </ul>
-          </>
-        ) : (
-          <div className="splash">{error || "Chargement..."}</div>
-        )}
-      </main>
-
-      <footer className="dash-footer">{"v1.0.0 — Commit #1"}</footer>
-    </div>
+          <div className="card-grid">
+            <Link to="/merchants" className="card card-link">
+              <div className="card-link-title">{"Commercants"}</div>
+              <div className="card-link-sub">{"Lister, geler, modifier"}</div>
+            </Link>
+            <Link to="/clients" className="card card-link">
+              <div className="card-link-title">{"Clients"}</div>
+              <div className="card-link-sub">{"Bloquer, supprimer cross-merchant"}</div>
+            </Link>
+            <Link to="/audit" className="card card-link">
+              <div className="card-link-title">{"Audit log"}</div>
+              <div className="card-link-sub">{"Historique des actions admin"}</div>
+            </Link>
+            <Link to="/settings" className="card card-link">
+              <div className="card-link-title">{"Reglages compte"}</div>
+              <div className="card-link-sub">{"2FA, mot de passe"}</div>
+            </Link>
+          </div>
+        </>
+      ) : (
+        <div className="splash">{"Chargement..."}</div>
+      )}
+    </AppShell>
   );
 }

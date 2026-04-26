@@ -1,0 +1,38 @@
+// admin.js — API helpers pour les ressources admin (merchants, clients, etc.).
+// Wrap apiJson pour fournir une surface ergonomique.
+
+import { apiJson } from './api.js';
+
+// ── Merchants ───────────────────────────────────────────────────────────────
+export async function listMerchants({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
+  const qs = new URLSearchParams();
+  if (search) qs.set('search', search);
+  if (status && status !== 'all') qs.set('status', status);
+  qs.set('limit',  String(limit));
+  qs.set('offset', String(offset));
+  return await apiJson(`/api/admin/merchants?${qs.toString()}`);
+}
+
+export async function getMerchant(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}`);
+}
+
+export async function updateMerchant(id, fields) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  });
+}
+
+export async function freezeMerchant(id, reason) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/freeze`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function unfreezeMerchant(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/unfreeze`, {
+    method: 'POST',
+  });
+}
