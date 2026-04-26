@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 require('dotenv').config();
+const { applyAdminSchema } = require('./adminSchema');
 
 // Supporte DATABASE_URL ou variables séparées DB_HOST/DB_USER/DB_PASSWORD
 let pool;
@@ -1344,6 +1345,8 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_email ON marketing_optout_log(email)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_created_at ON marketing_optout_log(created_at DESC)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_source ON marketing_optout_log(source)`);
+
+  await applyAdminSchema(pool);
 
 console.log('[DB] Tables initialisées');
 }
