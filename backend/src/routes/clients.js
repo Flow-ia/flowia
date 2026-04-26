@@ -237,16 +237,22 @@ router.get('/search', async (req, res) => {
     if (!q || q.trim().length < 2) return res.json([]);
     const uid  = req.user.userId;
     const term = `%${q.trim()}%`;
+    // Renvoie first_name / last_name séparés ET name concaténé pour
+    // backward-compat (consommateurs caisse + agenda). Avant : seul `name`
+    // était exposé, le dropdown caisse Step3 affichait "—" car il lisait
+    // first_name / last_name absents → bug visuel signalé après 24c.
     const { rows } = await pool.query(`
       SELECT
-        ca.id, ca.email, ca.first_name||' '||ca.last_name AS name,
+        ca.id, ca.email,
+        ca.first_name, ca.last_name,
+        TRIM(BOTH ' ' FROM COALESCE(ca.first_name,'')||' '||COALESCE(ca.last_name,'')) AS name,
         ca.phone, ca.global_client_id,
         CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
         cl.stamps, cl.points, cl.total_stamps_ever
       FROM client_accounts ca
       LEFT JOIN client_loyalty cl ON cl.user_id=ca.user_id AND cl.client_email=ca.email
       WHERE ca.user_id=$1 AND (
-        (ca.first_name||' '||ca.last_name) ILIKE $2
+        (COALESCE(ca.first_name,'')||' '||COALESCE(ca.last_name,'')) ILIKE $2
         OR ca.email ILIKE $2
         OR ca.phone ILIKE $2
       )

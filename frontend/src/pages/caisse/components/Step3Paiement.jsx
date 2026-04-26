@@ -75,10 +75,11 @@ export default function Step3Paiement({
   }, [clientSearch]);
 
   const pickClient = (c) => {
-    const display = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.client_name || '';
+    const display = [c.first_name, c.last_name].filter(Boolean).join(' ').trim()
+                 || c.name || c.client_name || '';
     setClientName(display);
     setClientEmail(c.email || '');
-    setClientSearch(display || c.email || '');
+    setClientSearch(display || c.email || c.phone || '');
     setSuggestsOpen(false);
   };
 
@@ -210,8 +211,12 @@ export default function Step3Paiement({
                             boxShadow: t.shadowSm || '0 4px 16px rgba(0,0,0,0.08)',
                             overflow: 'hidden' }}>
                 {clientSuggests.map(c => {
-                  const name = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || c.client_name || '—';
-                  const sub  = c.email || c.phone || '';
+                  // Fallback : back retourne first_name + last_name (commit
+                  // 24d) + name concaténé. Anciens consommateurs : on garde
+                  // c.name comme dernier secours avant '—'.
+                  const fullName = [c.first_name, c.last_name].filter(Boolean).join(' ').trim()
+                                || c.name || c.client_name || '';
+                  const display = fullName || '(Sans nom)';
                   return (
                     <button key={c.id}
                             onMouseDown={() => pickClient(c)}
@@ -220,19 +225,30 @@ export default function Step3Paiement({
                                      background: 'transparent', color: t.text,
                                      cursor:'pointer', fontFamily:'inherit',
                                      borderBottom: `0.5px solid ${t.separator}`,
-                                     display:'flex', flexDirection:'column', gap:2 }}
+                                     display:'flex', flexDirection:'column', gap:3 }}
                             onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: t.text,
+                      <span style={{ fontSize: 14, fontWeight: 500, color: t.text,
                                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {name}
+                        {display}
                       </span>
-                      {sub && (
-                        <span style={{ fontSize: 11, color: t.muted,
-                                       overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {sub}
-                        </span>
-                      )}
+                      <span style={{ fontSize: 11, color: t.muted, display:'flex',
+                                     gap: 10, flexWrap:'wrap', alignItems:'center' }}>
+                        {c.email && (
+                          <span style={{ overflow:'hidden', textOverflow:'ellipsis',
+                                         whiteSpace:'nowrap', maxWidth:'60%' }}>
+                            {c.email}
+                          </span>
+                        )}
+                        {c.phone && (
+                          <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                            {c.phone}
+                          </span>
+                        )}
+                        {!c.email && !c.phone && (
+                          <span style={{ fontStyle:'italic' }}>{"Aucun contact enregistré"}</span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}

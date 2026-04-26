@@ -17,6 +17,7 @@
 //   disabled  boolean
 //   theme     { text, muted, inputBg, inputBorder } optionnel
 //
+import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 
 const MONTHS = [
@@ -46,7 +47,22 @@ export default function BirthMonthYearPicker({
     inputBg: '#ffffff',
     inputBorder: '#e5e7eb',
   };
-  const { month, year } = parseValue(value);
+
+  // State local : permet de conserver l'affichage de la sélection mois OU
+  // année avant que la valeur composite (YYYY-MM-DD) puisse être émise.
+  // Avant : emit(month, '') envoyait null au parent → re-render avec value
+  // vide → parseValue revoie {month:'', year:''} → les selects perdaient
+  // leur affichage. Bug visuel signalé après commit 24a.
+  const parsed = parseValue(value);
+  const [month, setMonth] = useState(parsed.month);
+  const [year,  setYear]  = useState(parsed.year);
+
+  // Re-sync depuis le parent (ex: reset formulaire ou pré-remplissage).
+  useEffect(() => {
+    const p = parseValue(value);
+    setMonth(p.month);
+    setYear(p.year);
+  }, [value]);
 
   const currentYear = new Date().getFullYear();
   const minYear = currentYear - 100;
@@ -55,6 +71,8 @@ export default function BirthMonthYearPicker({
   for (let y = maxYear; y >= minYear; y--) years.push(y);
 
   const emit = (nextMonth, nextYear) => {
+    setMonth(nextMonth);
+    setYear(nextYear);
     if (!nextMonth || !nextYear) {
       onChange && onChange(null);
       return;
