@@ -1276,6 +1276,17 @@ async function initDB() {
   // Seed : une ligne user_settings par merchant existant, defaults DB appliqués.
   await runMigration(`INSERT INTO user_settings (user_id) SELECT id FROM users ON CONFLICT (user_id) DO NOTHING`);
 
+  // Commit 31 — durée de session merchant configurable + mode veille.
+  // merchant_session_duration : valeurs autorisées '12h' | '24h' | '7d' | '30d' | 'never'
+  //   - utilisée comme expiresIn JWT au login. 'never' = pas d'expiration côté JWT.
+  // lock_screen_enabled       : active le verrouillage automatique de l'app
+  //                              après inactivité. Déverrouillage par PIN
+  //                              employé ou PIN admin.
+  // lock_screen_idle_minutes  : 0 (désactivé) | 10 | 15 | 60 | 120 | 240
+  await runMigration(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS merchant_session_duration VARCHAR(10) DEFAULT '7d'`);
+  await runMigration(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS lock_screen_enabled BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS lock_screen_idle_minutes INT DEFAULT 15`);
+
   // Commit 25 — traçabilité création RDV. Source : 'public' (booking client),
   // 'admin' (commerçant), 'employee' (tablette PIN), 'migration' (RDV
   // historiques antérieurs à la migration). created_by_employee_id : FK

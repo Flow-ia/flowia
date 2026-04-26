@@ -12,6 +12,8 @@ import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
 import { TabletModeProvider } from './contexts/TabletModeProvider';
 import { AdminModeProvider } from './contexts/AdminModeContext';
+import { IdleLockProvider } from './hooks/useIdleLock';
+import LockScreen from './components/LockScreen';
 import './index.css';
 
 // ── Détection du domaine au montage ──────────────────────────────────────────
@@ -51,13 +53,23 @@ function QuickJoinRedirect() {
 // Racine catch-all : sur booking domain, redirige vers /book/<slug> (garde
 // toutes les URLs internes `/book/lille/...` générées par BookingPage stables).
 // Sinon, rend l'app commerçant comme avant.
+//
+// Commit 31 — sur le domaine commerçant, on englobe <App/> dans
+// IdleLockProvider et on rend <LockScreen/> par-dessus. Le hook lit la
+// config depuis user_settings côté backend → si l'utilisateur n'est pas
+// connecté ou a désactivé le mode veille, le LockScreen reste invisible.
 function RootSwitch() {
   const location = useLocation();
   if (isBookingHost() && BOOKING_SLUG) {
     const target = `/book/${BOOKING_SLUG}${location.search || ''}`;
     return <Navigate to={target} replace />;
   }
-  return <App />;
+  return (
+    <IdleLockProvider>
+      <App />
+      <LockScreen />
+    </IdleLockProvider>
+  );
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

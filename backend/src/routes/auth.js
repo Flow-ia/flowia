@@ -23,6 +23,35 @@ function isValidEmail(e) {
   return typeof e === 'string' && EMAIL_RE.test(e) && e.length <= 254;
 }
 
+// Commit 31 — durée de session JWT merchant configurable par compte.
+// Lit user_settings.merchant_session_duration ('12h'|'24h'|'7d'|'30d'|'never').
+// 'never' → on n'inclut PAS expiresIn → JWT sans expiration côté serveur.
+// Fallback : env JWT_EXPIRES_IN ou '7d'. Best-effort : tout échec retourne
+// la valeur par défaut, on ne bloque jamais le login.
+const ALLOWED_DURATIONS = new Set(['12h', '24h', '7d', '30d', 'never']);
+async function getMerchantSessionDuration(userId) {
+  if (!userId) return process.env.JWT_EXPIRES_IN || '7d';
+  try {
+    const { rows } = await pool.query(
+      `SELECT merchant_session_duration FROM user_settings WHERE user_id=$1`,
+      [userId]
+    );
+    const d = rows[0]?.merchant_session_duration;
+    if (d && ALLOWED_DURATIONS.has(d)) return d;
+  } catch (e) {
+    console.warn('[AUTH session-duration]', e.message);
+  }
+  return process.env.JWT_EXPIRES_IN || '7d';
+}
+
+// Wrapper jwt.sign qui gère le cas 'never' (pas d'expiresIn).
+function signMerchantJwt(payload, expiresIn) {
+  if (expiresIn === 'never') {
+    return jwt.sign(payload, process.env.JWT_SECRET);
+  }
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
+}
+
 // Hash bcrypt "dummy" pour enforcer un temps constant sur /login quand
 // l'email n'existe pas (empêche l'énumération par timing attack bcrypt).
 const DUMMY_BCRYPT = bcrypt.hashSync('dummy_' + process.pid + '_' + Date.now(), 12);
@@ -163,9 +192,10 @@ router.post('/register/confirm', async (req, res) => {
       [user.id, finalSlug]
     );
     await deleteCode(`reg_${email.toLowerCase()}`);
-    const token = jwt.sign(
+    const tokenExpiry = await getMerchantSessionDuration(user.id);
+    const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },
-      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      tokenExpiry
     );
     res.json({ ok: true, token, user: {
       id:                user.id,
@@ -225,9 +255,10 @@ router.post('/login', async (req, res) => {
     const user = rows[0] || null;
     const valid = await bcrypt.compare(String(password), user?.password_hash || DUMMY_BCRYPT);
     if (!user || !valid) return res.status(401).json({ error: INVALID });
-    const token = jwt.sign(
+    const tokenExpiry = await getMerchantSessionDuration(user.id);
+    const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },
-      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      tokenExpiry
     );
     res.json({ ok: true, token, user: {
       id:                user.id,
@@ -356,9 +387,10 @@ router.post('/change-email/confirm', authMiddleware, async (req, res) => {
     await deleteCode(`chg_email_${req.user.userId}`);
     const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.user.userId]);
     const user = rows[0];
-    const token = jwt.sign(
+    const tokenExpiry = await getMerchantSessionDuration(user.id);
+    const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },
-      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      tokenExpiry
     );
     res.json({ ok: true, token, newEmail });
   } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -756,10 +788,11 @@ router.get('/google/merchant/callback', async (req, res) => {
       }
     }
 
-    // 5. Générer le JWT commerçant
-    const token = jwt.sign(
+    // 5. Générer le JWT commerçant — durée configurable via user_settings.
+    const tokenExpiry = await getMerchantSessionDuration(user.id);
+    const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },
-      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      tokenExpiry
     );
 
     const userObj = {
@@ -829,10 +862,11 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
     }
     await pool.query('UPDATE booking_settings SET slug=$1 WHERE user_id=$2', [finalSlug, req.user.userId]);
 
-    // Nouveau token avec le bon businessName
-    const token = jwt.sign(
+    // Nouveau token avec le bon businessName — durée configurable.
+    const tokenExpiry = await getMerchantSessionDuration(u.id);
+    const token = signMerchantJwt(
       { userId: u.id, email: u.email, businessName: u.business_name },
-      process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      tokenExpiry
     );
 
     res.json({
