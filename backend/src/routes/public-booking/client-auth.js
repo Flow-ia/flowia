@@ -333,6 +333,11 @@ module.exports = function attachClientAuthRoutes(router) {
 
       if (!valid) return res.status(401).json({ error: 'Mot de passe incorrect.' });
 
+      // Admin commit #4 : refus si le compte global est bloqué par un admin
+      // FlowIA. Le blocage est cross-merchant (table global_clients), donc ce
+      // client ne peut se connecter sur AUCUN salon FlowIA.
+      if (gc?.is_blocked) return res.status(403).json({ error: 'Connexion refusee. Contactez le support FlowIA.' });
+
       // 4. Si fiche locale absente mais compte global existe → créer la fiche locale automatiquement
       if (!local && gc) {
         const { rows: created } = await pool.query(

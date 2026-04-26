@@ -36,3 +36,36 @@ export async function unfreezeMerchant(id) {
     method: 'POST',
   });
 }
+
+// ── Clients (global_clients cross-merchant) ─────────────────────────────────
+export async function listClients({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
+  const qs = new URLSearchParams();
+  if (search) qs.set('search', search);
+  if (status && status !== 'all') qs.set('status', status);
+  qs.set('limit',  String(limit));
+  qs.set('offset', String(offset));
+  return await apiJson(`/api/admin/clients?${qs.toString()}`);
+}
+
+export async function getClient(id) {
+  return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}`);
+}
+
+export async function blockClient(id, reason) {
+  return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}/block`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function unblockClient(id) {
+  return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}/unblock`, {
+    method: 'POST',
+  });
+}
+
+export async function anonymizeClient(id) {
+  return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
