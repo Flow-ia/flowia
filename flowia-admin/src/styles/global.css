@@ -1,0 +1,214 @@
+/* FlowIA Admin — thème sombre austère, monospace, FDS-2026 (fw≤500, bordures 0.5px, pas de gradients).
+   Volontairement séparé du frontend merchant : aucun import croisé. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0a0a;
+  --surface:   #141414;
+  --surface-2: #1c1c1c;
+  --border:    #2a2a2a;
+  --fg:        #f5f5f5;
+  --fg-muted:  #888888;
+  --error:     #ff5b50;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size:   inherit;
+  color:       inherit;
+}
+
+input {
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+input:focus { border-color: var(--fg); }
+input::placeholder { color: var(--fg-muted); }
+
+.splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 60vh;
+  color: var(--fg-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Login ─────────────────────────────────────────────────────────────── */
+
+.login-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  padding: 32px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-brand {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+}
+.login-title {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-top: -2px;
+}
+.login-sub {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field span {
+  font-size: 11px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+  border: 0.5px solid var(--fg);
+  padding: 11px 14px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-top: 6px;
+  transition: opacity 0.15s ease;
+}
+.btn-primary:hover    { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-muted);
+  border: 0.5px solid var(--border);
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.btn-ghost:hover { color: var(--fg); border-color: var(--fg); }
+
+.login-error {
+  background: rgba(255, 91, 80, 0.08);
+  border: 0.5px solid var(--error);
+  color: var(--error);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+/* ── Dashboard ─────────────────────────────────────────────────────────── */
+
+.dash-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 0.5px solid var(--border);
+}
+.dash-brand {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.dash-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.dash-user {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.dash-main {
+  flex: 1;
+  padding: 48px 24px;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.dash-title {
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.dash-text {
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin-bottom: 32px;
+  max-width: 60ch;
+}
+
+.dash-list {
+  list-style: none;
+  border-top: 0.5px solid var(--border);
+}
+.dash-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 12px;
+}
+.dash-list .k {
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dash-list .v { color: var(--fg); }
+
+.dash-footer {
+  padding: 12px 24px;
+  border-top: 0.5px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
