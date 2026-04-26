@@ -492,3 +492,32 @@ a.stat-card:hover { border-color: var(--fg); background: var(--surface-2); }
   color: var(--fg-muted);
   letter-spacing: 0.04em;
 }
+
+/* ── Audit details (expanded row) ──────────────────────────────────────── */
+
+.audit-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+}
+.audit-details strong {
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 500;
+}
+.audit-pre {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  padding: 12px;
+  margin-top: 4px;
+  font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}

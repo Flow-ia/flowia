@@ -74,3 +74,22 @@ export async function anonymizeClient(id) {
 export async function getGlobalStats() {
   return await apiJson('/api/admin/stats');
 }
+
+// ── Audit log ───────────────────────────────────────────────────────────────
+export async function listAudit({ action = '', adminId = '', targetType = '', status = '', search = '', since = '', until = '', limit = 100, offset = 0 } = {}) {
+  const qs = new URLSearchParams();
+  if (action)     qs.set('action',     action);
+  if (adminId)    qs.set('adminId',    adminId);
+  if (targetType) qs.set('targetType', targetType);
+  if (status)     qs.set('status',     status);
+  if (search)     qs.set('search',     search);
+  if (since)      qs.set('since',      since);
+  if (until)      qs.set('until',      until);
+  qs.set('limit',  String(limit));
+  qs.set('offset', String(offset));
+  return await apiJson(`/api/admin/audit?${qs.toString()}`);
+}
+
+export async function listAuditActions() {
+  return await apiJson('/api/admin/audit/actions');
+}

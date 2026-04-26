@@ -6,6 +6,7 @@ import MerchantsListPage from './pages/MerchantsListPage.jsx';
 import MerchantDetailPage from './pages/MerchantDetailPage.jsx';
 import ClientsListPage from './pages/ClientsListPage.jsx';
 import ClientDetailPage from './pages/ClientDetailPage.jsx';
+import AuditPage from './pages/AuditPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import './styles/global.css';
 
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/merchants/:id"      element={<Protected><MerchantDetailPage /></Protected>} />
         <Route path="/clients"            element={<Protected><ClientsListPage /></Protected>} />
         <Route path="/clients/:id"        element={<Protected><ClientDetailPage /></Protected>} />
+        <Route path="/audit"              element={<Protected><AuditPage /></Protected>} />
         <Route path="/settings"           element={<Protected><SettingsPage /></Protected>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
