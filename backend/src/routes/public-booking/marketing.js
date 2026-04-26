@@ -118,6 +118,118 @@ module.exports = function attachMarketingRoutes(router) {
     }
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Commit 27 — flow en 2 étapes pour la page React /unsubscribe.
+  // Évite les désinscriptions accidentelles dues au prefetch Gmail/bots/clic
+  // involontaire. Le 1-clic existant (GET /unsubscribe/:token) reste intact
+  // pour le header List-Unsubscribe RFC 8058 (Gmail/Apple bouton intégré).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // GET /api/pub/unsubscribe-preview/:token → lecture seule (PAS d'UPDATE).
+  // Renvoie les infos client pour que la page React affiche un écran de
+  // confirmation avec le nom du client + nom commerce. Ne loggue pas dans
+  // marketing_optout_log (la désinscription n'a pas encore eu lieu).
+  router.get('/unsubscribe-preview/:token', async (req, res) => {
+    const token = String(req.params.token || '').trim();
+    if (!UUID_RE.test(token)) {
+      return res.status(404).json({ ok: false, error: 'invalid_token' });
+    }
+    try {
+      const { rows: caRows } = await pool.query(
+        `SELECT ca.email, ca.first_name, ca.marketing_opt_in, u.business_name, u.email AS business_email
+           FROM client_accounts ca
+           LEFT JOIN users u ON u.id = ca.user_id
+          WHERE ca.unsubscribe_token = $1 LIMIT 1`, [token]
+      );
+      const { rows: gcRows } = await pool.query(
+        `SELECT email, first_name, marketing_opt_in
+           FROM global_clients WHERE unsubscribe_token = $1 LIMIT 1`, [token]
+      );
+      const ca = caRows[0];
+      const gc = gcRows[0];
+      if (!ca && !gc) return res.status(404).json({ ok: false, error: 'invalid_token' });
+
+      // already_unsubscribed = TRUE si toutes les lignes trouvées sont déjà à FALSE
+      const optInValues = [];
+      if (ca) optInValues.push(ca.marketing_opt_in);
+      if (gc) optInValues.push(gc.marketing_opt_in);
+      const alreadyUnsubscribed = optInValues.length > 0 && optInValues.every(v => v === false);
+
+      return res.json({
+        ok: true,
+        email: ca?.email || gc?.email || null,
+        first_name: ca?.first_name || gc?.first_name || null,
+        business_name: ca?.business_name || null,
+        business_email: ca?.business_email || null,
+        already_unsubscribed: alreadyUnsubscribed,
+      });
+    } catch (e) {
+      console.error('[UNSUB PREVIEW]', e.message);
+      return res.status(500).json({ ok: false, error: 'server_error' });
+    }
+  });
+
+  // POST /api/pub/unsubscribe-confirm/:token → confirmation explicite après
+  // page de preview. Effectue le UPDATE + log audit avec source='public_form'
+  // (différent de 'email_link' qui correspond au 1-clic GET legacy).
+  // Pas de body requis : juste le token en URL = preuve d'identité.
+  router.post('/unsubscribe-confirm/:token', async (req, res) => {
+    const token = String(req.params.token || '').trim();
+    if (!UUID_RE.test(token)) {
+      return res.status(404).json({ ok: false, error: 'invalid_token' });
+    }
+    try {
+      const { rows: caRows } = await pool.query(
+        `SELECT ca.id, ca.user_id, ca.email, ca.marketing_opt_in, u.business_name
+           FROM client_accounts ca
+           LEFT JOIN users u ON u.id = ca.user_id
+          WHERE ca.unsubscribe_token = $1 LIMIT 1`, [token]
+      );
+      const { rows: gcRows } = await pool.query(
+        `SELECT id, email, marketing_opt_in
+           FROM global_clients WHERE unsubscribe_token = $1 LIMIT 1`, [token]
+      );
+      if (!caRows[0] && !gcRows[0]) {
+        return res.status(404).json({ ok: false, error: 'invalid_token' });
+      }
+
+      const wasOptedIn = (caRows[0]?.marketing_opt_in === true) || (gcRows[0]?.marketing_opt_in === true);
+
+      await pool.query(
+        `UPDATE client_accounts SET marketing_opt_in = FALSE, marketing_opt_in_at = NULL
+           WHERE unsubscribe_token = $1`, [token]
+      );
+      await pool.query(
+        `UPDATE global_clients SET marketing_opt_in = FALSE, marketing_opt_in_at = NULL
+           WHERE unsubscribe_token = $1`, [token]
+      );
+
+      // Audit : on log uniquement si l'opt-in était TRUE avant (sinon c'est
+      // un re-clic sur un déjà-désinscrit, pas une nouvelle désinscription).
+      if (wasOptedIn) {
+        await logOptout({
+          userId: caRows[0]?.user_id,
+          clientAccountId: caRows[0]?.id,
+          globalClientId: gcRows[0]?.id,
+          email: caRows[0]?.email || gcRows[0]?.email || null,
+          source: 'public_form',
+          ip: req.ip || req.headers['x-forwarded-for'] || null,
+          userAgent: req.get('user-agent') || null,
+        });
+      }
+
+      return res.json({
+        ok: true,
+        already_unsubscribed: !wasOptedIn,
+        email: caRows[0]?.email || gcRows[0]?.email || null,
+        business_name: caRows[0]?.business_name || null,
+      });
+    } catch (e) {
+      console.error('[UNSUB CONFIRM]', e.message);
+      return res.status(500).json({ ok: false, error: 'server_error' });
+    }
+  });
+
   // GET /api/pub/opt-in/:token → inscription 1-clic (pendant de /unsubscribe)
   router.get('/opt-in/:token', async (req, res) => {
     const token = String(req.params.token || '').trim();

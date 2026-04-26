@@ -100,8 +100,14 @@ function marketingFooterText({ token, businessEmail }) {
 }
 
 // Header List-Unsubscribe (RFC 2369 + RFC 8058 1-clic).
+// Commit 27 — pointe TOUJOURS vers le backend (GET /api/pub/unsubscribe/:token)
+// pour préserver le 1-clic Gmail/Apple Mail RFC 8058. La page React
+// /unsubscribe?token=... fait 2 étapes (preview + confirm) ce qui n'est PAS
+// compatible avec un POST 1-clic d'un mail client. On dissocie donc :
+//   - footer email cliquable (visible client) → page React 2 étapes (UX)
+//   - header List-Unsubscribe (Gmail bouton) → backend 1-clic (délivrabilité)
 function unsubscribeHeaders({ token, businessEmail, refId }) {
-  const url = unsubscribeUrl(token);
+  const url = backendUnsubscribeUrl(token);
   const mailto = businessEmail || process.env.SENDER_EMAIL || null;
   const parts = [];
   if (url) parts.push(`<${url}>`);

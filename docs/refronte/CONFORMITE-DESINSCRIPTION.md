@@ -9,21 +9,39 @@
 - **CNIL délibération 2020-091** — opt-in préalable pour la prospection commerciale + lien de désabonnement obligatoire dans chaque message
 - **Loi Informatique et Libertés art. 38** — droit d'opposition
 
-## Architecture
+## Architecture en 2 chemins distincts (commit 27)
 
-1. **Token UUID** stocké sur `client_accounts.unsubscribe_token` et `global_clients.unsubscribe_token` (généré à la création).
-2. **Lien dans chaque message marketing** :
-   - Email : footer HTML via `backend/src/utils/unsubscribe.js → unsubscribeEmailHtml(token)`
-   - SMS : ligne `Stop: <url>` via `backend/src/utils/unsubscribe.js → appendUnsubscribeSms(msg, token)`
-   - URL : `${FRONTEND_PUBLIC_URL}/unsubscribe?token=<uuid>` (page React FDS-2026) avec fallback `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe/:token` (HTML inline) si la variable n'est pas définie.
-3. **Page React `/unsubscribe?token=...`** (`frontend/src/pages/unsubscribe/Unsubscribe.jsx`) — au mount, appelle `GET /api/pub/unsubscribe/:token` avec `Accept: application/json`. Affiche le résultat (succès, déjà désinscrit, lien invalide, erreur). Bouton « Me réinscrire aux offres » qui appelle `GET /api/pub/opt-in/:token`.
-4. **Endpoint backend `GET /api/pub/unsubscribe/:token`** (`backend/src/routes/public-booking/marketing.js`) :
-   - Valide le token (UUID v4)
-   - `UPDATE client_accounts SET marketing_opt_in=FALSE, marketing_opt_in_at=NULL` puis idem `global_clients`
-   - `INSERT marketing_optout_log` (audit, voir ci-dessous)
-   - Retourne JSON ou HTML selon `Accept` header (rétrocompat anciens emails)
-   - Effet immédiat, pas d'authentification requise (token = preuve d'identité)
-5. **Endpoint backend `GET /api/pub/opt-in/:token`** — pendant pour le réabonnement 1-clic.
+Pour réconcilier deux exigences contradictoires — **éviter les désinscriptions accidentelles** (prefetch Gmail, bots, clic involontaire) et **préserver le 1-clic Gmail/Apple Mail RFC 8058** (délivrabilité) — on émet **deux URLs distinctes** par message marketing :
+
+| Chemin | Audience | URL émise | Comportement |
+|---|---|---|---|
+| **1. Lien email cliquable** (footer HTML) | Client humain qui clique le lien dans l'email | `${FRONTEND_PUBLIC_URL}/unsubscribe?token=...` (page React) ou fallback `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe/:token` | **2 étapes** : page de confirmation avec aperçu des avantages perdus + bouton « Confirmer ». Source `public_form` dans le log. |
+| **2. Header `List-Unsubscribe`** (RFC 2369 + 8058) | Bouton « Se désabonner » intégré dans Gmail/Apple Mail à côté de l'expéditeur | TOUJOURS `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe/:token` (jamais frontend) | **1-clic immédiat** : flip + log `email_link`. Compatible POST One-Click Gmail. Préserve la délivrabilité. |
+
+**Ce sont deux URLs volontairement différentes selon le contexte d'usage.** Côté backend, `unsubscribeHeaders()` force l'URL backend ; `unsubscribeUrl()` (utilisé dans les footers HTML) privilégie la frontend.
+
+## Endpoints backend
+
+| Méthode | Route | Effet | Source log | Usage |
+|---|---|---|---|---|
+| GET | `/api/pub/unsubscribe-preview/:token` | Lecture seule (aucun UPDATE, aucun log) | – | Page React au mount |
+| POST | `/api/pub/unsubscribe-confirm/:token` | UPDATE + log (si pas déjà désinscrit) | `public_form` | Bouton « Confirmer » de la page React |
+| GET | `/api/pub/unsubscribe/:token` | UPDATE + log immédiat (1-clic) | `email_link` (default) ou `?source=sms_link` | Header List-Unsubscribe + anciens emails (rétrocompat) |
+| GET | `/api/pub/opt-in/:token` | UPDATE marketing_opt_in=TRUE | – | Réabonnement 1-clic |
+
+**Token UUID** stocké sur `client_accounts.unsubscribe_token` et `global_clients.unsubscribe_token` (généré à la création, backfillé si NULL — cf. `backend/src/db/index.js:1218`).
+
+## Page React `/unsubscribe?token=...` (5 états)
+
+`frontend/src/pages/unsubscribe/Unsubscribe.jsx` — design FDS-2026 (card 480px, border 0.5px, fw 500, icônes Lucide).
+
+1. **LOADING** — spinner pendant `GET /unsubscribe-preview/:token`
+2. **CONFIRM** — `already_unsubscribed=false` : icône ambre + bloc « Vous perdrez vos avantages exclusifs » (anniversaire / parrainage / fidélité) + 2 boutons « Annuler » et « Confirmer le désabonnement »
+3. **ALREADY** — `already_unsubscribed=true` : icône bleue + message « Vous êtes déjà désinscrit » + bouton « Me réinscrire »
+4. **SUCCESS** — après POST réussi : icône verte + email confirmé + boutons « Me réinscrire maintenant » et « Retour à l'accueil »
+5. **INVALID** — token KO ou erreur réseau : icône ambre + bouton mailto vers le commerçant si `business_email` connu
+
+Le bouton « Me réinscrire » appelle `GET /api/pub/opt-in/:token` (route 1-clic existante, inchangée).
 
 ## Table d'audit `marketing_optout_log`
 
