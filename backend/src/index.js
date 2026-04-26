@@ -107,14 +107,23 @@ function startServer() {
     }
     return /^https:\/\/flowia(-[a-z0-9-]+)?\.vercel\.app$/i;
   })();
-  app.use(cors({
+  // CORS merchant — INCHANGÉ pour tous les paths sauf /api/admin/*.
+  // Le namespace admin a sa propre whitelist (admin.haircoifflille.fr +
+  // localhost:5174) appliquée par le router admin lui-même. Bypasser le CORS
+  // merchant ici évite que la regex Vercel preview merchant n'autorise par
+  // accident un sous-domaine sur l'admin, et inversement.
+  const merchantCors = cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.has(origin)) return callback(null, true);
       if (previewRegex.test(origin)) return callback(null, true);
       callback(new Error('CORS not allowed: ' + origin));
     },
     credentials: true,
-  }));
+  });
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/admin')) return next();
+    return merchantCors(req, res, next);
+  });
 
   // Audit Y : security headers. Le backend sert du JSON uniquement (pas de
   // HTML), CSP détaillée dans `frontend/vercel.json`. Ici on applique les
@@ -289,6 +298,11 @@ function startServer() {
 
   // Refonte FDS-2026 commit 2 : préférences compte (mode tablette, etc.).
   app.use('/api/user-settings',  apiLimiter,  require('./routes/user-settings'));
+
+  // ── Admin panel (commit #1b admin) ───────────────────────────────────────
+  // Namespace totalement isolé : CORS dédié dans le router, JWT secrets
+  // séparés (ADMIN_JWT_SECRET / ADMIN_JWT_REFRESH_SECRET), audit log obligatoire.
+  app.use('/api/admin', require('./routes/admin'));
 
   // ── Health ───────────────────────────────────────────────────────────────
   app.get('/api/health', (req, res) => {
