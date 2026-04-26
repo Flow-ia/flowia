@@ -125,7 +125,7 @@ export function SideCard({ th, slug, business, onReserve }) {
 
   return (
     <div className="bk-do bk-sb"
-      style={{ width:290, flexShrink:0, paddingTop:32,
+      style={{ width:290, flexShrink:0, paddingTop:16,
         position:'sticky', top:80, alignSelf:'flex-start' }}>
       <div style={{ background:th.sidebarBg, border: `0.5px solid ${th.border}`,
         borderRadius:16, overflow:'hidden' }}>

@@ -15,7 +15,7 @@ export function Step1Home({
     <div style={{ animation:'fadeIn .2s ease' }}>
 
       {/* Infos commerçant mobile */}
-      <div className="bk-mo" style={{ marginBottom:24, padding:20,
+      <div className="bk-mo" style={{ marginBottom:16, padding:20,
         background:th.card, borderRadius:16, border: `0.5px solid ${th.border}` }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
           <div style={{ width:56, height:56, borderRadius:12, overflow:'hidden', flexShrink:0,
@@ -72,7 +72,7 @@ export function Step1Home({
       </div>
 
       {/* ── SECTION PRESTATIONS ── */}
-      <section id="section-prestations" style={{ marginBottom:40 }}>
+      <section id="section-prestations" style={{ marginBottom:24 }}>
         <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
           margin:'0 0 20px', letterSpacing:'-0.02em' }}>Nos prestations</h2>
         {services.length === 0 ? (
@@ -95,7 +95,7 @@ export function Step1Home({
       </section>
 
       {/* ── SECTION ÉQUIPE ── */}
-      <section id="section-equipe" style={{ marginBottom:40 }}>
+      <section id="section-equipe" style={{ marginBottom:24 }}>
         <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
           margin:'0 0 16px', letterSpacing:'-0.02em' }}>Équipe</h2>
         <div className="bk-emp-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
@@ -148,7 +148,7 @@ export function Step1Home({
 
       {/* ── SECTION COMMENTAIRES Google ── */}
       {business?.google_business_url && (
-        <section id="section-avis" style={{ marginBottom:40 }}>
+        <section id="section-avis" style={{ marginBottom:24 }}>
           <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
             margin:'0 0 16px', letterSpacing:'-0.02em' }}>Commentaires</h2>
 
@@ -277,7 +277,7 @@ export function Step1Home({
 
       {/* ── SECTION PHOTOS (en bas de la section avis) ── */}
       {business?.cover_urls?.length > 0 && (
-        <section id="section-photos" style={{ marginBottom:40 }}>
+        <section id="section-photos" style={{ marginBottom:24 }}>
           <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
             margin:'0 0 16px', letterSpacing:'-0.02em' }}>Photos</h2>
           <div style={{ display:'grid',
@@ -296,7 +296,7 @@ export function Step1Home({
       )}
 
       {/* ── SECTION ADRESSE (deplacee en bas : prestations + equipe prioritaires) ── */}
-      <section id="section-adresse" style={{ marginBottom:40 }}>
+      <section id="section-adresse" style={{ marginBottom:24 }}>
         <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
           margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
 

@@ -789,7 +789,7 @@ export default function BookingPage({ slug }) {
         display:'flex', gap:32, alignItems:'flex-start' }} className="bk-2c">
 
         {/* ── COLONNE GAUCHE ── */}
-        <div style={{ flex:'1 1 0%', minWidth:0, paddingTop:32, width:'100%' }}>
+        <div style={{ flex:'1 1 0%', minWidth:0, paddingTop:16, width:'100%' }}>
 
           {/* Panneau auth */}
           {showAuthPanel && (
