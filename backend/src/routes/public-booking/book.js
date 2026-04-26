@@ -338,8 +338,9 @@ module.exports = function attachBookRoute(router) {
         `INSERT INTO appointments
            (user_id, service_id, employee_id, client_id, client_name, client_email,
             client_phone, date, start_time, end_time, duration_minutes, notes, status,
-            total_amount, original_amount, promo_code_id, promo_code, discount_amount)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17
+            total_amount, original_amount, promo_code_id, promo_code, discount_amount,
+            source, created_by_employee_id)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL
           WHERE NOT EXISTS (
             SELECT 1 FROM appointments
              WHERE user_id=$1 AND employee_id=$3 AND date=$8
@@ -351,7 +352,7 @@ module.exports = function attachBookRoute(router) {
            TO_CHAR(date, 'YYYY-MM-DD') as date,
            TO_CHAR(start_time, 'HH24:MI') as start_time,
            TO_CHAR(end_time,   'HH24:MI') as end_time,
-           duration_minutes, status, notes, created_at,
+           duration_minutes, status, notes, created_at, source,
            total_amount, original_amount, promo_code_id, promo_code, discount_amount`,
         [userId, service_id, finalEmpId, clientId, client_name, client_email||null,
          clientPhoneE164, date, start_time, end_time, duration, notes||null,
@@ -533,10 +534,13 @@ module.exports = function attachBookRoute(router) {
       appt.referral_skip_reason  = referralCtx ? null : (referralSkipReason || null);
       res.status(201).json(appt);
 
-      // Notification in-app + push au commerçant (non-bloquant)
-      notifyNewAppointment(userId, { ...appt, service_name: svcName }).catch(err =>
-        console.warn('[push new appt]', err.message)
-      );
+      // Notification in-app + push + email transactionnel au commerçant
+      // (commit 25 : email ajouté). Non-bloquant.
+      notifyNewAppointment(
+        userId,
+        { ...appt, service_name: svcName },
+        { source: 'public', withEmail: true }
+      ).catch(err => console.warn('[notify new appt]', err.message));
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 };

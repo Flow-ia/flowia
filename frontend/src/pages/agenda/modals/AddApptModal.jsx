@@ -18,6 +18,9 @@ export default function AddApptModal({ employees, services, selectedDate, onSave
   const [cart, setCart] = useState([]);
   const [customDuration, setCustomDuration] = useState('');
   const [saving, setSaving] = useState(false);
+  // Commit 25 — modale de confirmation RDV passé. Friction supplémentaire
+  // pour éviter les saisies erronées (ex: walk-in oublié vs erreur de doigt).
+  const [confirmPast, setConfirmPast] = useState(false);
 
   const actSvcs = (services || []).filter((s) => s.is_active !== false);
   const actEmps = (employees || []).filter((e) => e.is_active !== false);
@@ -68,8 +71,13 @@ export default function AddApptModal({ employees, services, selectedDate, onSave
       return n;
     });
 
-  const handleSave = async () => {
-    if (!client.name.trim() || !client.date || !client.start_time) return;
+  // Commit 25 — détecte un RDV daté avant aujourd'hui (cas walk-in
+  // a posteriori OU erreur de saisie). Compare en local pour éviter les
+  // pièges TZ : svLocal(today) en YYYY-MM-DD + comparaison string.
+  const todayStr = svLocal(new Date());
+  const isPast = client.date && client.date < todayStr;
+
+  const doSave = async () => {
     setSaving(true);
     try {
       await onSave({
@@ -91,6 +99,12 @@ export default function AddApptModal({ employees, services, selectedDate, onSave
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = () => {
+    if (!client.name.trim() || !client.date || !client.start_time) return;
+    if (isPast) { setConfirmPast(true); return; }
+    doSave();
   };
 
   const inputStyle = {
@@ -588,6 +602,42 @@ export default function AddApptModal({ employees, services, selectedDate, onSave
           </p>
         )}
       </div>
+
+      {/* Confirmation RDV daté avant aujourd'hui — commit 25. */}
+      {confirmPast && (
+        <Modal open={true} onClose={() => setConfirmPast(false)} title="RDV dans le passé" theme={t}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 10,
+                          background: '#fffbeb', border: '0.5px solid #fde68a',
+                          borderLeft: '2px solid #f59e0b' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400e"
+                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}>
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500, color: '#92400e', margin: 0 }}>
+                  RDV dans le passé
+                </p>
+                <p style={{ fontSize: 12, color: '#92400e', margin: '6px 0 0', lineHeight: 1.5 }}>
+                  Vous êtes sur le point de créer un RDV pour le {client.date} qui est antérieur à aujourd'hui.
+                  Cas d'usage : enregistrement a posteriori d'un walk-in.
+                </p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="secondary" fullWidth onClick={() => setConfirmPast(false)}>
+                Annuler
+              </Button>
+              <Button fullWidth disabled={saving}
+                      onClick={() => { setConfirmPast(false); doSave(); }}>
+                {saving ? 'Enregistrement…' : 'Oui, créer ce RDV'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Modal>
   );
 }

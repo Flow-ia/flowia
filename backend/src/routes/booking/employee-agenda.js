@@ -23,6 +23,7 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
         a.client_name, a.client_email, a.client_phone, a.status, a.notes, a.cancel_reason,
         a.duration_minutes, a.total_duration, a.total_amount, a.service_id, a.employee_id, a.paid, a.paid_method,
         a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
+        a.source, a.created_by_employee_id,
         bs.name as service_name, bs.color as service_color, bs.price as service_price,
         ru.id as referral_use_id, ru.status as referral_status,
         rc.code as referral_code, rc.owner_client_email as referral_parrain_email,
@@ -116,15 +117,21 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
       const firstItem = (cartItems && cartItems.length > 0) ? cartItems[0] : null;
       const mainServiceId = firstItem?.service_id || null;
 
+      // Commit 25 — traçabilité. Si req.employee défini (header x-employee-pin
+      // valide via employeePinOptional), source='employee' et created_by =
+      // req.employee.id. Sinon (cas rare : merchant qui appelle cette route
+      // direct), source='admin' pour rester cohérent.
+      const trackedSource = req.employee ? 'employee' : 'admin';
+      const trackedBy     = req.employee ? req.employee.id : null;
       const { rows } = await pool.query(
         `INSERT INTO appointments
-           (user_id,service_id,employee_id,client_name,client_email,client_phone,date,start_time,end_time,duration_minutes,total_duration,total_amount,notes,status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'confirmed')
+           (user_id,service_id,employee_id,client_name,client_email,client_phone,date,start_time,end_time,duration_minutes,total_duration,total_amount,notes,status,source,created_by_employee_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'confirmed',$14,$15)
          RETURNING id,TO_CHAR(date,'YYYY-MM-DD') as date,
            TO_CHAR(start_time,'HH24:MI') as start_time,TO_CHAR(end_time,'HH24:MI') as end_time,
-           client_name,client_email,client_phone,status,notes,duration_minutes,total_duration,total_amount,service_id,employee_id,created_at`,
+           client_name,client_email,client_phone,status,notes,duration_minutes,total_duration,total_amount,service_id,employee_id,created_at,source,created_by_employee_id`,
         [req.user.userId, mainServiceId, employee_id, client_name, client_email||null, client_phone||null,
-         date, start_time, end_time, duration, duration, totalAmount, notes||null]
+         date, start_time, end_time, duration, duration, totalAmount, notes||null, trackedSource, trackedBy]
       );
       const appt = rows[0];
 
@@ -193,6 +200,26 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
           }
         }
       } catch(linkErr) { console.warn('[link client emp]', linkErr.message); }
+
+      // Commit 25 — notification commerçant si RDV créé par un employé
+      // tablette (in-app + push, PAS d'email pour éviter le spam si beaucoup
+      // de walk-ins). Le commerçant voit dans la cloche que l'employé
+      // {created_by_employee_name} a créé un RDV.
+      if (req.employee) {
+        try {
+          const empNameLookup = req.employee.name;
+          const { notifyNewAppointment } = require('../../utils/push');
+          notifyNewAppointment(
+            req.user.userId,
+            {
+              ...appt,
+              service_name: cartItems && cartItems[0]?.service_name || null,
+              created_by_employee_name: empNameLookup,
+            },
+            { source: 'employee', withEmail: false }
+          ).catch(err => console.warn('[notify new appt employee]', err.message));
+        } catch (e) { console.warn('[notify new appt employee]', e.message); }
+      }
 
       // Email confirmation si email fourni
       if (client_email) {

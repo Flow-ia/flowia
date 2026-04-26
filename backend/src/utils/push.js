@@ -150,14 +150,27 @@ function apptDateStr(appt) {
   return null;
 }
 
-async function notifyNewAppointment(userId, appt) {
+async function notifyNewAppointment(userId, appt, options = {}) {
+  // Commit 25 — options.source : 'public' | 'admin' | 'employee' (défaut
+  // 'public' pour rétro-compat avec le seul appelant existant). Les types
+  // in-app sont distincts pour permettre de filtrer côté front.
+  // options.withEmail : true → envoie l'email transactionnel commerçant
+  // (Brevo HTTPS, hors quota marketing). Default false.
+  const source = options.source || 'public';
+  const withEmail = options.withEmail === true;
   const timeStr   = String(appt.start_time || '').substring(0, 5);
   const deepLink  = apptDeepLink(appt);
   const empName   = await resolveEmployeeName(appt);
   const dateStr   = apptDateStr(appt);
-  // Titre in-app sans emoji (FDS-2026 : l'UI porte l'icône via I.Calendar).
-  // Titre compact, le rendu affiche employé/date/heure en grand via `data`.
-  const appTitle = `Nouveau rendez-vous — ${appt.client_name || 'Client'}`;
+  // Type in-app dépend de la source : 'new_appointment_public' /
+  // 'new_appointment_employee' / 'new_appointment_admin' (le dernier est
+  // rare — l'admin sait ce qu'il fait, on n'envoie pas, voir routes).
+  const inappType = source === 'employee' ? 'new_appointment_employee'
+                  : source === 'admin'    ? 'new_appointment_admin'
+                  : 'new_appointment_public';
+  const appTitle = source === 'employee'
+    ? `Nouveau RDV (employé) — ${appt.client_name || 'Client'}`
+    : `Nouveau rendez-vous — ${appt.client_name || 'Client'}`;
   const appBody  = `${appt.service_name || 'RDV'}${empName ? ` · ${empName}` : ''}`;
   // Push (lock-screen OS, hors périmètre FDS-2026) — emoji conservé pour repérage.
   const pushTitle = '📅 Nouveau rendez-vous';
@@ -166,19 +179,22 @@ async function notifyNewAppointment(userId, appt) {
   const data = {
     appointment_id: appt.id,
     url: deepLink,
+    source,
     employee_id:    appt.employee_id || null,
     employee_name:  empName,
+    created_by_employee_id:   appt.created_by_employee_id || null,
+    created_by_employee_name: appt.created_by_employee_name || null,
     client_name:    appt.client_name || null,
     service_name:   appt.service_name || null,
     appt_date:      dateStr,
     start_time:     timeStr || null,
   };
 
-  await createAppNotification(userId, { type: 'new_appointment', title: appTitle, body: appBody, data });
+  await createAppNotification(userId, { type: inappType, title: appTitle, body: appBody, data });
 
   try {
     await sendPushToUser(userId, {
-      type: 'new_appointment',
+      type: inappType,
       title: pushTitle,
       body:  pushBody,
       icon: '/icon-192.png',
@@ -187,6 +203,41 @@ async function notifyNewAppointment(userId, appt) {
       sound: 'new_appointment',
     });
   } catch {}
+
+  if (withEmail) {
+    try {
+      const { rows: u } = await pool.query(
+        'SELECT email, business_name FROM users WHERE id=$1', [userId]
+      );
+      const merchantEmail = u[0]?.email;
+      if (!merchantEmail) return;
+      const { sendNewAppointmentMerchant } = require('./email');
+      const FRONT = process.env.FRONTEND_URL || '';
+      const agendaUrl = (FRONT && dateStr && appt.id)
+        ? `${FRONT}/agenda?date=${dateStr}&appt=${encodeURIComponent(appt.id)}`
+        : null;
+      await sendNewAppointmentMerchant({
+        to:               merchantEmail,
+        businessName:     u[0].business_name || 'Votre commerce',
+        clientName:       appt.client_name,
+        clientEmail:      appt.client_email,
+        clientPhone:      appt.client_phone,
+        serviceName:      appt.service_name || null,
+        employeeName:     empName,
+        date:             dateStr,
+        startTime:        timeStr,
+        endTime:          appt.end_time ? String(appt.end_time).substring(0, 5) : null,
+        durationMinutes:  appt.duration_minutes || null,
+        price:            appt.total_amount ?? appt.original_amount ?? null,
+        appointmentId:    appt.id,
+        agendaUrl,
+        source,
+      });
+    } catch (e) {
+      // Non bloquant : la résa a été créée, l'email est secondaire.
+      console.warn('[notify new appt email]', e.message);
+    }
+  }
 }
 
 // ── Notifier : rappel RDV ────────────────────────────────────────────────────

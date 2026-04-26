@@ -58,6 +58,24 @@ export default function ApptListCard({ a, onOpen, isDark, t }) {
               >
                 {st.label}
               </span>
+              {/* Badges source (commit 25). 'admin' = standard, pas de badge.
+                  'public' = bleu pastel, 'employee' = vert pastel. */}
+              {a.source === 'public' && (
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 99,
+                  background: '#eff6ff', color: '#1e40af', fontWeight: 500,
+                }}>
+                  En ligne
+                </span>
+              )}
+              {a.source === 'employee' && (
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 99,
+                  background: '#f0fdf4', color: '#065f46', fontWeight: 500,
+                }}>
+                  Tablette
+                </span>
+              )}
             </div>
             <p style={{ fontWeight: 500, fontSize: 13, margin: '4px 0 0', color: t.text }}>
               {a.client_name}

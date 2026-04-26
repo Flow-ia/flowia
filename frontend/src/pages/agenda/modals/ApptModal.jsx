@@ -587,6 +587,25 @@ export default function ApptModal({
                 </p>
               </div>
             )}
+
+            {/* Source du RDV (commit 25) — info discrète en bas de la modale.
+                Lookup nom employé via prop employees pour la source 'employee'. */}
+            {appt.source && (() => {
+              const lookup = (employees || []).find(e => e.id === appt.created_by_employee_id);
+              const empName = lookup?.name || appt.created_by_employee_name || 'un employé';
+              const label =
+                appt.source === 'public'    ? 'Réservé en ligne par le client'
+              : appt.source === 'admin'     ? "Créé par l'administrateur"
+              : appt.source === 'employee'  ? `Créé par ${empName} (tablette employé)`
+              : appt.source === 'migration' ? 'Antérieur à la traçabilité'
+              : null;
+              if (!label) return null;
+              return (
+                <p style={{ fontSize: 11, color: '#6b7280', margin: '12px 0 0', fontStyle: 'italic' }}>
+                  {label}
+                </p>
+              );
+            })()}
           </div>
         )}
 

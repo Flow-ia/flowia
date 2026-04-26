@@ -19,6 +19,7 @@ module.exports = function attachAppointmentsRoutes(router) {
         a.duration_minutes, a.total_duration, a.total_amount, a.status, a.notes, a.cancel_reason,
         a.paid, a.paid_method, a.transaction_id,
         a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
+        a.source, a.created_by_employee_id,
         a.created_at, a.updated_at,
         bs.name as service_name, bs.color as service_color, bs.price as service_price, bs.duration_minutes as svc_duration,
         e.name as employee_name, e.avatar_color as employee_color, e.can_cancel, e.can_modify, e.can_encash,
@@ -111,15 +112,17 @@ module.exports = function attachAppointmentsRoutes(router) {
         }
       }
 
+      // Commit 25 — source='admin' : créé par le commerçant en mode admin
+      // (req.user.userId, JWT scope merchant). created_by_employee_id NULL.
       const { rows } = await pool.query(
-        `INSERT INTO appointments (user_id, service_id, employee_id, client_name, client_email, client_phone, date, start_time, end_time, duration_minutes, notes, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'confirmed')
+        `INSERT INTO appointments (user_id, service_id, employee_id, client_name, client_email, client_phone, date, start_time, end_time, duration_minutes, notes, status, source, created_by_employee_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'confirmed','admin',NULL)
          RETURNING id, user_id, service_id, employee_id,
            client_name, client_email, client_phone,
            TO_CHAR(date, 'YYYY-MM-DD') as date,
            TO_CHAR(start_time, 'HH24:MI') as start_time,
            TO_CHAR(end_time,   'HH24:MI') as end_time,
-           duration_minutes, status, notes, cancel_reason, created_at`,
+           duration_minutes, status, notes, cancel_reason, created_at, source`,
         [req.user.userId, service_id || null, employee_id || null,
          client_name, client_email || null, client_phone || null,
          date, start_time, end_time, duration, notes || null]

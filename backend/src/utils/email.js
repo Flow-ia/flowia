@@ -1004,6 +1004,75 @@ async function sendOptInInvite({ to, clientName, businessName, optInToken, busin
   return true;
 }
 
+// ── Email transactionnel commerçant : nouvelle réservation publique ─────
+// Commit 25 — alerte le commerçant à chaque RDV créé via /book/:slug. Hors
+// quota Brevo 300/j (transactionnel). Deep-link agenda?date=&appt= pour
+// ouvrir directement la modale du RDV.
+async function sendNewAppointmentMerchant({
+  to, businessName, clientName, clientEmail, clientPhone,
+  serviceName, employeeName, date, startTime, endTime, durationMinutes,
+  price, appointmentId, agendaUrl, source = 'public',
+}) {
+  const refId = String(appointmentId || '').substring(0, 8).toUpperCase();
+  const [dy, dm, dd] = String(date || '').split('-').map(Number);
+  const dateObj = (dy && dm && dd) ? new Date(dy, dm - 1, dd) : new Date();
+  const dateFr = dateObj.toLocaleDateString('fr-FR',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateCap = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
+  const sourceLabel = source === 'public'   ? 'Réservation en ligne'
+                    : source === 'employee' ? 'Créé par un employé en boutique'
+                    : 'Nouveau RDV';
+  const subject = `Nouvelle réservation : ${clientName || 'Client'} le ${dateCap} à ${startTime || ''}`;
+
+  const text = [
+    `Bonjour ${businessName || ''},`, '',
+    `${sourceLabel} :`, '',
+    `Client : ${clientName || '—'}`,
+    clientEmail ? `Email : ${clientEmail}` : '',
+    clientPhone ? `Téléphone : ${clientPhone}` : '',
+    `Date : ${dateCap}`,
+    `Heure : ${startTime || ''}${endTime ? ' - ' + endTime : ''}`,
+    serviceName ? `Service : ${serviceName}${durationMinutes ? ' · ' + durationMinutes + ' min' : ''}` : '',
+    employeeName ? `Avec : ${employeeName}` : '',
+    price != null ? `Montant : ${Number(price).toFixed(2)} €` : '',
+    '',
+    agendaUrl ? `Ouvrir l'agenda : ${agendaUrl}` : '',
+    '',
+    `Référence #${refId}`,
+  ].filter(Boolean).join('\n');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:24px 12px;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border:0.5px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+    <div style="padding:24px 28px 16px;border-bottom:0.5px solid #e5e7eb;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">${sourceLabel}</p>
+      <h1 style="margin:0;font-size:18px;font-weight:500;color:#111827;letter-spacing:-0.01em;">Nouvelle réservation</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">${dateCap} à ${startTime || ''}${endTime ? ' - ' + endTime : ''}</p>
+    </div>
+    <div style="padding:18px 28px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;color:#111827;">
+        <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Client</td><td style="padding:6px 0;font-weight:500;">${clientName || '—'}</td></tr>
+        ${clientEmail ? `<tr><td style="padding:6px 0;color:#6b7280;">Email</td><td style="padding:6px 0;">${clientEmail}</td></tr>` : ''}
+        ${clientPhone ? `<tr><td style="padding:6px 0;color:#6b7280;">Téléphone</td><td style="padding:6px 0;font-family:ui-monospace,Menlo,monospace;">${clientPhone}</td></tr>` : ''}
+        ${serviceName ? `<tr><td style="padding:6px 0;color:#6b7280;">Prestation</td><td style="padding:6px 0;">${serviceName}${durationMinutes ? ' · ' + durationMinutes + ' min' : ''}</td></tr>` : ''}
+        ${employeeName ? `<tr><td style="padding:6px 0;color:#6b7280;">Avec</td><td style="padding:6px 0;">${employeeName}</td></tr>` : ''}
+        ${price != null ? `<tr><td style="padding:6px 0;color:#6b7280;">Montant</td><td style="padding:6px 0;font-family:ui-monospace,Menlo,monospace;">${Number(price).toFixed(2)} €</td></tr>` : ''}
+      </table>
+      ${agendaUrl ? `
+      <div style="margin-top:18px;text-align:center;">
+        <a href="${agendaUrl}" style="display:inline-block;padding:11px 22px;border-radius:8px;background:#111827;color:#fff;font-size:13px;font-weight:500;text-decoration:none;">Ouvrir dans l'agenda</a>
+      </div>` : ''}
+    </div>
+    <div style="padding:12px 28px;background:#f9fafb;border-top:0.5px solid #e5e7eb;">
+      <p style="margin:0;font-size:11px;color:#9ca3af;font-family:ui-monospace,Menlo,monospace;">Référence #${refId}</p>
+    </div>
+  </div>
+</body></html>`;
+
+  return sendEmail({ to, subject, html, text });
+}
+
 module.exports = {
   sendEmail,
   sendVerificationEmail,
@@ -1020,6 +1089,7 @@ module.exports = {
   sendReferralWelcome,
   sendBirthdayPromo,
   sendOptInInvite,
+  sendNewAppointmentMerchant,
   getGlobalEmailCount,
   incrGlobalEmailCount,
   incrUserEmailCount,

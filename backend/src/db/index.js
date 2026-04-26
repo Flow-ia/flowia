@@ -1276,6 +1276,19 @@ async function initDB() {
   // Seed : une ligne user_settings par merchant existant, defaults DB appliqués.
   await runMigration(`INSERT INTO user_settings (user_id) SELECT id FROM users ON CONFLICT (user_id) DO NOTHING`);
 
+  // Commit 25 — traçabilité création RDV. Source : 'public' (booking client),
+  // 'admin' (commerçant), 'employee' (tablette PIN), 'migration' (RDV
+  // historiques antérieurs à la migration). created_by_employee_id : FK
+  // implicite vers employees.id si source='employee', NULL sinon. Pas de FK
+  // stricte pour préserver l'audit en cas de suppression d'un employé.
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS source TEXT`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS created_by_employee_id UUID`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_source ON appointments(source)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_created_by_employee_id ON appointments(created_by_employee_id)`);
+  // Marque les RDV antérieurs (NULL après migration) — un seul UPDATE,
+  // idempotent : si rerun, plus de rows à WHERE source IS NULL.
+  await runMigration(`UPDATE appointments SET source = 'migration' WHERE source IS NULL`);
+
   // Commit 24d — audit trail des modifications de fiches client par un admin
   // (PIN admin). Trace la modification de champs sensibles (birth_date qui
   // contourne l'anti-fraude rolling 330j côté client). Pas de FK sur
