@@ -17,6 +17,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { sendClientInvite } = require('../utils/email');
 const { validatePhone } = require('../utils/phone');
+const { parseBirthDate } = require('../utils/birthDate');
 const crypto   = require('crypto');
 const router   = express.Router();
 router.use(authMiddleware);
@@ -30,7 +31,7 @@ function isValidEmail(e) {
 
 // ─── Helper : upsert fiche locale ────────────────────────────────────────────
 // RGPD commit 20 : phone_e164 stocké en parallèle du phone (raw).
-async function upsertLocalClient(userId, { email, first_name, last_name, phone, phone_e164, notes }) {
+async function upsertLocalClient(userId, { email, first_name, last_name, phone, phone_e164, notes, birth_date }) {
   if (!email && !phone && !first_name) return null;
   const emailLow = email ? email.toLowerCase().trim() : '';
 
@@ -75,9 +76,10 @@ async function upsertLocalClient(userId, { email, first_name, last_name, phone, 
            phone      = COALESCE(NULLIF($5,''), phone),
            phone_e164 = COALESCE(NULLIF($6,''), phone_e164),
            notes      = COALESCE(NULLIF($7,''), notes),
-           email      = CASE WHEN (email IS NULL OR email='') AND $8<>'' THEN $8 ELSE email END
+           email      = CASE WHEN (email IS NULL OR email='') AND $8<>'' THEN $8 ELSE email END,
+           birth_date = COALESCE($9, birth_date)
          WHERE id=$1 AND user_id=$2`,
-        [existing.id, userId, first_name||'', last_name||'', phone||'', phone_e164||'', notes||'', emailLow]
+        [existing.id, userId, first_name||'', last_name||'', phone||'', phone_e164||'', notes||'', emailLow, birth_date || null]
       );
       await linkToGlobal(existing.id, emailLow, phone_e164 || phone);
     }
@@ -88,15 +90,16 @@ async function upsertLocalClient(userId, { email, first_name, last_name, phone, 
   // 3. Créer
   const fn = first_name || (emailLow ? emailLow.split('@')[0] : 'Client');
   const { rows } = await pool.query(
-    `INSERT INTO client_accounts (user_id, email, first_name, last_name, phone, phone_e164, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO client_accounts (user_id, email, first_name, last_name, phone, phone_e164, notes, birth_date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT (user_id, email) DO UPDATE SET
        first_name = COALESCE(NULLIF(EXCLUDED.first_name,''), client_accounts.first_name),
        phone      = COALESCE(NULLIF(EXCLUDED.phone,''), client_accounts.phone),
        phone_e164 = COALESCE(NULLIF(EXCLUDED.phone_e164,''), client_accounts.phone_e164),
-       last_name  = COALESCE(NULLIF(EXCLUDED.last_name,''), client_accounts.last_name)
+       last_name  = COALESCE(NULLIF(EXCLUDED.last_name,''), client_accounts.last_name),
+       birth_date = COALESCE(client_accounts.birth_date, EXCLUDED.birth_date)
      RETURNING *`,
-    [userId, emailLow, fn, last_name||'', phone||null, phone_e164||null, notes||null]
+    [userId, emailLow, fn, last_name||'', phone||null, phone_e164||null, notes||null, birth_date || null]
   );
   const created = rows[0];
   if (created?.id) {
@@ -259,7 +262,7 @@ router.get('/search', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const uid = req.user.userId;
-    const { email, first_name, last_name, phone, notes } = req.body;
+    const { email, first_name, last_name, phone, notes, birth_date } = req.body;
     if (!first_name && !email) return res.status(400).json({ error: 'Nom ou email requis.' });
     if (email && !isValidEmail(email)) return res.status(400).json({ error: 'Email invalide.' });
     // RGPD commit 20 : téléphone obligatoire + validé E.164.
@@ -270,11 +273,17 @@ router.post('/', async (req, res) => {
         code:  phoneCheck.error,
       });
     }
+    // Commit 24a : birth_date optionnelle, strict YYYY-MM-01.
+    const birthCheck = parseBirthDate(birth_date);
+    if (!birthCheck.valid) {
+      return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
+    }
     const client = await upsertLocalClient(uid, {
       email, first_name, last_name,
       phone:      phoneCheck.raw,
       phone_e164: phoneCheck.e164,
       notes,
+      birth_date: birthCheck.value,
     });
     res.json(client);
   } catch (e) {
@@ -389,7 +398,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const uid = req.user.userId;
-    const { first_name, last_name, email, phone, notes } = req.body;
+    const { first_name, last_name, email, phone, notes, birth_date } = req.body;
     // RGPD commit 20 : si phone fourni, valider en E.164. PUT est partiel ;
     // un phone vide/null laisse la valeur existante (required:false).
     let phoneRaw  = null;
@@ -404,6 +413,21 @@ router.put('/:id', async (req, res) => {
       }
       phoneRaw  = phoneCheck.raw;
       phoneE164 = phoneCheck.e164;
+    }
+    // Commit 24a : birth_date optionnelle.
+    //   - undefined → ne pas toucher
+    //   - null / '' → effacer
+    //   - YYYY-MM-01 → enregistrer
+    // Pas de restriction anti-fraude côté admin (le commerçant peut corriger
+    // une erreur sous PIN admin, contrairement au PATCH /me client).
+    let birthForUpdate = undefined;
+    if (birth_date === null || birth_date === '') birthForUpdate = null;
+    else if (birth_date !== undefined) {
+      const birthCheck = parseBirthDate(birth_date);
+      if (!birthCheck.valid) {
+        return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
+      }
+      birthForUpdate = birthCheck.value;
     }
 
     const { rows: ex } = await pool.query(
@@ -433,9 +457,17 @@ router.put('/:id', async (req, res) => {
           _readonly_identity: true,
         });
       }
+      // Commit 24a : la birth_date n'est pas considérée comme identité ;
+      // l'admin peut la corriger pour activer le programme anniversaire.
+      // Modification limitée à la fiche locale (le compte global n'est pas
+      // touché — un admin de boutique A ne doit pas modifier le profil global
+      // partagé avec d'autres commerçants).
       const { rows } = await pool.query(
-        'UPDATE client_accounts SET notes=$3 WHERE id=$1 AND user_id=$2 RETURNING *',
-        [req.params.id, uid, notes??null]
+        `UPDATE client_accounts SET
+           notes      = COALESCE($3, notes),
+           birth_date = CASE WHEN $4::boolean THEN $5::date ELSE birth_date END
+         WHERE id=$1 AND user_id=$2 RETURNING *`,
+        [req.params.id, uid, notes ?? null, birthForUpdate !== undefined, birthForUpdate ?? null]
       );
       return res.json({ ...rows[0], _readonly_identity: true, source: 'platform' });
     }
@@ -452,10 +484,12 @@ router.put('/:id', async (req, res) => {
          email      = COALESCE(NULLIF($5,''), email),
          phone      = COALESCE(NULLIF($6,''), phone),
          phone_e164 = COALESCE(NULLIF($7,''), phone_e164),
-         notes      = $8
+         notes      = $8,
+         birth_date = CASE WHEN $9::boolean THEN $10::date ELSE birth_date END
        WHERE id=$1 AND user_id=$2 RETURNING *`,
       [req.params.id, uid, first_name||'', last_name||'', emailNorm,
-       phoneRaw||'', phoneE164||'', notes??null]
+       phoneRaw||'', phoneE164||'', notes??null,
+       birthForUpdate !== undefined, birthForUpdate ?? null]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Client introuvable.' });
 

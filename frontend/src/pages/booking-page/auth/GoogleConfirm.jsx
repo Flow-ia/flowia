@@ -14,6 +14,7 @@ import { pubApi } from '../../../utils/api';
 import { ConsentCheckboxes } from '../../../components/ConsentCheckboxes';
 import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 import { Icon } from '../../../components/Icon';
+import BirthMonthYearPicker from '../../../components/BirthMonthYearPicker';
 
 const LIGHT = {
   bg:'#f7f7f7', card:'#ffffff', text:'#1a1a1a', muted:'#6b7280',
@@ -53,6 +54,8 @@ export default function GoogleConfirm() {
   const [payload, setPayload]   = useState(null);
   const [expired, setExpired]   = useState(false);
   const [phone, setPhone]       = useState('');
+  // Commit 24a : date de naissance optionnelle (mois + année).
+  const [birthDate, setBirthDate] = useState(null);
   const [consents, setConsents] = useState({ contractAccepted: true, marketingAccepted: false });
   const [busy, setBusy]         = useState(false);
   const [err, setErr]           = useState('');
@@ -89,6 +92,7 @@ export default function GoogleConfirm() {
         contract_accepted:  consents.contractAccepted,
         marketing_accepted: consents.marketingAccepted,
         phone:              phone || undefined,
+        birth_date:         birthDate || null,
       });
       if (!res?.token || !res?.client) throw new Error('Réponse invalide');
       // Persistance cohérente avec AuthPanel.applyClientLogin.
@@ -221,6 +225,13 @@ export default function GoogleConfirm() {
           label="Téléphone *" required
           theme={{ text: th.text, muted: th.muted, dim: th.dim,
             border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
+      </div>
+
+      {/* Commit 24a : mois + année de naissance, optionnels. */}
+      <div style={{ marginBottom:14 }}>
+        <BirthMonthYearPicker value={birthDate} onChange={setBirthDate}
+          label="Date de naissance"
+          theme={{ text: th.text, muted: th.muted, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
       </div>
 
       {/* ConsentCheckboxes (commit 17) */}

@@ -6,6 +6,7 @@ import { pubApi, globalClientApi } from '../../../../utils/api';
 import { GoogleOAuthOverlay } from '../../../../components/AuthFlow';
 import { ConsentCheckboxes } from '../../../../components/ConsentCheckboxes';
 import { PhoneInput, isValidPhoneNumber } from '../../../../components/PhoneInput';
+import BirthMonthYearPicker from '../../../../components/BirthMonthYearPicker';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false, onModeChange }) {
@@ -24,6 +25,9 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   const [first, setFirst]       = useState('');
   const [last, setLast]         = useState('');
   const [phone, setPhone]       = useState('');
+  // Commit 24a : date de naissance optionnelle (mois + année).
+  // Format ISO YYYY-MM-01 ; null si non renseignée.
+  const [birthDate, setBirthDate] = useState(null);
   const [err, setErr]           = useState('');
   const [ok, setOk]             = useState('');
   const [loading, setLoading]   = useState(false);
@@ -181,7 +185,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       } else {
         if (!first.trim() || !last.trim()) { setErr('Prenom et nom requis.'); setLoading(false); return; }
         if (pwd.length < 6) { setErr('Mot de passe minimum 6 caracteres.'); setLoading(false); return; }
-        r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), referral_code: referralCode || undefined, marketing_opt_in: marketingOptIn });
+        r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), birth_date: birthDate || null, referral_code: referralCode || undefined, marketing_opt_in: marketingOptIn });
       }
       localStorage.setItem('ff_client_token', r.token);
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));
@@ -222,6 +226,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         first_name: first.trim(),
         last_name:  last.trim(),
         phone:      phone.trim(),
+        birth_date: birthDate || null,
         marketing_opt_in: marketingOptIn,
       });
       localStorage.setItem('ff_client_token', r.token);
@@ -347,6 +352,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
               label="Téléphone *" required
               theme={{ text: th.text, muted: th.muted, dim: th.dim,
                 border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
+            {/* Commit 24a : mois + année de naissance, optionnels. */}
+            <BirthMonthYearPicker value={birthDate} onChange={setBirthDate}
+              label="Date de naissance"
+              theme={{ text: th.text, muted: th.muted, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
             {/* RGPD commit 17 : 2 cases (CGU obligatoire + marketing optionnel),
                 version compacte adaptée au flow rapide QR. */}
             <ConsentCheckboxes slug={slug} th={th} onChange={handleConsents} compact/>
@@ -529,6 +538,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                   label="Téléphone *" required
                   theme={{ text: th.text, muted: th.muted, dim: th.dim,
                     border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
+                {/* Commit 24a : mois + année de naissance, optionnels. */}
+                <BirthMonthYearPicker value={birthDate} onChange={setBirthDate}
+                  label="Date de naissance"
+                  theme={{ text: th.text, muted: th.muted, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
               </>
             )}
 

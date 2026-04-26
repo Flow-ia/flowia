@@ -4,6 +4,7 @@ const { pool } = require('../../db');
 const bcrypt   = require('bcryptjs');
 const { globalClientAuth } = require('./helpers');
 const { validatePhone } = require('../../utils/phone');
+const { parseBirthDate } = require('../../utils/birthDate');
 
 module.exports = function attachProfileRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -61,15 +62,22 @@ module.exports = function attachProfileRoutes(router) {
         phoneRawForUpdate  = null;
         phoneE164ForUpdate = null;
       }
-      // Accepte YYYY-MM-DD, YYYY-MM (1er du mois), '' / null (effacer), undefined (ne pas toucher)
+      // Commit 24a : strict YYYY-MM-01.
+      // Sémantique PATCH partielle :
+      //   - undefined     → ne pas toucher
+      //   - null / ''     → effacer
+      //   - YYYY-MM-01    → enregistrer
+      //   - tout le reste → 400 BIRTH_DATE_INVALID
       let bd;
-      if (birth_date === '' || birth_date === null) bd = null;
-      else if (typeof birth_date === 'string') {
-        const s = birth_date.trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bd = s;
-        else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
-        else                                    bd = undefined;
-      } else bd = undefined;
+      if (birth_date === undefined) bd = undefined;
+      else if (birth_date === null || birth_date === '') bd = null;
+      else {
+        const birthCheck = parseBirthDate(birth_date);
+        if (!birthCheck.valid) {
+          return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
+        }
+        bd = birthCheck.value;
+      }
       // postal_code / city : même sémantique que bd (undefined/null/''/string)
       const pc = postal_code === undefined ? undefined
                : (postal_code === null || postal_code === '' ? null : String(postal_code).trim().slice(0,20));

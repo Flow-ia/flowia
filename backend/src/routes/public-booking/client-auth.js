@@ -3,6 +3,7 @@ const jwt    = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { sendReferralWelcome } = require('../../utils/email');
 const { validatePhone } = require('../../utils/phone');
+const { parseBirthDate } = require('../../utils/birthDate');
 
 module.exports = function attachClientAuthRoutes(router) {
   // GET /:slug/client/check-email?email=xx
@@ -64,13 +65,12 @@ module.exports = function attachClientAuthRoutes(router) {
       const optIn = marketing_opt_in === true || marketing_opt_in === 'true';
 
       const emailLow = email.toLowerCase().trim();
-      // birth_date optionnelle : accepte YYYY-MM-DD OU YYYY-MM (= 1er du mois)
-      let bd = null;
-      if (typeof birth_date === 'string' && birth_date.trim()) {
-        const s = birth_date.trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(s))      bd = s;
-        else if (/^\d{4}-\d{2}$/.test(s))       bd = s + '-01';
+      // Commit 24a : strict YYYY-MM-01 (mois 01-12, année [-100, -13]).
+      const birthCheck = parseBirthDate(birth_date);
+      if (!birthCheck.valid) {
+        return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
       }
+      const bd = birthCheck.value;
 
       // 1. Vérifier si compte global existe déjà avec cet email
       const { rows: gcEx } = await pool.query(
@@ -235,6 +235,13 @@ module.exports = function attachClientAuthRoutes(router) {
       // le commerçant devra inviter le client à opter-in plus tard si besoin).
       const optIn = req.body?.marketing_opt_in === true || req.body?.marketing_opt_in === 'true';
 
+      // Commit 24a : birth_date optionnelle (YYYY-MM-01).
+      const birthCheck = parseBirthDate(req.body?.birth_date);
+      if (!birthCheck.valid) {
+        return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
+      }
+      const bd = birthCheck.value;
+
       let client;
       if (existing.length) {
         // Re-scan : on peut mettre à jour l'opt-in si le client nous l'a cochée
@@ -246,6 +253,14 @@ module.exports = function attachClientAuthRoutes(router) {
             [existing[0].id]
           ).catch(() => {});
         }
+        // Si la fiche existante n'a pas de birth_date et que le client en
+        // fournit une au re-scan, on l'enregistre (sans écraser l'existant).
+        if (bd) {
+          await pool.query(
+            `UPDATE client_accounts SET birth_date=$2 WHERE id=$1 AND birth_date IS NULL`,
+            [existing[0].id, bd]
+          ).catch(() => {});
+        }
         client = existing[0];
       } else {
         const rand  = Math.random().toString(36).slice(2, 10);
@@ -253,10 +268,10 @@ module.exports = function attachClientAuthRoutes(router) {
         const hash  = await bcrypt.hash(rand + Date.now(), 10);
         const { rows } = await pool.query(
           `INSERT INTO client_accounts
-             (user_id, email, password_hash, first_name, last_name, phone, phone_e164, source, marketing_opt_in, marketing_opt_in_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,'qr',$8, CASE WHEN $8 THEN NOW() ELSE NULL END)
+             (user_id, email, password_hash, first_name, last_name, phone, phone_e164, birth_date, source, marketing_opt_in, marketing_opt_in_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'qr',$9, CASE WHEN $9 THEN NOW() ELSE NULL END)
            RETURNING id, email, first_name, last_name, phone, phone_e164, birth_date, postal_code, city, global_client_id`,
-          [userId, email, hash, first, last || '', phoneRaw, phoneE164, optIn]
+          [userId, email, hash, first, last || '', phoneRaw, phoneE164, bd, optIn]
         );
         client = rows[0];
       }
@@ -442,7 +457,7 @@ module.exports = function attachClientAuthRoutes(router) {
       if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
       const userId = biz[0].user_id;
 
-      const { pre_token, contract_accepted, marketing_accepted, phone } = req.body || {};
+      const { pre_token, contract_accepted, marketing_accepted, phone, birth_date } = req.body || {};
       if (!pre_token) {
         return res.status(401).json({ error: 'Session OAuth manquante.', code: 'OAUTH_PRE_TOKEN_INVALID' });
       }
@@ -462,6 +477,12 @@ module.exports = function attachClientAuthRoutes(router) {
       }
       const phoneRaw  = phoneCheck.raw;
       const phoneE164 = phoneCheck.e164;
+      // Commit 24a : birth_date optionnelle (YYYY-MM-01).
+      const birthCheck = parseBirthDate(birth_date);
+      if (!birthCheck.valid) {
+        return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
+      }
+      const bd = birthCheck.value;
 
       // 1. Vérifier le pre_token (scope + expiration)
       let payload;
@@ -506,40 +527,53 @@ module.exports = function attachClientAuthRoutes(router) {
           );
           gc.google_id = payload.google_id;
         }
+        // Commit 24a : enregistrer la birth_date si le compte global n'en avait
+        // pas (ne pas écraser une valeur existante — l'utilisateur peut l'avoir
+        // déjà saisie sur un autre commerçant).
+        if (bd && !gc.birth_date) {
+          await pool.query(
+            'UPDATE global_clients SET birth_date=$1, updated_at=NOW() WHERE id=$2',
+            [bd, gc.id]
+          ).catch(() => {});
+          gc.birth_date = bd;
+        }
       } else {
         const { rows: created } = await pool.query(
           `INSERT INTO global_clients
-             (email, google_id, first_name, last_name, phone, phone_e164, avatar_url,
+             (email, google_id, first_name, last_name, phone, phone_e164, birth_date, avatar_url,
               is_verified, consent_at, consent_ip,
               marketing_opt_in, marketing_opt_in_at, marketing_opt_in_source)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,NOW(),$8,$9,
-                   CASE WHEN $9 THEN NOW() ELSE NULL END,
-                   CASE WHEN $9 THEN 'oauth_google' ELSE NULL END)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,NOW(),$9,$10,
+                   CASE WHEN $10 THEN NOW() ELSE NULL END,
+                   CASE WHEN $10 THEN 'oauth_google' ELSE NULL END)
            RETURNING *`,
           [emailLow, payload.google_id, payload.first_name || '', payload.last_name || '',
-           phoneRaw, phoneE164, payload.picture || null, consentIp, optIn]
+           phoneRaw, phoneE164, bd, payload.picture || null, consentIp, optIn]
         );
         gc = created[0];
       }
 
       // 3. Créer la fiche locale chez ce commerçant.
+      // Commit 24a : propage birth_date sur la fiche locale (utilisé par le
+      // cron anniversaire qui lit client_accounts.birth_date).
       const { rows: localRows } = await pool.query(
         `INSERT INTO client_accounts
-           (user_id, email, first_name, last_name, phone, phone_e164,
+           (user_id, email, first_name, last_name, phone, phone_e164, birth_date,
             global_client_id, source,
             marketing_opt_in, marketing_opt_in_at, marketing_opt_in_source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'google',$8,
-                 CASE WHEN $8 THEN NOW() ELSE NULL END,
-                 CASE WHEN $8 THEN 'oauth_google' ELSE NULL END)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'google',$9,
+                 CASE WHEN $9 THEN NOW() ELSE NULL END,
+                 CASE WHEN $9 THEN 'oauth_google' ELSE NULL END)
          ON CONFLICT (user_id, email) DO UPDATE SET
            global_client_id = EXCLUDED.global_client_id,
            first_name = COALESCE(NULLIF(client_accounts.first_name,''), EXCLUDED.first_name),
            last_name  = COALESCE(NULLIF(client_accounts.last_name,''),  EXCLUDED.last_name),
            phone      = COALESCE(NULLIF(client_accounts.phone,''),      EXCLUDED.phone),
-           phone_e164 = COALESCE(NULLIF(client_accounts.phone_e164,''), EXCLUDED.phone_e164)
+           phone_e164 = COALESCE(NULLIF(client_accounts.phone_e164,''), EXCLUDED.phone_e164),
+           birth_date = COALESCE(client_accounts.birth_date, EXCLUDED.birth_date)
          RETURNING *`,
         [userId, emailLow, gc.first_name, gc.last_name || '',
-         phoneRaw, phoneE164, gc.id, optIn]
+         phoneRaw, phoneE164, gc.birth_date || bd, gc.id, optIn]
       );
       const local = localRows[0];
 

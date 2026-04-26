@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { fmtDate } from '../helpers';
 import { clientsApi } from '../../../utils/api';
 import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
+import BirthMonthYearPicker from '../../../components/BirthMonthYearPicker';
 
 // ─── Onglet Infos ─────────────────────────────────────────────────────────────
 // Affiche les infos de la fiche + édition téléphone (PhoneInput E.164,
@@ -26,6 +27,21 @@ export default function InfoTab({ fiche, theme, card, setFiche }) {
   const [phoneDraft,   setPhoneDraft]   = useState(initialPhone);
   const [phoneBusy,    setPhoneBusy]    = useState(false);
   const [phoneErr,     setPhoneErr]     = useState('');
+
+  // Commit 24a : édition date de naissance (mois + année). Admin peut corriger
+  // librement (pas d'anti-fraude rolling 330j ici, contrairement au PATCH /me).
+  // Format ISO YYYY-MM-01 ; on normalise YYYY-MM-XX legacy en YYYY-MM-01 pour
+  // l'affichage du picker (qui ne propose que le 1er du mois).
+  const initialBirth = (() => {
+    const s = fiche.birth_date;
+    if (!s || typeof s !== 'string') return '';
+    const m = s.match(/^(\d{4})-(\d{2})/);
+    return m ? `${m[1]}-${m[2]}-01` : '';
+  })();
+  const [editingBirth, setEditingBirth] = useState(false);
+  const [birthDraft,   setBirthDraft]   = useState(initialBirth);
+  const [birthBusy,    setBirthBusy]    = useState(false);
+  const [birthErr,     setBirthErr]     = useState('');
 
   const startEditPhone = () => {
     setPhoneDraft(initialPhone);
@@ -66,6 +82,36 @@ export default function InfoTab({ fiche, theme, card, setFiche }) {
   };
 
   const phoneSaveDisabled = phoneBusy || !isValidPhoneNumber(phoneDraft || '');
+
+  // ── Date de naissance (commit 24a) ─────────────────────────────────────────
+  const startEditBirth = () => {
+    setBirthDraft(initialBirth);
+    setBirthErr('');
+    setEditingBirth(true);
+  };
+  const cancelEditBirth = () => {
+    setEditingBirth(false);
+    setBirthErr('');
+  };
+  const saveBirth = async () => {
+    setBirthBusy(true); setBirthErr('');
+    try {
+      // Envoyer null si l'admin a vidé le champ, sinon YYYY-MM-01.
+      const payload = { birth_date: birthDraft || null };
+      const updated = await clientsApi.update(fiche.id, payload);
+      if (setFiche) setFiche(prev => ({ ...prev, ...updated }));
+      setEditingBirth(false);
+    } catch (e) {
+      setBirthErr(e?.message || 'Modification impossible.');
+    } finally { setBirthBusy(false); }
+  };
+  const birthDisplay = (() => {
+    if (!fiche.birth_date) return '—';
+    try {
+      return new Date(fiche.birth_date.slice(0, 10) + 'T12:00:00')
+        .toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    } catch { return fiche.birth_date; }
+  })();
 
   return (
     <>
@@ -121,6 +167,62 @@ export default function InfoTab({ fiche, theme, card, setFiche }) {
                 {fiche.phone_e164 || fiche.phone || '—'}
               </p>
               <button onClick={startEditPhone}
+                style={{ padding:'6px 12px', borderRadius:8,
+                  background:'transparent', color:theme.text,
+                  border:`0.5px solid ${theme.border}`,
+                  fontSize:11, fontWeight:500, fontFamily:'inherit',
+                  cursor:'pointer', flexShrink:0 }}>
+                Modifier
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Date de naissance (commit 24a) — édition libre admin sous PIN. */}
+        <div style={{ display:'flex', flexDirection:'column',
+          padding:'12px 0', gap:6,
+          borderTop:`0.5px solid ${theme.border}` }}>
+          <p style={{ margin:0, fontSize:11, color:theme.muted, fontWeight:500 }}>{"Date de naissance"}</p>
+          {editingBirth ? (
+            <>
+              <BirthMonthYearPicker
+                value={birthDraft}
+                onChange={(iso) => setBirthDraft(iso || '')}
+                label=""
+                theme={{ text: theme.text, muted: theme.muted, inputBg: theme.inputBg, inputBorder: theme.inputBorder }}
+              />
+              {birthErr && (
+                <p style={{ margin:'2px 0 0', fontSize:11, color:'#dc2626', fontWeight:500 }}>
+                  {birthErr}
+                </p>
+              )}
+              <div style={{ display:'flex', gap:8, marginTop:4 }}>
+                <button onClick={saveBirth} disabled={birthBusy}
+                  style={{ padding:'8px 14px', borderRadius:8,
+                    background: birthBusy ? theme.border : theme.accent,
+                    color:      birthBusy ? theme.muted  : theme.accentText,
+                    border:'none', fontSize:12, fontWeight:500, fontFamily:'inherit',
+                    cursor: birthBusy ? 'wait' : 'pointer',
+                    opacity: birthBusy ? 0.7 : 1 }}>
+                  {birthBusy ? '…' : 'Enregistrer'}
+                </button>
+                <button onClick={cancelEditBirth} disabled={birthBusy}
+                  style={{ padding:'8px 14px', borderRadius:8,
+                    background:'transparent', color:theme.muted,
+                    border:`0.5px solid ${theme.border}`,
+                    fontSize:12, fontWeight:500, fontFamily:'inherit',
+                    cursor: birthBusy ? 'wait' : 'pointer' }}>
+                  Annuler
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+              <p style={{ margin:0, fontSize:14, color:theme.text, fontWeight:500,
+                wordBreak:'break-word', lineHeight:1.5 }}>
+                {birthDisplay}
+              </p>
+              <button onClick={startEditBirth}
                 style={{ padding:'6px 12px', borderRadius:8,
                   background:'transparent', color:theme.text,
                   border:`0.5px solid ${theme.border}`,

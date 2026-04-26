@@ -6,6 +6,7 @@ const crypto   = require('crypto');
 const { sendPasswordReset } = require('../../utils/email');
 const { isValidEmail, isRealDate, saveCode, getCode, deleteCode } = require('./helpers');
 const { validatePhone } = require('../../utils/phone');
+const { parseBirthDate } = require('../../utils/birthDate');
 
 module.exports = function attachAuthRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -32,15 +33,12 @@ module.exports = function attachAuthRoutes(router) {
       const phoneE164 = phoneCheck.e164;
 
       const emailLow = email.toLowerCase().trim();
-      // Accepte YYYY-MM-DD et YYYY-MM (= 1er du mois). Cohérent avec
-      // public-booking register et l'UI client (select mois+année).
-      // Refuse les dates impossibles (ex: 2024-02-31) qui passent la regex.
-      let bd = null;
-      if (birth_date && typeof birth_date === 'string') {
-        const s = birth_date.trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(s) && isRealDate(s))      bd = s;
-        else if (/^\d{4}-\d{2}$/.test(s) && isRealDate(s + '-01')) bd = s + '-01';
+      // Commit 24a : strict YYYY-MM-01 (mois 01-12, année [-100, -13]).
+      const birthCheck = parseBirthDate(birth_date);
+      if (!birthCheck.valid) {
+        return res.status(400).json({ error: 'Date de naissance invalide.', code: 'BIRTH_DATE_INVALID' });
       }
+      const bd = birthCheck.value;
 
       // Vérifier si email déjà pris
       const { rows: ex } = await pool.query(

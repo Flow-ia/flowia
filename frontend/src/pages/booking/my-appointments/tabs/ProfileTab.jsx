@@ -2,6 +2,7 @@
 // Onglet "Mon profil" : affichage + mode édition + sécurité (email/mdp) + suppression.
 import { ymd } from '../helpers';
 import { PhoneInput } from '../../../../components/PhoneInput';
+import BirthMonthYearPicker from '../../../../components/BirthMonthYearPicker';
 
 export function ProfileTab({
   th,
@@ -79,20 +80,13 @@ export function ProfileTab({
               theme={{ text: th.text, muted: th.muted, dim: th.dim,
                 border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
             <div>
-              <label style={{ display:'block', fontSize:11, fontWeight: 500,
-                color:th.muted, marginBottom:6 }}>
-                Date de naissance
-              </label>
-              <input type="date" value={editBirth} onChange={e=>setEditBirth(e.target.value)}
-                max={new Date().toISOString().slice(0,10)}
-                style={inpStyle}/>
-              <p style={{ fontSize:11, color:th.muted, margin:'6px 0 0', lineHeight:1.5,
-                background:'rgba(236,72,153,0.08)', border: '0.5px solid rgba(236,72,153,0.2)',
-                padding:'8px 10px', borderRadius:8 }}>
-                🎂 Cette information permet de bénéficier d'offres et de réductions
-                spéciales anniversaire proposées par le commerçant (envoyées le jour J,
-                selon les conditions de chaque commerce).
-              </p>
+              {/* Commit 24a : picker mois + année (le jour exact n'est plus collecté). */}
+              <BirthMonthYearPicker
+                value={editBirth}
+                onChange={(iso) => setEditBirth(iso || '')}
+                label="Date de naissance"
+                theme={{ text: th.text, muted: th.muted, inputBg: th.inputBg, inputBorder: th.inputBorder }}
+              />
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
               <div>
@@ -161,12 +155,13 @@ export function ProfileTab({
               </div>
             )}
             {(() => {
+              // Commit 24a : on n'affiche plus que mois + année (jour collecté = 01).
               const birthStr = (() => {
                 const s = ymd(clientInfo?.birth_date);
                 if (!s) return '-';
                 try {
                   return new Date(s + 'T12:00:00').toLocaleDateString('fr-FR',
-                    { day: 'numeric', month: 'long', year: 'numeric' });
+                    { month: 'long', year: 'numeric' });
                 } catch { return s; }
               })();
               const cityLine = [clientInfo?.postal_code, clientInfo?.city].filter(Boolean).join(' ') || '-';
