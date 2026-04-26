@@ -1,33 +1,18 @@
 // backend/src/utils/emailSender.js
 // Utilitaire centralise pour tous les envois email marketing via Brevo
+//
+// Commit 30 — la limite Brevo per-merchant est désormais gérée par le helper
+// unifié `utils/email.js → checkUserEmailQuota` (BDD `users.email_sent_today/
+// _month`, cluster-safe). Cette fonction ne porte plus de compteur mémoire
+// (qui était par-worker, pas cluster-safe, et perdu à chaque reboot Render).
+// Les call-sites (campaigns, promo) checkent et tronquent leur batch en amont.
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const SENDER_EMAIL  = process.env.SENDER_EMAIL  || process.env.BREVO_FROM || 'contact@haircoifflille.fr';
 const SENDER_NAME   = process.env.SENDER_NAME   || 'FlowIA';
 
-// Compteur global emails journalier (protection quota Brevo gratuit)
-let emailsToday = 0;
-let emailsTodayDate = new Date().toDateString();
-
-function resetCounterIfNewDay() {
-  const today = new Date().toDateString();
-  if (today !== emailsTodayDate) {
-    emailsToday = 0;
-    emailsTodayDate = today;
-  }
-}
-
 // Fonction principale d'envoi email
 async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 'transactional', headers }) {
-  resetCounterIfNewDay();
-
-  const EMAIL_MARKETING_MAX = 220; // reserve 80 pour transactionnel
-
-  // Bloquer marketing si quota atteint
-  if (type === 'marketing' && emailsToday >= EMAIL_MARKETING_MAX) {
-    throw new Error(`Quota email marketing atteint (${emailsToday}/${EMAIL_MARKETING_MAX}). Reessayez demain.`);
-  }
-
   if (!BREVO_API_KEY) {
     throw new Error('BREVO_API_KEY manquante dans les variables environnement');
   }
@@ -58,8 +43,7 @@ async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 
     throw new Error(data.message || 'Erreur envoi email Brevo');
   }
 
-  emailsToday++;
-  console.log(`[EMAIL] Envoye → ${to} | Total aujourd'hui: ${emailsToday}`);
+  console.log(`[EMAIL] Envoye → ${to}`);
   return data;
 }
 
@@ -111,13 +95,16 @@ async function sendMarketingEmail(clientEmail, clientName, message, promoCode, u
   });
 }
 
-// Obtenir le quota restant
-function getEmailQuota() {
-  resetCounterIfNewDay();
+// Commit 30 — alias rétrocompat. Les nouveaux appels doivent passer par
+// `utils/email.js → checkUserEmailQuota(userId)` (BDD per-user). Cette
+// fonction sans userId retourne un quota générique pour code legacy.
+const { checkUserEmailQuota, EMAIL_DAILY_LIMIT_USER } = require('./email');
+function getEmailQuota(userId) {
+  if (userId) return checkUserEmailQuota(userId);
   return {
-    sent_today: emailsToday,
-    available_today: Math.max(0, 220 - emailsToday),
-    daily_max: 220
+    sent_today: 0,
+    available_today: EMAIL_DAILY_LIMIT_USER,
+    daily_max: EMAIL_DAILY_LIMIT_USER,
   };
 }
 

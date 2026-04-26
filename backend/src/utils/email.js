@@ -939,6 +939,95 @@ async function incrUserEmailCount(userId) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Commit 30 — Quota emails marketing UNIFIÉ et cluster-safe.
+// Source unique de vérité : `users.email_sent_today` + `email_sent_month`.
+// Avant : 3 sources incohérentes (var mémoire `emailsToday`, constante locale
+// `EMAIL_DAILY_LIMIT=300`, BDD) → l'UI affichait des chiffres faux et le
+// commerçant pouvait dépasser le quota Brevo (300/jour gratuit).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Limite per-merchant. 190/jour laisse une marge de 110 sur le quota Brevo
+// gratuit (300/jour) pour les emails transactionnels (rappels RDV, OTP,
+// confirmations, password reset, daily recap commerçant).
+const EMAIL_DAILY_LIMIT_USER   = 190;
+const EMAIL_MONTHLY_LIMIT_USER = 5700; // 190 * 30 — borne haute mensuelle
+
+// Reset automatique des compteurs en BDD quand le jour/mois change.
+// Idempotent : si déjà reset aujourd'hui, ne fait rien. Lit après écriture
+// pour retourner les valeurs FRAÎCHES (sinon premier appel après minuit
+// retourne l'ancien `email_sent_today`).
+async function checkUserEmailQuota(userId) {
+  if (!userId) {
+    return {
+      sent_today: 0, sent_month: 0,
+      available_today: EMAIL_DAILY_LIMIT_USER,
+      available_month: EMAIL_MONTHLY_LIMIT_USER,
+      daily_limit: EMAIL_DAILY_LIMIT_USER,
+      monthly_limit: EMAIL_MONTHLY_LIMIT_USER,
+    };
+  }
+  try {
+    // 1) Reset journalier si email_day_reset < aujourd'hui (atomique).
+    await _emailPool.query(
+      `UPDATE users
+          SET email_sent_today = 0, email_day_reset = CURRENT_DATE
+        WHERE id = $1
+          AND (email_day_reset IS NULL OR email_day_reset < CURRENT_DATE)`,
+      [userId]
+    );
+    // 2) Reset mensuel si email_month_reset < début du mois en cours.
+    await _emailPool.query(
+      `UPDATE users
+          SET email_sent_month = 0, email_month_reset = DATE_TRUNC('month', CURRENT_DATE)::date
+        WHERE id = $1
+          AND (email_month_reset IS NULL OR email_month_reset < DATE_TRUNC('month', CURRENT_DATE)::date)`,
+      [userId]
+    );
+    // 3) Lecture après reset.
+    const { rows } = await _emailPool.query(
+      `SELECT COALESCE(email_sent_today, 0) AS st,
+              COALESCE(email_sent_month, 0) AS sm,
+              email_day_reset, email_month_reset
+         FROM users WHERE id = $1`,
+      [userId]
+    );
+    const r = rows[0] || {};
+    const sentToday = parseInt(r.st, 10) || 0;
+    const sentMonth = parseInt(r.sm, 10) || 0;
+    return {
+      sent_today: sentToday,
+      sent_month: sentMonth,
+      available_today: Math.max(0, EMAIL_DAILY_LIMIT_USER - sentToday),
+      available_month: Math.max(0, EMAIL_MONTHLY_LIMIT_USER - sentMonth),
+      daily_limit: EMAIL_DAILY_LIMIT_USER,
+      monthly_limit: EMAIL_MONTHLY_LIMIT_USER,
+      day_reset: r.email_day_reset,
+      month_reset: r.email_month_reset,
+    };
+  } catch (e) {
+    console.error('[EMAIL checkUserEmailQuota]', e.message);
+    return {
+      sent_today: 0, sent_month: 0,
+      available_today: 0, available_month: 0,
+      daily_limit: EMAIL_DAILY_LIMIT_USER,
+      monthly_limit: EMAIL_MONTHLY_LIMIT_USER,
+      error: 'quota_unavailable',
+    };
+  }
+}
+
+// Combien d'emails marketing on peut envoyer MAINTENANT à count destinataires.
+// Retourne le min entre quota jour, quota mois et count demandé. Utilisé par
+// les routes d'envoi pour tronquer le batch et éviter les rejets Brevo.
+async function getAllowedEmailBatch(userId, count) {
+  const q = await checkUserEmailQuota(userId);
+  return {
+    allowed: Math.max(0, Math.min(count, q.available_today, q.available_month)),
+    quota: q,
+  };
+}
+
 // ── Email invitation à l'opt-in marketing (RGPD, Audit Z4) ──────────────────
 // Email transactionnel unique pour solliciter le consentement marketing des
 // clients existants de la base. Un seul CTA : bouton "Oui je veux les offres"
@@ -1096,4 +1185,8 @@ module.exports = {
   getGlobalEmailCount,
   incrGlobalEmailCount,
   incrUserEmailCount,
+  checkUserEmailQuota,
+  getAllowedEmailBatch,
+  EMAIL_DAILY_LIMIT_USER,
+  EMAIL_MONTHLY_LIMIT_USER,
 };

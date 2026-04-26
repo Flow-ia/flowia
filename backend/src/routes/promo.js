@@ -229,6 +229,13 @@ router.get('/stats', async (req, res) => {
 // du consentement (RGPD art. 7-3 + LCEN art. L34-5). Le SELECT exclut aussi
 // les clients bloqués (`is_booking_blocked`) — pas de raison commerciale de
 // leur envoyer une promo non plus.
+//
+// Commit 30 — quota emails marketing per-user vérifié AVANT l'envoi. Avant,
+// cette route ignorait totalement le quota (la limite Brevo plantait après
+// quelques requêtes). Désormais : check `users.email_sent_today/_month`,
+// tronque le batch si quota dépassé, incrémente après chaque envoi réussi.
+const { checkUserEmailQuota, incrUserEmailCount } = require('../utils/email');
+
 router.post('/:id/send-emails', async (req, res) => {
   try {
     const { client_ids } = req.body;
@@ -276,17 +283,34 @@ router.post('/:id/send-emails', async (req, res) => {
 
     if (!clients.length) {
       return res.json({
-        sent: 0, failed: 0, total: 0, skipped_opt_out: skippedOptOut,
+        sent: 0, failed: 0, total: 0, skipped_opt_out: skippedOptOut, skipped_quota: 0,
         message: skippedOptOut > 0
           ? `Aucun destinataire éligible : ${skippedOptOut} client(s) désabonné(s) ou bloqué(s) exclu(s) (RGPD).`
           : 'Aucun client avec email.',
       });
     }
 
+    // Commit 30 — quota per-user. Tronquer le batch au minimum entre liste
+    // éligible, quota jour, et quota mois.
+    const quota = await checkUserEmailQuota(req.user.userId);
+    const allowed = Math.min(clients.length, quota.available_today, quota.available_month);
+    const skippedQuota = clients.length - allowed;
+    if (allowed === 0) {
+      return res.status(429).json({
+        error: 'Quota email atteint.',
+        sent: 0, failed: 0, total: 0,
+        skipped_opt_out: skippedOptOut, skipped_quota: skippedQuota,
+        quota,
+        message: `Limite atteinte : ${quota.sent_today}/${quota.daily_limit} emails envoyés aujourd'hui ` +
+                 `(${quota.sent_month}/${quota.monthly_limit} ce mois). Réessayez demain.`,
+      });
+    }
+    const recipients = clients.slice(0, allowed);
+
     const { sendPromoEmail } = require('../utils/email');
-    console.log(`[PROMO SEND] ${promo.code} → ${clients.length} destinataires (exclus RGPD: ${skippedOptOut})`);
+    console.log(`[PROMO SEND] ${promo.code} → ${recipients.length} destinataires (exclus RGPD: ${skippedOptOut}, quota: ${skippedQuota})`);
     let sent = 0, failed = 0;
-    for (const client of clients) {
+    for (const client of recipients) {
       const name = [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Client';
       try {
         const ok = await sendPromoEmail({
@@ -294,11 +318,25 @@ router.post('/:id/send-emails', async (req, res) => {
           businessEmail, businessAddress, businessPhone,
           unsubscribeToken: client.unsubscribe_token,
         });
-        if (ok) sent++; else failed++;
+        if (ok) {
+          sent++;
+          // Incrémente atomiquement le compteur per-user après chaque envoi
+          // réussi → cohérent avec le quota lu en début de batch.
+          await incrUserEmailCount(req.user.userId);
+        } else {
+          failed++;
+        }
       } catch(e) { failed++; console.error(`[PROMO SEND ERR] ${client.email}: ${e.message}`); }
     }
-    console.log(`[PROMO SEND] ${promo.code} — bilan: sent=${sent} failed=${failed} skipped_opt_out=${skippedOptOut}`);
-    res.json({ sent, failed, total: clients.length, skipped_opt_out: skippedOptOut });
+    const finalQuota = await checkUserEmailQuota(req.user.userId);
+    console.log(`[PROMO SEND] ${promo.code} — bilan: sent=${sent} failed=${failed} skipped_opt_out=${skippedOptOut} skipped_quota=${skippedQuota}`);
+    res.json({
+      sent, failed,
+      total: recipients.length,
+      skipped_opt_out: skippedOptOut,
+      skipped_quota: skippedQuota,
+      quota: finalQuota,
+    });
   } catch(e) {
     console.error('[PROMO SEND] ERREUR:', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });

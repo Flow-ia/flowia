@@ -3,18 +3,24 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { sendSMS, sleep, chunk, SMS_COST, SMS_PRICE } = require('../utils/messenger');
-const { sendMarketingEmail, getEmailQuota } = require('../utils/emailSender');
+const { sendMarketingEmail } = require('../utils/emailSender');
 const { appendUnsubscribeSms } = require('../utils/unsubscribe');
+// Commit 30 — quota emails marketing unifié, source unique de vérité.
+const {
+  checkUserEmailQuota,
+  incrUserEmailCount,
+  EMAIL_DAILY_LIMIT_USER,
+  EMAIL_MONTHLY_LIMIT_USER,
+} = require('../utils/email');
 const router = express.Router();
 
 // Toutes les routes nécessitent une authentification commerçant
 router.use(authMiddleware);
 
-// ── Constantes ──────────────────────────────────────────────────────────────
-const EMAIL_DAILY_LIMIT   = 300;
-const EMAIL_MONTHLY_LIMIT = 9000;
-// Plus de EMAIL_RESERVE fixe — le compteur inclut tous les emails
-const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT; // 300/jour total
+// ── Constantes (alias pour rétrocompat code existant) ────────────────────────
+const EMAIL_DAILY_LIMIT   = EMAIL_DAILY_LIMIT_USER;
+const EMAIL_MONTHLY_LIMIT = EMAIL_MONTHLY_LIMIT_USER;
+const EMAIL_MARKETING_MAX = EMAIL_DAILY_LIMIT_USER;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,41 +71,10 @@ async function getTopClients(userId, limit, needPhone, needEmail) {
   return rows;
 }
 
-async function checkEmailQuota(userId) {
-  const { rows } = await pool.query(
-    `SELECT email_sent_today, email_sent_month, email_day_reset, email_month_reset FROM users WHERE id=$1`,
-    [userId]
-  );
-  if (!rows.length) return null;
-  const u = rows[0];
-  const today = new Date().toISOString().slice(0, 10);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-
-  let sentToday = u.email_sent_today || 0;
-  let sentMonth = u.email_sent_month || 0;
-
-  // Reset journalier
-  if (!u.email_day_reset || u.email_day_reset.toISOString().slice(0, 10) < today) {
-    await pool.query(`UPDATE users SET email_sent_today=0, email_day_reset=$2 WHERE id=$1`, [userId, today]);
-    sentToday = 0;
-  }
-  // Reset mensuel
-  if (!u.email_month_reset || u.email_month_reset.toISOString().slice(0, 10) < monthStart) {
-    await pool.query(`UPDATE users SET email_sent_month=0, email_month_reset=$2 WHERE id=$1`, [userId, monthStart]);
-    sentMonth = 0;
-  }
-
-  return {
-    available_today: Math.max(0, EMAIL_MARKETING_MAX - sentToday),
-    available_month: Math.max(0, EMAIL_MONTHLY_LIMIT - sentMonth),
-    sent_today: sentToday,
-    sent_month: sentMonth,
-    daily_limit: EMAIL_MARKETING_MAX,
-    monthly_limit: EMAIL_MONTHLY_LIMIT,
-    day_reset: u.email_day_reset,
-    month_reset: u.email_month_reset,
-  };
-}
+// Commit 30 — délégué au helper unifié `utils/email.js → checkUserEmailQuota`.
+// Préservé comme alias pour les call-sites existants. Source unique de vérité :
+// `users.email_sent_today` + `email_sent_month` (BDD, cluster-safe).
+const checkEmailQuota = checkUserEmailQuota;
 
 // ── Segmentation 5 classes (champion/fidele/prometteur/risque/perdu) ─────────
 // Anti-spam: exclut par défaut les clients ayant reçu un SMS dans les 7 derniers jours
@@ -729,9 +704,15 @@ router.post('/send', async (req, res) => {
     }
 
     // Envoyer emails via sendMarketingEmail (Brevo)
+    // Commit 30 — quota per-user BDD (cluster-safe), pas la var mémoire
+    // historique de getEmailQuota() qui était par worker et incorrecte.
     if (needEmail && (message_email || message_sms)) {
-      const emailQuota = getEmailQuota();
-      const emailsToSendNow = Math.min(emailClients.length, emailQuota.available_today);
+      const emailQuota = await checkUserEmailQuota(userId);
+      const emailsToSendNow = Math.min(
+        emailClients.length,
+        emailQuota.available_today,
+        emailQuota.available_month
+      );
       const emailsToQueue = emailClients.slice(emailsToSendNow);
       const emailsNow = emailClients.slice(0, emailsToSendNow);
 
