@@ -37,5 +37,6 @@ router.use(cors({
 router.use('/auth', require('./auth'));
 router.use('/merchants', require('./merchants'));
 router.use('/clients',   require('./clients'));
+router.use('/stats',     require('./stats'));
 
 module.exports = router;

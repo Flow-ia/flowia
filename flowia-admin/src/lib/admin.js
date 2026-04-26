@@ -69,3 +69,8 @@ export async function anonymizeClient(id) {
     method: 'DELETE',
   });
 }
+
+// ── Stats globales ──────────────────────────────────────────────────────────
+export async function getGlobalStats() {
+  return await apiJson('/api/admin/stats');
+}

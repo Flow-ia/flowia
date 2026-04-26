@@ -448,3 +448,47 @@ input::placeholder { color: var(--fg-muted); }
 .card-link:hover { border-color: var(--fg); background: var(--surface-2); }
 .card-link-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
 .card-link-sub   { font-size: 11px; color: var(--fg-muted); }
+
+/* ── Stat cards (Dashboard) ────────────────────────────────────────────── */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  padding: 20px;
+  text-decoration: none;
+  color: var(--fg);
+  display: block;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+a.stat-card:hover { border-color: var(--fg); background: var(--surface-2); }
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  margin-bottom: 10px;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+.stat-meta {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.dash-footer-meta {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-muted);
+  letter-spacing: 0.04em;
+}
