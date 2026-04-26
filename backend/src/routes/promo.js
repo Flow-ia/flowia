@@ -223,6 +223,12 @@ router.get('/stats', async (req, res) => {
 
 
 // ── POST /api/promo/:id/send-emails ──────────────────────────────────────────
+// Commit 29 — fix RGPD critique : filtrage `marketing_opt_in = TRUE` ajouté.
+// Avant ce commit, la route envoyait à TOUS les clients ayant un email, y
+// compris ceux qui s'étaient explicitement désinscrits. Violation directe
+// du consentement (RGPD art. 7-3 + LCEN art. L34-5). Le SELECT exclut aussi
+// les clients bloqués (`is_booking_blocked`) — pas de raison commerciale de
+// leur envoyer une promo non plus.
 router.post('/:id/send-emails', async (req, res) => {
   try {
     const { client_ids } = req.body;
@@ -241,21 +247,44 @@ router.post('/:id/send-emails', async (req, res) => {
     const businessPhone   = userRows[0]?.phone || null;
     const businessAddress = userRows[0]?.address || null;
 
-    let clientQuery, clientParams;
+    // Filtre RGPD : on ne sélectionne QUE les clients qui ont explicitement
+    // opté pour le marketing ET qui ne sont pas bloqués. Appliqué dans les
+    // deux branches (envoi ciblé via client_ids ET envoi global).
+    const RGPD_FILTER = `marketing_opt_in = TRUE
+                         AND COALESCE(is_booking_blocked, FALSE) = FALSE`;
+    let clientQuery, clientParams, totalRequested = 0;
     if (client_ids && client_ids.length > 0) {
+      totalRequested = client_ids.length;
       clientQuery = `SELECT id, first_name, last_name, email, unsubscribe_token FROM client_accounts
-                     WHERE user_id=$1 AND id=ANY($2::uuid[]) AND email IS NOT NULL AND email != ''`;
+                     WHERE user_id=$1 AND id=ANY($2::uuid[])
+                       AND email IS NOT NULL AND email != ''
+                       AND ${RGPD_FILTER}`;
       clientParams = [req.user.userId, client_ids];
     } else {
+      const { rows: totR } = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM client_accounts
+          WHERE user_id=$1 AND email IS NOT NULL AND email != ''`, [req.user.userId]
+      );
+      totalRequested = totR[0]?.n || 0;
       clientQuery = `SELECT id, first_name, last_name, email, unsubscribe_token FROM client_accounts
-                     WHERE user_id=$1 AND email IS NOT NULL AND email != ''`;
+                     WHERE user_id=$1 AND email IS NOT NULL AND email != ''
+                       AND ${RGPD_FILTER}`;
       clientParams = [req.user.userId];
     }
     const { rows: clients } = await pool.query(clientQuery, clientParams);
-    if (!clients.length) return res.json({ sent:0, failed:0, total:0, message:'Aucun client avec email.' });
+    const skippedOptOut = Math.max(0, totalRequested - clients.length);
+
+    if (!clients.length) {
+      return res.json({
+        sent: 0, failed: 0, total: 0, skipped_opt_out: skippedOptOut,
+        message: skippedOptOut > 0
+          ? `Aucun destinataire éligible : ${skippedOptOut} client(s) désabonné(s) ou bloqué(s) exclu(s) (RGPD).`
+          : 'Aucun client avec email.',
+      });
+    }
 
     const { sendPromoEmail } = require('../utils/email');
-    console.log(`[PROMO SEND] ${promo.code} → ${clients.length} destinataires`);
+    console.log(`[PROMO SEND] ${promo.code} → ${clients.length} destinataires (exclus RGPD: ${skippedOptOut})`);
     let sent = 0, failed = 0;
     for (const client of clients) {
       const name = [client.first_name, client.last_name].filter(Boolean).join(' ') || 'Client';
@@ -268,8 +297,8 @@ router.post('/:id/send-emails', async (req, res) => {
         if (ok) sent++; else failed++;
       } catch(e) { failed++; console.error(`[PROMO SEND ERR] ${client.email}: ${e.message}`); }
     }
-    console.log(`[PROMO SEND] ${promo.code} — bilan: sent=${sent} failed=${failed}`);
-    res.json({ sent, failed, total: clients.length });
+    console.log(`[PROMO SEND] ${promo.code} — bilan: sent=${sent} failed=${failed} skipped_opt_out=${skippedOptOut}`);
+    res.json({ sent, failed, total: clients.length, skipped_opt_out: skippedOptOut });
   } catch(e) {
     console.error('[PROMO SEND] ERREUR:', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
