@@ -626,10 +626,10 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       }
     }, 2 * 60 * 60 * 1000);
 
-    // Anniversaires clients — une tentative par heure, ne déclenche l'envoi
-    // qu'entre 09:00 et 10:00 (guard interne au handler), pour éviter de spammer
-    // si le worker redémarre plusieurs fois. Protégé par client_rewards unique
-    // sur (user_id, client_email, reward_type, année) — voir runBirthdayPromos.
+    // Anniversaires clients — commit 24b. Tente l'envoi toutes les heures,
+    // mais le handler ne déclenche que le 1er du mois entre 09:00 et 10:00
+    // (guards horaires internes). Anti-doublon annuel via SELECT préalable
+    // sur client_rewards + filtre last_birthday_reward_at rolling 330j.
     setInterval(async () => {
       try { await runBirthdayPromos(); } catch (e) { console.error('[CRON birthday]', e.message); }
     }, 60 * 60 * 1000);
@@ -638,63 +638,75 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
   }
 
   // ── Cron anniversaire : génère promos + envoie emails ─────────────────────
-  // Exécuté une fois par jour (09:00). Pour chaque commerçant avec
-  // birthday_campaigns.is_enabled = TRUE, détecte les client_accounts dont le
-  // (mois, jour) de birth_date correspond à aujourd'hui et qui n'ont pas déjà
-  // reçu de réduction anniversaire cette année → crée un promo_code unique
-  // BDAY-... + une ligne client_rewards + envoie l'email.
-  async function runBirthdayPromos() {
+  // Commit 24b — refonte UX : on n'envoie plus le jour exact d'anniversaire
+  // mais le 1er du mois de naissance, et le code est valable tout le mois
+  // calendaire (du 1er au dernier jour du mois). UX plus respectueuse RGPD
+  // (mois+année suffisent à l'inscription) + fenêtre d'utilisation plus large
+  // pour le client.
+  //
+  // Filtre principal :
+  //   - birthday_campaigns.is_enabled = TRUE     (gate commerçant)
+  //   - ca.marketing_opt_in = TRUE               (RGPD commit 17)
+  //   - EXTRACT(MONTH FROM birth_date) = MONTH(now) AND DAY(now) = 1
+  //   - rolling 330j via ca.last_birthday_reward_at (anti-fraude)
+  //
+  // Cron exécuté toutes les heures, mais l'envoi n'est déclenché qu'à 09:xx
+  // (guard horaire interne) — ce qui restreint naturellement à un seul créneau
+  // d'envoi par jour, idempotent via le filtre last_birthday_reward_at.
+  // options.force        : ignore les guards horaires (test admin)
+  // options.userIdFilter : limite l'envoi à un seul commerçant (test admin)
+  async function runBirthdayPromos(options = {}) {
+    const { force = false, userIdFilter = null } = options;
     const now = new Date();
-    if (now.getHours() !== 9) return; // guard : 09:xx uniquement
+    if (!force) {
+      if (now.getHours() !== 9) return { ok: true, sent: 0, skipped: 'not_9am' };
+      if (now.getDate() !== 1) return { ok: true, sent: 0, skipped: 'not_first_of_month' };
+    }
     try {
+      const params = [];
+      let where = 'bc.is_enabled = TRUE';
+      if (userIdFilter) { params.push(userIdFilter); where += ` AND bc.user_id = $${params.length}`; }
       const { rows: campaigns } = await dbPool.query(
-        `SELECT bc.user_id, bc.discount_type, bc.discount_value, bc.validity_days,
+        `SELECT bc.user_id, bc.discount_type, bc.discount_value,
                 bc.message, u.business_name, u.email AS biz_email, u.phone AS biz_phone,
                 u.address AS biz_address
            FROM birthday_campaigns bc
            JOIN users u ON u.id = bc.user_id
-          WHERE bc.is_enabled = TRUE`
+          WHERE ${where}`,
+        params
       );
-      if (!campaigns.length) return;
+      if (!campaigns.length) return { ok: true, sent: 0, skipped: 'no_campaign_enabled' };
 
       const { sendBirthdayPromo } = require('./utils/email');
       let totalSent = 0;
 
-      // Fallback 29 février : en année non-bissextile, on fait correspondre
-      // aussi les naissances du 29/02 au 28/02.
-      const todayMon = now.getMonth() + 1;
-      const todayDay = now.getDate();
       const y = now.getFullYear();
-      const isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-      const feb29Fallback = (!isLeap && todayMon === 2 && todayDay === 28)
-        ? ` OR (EXTRACT(MONTH FROM ca.birth_date)=2 AND EXTRACT(DAY FROM ca.birth_date)=29)`
-        : '';
+      const monthNum = now.getMonth() + 1; // 1..12
+      const monthNames = [
+        'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+      ];
+      const monthName = monthNames[monthNum - 1];
 
       for (const camp of campaigns) {
-        // Clients de ce commerçant dont c'est l'anniversaire aujourd'hui.
-        // Anti-fraude 330j : porté UNIQUEMENT par client_accounts (scope
-        // user_id → par commerçant). La version globale bloquait faussement
-        // les autres commerçants d'un client multi-commerces.
+        // Clients de ce commerçant nés ce mois-ci. On filtre uniquement sur
+        // EXTRACT(MONTH FROM birth_date) — le jour de naissance n'est plus
+        // utilisé (le picker ne collecte que mois+année, jour forcé à 01).
+        // Anti-fraude 330j porté UNIQUEMENT par client_accounts (scope user_id
+        // → par commerçant), pour ne pas bloquer un client multi-commerces.
         const { rows: clients } = await dbPool.query(
-          `SELECT DISTINCT ca.email, ca.first_name, ca.last_name, ca.unsubscribe_token
+          `SELECT DISTINCT ca.id, ca.email, ca.first_name, ca.last_name, ca.unsubscribe_token
              FROM client_accounts ca
             WHERE ca.user_id = $1
               AND ca.birth_date IS NOT NULL
               AND ca.marketing_opt_in = TRUE
-              AND (
-                (EXTRACT(MONTH FROM ca.birth_date)=EXTRACT(MONTH FROM CURRENT_DATE)
-                 AND EXTRACT(DAY FROM ca.birth_date)=EXTRACT(DAY FROM CURRENT_DATE))
-                ${feb29Fallback}
-              )
+              AND EXTRACT(MONTH FROM ca.birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
               AND ca.email IS NOT NULL AND ca.email <> ''
               AND (ca.last_birthday_reward_at IS NULL
                    OR ca.last_birthday_reward_at < NOW() - INTERVAL '330 days')`,
           [camp.user_id]
         );
         if (!clients.length) continue;
-
-        const validity = Math.max(1, parseInt(camp.validity_days) || 30);
-        const year = y;
 
         for (const c of clients) {
           const emailLow = c.email.toLowerCase();
@@ -707,19 +719,17 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                   AND reward_type='birthday'
                   AND EXTRACT(YEAR FROM created_at) = $3
                 LIMIT 1`,
-              [camp.user_id, emailLow, year]
+              [camp.user_id, emailLow, y]
             );
             if (already.length) continue;
             const sentToday = await getGlobalEmailCount();
             if (sentToday >= 300) { console.log('[CRON birthday] limite email atteinte'); return; }
 
-            // INSERT promo + INSERT reward en TRANSACTION atomique.
-            // + Retry (3 tentatives) sur collision UNIQUE(user_id, code) —
-            //   4 chars aléatoires = ~1.6M combinaisons, collision possible
-            //   chez un gros commerçant avec plusieurs clients aux mêmes
-            //   initiales.
-            const initials = [c.first_name, c.last_name]
-              .filter(Boolean).map(s => s.charAt(0).toUpperCase()).join('') || 'C';
+            // Format code : BDAY-{client_id_short}-{year}.
+            // Brief 24b : "BDAY-A1B2-2026". client_id_short = 4 premiers chars
+            // du UUID client (déterministe, lisible). Sur collision UNIQUE
+            // (user_id, code) → retry avec 6 chars puis 6 chars + 2 random.
+            const idHex = String(c.id || '').replace(/-/g, '');
             const txClient = await dbPool.connect();
             let promoRow = null;
             let code = null;
@@ -727,18 +737,24 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               await txClient.query('BEGIN');
               let inserted = false;
               for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
-                const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-                code = `BDAY-${initials}-${rand}`;
+                let shortId;
+                if (attempt === 0)      shortId = idHex.slice(0, 4).toUpperCase();
+                else if (attempt === 1) shortId = idHex.slice(0, 6).toUpperCase();
+                else                    shortId = idHex.slice(0, 6).toUpperCase()
+                                                  + Math.random().toString(36).slice(2, 4).toUpperCase();
+                code = `BDAY-${shortId || 'C'}-${y}`;
                 try {
+                  // valid_until = dernier jour du mois courant (ex 30/04/2026
+                  // si on est le 01/04/2026). DATE_TRUNC + 1 mois - 1 jour.
                   const { rows } = await txClient.query(
                     `INSERT INTO promo_codes
                        (user_id, code, type, value, max_uses, valid_from, valid_until,
                         is_active, target_clients, owner_client_email)
-                     VALUES ($1,$2,$3,$4,1,CURRENT_DATE, CURRENT_DATE + ($5 || ' days')::INTERVAL,
-                             TRUE,'specific',$6)
+                     VALUES ($1,$2,$3,$4,1,CURRENT_DATE,
+                             (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::DATE,
+                             TRUE,'specific',$5)
                      RETURNING id, valid_until`,
-                    [camp.user_id, code, camp.discount_type, camp.discount_value,
-                     String(validity), emailLow]
+                    [camp.user_id, code, camp.discount_type, camp.discount_value, emailLow]
                   );
                   promoRow = rows[0];
                   inserted = true;
@@ -750,17 +766,15 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                 }
               }
               if (!inserted) throw new Error(`code collision 3x for ${emailLow}`);
-              // expires_at stockée à 00:00 UTC du jour APRÈS valid_until
-              // (= moment exact où la promo bascule "valide" → "expirée"
-              // côté backend via `valid_until >= CURRENT_DATE`). Aligne
-              // l'affichage frontend avec la vraie expiration — évite
-              // "expiré" visuel plusieurs heures avant l'heure réelle en
-              // timezone locale non-UTC.
+              // expires_at = 1er du mois suivant à 00:00 UTC = moment exact où
+              // la promo bascule "valide" → "expirée" côté backend via
+              // `valid_until >= CURRENT_DATE`.
               await txClient.query(
                 `INSERT INTO client_rewards
                    (user_id, client_email, reward_type, status, promo_code_id, expires_at)
-                 VALUES ($1,$2,'birthday','available',$3,(CURRENT_DATE + ($4 || ' days')::INTERVAL)::timestamptz)`,
-                [camp.user_id, emailLow, promoRow.id, String(validity + 1)]
+                 VALUES ($1,$2,'birthday','available',$3,
+                         (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month')::timestamptz)`,
+                [camp.user_id, emailLow, promoRow.id]
               );
               await txClient.query(
                 `UPDATE client_accounts SET last_birthday_reward_at = NOW()
@@ -785,6 +799,8 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               type: camp.discount_type,
               value: camp.discount_value,
               validUntil: promo[0].valid_until,
+              monthName,
+              monthNum,
               customMessage: camp.message,
               businessEmail: camp.biz_email,
               businessPhone: camp.biz_phone,
@@ -800,9 +816,12 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
           }
         }
       }
-      if (totalSent) console.log(`[CRON birthday] ${totalSent} anniversaires traités`);
-    } catch (e) { console.error('[CRON birthday]', e.message); }
+      if (totalSent) console.log(`[CRON birthday] ${totalSent} anniversaires traités (mois ${monthName} ${y})`);
+      return { ok: true, sent: totalSent, monthName, year: y };
+    } catch (e) { console.error('[CRON birthday]', e.message); return { ok: false, error: e.message }; }
   }
+  // Expose pour endpoint admin de test (POST /api/birthday-campaign/test-run).
+  app.locals.runBirthdayPromos = runBirthdayPromos;
 
   const PORT = process.env.PORT || 5000;
   initDB()

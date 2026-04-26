@@ -780,24 +780,34 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
 
 // ── Email anniversaire client ─────────────────────────────────────────────
 // Audit Z : accepte `unsubscribeToken` pour conformité RGPD.
-async function sendBirthdayPromo({ to, clientName, businessName, code, type, value, validUntil, customMessage, businessEmail, businessPhone, businessAddress, unsubscribeToken }) {
+async function sendBirthdayPromo({ to, clientName, businessName, code, type, value, validUntil, customMessage, businessEmail, businessPhone, businessAddress, unsubscribeToken, monthName, monthNum }) {
   const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
   const firstName = (clientName || '').split(' ')[0] || '';
-  const subject = `Joyeux anniversaire ${firstName ? firstName + ' ' : ''}— ${discountStr} offert par ${businessName}`;
+  // Commit 24b — sujet et corps évoquent le mois (envoi 1er du mois, code
+  // valable tout le mois) plutôt que le jour exact.
+  const subject = `Joyeux anniversaire${firstName ? ' ' + firstName : ''}, votre cadeau vous attend`;
   const validStr = validUntil ? new Date(validUntil).toLocaleDateString('fr-FR') : null;
+  const monthLabel = monthName || (validUntil ? new Date(validUntil).toLocaleDateString('fr-FR', { month: 'long' }) : '');
+  const validUntilShort = validUntil
+    ? `${String(new Date(validUntil).getDate()).padStart(2, '0')}/${String(monthNum || (new Date(validUntil).getMonth() + 1)).padStart(2, '0')}`
+    : null;
+
+  const intro = customMessage
+    ? customMessage
+    : `En ce mois de ${monthLabel}, profitez de ${discountStr} sur votre prochaine visite chez ${businessName}.`;
 
   const text = [
-    `Bon anniversaire ${firstName || 'cher client'} ! 🎂`,
+    `Joyeux anniversaire ${firstName || 'cher client'} !`,
     '',
-    customMessage || `${businessName} vous offre ${discountStr} sur votre prochaine visite.`,
+    intro,
     '',
     `Code : ${code}`,
-    validStr ? `Valable jusqu'au ${validStr}.` : '',
+    validUntilShort ? `Valable jusqu'au ${validUntilShort}.` : (validStr ? `Valable jusqu'au ${validStr}.` : ''),
     '',
     businessAddress ? `Adresse : ${businessAddress}` : '',
     businessPhone   ? `Téléphone : ${businessPhone}` : '',
     '',
-    'À bientôt,',
+    'À très bientôt,',
     businessName,
   ].filter(Boolean).join('\n');
 
@@ -808,10 +818,12 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
     <div style="background:linear-gradient(135deg,#ec4899,#f97316);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
       <div style="font-size:64px;margin-bottom:12px;">🎂</div>
       <h1 style="color:white;margin:0;font-size:28px;font-weight:900;">Joyeux anniversaire !</h1>
-      <p style="color:rgba(255,255,255,0.95);margin:10px 0 0;font-size:16px;">${firstName ? firstName + ', ' : ''}${businessName} pense à vous aujourd'hui.</p>
+      <p style="color:rgba(255,255,255,0.95);margin:10px 0 0;font-size:16px;">${firstName ? firstName + ', ' : ''}${businessName} a un cadeau pour vous${monthLabel ? ' en ce mois de ' + monthLabel : ''}.</p>
     </div>
     <div style="background:white;padding:32px 36px;border-left:1px solid #fecdd3;border-right:1px solid #fecdd3;">
-      ${customMessage ? `<p style="color:#831843;font-size:15px;line-height:1.7;margin:0 0 20px;font-style:italic;text-align:center;">"${customMessage}"</p>` : ''}
+      ${customMessage
+        ? `<p style="color:#831843;font-size:15px;line-height:1.7;margin:0 0 20px;font-style:italic;text-align:center;">"${customMessage}"</p>`
+        : `<p style="color:#831843;font-size:14px;line-height:1.7;margin:0 0 20px;text-align:center;">En ce mois de ${monthLabel}, profitez de <strong>${discountStr}</strong> sur votre prochaine visite chez <strong>${businessName}</strong>.</p>`}
       <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(249,115,22,0.08));border:2px solid rgba(236,72,153,0.3);border-radius:20px;padding:24px;text-align:center;margin-bottom:24px;">
         <p style="color:#9f1239;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Votre cadeau</p>
         <p style="color:#ec4899;font-size:48px;font-weight:900;margin:0;font-family:monospace;">${discountStr}</p>

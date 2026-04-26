@@ -68,4 +68,29 @@ router.put('/', pinAdminMiddleware, async (req, res) => {
   } catch (e) { console.error('[BIRTHDAY PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
+// ── POST /api/birthday-campaign/test-run ────────────────────────────────────
+// Commit 24b — déclenchement manuel du cron anniversaire pour le commerçant
+// connecté (force l'envoi sans attendre le 1er du mois 09:xx). Permet aux
+// commerçants de tester leur configuration. Préserve TOUS les filtres métier :
+//   - birthday_campaigns.is_enabled = TRUE
+//   - clients ayant marketing_opt_in = TRUE et birth_date du mois courant
+//   - anti-fraude rolling 330j (last_birthday_reward_at)
+//   - anti-doublon annuel (1 reward par client par an)
+//   - quota Brevo 300/j cluster-safe
+// Audit : PIN admin (alignement W/X/AA — toute action métier
+// déclenchant des emails facturés passe par PIN).
+router.post('/test-run', pinAdminMiddleware, async (req, res) => {
+  try {
+    const runner = req.app.locals.runBirthdayPromos;
+    if (typeof runner !== 'function') {
+      return res.status(503).json({ error: 'Cron anniversaire indisponible.' });
+    }
+    const result = await runner({ force: true, userIdFilter: req.user.userId });
+    res.json(result || { ok: true });
+  } catch (e) {
+    console.error('[BIRTHDAY TEST-RUN]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 module.exports = router;
