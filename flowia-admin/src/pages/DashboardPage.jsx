@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { getMe, logout } from '../lib/auth.js';
 
 export default function DashboardPage() {
@@ -30,6 +30,7 @@ export default function DashboardPage() {
       <header className="dash-header">
         <div className="dash-brand">FlowIA Admin</div>
         <div className="dash-meta">
+          <Link to="/settings" className="btn-ghost">{"Reglages"}</Link>
           {me && <span className="dash-user">{me.name}</span>}
           <button className="btn-ghost" onClick={onLogout}>{"Deconnexion"}</button>
         </div>

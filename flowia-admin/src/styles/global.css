@@ -212,3 +212,94 @@ input::placeholder { color: var(--fg-muted); }
   text-align: center;
   letter-spacing: 0.04em;
 }
+
+/* ── Cards (Settings, etc.) ────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+.card-sub {
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  max-width: 60ch;
+}
+
+.badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border: 0.5px solid var(--border);
+  font-weight: 500;
+}
+.badge-on  { color: #4ade80; border-color: #4ade80; }
+.badge-off { color: var(--fg-muted); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--error);
+  border: 0.5px solid var(--error);
+  padding: 11px 14px;
+  cursor: pointer;
+  font-weight: 500;
+  width: 100%;
+  transition: background 0.15s ease;
+}
+.btn-danger:hover    { background: rgba(255, 91, 80, 0.08); }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.login-success {
+  background: rgba(74, 222, 128, 0.08);
+  border: 0.5px solid #4ade80;
+  color: #4ade80;
+  padding: 8px 10px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.totp-setup, .totp-disable {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.totp-step {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+}
+.totp-qr {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  background: white;
+  border: 0.5px solid var(--border);
+  align-self: flex-start;
+}
+.totp-secret {
+  display: block;
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  padding: 10px 12px;
+  font-family: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--fg);
+  letter-spacing: 0.04em;
+}
