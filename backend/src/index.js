@@ -897,7 +897,25 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       app.listen(PORT, () => {
         const isWorker1 = !cluster.worker || cluster.worker.id === 1;
         console.log(`✅ Worker ${process.pid} → http://localhost:${PORT}`);
-        if (isWorker1) startCron();
+        // Commit 28b — log diagnostic des URLs unsubscribe émises dans les
+        // emails marketing. Si l'URL pointe vers un backend qui ne contient
+        // pas la route `/api/pub/unsubscribe-page` (ex. backend prod sur
+        // branche main pendant la refonte), les liens cliquables renverront
+        // 404 « Cannot GET ». Ce log permet de détecter la config en 1 coup.
+        if (isWorker1) {
+          try {
+            const { unsubscribeUrl, backendUnsubscribeUrl } = require('./utils/unsubscribe');
+            const stub = '00000000-0000-0000-0000-000000000000';
+            const footerUrl = unsubscribeUrl(stub);
+            const headerUrl = backendUnsubscribeUrl(stub);
+            console.log(`[UNSUB CFG] footer email → ${footerUrl || '(non générable, BACKEND_PUBLIC_URL manquante)'}`);
+            console.log(`[UNSUB CFG] List-Unsubscribe header → ${headerUrl || '(non générable)'}`);
+            if (process.env.UNSUBSCRIBE_FRONTEND_PAGE_URL) {
+              console.log(`[UNSUB CFG] redirect 302 actif vers → ${process.env.UNSUBSCRIBE_FRONTEND_PAGE_URL}`);
+            }
+          } catch (e) { console.warn('[UNSUB CFG] Log diagnostic indisponible:', e.message); }
+          startCron();
+        }
       });
     })
     .catch(err => {
