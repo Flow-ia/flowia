@@ -96,9 +96,21 @@ function startServer() {
       }
     } catch { /* origine non-URL (ex: localhost:3000) — ignorer */ }
   }
+  // Commit 28 — autoriser les preview Vercel du projet (URLs uniques par
+  // commit/branche, ne peuvent pas être whitelistées exactement).
+  // Le pattern est strict : doit commencer par `flowia` ou `flowia-git-` et
+  // finir par `.vercel.app`. Optionnellement étendable via VERCEL_PREVIEW_REGEX.
+  const previewRegex = (() => {
+    const env = (process.env.VERCEL_PREVIEW_REGEX || '').trim();
+    if (env) {
+      try { return new RegExp(env); } catch { /* pattern invalide → fallback */ }
+    }
+    return /^https:\/\/flowia(-[a-z0-9-]+)?\.vercel\.app$/i;
+  })();
   app.use(cors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+      if (previewRegex.test(origin)) return callback(null, true);
       callback(new Error('CORS not allowed: ' + origin));
     },
     credentials: true,

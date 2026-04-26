@@ -15,21 +15,38 @@
 // log d'avertissement explicite côté serveur — l'email reste envoyé avec
 // le mailto STOP en fallback (mieux que rien, mais à corriger en config).
 
-function backendUnsubscribeUrl(token) {
-  const base = (process.env.BACKEND_PUBLIC_URL || process.env.API_URL || '')
+function backendBase() {
+  return (process.env.BACKEND_PUBLIC_URL || process.env.API_URL || '')
     .split(',')[0]?.replace(/\/$/, '') || '';
+}
+
+// URL backend 1-clic (utilisée par le header List-Unsubscribe RFC 8058).
+// Effet immédiat — destinée à Gmail/Apple Mail bouton intégré.
+function backendUnsubscribeUrl(token) {
+  const base = backendBase();
   if (!base || !token) return null;
   return `${base}/api/pub/unsubscribe/${token}`;
 }
 
-// URL préférée pour les nouveaux envois : page frontend FDS-2026.
-// Fallback automatique sur le backend si FRONTEND_PUBLIC_URL non configurée.
+// URL backend 2 étapes (utilisée par le footer cliquable des emails).
+// Page HTML autonome avec form de confirmation — fonctionne en prod sans
+// dépendance à la frontend React. Si la frontend est en prod, l'admin peut
+// définir UNSUBSCRIBE_FRONTEND_PAGE_URL côté backend ; la route fera alors
+// un redirect 302 vers la page React FDS-2026.
+function backendUnsubscribePageUrl(token) {
+  const base = backendBase();
+  if (!base || !token) return null;
+  return `${base}/api/pub/unsubscribe-page/${token}`;
+}
+
+// URL retournée pour le footer email cliquable.
+// Commit 28 — pointe TOUJOURS vers le backend (page 2 étapes autonome). La
+// frontend React `/unsubscribe?token=...` reste accessible aux utilisateurs
+// qui y arrivent directement, mais on n'envoie plus son URL dans les emails
+// tant que la prod main ne l'a pas (sinon → page de login).
 function unsubscribeUrl(token) {
   if (!token) return null;
-  const front = (process.env.FRONTEND_PUBLIC_URL || '')
-    .split(',')[0]?.replace(/\/$/, '') || '';
-  if (front) return `${front}/unsubscribe?token=${token}`;
-  return backendUnsubscribeUrl(token);
+  return backendUnsubscribePageUrl(token) || backendUnsubscribeUrl(token);
 }
 
 // SMS : footer court en 1 ligne. ~50 chars — coût d'1 segment SMS
@@ -124,6 +141,7 @@ function unsubscribeHeaders({ token, businessEmail, refId }) {
 module.exports = {
   unsubscribeUrl,
   backendUnsubscribeUrl,
+  backendUnsubscribePageUrl,
   appendUnsubscribeSms,
   unsubscribeEmailHtml,
   marketingFooterHtml,

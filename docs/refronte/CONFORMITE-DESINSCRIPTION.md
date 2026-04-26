@@ -9,24 +9,26 @@
 - **CNIL délibération 2020-091** — opt-in préalable pour la prospection commerciale + lien de désabonnement obligatoire dans chaque message
 - **Loi Informatique et Libertés art. 38** — droit d'opposition
 
-## Architecture en 2 chemins distincts (commit 27)
+## Architecture en 2 chemins distincts (commits 27 + 28)
 
 Pour réconcilier deux exigences contradictoires — **éviter les désinscriptions accidentelles** (prefetch Gmail, bots, clic involontaire) et **préserver le 1-clic Gmail/Apple Mail RFC 8058** (délivrabilité) — on émet **deux URLs distinctes** par message marketing :
 
 | Chemin | Audience | URL émise | Comportement |
 |---|---|---|---|
-| **1. Lien email cliquable** (footer HTML) | Client humain qui clique le lien dans l'email | `${FRONTEND_PUBLIC_URL}/unsubscribe?token=...` (page React) ou fallback `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe/:token` | **2 étapes** : page de confirmation avec aperçu des avantages perdus + bouton « Confirmer ». Source `public_form` dans le log. |
-| **2. Header `List-Unsubscribe`** (RFC 2369 + 8058) | Bouton « Se désabonner » intégré dans Gmail/Apple Mail à côté de l'expéditeur | TOUJOURS `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe/:token` (jamais frontend) | **1-clic immédiat** : flip + log `email_link`. Compatible POST One-Click Gmail. Préserve la délivrabilité. |
+| **1. Lien email cliquable** (footer HTML) | Client humain qui clique le lien dans l'email | `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe-page/:token` (page HTML 2 étapes autonome) | **2 étapes** : aperçu des avantages perdus + form POST « Confirmer ». Source `public_form`. Si `UNSUBSCRIBE_FRONTEND_PAGE_URL` est défini → redirect 302 vers la page React FDS-2026. |
+| **2. Header `List-Unsubscribe`** (RFC 2369 + 8058) | Bouton « Se désabonner » intégré dans Gmail/Apple Mail à côté de l'expéditeur | TOUJOURS `${BACKEND_PUBLIC_URL}/api/pub/unsubscribe/:token` | **1-clic immédiat** : flip + log `email_link`. Compatible POST One-Click Gmail. Préserve la délivrabilité. |
 
-**Ce sont deux URLs volontairement différentes selon le contexte d'usage.** Côté backend, `unsubscribeHeaders()` force l'URL backend ; `unsubscribeUrl()` (utilisé dans les footers HTML) privilégie la frontend.
+**Important — bug évité au commit 28** : avant ce commit, le footer cliquable pointait vers `${FRONTEND_PUBLIC_URL}/unsubscribe?token=...`. Pendant la phase de refonte, cette URL résolvait sur le domaine prod (ex `www.haircoifflille.fr`) qui ne contient pas encore la route React `/unsubscribe` — résultat : redirection vers la page de login. La route backend autonome `unsubscribe-page` corrige ce problème : elle marche en prod immédiatement, sans dépendance à un déploiement frontend. Quand la frontend prod aura la route React, l'admin pourra basculer en définissant `UNSUBSCRIBE_FRONTEND_PAGE_URL=https://www.haircoifflille.fr/unsubscribe` côté Render.
 
 ## Endpoints backend
 
 | Méthode | Route | Effet | Source log | Usage |
 |---|---|---|---|---|
-| GET | `/api/pub/unsubscribe-preview/:token` | Lecture seule (aucun UPDATE, aucun log) | – | Page React au mount |
-| POST | `/api/pub/unsubscribe-confirm/:token` | UPDATE + log (si pas déjà désinscrit) | `public_form` | Bouton « Confirmer » de la page React |
-| GET | `/api/pub/unsubscribe/:token` | UPDATE + log immédiat (1-clic) | `email_link` (default) ou `?source=sms_link` | Header List-Unsubscribe + anciens emails (rétrocompat) |
+| GET | `/api/pub/unsubscribe-page/:token` | HTML 2 étapes autonome (aucun UPDATE) | – | **Lien cliquable des emails** (commit 28). Si `UNSUBSCRIBE_FRONTEND_PAGE_URL` défini → redirect 302. |
+| POST | `/api/pub/unsubscribe-page/:token` | UPDATE + log + écran succès HTML | `public_form` | Submit du form de la page ci-dessus |
+| GET | `/api/pub/unsubscribe-preview/:token` | Lecture seule (JSON) | – | Page React `/unsubscribe?token=...` au mount |
+| POST | `/api/pub/unsubscribe-confirm/:token` | UPDATE + log (JSON) | `public_form` | Bouton « Confirmer » de la page React |
+| GET | `/api/pub/unsubscribe/:token` | UPDATE + log immédiat (1-clic) | `email_link` ou `?source=sms_link` | Header `List-Unsubscribe` + anciens emails (rétrocompat) |
 | GET | `/api/pub/opt-in/:token` | UPDATE marketing_opt_in=TRUE | – | Réabonnement 1-clic |
 
 **Token UUID** stocké sur `client_accounts.unsubscribe_token` et `global_clients.unsubscribe_token` (généré à la création, backfillé si NULL — cf. `backend/src/db/index.js:1218`).
@@ -131,12 +133,14 @@ Templates **transactionnels** (pas de footer requis car non marketing) : `sendVe
 
 Templates **transactionnels** (pas de footer requis car non marketing) : `sendVerificationEmail`, `sendAppointmentConfirmation`, `sendDailyRecap`, `sendRdvReminder`, `sendLoyaltyReward`, `sendClientInvite`, `sendAppointmentCancellation`, `sendEmployeeReminder`, `sendPasswordReset`, `sendReferralWelcome`, `sendOptInInvite`, `sendNewAppointmentMerchant`.
 
-## Variables d'environnement
+## Variables d'environnement (Render)
 
-- `FRONTEND_PUBLIC_URL` (recommandée) : URL de l'app React, ex `https://hair-coiff-lille.vercel.app`. Si définie, les liens unsubscribe pointent vers `/unsubscribe?token=...` (page FDS-2026).
-- `BACKEND_PUBLIC_URL` (obligatoire) : URL Render du backend, ex `https://flowia.onrender.com`. Sert au fallback HTML inline.
+- `BACKEND_PUBLIC_URL` (**obligatoire**) : URL Render du backend, ex `https://flowia-backend-dev.onrender.com`. Sert à générer toutes les URLs unsubscribe.
+- `UNSUBSCRIBE_FRONTEND_PAGE_URL` (optionnelle) : URL exacte de la page React, ex `https://www.haircoifflille.fr/unsubscribe`. Quand définie, la route backend `/unsubscribe-page/:token` fait un redirect 302 vers cette URL (avec `?token=...` ajouté). À définir UNIQUEMENT quand la page React est en prod main, sinon les utilisateurs tomberont sur une page de login.
+- `VERCEL_PREVIEW_REGEX` (optionnelle) : regex custom pour autoriser les origins Vercel preview en CORS. Default : `^https:\/\/flowia(-[a-z0-9-]+)?\.vercel\.app$` (couvre les preview branche `flowia-git-*-projects.vercel.app`).
+- `FRONTEND_URL` (obligatoire) : whitelist CORS classique, liste séparée par virgule des origines autorisées (les `www.*` et `commercant.*` sont ajoutés automatiquement).
 
-Sans `FRONTEND_PUBLIC_URL`, le système reste fonctionnel : les liens pointent vers le backend qui rend une page HTML autonome.
+**Important** : la variable `FRONTEND_PUBLIC_URL` introduite au commit 26 n'est plus utilisée (depuis commit 28). Elle peut être laissée définie sans effet, ou supprimée pour clarifier la config.
 
 ## Note de cleanup futur
 
