@@ -80,10 +80,18 @@ module.exports = function attachPromoRoutes(router) {
       const { client_email } = req.body;
       const baseAmt = parseFloat(amount) || 0;
 
-      // Vérifier owner pour codes fidélité
-      if (promo.is_loyalty_reward && promo.owner_client_email && client_email) {
-        if (promo.owner_client_email.toLowerCase() !== client_email.toLowerCase()) {
-          return res.json({ valid: false, error: `Ce code de fidélité appartient à un autre client et ne peut pas être utilisé ici.` });
+      // Codes nominatifs : owner_client_email + target_clients='specific'.
+      // Couvre fidélité, anniversaire (BDAY-*) et parrainage. Avant 24c le
+      // check ne portait que sur is_loyalty_reward, laissant les codes BDAY
+      // utilisables par n'importe quel client. Faille corrigée 24c.
+      const isOwned = (promo.target_clients === 'specific' || promo.is_loyalty_reward)
+                    && !!promo.owner_client_email;
+      if (isOwned) {
+        if (!client_email) {
+          return res.json({ valid: false, error: 'Ce code est nominatif. Identifiez-vous pour l\'utiliser.' });
+        }
+        if (promo.owner_client_email.toLowerCase() !== String(client_email).toLowerCase()) {
+          return res.json({ valid: false, error: 'Ce code est nominatif et ne peut pas être utilisé par un autre client.' });
         }
       }
 

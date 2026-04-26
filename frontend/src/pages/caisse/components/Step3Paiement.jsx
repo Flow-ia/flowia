@@ -290,8 +290,106 @@ export default function Step3Paiement({
           )}
         </div>
 
+        {/* Réductions disponibles — commit 24c. Cards cliquables, sélection
+            unique (no cumul). Click sur card = applique le code promo lié.
+            Un 2e click sur la même card désélectionne. Les parrainages
+            pending sont affichés en informatif (validation back automatique
+            à l'encaissement) et le crédit dans la card client au-dessus. */}
+        {(clientRewards.filter(r => r.status === 'available').length > 0 || pendingRefs.length > 0) && (
+          <div style={card}>
+            <p style={title}>{"Réductions disponibles"}</p>
+            <p style={{ margin:0, fontSize:11, color: t.muted, fontStyle:'italic' }}>
+              {"Cliquez pour appliquer. Une seule réduction par encaissement."}
+            </p>
+            {clientRewards.filter(r => r.status === 'available').map(r => {
+              const isBday = r.reward_type === 'birthday';
+              const accentBg   = isBday ? '#fff7ed' : '#eef2ff';
+              const accentText = isBday ? '#9a3412' : '#4338ca';
+              const accentBar  = isBday ? '#f97316' : '#4338ca';
+              const isSelected = selectedRewardId === r.id;
+              return (
+                <button key={r.id} type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedRewardId(null);
+                            setPromoCode(''); setPromoData(null); setPromoErr('');
+                          } else applyReward(r);
+                        }}
+                        style={{ padding:10, borderRadius:8,
+                                 background: accentBg,
+                                 borderLeft: '2px solid ' + accentBar,
+                                 border: isSelected
+                                   ? `0.5px solid ${accentText}`
+                                   : `0.5px solid ${accentBg}`,
+                                 borderLeftWidth: 2, borderLeftColor: accentBar,
+                                 borderLeftStyle: 'solid',
+                                 display:'flex', justifyContent:'space-between',
+                                 alignItems:'center', gap:8,
+                                 cursor:'pointer', fontFamily:'inherit',
+                                 textAlign:'left', width:'100%',
+                                 boxShadow: isSelected ? `0 0 0 2px ${accentBar}33` : 'none',
+                                 transition: 'box-shadow 0.15s ease' }}>
+                  <span style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
+                    <Icon name="gift" size={14} color={accentText}/>
+                    <span style={{ minWidth:0, display:'flex', flexDirection:'column' }}>
+                      <span style={{ fontSize:12, fontWeight:500, color: accentText }}>
+                        {isBday ? 'Offre anniversaire' : 'Récompense fidélité'}
+                      </span>
+                      <span style={{ fontSize:11, color:t.muted,
+                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {r.code || 'Code automatique'}
+                      </span>
+                    </span>
+                  </span>
+                  <span style={{ fontSize:11, fontWeight:500, color: accentText, flexShrink:0 }}>
+                    {isSelected ? 'Appliqué' : 'Appliquer'}
+                  </span>
+                </button>
+              );
+            })}
+            {pendingRefs.map(ref => {
+              const needsOptIn = ref.parrain_opt_in === false || ref.filleul_opt_in === false;
+              return (
+                <div key={ref.id}
+                     style={{ padding:10, borderRadius:8,
+                              background:'#eeedfe', borderLeft:'2px solid #8b5cf6',
+                              display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                    <div style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
+                      <Icon name="users" size={14} color="#3c3489"/>
+                      <div style={{ minWidth:0 }}>
+                        <p style={{ margin:0, fontSize:12, fontWeight:500, color:'#3c3489' }}>
+                          {"Parrainage en attente"}
+                        </p>
+                        <p style={{ margin:0, fontSize:11, color:t.muted,
+                                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {ref.parrain_label || ref.code || 'Filleul'}
+                        </p>
+                      </div>
+                    </div>
+                    <p style={{ margin:0, fontSize:11, color: needsOptIn ? '#92400e' : t.muted,
+                                flexShrink:0, opacity: needsOptIn ? 0.7 : 1 }}>
+                      {needsOptIn ? 'Non validable' : 'À valider à la caisse'}
+                    </p>
+                  </div>
+                  {needsOptIn && (
+                    <div style={{ padding:'6px 9px', borderRadius:7,
+                                  background:'#fffbeb',
+                                  borderLeft:'2px solid #f59e0b',
+                                  fontSize:10, color:'#92400e', lineHeight:1.5 }}>
+                      {"Parrainage non validable : marketing_opt_in manquant pour "}
+                      {ref.parrain_opt_in === false && ref.filleul_opt_in === false ? 'le parrain et le filleul.'
+                        : ref.parrain_opt_in === false ? 'le parrain.' : 'le filleul.'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div style={card}>
-          <p style={title}>{"Code promo / parrainage"}</p>
+          <p style={title}>{"Code promo manuel"}</p>
           <div style={{ display:'flex', gap:6 }}>
             <input value={promoCode}
                    onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoErr(''); }}
@@ -313,79 +411,6 @@ export default function Step3Paiement({
               {"Remise appliquée : −" + fmt(discount) + " €"}
             </p>
           )}
-
-          {/* Rewards anniversaire / fidélité (pastel orange/indigo). */}
-          {clientRewards.filter(r => r.status === 'available').map(r => (
-            <div key={r.id}
-                 style={{ padding:10, borderRadius:8,
-                          background: r.reward_type === 'birthday' ? '#fff7ed' : '#eef2ff',
-                          borderLeft: '2px solid ' + (r.reward_type === 'birthday' ? '#f97316' : '#4338ca'),
-                          display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-              <div style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
-                <Icon name="gift" size={14}
-                      color={r.reward_type === 'birthday' ? '#9a3412' : '#4338ca'}/>
-                <div style={{ minWidth:0 }}>
-                  <p style={{ margin:0, fontSize:12, fontWeight:500,
-                              color: r.reward_type === 'birthday' ? '#9a3412' : '#4338ca' }}>
-                    {r.reward_type === 'birthday' ? 'Offre anniversaire' : 'Récompense fidélité'}
-                  </p>
-                  <p style={{ margin:0, fontSize:11, color:t.muted,
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {r.code || 'Code automatique'}
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => applyReward(r)}
-                      style={{ padding:'5px 10px', borderRadius:6, border:'none',
-                               background:t.cardAlt, color:t.text, cursor:'pointer',
-                               fontFamily:'inherit', fontSize:11, fontWeight:500,
-                               flexShrink:0 }}>
-                {selectedRewardId === r.id ? 'Appliqué' : 'Appliquer'}
-              </button>
-            </div>
-          ))}
-
-          {/* Parrainages pending (violet). RGPD commit 17 : si parrain ou
-              filleul n'a pas opt-in marketing, bandeau ambre + indication
-              "non validable" — la validation back lèvera REFERRAL_OPT_IN_REQUIRED. */}
-          {pendingRefs.map(ref => {
-            const needsOptIn = ref.parrain_opt_in === false || ref.filleul_opt_in === false;
-            return (
-              <div key={ref.id}
-                   style={{ padding:10, borderRadius:8,
-                            background:'#eeedfe', borderLeft:'2px solid #8b5cf6',
-                            display:'flex', flexDirection:'column', gap:8 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-                  <div style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
-                    <Icon name="users" size={14} color="#3c3489"/>
-                    <div style={{ minWidth:0 }}>
-                      <p style={{ margin:0, fontSize:12, fontWeight:500, color:'#3c3489' }}>
-                        {"Parrainage en attente"}
-                      </p>
-                      <p style={{ margin:0, fontSize:11, color:t.muted,
-                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {ref.parrain_label || ref.code || 'Filleul'}
-                      </p>
-                    </div>
-                  </div>
-                  <p style={{ margin:0, fontSize:11, color: needsOptIn ? '#92400e' : t.muted,
-                              flexShrink:0, opacity: needsOptIn ? 0.7 : 1 }}>
-                    {needsOptIn ? 'Non validable' : 'À valider à la caisse'}
-                  </p>
-                </div>
-                {needsOptIn && (
-                  <div style={{ padding:'6px 9px', borderRadius:7,
-                                background:'#fffbeb',
-                                borderLeft:'2px solid #f59e0b',
-                                fontSize:10, color:'#92400e', lineHeight:1.5 }}>
-                    {"Parrainage non validable : marketing_opt_in manquant pour "}
-                    {ref.parrain_opt_in === false && ref.filleul_opt_in === false ? 'le parrain et le filleul.'
-                      : ref.parrain_opt_in === false ? 'le parrain.' : 'le filleul.'}
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
       </div>
 

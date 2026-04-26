@@ -318,11 +318,14 @@ export default function BookingPage({ slug }) {
   const [promoErr,     setPromoErr]     = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
 
-  const checkPromo = async () => {
-    if (!promoCode.trim()) return;
+  // Commit 24c — accepte un override pour les cards cliquables Step6 :
+  // setPromoCode + checkPromo dans le même tick, sans attendre le re-render
+  // (closure sur l'ancienne valeur de promoCode).
+  const checkPromo = async (codeOverride) => {
+    const codeRaw = (codeOverride || promoCode || '').trim();
+    if (!codeRaw) return;
     setPromoLoading(true); setPromoErr('');
     try {
-      const codeRaw = promoCode.trim();
       // 1. Essai code promo classique
       const res = await pubApi.checkPromo(slug, {
         code:         codeRaw,
@@ -932,7 +935,8 @@ export default function BookingPage({ slug }) {
               {/* ── ÉTAPE 6 : Confirmation ── */}
               {step === 6 && (
                 <Step6Confirm
-                  th={th} selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
+                  th={th} slug={slug}
+                  selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
                   clientUser={clientUser} clientName={clientName}
                   clientEmail={clientEmail} clientPhone={clientPhone}
                   promoCode={promoCode} setPromoCode={setPromoCode}

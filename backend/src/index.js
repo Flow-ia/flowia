@@ -204,6 +204,16 @@ function startServer() {
     message: { error: 'Trop de tentatives de PIN. Patientez 5 minutes.' },
     standardHeaders: true, legacyHeaders: false,
   });
+  // Commit 24c : force-run du cron anniversaire (POST /api/birthday-campaign/
+  // test-run). Endpoint protégé par PIN admin mais déclenche un envoi en
+  // masse d'emails (gated par anti-doublon annuel et quota Brevo 300/j).
+  // Cap strict 1/h/IP : suffit pour smoke-test légitime, bloque accident +
+  // PIN admin compromis.
+  const birthdayTestRunLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, max: 1,
+    message: { error: 'Test cron anniversaire déjà déclenché. Réessayez dans 1 heure.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
 
   // ── Routes ───────────────────────────────────────────────────────────────
   // Routes auth avec limiters spécifiques par endpoint
@@ -245,6 +255,9 @@ function startServer() {
   app.use('/api/employee-pins',  apiLimiter,  require('./routes/employee-pins'));
   app.use('/api/campaigns',     apiLimiter,  require('./routes/campaigns'));
   app.use('/api/marketing',     apiLimiter,  require('./routes/marketing'));
+  // Commit 24c : limiter dédié AVANT apiLimiter sur /test-run uniquement
+  // (1 appel / heure / IP). Express évalue les middlewares dans l'ordre.
+  app.use('/api/birthday-campaign/test-run', birthdayTestRunLimiter);
   app.use('/api/birthday-campaign', apiLimiter, require('./routes/birthday'));
   app.use('/api/referrals',     apiLimiter,  require('./routes/referrals'));
   // Limite spécifique sur les endpoints de création d'intent/checkout AVANT

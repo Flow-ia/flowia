@@ -382,4 +382,150 @@ module.exports = function attachClientProfileRoutes(router) {
       res.status(500).json({ error: 'Erreur serveur.' });
     } finally { client.release(); }
   });
+
+  // ── GET /:slug/client/:id/available-discounts ─────────────────────────────
+  // Commit 24c — réductions disponibles pour le client connecté chez ce
+  // commerçant. Consolidé : codes BDAY (filtre client_id strict via
+  // owner_client_email), récompenses fidélité disponibles, crédit > 0,
+  // parrainages pending (à valider en boutique). Utilisé par la step6 du
+  // booking public pour proposer des cards cliquables, no cumul.
+  //
+  // Filtres :
+  //  - JWT scope='client' + decoded.clientId === :id (anti-cross-account)
+  //  - birthday_campaigns.is_enabled (sinon BDAY filtré)
+  //  - client_accounts.marketing_opt_in (sinon BDAY/parrainage filtrés —
+  //    le code BDAY ne devrait jamais avoir été émis sans opt-in, mais on
+  //    re-check par défense en profondeur)
+  //  - promo_codes.is_active + valid_until >= today + uses_count < max_uses
+  //  - client_rewards.status='available' + expires_at > NOW()
+  //  - client_credits.balance > 0
+  //  - codes BDAY (target_clients='specific' + owner_client_email = email
+  //    du client authentifié) — filtre strict.
+  router.get('/:slug/client/:id/available-discounts', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+      const { rows: biz } = await pool.query(
+        'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
+        [req.params.slug]
+      );
+      if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
+      const userId = biz[0].user_id;
+      let decoded;
+      try { decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET); }
+      catch { return res.status(401).json({ error: 'Token invalide.' }); }
+      if (decoded.scope !== 'client' || decoded.merchantId !== userId)
+        return res.status(403).json({ error: 'Accès refusé.' });
+      // Anti-cross-account : :id doit matcher le clientId du JWT.
+      if (req.params.id && decoded.clientId && req.params.id !== decoded.clientId)
+        return res.status(403).json({ error: 'Accès refusé.' });
+
+      // Email + marketing_opt_in du client local. Si fiche locale absente,
+      // on tente via global_clients (client connecté qui n'a pas encore de
+      // fiche locale — pas de BDAY/fidélité possible mais on retourne tableau
+      // vide, pas une erreur).
+      let clientEmail = null;
+      let optIn = false;
+      const { rows: localRows } = await pool.query(
+        'SELECT email, marketing_opt_in FROM client_accounts WHERE id=$1 AND user_id=$2',
+        [decoded.clientId, userId]
+      );
+      if (localRows[0]?.email) {
+        clientEmail = localRows[0].email;
+        optIn = localRows[0].marketing_opt_in === true;
+      } else if (decoded.globalClientId) {
+        const { rows: gc } = await pool.query(
+          'SELECT email FROM global_clients WHERE id=$1', [decoded.globalClientId]
+        );
+        if (gc[0]?.email) clientEmail = gc[0].email;
+      }
+      if (!clientEmail) return res.json({ discounts: [], credit: null });
+      const emailLow = clientEmail.toLowerCase();
+
+      // is_enabled birthday_campaigns du commerçant — gate les codes BDAY.
+      const { rows: bcRows } = await pool.query(
+        'SELECT is_enabled FROM birthday_campaigns WHERE user_id=$1', [userId]
+      );
+      const birthdayEnabled = bcRows[0]?.is_enabled === true;
+
+      // Rewards client (BDAY + fidélité) — déjà liés au client via
+      // client_rewards.client_email. Filtre BDAY supplémentaire :
+      // owner_client_email du promo doit matcher l'email du client (défense
+      // en profondeur, au cas où une ligne reward orpheline existerait).
+      const { rows: rewardRows } = await pool.query(
+        `SELECT cr.id AS reward_id, cr.reward_type, cr.expires_at, cr.created_at,
+                p.id AS promo_id, p.code, p.type AS discount_type, p.value AS discount_value,
+                p.valid_until, p.target_clients, p.owner_client_email
+           FROM client_rewards cr
+           JOIN promo_codes p ON p.id = cr.promo_code_id
+          WHERE cr.user_id=$1
+            AND LOWER(cr.client_email)=$2
+            AND cr.status='available'
+            AND (cr.expires_at IS NULL OR cr.expires_at > NOW())
+            AND p.is_active = TRUE
+            AND (p.valid_until IS NULL OR p.valid_until >= CURRENT_DATE)
+            AND (p.max_uses IS NULL OR p.uses_count < p.max_uses)
+            AND (p.owner_client_email IS NULL
+                 OR LOWER(p.owner_client_email) = $2)
+          ORDER BY cr.expires_at ASC NULLS LAST, cr.created_at ASC`,
+        [userId, emailLow]
+      );
+
+      // Crédit client (positif uniquement).
+      const { rows: creditRows } = await pool.query(
+        `SELECT id, balance FROM client_credits
+          WHERE user_id=$1 AND LOWER(client_email)=$2 AND balance > 0
+          LIMIT 1`,
+        [userId, emailLow]
+      );
+
+      // Parrainages pending (filleul = ce client, pas encore validé).
+      const { rows: refRows } = await pool.query(
+        `SELECT ru.id, ru.created_at, rc.code AS referral_code,
+                rc.owner_client_email AS parrain_email
+           FROM referral_uses ru
+           JOIN referral_codes rc ON rc.id = ru.referral_code_id
+          WHERE ru.user_id=$1
+            AND LOWER(ru.filleul_email)=$2
+            AND ru.status='pending'
+          ORDER BY ru.created_at ASC`,
+        [userId, emailLow]
+      );
+
+      const discounts = [];
+      for (const r of rewardRows) {
+        // Gate BDAY : marketing_opt_in + birthday_campaigns.is_enabled.
+        if (r.reward_type === 'birthday' && (!optIn || !birthdayEnabled)) continue;
+        discounts.push({
+          id: r.reward_id,
+          source: r.reward_type,                 // 'birthday' | 'loyalty'
+          code: r.code,
+          discount_type: r.discount_type,        // 'percent' | 'fixed'
+          discount_value: parseFloat(r.discount_value),
+          expires_at: r.expires_at || r.valid_until || null,
+        });
+      }
+      for (const ref of refRows) {
+        // Pas un code applicable directement à la commande mais affiché à
+        // titre informatif (validation back en caisse). Marketing_opt_in
+        // requis côté filleul aussi.
+        if (!optIn) continue;
+        discounts.push({
+          id: ref.id,
+          source: 'referral_pending',
+          code: ref.referral_code,
+          info: 'A valider lors de votre prochain encaissement en boutique.',
+          expires_at: null,
+        });
+      }
+      const credit = creditRows[0]
+        ? { id: creditRows[0].id, balance: parseFloat(creditRows[0].balance) }
+        : null;
+
+      res.json({ discounts, credit });
+    } catch (e) {
+      console.error('[AVAILABLE-DISCOUNTS]', e.message);
+      res.status(500).json({ error: 'Erreur serveur.' });
+    }
+  });
 };

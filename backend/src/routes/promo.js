@@ -82,10 +82,19 @@ router.post('/check', async (req, res) => {
 
     const baseAmt = parseFloat(amount) || 0;
 
-    // ── Code fidélité : vérifier que c'est bien le bon client ──────────────
-    if (promo.is_loyalty_reward && promo.owner_client_email) {
-      if (client_email && promo.owner_client_email.toLowerCase() !== client_email.toLowerCase()) {
-        return res.json({ valid: false, error: `Ce code de fidélité appartient au client ${promo.owner_client_email} et ne peut pas être utilisé par un autre client.` });
+    // ── Code nominatif : owner_client_email + target_clients='specific' ────
+    // Couvre tous les codes liés à un client (fidélité, anniversaire BDAY-*,
+    // parrainage). Avant 24c le check ne s'appliquait qu'à is_loyalty_reward
+    // — les codes BDAY (is_loyalty_reward=FALSE, target_clients='specific')
+    // étaient utilisables par n'importe quel client. Faille corrigée 24c.
+    const isOwned = (promo.target_clients === 'specific' || promo.is_loyalty_reward)
+                  && !!promo.owner_client_email;
+    if (isOwned) {
+      if (!client_email) {
+        return res.json({ valid: false, error: 'Ce code est nominatif. Saisissez l\'email du client pour l\'appliquer.' });
+      }
+      if (promo.owner_client_email.toLowerCase() !== String(client_email).toLowerCase()) {
+        return res.json({ valid: false, error: 'Ce code est nominatif et ne peut pas être utilisé par un autre client.' });
       }
     }
 
