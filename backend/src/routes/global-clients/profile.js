@@ -78,6 +78,57 @@ module.exports = function attachProfileRoutes(router) {
         }
         bd = birthCheck.value;
       }
+
+      // Commit 24d — anti-fraude rolling 330j sur changement de mois.
+      // Empêche un client de modifier sa date de naissance après avoir reçu
+      // un code anniversaire (sinon il pourrait toucher 12 codes/an en
+      // décalant le mois chaque mois). Idempotent : si la nouvelle valeur
+      // est identique à l'ancienne, on laisse passer (no-op effectif).
+      // Côté admin, la restriction est levée (PUT /api/clients/:id) car le
+      // commerçant a un cas d'usage légitime (corriger une saisie erronée).
+      if (bd !== undefined) {
+        const gcId = req.globalClient.globalClientId;
+        const { rows: cur } = await pool.query(
+          `SELECT birth_date FROM global_clients WHERE id=$1`, [gcId]
+        );
+        const currentBd = cur[0]?.birth_date
+          ? new Date(cur[0].birth_date).toISOString().slice(0, 10)
+          : null;
+        const newBd = bd; // déjà 'YYYY-MM-DD' ou null
+        const isIdempotent = currentBd === newBd;
+        if (!isIdempotent && currentBd) {
+          // MAX(last_birthday_reward_at) sur l'ensemble des fiches locales
+          // liées + le compte global lui-même (le cron 24b update
+          // client_accounts.last_birthday_reward_at, mais la colonne existe
+          // aussi sur global_clients). Anti-fraude scope plateforme : si le
+          // client a touché un code chez UN commerçant dans les 330j, on
+          // bloque le changement partout. UNION ALL + MAX gère proprement
+          // les NULL des deux côtés (MAX(NULL,NULL) = NULL).
+          const { rows: maxRow } = await pool.query(
+            `SELECT MAX(at) AS last_at FROM (
+                SELECT MAX(last_birthday_reward_at) AS at
+                  FROM client_accounts WHERE global_client_id=$1
+                UNION ALL
+                SELECT last_birthday_reward_at AS at
+                  FROM global_clients WHERE id=$1
+              ) s`,
+            [gcId]
+          );
+          const lastAt = maxRow[0]?.last_at ? new Date(maxRow[0].last_at) : null;
+          if (lastAt) {
+            const unlockAt = new Date(lastAt.getTime() + 330 * 24 * 60 * 60 * 1000);
+            if (unlockAt > new Date()) {
+              const unlockStr = unlockAt.toLocaleDateString('fr-FR',
+                { day: '2-digit', month: '2-digit', year: 'numeric' });
+              return res.status(400).json({
+                error: `Vous avez déjà bénéficié d'un code anniversaire cette année. Le mois ne peut pas être modifié avant le ${unlockStr}.`,
+                code: 'BIRTH_DATE_LOCKED',
+                unlock_at: unlockAt.toISOString(),
+              });
+            }
+          }
+        }
+      }
       // postal_code / city : même sémantique que bd (undefined/null/''/string)
       const pc = postal_code === undefined ? undefined
                : (postal_code === null || postal_code === '' ? null : String(postal_code).trim().slice(0,20));

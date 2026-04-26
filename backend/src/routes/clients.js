@@ -437,7 +437,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const { rows: ex } = await pool.query(
-      `SELECT ca.id, ca.global_client_id,
+      `SELECT ca.id, ca.global_client_id, ca.birth_date,
               gc.first_name AS gc_first, gc.last_name AS gc_last,
               gc.email AS gc_email, gc.phone AS gc_phone
        FROM client_accounts ca
@@ -446,6 +446,10 @@ router.put('/:id', async (req, res) => {
       [req.params.id, uid]
     );
     if (!ex[0]) return res.status(404).json({ error: 'Client introuvable.' });
+    // Commit 24d — capture l'ancienne birth_date AVANT UPDATE pour audit log.
+    const previousBd = ex[0].birth_date
+      ? new Date(ex[0].birth_date).toISOString().slice(0, 10)
+      : null;
 
     const isGlobal = !!ex[0].global_client_id;
 
@@ -475,6 +479,19 @@ router.put('/:id', async (req, res) => {
          WHERE id=$1 AND user_id=$2 RETURNING *`,
         [req.params.id, uid, notes ?? null, birthForUpdate !== undefined, birthForUpdate ?? null]
       );
+      // Commit 24d — audit log birth_date côté plateforme (même logique
+      // que chemin interne). previousBd capturé en haut de la fonction.
+      const newBdStrPF = rows[0]?.birth_date
+        ? new Date(rows[0].birth_date).toISOString().slice(0, 10) : null;
+      if (newBdStrPF !== previousBd) {
+        await pool.query(
+          `INSERT INTO client_audit_log
+             (client_account_id, user_id, action, field_name,
+              value_before, value_after, changed_by_type)
+           VALUES ($1,$2,'birth_date_change','birth_date',$3,$4,'admin')`,
+          [req.params.id, uid, previousBd, newBdStrPF]
+        ).catch(e => console.warn('[CLIENT AUDIT]', e.message));
+      }
       return res.json({ ...rows[0], _readonly_identity: true, source: 'platform' });
     }
 
@@ -502,6 +519,23 @@ router.put('/:id', async (req, res) => {
     // Tenter liaison global après modification
     if (!rows[0].global_client_id) {
       await linkToGlobal(rows[0].id, rows[0].email, rows[0].phone);
+    }
+    // Commit 24d — audit log si birth_date modifiée (chemin interne).
+    // Empêche la dérive : un admin malveillant pourrait sinon contourner
+    // l'anti-fraude rolling 330j en éditant la fiche locale. La modif
+    // reste autorisée (cas d'usage légitime : correction de saisie) mais
+    // tracée. previousBd est `'YYYY-MM-DD'` ou null ; rows[0].birth_date
+    // est l'objet Date PG → on normalise avant comparaison.
+    const newBdStr = rows[0].birth_date
+      ? new Date(rows[0].birth_date).toISOString().slice(0, 10) : null;
+    if (newBdStr !== previousBd) {
+      await pool.query(
+        `INSERT INTO client_audit_log
+           (client_account_id, user_id, action, field_name,
+            value_before, value_after, changed_by_type)
+         VALUES ($1,$2,'birth_date_change','birth_date',$3,$4,'admin')`,
+        [req.params.id, uid, previousBd, newBdStr]
+      ).catch(e => console.warn('[CLIENT AUDIT]', e.message));
     }
     const r = await pool.query('SELECT * FROM client_accounts WHERE id=$1', [rows[0].id]);
     res.json({ ...r.rows[0], source: r.rows[0].global_client_id ? 'platform' : 'internal' });

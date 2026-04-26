@@ -1276,6 +1276,28 @@ async function initDB() {
   // Seed : une ligne user_settings par merchant existant, defaults DB appliqués.
   await runMigration(`INSERT INTO user_settings (user_id) SELECT id FROM users ON CONFLICT (user_id) DO NOTHING`);
 
+  // Commit 24d — audit trail des modifications de fiches client par un admin
+  // (PIN admin). Trace la modification de champs sensibles (birth_date qui
+  // contourne l'anti-fraude rolling 330j côté client). Pas de FK sur
+  // client_account_id : la fiche peut être supprimée (soft delete RGPD)
+  // sans perdre la trace audit.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS client_audit_log (
+      id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_account_id UUID NOT NULL,
+      user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      action            VARCHAR(40) NOT NULL,
+      field_name        VARCHAR(40),
+      value_before      TEXT,
+      value_after       TEXT,
+      changed_by_type   VARCHAR(20) NOT NULL DEFAULT 'admin',
+      reason            TEXT,
+      created_at        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_audit_log_user ON client_audit_log(user_id, created_at DESC)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_audit_log_client ON client_audit_log(client_account_id, created_at DESC)`);
+
 console.log('[DB] Tables initialisées');
 }
 
