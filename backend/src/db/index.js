@@ -1311,6 +1311,29 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_audit_log_user ON client_audit_log(user_id, created_at DESC)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_client_audit_log_client ON client_audit_log(client_account_id, created_at DESC)`);
 
+  // Commit 26 — audit RGPD désinscription marketing. Une ligne par tentative
+  // de désinscription (réussie ou non), pas de dédup si l'utilisateur clique
+  // plusieurs fois — chaque clic est une preuve indépendante. Pas de FK pour
+  // préserver le log même après suppression RGPD du client (anonymisation).
+  // Conforme CNIL : prouve qui/quand/comment pour audit en cas de plainte.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS marketing_optout_log (
+      id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id           UUID,
+      client_account_id UUID,
+      global_client_id  UUID,
+      email             VARCHAR(255),
+      source            VARCHAR(20) NOT NULL DEFAULT 'email_link'
+                        CHECK (source IN ('email_link','sms_link','admin_action','public_form','api')),
+      ip                VARCHAR(64),
+      user_agent        TEXT,
+      created_at        TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_email ON marketing_optout_log(email)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_created_at ON marketing_optout_log(created_at DESC)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_source ON marketing_optout_log(source)`);
+
 console.log('[DB] Tables initialisées');
 }
 

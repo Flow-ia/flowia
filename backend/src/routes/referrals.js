@@ -321,7 +321,7 @@ async function validateReferralUse(useId, userId) {
         [userId]
       );
       const { rows: parrainRows } = await pool.query(
-        `SELECT first_name, last_name FROM client_accounts
+        `SELECT first_name, last_name, unsubscribe_token FROM client_accounts
           WHERE user_id=$1 AND LOWER(email)=LOWER($2)`,
         [userId, use.parrain_email]
       );
@@ -341,6 +341,7 @@ async function validateReferralUse(useId, userId) {
         code, type: prog.parrain_type, value: prog.parrain_value,
         validUntil: promo[0].valid_until,
         businessEmail: biz.email, businessPhone: biz.phone, businessAddress: biz.address,
+        unsubscribeToken: parrainRows[0]?.unsubscribe_token,
       });
     } catch (mailErr) {
       console.warn('[referral validate mail]', mailErr.message);

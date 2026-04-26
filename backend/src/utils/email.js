@@ -607,7 +607,7 @@ async function sendPasswordReset({ to, clientName, code }) {
 // - Reply-To vers l'email du commerçant (transactionnel vs bulk)
 // - Header List-Unsubscribe (exigence Gmail 2024)
 // - Design sobre, peu d'images/gradients, ratio texte/image élevé
-async function sendPromoEmail({ to, clientName, businessName, promo, businessEmail, businessAddress, businessPhone }) {
+async function sendPromoEmail({ to, clientName, businessName, promo, businessEmail, businessAddress, businessPhone, unsubscribeToken }) {
   const { code, type, value, valid_from, valid_until, time_allday, time_from, time_until, min_purchase, max_uses, target_clients } = promo;
   const firstName = (clientName || '').split(' ')[0] || clientName || '';
   const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
@@ -687,6 +687,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
     <p style="margin:0;color:#999;font-size:11px;line-height:1.5;">
       Vous recevez cet email en tant que client de ${businessName}. Pour ne plus recevoir ces messages, répondez avec "STOP" en objet.
     </p>
+    ${require('./unsubscribe').unsubscribeEmailHtml(unsubscribeToken)}
   </div>
 </body></html>`;
 
@@ -695,9 +696,14 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
     : undefined;
 
   // List-Unsubscribe header (exigence Gmail/Yahoo 2024 pour éviter Promotions/Spam)
+  // Si token disponible, on privilégie l'URL backend 1-clic (RFC 8058) au mailto.
+  const { unsubscribeUrl } = require('./unsubscribe');
+  const unsubLink = unsubscribeUrl(unsubscribeToken);
   const unsubEmail = businessEmail || process.env.SENDER_EMAIL || 'contact@haircoifflille.fr';
   const headers = {
-    'List-Unsubscribe': `<mailto:${unsubEmail}?subject=STOP>`,
+    'List-Unsubscribe': unsubLink
+      ? `<${unsubLink}>, <mailto:${unsubEmail}?subject=STOP>`
+      : `<mailto:${unsubEmail}?subject=STOP>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     'X-Entity-Ref-ID': String(promo?.id || code),
   };
@@ -716,7 +722,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
 }
 
 // ── Email récompense parrain (après validation en caisse) ─────────────────
-async function sendReferralReward({ to, parrainName, filleulName, businessName, code, type, value, validUntil, businessEmail, businessPhone, businessAddress }) {
+async function sendReferralReward({ to, parrainName, filleulName, businessName, code, type, value, validUntil, businessEmail, businessPhone, businessAddress, unsubscribeToken }) {
   const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
   const firstName = (parrainName || '').split(' ')[0] || 'vous';
   const subject = `${firstName}, votre réduction ${discountStr} chez ${businessName}`;
@@ -764,6 +770,7 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
     <div style="background:#f5f3ff;border:1px solid #e0e7ff;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
       <p style="color:#94a3b8;font-size:11px;margin:0;">Programme parrainage <strong style="color:#8b5cf6;">${businessName}</strong></p>
     </div>
+    ${require('./unsubscribe').unsubscribeEmailHtml(unsubscribeToken)}
   </div>
 </body></html>`;
 

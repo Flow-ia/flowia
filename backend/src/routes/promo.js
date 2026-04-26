@@ -243,11 +243,11 @@ router.post('/:id/send-emails', async (req, res) => {
 
     let clientQuery, clientParams;
     if (client_ids && client_ids.length > 0) {
-      clientQuery = `SELECT id, first_name, last_name, email FROM client_accounts
+      clientQuery = `SELECT id, first_name, last_name, email, unsubscribe_token FROM client_accounts
                      WHERE user_id=$1 AND id=ANY($2::uuid[]) AND email IS NOT NULL AND email != ''`;
       clientParams = [req.user.userId, client_ids];
     } else {
-      clientQuery = `SELECT id, first_name, last_name, email FROM client_accounts
+      clientQuery = `SELECT id, first_name, last_name, email, unsubscribe_token FROM client_accounts
                      WHERE user_id=$1 AND email IS NOT NULL AND email != ''`;
       clientParams = [req.user.userId];
     }
@@ -263,6 +263,7 @@ router.post('/:id/send-emails', async (req, res) => {
         const ok = await sendPromoEmail({
           to: client.email, clientName: name, businessName, promo,
           businessEmail, businessAddress, businessPhone,
+          unsubscribeToken: client.unsubscribe_token,
         });
         if (ok) sent++; else failed++;
       } catch(e) { failed++; console.error(`[PROMO SEND ERR] ${client.email}: ${e.message}`); }

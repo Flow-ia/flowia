@@ -6,6 +6,7 @@ import BookingPage from './pages/BookingPage';
 import BookingPolitique from './pages/BookingPolitique';
 import OAuthCallback from './pages/OAuthCallback';
 import GoogleConfirm from './pages/booking-page/auth/GoogleConfirm';
+import Unsubscribe from './pages/unsubscribe/Unsubscribe';
 import { AuthProvider } from './hooks/useAuth';
 import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
@@ -95,6 +96,8 @@ root.render(
               <Route path="/book/:slug/client/passages/:visitId"                                                             element={<BookingPageWrapper />} />
               <Route path="/book/:slug/parrain"                                                                              element={<BookingPageWrapper />} />
               <Route path="/book/:slug"                                                                                  element={<BookingPageWrapper />} />
+              {/* Commit 26 — désinscription marketing publique (RGPD), accessible sans auth */}
+              <Route path="/unsubscribe"                                                                                  element={<Unsubscribe />} />
               {/* ── Racine : BookingPage sur domaine public, app commerçant ailleurs ── */}
               <Route path="/*" element={<RootSwitch />} />
             </Routes>
