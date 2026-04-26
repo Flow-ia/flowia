@@ -649,7 +649,10 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
   textLines.push(businessName);
   textLines.push('');
   textLines.push('---');
-  textLines.push(`Pour ne plus recevoir ces messages, répondez STOP à cet email.`);
+  {
+    const { marketingFooterText } = require('./unsubscribe');
+    textLines.push(marketingFooterText({ token: unsubscribeToken, businessEmail }));
+  }
   const textContent = textLines.join('\n');
 
   // HTML sobre, sans gradient, peu d'emojis, ratio texte élevé
@@ -683,11 +686,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
     </p>
     ${contactHtml}
     <p style="margin:22px 0 0;color:#111;font-size:14px;">À bientôt,<br/>${businessName}</p>
-    <hr style="border:none;border-top:1px solid #eee;margin:24px 0 14px;"/>
-    <p style="margin:0;color:#999;font-size:11px;line-height:1.5;">
-      Vous recevez cet email en tant que client de ${businessName}. Pour ne plus recevoir ces messages, répondez avec "STOP" en objet.
-    </p>
-    ${require('./unsubscribe').unsubscribeEmailHtml(unsubscribeToken)}
+    ${require('./unsubscribe').marketingFooterHtml({ token: unsubscribeToken, businessName, businessEmail, context: 'sendPromoEmail' })}
   </div>
 </body></html>`;
 
@@ -695,18 +694,11 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
     ? { email: businessEmail, name: businessName }
     : undefined;
 
-  // List-Unsubscribe header (exigence Gmail/Yahoo 2024 pour éviter Promotions/Spam)
-  // Si token disponible, on privilégie l'URL backend 1-clic (RFC 8058) au mailto.
-  const { unsubscribeUrl } = require('./unsubscribe');
-  const unsubLink = unsubscribeUrl(unsubscribeToken);
-  const unsubEmail = businessEmail || process.env.SENDER_EMAIL || 'contact@haircoifflille.fr';
-  const headers = {
-    'List-Unsubscribe': unsubLink
-      ? `<${unsubLink}>, <mailto:${unsubEmail}?subject=STOP>`
-      : `<mailto:${unsubEmail}?subject=STOP>`,
-    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-    'X-Entity-Ref-ID': String(promo?.id || code),
-  };
+  // List-Unsubscribe header (RFC 2369 + RFC 8058 1-clic) — Gmail/Yahoo 2024.
+  const { unsubscribeHeaders } = require('./unsubscribe');
+  const headers = unsubscribeHeaders({
+    token: unsubscribeToken, businessEmail, refId: promo?.id || code,
+  });
 
   try {
     await sendEmail({
@@ -770,13 +762,15 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
     <div style="background:#f5f3ff;border:1px solid #e0e7ff;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
       <p style="color:#94a3b8;font-size:11px;margin:0;">Programme parrainage <strong style="color:#8b5cf6;">${businessName}</strong></p>
     </div>
-    ${require('./unsubscribe').unsubscribeEmailHtml(unsubscribeToken)}
+    ${require('./unsubscribe').marketingFooterHtml({ token: unsubscribeToken, businessName, businessEmail, context: 'sendReferralReward' })}
   </div>
 </body></html>`;
 
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
+  const { unsubscribeHeaders } = require('./unsubscribe');
+  const headers = unsubscribeHeaders({ token: unsubscribeToken, businessEmail, refId: code });
   try {
-    await sendEmail({ to, subject, html, text, replyTo });
+    await sendEmail({ to, subject, html, text, replyTo, headers });
     console.log(`[MAIL REFERRAL OK] ${code} -> ${to}`);
     return true;
   } catch(e) {
@@ -847,13 +841,15 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
     <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
       <p style="color:#94a3b8;font-size:11px;margin:0;">Offre anniversaire <strong style="color:#ec4899;">${businessName}</strong></p>
     </div>
-    ${require('./unsubscribe').unsubscribeEmailHtml(unsubscribeToken)}
+    ${require('./unsubscribe').marketingFooterHtml({ token: unsubscribeToken, businessName, businessEmail, context: 'sendBirthdayPromo' })}
   </div>
 </body></html>`;
 
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
+  const { unsubscribeHeaders } = require('./unsubscribe');
+  const headers = unsubscribeHeaders({ token: unsubscribeToken, businessEmail, refId: code });
   try {
-    await sendEmail({ to, subject, html, text, replyTo });
+    await sendEmail({ to, subject, html, text, replyTo, headers });
     console.log(`[MAIL BIRTHDAY OK] ${code} -> ${to}`);
     return true;
   } catch(e) {

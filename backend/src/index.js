@@ -358,15 +358,28 @@ function startServer() {
   const { sleep: cronSleep } = require('./utils/messenger');
 
   // Traitement file d'attente campagnes email (toutes les heures, 8h-20h)
+  // Commit 26b — JOIN client_accounts + users pour récupérer unsubscribe_token,
+  // business_name, business_email afin d'injecter le footer marketing 1-clic
+  // RGPD-conforme dans chaque envoi différé. Sans ce footer, les emails de
+  // queue partent sans mécanisme de désinscription = non conforme.
+  const { marketingFooterHtml, unsubscribeHeaders } = require('./utils/unsubscribe');
   async function processCampaignQueue() {
     const hour = new Date().getHours();
     if (hour < 8 || hour > 20) return;
     try {
       const { rows } = await dbPool.query(`
-        SELECT * FROM campaign_queue
-        WHERE status='pending' AND scheduled_date <= CURRENT_DATE
-          AND channel = 'email'
-        ORDER BY created_at ASC
+        SELECT q.*,
+               ca.unsubscribe_token AS ca_unsubscribe_token,
+               u.business_name      AS biz_name,
+               u.email              AS biz_email
+          FROM campaign_queue q
+          LEFT JOIN client_accounts ca
+                 ON ca.user_id = q.user_id
+                AND LOWER(ca.email) = LOWER(q.client_email)
+          LEFT JOIN users u ON u.id = q.user_id
+        WHERE q.status='pending' AND q.scheduled_date <= CURRENT_DATE
+          AND q.channel = 'email'
+        ORDER BY q.created_at ASC
         LIMIT 30
         FOR UPDATE SKIP LOCKED
       `);
@@ -378,7 +391,27 @@ function startServer() {
             console.log('[CRON queue] Limite email marketing atteinte, arret');
             break;
           }
-          await sendEmail({ to: item.client_email, subject: 'Offre speciale de votre commerce', html: item.message });
+          const footer = marketingFooterHtml({
+            token: item.ca_unsubscribe_token,
+            businessName: item.biz_name,
+            businessEmail: item.biz_email,
+            context: 'campaignQueue',
+          });
+          const headers = unsubscribeHeaders({
+            token: item.ca_unsubscribe_token,
+            businessEmail: item.biz_email,
+            refId: item.campaign_id || item.id,
+          });
+          // Inject footer juste avant </body> si présent, sinon append.
+          const html = /<\/body>/i.test(item.message)
+            ? item.message.replace(/<\/body>/i, `${footer}</body>`)
+            : `${item.message}${footer}`;
+          await sendEmail({
+            to: item.client_email,
+            subject: 'Offre speciale de votre commerce',
+            html,
+            headers,
+          });
           await dbPool.query(`UPDATE campaign_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [item.id]);
           await incrUserEmailCount(item.user_id);
           await incrGlobalEmailCount();
@@ -417,21 +450,30 @@ function startServer() {
       console.error('[CRON sms refund]', e.message);
     }
   }
+  // Commit 26b — `appendUnsubscribeSms` ajoute "Stop: <url>" au message SMS
+  // marketing différé. Lookup unsubscribe_token via client_accounts pour ne
+  // pas dépendre d'une éventuelle dénormalisation absente dans la queue.
+  const { appendUnsubscribeSms } = require('./utils/unsubscribe');
   async function processSmsQueue() {
     const hour = new Date().getHours();
     if (hour < 9 || hour > 20) return;
     try {
       // scheduled_at (timestamp précis) si défini, sinon fallback scheduled_date
       const { rows } = await dbPool.query(`
-        SELECT * FROM campaign_queue
-        WHERE status='pending'
-          AND channel = 'sms'
-          AND client_phone IS NOT NULL AND client_phone != ''
+        SELECT q.*,
+               ca.unsubscribe_token AS ca_unsubscribe_token
+          FROM campaign_queue q
+          LEFT JOIN client_accounts ca
+                 ON ca.user_id = q.user_id
+                AND ca.phone = q.client_phone
+        WHERE q.status='pending'
+          AND q.channel = 'sms'
+          AND q.client_phone IS NOT NULL AND q.client_phone != ''
           AND (
-            (scheduled_at IS NOT NULL AND scheduled_at <= NOW()) OR
-            (scheduled_at IS NULL AND scheduled_date <= CURRENT_DATE)
+            (q.scheduled_at IS NOT NULL AND q.scheduled_at <= NOW()) OR
+            (q.scheduled_at IS NULL AND q.scheduled_date <= CURRENT_DATE)
           )
-        ORDER BY COALESCE(scheduled_at, scheduled_date::timestamptz) ASC
+        ORDER BY COALESCE(q.scheduled_at, q.scheduled_date::timestamptz) ASC
         LIMIT 50
         FOR UPDATE SKIP LOCKED
       `);
@@ -439,7 +481,8 @@ function startServer() {
       let sent = 0, failed = 0, refunded = 0;
       for (const item of rows) {
         try {
-          const r = await sendSMS(item.client_phone, item.message);
+          const finalMsg = appendUnsubscribeSms(item.message, item.ca_unsubscribe_token);
+          const r = await sendSMS(item.client_phone, finalMsg);
           if (r.success) {
             sent++;
             await dbPool.query(`UPDATE campaign_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [item.id]);

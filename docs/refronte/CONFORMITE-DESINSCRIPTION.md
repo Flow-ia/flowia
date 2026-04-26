@@ -88,12 +88,28 @@ Pour un nouveau template SMS :
 
 ## Templates email marketing actuels (audit complet)
 
-| Fonction | Fichier | Footer unsub | Status |
-|---|---|---|---|
-| `sendBirthdayPromo` | `backend/src/utils/email.js` | ✓ via param `unsubscribeToken` | OK |
-| `sendPromoEmail` | `backend/src/utils/email.js` | ✓ ajouté commit 26 | OK |
-| `sendReferralReward` | `backend/src/utils/email.js` | ✓ ajouté commit 26 | OK |
-| `sendMarketingEmail` | `backend/src/utils/emailSender.js` | ✓ via param `unsubscribeToken` | OK |
+| Fonction / chemin | Fichier | Footer unsub | Headers `List-Unsubscribe` | Status |
+|---|---|---|---|---|
+| `sendBirthdayPromo` | `backend/src/utils/email.js` | ✓ `marketingFooterHtml` | ✓ `unsubscribeHeaders` (commit 26b) | OK |
+| `sendPromoEmail` | `backend/src/utils/email.js` | ✓ `marketingFooterHtml` (commit 26b — STOP en objet retiré) | ✓ `unsubscribeHeaders` | OK |
+| `sendReferralReward` | `backend/src/utils/email.js` | ✓ `marketingFooterHtml` (commit 26b) | ✓ `unsubscribeHeaders` (commit 26b) | OK |
+| `sendMarketingEmail` | `backend/src/utils/emailSender.js` | ✓ `marketingFooterHtml` (commit 26b) | ✓ `unsubscribeHeaders` (commit 26b) | OK |
+| `processCampaignQueue` (cron worker email différé) | `backend/src/index.js` | ✓ injection footer post-fetch + JOIN `client_accounts.unsubscribe_token` (commit 26b) | ✓ `unsubscribeHeaders` (commit 26b) | OK |
+| `processSmsQueue` (cron worker SMS différé) | `backend/src/index.js` | ✓ `appendUnsubscribeSms` + JOIN (commit 26b) | n/a (SMS) | OK |
+
+Templates **transactionnels** (pas de footer requis car non marketing) : `sendVerificationEmail`, `sendAppointmentConfirmation`, `sendDailyRecap`, `sendRdvReminder`, `sendLoyaltyReward`, `sendClientInvite`, `sendAppointmentCancellation`, `sendEmployeeReminder`, `sendPasswordReset`, `sendReferralWelcome`, `sendOptInInvite`, `sendNewAppointmentMerchant`, rappels RDV 24h/2h cron (`backend/src/index.js`).
+
+## Helpers unifiés (`backend/src/utils/unsubscribe.js`)
+
+| Helper | Usage |
+|---|---|
+| `unsubscribeUrl(token)` | URL canonique (frontend si `FRONTEND_PUBLIC_URL`, sinon backend) |
+| `appendUnsubscribeSms(msg, token)` | Append `Stop: <url>?source=sms_link` (RGPD SMS) |
+| `marketingFooterHtml({ token, businessName, businessEmail, context })` | Footer HTML complet — 1-clic prioritaire, mailto STOP fallback, log warning si rien |
+| `marketingFooterText({ token, businessEmail })` | Version text/plain (Gmail Primary Inbox) |
+| `unsubscribeHeaders({ token, businessEmail, refId })` | Headers `List-Unsubscribe` + `List-Unsubscribe-Post` (RFC 2369 + RFC 8058) + `X-Entity-Ref-ID` |
+
+**Règle d'or** : tout nouveau template marketing doit utiliser `marketingFooterHtml` + `unsubscribeHeaders`. Ne jamais coller un footer manuel à base de "STOP en objet" — c'est juridiquement faible et ne loggue rien dans `marketing_optout_log`.
 
 Templates **transactionnels** (pas de footer requis car non marketing) : `sendVerificationEmail`, `sendAppointmentConfirmation`, `sendDailyRecap`, `sendRdvReminder`, `sendLoyaltyReward`, `sendClientInvite`, `sendAppointmentCancellation`, `sendEmployeeReminder`, `sendPasswordReset`, `sendReferralWelcome`, `sendOptInInvite`, `sendNewAppointmentMerchant`.
 

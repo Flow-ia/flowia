@@ -18,7 +18,7 @@ function resetCounterIfNewDay() {
 }
 
 // Fonction principale d'envoi email
-async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 'transactional' }) {
+async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 'transactional', headers }) {
   resetCounterIfNewDay();
 
   const EMAIL_MARKETING_MAX = 220; // reserve 80 pour transactionnel
@@ -38,6 +38,7 @@ async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 
     subject: subject,
     htmlContent: htmlContent
   };
+  if (headers && Object.keys(headers).length) body.headers = headers;
 
   console.log(`[EMAIL] Envoi ${type} → ${to} | Sujet: ${subject}`);
 
@@ -65,13 +66,19 @@ async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 
 // Email marketing campagne code promo
 // Audit Z : accepte un `unsubscribeToken` pour injecter le lien de
 // désabonnement 1-clic dans le footer (RGPD).
-async function sendMarketingEmail(clientEmail, clientName, message, promoCode, unsubscribeToken = null) {
+// Commit 26b — utilise `marketingFooterHtml` unifié + `unsubscribeHeaders`.
+async function sendMarketingEmail(clientEmail, clientName, message, promoCode, unsubscribeToken = null, businessEmail = null, businessName = null) {
   const subject = promoCode
     ? `Offre exclusive : ${promoCode} vous attend !`
     : 'Une offre exclusive pour vous';
 
-  const { unsubscribeEmailHtml } = require('./unsubscribe');
-  const unsubFooter = unsubscribeEmailHtml(unsubscribeToken);
+  const { marketingFooterHtml, unsubscribeHeaders } = require('./unsubscribe');
+  const unsubFooter = marketingFooterHtml({
+    token: unsubscribeToken, businessName, businessEmail, context: 'sendMarketingEmail',
+  });
+  const headers = unsubscribeHeaders({
+    token: unsubscribeToken, businessEmail, refId: promoCode || null,
+  });
 
   const htmlContent = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
@@ -82,7 +89,6 @@ async function sendMarketingEmail(clientEmail, clientName, message, promoCode, u
   .header h1 { color: white; margin: 0; font-size: 24px; }
   .body { padding: 32px; }
   .message { font-size: 16px; color: #333; line-height: 1.6; white-space: pre-wrap; }
-  .footer { padding: 20px 32px; background: #f8fafc; text-align: center; font-size: 12px; color: #999; }
 </style>
 </head><body>
 <div class="container">
@@ -92,9 +98,6 @@ async function sendMarketingEmail(clientEmail, clientName, message, promoCode, u
     <div class="message">${message}</div>
     ${unsubFooter}
   </div>
-  <div class="footer">
-    <p>Vous recevez cet email car vous etes client de notre etablissement.</p>
-  </div>
 </div>
 </body></html>`;
 
@@ -103,7 +106,8 @@ async function sendMarketingEmail(clientEmail, clientName, message, promoCode, u
     toName: clientName,
     subject,
     htmlContent,
-    type: 'marketing'
+    type: 'marketing',
+    headers,
   });
 }
 

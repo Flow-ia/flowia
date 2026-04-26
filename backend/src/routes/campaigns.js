@@ -644,6 +644,13 @@ router.post('/send', async (req, res) => {
     if (needSMS && !smsClients.length) return res.status(400).json({ error: 'Aucun client avec numero de telephone valide.' });
     if (needEmail && !emailClients.length) return res.status(400).json({ error: 'Aucun client avec email valide.' });
 
+    // Commit 26b — récupérer business_name/email pour footer marketing + List-Unsubscribe.
+    const { rows: bizRows } = await pool.query(
+      `SELECT business_name, email FROM users WHERE id=$1`, [userId]
+    );
+    const bizName  = bizRows[0]?.business_name || null;
+    const bizEmail = bizRows[0]?.email || null;
+
     // Vérifier solde SMS
     if (needSMS) {
       const totalCost = smsClients.length * SMS_PRICE;
@@ -745,7 +752,9 @@ router.post('/send', async (req, res) => {
               `${client.first_name || ''} ${client.last_name || ''}`.trim(),
               msg,
               promo_code || null,
-              client.unsubscribe_token
+              client.unsubscribe_token,
+              bizEmail,
+              bizName
             );
             sentEmail++;
 
