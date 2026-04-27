@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
               g.created_at,
               (SELECT COUNT(*)::int FROM client_accounts c WHERE c.global_client_id = g.id) AS merchants_count,
               (SELECT COUNT(*)::int FROM appointments a
-                 INNER JOIN client_accounts c ON c.id = a.client_account_id
+                 INNER JOIN client_accounts c ON c.id = a.client_id
                 WHERE c.global_client_id = g.id) AS appointments_count
          FROM global_clients g
          ${whereSql}
@@ -88,8 +88,8 @@ router.get('/:id', async (req, res) => {
               u.business_name,
               u.email            AS merchant_email,
               u.is_frozen        AS merchant_frozen,
-              (SELECT COUNT(*)::int FROM appointments a WHERE a.client_account_id = c.id)        AS appointments_count,
-              (SELECT MAX(date)         FROM appointments a WHERE a.client_account_id = c.id)    AS last_appointment_date
+              (SELECT COUNT(*)::int FROM appointments a WHERE a.client_id = c.id)        AS appointments_count,
+              (SELECT MAX(date)         FROM appointments a WHERE a.client_id = c.id)    AS last_appointment_date
          FROM client_accounts c
          LEFT JOIN users u ON u.id = c.user_id
         WHERE c.global_client_id = $1

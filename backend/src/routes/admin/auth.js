@@ -56,11 +56,14 @@ function getCookie(req, name) {
 }
 
 function setRefreshCookie(res, token) {
+  // SameSite=None obligatoire en prod : front (vercel.app) et back (onrender.com)
+  // sont sur des domaines distincts, sinon le navigateur n'envoie pas le cookie
+  // sur /refresh et l'admin est déconnecté à chaque F5.
   const parts = [
     `${REFRESH_COOKIE}=${encodeURIComponent(token)}`,
     `Path=${REFRESH_COOKIE_PATH}`,
     'HttpOnly',
-    'SameSite=Strict',
+    `SameSite=${IS_PROD ? 'None' : 'Strict'}`,
     `Max-Age=${Math.floor(REFRESH_TTL_MS / 1000)}`,
   ];
   if (IS_PROD) parts.push('Secure');
@@ -71,7 +74,7 @@ function clearRefreshCookie(res) {
     `${REFRESH_COOKIE}=`,
     `Path=${REFRESH_COOKIE_PATH}`,
     'HttpOnly',
-    'SameSite=Strict',
+    `SameSite=${IS_PROD ? 'None' : 'Strict'}`,
     'Max-Age=0',
   ];
   if (IS_PROD) parts.push('Secure');
