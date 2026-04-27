@@ -337,15 +337,20 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             value={form.slug}
             onChange={e => handleSlugChange(e.target.value)}
             placeholder="mon-salon"
+            disabled={initSettings?.slug_locked === true}
+            title={initSettings?.slug_locked
+              ? "Votre URL a ete imposee par notre equipe et ne peut pas etre modifiee. Contactez le support."
+              : undefined}
             style={{
               flex: 1,
               padding: '10px 12px',
               fontSize: 13,
-              background: t.inputBg,
-              color: t.text,
+              background: initSettings?.slug_locked ? t.cardAlt : t.inputBg,
+              color: initSettings?.slug_locked ? t.muted : t.text,
               border: 'none',
               outline: 'none',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              cursor: initSettings?.slug_locked ? 'not-allowed' : 'text',
             }}
           />
           {slugStatus !== 'idle' && (

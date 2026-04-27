@@ -55,6 +55,13 @@ export async function setMerchantFeature(id, { feature, enabled, reason }) {
   });
 }
 
+export async function forceMerchantSlug(id, { slug, lock }) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/slug/force`, {
+    method: 'POST',
+    body: JSON.stringify({ slug, lock }),
+  });
+}
+
 // ── Clients (global_clients cross-merchant) ─────────────────────────────────
 export async function listClients({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
   const qs = new URLSearchParams();

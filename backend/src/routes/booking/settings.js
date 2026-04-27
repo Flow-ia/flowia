@@ -23,6 +23,20 @@ module.exports = function attachSettingsRoutes(router) {
       const { is_enabled, slug, business_description, address, phone, timezone,
               advance_booking_days, min_notice_hours, cancellation_policy_hours,
               require_account, google_business_url } = req.body;
+
+      // Admin commit 10 — slug verrouille par admin : refuser toute tentative
+      // de modification cote merchant. Le merchant doit contacter le support
+      // pour faire lever le verrou. On lit l'etat actuel + slug deja en base.
+      const { rows: current } = await pool.query(
+        'SELECT slug, slug_locked FROM booking_settings WHERE user_id=$1',
+        [req.user.userId]
+      );
+      if (current.length && current[0].slug_locked && slug !== current[0].slug) {
+        return res.status(403).json({
+          error: "Votre URL de reservation a ete imposee par notre equipe et ne peut pas etre modifiee. Merci de contacter le support pour toute demande.",
+          code: 'SLUG_LOCKED',
+        });
+      }
       // Vérifier unicité du slug
       if (slug) {
         const { rows: existing } = await pool.query(

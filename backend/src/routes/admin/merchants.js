@@ -67,8 +67,11 @@ router.get('/:id', async (req, res) => {
               u.is_frozen, u.frozen_at, u.frozen_reason, u.frozen_by_admin_id,
               u.sms_balance, u.feature_flags,
               u.created_at, u.onboarding_completed,
-              (SELECT slug FROM booking_settings WHERE user_id = u.id LIMIT 1) AS slug
+              bs.slug                       AS slug,
+              bs.slug_locked                AS slug_locked,
+              bs.slug_locked_at             AS slug_locked_at
          FROM users u
+         LEFT JOIN booking_settings bs ON bs.user_id = u.id
         WHERE u.id = $1
         LIMIT 1`,
       [req.params.id]
@@ -362,6 +365,63 @@ router.patch('/:id/features', async (req, res) => {
     return res.json({ ok: true, features: newFlags });
   } catch (e) {
     console.error('[admin/merchants features patch]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── POST /:id/slug/force — admin impose un slug et le verrouille ────────────
+// Body { slug, lock: true } — slug normalisé/validé cote serveur, unicite
+// verifiee, audit log. lock=true => le merchant ne peut plus changer son slug.
+router.post('/:id/slug/force', async (req, res) => {
+  const rawSlug = String(req.body?.slug || '').trim().toLowerCase();
+  const lock    = req.body?.lock === true;
+  // Normalisation : enleve accents, garde a-z 0-9 et tirets, deduplique tirets.
+  const slug = rawSlug.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  if (!slug || slug.length < 3) {
+    return res.status(400).json({ error: 'Slug invalide (min 3 caracteres a-z 0-9 -).' });
+  }
+
+  try {
+    // Le slug est UNIQUE en base — on verifie d'abord pour retourner un 409
+    // explicite plutot qu'une erreur PG cryptique.
+    const { rows: clash } = await pool.query(
+      `SELECT user_id FROM booking_settings WHERE slug = $1 AND user_id <> $2 LIMIT 1`,
+      [slug, req.params.id]
+    );
+    if (clash.length) {
+      return res.status(409).json({ error: 'Slug deja utilise par un autre commerce.' });
+    }
+
+    const { rows: before } = await pool.query(
+      `SELECT user_id, slug, slug_locked FROM booking_settings WHERE user_id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Booking settings introuvables pour ce merchant.' });
+
+    await pool.query(
+      `UPDATE booking_settings
+          SET slug = $2,
+              slug_locked = $3,
+              slug_locked_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
+              slug_locked_by_admin_id = CASE WHEN $3 THEN $4 ELSE NULL END
+        WHERE user_id = $1`,
+      [req.params.id, slug, lock, req.admin.id]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: lock ? 'merchant.slug.force_lock' : 'merchant.slug.force_unlock',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { slug: before[0].slug, slug_locked: before[0].slug_locked },
+      payloadAfter:  { slug, slug_locked: lock },
+      req,
+    });
+
+    return res.json({ ok: true, slug, slug_locked: lock });
+  } catch (e) {
+    console.error('[admin/merchants slug force]', e.message);
+    if (e.code === '23505') return res.status(409).json({ error: 'Slug deja utilise.' });
     return res.status(500).json({ error: 'Erreur serveur.' });
   }
 });

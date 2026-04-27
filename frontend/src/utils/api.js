@@ -63,7 +63,7 @@ function handleAccountBlocked(data) {
 // non-deconnectant avec le message du backend.
 function handleFeatureBlocked(data) {
   const code = data?.code;
-  if (code !== 'FEATURE_BLOCKED' && code !== 'CANNOT_BOOK') return false;
+  if (code !== 'FEATURE_BLOCKED' && code !== 'CANNOT_BOOK' && code !== 'SLUG_LOCKED') return false;
   const msg = data?.error || "Cette fonctionnalite n'est pas accessible pour votre compte. Merci de contacter notre equipe pour plus de details.";
   try {
     window.dispatchEvent(new CustomEvent('ff-feature-blocked', {

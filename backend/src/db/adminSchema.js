@@ -91,6 +91,14 @@ async function applyAdminSchema(pool) {
   await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book_reason    TEXT`);
   await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book_at        TIMESTAMPTZ`);
   await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book_by_admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL`);
+
+  // ── Commit admin 10 — slug verrouillage par admin ─────────────────────────
+  // Permet a un super-admin d'imposer un slug a un merchant (URL booking
+  // publique) et de bloquer toute modification ulterieure cote merchant.
+  // Le merchant qui PATCH son slug avec slug_locked=TRUE recoit un 403.
+  await runMig(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS slug_locked     BOOLEAN     DEFAULT FALSE`);
+  await runMig(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS slug_locked_at  TIMESTAMPTZ`);
+  await runMig(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS slug_locked_by_admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL`);
 }
 
 module.exports = { applyAdminSchema };

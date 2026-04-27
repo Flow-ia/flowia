@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
-import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance, getMerchantFeatures, setMerchantFeature } from '../lib/admin.js';
+import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance, getMerchantFeatures, setMerchantFeature, forceMerchantSlug } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
 
 // Liste des features blocables avec libelle FR. Doit rester aligne avec la
@@ -39,6 +39,10 @@ export default function MerchantDetailPage() {
   const [features, setFeatures]     = useState(null); // { feature: true|false }
   const [pendingFeat, setPendingFeat] = useState(null); // { feature, nextEnabled }
   const [featReason, setFeatReason] = useState('');
+  // Forcage URL slug
+  const [slugOpen, setSlugOpen]     = useState(false);
+  const [slugInput, setSlugInput]   = useState('');
+  const [slugLockInput, setSlugLockInput] = useState(true);
 
   useEffect(() => { getMe().then(setMe).catch(() => navigate('/login', { replace: true })); }, [navigate]);
 
@@ -125,6 +129,38 @@ export default function MerchantDetailPage() {
       await freezeMerchant(id, freezeReason.trim());
       setSuccess('Compte gele.');
       setFreeze(false); setReason('');
+      await load();
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Erreur.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doForceSlug(e) {
+    e.preventDefault();
+    const slug = slugInput.trim().toLowerCase();
+    if (!slug || slug.length < 3) { setError('Slug invalide (3 caracteres min).'); return; }
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const r = await forceMerchantSlug(id, { slug, lock: slugLockInput });
+      setSuccess(`Slug ${slugLockInput ? 'verrouille' : 'modifie'} : /${r.slug}.`);
+      setSlugOpen(false); setSlugInput(''); setSlugLockInput(true);
+      await load();
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Erreur.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doUnlockSlug() {
+    if (!confirm('Lever le verrou du slug ? Le commercant pourra a nouveau le modifier.')) return;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      // Reutilise force avec lock=false pour debrouiller, en gardant le slug actuel.
+      const r = await forceMerchantSlug(id, { slug: merchant.slug, lock: false });
+      setSuccess(`Slug deverrouille : /${r.slug}.`);
       await load();
     } catch (err) {
       setError(err && err.message ? err.message : 'Erreur.');
@@ -254,6 +290,67 @@ export default function MerchantDetailPage() {
             </div>
           </form>
         )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">{"URL de reservation"}</h2>
+          {merchant.slug_locked && !slugOpen && (
+            <button className="btn-ghost" onClick={doUnlockSlug} disabled={busy}>{"Deverrouiller"}</button>
+          )}
+        </div>
+        <ul className="dash-list">
+          <li>
+            <span className="k">{"Slug actuel"}</span>
+            <span className="v mono">{merchant.slug ? `/${merchant.slug}` : '—'}</span>
+          </li>
+          <li>
+            <span className="k">{"Statut"}</span>
+            <span className="v">
+              {merchant.slug_locked
+                ? <span className="badge badge-frozen">{"Verrouille (impose admin)"}</span>
+                : <span className="badge badge-on">{"Modifiable par le merchant"}</span>}
+            </span>
+          </li>
+          {merchant.slug_locked && merchant.slug_locked_at && (
+            <li><span className="k">{"Verrouille le"}</span><span className="v mono">{new Date(merchant.slug_locked_at).toLocaleString('fr-FR')}</span></li>
+          )}
+        </ul>
+
+        {!slugOpen
+          ? <button className="btn-ghost" onClick={() => { setSlugOpen(true); setSlugInput(merchant.slug || ''); setError(''); setSuccess(''); }} style={{ marginTop: 8 }}>
+              {merchant.slug_locked ? 'Modifier le slug verrouille' : 'Imposer un slug'}
+            </button>
+          : (
+            <form onSubmit={doForceSlug} className="form-stack" style={{ marginTop: 12 }}>
+              <p className="card-sub" style={{ margin: 0 }}>
+                {"Le slug est l'URL publique du site de reservation : flowia.fr/book/<slug>. Caracteres autorises : a-z, 0-9, tirets. Unicite verifiee."}
+              </p>
+              <label className="field"><span>{"Nouveau slug"}</span>
+                <input
+                  value={slugInput}
+                  onChange={(e) => setSlugInput(e.target.value)}
+                  placeholder="hair-coiff-lille"
+                  pattern="[a-z0-9-]+"
+                  minLength={3} maxLength={60}
+                  required autoFocus
+                />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={slugLockInput}
+                  onChange={(e) => setSlugLockInput(e.target.checked)}
+                />
+                {"Verrouiller (le merchant ne pourra plus modifier le slug)"}
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" className="btn-primary" disabled={busy} style={{ flex: 1 }}>{busy ? '...' : 'Appliquer'}</button>
+                <button type="button" className="btn-ghost" onClick={() => { setSlugOpen(false); setSlugInput(''); }}>{"Annuler"}</button>
+              </div>
+            </form>
+          )
+        }
       </section>
 
       <section className="card">
