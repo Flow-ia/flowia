@@ -391,15 +391,23 @@ function useGoogleMerchantAuth(onSuccess) {
 export function GoogleOAuthOverlay({ status, errorMsg, onRetry, onClose }) {
   if (status === 'idle' || status === 'success') return null;
 
+  // Admin commit 7 — fenetre eclair possible sur les codes de blocage compte
+  // (entre la reception de oauth_error et la fermeture de cet overlay par le
+  // hook useGoogleMerchantAuth qui repasse a idle). On affiche un message
+  // user-friendly plutot que le code brut "ACCOUNT_FROZEN".
+  const isAccountBlocked = errorMsg === 'ACCOUNT_FROZEN' || errorMsg === 'ACCOUNT_BLOCKED';
+
   const TITLES = {
     loading:   'Connexion à Google…',
-    error:     'Connexion impossible',
+    error:     isAccountBlocked ? 'Compte bloqué' : 'Connexion impossible',
     cancelled: 'Connexion annulée',
     timeout:   'Délai dépassé',
   };
   const MESSAGES = {
     loading:   'Validez vos informations dans la fenêtre Google. Ne fermez pas cette page.',
-    error:     errorMsg || 'Une erreur est survenue. Vérifiez votre connexion et réessayez.',
+    error:     isAccountBlocked
+      ? 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.'
+      : (errorMsg || 'Une erreur est survenue. Vérifiez votre connexion et réessayez.'),
     cancelled: 'Vous avez fermé la fenêtre Google avant la fin. Réessayez quand vous êtes prêt.',
     timeout:   'La connexion a pris trop de temps. Vérifiez votre connexion internet et réessayez.',
   };
@@ -444,6 +452,15 @@ export function GoogleOAuthOverlay({ status, errorMsg, onRetry, onClose }) {
               background:'transparent', border:'1px solid #e5e7eb', color:'#64748b',
               fontSize:12, fontWeight:500, cursor:'pointer', fontFamily:'inherit',
             }}>Annuler</button>
+        ) : isAccountBlocked ? (
+          // Compte bloque : pas de bouton "Reessayer" — le compte reste bloque
+          // tant que l'admin ne degele pas, retry serait inutile et confus.
+          <button type="button" onClick={onClose}
+            style={{
+              width:'100%', padding:'11px', borderRadius:9,
+              background:'#0f172a', border:'none', color:'#fff',
+              fontSize:13, fontWeight:500, cursor:'pointer', fontFamily:'inherit',
+            }}>{"J'ai compris"}</button>
         ) : (
           <div style={{ display:'flex', gap:8 }}>
             <button type="button" onClick={onClose}
