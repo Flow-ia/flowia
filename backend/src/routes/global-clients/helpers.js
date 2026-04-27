@@ -20,36 +20,72 @@ function isRealDate(s) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Middleware : authentification compte client global
 // ─────────────────────────────────────────────────────────────────────────────
-function globalClientAuth(req, res, next) {
+
+// Cache mémoire des global_clients bloqués/actifs. Même rationale que le
+// merchant authMiddleware : enforcement quasi-temps-réel après un blocage admin
+// (cross-merchant) sans taper la DB à chaque appel API authentifié.
+const BLOCKED_CACHE_TTL_MS = 30_000;
+const blockedCache = new Map(); // globalClientId → { isBlocked, expiresAt }
+
+async function isGlobalClientBlocked(globalClientId) {
+  if (!globalClientId) return false;
+  const cached = blockedCache.get(globalClientId);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) return cached.isBlocked;
+  try {
+    const { rows } = await pool.query(
+      'SELECT is_blocked FROM global_clients WHERE id = $1 LIMIT 1',
+      [globalClientId]
+    );
+    const isBlocked = !!(rows[0]?.is_blocked);
+    blockedCache.set(globalClientId, { isBlocked, expiresAt: now + BLOCKED_CACHE_TTL_MS });
+    return isBlocked;
+  } catch (e) {
+    console.error('[helpers.isGlobalClientBlocked]', e.message);
+    return cached?.isBlocked ?? false;
+  }
+}
+
+function blockedResponse(res) {
+  return res.status(403).json({
+    error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.',
+    code: 'ACCOUNT_BLOCKED',
+  });
+}
+
+async function globalClientAuth(req, res, next) {
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non authentifié.' });
-  try {
-    const dec = jwt.verify(h.slice(7), process.env.JWT_SECRET);
-    if (dec.scope !== 'global_client') return res.status(401).json({ error: 'Token invalide.' });
-    req.globalClient = dec;
-    next();
-  } catch { res.status(401).json({ error: 'Session expirée.' }); }
+  let dec;
+  try { dec = jwt.verify(h.slice(7), process.env.JWT_SECRET); }
+  catch { return res.status(401).json({ error: 'Session expirée.' }); }
+  if (dec.scope !== 'global_client') return res.status(401).json({ error: 'Token invalide.' });
+  if (await isGlobalClientBlocked(dec.globalClientId)) return blockedResponse(res);
+  req.globalClient = dec;
+  next();
 }
 
 // Auth unifié : accepte scope='global_client' OU scope='client' lié à un
 // global_client (globalClientId présent). Les endpoints parrainage utilisent
 // ce middleware car le client s'authentifie via ff_client_token (login
 // commerçant) — ff_gc_token n'est jamais écrit côté front.
-function clientOrGlobalClientAuth(req, res, next) {
+async function clientOrGlobalClientAuth(req, res, next) {
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non authentifié.' });
-  try {
-    const dec = jwt.verify(h.slice(7), process.env.JWT_SECRET);
-    if (dec.scope === 'global_client' && dec.globalClientId) {
-      req.globalClient = dec;
-      return next();
-    }
-    if (dec.scope === 'client' && dec.globalClientId) {
-      req.globalClient = { globalClientId: dec.globalClientId, email: dec.email };
-      return next();
-    }
-    return res.status(401).json({ error: 'Token invalide.' });
-  } catch { res.status(401).json({ error: 'Session expirée.' }); }
+  let dec;
+  try { dec = jwt.verify(h.slice(7), process.env.JWT_SECRET); }
+  catch { return res.status(401).json({ error: 'Session expirée.' }); }
+  if (dec.scope === 'global_client' && dec.globalClientId) {
+    if (await isGlobalClientBlocked(dec.globalClientId)) return blockedResponse(res);
+    req.globalClient = dec;
+    return next();
+  }
+  if (dec.scope === 'client' && dec.globalClientId) {
+    if (await isGlobalClientBlocked(dec.globalClientId)) return blockedResponse(res);
+    req.globalClient = { globalClientId: dec.globalClientId, email: dec.email };
+    return next();
+  }
+  return res.status(401).json({ error: 'Token invalide.' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,6 +120,7 @@ module.exports = {
   isRealDate,
   globalClientAuth,
   clientOrGlobalClientAuth,
+  isGlobalClientBlocked,
   saveCode,
   getCode,
   deleteCode,

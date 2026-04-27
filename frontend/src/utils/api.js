@@ -38,6 +38,24 @@ function dispatchAuthExpired() {
   try { window.dispatchEvent(new Event('ff-auth-expired')); } catch {}
 }
 
+// Admin commit 7 — gel/blocage compte. Le backend retourne 403 + code
+// 'ACCOUNT_FROZEN' (merchant geled) ou 'ACCOUNT_BLOCKED' (client global
+// bloque) sur TOUTE requete authentifiee, y compris pour des sessions deja
+// ouvertes au moment du gel ou pour un re-login Google. On purge tous les
+// tokens cote front, on memorise le message pour la page Login (qui l'affiche
+// au mount), puis on declenche la deconnexion globale.
+function handleAccountBlocked(data) {
+  const code = data?.code;
+  if (code !== 'ACCOUNT_FROZEN' && code !== 'ACCOUNT_BLOCKED') return false;
+  const msg = data?.error || 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+  try { sessionStorage.setItem('ff_account_blocked_msg', msg); } catch {}
+  ['ff_token','ff_pin_token','ff_oauth_merchant','ff_gc_token','ff_client_token']
+    .forEach(k => { try { localStorage.removeItem(k); } catch {} });
+  try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: msg } })); } catch {}
+  try { window.dispatchEvent(new Event('ff-auth-expired')); } catch {}
+  return true;
+}
+
 // Appelé quand une requête merchant retourne 401. Purge les tokens locaux
 // et signale useAuth pour qu'il remette user=null (l'app retombe alors
 // sur /login). Sans ça, l'onglet resterait "logged in" en state React
@@ -123,6 +141,7 @@ async function adminRequest(path, options = {}) {
     const res  = await fetch(`${BASE}${path}`, { ...options, headers });
     handleMerchant401(res, path);
     const data = await res.json().catch(() => ({}));
+    if (res.status === 403) handleAccountBlocked(data);
     return { res, data };
   };
   let { res, data } = await exec();
@@ -168,6 +187,7 @@ async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   handleMerchant401(res, path);
   const data = await res.json();
+  if (res.status === 403) handleAccountBlocked(data);
   if (!res.ok) throw new Error(data.error || 'Erreur serveur');
   return data;
 }
@@ -365,6 +385,7 @@ export const mediaApi = {
     } else {
       await res.text().catch(() => {}); // drain
     }
+    if (res.status === 403) handleAccountBlocked(data);
     if (!res.ok) {
       const msg = data.error
         || (res.status === 413 ? 'Image trop lourde (max 5 Mo).'
@@ -393,6 +414,7 @@ async function pubRequest(path, options = {}) {
   if (clientToken) headers['Authorization'] = `Bearer ${clientToken}`;
   const res = await fetch(`${PUB_BASE}/pub${path}`, { ...options, headers });
   const data = await res.json();
+  if (res.status === 403) handleAccountBlocked(data);
   if (!res.ok) {
     const err = new Error(data.error || 'Erreur serveur');
     err.data = data;       // préserve code, policy_hours, merchant_phone, etc.
@@ -680,6 +702,7 @@ async function gcRequest(path, options = {}, token = null) {
   if (auth) headers['Authorization'] = `Bearer ${auth}`;
   const res  = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
+  if (res.status === 403) handleAccountBlocked(data);
   if (!res.ok) throw new Error(data.error || 'Erreur reseau');
   return data;
 }

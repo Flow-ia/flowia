@@ -7,6 +7,10 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Admin commit 7 — message de blocage compte (gel merchant ou blocage client
+  // global par un admin FlowIA). Affiche un overlay bloquant que l'utilisateur
+  // ne peut que fermer ; api.js a deja purge tous les tokens.
+  const [blockedMsg, setBlockedMsg] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('ff_token');
@@ -69,6 +73,23 @@ export function AuthProvider({ children }) {
     const onAuthExpired = () => setUser(null);
     window.addEventListener('ff-auth-expired', onAuthExpired);
 
+    // Admin commit 7 — overlay de blocage. api.js dispatch ff-account-blocked
+    // sur 403 ACCOUNT_FROZEN/ACCOUNT_BLOCKED. setUser(null) est deja gere par
+    // ff-auth-expired (dispatch en parallele dans handleAccountBlocked).
+    const onAccountBlocked = (ev) => {
+      const msg = ev?.detail?.message
+        || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ff_account_blocked_msg') : null)
+        || 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+      setBlockedMsg(msg);
+    };
+    window.addEventListener('ff-account-blocked', onAccountBlocked);
+    // Au mount initial, si un message est deja en sessionStorage (refresh page
+    // apres blocage), on l'affiche aussi.
+    try {
+      const persisted = sessionStorage.getItem('ff_account_blocked_msg');
+      if (persisted) setBlockedMsg(persisted);
+    } catch {}
+
     // Fallback storage event : fire-and-forget dans la popup → déclenche
     // un `storage` event dans l'opener (same-origin). Le payload contient
     // { token, user } sérialisés pour survivre au cas BroadcastChannel KO.
@@ -86,8 +107,14 @@ export function AuthProvider({ children }) {
       try { bc && bc.close(); } catch {}
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('ff-auth-expired', onAuthExpired);
+      window.removeEventListener('ff-account-blocked', onAccountBlocked);
     };
   }, []);
+
+  function dismissBlocked() {
+    try { sessionStorage.removeItem('ff_account_blocked_msg'); } catch {}
+    setBlockedMsg(null);
+  }
 
   function login(token, userData) {
     // Au login d'un nouveau compte, supprimer l'ancienne session PIN
@@ -112,7 +139,46 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
       {children}
+      {blockedMsg && <AccountBlockedOverlay message={blockedMsg} onClose={dismissBlocked} />}
     </AuthContext.Provider>
+  );
+}
+
+function AccountBlockedOverlay({ message, onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 99999,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        maxWidth: 460, width: '100%',
+        background: '#fff', color: '#111',
+        border: '0.5px solid rgba(0,0,0,0.15)',
+        borderRadius: 12, padding: 28,
+        boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
+        textAlign: 'left',
+      }}>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>
+          {"Compte bloque"}
+        </div>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: '#333', marginBottom: 22 }}>
+          {message}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            width: '100%', padding: '10px 14px',
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: 8,
+            fontSize: 14, fontWeight: 500, cursor: 'pointer',
+          }}
+        >
+          {"J'ai compris"}
+        </button>
+      </div>
+    </div>
   );
 }
 

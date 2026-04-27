@@ -523,6 +523,14 @@ module.exports = function attachClientAuthRoutes(router) {
       );
       if (existing.length) {
         gc = existing[0];
+        // Admin commit 7 : refus OAuth si compte global bloqué (cross-merchant).
+        // Symétrique au check du login formulaire ligne 339.
+        if (gc.is_blocked) {
+          return res.status(403).json({
+            error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.',
+            code: 'ACCOUNT_BLOCKED',
+          });
+        }
         // Si le compte existait sans google_id (créé via email/password puis
         // login OAuth) on le rattache, sans toucher l'opt-in marketing existant.
         if (!gc.google_id) {
