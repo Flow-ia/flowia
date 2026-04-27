@@ -509,7 +509,16 @@ export default function AuthFlow({ initialScreen = 'login' }) {
       const url = new URL(window.location.href);
       const authError = url.searchParams.get('auth_error');
       if (authError) {
-        show(decodeURIComponent(authError), 'err');
+        const code = decodeURIComponent(authError);
+        // Admin commit 7 — gel compte detecte cote backend OAuth Google :
+        // declenche l'overlay (meme UI que tous les autres canaux), pas le toast.
+        if (code === 'ACCOUNT_FROZEN' || code === 'ACCOUNT_BLOCKED') {
+          const msg = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+          try { sessionStorage.setItem('ff_account_blocked_msg', msg); } catch {}
+          try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: msg } })); } catch {}
+        } else {
+          show(code, 'err');
+        }
         url.searchParams.delete('auth_error');
         window.history.replaceState({}, '',
           url.pathname + (url.searchParams.toString() ? '?' + url.searchParams : '') + url.hash);

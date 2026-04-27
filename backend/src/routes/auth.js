@@ -792,6 +792,14 @@ router.get('/google/merchant/callback', async (req, res) => {
       }
     }
 
+    // Admin commit 7 — refus immediat sans emission de token si compte gele.
+    // Le flow OAuth Google lui-meme (echange code, fetch profile, lien
+    // google_id) est volontairement preserve : ce check est un veto metier
+    // applique a la fin du flow, juste avant la signature du JWT.
+    if (user.is_frozen) {
+      return res.redirect(`${TARGET_ORIGIN}?auth_error=ACCOUNT_FROZEN`);
+    }
+
     // 5. Générer le JWT commerçant — durée configurable via user_settings.
     const tokenExpiry = await getMerchantSessionDuration(user.id);
     const token = signMerchantJwt(
