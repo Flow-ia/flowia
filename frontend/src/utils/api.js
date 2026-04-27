@@ -188,7 +188,7 @@ async function request(path, options = {}) {
   handleMerchant401(res, path);
   const data = await res.json();
   if (res.status === 403) handleAccountBlocked(data);
-  if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Erreur serveur'), { code: data.code });
   return data;
 }
 
@@ -703,7 +703,7 @@ async function gcRequest(path, options = {}, token = null) {
   const res  = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
   if (res.status === 403) handleAccountBlocked(data);
-  if (!res.ok) throw new Error(data.error || 'Erreur reseau');
+  if (!res.ok) throw Object.assign(new Error(data.error || 'Erreur reseau'), { code: data.code });
   return data;
 }
 

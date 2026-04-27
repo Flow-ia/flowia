@@ -613,7 +613,13 @@ function LoginScreen({ show, onLogin, goReg, goForgot, openGoogle }) {
     try {
       const r = await api.login({ email: f.email, password: f.pw });
       onLogin(r.token, r.user);
-    } catch (err) { show(err.message, 'err'); }
+    } catch (err) {
+      // Admin commit 7 : sur compte gele, l'overlay AccountBlockedOverlay
+      // (useAuth) est deja affiche par api.js. On ne double pas avec un toast.
+      if (err.code !== 'ACCOUNT_FROZEN' && err.code !== 'ACCOUNT_BLOCKED') {
+        show(err.message, 'err');
+      }
+    }
     finally { setLd(false); }
   };
 

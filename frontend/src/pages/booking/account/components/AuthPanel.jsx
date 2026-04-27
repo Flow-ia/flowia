@@ -193,8 +193,14 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       // qui demande mois/année de naissance + téléphone optionnels).
       onAuth(r.client, { justRegistered: mode === 'register' });
     } catch(e) {
+      // Admin commit 7 : sur compte bloque, l'overlay (useAuth) est deja
+      // affiche par api.js. On ne double pas avec un setErr inline.
+      const code = e.code || e.data?.code;
+      if (code === 'ACCOUNT_BLOCKED' || code === 'ACCOUNT_FROZEN') {
+        // overlay deja a l'ecran — rien a faire ici
+      }
       // Si l'erreur indique qu'un compte existe → basculer en login
-      if (e.message?.includes('existe') || e.message?.includes('USE_LOGIN') || e.message?.includes('deja')) {
+      else if (e.message?.includes('existe') || e.message?.includes('USE_LOGIN') || e.message?.includes('deja')) {
         setMode('login');
         setErr('Un compte existe dejà avec cet email. Connectez-vous a la place.');
       } else {
