@@ -5,6 +5,7 @@ const express = require('express');
 const { pool } = require('../../db');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { logAuditAction } = require('../../services/adminAudit');
+const { FEATURES } = require('../../middleware/requireFeature');
 
 const router = express.Router();
 router.use(adminAuth);
@@ -64,7 +65,7 @@ router.get('/:id', async (req, res) => {
       `SELECT u.id, u.email, u.business_name, u.phone, u.address, u.city, u.country, u.postal_code,
               u.first_name, u.last_name, u.avatar_url,
               u.is_frozen, u.frozen_at, u.frozen_reason, u.frozen_by_admin_id,
-              u.sms_balance,
+              u.sms_balance, u.feature_flags,
               u.created_at, u.onboarding_completed,
               (SELECT slug FROM booking_settings WHERE user_id = u.id LIMIT 1) AS slug
          FROM users u
@@ -297,6 +298,70 @@ router.post('/:id/sms-balance/adjust', async (req, res) => {
     if (e.code === '23514') {
       return res.status(409).json({ error: 'Solde insuffisant.' });
     }
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── GET /:id/features — etat des feature flags ──────────────────────────────
+// Renvoie un objet exhaustif { feature: true|false } pour chaque feature
+// blocable (FEATURES). Default true si la cle est absente du JSONB.
+router.get('/:id/features', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT feature_flags FROM users WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const stored = rows[0].feature_flags || {};
+    const out = {};
+    for (const f of FEATURES) {
+      out[f] = stored[f] !== false; // absent OU true => active
+    }
+    return res.json({ features: out });
+  } catch (e) {
+    console.error('[admin/merchants features get]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── PATCH /:id/features — toggle une feature ─────────────────────────────────
+// Body { feature: 'loyalty', enabled: false, reason: 'motif' }
+router.patch('/:id/features', async (req, res) => {
+  const feature = String(req.body?.feature || '').trim();
+  const enabled = req.body?.enabled === true;
+  const reason  = String(req.body?.reason || '').trim();
+
+  if (!FEATURES.includes(feature)) {
+    return res.status(400).json({ error: 'Feature inconnue.' });
+  }
+  if (!reason) return res.status(400).json({ error: 'Motif requis.' });
+
+  try {
+    const { rows: before } = await pool.query(
+      `SELECT id, feature_flags FROM users WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Not found' });
+    const oldFlags = before[0].feature_flags || {};
+    const newFlags = { ...oldFlags, [feature]: enabled };
+
+    await pool.query(
+      `UPDATE users SET feature_flags = $2 WHERE id = $1`,
+      [req.params.id, newFlags]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: enabled ? 'merchant.feature.enable' : 'merchant.feature.disable',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { [feature]: oldFlags[feature] !== false },
+      payloadAfter:  { [feature]: enabled, reason },
+      req,
+    });
+
+    return res.json({ ok: true, features: newFlags });
+  } catch (e) {
+    console.error('[admin/merchants features patch]', e.message);
     return res.status(500).json({ error: 'Erreur serveur.' });
   }
 });

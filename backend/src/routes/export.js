@@ -2,10 +2,12 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const PDFDocument = require('pdfkit');
 const router   = express.Router();
 router.use(authMiddleware);
+router.use(requireFeature('export'));
 
 // AUDIT export #3 + #4 + #5 : escCsv robuste contre séparateurs multiples,
 // injection de formules Excel (= + - @ \t \r), et double escape.

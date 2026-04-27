@@ -11,6 +11,10 @@ export function AuthProvider({ children }) {
   // global par un admin FlowIA). Affiche un overlay bloquant que l'utilisateur
   // ne peut que fermer ; api.js a deja purge tous les tokens.
   const [blockedMsg, setBlockedMsg] = useState(null);
+  // Admin commit 9 — message de feature bloquee (FEATURE_BLOCKED ou
+  // CANNOT_BOOK). Pas de purge tokens : le user reste loggue, seule la
+  // fonctionnalite ciblee n'est pas accessible. Overlay fermable.
+  const [featureBlockedMsg, setFeatureBlockedMsg] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('ff_token');
@@ -90,6 +94,14 @@ export function AuthProvider({ children }) {
       if (persisted) setBlockedMsg(persisted);
     } catch {}
 
+    // Admin commit 9 — feature bloquee (overlay non-deconnectant).
+    const onFeatureBlocked = (ev) => {
+      const msg = ev?.detail?.message
+        || "Cette fonctionnalite n'est pas accessible pour votre compte. Merci de contacter notre equipe pour plus de details.";
+      setFeatureBlockedMsg(msg);
+    };
+    window.addEventListener('ff-feature-blocked', onFeatureBlocked);
+
     // Fallback storage event : fire-and-forget dans la popup → déclenche
     // un `storage` event dans l'opener (same-origin). Le payload contient
     // { token, user } sérialisés pour survivre au cas BroadcastChannel KO.
@@ -108,6 +120,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('ff-auth-expired', onAuthExpired);
       window.removeEventListener('ff-account-blocked', onAccountBlocked);
+      window.removeEventListener('ff-feature-blocked', onFeatureBlocked);
     };
   }, []);
 
@@ -115,6 +128,7 @@ export function AuthProvider({ children }) {
     try { sessionStorage.removeItem('ff_account_blocked_msg'); } catch {}
     setBlockedMsg(null);
   }
+  function dismissFeatureBlocked() { setFeatureBlockedMsg(null); }
 
   function login(token, userData) {
     // Au login d'un nouveau compte, supprimer l'ancienne session PIN
@@ -140,7 +154,46 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
       {children}
       {blockedMsg && <AccountBlockedOverlay message={blockedMsg} onClose={dismissBlocked} />}
+      {featureBlockedMsg && <FeatureBlockedOverlay message={featureBlockedMsg} onClose={dismissFeatureBlocked} />}
     </AuthContext.Provider>
+  );
+}
+
+function FeatureBlockedOverlay({ message, onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 99998,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        maxWidth: 460, width: '100%',
+        background: '#fff', color: '#111',
+        border: '0.5px solid rgba(0,0,0,0.15)',
+        borderRadius: 12, padding: 28,
+        boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
+        textAlign: 'left',
+      }}>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>
+          {"Fonctionnalite indisponible"}
+        </div>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: '#333', marginBottom: 22 }}>
+          {message}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            width: '100%', padding: '10px 14px',
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: 8,
+            fontSize: 14, fontWeight: 500, cursor: 'pointer',
+          }}
+        >
+          {"J'ai compris"}
+        </button>
+      </div>
+    </div>
   );
 }
 

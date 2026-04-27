@@ -73,6 +73,24 @@ async function applyAdminSchema(pool) {
   await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS blocked_reason      TEXT`);
   await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS blocked_at          TIMESTAMPTZ`);
   await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS blocked_by_admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL`);
+
+  // ── Commit admin 9 — feature flags merchant + restrictions client ─────────
+  // Permet aux super-admins de desactiver granulairement des features sur un
+  // merchant donne (codes promo, fidelite, parrainage, marketing IA, etc.) ou
+  // d'empecher un client global de reserver de nouveaux RDV.
+  //
+  // Choix JSONB plutot qu'une table dediee : pas de jointure, lecture en O(1)
+  // sur le user, format extensible sans migration future. Default '{}' =
+  // toutes features actives (semantique : flag absent = autorise).
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS feature_flags JSONB DEFAULT '{}'::jsonb`);
+
+  // Restriction cannot_book client global : independant de is_blocked (qui
+  // bloque le login total). cannot_book autorise le login + consultation
+  // historique + RGPD, mais bloque uniquement la reservation de nouveaux RDV.
+  await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book           BOOLEAN     DEFAULT FALSE`);
+  await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book_reason    TEXT`);
+  await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book_at        TIMESTAMPTZ`);
+  await runMig(`ALTER TABLE global_clients ADD COLUMN IF NOT EXISTS cannot_book_by_admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL`);
 }
 
 module.exports = { applyAdminSchema };

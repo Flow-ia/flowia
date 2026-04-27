@@ -2,10 +2,12 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { sendSMS, SMS_PRICE, chunk, sleep } = require('../utils/messenger');
 const { appendUnsubscribeSms } = require('../utils/unsubscribe');
 const router = express.Router();
 router.use(authMiddleware);
+router.use(requireFeature('marketing_ai'));
 
 // Taux de retour estimés (pessimiste/optimiste) par segment — réalistes pour salon
 const RETURN_RATE_MIN = 0.08; // 8%

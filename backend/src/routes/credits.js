@@ -9,8 +9,10 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const router   = express.Router();
 router.use(authMiddleware);
+router.use(requireFeature('credits'));
 
 // ─── Helper : upsert compte crédit ───────────────────────────────────────────
 async function getOrCreateCredit(userId, clientEmail, clientName) {

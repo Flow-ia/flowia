@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
-import { getClient, blockClient, unblockClient, anonymizeClient } from '../lib/admin.js';
+import { getClient, blockClient, unblockClient, anonymizeClient, restrictClientBooking, allowClientBooking } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
 
 export default function ClientDetailPage() {
@@ -14,6 +14,8 @@ export default function ClientDetailPage() {
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState('');
   const [success, setSuccess]     = useState('');
+  const [restrictOpen, setRestrictOpen] = useState(false);
+  const [restrictReason, setRestrictReason] = useState('');
 
   useEffect(() => { getMe().then(setMe).catch(() => navigate('/login', { replace: true })); }, [navigate]);
 
@@ -48,6 +50,30 @@ export default function ClientDetailPage() {
     try {
       await unblockClient(id);
       setSuccess('Client debloque.');
+      await load();
+    } catch (err) { setError(err && err.message ? err.message : 'Erreur.'); }
+    finally { setBusy(false); }
+  }
+
+  async function doRestrictBooking(e) {
+    e.preventDefault();
+    if (!restrictReason.trim()) { setError('Motif requis.'); return; }
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      await restrictClientBooking(id, restrictReason.trim());
+      setSuccess('Reservation restreinte.');
+      setRestrictOpen(false); setRestrictReason('');
+      await load();
+    } catch (err) { setError(err && err.message ? err.message : 'Erreur.'); }
+    finally { setBusy(false); }
+  }
+
+  async function doAllowBooking() {
+    if (!confirm('Lever la restriction de reservation pour ce client ?')) return;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      await allowClientBooking(id);
+      setSuccess('Restriction levee.');
       await load();
     } catch (err) { setError(err && err.message ? err.message : 'Erreur.'); }
     finally { setBusy(false); }
@@ -159,6 +185,51 @@ export default function ClientDetailPage() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">{"Restriction de reservation"}</h2>
+          {client.cannot_book && !restrictOpen && (
+            <button className="btn-ghost" onClick={doAllowBooking} disabled={busy}>{"Lever la restriction"}</button>
+          )}
+        </div>
+        <p className="card-sub" style={{ marginTop: 0 }}>
+          {"Different du blocage total : le client peut toujours se connecter, voir son historique et exporter ses donnees, mais ne peut plus reserver de nouveaux RDV sur AUCUN salon FlowIA."}
+        </p>
+
+        {client.cannot_book ? (
+          <ul className="dash-list">
+            <li><span className="k">{"Statut"}</span><span className="v"><span className="badge badge-frozen">{"Reservation bloquee"}</span></span></li>
+            <li><span className="k">{"Motif"}</span><span className="v">{client.cannot_book_reason || '—'}</span></li>
+            <li><span className="k">{"Depuis"}</span><span className="v mono">{client.cannot_book_at ? new Date(client.cannot_book_at).toLocaleString('fr-FR') : '—'}</span></li>
+          </ul>
+        ) : (
+          <>
+            <ul className="dash-list">
+              <li><span className="k">{"Statut"}</span><span className="v"><span className="badge badge-on">{"Reservation autorisee"}</span></span></li>
+            </ul>
+            {!restrictOpen
+              ? <button className="btn-ghost" onClick={() => { setRestrictOpen(true); setRestrictReason(''); setError(''); setSuccess(''); }} style={{ marginTop: 8 }}>{"Bloquer la reservation"}</button>
+              : (
+                <form onSubmit={doRestrictBooking} className="form-stack" style={{ marginTop: 12 }}>
+                  <label className="field"><span>{"Motif (audit log)"}</span>
+                    <input
+                      value={restrictReason}
+                      onChange={(e) => setRestrictReason(e.target.value)}
+                      placeholder={"Ex: no-shows repetes, abus de RDV non honores"}
+                      required autoFocus
+                    />
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="submit" className="btn-danger" disabled={busy} style={{ flex: 1 }}>{busy ? '...' : 'Confirmer le blocage'}</button>
+                    <button type="button" className="btn-ghost" onClick={() => { setRestrictOpen(false); setRestrictReason(''); }}>{"Annuler"}</button>
+                  </div>
+                </form>
+              )
+            }
+          </>
         )}
       </section>
 

@@ -2,10 +2,12 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware }  = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const router = express.Router();
 router.use(authMiddleware);
+router.use(requireFeature('loyalty'));
 
 // Audit X : bornes métier fidélité. Évitent qu'une typo admin ou un JWT
 // compromis via XSS pousse des valeurs aberrantes (reward=999%, 1€ = 1000

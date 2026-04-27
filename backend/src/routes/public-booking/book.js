@@ -52,6 +52,22 @@ module.exports = function attachBookRoute(router) {
         });
       }
 
+      // Admin commit 9 — restriction de reservation cross-merchant. Le client
+      // peut continuer a se connecter et consulter son historique, mais ne
+      // peut plus creer de nouveau RDV sur AUCUN salon FlowIA.
+      if (tokenGlobalClientId) {
+        const { rows: gcCheck } = await pool.query(
+          'SELECT cannot_book FROM global_clients WHERE id = $1 LIMIT 1',
+          [tokenGlobalClientId]
+        );
+        if (gcCheck.length && gcCheck[0].cannot_book) {
+          return res.status(403).json({
+            error: "La reservation n'est pas autorisee pour votre compte. Merci de contacter notre equipe pour plus de details.",
+            code: 'CANNOT_BOOK',
+          });
+        }
+      }
+
       // ── Récupérer la fiche client autoritative (nom/email/téléphone) ─────
       // Le merchant a pu supprimer la fiche locale (bouton "Supprimer client"),
       // auquel cas on tente de la recréer depuis global_clients via le token,

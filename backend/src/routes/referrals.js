@@ -31,7 +31,9 @@ function genReferralCode() {
 
 // ═══ Routes commerçant (authentifiées) ══════════════════════════════════════
 const merchantRouter = express.Router();
+const { requireFeature } = require('../middleware/requireFeature');
 merchantRouter.use(authMiddleware);
+merchantRouter.use(requireFeature('referrals'));
 
 // Périodes valides pour la limite anti-abus.
 const VALID_LIMIT_PERIODS = ['unlimited', 'lifetime', 'month', '3months', 'year'];

@@ -1,8 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
-import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance } from '../lib/admin.js';
+import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance, getMerchantFeatures, setMerchantFeature } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
+
+// Liste des features blocables avec libelle FR. Doit rester aligne avec la
+// constante FEATURES de backend/src/middleware/requireFeature.js.
+const FEATURE_LABELS = [
+  ['promo',        'Codes promo'],
+  ['loyalty',      'Programme fidelite'],
+  ['birthday',     'Campagne anniversaire'],
+  ['referrals',    'Parrainage'],
+  ['campaigns',    'Campagnes SMS / Email'],
+  ['marketing_ai', 'Marketing IA'],
+  ['export',       'Exports comptables'],
+  ['credits',      'Credits clients'],
+  ['commissions',  'Commissions employes'],
+];
 
 export default function MerchantDetailPage() {
   const { id } = useParams();
@@ -21,6 +35,10 @@ export default function MerchantDetailPage() {
   const [smsDir, setSmsDir]         = useState('add'); // 'add' | 'sub'
   const [smsAmount, setSmsAmount]   = useState('');
   const [smsReason, setSmsReason]   = useState('');
+  // Feature flags merchant
+  const [features, setFeatures]     = useState(null); // { feature: true|false }
+  const [pendingFeat, setPendingFeat] = useState(null); // { feature, nextEnabled }
+  const [featReason, setFeatReason] = useState('');
 
   useEffect(() => { getMe().then(setMe).catch(() => navigate('/login', { replace: true })); }, [navigate]);
 
@@ -39,6 +57,38 @@ export default function MerchantDetailPage() {
     }
   }
   useEffect(() => { load(); }, [id]);
+
+  // Charge les feature flags en parallele du detail merchant.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    getMerchantFeatures(id).then((r) => { if (!cancelled) setFeatures(r.features); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [id]);
+
+  async function confirmFeatureToggle(e) {
+    e.preventDefault();
+    if (!pendingFeat) return;
+    if (!featReason.trim()) { setError('Motif requis.'); return; }
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const r = await setMerchantFeature(id, {
+        feature: pendingFeat.feature,
+        enabled: pendingFeat.nextEnabled,
+        reason: featReason.trim(),
+      });
+      setFeatures(r.features ? Object.fromEntries(FEATURE_LABELS.map(([k]) => [k, r.features[k] !== false])) : features);
+      // Plus simple : recharger via getMerchantFeatures
+      const fresh = await getMerchantFeatures(id);
+      setFeatures(fresh.features);
+      setSuccess(`${pendingFeat.nextEnabled ? 'Feature activee' : 'Feature desactivee'} : ${pendingFeat.feature}.`);
+      setPendingFeat(null); setFeatReason('');
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Erreur.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function startEdit() {
     setEdit({
@@ -268,6 +318,63 @@ export default function MerchantDetailPage() {
           <li><span className="k">{"CA total"}</span><span className="v">{stats.revenue_total ? `${Number(stats.revenue_total).toFixed(2)} €` : '—'}</span></li>
           <li><span className="k">{"Dernier RDV"}</span><span className="v mono">{stats.last_appointment_at ? new Date(stats.last_appointment_at).toLocaleString('fr-FR') : '—'}</span></li>
         </ul>
+      </section>
+
+      <section className="card">
+        <h2 className="card-title">{"Permissions / Features"}</h2>
+        <p className="card-sub" style={{ marginTop: 0 }}>
+          {"Activer ou desactiver une fonctionnalite. Une feature desactivee renvoie 403 cote API et le merchant voit un message dans son interface. Toute modification est tracee dans l'audit log avec motif obligatoire."}
+        </p>
+        {!features
+          ? <div className="splash" style={{ padding: 12 }}>{"Chargement..."}</div>
+          : (
+            <ul className="dash-list">
+              {FEATURE_LABELS.map(([key, label]) => {
+                const enabled = features[key] !== false;
+                return (
+                  <li key={key}>
+                    <span className="k">{label}</span>
+                    <span className="v" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span className={enabled ? 'badge badge-on' : 'badge badge-frozen'}>
+                        {enabled ? 'Active' : 'Bloquee'}
+                      </span>
+                      <button
+                        className="btn-ghost"
+                        onClick={() => { setPendingFeat({ feature: key, nextEnabled: !enabled }); setFeatReason(''); setError(''); setSuccess(''); }}
+                        disabled={busy}
+                      >
+                        {enabled ? 'Bloquer' : 'Activer'}
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+        {pendingFeat && (
+          <form onSubmit={confirmFeatureToggle} className="form-stack" style={{ marginTop: 14 }}>
+            <p className="card-sub" style={{ margin: 0 }}>
+              {pendingFeat.nextEnabled
+                ? `Confirmer l'activation de '${pendingFeat.feature}' pour ce merchant.`
+                : `Confirmer le blocage de '${pendingFeat.feature}' pour ce merchant.`}
+            </p>
+            <label className="field"><span>{"Motif (audit log)"}</span>
+              <input
+                value={featReason}
+                onChange={(e) => setFeatReason(e.target.value)}
+                placeholder={pendingFeat.nextEnabled ? "Ex: reactivation apres regularisation" : "Ex: usage abusif, plan inferieur"}
+                required autoFocus
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className={pendingFeat.nextEnabled ? 'btn-primary' : 'btn-danger'} disabled={busy} style={{ flex: 1 }}>
+                {busy ? '...' : 'Confirmer'}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => { setPendingFeat(null); setFeatReason(''); }}>{"Annuler"}</button>
+            </div>
+          </form>
+        )}
       </section>
 
       {!merchant.is_frozen && (

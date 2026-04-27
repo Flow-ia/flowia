@@ -1,10 +1,12 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router = express.Router();
 
 router.use(authMiddleware);
+router.use(requireFeature('birthday'));
 
 // ── GET /api/birthday-campaign — config du commerçant (1 ligne) ─────────────
 router.get('/', async (req, res) => {

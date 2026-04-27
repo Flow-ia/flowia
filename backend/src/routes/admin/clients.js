@@ -65,6 +65,7 @@ router.get('/:id', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, email, phone, first_name, last_name, is_verified,
               is_blocked, blocked_reason, blocked_at, blocked_by_admin_id,
+              cannot_book, cannot_book_reason, cannot_book_at, cannot_book_by_admin_id,
               created_at, updated_at
          FROM global_clients
         WHERE id = $1
@@ -183,6 +184,85 @@ router.post('/:id/unblock', async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('[admin/clients unblock]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── POST /:id/restrict-booking — empeche la creation de nouveaux RDV ────────
+// Different de /block (qui bloque le login total). Le client peut toujours se
+// connecter, voir son historique, exporter ses donnees RGPD, mais ne peut
+// plus reserver de nouveaux creneaux. Cas d'usage : sanction graduee, no-show
+// repetes, abus de RDV non honores.
+router.post('/:id/restrict-booking', async (req, res) => {
+  const reason = String(req.body?.reason || '').trim();
+  if (!reason) return res.status(400).json({ error: 'Motif requis.' });
+
+  try {
+    const { rows: before } = await pool.query(
+      `SELECT id, cannot_book FROM global_clients WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Not found' });
+    if (before[0].cannot_book) return res.status(409).json({ error: 'Reservation deja restreinte.' });
+
+    await pool.query(
+      `UPDATE global_clients
+          SET cannot_book = TRUE,
+              cannot_book_reason = $2,
+              cannot_book_at = NOW(),
+              cannot_book_by_admin_id = $3,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [req.params.id, reason.slice(0, 1000), req.admin.id]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: 'client.restrict_booking', targetType: 'global_client', targetId: req.params.id,
+      payloadBefore: { cannot_book: false },
+      payloadAfter:  { cannot_book: true, reason },
+      req,
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[admin/clients restrict-booking]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── POST /:id/allow-booking — leve la restriction de reservation ────────────
+router.post('/:id/allow-booking', async (req, res) => {
+  try {
+    const { rows: before } = await pool.query(
+      `SELECT id, cannot_book, cannot_book_reason FROM global_clients WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Not found' });
+    if (!before[0].cannot_book) return res.status(409).json({ error: 'Aucune restriction active.' });
+
+    await pool.query(
+      `UPDATE global_clients
+          SET cannot_book = FALSE,
+              cannot_book_reason = NULL,
+              cannot_book_at = NULL,
+              cannot_book_by_admin_id = NULL,
+              updated_at = NOW()
+        WHERE id = $1`,
+      [req.params.id]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: 'client.allow_booking', targetType: 'global_client', targetId: req.params.id,
+      payloadBefore: { cannot_book: true, reason: before[0].cannot_book_reason },
+      payloadAfter:  { cannot_book: false },
+      req,
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[admin/clients allow-booking]', e.message);
     return res.status(500).json({ error: 'Erreur serveur.' });
   }
 });

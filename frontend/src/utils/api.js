@@ -56,6 +56,23 @@ function handleAccountBlocked(data) {
   return true;
 }
 
+// Admin commit 9 — feature gating (merchant) ou cannot_book (client). Le
+// backend renvoie 403 + code FEATURE_BLOCKED ou CANNOT_BOOK. Pas de purge de
+// session : l'utilisateur reste loggue, seule la fonctionnalite ciblee est
+// bloquee. On dispatch un event que useAuth consomme pour afficher un overlay
+// non-deconnectant avec le message du backend.
+function handleFeatureBlocked(data) {
+  const code = data?.code;
+  if (code !== 'FEATURE_BLOCKED' && code !== 'CANNOT_BOOK') return false;
+  const msg = data?.error || "Cette fonctionnalite n'est pas accessible pour votre compte. Merci de contacter notre equipe pour plus de details.";
+  try {
+    window.dispatchEvent(new CustomEvent('ff-feature-blocked', {
+      detail: { message: msg, code, feature: data?.feature || null }
+    }));
+  } catch {}
+  return true;
+}
+
 // Appelé quand une requête merchant retourne 401. Purge les tokens locaux
 // et signale useAuth pour qu'il remette user=null (l'app retombe alors
 // sur /login). Sans ça, l'onglet resterait "logged in" en state React
@@ -141,7 +158,7 @@ async function adminRequest(path, options = {}) {
     const res  = await fetch(`${BASE}${path}`, { ...options, headers });
     handleMerchant401(res, path);
     const data = await res.json().catch(() => ({}));
-    if (res.status === 403) handleAccountBlocked(data);
+    if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
     return { res, data };
   };
   let { res, data } = await exec();
@@ -187,7 +204,7 @@ async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
   handleMerchant401(res, path);
   const data = await res.json();
-  if (res.status === 403) handleAccountBlocked(data);
+  if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
   if (!res.ok) throw Object.assign(new Error(data.error || 'Erreur serveur'), { code: data.code });
   return data;
 }
@@ -385,7 +402,7 @@ export const mediaApi = {
     } else {
       await res.text().catch(() => {}); // drain
     }
-    if (res.status === 403) handleAccountBlocked(data);
+    if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
     if (!res.ok) {
       const msg = data.error
         || (res.status === 413 ? 'Image trop lourde (max 5 Mo).'
@@ -414,7 +431,7 @@ async function pubRequest(path, options = {}) {
   if (clientToken) headers['Authorization'] = `Bearer ${clientToken}`;
   const res = await fetch(`${PUB_BASE}/pub${path}`, { ...options, headers });
   const data = await res.json();
-  if (res.status === 403) handleAccountBlocked(data);
+  if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
   if (!res.ok) {
     const err = new Error(data.error || 'Erreur serveur');
     err.data = data;       // préserve code, policy_hours, merchant_phone, etc.
@@ -702,7 +719,7 @@ async function gcRequest(path, options = {}, token = null) {
   if (auth) headers['Authorization'] = `Bearer ${auth}`;
   const res  = await fetch(`${BASE}${path}`, { ...options, headers });
   const data = await res.json();
-  if (res.status === 403) handleAccountBlocked(data);
+  if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
   if (!res.ok) throw Object.assign(new Error(data.error || 'Erreur reseau'), { code: data.code });
   return data;
 }

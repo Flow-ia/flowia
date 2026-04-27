@@ -2,8 +2,10 @@
 const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const router   = express.Router();
 router.use(authMiddleware);
+router.use(requireFeature('promo'));
 
 // Validation commune POST + PUT. Retourne un string d'erreur ou null si OK.
 function validatePromoInput({ type, value, max_uses }) {

@@ -2,6 +2,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 const { sendSMS, sleep, chunk, SMS_COST, SMS_PRICE } = require('../utils/messenger');
 const { sendMarketingEmail } = require('../utils/emailSender');
 const { appendUnsubscribeSms } = require('../utils/unsubscribe');
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // Toutes les routes nécessitent une authentification commerçant
 router.use(authMiddleware);
+router.use(requireFeature('campaigns'));
 
 // ── Constantes (alias pour rétrocompat code existant) ────────────────────────
 const EMAIL_DAILY_LIMIT   = EMAIL_DAILY_LIMIT_USER;

@@ -44,6 +44,17 @@ export async function adjustMerchantSmsBalance(id, { delta, reason }) {
   });
 }
 
+export async function getMerchantFeatures(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/features`);
+}
+
+export async function setMerchantFeature(id, { feature, enabled, reason }) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/features`, {
+    method: 'PATCH',
+    body: JSON.stringify({ feature, enabled, reason }),
+  });
+}
+
 // ── Clients (global_clients cross-merchant) ─────────────────────────────────
 export async function listClients({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
   const qs = new URLSearchParams();
@@ -74,6 +85,19 @@ export async function unblockClient(id) {
 export async function anonymizeClient(id) {
   return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}`, {
     method: 'DELETE',
+  });
+}
+
+export async function restrictClientBooking(id, reason) {
+  return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}/restrict-booking`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function allowClientBooking(id) {
+  return await apiJson(`/api/admin/clients/${encodeURIComponent(id)}/allow-booking`, {
+    method: 'POST',
   });
 }
 
