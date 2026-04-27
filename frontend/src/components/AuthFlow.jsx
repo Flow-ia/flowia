@@ -301,6 +301,19 @@ function useGoogleMerchantAuth(onSuccess) {
     };
     const handleError = (msg) => {
       cleanup();
+      // Admin commit 7 — gel detecte cote backend OAuth : on ne montre PAS
+      // l'overlay Google "Erreur, reessayer" (le retry serait inutile : le
+      // compte est gele tant que l'admin ne degele pas). On declenche
+      // l'overlay AccountBlocked global et on remet le hook a idle pour
+      // refermer la popup Google overlay proprement.
+      if (msg === 'ACCOUNT_FROZEN' || msg === 'ACCOUNT_BLOCKED') {
+        setStatus('idle');
+        setErrorMsg('');
+        const text = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+        try { sessionStorage.setItem('ff_account_blocked_msg', text); } catch {}
+        try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: text } })); } catch {}
+        return;
+      }
       setErrorMsg(msg || 'Erreur Google');
       setStatus('error');
     };

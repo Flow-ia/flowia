@@ -147,6 +147,16 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         else if (ev.data?.type === 'oauth_pre_register') handlePreRegister(ev.data.pre_token, ev.data.slug);
         else if (ev.data?.type === 'oauth_error') {
           cleanupGoogle();
+          // Admin commit 7 — blocage detecte cote backend OAuth client.
+          // Pas d'overlay Google retry inutile : l'overlay AccountBlocked
+          // global (useAuth) prend le relais.
+          if (ev.data.error === 'ACCOUNT_BLOCKED' || ev.data.error === 'ACCOUNT_FROZEN') {
+            setGStatus('idle'); setGError('');
+            const text = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+            try { sessionStorage.setItem('ff_account_blocked_msg', text); } catch {}
+            try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: text } })); } catch {}
+            return;
+          }
           setGError(ev.data.error || 'Erreur Google');
           setGStatus('error');
         }

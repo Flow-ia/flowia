@@ -796,8 +796,11 @@ router.get('/google/merchant/callback', async (req, res) => {
     // Le flow OAuth Google lui-meme (echange code, fetch profile, lien
     // google_id) est volontairement preserve : ce check est un veto metier
     // applique a la fin du flow, juste avant la signature du JWT.
+    // Redirection vers /__oauth (PAS la page racine) pour que la popup se
+    // ferme proprement via OAuthCallback.jsx qui detecte error=... dans le
+    // hash, signale l'opener via BroadcastChannel puis close() la popup.
     if (user.is_frozen) {
-      return res.redirect(`${TARGET_ORIGIN}?auth_error=ACCOUNT_FROZEN`);
+      return res.redirect(`${TARGET_ORIGIN}/__oauth#error=ACCOUNT_FROZEN`);
     }
 
     // 5. Générer le JWT commerçant — durée configurable via user_settings.
@@ -1009,6 +1012,14 @@ router.get('/google/callback', async (req, res) => {
         console.log(`[GOOGLE OAUTH] ${emailLow} pre-register pending sur slug=${slug}`);
         return;
       }
+    }
+
+    // Admin commit 7 — refus immediat si compte global bloque (cross-merchant).
+    // Symetrique au check du login formulaire (client-auth.js l339) et du
+    // OAuth merchant callback. Aucun token n'est emis, popup se ferme via
+    // OAuthCallback.jsx qui detecte error=... dans le hash.
+    if (gc.is_blocked) {
+      return res.redirect(`${TARGET_ORIGIN}/__oauth#error=ACCOUNT_BLOCKED`);
     }
 
     // 5. Créer/mettre à jour la fiche locale chez ce commerçant.
