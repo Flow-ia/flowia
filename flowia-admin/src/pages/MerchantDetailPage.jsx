@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
-import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant } from '../lib/admin.js';
+import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
 
 export default function MerchantDetailPage() {
@@ -16,6 +16,11 @@ export default function MerchantDetailPage() {
   const [busy, setBusy]           = useState(false);
   const [error, setError]         = useState('');
   const [success, setSuccess]     = useState('');
+  // Ajustement solde SMS — direction add/sub, montant absolu, motif
+  const [smsOpen, setSmsOpen]       = useState(false);
+  const [smsDir, setSmsDir]         = useState('add'); // 'add' | 'sub'
+  const [smsAmount, setSmsAmount]   = useState('');
+  const [smsReason, setSmsReason]   = useState('');
 
   useEffect(() => { getMe().then(setMe).catch(() => navigate('/login', { replace: true })); }, [navigate]);
 
@@ -70,6 +75,26 @@ export default function MerchantDetailPage() {
       await freezeMerchant(id, freezeReason.trim());
       setSuccess('Compte gele.');
       setFreeze(false); setReason('');
+      await load();
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Erreur.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doAdjustSms(e) {
+    e.preventDefault();
+    const amt = Number(String(smsAmount).replace(',', '.'));
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Montant invalide.'); return; }
+    if (amt > 1000) { setError('Cap par operation : 1000 euros.'); return; }
+    if (!smsReason.trim()) { setError('Motif requis.'); return; }
+    const delta = smsDir === 'sub' ? -amt : amt;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const r = await adjustMerchantSmsBalance(id, { delta, reason: smsReason.trim() });
+      setSuccess(`Solde ajuste : ${r.sms_balance.toFixed(2)} euros (${delta > 0 ? '+' : ''}${delta.toFixed(2)}).`);
+      setSmsOpen(false); setSmsAmount(''); setSmsReason(''); setSmsDir('add');
       await load();
     } catch (err) {
       setError(err && err.message ? err.message : 'Erreur.');
@@ -176,6 +201,56 @@ export default function MerchantDetailPage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="btn-primary" disabled={busy} style={{ flex: 1 }}>{busy ? '...' : 'Enregistrer'}</button>
               <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>{"Annuler"}</button>
+            </div>
+          </form>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">{"Solde SMS"}</h2>
+          {!smsOpen && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-ghost" onClick={() => { setSmsOpen(true); setSmsDir('add'); setError(''); setSuccess(''); }}>{"Ajouter"}</button>
+              <button className="btn-ghost" onClick={() => { setSmsOpen(true); setSmsDir('sub'); setError(''); setSuccess(''); }}>{"Retirer"}</button>
+            </div>
+          )}
+        </div>
+        <ul className="dash-list">
+          <li>
+            <span className="k">{"Solde actuel"}</span>
+            <span className="v mono">{merchant.sms_balance != null ? `${Number(merchant.sms_balance).toFixed(2)} €` : '—'}</span>
+          </li>
+        </ul>
+
+        {smsOpen && (
+          <form onSubmit={doAdjustSms} className="form-stack" style={{ marginTop: 12 }}>
+            <p className="card-sub" style={{ margin: 0 }}>
+              {smsDir === 'add' ? "Ajout de credit (geste commercial, compensation, etc.)." : "Retrait de credit (correction d'erreur, ajustement)."}
+              {" Cap par operation : 1000 €. Audit log obligatoire."}
+            </p>
+            <label className="field"><span>{"Montant en euros (positif)"}</span>
+              <input
+                type="number" min="0.01" max="1000" step="0.01"
+                value={smsAmount}
+                onChange={(e) => setSmsAmount(e.target.value)}
+                placeholder="Ex: 25.00"
+                required autoFocus
+              />
+            </label>
+            <label className="field"><span>{"Motif (visible dans l'audit log)"}</span>
+              <input
+                value={smsReason}
+                onChange={(e) => setSmsReason(e.target.value)}
+                placeholder={smsDir === 'add' ? "Ex: compensation bug Stripe" : "Ex: correction double recharge"}
+                required
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className={smsDir === 'sub' ? 'btn-danger' : 'btn-primary'} disabled={busy} style={{ flex: 1 }}>
+                {busy ? '...' : (smsDir === 'add' ? 'Confirmer ajout' : 'Confirmer retrait')}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => { setSmsOpen(false); setSmsAmount(''); setSmsReason(''); }}>{"Annuler"}</button>
             </div>
           </form>
         )}

@@ -37,6 +37,13 @@ export async function unfreezeMerchant(id) {
   });
 }
 
+export async function adjustMerchantSmsBalance(id, { delta, reason }) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/sms-balance/adjust`, {
+    method: 'POST',
+    body: JSON.stringify({ delta, reason }),
+  });
+}
+
 // ── Clients (global_clients cross-merchant) ─────────────────────────────────
 export async function listClients({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
   const qs = new URLSearchParams();

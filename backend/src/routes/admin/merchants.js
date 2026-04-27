@@ -64,6 +64,7 @@ router.get('/:id', async (req, res) => {
       `SELECT u.id, u.email, u.business_name, u.phone, u.address, u.city, u.country, u.postal_code,
               u.first_name, u.last_name, u.avatar_url,
               u.is_frozen, u.frozen_at, u.frozen_reason, u.frozen_by_admin_id,
+              u.sms_balance,
               u.created_at, u.onboarding_completed,
               (SELECT slug FROM booking_settings WHERE user_id = u.id LIMIT 1) AS slug
          FROM users u
@@ -213,6 +214,89 @@ router.post('/:id/unfreeze', async (req, res) => {
     return res.json({ ok: true });
   } catch (e) {
     console.error('[admin/merchants unfreeze]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── POST /:id/sms-balance/adjust — ajout ou retrait manuel solde SMS ─────────
+// Usage admin : compensation, geste commercial, correction bug Stripe.
+// Body : { delta: number, reason: string }
+//   delta > 0 → ajout
+//   delta < 0 → retrait
+// Garde-fous :
+// - delta != 0
+// - |delta| ≤ 1000 (cap par operation, plusieurs operations consecutives
+//   restent possibles si justifie)
+// - reason obligatoire (audit)
+// - solde resultant >= 0 garanti par la contrainte DB users_sms_balance_nonneg
+//   et verifie en amont pour retourner un 409 explicite plutot qu'un 500.
+const SMS_BALANCE_DELTA_MAX = 1000;
+
+router.post('/:id/sms-balance/adjust', async (req, res) => {
+  const deltaRaw = req.body?.delta;
+  const delta = typeof deltaRaw === 'number' ? deltaRaw : Number(deltaRaw);
+  const reason = String(req.body?.reason || '').trim();
+
+  if (!Number.isFinite(delta) || delta === 0) {
+    return res.status(400).json({ error: 'Montant invalide.' });
+  }
+  if (Math.abs(delta) > SMS_BALANCE_DELTA_MAX) {
+    return res.status(400).json({ error: `Cap par operation : ${SMS_BALANCE_DELTA_MAX} euros.` });
+  }
+  if (!reason) return res.status(400).json({ error: 'Motif requis.' });
+
+  // Arrondi 2 decimales pour eviter les artefacts flottants en base.
+  const deltaRounded = Math.round(delta * 100) / 100;
+
+  try {
+    const { rows: before } = await pool.query(
+      `SELECT id, email, business_name, sms_balance FROM users WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Not found' });
+
+    const currentBalance = Number(before[0].sms_balance) || 0;
+    const newBalance = Math.round((currentBalance + deltaRounded) * 100) / 100;
+    if (newBalance < 0) {
+      return res.status(409).json({
+        error: `Solde insuffisant : ${currentBalance.toFixed(2)} euros disponibles.`,
+      });
+    }
+
+    // UPDATE atomique avec re-lecture du solde pour eviter une race condition
+    // entre le SELECT et le UPDATE (ex : Stripe webhook concurrent).
+    const { rows: updated } = await pool.query(
+      `UPDATE users
+          SET sms_balance = sms_balance + $2
+        WHERE id = $1
+          AND sms_balance + $2 >= 0
+        RETURNING sms_balance`,
+      [req.params.id, deltaRounded]
+    );
+    if (!updated.length) {
+      return res.status(409).json({ error: 'Solde insuffisant (race).' });
+    }
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: deltaRounded > 0 ? 'merchant.sms_balance.add' : 'merchant.sms_balance.subtract',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { sms_balance: currentBalance },
+      payloadAfter:  { sms_balance: Number(updated[0].sms_balance), delta: deltaRounded, reason },
+      req,
+    });
+
+    return res.json({
+      ok: true,
+      sms_balance: Number(updated[0].sms_balance),
+      delta: deltaRounded,
+    });
+  } catch (e) {
+    console.error('[admin/merchants sms_balance adjust]', e.message);
+    // Contrainte DB users_sms_balance_nonneg
+    if (e.code === '23514') {
+      return res.status(409).json({ error: 'Solde insuffisant.' });
+    }
     return res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
