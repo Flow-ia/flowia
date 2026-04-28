@@ -229,7 +229,8 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
             pool.query('SELECT business_name FROM users WHERE id=$1', [req.user.userId]),
             pool.query('SELECT slug FROM booking_settings WHERE user_id=$1', [req.user.userId]),
           ]);
-          const bookingUrl = bR.rows[0]?.slug ? `${process.env.FRONTEND_URL||'http://localhost:5173'}/book/${bR.rows[0].slug}` : '';
+          const { bookingPageUrl } = require('../../utils/publicUrl');
+          const bookingUrl = bR.rows[0]?.slug ? bookingPageUrl(bR.rows[0].slug) : '';
           const serviceSummary = cartItems && cartItems.length > 0
             ? cartItems.map(it => it.qty > 1 ? `${it.service_name} ×${it.qty}` : it.service_name).join(', ')
             : 'Service';

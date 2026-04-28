@@ -443,7 +443,8 @@ module.exports = function attachBookRoute(router) {
           const { rows: emp } = await pool.query('SELECT name FROM employees WHERE id=$1', [finalEmpId]);
           empName = emp[0]?.name || null;
         }
-        const bookingUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/book/${req.params.slug}`;
+        const { bookingPageUrl } = require('../../utils/publicUrl');
+        const bookingUrl = bookingPageUrl(req.params.slug);
         await sendAppointmentConfirmation({
           to: client_email, clientName: client_name, businessName: business_name,
           serviceName: svcName, employeeName: empName,

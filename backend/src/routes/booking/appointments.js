@@ -196,7 +196,8 @@ module.exports = function attachAppointmentsRoutes(router) {
             pool.query('SELECT business_name FROM users WHERE id=$1', [req.user.userId]),
             pool.query('SELECT slug FROM booking_settings WHERE user_id=$1', [req.user.userId]),
           ]);
-          const bookingUrl = bR.rows[0]?.slug ? `${process.env.FRONTEND_URL||'http://localhost:5173'}/book/${bR.rows[0].slug}` : '';
+          const { bookingPageUrl } = require('../../utils/publicUrl');
+          const bookingUrl = bR.rows[0]?.slug ? bookingPageUrl(bR.rows[0].slug) : '';
           const emailPrice = sR.rows[0]?.price ? parseFloat(sR.rows[0].price) : null;
           setImmediate(() => sendAppointmentConfirmation({ to: client_email, clientName: client_name, businessName: uR.rows[0]?.business_name || '', serviceName: sR.rows[0]?.name || 'Service', employeeName: eR.rows[0]?.name || null, date, startTime: start_time, endTime: end_time, durationMinutes: duration, price: emailPrice, notes: notes||null, appointmentId: appt.id, bookingUrl, }).catch(e => console.error('[EMAIL]', e.message)));
         } catch(me){ console.error('[MAIL CONF]', me.message); }

@@ -635,7 +635,8 @@ router.post('/:id/invite', async (req, res) => {
       );
     }
 
-    const inviteUrl = `${process.env.FRONTEND_URL||'http://localhost:5173'}/register?invite=${token}&email=${encodeURIComponent(client.email)}`;
+    const { clientInviteUrl } = require('../utils/publicUrl');
+    const inviteUrl = clientInviteUrl(token, client.email);
     const sent = await sendClientInvite(client.email, client.first_name, bizName, inviteUrl);
 
     if (sent) {
