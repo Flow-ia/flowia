@@ -1,6 +1,76 @@
 // ─ GOOD GOOD git
 
 require('dotenv').config();
+
+// ── Sentry — observabilité prod (commit 29) ─────────────────────────────────
+// Doit être initialisé AVANT tout autre import du projet (cluster, express,
+// db, routes…) pour que les erreurs survenant pendant l'init soient
+// capturées. Si SENTRY_DSN_BACKEND n'est pas défini → no-op (graceful
+// fallback : l'app démarre normalement, juste sans observabilité).
+//
+// RGPD strict : on ne capture JAMAIS le body des requêtes, les headers
+// Authorization/Cookie, ni les variables d'environnement. beforeSend
+// scrub aussi les emails et numéros de téléphone éventuellement présents
+// dans les messages d'erreur (fallback si une regex métier les laisse
+// passer dans une string).
+//
+// tracesSampleRate=0.1 : 10 % de traces (perf) — assez pour spotter les
+// hot paths sans saturer le quota free 5 000 events/mois.
+const Sentry = require('@sentry/node');
+if (process.env.SENTRY_DSN_BACKEND) {
+  const pkg = require('../package.json');
+  // Regex défensives. L'idée n'est pas une couverture parfaite (ce serait
+  // illusoire), mais d'éviter qu'un email ou numéro qui aurait fuité
+  // dans une error.message remonte tel quel à Sentry.
+  const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/gi;
+  const PHONE_RE = /\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?){2,5}\d{2,4}\b/g;
+  const scrub = (s) => typeof s === 'string'
+    ? s.replace(EMAIL_RE, '[email]').replace(PHONE_RE, '[phone]')
+    : s;
+
+  Sentry.init({
+    dsn:              process.env.SENTRY_DSN_BACKEND,
+    environment:      process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0.1,
+    release:          `${pkg.name}@${pkg.version}`,
+    sendDefaultPii:   false, // anti-RGPD : pas d'IP, pas d'user, pas de cookies
+    beforeSend(event) {
+      // 1. Scrub email/téléphone dans les messages
+      if (event.message) event.message = scrub(event.message);
+      if (event.exception?.values) {
+        for (const ex of event.exception.values) if (ex.value) ex.value = scrub(ex.value);
+      }
+      if (Array.isArray(event.breadcrumbs)) {
+        for (const b of event.breadcrumbs) if (b.message) b.message = scrub(b.message);
+      }
+      // 2. Defense in depth : retirer body, cookies, headers sensibles, env
+      if (event.request) {
+        delete event.request.data;       // body
+        delete event.request.cookies;
+        delete event.request.query_string;
+        if (event.request.headers) {
+          for (const k of Object.keys(event.request.headers)) {
+            const lk = k.toLowerCase();
+            if (lk === 'authorization' || lk === 'cookie' ||
+                lk === 'x-pin-session' || lk === 'x-employee-pin') {
+              delete event.request.headers[k];
+            }
+          }
+        }
+      }
+      // 3. Pas d'info user / pas d'env (process.env potentiellement secrets)
+      delete event.user;
+      if (event.contexts?.runtime) delete event.contexts.runtime.environment;
+      // event.extra peut contenir des données arbitraires → on coupe
+      delete event.extra;
+      return event;
+    },
+  });
+  console.log(`[Sentry] backend init OK (env=${process.env.NODE_ENV || 'development'}, release=${pkg.name}@${pkg.version})`);
+} else {
+  console.warn('[Sentry] SENTRY_DSN_BACKEND non défini — observabilité erreurs désactivée (graceful fallback)');
+}
+
 const cluster = require('cluster');
 const os      = require('os');
 
@@ -357,6 +427,25 @@ function startServer() {
   });
 
   // ── Error handler JSON pour /api ─────────────────────────────────────────
+  // ── Route diagnostic Sentry (commit 29) ──────────────────────────────
+  // GET /api/_sentry-test — protégée par auth merchant. Throw une erreur
+  // volontaire pour vérifier que Sentry capture côté backend. À utiliser
+  // 1× après le 1er déploiement, puis désactiver via flag si besoin
+  // (suffit de retirer la route pour la couper proprement).
+  const { authMiddleware: _authForSentry } = require('./middleware/auth');
+  app.get('/api/_sentry-test', _authForSentry, (req, _res) => {
+    throw new Error('Sentry backend test — déclenchement volontaire (commit 29)');
+  });
+
+  // ── Sentry error handler (commit 29) ─────────────────────────────────
+  // Doit être placé APRÈS toutes les routes et AVANT le error handler
+  // Express global ci-dessous. Capture l'erreur puis next(err) → l'erreur
+  // continue sa route normale (notre handler renvoie le JSON au client).
+  // En l'absence de DSN, Sentry.setupExpressErrorHandler est un no-op safe.
+  if (process.env.SENTRY_DSN_BACKEND) {
+    Sentry.setupExpressErrorHandler(app);
+  }
+
   // Sans ce middleware, une erreur passée à next(err) (ex: multer qui
   // rejette un type MIME ou une taille, body-parser qui refuse un JSON
   // malformé) tombait dans le handler par défaut d'Express → réponse HTML
