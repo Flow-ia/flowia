@@ -8,6 +8,7 @@ import { I } from '../../../utils/icons';
 import { DAYS_FR, MONTHS_FR } from '../constants';
 import { svLocal } from '../helpers';
 import Spin from '../components/Spin';
+import AgendaLoader from '../components/AgendaLoader';
 import ApptCard from '../components/ApptCard';
 import ApptActionModal from '../modals/ApptActionModal';
 import QuickAddApptModal from '../modals/QuickAddApptModal';
@@ -516,7 +517,9 @@ export default function EmpAgendaMain({ employee, services, allEmployees, onBack
               </button>
             </div>
 
-            {dayAppts.length === 0 ? (
+            {loading && allAppts.length === 0 ? (
+              <AgendaLoader />
+            ) : dayAppts.length === 0 ? (
               <div style={{
                 padding: '40px 20px',
                 textAlign: 'center',

@@ -9,6 +9,7 @@ import { I } from '../../../utils/icons';
 import { DAYS_FR, MONTHS_SH, MONTHS_FR, STATUS_GRID } from '../constants';
 import { fmtTime, svLocal } from '../helpers';
 import Spin from './Spin';
+import AgendaLoader from './AgendaLoader';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
 import ListView from './ListView';
@@ -453,6 +454,12 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
 
       {/* ── CONTENU ── */}
       <div style={{ flex:1, overflow:'auto', minHeight:0 }}>
+        {/* Loader plein ecran au PREMIER chargement uniquement (allAppts vide).
+            Les refresh ulterieurs gardent le contenu visible et affichent
+            uniquement le petit Spin du header (cf l.357) pour eviter le flicker. */}
+        {loading && allAppts.length === 0 ? (
+          <AgendaLoader />
+        ) : (<>
         {viewMode === 'day' && (
           activeEmps.length === 0 ? (
             <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:40 }}>
@@ -725,6 +732,7 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
             onOpenAppt={openApptModal}
           />
         )}
+        </>)}
       </div>
 
       {/* ── MODAUX ── */}
