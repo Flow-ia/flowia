@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom';
-import * as Sentry from '@sentry/react';
 import App from './App';
 import BookingPage from './pages/BookingPage';
 import BookingPolitique from './pages/BookingPolitique';
@@ -16,52 +15,6 @@ import { AdminModeProvider } from './contexts/AdminModeContext';
 import { IdleLockProvider } from './hooks/useIdleLock';
 import LockScreen from './components/LockScreen';
 import './index.css';
-
-// ── Sentry — observabilité prod (commit 29) ────────────────────────────────
-// RGPD strict : replays vidéo désactivés (replaysOnErrorSampleRate=0,
-// replaysSessionSampleRate=0). Pas de capture DOM, pas de session replay,
-// pas de breadcrumbs réseau (qui peuvent contenir des données client).
-// Si VITE_SENTRY_DSN_FRONTEND absent → no-op (l'app démarre normalement).
-if (import.meta.env.VITE_SENTRY_DSN_FRONTEND) {
-  Sentry.init({
-    dsn:                       import.meta.env.VITE_SENTRY_DSN_FRONTEND,
-    environment:               import.meta.env.MODE,
-    tracesSampleRate:          0.1,
-    replaysOnErrorSampleRate:  0,
-    replaysSessionSampleRate:  0,
-    sendDefaultPii:            false,
-    integrations:              [], // pas de browser tracing par défaut, pas de session replay
-    beforeSend(event) {
-      // Scrub email/téléphone dans les messages (défense en profondeur)
-      const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/gi;
-      const PHONE_RE = /\b(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?){2,5}\d{2,4}\b/g;
-      const scrub = (s) => typeof s === 'string'
-        ? s.replace(EMAIL_RE, '[email]').replace(PHONE_RE, '[phone]')
-        : s;
-      if (event.message) event.message = scrub(event.message);
-      if (event.exception?.values) {
-        for (const ex of event.exception.values) if (ex.value) ex.value = scrub(ex.value);
-      }
-      if (Array.isArray(event.breadcrumbs)) {
-        for (const b of event.breadcrumbs) if (b.message) b.message = scrub(b.message);
-      }
-      // Pas de user info, pas de cookies, pas de body, pas de query string
-      if (event.request) {
-        delete event.request.data;
-        delete event.request.cookies;
-        delete event.request.query_string;
-      }
-      delete event.user;
-      delete event.extra;
-      return event;
-    },
-  });
-} else if (import.meta.env.MODE === 'production') {
-  // En prod, on log un warning visible si DSN manquant — en dev, silence
-  // pour éviter le bruit (Sentry est généralement off en local).
-  // eslint-disable-next-line no-console
-  console.warn('[Sentry] VITE_SENTRY_DSN_FRONTEND non défini — observabilité erreurs désactivée');
-}
 
 // ── Détection du domaine au montage ──────────────────────────────────────────
 // haircoifflille.fr (+ www.) → page réservation publique avec slug par défaut
@@ -119,32 +72,9 @@ function RootSwitch() {
   );
 }
 
-// Fallback UI affiché si Sentry.ErrorBoundary attrape une erreur React.
-// Volontairement minimaliste, sans dépendances de hooks/contextes (qui
-// peuvent être eux-mêmes la cause de l'erreur). Bouton « Recharger » pour
-// récupérer rapidement sans perdre l'utilisateur sur une page blanche.
-function SentryFallback() {
-  return (
-    <div style={{ padding: 24, fontFamily: 'system-ui, sans-serif',
-                  maxWidth: 520, margin: '40px auto', textAlign: 'center' }}>
-      <h1 style={{ fontSize: 18, margin: '0 0 8px' }}>{"Une erreur est survenue"}</h1>
-      <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 16px' }}>
-        {"Notre équipe a été notifiée. Vous pouvez recharger la page pour réessayer."}
-      </p>
-      <button onClick={() => window.location.reload()}
-              style={{ padding: '10px 16px', borderRadius: 8, border: 'none',
-                       background: '#111827', color: '#fff', cursor: 'pointer',
-                       fontSize: 13, fontWeight: 500 }}>
-        {"Recharger la page"}
-      </button>
-    </div>
-  );
-}
-
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <Sentry.ErrorBoundary fallback={<SentryFallback />}>
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
@@ -189,6 +119,5 @@ root.render(
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
-    </Sentry.ErrorBoundary>
   </React.StrictMode>
 );

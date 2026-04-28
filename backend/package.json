@@ -10,7 +10,6 @@
     "start:pm2": "pm2 start src/index.js --name flowia -i max --max-memory-restart 512M"
   },
   "dependencies": {
-    "@sentry/node": "^10.50.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
     "compression": "^1.7.4",
