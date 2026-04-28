@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login, login2fa, isAuthenticated } from '../lib/auth.js';
+import { getTheme, toggleTheme } from '../lib/theme.js';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [code, setCode]               = useState('');
   const [error, setError]             = useState('');
   const [loading, setLoading]         = useState(false);
+  const [theme, setTheme]             = useState(getTheme());
 
   useEffect(() => {
     if (isAuthenticated()) navigate('/dashboard', { replace: true });
@@ -56,8 +58,23 @@ export default function LoginPage() {
     setError('');
   }
 
+  function onToggleTheme() { setTheme(toggleTheme()); }
+
   return (
-    <div className="login-wrap">
+    <div className="login-wrap" style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={onToggleTheme}
+        className="theme-toggle"
+        title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+        aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
+        style={{ position: 'absolute', top: 16, right: 16 }}
+      >
+        {theme === 'dark'
+          ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>)
+          : (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>)
+        }
+      </button>
       {step === 1 && (
         <form className="login-card" onSubmit={onSubmitStep1} autoComplete="off">
           <div className="login-brand">FlowIA</div>
