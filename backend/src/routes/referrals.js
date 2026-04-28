@@ -186,19 +186,52 @@ merchantRouter.get('/rewards', async (req, res) => {
           ORDER BY ru.created_at ASC`,
         [req.user.userId, email]
       ),
+      // UNION : (a) client_rewards classiques (parrainage / anniversaire /
+      // fidélité depuis le commit caisse-rewards) + (b) promo_codes
+      // is_loyalty_reward=TRUE liés au client mais SANS ligne
+      // client_rewards (orphelins des codes FIDEL générés avant le commit
+      // qui les liait). Sans la branche (b), les anciens FIDEL-XXXXX
+      // restent invisibles en caisse — l'employé devrait les saisir
+      // manuellement. La sous-requête NOT EXISTS exclut les promo_codes
+      // déjà reflétés dans client_rewards pour éviter les doublons.
+      // Multi-tenant : filtre user_id partout (un FIDEL d'un commerçant
+      // est invisible chez un autre — code unique merchant↔client).
       pool.query(
-        `SELECT cr.id, cr.reward_type, cr.status, cr.expires_at, cr.created_at,
-                p.id AS promo_id, p.code, p.type, p.value,
-                p.uses_count, p.max_uses, p.is_active, p.valid_until
-           FROM client_rewards cr
-           LEFT JOIN promo_codes p ON p.id = cr.promo_code_id
-          WHERE cr.user_id=$1
-            AND LOWER(cr.client_email)=$2
-            AND cr.status='available'
-            AND (cr.expires_at IS NULL OR cr.expires_at > NOW())
-            AND (p.id IS NULL OR p.is_active = TRUE)
-            AND (p.max_uses IS NULL OR p.uses_count < p.max_uses)
-          ORDER BY cr.expires_at ASC NULLS LAST, cr.created_at ASC`,
+        `(
+           SELECT cr.id, cr.reward_type, cr.status, cr.expires_at, cr.created_at,
+                  p.id AS promo_id, p.code, p.type, p.value,
+                  p.uses_count, p.max_uses, p.is_active, p.valid_until,
+                  'client_reward' AS source_table
+             FROM client_rewards cr
+             LEFT JOIN promo_codes p ON p.id = cr.promo_code_id
+            WHERE cr.user_id=$1
+              AND LOWER(cr.client_email)=$2
+              AND cr.status='available'
+              AND (cr.expires_at IS NULL OR cr.expires_at > NOW())
+              AND (p.id IS NULL OR p.is_active = TRUE)
+              AND (p.max_uses IS NULL OR p.uses_count < p.max_uses)
+         )
+         UNION ALL
+         (
+           SELECT NULL::uuid AS id, 'loyalty' AS reward_type, 'available' AS status,
+                  p.valid_until AS expires_at, p.created_at,
+                  p.id AS promo_id, p.code, p.type, p.value,
+                  p.uses_count, p.max_uses, p.is_active, p.valid_until,
+                  'promo_code' AS source_table
+             FROM promo_codes p
+            WHERE p.user_id=$1
+              AND p.is_loyalty_reward = TRUE
+              AND LOWER(p.owner_client_email) = $2
+              AND p.is_active = TRUE
+              AND (p.max_uses IS NULL OR p.uses_count < p.max_uses)
+              AND (p.valid_until IS NULL OR p.valid_until > NOW())
+              AND NOT EXISTS (
+                SELECT 1 FROM client_rewards cr2
+                 WHERE cr2.user_id = p.user_id
+                   AND cr2.promo_code_id = p.id
+              )
+         )
+         ORDER BY expires_at ASC NULLS LAST, created_at ASC`,
         [req.user.userId, email]
       ),
     ]);

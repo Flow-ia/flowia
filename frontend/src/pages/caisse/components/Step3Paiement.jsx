@@ -357,46 +357,94 @@ export default function Step3Paiement({
               </p>
             )}
             {clientRewards.filter(r => r.status === 'available').map(r => {
-              const isBday = r.reward_type === 'birthday';
-              const accentBg   = isBday ? '#fff7ed' : '#eef2ff';
-              const accentText = isBday ? '#9a3412' : '#4338ca';
-              const accentBar  = isBday ? '#f97316' : '#4338ca';
-              const isSelected = selectedRewardId === r.id;
+              // Source : 'birthday' (anniv), 'loyalty' (fidélité, code FIDEL-XXXXX),
+              // 'referral_parrain' (parrain qui a parrainé un nouveau client),
+              // 'referral_filleul' (filleul ayant utilisé un code de parrainage),
+              // autre type éventuel (push manuel commerçant).
+              const rt = r.reward_type || 'loyalty';
+              const isBday   = rt === 'birthday';
+              const isRef    = rt === 'referral_parrain' || rt === 'referral_filleul';
+              const palette = isBday
+                ? { bg:'#fff7ed', text:'#9a3412', bar:'#f97316' }
+                : isRef
+                  ? { bg:'#eeedfe', text:'#3c3489', bar:'#8b5cf6' }
+                  : { bg:'#eef2ff', text:'#4338ca', bar:'#4338ca' }; // loyalty / défaut
+              const sourceLabel = isBday   ? 'Anniversaire'
+                                : isRef    ? 'Parrainage'
+                                : rt === 'loyalty' ? 'Fidélité'
+                                : 'Promotion';
+              // Valeur de la réduction : pourcentage ou montant fixe.
+              const valNum = parseFloat(r.value);
+              const valLabel = Number.isFinite(valNum) && valNum > 0
+                ? (r.type === 'percent' || r.type === 'percentage'
+                    ? `−${valNum}%`
+                    : `−${fmt(valNum)} €`)
+                : '';
+              // Date d'expiration (utile pour informer l'employé).
+              const exp = r.expires_at ? new Date(r.expires_at) : null;
+              const expLabel = exp && !isNaN(exp.getTime())
+                ? exp.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' })
+                : null;
+              // Clé unique : id (client_rewards) ou promo_id (orphelin via UNION).
+              const key = r.id || ('p:' + r.promo_id);
+              // applyReward consulte r.id (selectedRewardId) — on injecte
+              // l'identifiant utilisable pour la désactivation backend.
+              const sel = r.id || null;
+              const isSelected = !!sel && selectedRewardId === sel;
               return (
-                <button key={r.id} type="button"
+                <button key={key} type="button"
                         onClick={() => {
                           if (isSelected) {
                             setSelectedRewardId(null);
                             setPromoCode(''); setPromoData(null); setPromoErr('');
-                          } else applyReward(r);
+                          } else applyReward({ ...r, id: sel });
                         }}
                         style={{ padding:10, borderRadius:8,
-                                 background: accentBg,
-                                 borderLeft: '2px solid ' + accentBar,
+                                 background: palette.bg,
+                                 borderLeft: '2px solid ' + palette.bar,
                                  border: isSelected
-                                   ? `0.5px solid ${accentText}`
-                                   : `0.5px solid ${accentBg}`,
-                                 borderLeftWidth: 2, borderLeftColor: accentBar,
+                                   ? `0.5px solid ${palette.text}`
+                                   : `0.5px solid ${palette.bg}`,
+                                 borderLeftWidth: 2, borderLeftColor: palette.bar,
                                  borderLeftStyle: 'solid',
                                  display:'flex', justifyContent:'space-between',
                                  alignItems:'center', gap:8,
                                  cursor:'pointer', fontFamily:'inherit',
                                  textAlign:'left', width:'100%',
-                                 boxShadow: isSelected ? `0 0 0 2px ${accentBar}33` : 'none',
+                                 boxShadow: isSelected ? `0 0 0 2px ${palette.bar}33` : 'none',
                                  transition: 'box-shadow 0.15s ease' }}>
-                  <span style={{ display:'flex', gap:8, alignItems:'center', minWidth:0 }}>
-                    <Icon name="gift" size={14} color={accentText}/>
-                    <span style={{ minWidth:0, display:'flex', flexDirection:'column' }}>
-                      <span style={{ fontSize:12, fontWeight:500, color: accentText }}>
-                        {isBday ? 'Offre anniversaire' : 'Récompense fidélité'}
+                  <span style={{ display:'flex', gap:8, alignItems:'center', minWidth:0, flex:1 }}>
+                    <Icon name="gift" size={14} color={palette.text}/>
+                    <span style={{ minWidth:0, display:'flex', flexDirection:'column', gap:2 }}>
+                      <span style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+                        <span style={{ fontSize:10, fontWeight:500,
+                                       padding:'1px 6px', borderRadius:99,
+                                       background:'rgba(255,255,255,0.6)',
+                                       color: palette.text,
+                                       textTransform:'uppercase',
+                                       letterSpacing:'0.04em' }}>
+                          {sourceLabel}
+                        </span>
+                        {valLabel && (
+                          <span style={{ fontSize:12, fontWeight:500, color: palette.text,
+                                         fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                            {valLabel}
+                          </span>
+                        )}
                       </span>
-                      <span style={{ fontSize:11, color:t.muted,
+                      <span style={{ fontSize:11, color: palette.text, opacity:0.85,
+                                     fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {r.code || 'Code automatique'}
                       </span>
+                      {expLabel && (
+                        <span style={{ fontSize:10, color:t.muted }}>
+                          {"Expire le " + expLabel}
+                        </span>
+                      )}
                     </span>
                   </span>
-                  <span style={{ fontSize:11, fontWeight:500, color: accentText, flexShrink:0 }}>
+                  <span style={{ fontSize:11, fontWeight:500, color: palette.text, flexShrink:0 }}>
                     {isSelected ? 'Appliqué' : 'Appliquer'}
                   </span>
                 </button>

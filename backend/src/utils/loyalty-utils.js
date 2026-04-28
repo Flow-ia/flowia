@@ -57,17 +57,36 @@ async function incrementStamps(userId, clientEmail, clientName, stampsToAdd = 1,
     const rewardCode = 'FIDEL-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const minPurch = parseFloat(program.min_purchase) || 0;
-    await pool.query(
+    const { rows: pcRows } = await pool.query(
       `INSERT INTO promo_codes
         (user_id, code, type, value, max_uses, valid_from, valid_until,
          is_loyalty_reward, owner_client_email, client_loyalty_id, min_purchase)
        VALUES ($1,$2,$3,$4,1,CURRENT_DATE,CURRENT_DATE + ($7 || ' days')::INTERVAL,
                TRUE,$5,$6,$8)
-       ON CONFLICT (user_id, code) DO NOTHING`,
+       ON CONFLICT (user_id, code) DO NOTHING
+       RETURNING id`,
       [userId, rewardCode,
        program.reward_type || 'percent', program.reward_value || 10,
        clientEmail, cl.id, validityDays, minPurch]
     );
+    const promoCodeId = pcRows[0]?.id;
+
+    // Visibilité caisse (commit caisse-rewards) : on lie aussi le promo
+    // fidélité dans client_rewards pour que l'employé le voie dans le bloc
+    // « Réductions disponibles pour ce client » de l'étape Paiement.
+    // Avant : seul le promo_code était créé → la caisse ne pouvait pas
+    // proposer le code automatiquement, l'employé devait le saisir à la
+    // main. Filtrage user_id (multi-tenant) + client_email = LOWER(email)
+    // pour matcher l'index (user_id, LOWER(client_email), status).
+    if (promoCodeId) {
+      await pool.query(
+        `INSERT INTO client_rewards
+           (user_id, client_email, reward_type, status, promo_code_id, expires_at)
+         VALUES ($1, LOWER($2), 'loyalty', 'available', $3,
+                 CURRENT_DATE + ($4 || ' days')::INTERVAL)`,
+        [userId, clientEmail, promoCodeId, validityDays]
+      ).catch(e => console.error('[LOYALTY REWARD LINK ERR]', e.message));
+    }
 
     // Réinitialiser selon le mode
     if (mode === 'points') {
