@@ -212,7 +212,8 @@ async function notifyNewAppointment(userId, appt, options = {}) {
       const merchantEmail = u[0]?.email;
       if (!merchantEmail) return;
       const { sendNewAppointmentMerchant } = require('./email');
-      const FRONT = process.env.FRONTEND_URL || '';
+      const { publicBookingOrigin } = require('./publicUrl');
+      const FRONT = publicBookingOrigin();
       const agendaUrl = (FRONT && dateStr && appt.id)
         ? `${FRONT}/agenda?date=${dateStr}&appt=${encodeURIComponent(appt.id)}`
         : null;

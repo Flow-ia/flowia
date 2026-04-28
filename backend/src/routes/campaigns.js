@@ -486,7 +486,7 @@ async function generateCampaignPlan(userId, budget, durationDays, customDiscount
       phone:         merchant.phone || null,
       slug:          merchant.slug || null,
       site_url:      merchant.slug
-        ? (process.env.FRONTEND_URL || 'https://haircoifflille.fr').split(',')[0].replace(/\/$/, '') + '/book/' + merchant.slug
+        ? require('../utils/publicUrl').bookingPageUrl(merchant.slug)
         : null,
     },
   };
