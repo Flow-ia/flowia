@@ -937,6 +937,23 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
             }
           } catch (e) { console.warn('[UNSUB CFG] Log diagnostic indisponible:', e.message); }
           startCron();
+
+          // ── Email queue (commit 30) ─────────────────────────────────────
+          // Démarre pg-boss + worker uniquement sur le worker leader local
+          // (isLocalLeader) pour économiser les connexions DB. pg-boss gère
+          // lui-même la concurrence inter-instances Render via FOR UPDATE
+          // SKIP LOCKED → safe en multi-instance. Si le démarrage échoue
+          // (DATABASE_URL absente, schéma bloqué…), enqueueEmail() bascule
+          // automatiquement en envoi synchrone — aucun email perdu.
+          (async () => {
+            try {
+              const { startEmailQueue, startEmailWorker } = require('./utils/emailQueue');
+              const b = await startEmailQueue();
+              if (b) await startEmailWorker();
+            } catch (e) {
+              console.error('[emailQueue] init globale échouée:', e.message);
+            }
+          })();
         }
       });
     })
