@@ -20,3 +20,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Claude Code runtime (cache local, scheduled tasks)
+.claude/

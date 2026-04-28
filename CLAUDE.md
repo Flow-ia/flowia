@@ -1,107 +1,84 @@
-# CLAUDE.md
+# FlowIA — Instructions Claude Code
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> Ce fichier est lu par Claude Code à chaque session.
 
-## Project Overview
+## Mission actuelle : refonte FDS-2026
 
-FlowIA is a full-stack SaaS platform for salon/service businesses. It provides appointment booking (public-facing multi-step flow), financial transaction management, employee management with PIN-based access, loyalty programs, promotions, and client CRM. The codebase is in French (UI, comments, variable names in routes).
+FlowIA est un SaaS complet de gestion salon/barbershop (RDV, caisse, CRM, marketing, fidélité, parrainage, SMS, IA, tablette partagée, OAuth, RGPD). Tu participes à la **refonte visuelle et architecturale**, PAS à une réécriture.
 
-## Tech Stack
+## Avant toute action
 
-- **Backend:** Node.js + Express.js, PostgreSQL (via `pg`), JWT auth, Nodemailer (SMTP), Cloudinary (media), web-push, PDFKit
-- **Frontend:** React 18 + React Router 6, Vite, inline styles (no CSS framework)
-- **Hosting:** Vercel (frontend), Render (backend), Supabase (PostgreSQL)
+1. Lire `docs/refonte/regles-absolues.md`
+2. Lire `docs/refonte/INVENTAIRE-FONCTIONNEL.md` (exhaustif, source de vérité)
+3. Lire `docs/refonte/onboarding-etape-par-etape.md` (plan 14 commits)
+4. Ouvrir `docs/refonte/maquettes/index.html` dans un navigateur
 
-## Development Commands
+## Stack
 
-### Backend (`cd backend`)
-```bash
-npm install
-npm run dev              # Dev server with nodemon (port 5000)
-npm start                # Production mode with clustering
-node reset-db.js         # DROP + recreate all tables (destructive!)
-node migrate.js          # Incremental schema migrations
-node seed-data.js        # Seed test data
-```
+- Backend Node.js/Express + PostgreSQL (Supabase) + JWT + Brevo + Stripe + Cloudinary + Web Push VAPID + PDFKit + clustering
+- Frontend React 18 + Vite + React Router 6 + inline styles (pas Tailwind)
+- Vercel + Render
 
-### Frontend (`cd frontend`)
-```bash
-npm install
-npm start                # Vite dev server on port 3000, proxies /api to :5000
-npm run build            # Production build → dist/
-npm run preview          # Preview production build
-```
+## Branche
 
-Both servers must run simultaneously for local development. The Vite dev server proxies `/api` requests to `http://localhost:5000`.
+Toujours `refonte-archi-v3`. Jamais `main` pendant la refonte.
 
-## Architecture
+## Règles critiques
 
-### Monorepo Layout
-- `backend/src/index.js` — Express entry point with cluster mode, middleware stack, cron jobs
-- `backend/src/db/index.js` — PostgreSQL pool + full schema (inline SQL, 23+ tables)
-- `backend/src/routes/` — 20 API route modules mounted at `/api/*`
-- `backend/src/middleware/` — auth.js (JWT), employee.js, pinAdmin.js, requireMerchant.js
-- `frontend/src/index.jsx` — React root with routing (public `/book/:slug/*` + private merchant routes)
-- `frontend/src/pages/` — 8 page components (Settings.jsx is ~6200 lines)
-- `frontend/src/hooks/` — Context providers: useAuth, useAdmin, useTheme, useNotifications, useEmployeePin
-- `frontend/src/utils/api.js` — Centralized REST client with dual token support (ff_token + ff_pin_token)
+1. **Zéro fonctionnalité perdue** (cocher `INVENTAIRE-FONCTIONNEL.md` au fil des commits)
+2. **Un commit par étape** du plan
+3. **Migrations SQL idempotentes** (IF NOT EXISTS, jamais DROP)
+4. **Filtre user_id partout** (multi-tenant)
+5. **Ne jamais toucher** : OAuth Google, Stripe, PIN, JWT scopes, webhooks, idempotency
+6. **FDS-2026** : pas d'emoji UI, pas de Tailwind, fw≤500, bordures 0.5px, pas de gradients
+7. **Apostrophes JSX** : double-quote obligatoire (`{"l'offre"}`)
+8. **Si tu doutes, tu demandes**
 
-### Multi-Tenancy
-All business data is scoped by `user_id` foreign key. Public booking routes use a slug to resolve the merchant.
+## Complexité à connaître
 
-### Auth Model
-- Merchant auth: JWT tokens (ff_token in localStorage)
-- PIN sessions: Temporary PIN-based access for sensitive operations (ff_pin_token)
-- Client accounts: Per-merchant client registration for booking
-- Employee access: PIN-based with scope-limited tokens
+- `App.jsx`, `Settings.jsx` très gros (3000+ lignes)
+- 13+ onglets Settings monolithiques à éclater en 4 pages
+- 5 scopes JWT différents (merchant, pin_session, employee_pin_session, client, global_client)
+- 10 rate limiters express dédiés
+- 8 crons worker 1 uniquement
+- Idempotency transactions + SMS Stripe
+- RGPD : anonymisation NULL (pas DROP), soft delete 30j, export JSON
+- Caps métier stricts (fidélité, parrainage)
+- Anti-fraude anniversaire rolling 330j
+- Quota Brevo 300/j global cluster-safe
 
-### Key API Route Groups
-- `/api/auth/*` — Registration, login, password reset, email verification
-- `/api/pub/:slug/*` — Public booking endpoints (no auth required)
-- `/api/booking/*` — Merchant booking management (auth required)
-- `/api/transactions/*` — Financial records (auth + PIN for writes)
-- `/api/employees/*`, `/api/clients/*`, `/api/loyalty/*`, `/api/promo/*`, `/api/stats/*`, `/api/export/*`
+## Workflow par commit
 
-### Cron Jobs (in-process, worker 1 only)
-- Appointment reminders (1 min interval)
-- Employee shift reminders (1 min interval)
-- Daily recaps (5 min interval)
+1. Lire section du plan
+2. Backup git si risqué (`git branch backup-avant-commit-X`)
+3. Modifier chirurgicalement (pas de réécriture massive)
+4. Push sur `refonte-archi-v3`
+5. Attendre Vercel preview
+6. Smoke test sur preview
+7. Arrêter, signaler à l'utilisateur
+8. Attendre validation avant commit suivant
 
-### Frontend Routing
-- Public: `/book/:slug` → 6-step booking flow (Service → Employee → Date → Slot → Info → Confirmation)
-- Private: `/` (Dashboard), `/transactions`, `/agenda`, `/employee-agenda`, `/settings`, `/clients`
+## Ce que tu ne fais JAMAIS
 
-## Build & Deploy
+- `git push --force`, `git reset --hard`, `git revert` sans validation
+- Supprimer du code mort
+- Ajouter une lib npm sans demander
+- Toucher OAuth Google commit `c73c4cf`
+- Modifier le webhook Stripe
+- Envoyer de vrai SMS/email en test (utiliser mode test)
+- Merger sur main
 
-- **Frontend builds** go to Vercel with SPA fallback (all routes → index.html)
-- **Backend deploys** to Render with health check at `/api/health`
-- Vite code splitting: vendor-react, page-booking, page-settings, page-agenda chunks
-- Production build drops console.log/debugger via terser
+## Commerçant actuel
 
-## Environment Variables
+Hair Coiff Lille, barbershop homme à Lille. Adapter les textes : "votre barbier", jamais "votre coiffeuse".
 
-Backend requires: `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL` (comma-separated for multi-origin CORS), `SMTP_*` (Gmail), `CLOUDINARY_*`, `VAPID_*`. See `backend/.env.example` for full list.
+## Préférences utilisateur
 
-Frontend requires: `VITE_API_URL` (production API base URL).
+- Windows + VS Code + Claude Code terminal
+- Valide rarement en local, teste via déploiement Vercel/Render
+- Réponses courtes et directes, briefs concis
+- Refuse auth email individuelle employé (choix : tablette partagée + PIN)
 
-## Rate Limiting
+---
 
-Endpoint-specific limits are configured in `backend/src/index.js`:
-- Auth endpoints: 5-20 req per window
-- General API: 300 req/min
-- Public booking: 600 req/min
-
-
-## Règles de travail
-- Toujours faire git add + git commit + git push après chaque modification
-- Ne jamais demander confirmation pour les commandes bash
-- Ne jamais s'arrêter pour valider une action
-- Message de commit automatique basé sur ce qui a été modifié
-
-## Règle importante
-Après chaque session de travail, mets à jour STATUS.md avec :
-- Les fichiers modifiés
-- Les bugs corrigés
-- L'état actuel du projet
-- Les bugs restants à corriger
-- Affiché le numéro de id de git commit +'    '+ le nom de commit que tu as fait a la fin de affichage de ton travail sur le terminal vs code
+**Début de session** : lis les 3 docs ci-dessus, confirme ta compréhension, attends le feu vert avant de coder.

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 04. Clients</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Clients</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Liste</button>
+    <button data-scene="2">Fiche · Info</button>
+    <button data-scene="3">Fiche · Historique</button>
+    <button data-scene="4">Fiche · Crédit</button>
+    <button data-scene="5">Fiche · Notes</button>
+    <button data-scene="6">Création</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Liste -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Clients · Liste</strong> — Recherche debounce 350ms, tri colonnes, pagination 10/page. Filtres (Tous / Fidèles / Anniv. mois / Avec crédit / Nouveaux / Inactifs / Bloqués). Bouton Ajouter + Export CSV/PDF gate PIN.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div></div></div>
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda</div>
+        <div class="nav-item"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item active"><span data-icon="users"></span>Clients</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div>
+        <div class="topbar">
+          <div><div class="breadcrumb">Clients</div><h1 class="page-title">Base clients</h1><p class="page-sub">148 clients · 23 fidèles · 8 anniv. ce mois</p></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-secondary"><span data-icon="download" data-size="13"></span> Export</button>
+            <button class="btn-primary"><span data-icon="userPlus" data-size="13"></span> Nouveau client</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="filter-bar">
+            <div class="filter-chip active">Tous <span class="count">148</span></div>
+            <div class="filter-chip">Fidèles <span class="count">23</span></div>
+            <div class="filter-chip">Anniv. <span class="count">8</span></div>
+            <div class="filter-chip">Avec crédit <span class="count">8</span></div>
+            <div class="filter-chip">Nouveaux <span class="count">12</span></div>
+            <div class="filter-chip">Inactifs <span class="count">18</span></div>
+            <div class="filter-chip">Bloqués <span class="count">2</span></div>
+          </div>
+
+          <div class="search-bar"><span data-icon="search"></span><input placeholder="Rechercher par nom, email ou téléphone..."></div>
+
+          <div class="table">
+            <div class="table-row header" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div></div><div>Nom</div><div>Email</div><div>Téléphone</div><div>Visites</div><div>CA total</div><div>Fidélité</div><div>Actions</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div class="avatar sm orange">AD</div>
+              <div><div style="font-weight:500">Alice Dubois</div><div style="font-size:10px;color:#6b7280">Client depuis 8 mois</div></div>
+              <div style="font-size:11px;color:#6b7280">alice@exemple.fr</div>
+              <div style="font-size:11px;color:#6b7280">06 12 34 56 78</div>
+              <div>14</div>
+              <div style="font-weight:500">420 €</div>
+              <div><span class="badge purple">10/10</span></div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div class="avatar sm green">ML</div>
+              <div><div style="font-weight:500">Marc Lefèvre <span class="badge success" style="font-size:9px;padding:1px 5px">Compte</span></div><div style="font-size:10px;color:#6b7280">Client depuis 1 an</div></div>
+              <div style="font-size:11px;color:#6b7280">marc@exemple.fr</div>
+              <div style="font-size:11px;color:#6b7280">06 98 76 54 32</div>
+              <div>12</div>
+              <div style="font-weight:500">360 €</div>
+              <div><span class="badge purple">10/10</span></div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div class="avatar sm purple">SB</div>
+              <div><div style="font-weight:500">Sarah Benali</div><div style="font-size:10px;color:#6b7280">Parrainée par Marc</div></div>
+              <div style="font-size:11px;color:#6b7280">sarah@exemple.fr</div>
+              <div style="font-size:11px;color:#6b7280">07 45 67 89 01</div>
+              <div>10</div>
+              <div style="font-weight:500">280 €</div>
+              <div><span class="badge purple">10/10</span></div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div class="avatar sm yellow">MC</div>
+              <div><div style="font-weight:500">Mohamed Chaabi <span class="badge orange" style="font-size:9px;padding:1px 5px">Anniv. 24/04</span></div><div style="font-size:10px;color:#6b7280">Client depuis 8 mois</div></div>
+              <div style="font-size:11px;color:#6b7280">mohamed@exemple.fr</div>
+              <div style="font-size:11px;color:#6b7280">07 12 00 11 22</div>
+              <div>6</div>
+              <div style="font-weight:500">240 €</div>
+              <div><span class="badge orange">5/10</span></div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div class="avatar sm blue">PN</div>
+              <div><div style="font-weight:500">Pierre Novak</div><div style="font-size:10px;color:#6b7280">Nouveau (5 jours)</div></div>
+              <div style="font-size:11px;color:#6b7280">pierre@exemple.fr</div>
+              <div style="font-size:11px;color:#6b7280">06 66 77 88 99</div>
+              <div>1</div>
+              <div style="font-weight:500">22 €</div>
+              <div><span class="badge neutral">1/10</span></div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 160px 140px 60px 80px 100px 60px">
+              <div class="avatar sm red">JD</div>
+              <div><div style="font-weight:500" class="text-muted">Jean Dupont <span class="badge danger" style="font-size:9px;padding:1px 5px">Bloqué</span></div><div style="font-size:10px;color:#6b7280">2 no-show consécutifs</div></div>
+              <div style="font-size:11px;color:#6b7280">jean@exemple.fr</div>
+              <div style="font-size:11px;color:#6b7280">06 55 44 33 22</div>
+              <div>3</div>
+              <div style="font-weight:500">65 €</div>
+              <div><span class="badge neutral">0/10</span></div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button>
+            </div>
+          </div>
+
+          <div class="pagination">
+            <div>148 clients · page 1/15</div>
+            <div class="pagination-nav">
+              <button class="pagination-btn"><span data-icon="chevronLeft" data-size="11"></span></button>
+              <button class="pagination-btn active">1</button>
+              <button class="pagination-btn">2</button>
+              <button class="pagination-btn">3</button>
+              <button class="pagination-btn">...</button>
+              <button class="pagination-btn">15</button>
+              <button class="pagination-btn"><span data-icon="chevronRight" data-size="11"></span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Clients · 148</div><div class="mob-icon-btn"><span data-icon="userPlus"></span></div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="search-bar"><span data-icon="search"></span><input placeholder="Rechercher..."></div>
+      <div class="filter-bar"><div class="filter-chip active">Tous</div><div class="filter-chip">Fidèles</div><div class="filter-chip">Anniv.</div></div>
+      <div class="card" style="padding:10px"><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm orange">AD</div><div style="flex:1"><div style="font-weight:500;font-size:12px">Alice Dubois</div><div style="font-size:11px;color:#6b7280">14 visites · 420 €</div></div><span class="badge purple">10/10</span></div></div>
+      <div class="card" style="padding:10px"><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm green">ML</div><div style="flex:1"><div style="font-weight:500;font-size:12px">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">12 visites · 360 €</div></div><span class="badge purple">10/10</span></div></div>
+      <div class="card" style="padding:10px"><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm yellow">MC</div><div style="flex:1"><div style="font-weight:500;font-size:12px">Mohamed C.</div><div style="font-size:11px;color:#6b7280">Anniv. 24/04 · 6 visites</div></div><span class="badge orange">5/10</span></div></div>
+    </div>
+    <div class="mob-bottom-nav">
+      <div class="mob-nav-item"><span data-icon="home"></span>Home</div>
+      <div class="mob-nav-item"><span data-icon="calendar"></span>Agenda</div>
+      <div class="mob-nav-item"><span data-icon="cash"></span>Caisse</div>
+      <div class="mob-nav-item active"><span data-icon="users"></span>Clients</div>
+      <div class="mob-nav-item"><span data-icon="more"></span>Plus</div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 Fiche Info -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Fiche client · Info</strong> — Coordonnées éditables, actions : Éditer / Supprimer / Bloquer (is_booking_blocked) / Inviter à créer un compte (clientsApi.invite). Client global : email/téléphone readonly. Gate PIN édition/suppr/bloc.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="users"></span>Clients</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar">
+          <div style="display:flex;gap:14px;align-items:center">
+            <button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button>
+            <div class="avatar lg green">ML</div>
+            <div><div style="font-size:18px;font-weight:500">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">Client depuis 1 an · 12 visites · 360 € · <span class="badge success" style="font-size:9px">Compte</span></div></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-secondary"><span data-icon="phone" data-size="13"></span> Appeler</button>
+            <button class="btn-secondary"><span data-icon="send" data-size="13"></span> SMS</button>
+            <button class="btn-primary"><span data-icon="plus" data-size="13"></span> Nouveau RDV</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab active">Info</div>
+            <div class="subtab">Historique <span class="count">24</span></div>
+            <div class="subtab">Crédit <span class="count">15 €</span></div>
+            <div class="subtab">Notes <span class="count">3</span></div>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <div class="card">
+                <div class="card-title">Coordonnées</div>
+                <div class="form-field"><div class="form-label">Prénom</div><input class="form-input" value="Marc"></div>
+                <div class="form-field"><div class="form-label">Nom</div><input class="form-input" value="Lefèvre"></div>
+                <div class="form-field"><div class="form-label">Email <span style="color:#6b7280">· compte global, readonly</span></div><input class="form-input" value="marc@exemple.fr" readonly style="background:#fafafa"></div>
+                <div class="form-field"><div class="form-label">Téléphone <span style="color:#6b7280">· compte global, readonly</span></div><input class="form-input" value="06 98 76 54 32" readonly style="background:#fafafa"></div>
+                <div class="form-row">
+                  <div><div class="form-label">Anniversaire</div><input class="form-input" type="date" value="1990-04-22"></div>
+                  <div><div class="form-label">Code postal</div><input class="form-input" value="59000"></div>
+                </div>
+                <div class="form-field"><div class="form-label">Ville</div><input class="form-input" value="Lille"></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Consentements RGPD</div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                  <div style="font-size:12px"><div style="font-weight:500">Opt-in marketing</div><div style="font-size:11px;color:#6b7280">Emails promotionnels</div></div>
+                  <div class="toggle on"></div>
+                </div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                  <div style="font-size:12px"><div style="font-weight:500">Rappels SMS</div><div style="font-size:11px;color:#6b7280">24h + 2h avant RDV</div></div>
+                  <div class="toggle on"></div>
+                </div>
+                <div style="padding:10px 0;display:flex;justify-content:space-between;align-items:center">
+                  <div style="font-size:12px"><div style="font-weight:500">Offre anniversaire</div><div style="font-size:11px;color:#6b7280">SMS à 09:00 le jour J</div></div>
+                  <div class="toggle on"></div>
+                </div>
+                <div style="font-size:10px;color:#6b7280;margin-top:10px">Consentement donné le 22/03/2025 · IP 82.***.**.12</div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Préférences</div>
+                <div class="form-field"><div class="form-label">Barbier préféré</div><select class="form-select"><option>Karim</option></select></div>
+                <div class="form-field"><div class="form-label">Préférences</div><textarea class="form-textarea">Préfère coupe courte sur les côtés, dégradé doux.</textarea></div>
+              </div>
+
+              <div class="card" style="border-color:#fde68a;background:#fffbeb">
+                <div style="font-size:12px;font-weight:500;color:#92400e;margin-bottom:6px">Actions sensibles (PIN admin)</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <button class="btn-secondary" style="font-size:11px"><span data-icon="send" data-size="11"></span> Inviter compte</button>
+                  <button class="btn-secondary" style="font-size:11px;color:#9a3412;border-color:#fed7aa"><span data-icon="lock" data-size="11"></span> Bloquer RDV</button>
+                  <button class="btn-secondary" style="font-size:11px;color:#991b1b;border-color:#fecaca"><span data-icon="trash" data-size="11"></span> Supprimer</button>
+                  <button class="btn-primary" style="font-size:11px"><span data-icon="save" data-size="11"></span> Enregistrer</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-left"><div class="mob-icon-btn"><span data-icon="chevronLeft"></span></div><div class="avatar sm green">ML</div><div><div style="font-size:13px;font-weight:500">Marc Lefèvre</div><div class="mob-topbar-sub">12 visites</div></div></div></div>
+    <div class="mob-body">
+      <div class="subtabs"><div class="subtab active">Info</div><div class="subtab">History</div><div class="subtab">€</div><div class="subtab">Notes</div></div>
+      <div class="card">
+        <div class="form-field"><div class="form-label">Prénom</div><input class="form-input" value="Marc"></div>
+        <div class="form-field"><div class="form-label">Email</div><input class="form-input" value="marc@exemple.fr" readonly style="background:#fafafa"></div>
+      </div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 3 Historique -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Fiche client · Historique</strong> — RDV + transactions tri date desc, filtre service. Source RDV/Caisse. Boutons Voir/Modifier.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="users"></span>Clients</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:14px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div class="avatar lg green">ML</div><div><div style="font-size:18px;font-weight:500">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">Historique complet</div></div></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab">Info</div>
+            <div class="subtab active">Historique <span class="count">24</span></div>
+            <div class="subtab">Crédit</div>
+            <div class="subtab">Notes</div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="filter-chip active">Tous <span class="count">24</span></div>
+            <div class="filter-chip">RDV <span class="count">12</span></div>
+            <div class="filter-chip">Caisse directe <span class="count">12</span></div>
+            <div style="flex:1"></div>
+            <select class="form-select" style="width:200px;font-size:11px"><option>Toutes prestations</option><option>Coupe</option><option>Coupe + Barbe</option></select>
+          </div>
+
+          <div class="kpi-grid cols-3">
+            <div class="kpi"><div class="kpi-label">CA total</div><div class="kpi-value">360 €</div></div>
+            <div class="kpi"><div class="kpi-label">Panier moyen</div><div class="kpi-value">30 €</div></div>
+            <div class="kpi"><div class="kpi-label">Dernière visite</div><div class="kpi-value" style="font-size:16px">22/04/2026</div></div>
+          </div>
+
+          <div class="table">
+            <div class="table-row header" style="grid-template-columns:100px 1fr 120px 100px 100px 80px">
+              <div>Date</div><div>Prestation</div><div>Employé</div><div>Paiement</div><div>Source</div><div>Montant</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:100px 1fr 120px 100px 100px 80px">
+              <div>22/04/26</div>
+              <div><div style="font-weight:500">Coupe + Barbe</div><div style="font-size:10px;color:#6b7280">Promo PRINTEMPS10 · -3€</div></div>
+              <div><div class="avatar sm green" style="display:inline-flex">K</div> <span style="font-size:11px">Karim</span></div>
+              <span class="badge blue">Carte</span>
+              <span class="badge neutral">RDV</span>
+              <div style="font-weight:500;text-align:right">32 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:100px 1fr 120px 100px 100px 80px">
+              <div>05/04/26</div>
+              <div style="font-weight:500">Coupe classique</div>
+              <div><div class="avatar sm blue" style="display:inline-flex">L</div> <span style="font-size:11px">Lucas</span></div>
+              <div><span class="badge green">Esp.</span></div>
+              <span class="badge info">Caisse</span>
+              <div style="font-weight:500;text-align:right">22 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:100px 1fr 120px 100px 100px 80px">
+              <div>18/03/26</div>
+              <div><div style="font-weight:500">Coupe + Barbe</div><div style="font-size:10px;color:#6b7280">🎁 Récompense fidélité utilisée</div></div>
+              <div><div class="avatar sm green" style="display:inline-flex">K</div> <span style="font-size:11px">Karim</span></div>
+              <span class="badge info">Gratuit</span>
+              <span class="badge neutral">RDV</span>
+              <div style="font-weight:500;text-align:right">0 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:100px 1fr 120px 100px 100px 80px">
+              <div>01/03/26</div>
+              <div style="font-weight:500">Coupe + Barbe</div>
+              <div><div class="avatar sm green" style="display:inline-flex">K</div> <span style="font-size:11px">Karim</span></div>
+              <span class="badge blue">Carte</span>
+              <span class="badge neutral">RDV</span>
+              <div style="font-weight:500;text-align:right">35 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Marc L. · Historique</div></div>
+    <div class="mob-body">
+      <div class="card" style="padding:10px"><div style="display:flex;justify-content:space-between"><div style="font-size:12px"><strong>22/04</strong> Coupe+Barbe</div><strong>32€</strong></div><div style="font-size:10px;color:#6b7280">Karim · Carte · RDV</div></div>
+      <div class="card" style="padding:10px"><div style="display:flex;justify-content:space-between"><div style="font-size:12px"><strong>05/04</strong> Coupe</div><strong>22€</strong></div><div style="font-size:10px;color:#6b7280">Lucas · Espèces · Caisse</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 4 Crédit -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Fiche client · Crédit</strong> — Solde, historique grant/repay, forms Grant (montant + note + employé can_grant) et Repay (montant + méthode + note, crée transaction revenue).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="users"></span>Clients</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:14px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div class="avatar lg green">ML</div><div><div style="font-size:18px;font-weight:500">Marc Lefèvre</div></div></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Info</div><div class="subtab">Historique</div><div class="subtab active">Crédit <span class="count">15 €</span></div><div class="subtab">Notes</div></div>
+
+          <div style="padding:20px;background:linear-gradient(135deg,#111827,#1f2937);border-radius:14px;color:#fff;margin-bottom:14px;text-align:center">
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:500;margin-bottom:4px">Solde crédit disponible</div>
+            <div style="font-size:40px;font-weight:500">15 €</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:4px">Total accordé : 25 € · Total utilisé : 10 €</div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title" style="display:flex;gap:8px;align-items:center"><span data-icon="plus" data-size="13" style="color:#065f46"></span> Accorder un crédit (Grant)</div>
+              <div class="form-field"><div class="form-label">Montant</div><input class="form-input" type="number" placeholder="20"></div>
+              <div class="form-field"><div class="form-label">Employé signataire</div><select class="form-select"><option>Karim (can_grant_credit)</option></select></div>
+              <div class="form-field"><div class="form-label">Note</div><textarea class="form-textarea" placeholder="Raison du crédit..."></textarea></div>
+              <button class="btn-primary w-full">Accorder</button>
+            </div>
+
+            <div class="card">
+              <div class="card-title" style="display:flex;gap:8px;align-items:center"><span data-icon="minus" data-size="13" style="color:#991b1b"></span> Consommer / Rembourser (Repay)</div>
+              <div class="form-field"><div class="form-label">Montant</div><input class="form-input" type="number" placeholder="10" max="15"><div style="font-size:10px;color:#6b7280;margin-top:4px">Max : 15 €</div></div>
+              <div class="form-field"><div class="form-label">Méthode</div><select class="form-select"><option>Consommer (crée une transaction revenue)</option><option>Rembourser au client (espèces)</option></select></div>
+              <div class="form-field"><div class="form-label">Note</div><textarea class="form-textarea" placeholder="Objet de l'utilisation..."></textarea></div>
+              <button class="btn-secondary w-full" style="background:#fef2f2;color:#991b1b;border-color:#fecaca">Consommer</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Historique des mouvements</div>
+            <div class="table-row" style="grid-template-columns:110px 100px 1fr 100px 100px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div>22/04/26</div><span class="badge success">Grant</span>
+              <div style="font-size:11px;color:#6b7280">Avance exceptionnelle · Karim</div>
+              <div style="font-weight:500;color:#065f46;text-align:right">+20 €</div>
+              <div style="text-align:right;font-size:11px;color:#6b7280">15 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:110px 100px 1fr 100px 100px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div>18/04/26</div><span class="badge info">Repay</span>
+              <div style="font-size:11px;color:#6b7280">Tx #1234 · Coupe · Lucas</div>
+              <div style="font-weight:500;color:#991b1b;text-align:right">-10 €</div>
+              <div style="text-align:right;font-size:11px;color:#6b7280">-5 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:110px 100px 1fr 100px 100px;padding:10px 0">
+              <div>10/04/26</div><span class="badge success">Grant</span>
+              <div style="font-size:11px;color:#6b7280">1er grant · Karim</div>
+              <div style="font-weight:500;color:#065f46;text-align:right">+5 €</div>
+              <div style="text-align:right;font-size:11px;color:#6b7280">5 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Crédit · Marc</div></div>
+    <div class="mob-body">
+      <div style="padding:20px;background:#111827;border-radius:12px;color:#fff;text-align:center">
+        <div style="font-size:10px;color:rgba(255,255,255,0.6)">Solde</div>
+        <div style="font-size:32px;font-weight:500">15 €</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <button class="btn-primary" style="padding:12px">+ Grant</button>
+        <button class="btn-secondary" style="padding:12px">− Repay</button>
+      </div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 5 Notes -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>Fiche client · Notes</strong> — Textarea auto-save + auteur + timestamp. clientNotesApi CRUD. PIN admin sur suppression.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="users"></span>Clients</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:14px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div class="avatar lg green">ML</div><div><div style="font-size:18px;font-weight:500">Marc Lefèvre</div></div></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Info</div><div class="subtab">Historique</div><div class="subtab">Crédit</div><div class="subtab active">Notes <span class="count">3</span></div></div>
+
+          <div class="card">
+            <div class="card-title">Nouvelle note</div>
+            <textarea class="form-textarea" placeholder="Ajouter une note interne (préférences, allergies, anecdotes...)" style="min-height:80px"></textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+              <div style="font-size:11px;color:#6b7280">Auto-save après 2s d'inactivité</div>
+              <button class="btn-primary" style="font-size:11px"><span data-icon="save" data-size="11"></span> Enregistrer</button>
+            </div>
+          </div>
+
+          <div class="card" style="border-left:2px solid #f97316">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <div style="font-size:12px;font-weight:500">Karim · 22 avril 2026 · 14h30</div>
+              <div style="display:flex;gap:4px"><button class="btn-secondary" style="padding:3px 6px"><span data-icon="edit" data-size="11"></span></button><button class="btn-secondary" style="padding:3px 6px;color:#991b1b"><span data-icon="trash" data-size="11"></span></button></div>
+            </div>
+            <div style="font-size:12px;color:#4b5563;line-height:1.6">Client fidèle, très sympathique. Préfère coupe courte avec dégradé doux sur les côtés. Aime discuter football.</div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <div style="font-size:12px;font-weight:500">Lucas · 15 mars 2026 · 11h00</div>
+              <div style="display:flex;gap:4px"><button class="btn-secondary" style="padding:3px 6px"><span data-icon="edit" data-size="11"></span></button></div>
+            </div>
+            <div style="font-size:12px;color:#4b5563;line-height:1.6">Attention au revers gauche légèrement plus épais. Passer à la tondeuse #3 en finition.</div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <div style="font-size:12px;font-weight:500">Karim · 8 janvier 2026 · 16h00</div>
+              <div style="display:flex;gap:4px"><button class="btn-secondary" style="padding:3px 6px"><span data-icon="edit" data-size="11"></span></button></div>
+            </div>
+            <div style="font-size:12px;color:#4b5563;line-height:1.6">A parrainé Sarah Benali (nouvelle cliente).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Notes · Marc</div></div>
+    <div class="mob-body">
+      <div class="card"><textarea class="form-textarea" placeholder="Nouvelle note..."></textarea><button class="btn-primary w-full mt-2" style="padding:10px">Ajouter</button></div>
+      <div class="card" style="border-left:2px solid #f97316;padding:10px"><div style="font-size:11px;font-weight:500">Karim · 22/04</div><div style="font-size:11px;color:#4b5563;margin-top:4px">Coupe courte, dégradé doux.</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 6 Création -->
+<div class="scene" data-scene="6">
+  <div class="intro-note"><strong>Nouveau client</strong> — Formulaire. Prénom OU email obligatoire. Consentements RGPD (opt-in, rappels SMS, offres anniv, emails promo). Source auto = 'manual'.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="users"></span>Clients</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Clients · Nouveau</div><h1 class="page-title">Créer un client</h1></div><button class="btn-secondary"><span data-icon="x" data-size="13"></span> Annuler</button></div>
+        <div class="body">
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Coordonnées</div>
+              <div class="form-row">
+                <div><div class="form-label">Prénom *</div><input class="form-input" placeholder="Pierre"></div>
+                <div><div class="form-label">Nom</div><input class="form-input" placeholder="Dupont"></div>
+              </div>
+              <div class="form-field"><div class="form-label">Email * <span style="color:#6b7280">· ou le prénom obligatoire</span></div><input class="form-input" placeholder="pierre@exemple.fr" type="email"></div>
+              <div class="form-field"><div class="form-label">Téléphone</div><input class="form-input" placeholder="06 12 34 56 78"></div>
+              <div class="form-row">
+                <div><div class="form-label">Anniversaire</div><input class="form-input" type="date"></div>
+                <div><div class="form-label">Code postal</div><input class="form-input" placeholder="59000"></div>
+              </div>
+              <div class="form-field"><div class="form-label">Ville</div><input class="form-input" placeholder="Lille"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Préférences et consentements</div>
+              <div class="form-field"><div class="form-label">Barbier préféré</div><select class="form-select"><option>Peu importe</option><option>Karim</option><option>Lucas</option><option>Sofiane</option></select></div>
+              <div class="form-field"><div class="form-label">Notes internes</div><textarea class="form-textarea" placeholder="Préférences, allergies..."></textarea></div>
+              
+              <div style="margin-top:14px">
+                <label class="checkbox-row selected mb-2"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500">Programme fidélité</div><div style="font-size:11px;color:#6b7280">Cumul tampons/points à chaque visite</div></div></label>
+                <label class="checkbox-row selected mb-2"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500">Rappels SMS</div><div style="font-size:11px;color:#6b7280">24h + 2h avant RDV</div></div></label>
+                <label class="checkbox-row mb-2"><input type="checkbox"><div style="flex:1"><div style="font-weight:500">Offre anniversaire</div><div style="font-size:11px;color:#6b7280">SMS à 09:00 le jour J</div></div></label>
+                <label class="checkbox-row"><input type="checkbox"><div style="flex:1"><div style="font-weight:500">Emails promotionnels</div><div style="font-size:11px;color:#6b7280">Nouveautés et campagnes</div></div></label>
+              </div>
+
+              <div class="info-banner" style="font-size:11px;margin-top:14px;margin-bottom:0">
+                Le consentement (consent_at + consent_ip) est horodaté à la création (RGPD).
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn-secondary">Annuler</button>
+            <button class="btn-primary"><span data-icon="userPlus" data-size="13"></span> Créer le client</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-left"><div class="mob-icon-btn"><span data-icon="x"></span></div><div><div class="mob-topbar-title">Nouveau client</div></div></div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="card">
+        <div class="form-field"><div class="form-label">Prénom *</div><input class="form-input" placeholder="Pierre"></div>
+        <div class="form-field"><div class="form-label">Email *</div><input class="form-input" placeholder="pierre@exemple.fr"></div>
+        <div class="form-field"><div class="form-label">Téléphone</div><input class="form-input" placeholder="06..."></div>
+      </div>
+      <label class="checkbox-row selected"><input type="checkbox" checked>Rappels SMS</label>
+      <button class="btn-primary w-full" style="padding:14px;margin-top:10px">Créer</button>
+    </div>
+  </div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

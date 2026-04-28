@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 06. Statistiques</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Statistiques</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Performance</button>
+    <button data-scene="2">Prévisions IA</button>
+    <button data-scene="3">Heatmap</button>
+    <button data-scene="4">Produits</button>
+    <button data-scene="5">Export</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Performance -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Statistiques · Performance</strong> — KPIs mois (CA, RDV, taux remplissage, panier moyen), ventilation par moyen de paiement, par employé, top prestations, évolution CA, graphiques.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div></div></div>
+        <div class="nav-section-label">Croissance</div>
+        <div class="nav-item"><span data-icon="megaphone"></span>Marketing</div>
+        <div class="nav-item active"><span data-icon="chart"></span>Statistiques</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Statistiques</div><h1 class="page-title">Performance</h1><p class="page-sub">Avril 2026 · PIN admin actif</p></div><div style="display:flex;gap:6px"><select class="form-select" style="width:140px;font-size:11px"><option>Ce mois</option><option>30 derniers j</option><option>Trimestre</option><option>Année</option></select><button class="btn-secondary"><span data-icon="download" data-size="13"></span> Exporter</button></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab active"><span data-icon="chart" data-size="12"></span> Performance</div>
+            <div class="subtab"><span data-icon="sparkles" data-size="12"></span> Prévisions IA</div>
+            <div class="subtab"><span data-icon="calendar" data-size="12"></span> Heatmap</div>
+            <div class="subtab"><span data-icon="tag" data-size="12"></span> Produits</div>
+            <div class="subtab"><span data-icon="download" data-size="12"></span> Export</div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi"><div class="kpi-label">CA du mois</div><div class="kpi-value">9 840 €</div><div class="kpi-delta">+18% vs mois précédent</div></div>
+            <div class="kpi"><div class="kpi-label">RDV</div><div class="kpi-value">312</div><div class="kpi-delta">+24 vs m-1</div></div>
+            <div class="kpi"><div class="kpi-label">Taux remplissage</div><div class="kpi-value">72%</div><div class="kpi-delta neutral">Objectif 80%</div></div>
+            <div class="kpi"><div class="kpi-label">Panier moyen</div><div class="kpi-value">31,50 €</div><div class="kpi-delta">+1,20 €</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Évolution CA · 30 derniers jours</div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:140px;padding:10px 0">
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:55%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:42%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:68%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:78%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:60%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:50%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:15%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:65%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:72%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:85%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:58%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:62%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:48%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:15%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:70%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:75%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:90%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:95%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:68%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:52%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:15%;border-radius:3px"></div></div>
+              <div style="flex:1;text-align:center"><div style="background:#111827;height:65%;border-radius:3px"></div></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#6b7280;padding:0 4px"><span>1 avr</span><span>7</span><span>14</span><span>21</span><span>Auj.</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Ventilation par moyen de paiement (mois)</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              <div style="padding:14px;background:#f0fdf4;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#065f46;text-transform:uppercase;font-weight:500">Espèces</div>
+                <div style="font-size:24px;font-weight:500;color:#065f46;margin:4px 0">4 250 €</div>
+                <div style="font-size:10px;color:#065f46;opacity:0.7">43% · 135 tx</div>
+              </div>
+              <div style="padding:14px;background:#eef2ff;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#4338ca;text-transform:uppercase;font-weight:500">Carte</div>
+                <div style="font-size:24px;font-weight:500;color:#4338ca;margin:4px 0">4 150 €</div>
+                <div style="font-size:10px;color:#4338ca;opacity:0.7">42% · 122 tx</div>
+              </div>
+              <div style="padding:14px;background:#ecfeff;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#0e7490;text-transform:uppercase;font-weight:500">Virement</div>
+                <div style="font-size:24px;font-weight:500;color:#0e7490;margin:4px 0">380 €</div>
+                <div style="font-size:10px;color:#0e7490;opacity:0.7">4% · 5 tx</div>
+              </div>
+              <div style="padding:14px;background:#fffbeb;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:500">Autre</div>
+                <div style="font-size:24px;font-weight:500;color:#92400e;margin:4px 0">1 060 €</div>
+                <div style="font-size:10px;color:#92400e;opacity:0.7">11% · 32 tx</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Par employé</div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm green">K</div>
+                <div style="flex:1"><div style="font-size:12px;font-weight:500">Karim</div><div class="progress-bar" style="margin-top:4px"><div class="progress-bar-fill green" style="width:78%"></div></div></div>
+                <div style="text-align:right"><div style="font-weight:500">3 840 €</div><div style="font-size:10px;color:#6b7280">128 RDV · 28% commission</div></div>
+              </div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm blue">L</div>
+                <div style="flex:1"><div style="font-size:12px;font-weight:500">Lucas</div><div class="progress-bar" style="margin-top:4px"><div class="progress-bar-fill blue" style="width:65%"></div></div></div>
+                <div style="text-align:right"><div style="font-weight:500">3 220 €</div><div style="font-size:10px;color:#6b7280">110 RDV · 25% commission</div></div>
+              </div>
+              <div style="padding:10px 0;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm purple">S</div>
+                <div style="flex:1"><div style="font-size:12px;font-weight:500">Sofiane</div><div class="progress-bar" style="margin-top:4px"><div class="progress-bar-fill purple" style="width:55%"></div></div></div>
+                <div style="text-align:right"><div style="font-weight:500">2 780 €</div><div style="font-size:10px;color:#6b7280">74 RDV · 28% commission</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Top prestations</div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-weight:500">Coupe + Barbe</div><div style="font-size:10px;color:#6b7280">102 RDV · 35 €</div></div>
+                <div style="font-weight:500">3 570 €</div>
+              </div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-weight:500">Coupe classique</div><div style="font-size:10px;color:#6b7280">138 RDV · 22 €</div></div>
+                <div style="font-weight:500">3 036 €</div>
+              </div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-weight:500">Rasage</div><div style="font-size:10px;color:#6b7280">48 RDV · 18 €</div></div>
+                <div style="font-weight:500">864 €</div>
+              </div>
+              <div style="padding:10px 0;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-weight:500">Coupe enfant</div><div style="font-size:10px;color:#6b7280">24 RDV · 15 €</div></div>
+                <div style="font-weight:500">360 €</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Statistiques</div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="subtabs"><div class="subtab active">Perf.</div><div class="subtab">IA</div><div class="subtab">Heat.</div><div class="subtab">Export</div></div>
+      <div class="kpi-grid mob"><div class="kpi"><div class="kpi-label">CA mois</div><div class="kpi-value mob">9840€</div></div><div class="kpi"><div class="kpi-label">RDV</div><div class="kpi-value mob">312</div></div></div>
+      <div class="card"><div class="card-title">Par employé</div><div style="font-size:11px;padding:6px 0">Karim · 3 840€ · 128 RDV</div><div style="font-size:11px;padding:6px 0">Lucas · 3 220€ · 110 RDV</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 Prévisions IA -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Prévisions IA · 7 jours</strong> — statsApi.forecast avec courbe prédictive, détection risques (solde SMS, fidèles inactifs, remplissage faible).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="chart"></span>Statistiques</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Statistiques · Prévisions</div><h1 class="page-title">Prévisions IA</h1><p class="page-sub">Analyse 90 derniers jours · projection 7 jours</p></div><button class="btn-secondary"><span data-icon="refresh" data-size="13"></span> Recalculer</button></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Performance</div><div class="subtab active">Prévisions</div><div class="subtab">Heatmap</div><div class="subtab">Produits</div><div class="subtab">Export</div></div>
+
+          <div class="kpi-grid cols-3">
+            <div class="kpi"><div class="kpi-label">CA prévu 7j</div><div class="kpi-value">2 380 €</div><div class="kpi-delta">+12%</div></div>
+            <div class="kpi"><div class="kpi-label">RDV prévus</div><div class="kpi-value">78</div><div class="kpi-delta">+5</div></div>
+            <div class="kpi"><div class="kpi-label">Précision</div><div class="kpi-value">±8%</div><div class="kpi-delta neutral">Bonne</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Prévision 7 jours</div>
+            <div style="display:flex;align-items:flex-end;gap:14px;height:160px;padding:10px 0;border-bottom:0.5px solid #e5e7eb">
+              <div style="flex:1;text-align:center"><div style="background:#111827;height:60%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px">Jeu 23</div><div style="font-size:10px;color:#6b7280">~320 €</div></div>
+              <div style="flex:1;text-align:center"><div style="background:#111827;height:75%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px">Ven 24</div><div style="font-size:10px;color:#6b7280">~410 €</div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f97316;height:95%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px;font-weight:500">Sam 25</div><div style="font-size:10px;color:#6b7280">~520 €</div></div>
+              <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:10%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px;color:#9ca3af">Dim 26</div><div style="font-size:10px;color:#6b7280">Fermé</div></div>
+              <div style="flex:1;text-align:center"><div style="background:#111827;height:55%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px">Lun 27</div><div style="font-size:10px;color:#6b7280">~300 €</div></div>
+              <div style="flex:1;text-align:center"><div style="background:#111827;height:65%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px">Mar 28</div><div style="font-size:10px;color:#6b7280">~360 €</div></div>
+              <div style="flex:1;text-align:center"><div style="background:#111827;height:70%;border-radius:4px"></div><div style="font-size:11px;margin-top:6px">Mer 29</div><div style="font-size:10px;color:#6b7280">~390 €</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Alertes proactives</div>
+            <div style="padding:10px;background:#fff7ed;border-radius:8px;margin-bottom:6px;border-left:2px solid #f97316;display:flex;gap:10px;align-items:flex-start">
+              <span data-icon="alert" data-size="14" style="color:#9a3412;margin-top:2px"></span>
+              <div style="font-size:12px;color:#9a3412"><strong>Solde SMS bas dans 5 jours</strong><br>À ce rythme, vous serez à zéro autour du 27 avril. Rechargez avant.</div>
+            </div>
+            <div style="padding:10px;background:#eef2ff;border-radius:8px;margin-bottom:6px;border-left:2px solid #4338ca;display:flex;gap:10px;align-items:flex-start">
+              <span data-icon="info" data-size="14" style="color:#4338ca;margin-top:2px"></span>
+              <div style="font-size:12px;color:#4338ca"><strong>Vendredi 24 sous-occupé (40%)</strong><br>Lancer une promo ciblée : +180 € potentiels.</div>
+            </div>
+            <div style="padding:10px;background:#f0fdf4;border-radius:8px;border-left:2px solid #10b981;display:flex;gap:10px;align-items:flex-start">
+              <span data-icon="checkCircle" data-size="14" style="color:#065f46;margin-top:2px"></span>
+              <div style="font-size:12px;color:#065f46"><strong>Samedi 25 excellent (95%)</strong><br>Journée record attendue. Tout est OK côté planning.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Prévisions</div></div><div class="mob-body"><div class="kpi-grid mob"><div class="kpi"><div class="kpi-label">CA 7j</div><div class="kpi-value mob">2380€</div></div><div class="kpi"><div class="kpi-label">RDV</div><div class="kpi-value mob">78</div></div></div><div class="card"><div class="card-title">Alertes</div><div style="padding:8px;background:#fff7ed;border-radius:6px;font-size:11px;color:#9a3412;margin-bottom:4px">Solde SMS bas dans 5j</div><div style="padding:8px;background:#eef2ff;border-radius:6px;font-size:11px;color:#4338ca">Vendredi sous-occupé</div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 3 Heatmap -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Heatmap Jour × Heure</strong> — statsApi.heatmap : occupation par case, identifie les créneaux à remplir.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="chart"></span>Statistiques</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Statistiques · Heatmap</div><h1 class="page-title">Occupation par créneau</h1><p class="page-sub">Moyenne des 30 derniers jours</p></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Performance</div><div class="subtab">Prévisions</div><div class="subtab active">Heatmap</div><div class="subtab">Produits</div><div class="subtab">Export</div></div>
+
+          <div class="card">
+            <div class="card-title">Heatmap jour × heure</div>
+            <div style="display:grid;grid-template-columns:60px repeat(7,1fr);gap:3px;font-size:10px">
+              <div></div>
+              <div style="text-align:center;color:#6b7280;padding:4px">Lun</div>
+              <div style="text-align:center;color:#6b7280;padding:4px">Mar</div>
+              <div style="text-align:center;color:#6b7280;padding:4px">Mer</div>
+              <div style="text-align:center;color:#6b7280;padding:4px">Jeu</div>
+              <div style="text-align:center;color:#6b7280;padding:4px">Ven</div>
+              <div style="text-align:center;color:#6b7280;padding:4px">Sam</div>
+              <div style="text-align:center;color:#9ca3af;padding:4px">Dim</div>
+
+              <div style="padding:4px;text-align:right;color:#6b7280">09h</div>
+              <div style="padding:14px;background:#f0fdf4;border-radius:4px;text-align:center;color:#065f46;font-weight:500">25</div>
+              <div style="padding:14px;background:#f0fdf4;border-radius:4px;text-align:center;color:#065f46;font-weight:500">30</div>
+              <div style="padding:14px;background:#f0fdf4;border-radius:4px;text-align:center;color:#065f46;font-weight:500">40</div>
+              <div style="padding:14px;background:#fef9c3;border-radius:4px;text-align:center;color:#713f12;font-weight:500">55</div>
+              <div style="padding:14px;background:#fef9c3;border-radius:4px;text-align:center;color:#713f12;font-weight:500">50</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">90</div>
+              <div style="padding:14px;background:#fafafa;border-radius:4px;text-align:center;color:#9ca3af">—</div>
+
+              <div style="padding:4px;text-align:right;color:#6b7280">10h</div>
+              <div style="padding:14px;background:#fef9c3;border-radius:4px;text-align:center;color:#713f12;font-weight:500">55</div>
+              <div style="padding:14px;background:#fef9c3;border-radius:4px;text-align:center;color:#713f12;font-weight:500">60</div>
+              <div style="padding:14px;background:#fef3c7;border-radius:4px;text-align:center;color:#854d0e;font-weight:500">70</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">80</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">85</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">98</div>
+              <div style="padding:14px;background:#fafafa;border-radius:4px;text-align:center;color:#9ca3af">—</div>
+
+              <div style="padding:4px;text-align:right;color:#6b7280">14h</div>
+              <div style="padding:14px;background:#fef9c3;border-radius:4px;text-align:center;color:#713f12;font-weight:500">55</div>
+              <div style="padding:14px;background:#f0fdf4;border-radius:4px;text-align:center;color:#065f46;font-weight:500">40</div>
+              <div style="padding:14px;background:#fef9c3;border-radius:4px;text-align:center;color:#713f12;font-weight:500">60</div>
+              <div style="padding:14px;background:#fef3c7;border-radius:4px;text-align:center;color:#854d0e;font-weight:500">75</div>
+              <div style="padding:14px;background:#f0fdf4;border-radius:4px;text-align:center;color:#065f46;font-weight:500">35</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">95</div>
+              <div style="padding:14px;background:#fafafa;border-radius:4px;text-align:center;color:#9ca3af">—</div>
+
+              <div style="padding:4px;text-align:right;color:#6b7280">16h</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">80</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">85</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">92</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">80</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">90</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">95</div>
+              <div style="padding:14px;background:#fafafa;border-radius:4px;text-align:center;color:#9ca3af">—</div>
+
+              <div style="padding:4px;text-align:right;color:#6b7280">18h</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">78</div>
+              <div style="padding:14px;background:#fef3c7;border-radius:4px;text-align:center;color:#854d0e;font-weight:500">70</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">82</div>
+              <div style="padding:14px;background:#fed7aa;border-radius:4px;text-align:center;color:#9a3412;font-weight:500">80</div>
+              <div style="padding:14px;background:#fecaca;border-radius:4px;text-align:center;color:#991b1b;font-weight:500">88</div>
+              <div style="padding:14px;background:#f0fdf4;border-radius:4px;text-align:center;color:#065f46;font-weight:500">45</div>
+              <div style="padding:14px;background:#fafafa;border-radius:4px;text-align:center;color:#9ca3af">—</div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:14px;font-size:10px;color:#6b7280;align-items:center;justify-content:center">
+              <div style="display:flex;gap:4px;align-items:center"><div style="width:14px;height:14px;background:#f0fdf4;border-radius:3px"></div>&lt; 50%</div>
+              <div style="display:flex;gap:4px;align-items:center"><div style="width:14px;height:14px;background:#fef9c3;border-radius:3px"></div>50-60%</div>
+              <div style="display:flex;gap:4px;align-items:center"><div style="width:14px;height:14px;background:#fed7aa;border-radius:3px"></div>70-85%</div>
+              <div style="display:flex;gap:4px;align-items:center"><div style="width:14px;height:14px;background:#fecaca;border-radius:3px"></div>&gt; 85%</div>
+            </div>
+          </div>
+
+          <div class="info-banner" style="font-size:12px">
+            <strong>Recommandations :</strong> les créneaux vendredi 14h + mardi 14h sont sous-occupés (35-40%). Une promo ciblée sur ces plages pourrait générer +200-300 €/mois.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Heatmap</div></div><div class="mob-body"><div class="card" style="padding:14px;text-align:center;font-size:11px;color:#6b7280">Heatmap optimisée desktop. Consultez sur grand écran pour les détails.</div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 4 Produits -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Stats Produits</strong> — Ventes articles non-prestations (shampooings, cires, accessoires).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="chart"></span>Statistiques</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Statistiques · Produits</div><h1 class="page-title">Ventes produits</h1></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Performance</div><div class="subtab">Prévisions</div><div class="subtab">Heatmap</div><div class="subtab active">Produits</div><div class="subtab">Export</div></div>
+
+          <div class="kpi-grid cols-3">
+            <div class="kpi"><div class="kpi-label">CA produits (mois)</div><div class="kpi-value">845 €</div><div class="kpi-delta">+22%</div></div>
+            <div class="kpi"><div class="kpi-label">Articles vendus</div><div class="kpi-value">62</div></div>
+            <div class="kpi"><div class="kpi-label">Panier moyen</div><div class="kpi-value">13,60 €</div></div>
+          </div>
+
+          <div class="table">
+            <div class="table-row header" style="grid-template-columns:40px 1fr 100px 100px 100px 100px">
+              <div></div><div>Produit</div><div>Prix</div><div>Ventes</div><div>CA</div><div>% total</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 100px 100px 100px 100px">
+              <div class="icon-tag orange"><span data-icon="tag" data-size="13"></span></div>
+              <div><div style="font-weight:500">Shampooing barbe 150ml</div><div style="font-size:10px;color:#6b7280">Barbe King</div></div>
+              <div>18 €</div>
+              <div>14</div>
+              <div style="font-weight:500">252 €</div>
+              <div><div class="progress-bar"><div class="progress-bar-fill" style="width:30%"></div></div><div style="font-size:10px;color:#6b7280;margin-top:2px">30%</div></div>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 100px 100px 100px 100px">
+              <div class="icon-tag yellow"><span data-icon="tag" data-size="13"></span></div>
+              <div><div style="font-weight:500">Cire coiffante 100g</div><div style="font-size:10px;color:#6b7280">American Crew</div></div>
+              <div>22 €</div>
+              <div>8</div>
+              <div style="font-weight:500">176 €</div>
+              <div><div class="progress-bar"><div class="progress-bar-fill" style="width:21%"></div></div><div style="font-size:10px;color:#6b7280;margin-top:2px">21%</div></div>
+            </div>
+            <div class="table-row" style="grid-template-columns:40px 1fr 100px 100px 100px 100px">
+              <div class="icon-tag green"><span data-icon="tag" data-size="13"></span></div>
+              <div><div style="font-weight:500">Huile barbe bio 30ml</div><div style="font-size:10px;color:#6b7280">Maison locale</div></div>
+              <div>15 €</div>
+              <div>9</div>
+              <div style="font-weight:500">135 €</div>
+              <div><div class="progress-bar"><div class="progress-bar-fill" style="width:16%"></div></div><div style="font-size:10px;color:#6b7280;margin-top:2px">16%</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Produits</div></div><div class="mob-body"><div class="kpi-grid mob"><div class="kpi"><div class="kpi-label">CA mois</div><div class="kpi-value mob">845€</div></div><div class="kpi"><div class="kpi-label">Vendus</div><div class="kpi-value mob">62</div></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 5 Export -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>Export CSV / PDF</strong> — exportApi (gate PIN admin). Downloadfile joint x-pin-session auto. ErrorModal pastel rouge sur échec (403 → "Session admin expirée").</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="chart"></span>Statistiques</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Statistiques · Export</div><h1 class="page-title">Exporter les données</h1><p class="page-sub">PIN admin requis · formats CSV et PDF</p></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Performance</div><div class="subtab">Prévisions</div><div class="subtab">Heatmap</div><div class="subtab">Produits</div><div class="subtab active">Export</div></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Paramètres d'export</div>
+              <div class="form-row">
+                <div><div class="form-label">Du</div><input class="form-input" type="date" value="2026-04-01"></div>
+                <div><div class="form-label">Au</div><input class="form-input" type="date" value="2026-04-22"></div>
+              </div>
+              <div class="form-field">
+                <div class="form-label">Type de données</div>
+                <select class="form-select">
+                  <option>Toutes (transactions + clients + RDV)</option>
+                  <option>Transactions uniquement</option>
+                  <option>Clients uniquement</option>
+                  <option>RDV uniquement</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <div class="form-label">Format</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <label class="checkbox-row selected"><input type="radio" checked><div style="flex:1;display:flex;gap:6px;align-items:center"><span data-icon="download" data-size="13"></span>CSV</div></label>
+                  <label class="checkbox-row"><input type="radio"><div style="flex:1;display:flex;gap:6px;align-items:center"><span data-icon="download" data-size="13"></span>PDF</div></label>
+                </div>
+              </div>
+
+              <div class="warn-banner" style="font-size:11px">
+                <strong>Session admin valide 5 min.</strong> Si le téléchargement échoue avec "Session expirée", re-validez votre PIN.
+              </div>
+
+              <button class="btn-primary w-full" style="padding:14px"><span data-icon="download" data-size="13"></span> Exporter (PIN admin)</button>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Historique des exports (anonymisé)</div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-size:12px;font-weight:500">Transactions avril 2026</div><div style="font-size:10px;color:#6b7280">CSV · 127 lignes · 22/04 14:30</div></div>
+                <span class="badge success">Réussi</span>
+              </div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-size:12px;font-weight:500">Clients complet</div><div style="font-size:10px;color:#6b7280">PDF · 148 clients · 15/04 10:12</div></div>
+                <span class="badge success">Réussi</span>
+              </div>
+              <div style="padding:10px 0;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-size:12px;font-weight:500">Export mars 2026</div><div style="font-size:10px;color:#6b7280">CSV · 01/04 09:00</div></div>
+                <span class="badge danger">Session expirée</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Export</div></div><div class="mob-body"><div class="card"><div class="form-row"><div><div class="form-label">Du</div><input class="form-input" type="date"></div><div><div class="form-label">Au</div><input class="form-input" type="date"></div></div><div class="form-field"><div class="form-label">Format</div><select class="form-select"><option>CSV</option><option>PDF</option></select></div></div><button class="btn-primary w-full" style="padding:14px"><span data-icon="download" data-size="13"></span> Exporter</button></div></div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

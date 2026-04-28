@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 09. Tablette partagée</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Mode Tablette</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop (tablette)</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Écran neutre</button>
+    <button data-scene="2">Qui encaisse ?</button>
+    <button data-scene="3">PIN employé</button>
+    <button data-scene="4">Lockout DB</button>
+    <button data-scene="5">Bascule admin</button>
+    <button data-scene="6">TopBar orange admin</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Écran neutre -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Tablette · Écran neutre initial</strong> — Aucun employé connecté. Sidebar 3 items neutres + bouton "Accès admin". L'accueil invite à choisir une action. Lock on tab close activable.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Tablette partagée</div></div></div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda global</div>
+        <div class="nav-item"><span data-icon="cash"></span>Encaisser</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+        <div class="nav-spacer"></div>
+        <div style="padding:10px 10px 0;border-top:0.5px solid #e5e7eb"><button class="btn-secondary w-full" style="padding:10px;font-size:11px;gap:6px"><span data-icon="lock" data-size="12"></span> Accès admin (PIN)</button></div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Tablette · Aucun employé connecté</div><h1 class="page-title">Hair Coiff Lille</h1><p class="page-sub">Mode tablette · chaque action sensible demande un PIN</p></div></div>
+        <div class="body">
+          <div style="padding:60px 40px;text-align:center;background:#fff;border:0.5px solid #e5e7eb;border-radius:14px">
+            <div class="icon-tag" style="width:64px;height:64px;background:#fafafa;margin:0 auto 20px"><span data-icon="tablet" data-size="28"></span></div>
+            <h2 style="font-size:22px;font-weight:500;margin-bottom:10px">Que voulez-vous faire ?</h2>
+            <p style="font-size:13px;color:#6b7280;margin-bottom:30px;max-width:400px;margin-left:auto;margin-right:auto">Choisissez une action pour commencer. Votre PIN employé sera demandé avant toute action sensible.</p>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:640px;margin:0 auto">
+              <div class="card" style="padding:24px;text-align:center;cursor:pointer;margin:0">
+                <div class="icon-tag blue" style="width:40px;height:40px;margin:0 auto 10px"><span data-icon="calendar" data-size="18"></span></div>
+                <div style="font-weight:500">Voir l'agenda</div>
+                <div style="font-size:11px;color:#6b7280;margin-top:4px">Libre accès</div>
+              </div>
+              <div class="card" style="padding:24px;text-align:center;cursor:pointer;margin:0;border-left:2px solid #f97316">
+                <div class="icon-tag orange" style="width:40px;height:40px;margin:0 auto 10px"><span data-icon="cash" data-size="18"></span></div>
+                <div style="font-weight:500">Encaisser</div>
+                <div style="font-size:11px;color:#6b7280;margin-top:4px">PIN requis</div>
+              </div>
+              <div class="card" style="padding:24px;text-align:center;cursor:pointer;margin:0">
+                <div class="icon-tag green" style="width:40px;height:40px;margin:0 auto 10px"><span data-icon="users" data-size="18"></span></div>
+                <div style="font-weight:500">Clients</div>
+                <div style="font-size:11px;color:#6b7280;margin-top:4px">Libre accès</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-banner" style="margin-top:16px">
+            <strong>user_settings.tablet_mode_enabled=true</strong> · employee_session_timeout_min=15 · lock_on_tab_close=true
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Hair Coiff · Tablette</div></div><div class="mob-body"><div class="card" style="padding:20px;text-align:center"><span data-icon="tablet" data-size="32"></span><div style="font-weight:500;margin-top:10px">Que voulez-vous faire ?</div></div><div class="card" style="padding:14px;display:flex;gap:10px;align-items:center"><div class="icon-tag blue"><span data-icon="calendar"></span></div><div style="flex:1">Agenda</div></div><div class="card" style="padding:14px;display:flex;gap:10px;align-items:center;border-left:2px solid #f97316"><div class="icon-tag orange"><span data-icon="cash"></span></div><div style="flex:1">Encaisser · PIN</div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 2 Qui encaisse ? -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Modale "Qui encaisse ?"</strong> — Avant PIN, choix de l'employé parmi ceux avec can_encash=true. Seuls les actifs (is_active=true) apparaissent. Affiche le statut de connexion de chaque PIN.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item"><span data-icon="cash"></span>Encaisser</div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Encaisser</h1></div>
+        <div class="body"><div style="opacity:0.2">[Contenu tablette]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:520px;border-radius:14px;padding:24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <div style="font-size:16px;font-weight:500">Qui encaisse ?</div>
+            <button class="btn-secondary" style="padding:4px 8px"><span data-icon="x" data-size="12"></span></button>
+          </div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:16px">Sélectionnez votre nom pour saisir votre PIN.</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="card" style="margin:0;padding:18px;cursor:pointer;border-left:2px solid #10b981;text-align:center">
+              <div class="avatar lg green" style="margin:0 auto 10px">K</div>
+              <div style="font-weight:500">Karim</div>
+              <div style="font-size:11px;color:#6b7280">Barbier senior</div>
+              <span class="badge success" style="margin-top:6px">PIN actif</span>
+            </div>
+            <div class="card" style="margin:0;padding:18px;cursor:pointer;border-left:2px solid #3b82f6;text-align:center">
+              <div class="avatar lg blue" style="margin:0 auto 10px">L</div>
+              <div style="font-weight:500">Lucas</div>
+              <div style="font-size:11px;color:#6b7280">Barbier junior</div>
+              <span class="badge success" style="margin-top:6px">PIN actif</span>
+            </div>
+            <div class="card" style="margin:0;padding:18px;cursor:not-allowed;opacity:0.5;text-align:center">
+              <div class="avatar lg purple" style="margin:0 auto 10px">S</div>
+              <div style="font-weight:500">Sofiane</div>
+              <div style="font-size:11px;color:#6b7280">Coiffeur</div>
+              <span class="badge warn" style="margin-top:6px">En congé</span>
+            </div>
+            <div class="card" style="margin:0;padding:18px;cursor:pointer;text-align:center;border-style:dashed;border:1px dashed #e5e7eb">
+              <div class="icon-tag neutral" style="width:36px;height:36px;margin:0 auto 10px"><span data-icon="userPlus" data-size="16"></span></div>
+              <div style="font-weight:500;font-size:12px;color:#6b7280">Autre</div>
+              <div style="font-size:10px;color:#9ca3af">Contacter l'admin</div>
+            </div>
+          </div>
+
+          <div class="info-banner" style="font-size:11px;margin-top:14px;margin-bottom:0">
+            Seuls les employés avec <strong>can_encash=true</strong> et <strong>is_active=true</strong> apparaissent.
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)"><div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;padding:16px"><div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 12px"></div><div style="font-size:14px;font-weight:500;margin-bottom:12px">Qui encaisse ?</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="card" style="margin:0;padding:14px;text-align:center;border-left:2px solid #10b981"><div class="avatar green" style="margin:0 auto 6px">K</div><div style="font-size:12px;font-weight:500">Karim</div></div><div class="card" style="margin:0;padding:14px;text-align:center;border-left:2px solid #3b82f6"><div class="avatar blue" style="margin:0 auto 6px">L</div><div style="font-size:12px;font-weight:500">Lucas</div></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 3 PIN employé -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Saisie PIN employé</strong> — 4 chiffres, 5 tentatives max / 5 min via employeePinVerifyLimiter + lockout DB 30 min après 5 échecs. Token JWT employee_pin_session 2h serveur / 5-15 min UI.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Encaisser</h1></div>
+        <div class="body"><div style="opacity:0.2">[Contenu]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:420px;border-radius:14px;padding:24px;text-align:center">
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px"><div class="avatar lg green" style="margin:0">K</div><div style="text-align:left"><div style="font-size:15px;font-weight:500">Karim</div><div style="font-size:11px;color:#6b7280">Saisissez votre PIN 4 chiffres</div></div></div>
+
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
+            <div style="width:44px;height:54px;border:0.5px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:500;background:#fafafa">•</div>
+            <div style="width:44px;height:54px;border:0.5px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:500;background:#fafafa">•</div>
+            <div style="width:44px;height:54px;border:2px solid #111827;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff"></div>
+            <div style="width:44px;height:54px;border:0.5px solid #e5e7eb;border-radius:10px;background:#fff"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">1</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">2</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">3</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">4</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">5</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">6</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">7</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">8</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">9</button>
+            <button class="btn-secondary" style="padding:18px;font-size:13px;color:#6b7280">Effacer</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">0</button>
+            <button class="btn-secondary" style="padding:18px;font-size:13px"><span data-icon="x" data-size="14"></span></button>
+          </div>
+
+          <div style="font-size:11px;color:#6b7280">Tentative 1 / 5 · PIN oublié ? Contactez l'admin</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)"><div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:90%;border-radius:14px;padding:20px;text-align:center"><div style="display:flex;gap:10px;align-items:center;margin-bottom:16px"><div class="avatar green">K</div><div style="text-align:left"><div style="font-size:13px;font-weight:500">Karim</div><div style="font-size:10px;color:#6b7280">PIN 4 chiffres</div></div></div><div style="display:flex;gap:6px;justify-content:center;margin-bottom:16px"><div style="width:36px;height:46px;border:0.5px solid #e5e7eb;border-radius:8px;font-size:20px;display:flex;align-items:center;justify-content:center">•</div><div style="width:36px;height:46px;border:0.5px solid #e5e7eb;border-radius:8px;font-size:20px;display:flex;align-items:center;justify-content:center">•</div><div style="width:36px;height:46px;border:2px solid #111827;border-radius:8px"></div><div style="width:36px;height:46px;border:0.5px solid #e5e7eb;border-radius:8px"></div></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"><button class="btn-secondary" style="padding:14px">1</button><button class="btn-secondary" style="padding:14px">2</button><button class="btn-secondary" style="padding:14px">3</button><button class="btn-secondary" style="padding:14px">4</button><button class="btn-secondary" style="padding:14px">5</button><button class="btn-secondary" style="padding:14px">6</button></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 4 Lockout DB -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Lockout DB · 30 min</strong> — Après 5 tentatives PIN échouées (employee_pins.failed_attempts=5), lockout en base (locked_until=NOW()+30min). Le compte est inutilisable même après reset limiter IP.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Encaisser</h1></div>
+        <div class="body"><div style="opacity:0.2">[Contenu]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:420px;border-radius:14px;padding:28px;text-align:center">
+          <div class="icon-tag" style="width:56px;height:56px;background:#fef2f2;color:#991b1b;margin:0 auto 16px"><span data-icon="lock" data-size="24"></span></div>
+          <div style="font-size:17px;font-weight:500;margin-bottom:8px;color:#991b1b">Compte verrouillé</div>
+          <div style="font-size:13px;color:#4b5563;margin-bottom:20px;line-height:1.6">Après 5 tentatives échouées, votre compte est temporairement verrouillé pour des raisons de sécurité.</div>
+
+          <div style="padding:16px;background:#fef2f2;border-radius:10px;border:0.5px solid #fecaca;margin-bottom:16px">
+            <div style="font-size:10px;color:#991b1b;text-transform:uppercase;font-weight:500;letter-spacing:0.05em">Temps restant</div>
+            <div style="font-size:28px;font-weight:500;color:#991b1b;font-family:monospace;margin-top:4px">28:42</div>
+            <div style="font-size:10px;color:#991b1b;opacity:0.7;margin-top:4px">Déverrouillage automatique</div>
+          </div>
+
+          <div class="warn-banner" style="font-size:11px;text-align:left;margin-bottom:0">
+            <strong>Action admin requise :</strong> demandez à l'administrateur de réinitialiser votre PIN depuis Réglages · Équipe · Sécurité.
+          </div>
+
+          <button class="btn-secondary w-full" style="margin-top:14px">Retour à l'accueil</button>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)"><div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:90%;border-radius:14px;padding:24px;text-align:center"><div class="icon-tag" style="width:48px;height:48px;background:#fef2f2;color:#991b1b;margin:0 auto 12px"><span data-icon="lock" data-size="20"></span></div><div style="font-weight:500;color:#991b1b;margin-bottom:8px">Compte verrouillé</div><div style="font-size:28px;font-weight:500;color:#991b1b;font-family:monospace">28:42</div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 5 Bascule admin -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>Bascule admin temporaire</strong> — Clic "Accès admin" → PIN admin → session timed (employee_session_timeout_min = 15 min). TopBar orange + sidebar 7 items complète. Retour automatique au mode neutre après timeout.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Tablette</h1></div>
+        <div class="body"><div style="opacity:0.2">[Mode neutre]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:420px;border-radius:14px;padding:24px;text-align:center">
+          <div class="icon-tag" style="width:56px;height:56px;background:#fff7ed;color:#9a3412;margin:0 auto 14px"><span data-icon="key" data-size="22"></span></div>
+          <div style="font-size:16px;font-weight:500;margin-bottom:4px">Accès administrateur</div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:20px">Saisissez le PIN admin pour activer le mode admin temporaire. Session : <strong>15 minutes</strong>.</div>
+
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px">
+            <div style="width:44px;height:54px;border:0.5px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fafafa">•</div>
+            <div style="width:44px;height:54px;border:0.5px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fafafa">•</div>
+            <div style="width:44px;height:54px;border:0.5px solid #e5e7eb;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fafafa">•</div>
+            <div style="width:44px;height:54px;border:2px solid #f97316;border-radius:10px"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">1</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">2</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">3</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">4</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">5</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">6</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">7</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">8</button>
+            <button class="btn-secondary" style="padding:18px;font-size:18px;font-weight:500">9</button>
+          </div>
+
+          <div class="warn-banner" style="font-size:11px;margin-top:14px;margin-bottom:0">
+            <strong>Important :</strong> toute transaction créée pendant cette session enregistre <code>signed_by_employee_id=null</code> (transaction signée admin).
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)"><div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:90%;border-radius:14px;padding:20px;text-align:center"><div class="icon-tag" style="width:48px;height:48px;background:#fff7ed;color:#9a3412;margin:0 auto 12px"><span data-icon="key" data-size="20"></span></div><div style="font-size:14px;font-weight:500">Accès admin</div><div style="font-size:11px;color:#6b7280;margin-bottom:14px">Session 15 min</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"><button class="btn-secondary" style="padding:14px">1</button><button class="btn-secondary" style="padding:14px">2</button><button class="btn-secondary" style="padding:14px">3</button></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 6 TopBar orange admin -->
+<div class="scene" data-scene="6">
+  <div class="intro-note"><strong>Mode admin temporaire actif</strong> — TopBar orange vif + timer visible (12:48 restant) + sidebar 7 items complète + bouton "Quitter le mode admin". L'admin peut tout configurer, puis la session expire.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub" style="color:#9a3412">Mode admin · 12:48</div></div></div>
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda</div>
+        <div class="nav-item"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+        <div class="nav-section-label">Croissance</div>
+        <div class="nav-item"><span data-icon="megaphone"></span>Marketing</div>
+        <div class="nav-item"><span data-icon="chart"></span>Statistiques</div>
+        <div class="nav-section-label">Paramétrage</div>
+        <div class="nav-item active"><span data-icon="settings"></span>Réglages</div>
+        <div class="nav-spacer"></div>
+        <div style="padding:10px 10px 0;border-top:0.5px solid #e5e7eb"><button class="btn-secondary w-full" style="padding:10px;font-size:11px;gap:6px;background:#fff7ed;color:#9a3412;border-color:#fed7aa"><span data-icon="logout" data-size="12"></span> Quitter mode admin</button></div>
+      </aside>
+      <div>
+        <div class="topbar" style="background:#fff7ed;border-bottom:0.5px solid #fed7aa">
+          <div>
+            <div class="breadcrumb" style="color:#9a3412">Mode admin temporaire</div>
+            <h1 class="page-title" style="color:#9a3412">Session admin active</h1>
+            <p class="page-sub" style="color:#9a3412">Actions sans PIN complet · audit trail actif</p>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div style="padding:6px 12px;background:#fff;border:0.5px solid #fed7aa;border-radius:8px;font-family:monospace;font-size:13px;color:#9a3412;font-weight:500">
+              <span data-icon="clock" data-size="11"></span> 12:48
+            </div>
+            <button class="btn-secondary" style="background:#9a3412;color:#fff;border-color:#9a3412;font-size:11px"><span data-icon="logout" data-size="11"></span> Quitter</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="warn-banner">
+            <strong>Vous êtes en mode administrateur temporaire.</strong> Toutes les actions sont possibles sans re-saisir le PIN. La session expire automatiquement dans <strong>12 min 48 sec</strong>. Retour au mode neutre automatique.
+          </div>
+
+          <div class="card">
+            <div class="card-title">Activité durant la session admin</div>
+            <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:12px"><div style="font-weight:500">Modif horaires employé</div><div style="font-size:10px;color:#6b7280">Karim · Samedi 09h-18h → 09h-20h</div></div>
+              <div style="font-size:10px;color:#6b7280">Il y a 1 min</div>
+            </div>
+            <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:12px"><div style="font-weight:500">Suppression transaction</div><div style="font-size:10px;color:#6b7280">Tx #1210 · 35 € · raison : doublon</div></div>
+              <div style="font-size:10px;color:#6b7280">Il y a 3 min</div>
+            </div>
+            <div style="padding:10px 0;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:12px"><div style="font-weight:500">Création promo TEST20</div><div style="font-size:10px;color:#6b7280">-20% · 10 usages max</div></div>
+              <div style="font-size:10px;color:#6b7280">Il y a 5 min</div>
+            </div>
+          </div>
+
+          <div class="info-banner">
+            <strong>Audit trail actif :</strong> chaque action admin est tracée dans <code>transaction_audit_log</code> avec timestamp, snapshot_before/after et identifiant de session. Les transactions créées pendant la session ont <code>signed_by_employee_id=NULL</code> (signature admin).
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar" style="background:#fff7ed"><div class="mob-topbar-left"><div class="logo sm">H</div><div><div class="mob-topbar-title" style="color:#9a3412">Mode admin</div><div class="mob-topbar-sub" style="color:#9a3412;font-family:monospace">12:48 restantes</div></div></div><button class="btn-secondary" style="background:#9a3412;color:#fff;border:none;padding:6px 10px;font-size:10px">Quitter</button></div><div class="mob-body"><div class="warn-banner" style="font-size:11px">Session admin active · 12:48 avant retour au mode neutre</div><div class="card" style="padding:10px"><div style="font-size:11px"><strong>Modif horaires</strong> · Karim · il y a 1 min</div></div></div></div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

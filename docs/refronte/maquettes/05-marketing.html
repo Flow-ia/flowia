@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 05. Marketing</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Marketing</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Fidélité</button>
+    <button data-scene="2">Anniversaire</button>
+    <button data-scene="3">Parrainage</button>
+    <button data-scene="4">Promos</button>
+    <button data-scene="5">Créer promo</button>
+    <button data-scene="6">Envoyer email</button>
+    <button data-scene="7">Solde SMS</button>
+    <button data-scene="8">Recharger SMS</button>
+    <button data-scene="9">IA</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Fidélité -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Marketing · Fidélité</strong> — Programme tampons ou points, min_purchase, récompense (% ou €), validity_days, count_trigger (both/physical/online). Caps : 100 tampons, 100 %, 500 €, 100 pts/€, 3650 j, 10 000 €.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div></div></div>
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda</div>
+        <div class="nav-item"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+        <div class="nav-section-label">Croissance</div>
+        <div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div>
+        <div class="nav-item"><span data-icon="chart"></span>Statistiques</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing</div><h1 class="page-title">Fidélité et récompenses</h1><p class="page-sub">23 clients fidèles · 8 récompenses à réclamer</p></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab active"><span data-icon="heart" data-size="12"></span> Fidélité</div>
+            <div class="subtab"><span data-icon="gift" data-size="12"></span> Anniversaire</div>
+            <div class="subtab"><span data-icon="users" data-size="12"></span> Parrainage</div>
+            <div class="subtab"><span data-icon="tag" data-size="12"></span> Promos <span class="count">6</span></div>
+            <div class="subtab"><span data-icon="send" data-size="12"></span> Solde SMS <span class="count">253</span></div>
+            <div class="subtab"><span data-icon="sparkles" data-size="12"></span> IA</div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi"><div class="kpi-label">Tampons distribués (jour)</div><div class="kpi-value">12</div></div>
+            <div class="kpi"><div class="kpi-label">Récompenses à réclamer</div><div class="kpi-value">8</div><div class="kpi-delta neutral">10/10 tampons</div></div>
+            <div class="kpi"><div class="kpi-label">Fidèles actifs</div><div class="kpi-value">23</div></div>
+            <div class="kpi"><div class="kpi-label">CA fidèles (30j)</div><div class="kpi-value">2 450 €</div></div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Configuration</span><div class="toggle on"></div></div>
+
+              <div class="form-field">
+                <div class="form-label">Mode</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <label class="checkbox-row selected"><input type="radio" checked><div style="flex:1"><div style="font-weight:500">Tampons</div><div style="font-size:10px;color:#6b7280">N visites = récompense</div></div></label>
+                  <label class="checkbox-row"><input type="radio"><div style="flex:1"><div style="font-weight:500">Points</div><div style="font-size:10px;color:#6b7280">X pts / €</div></div></label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div><div class="form-label">Tampons requis</div><input class="form-input" type="number" value="10" max="100"></div>
+                <div><div class="form-label">Achat min (€)</div><input class="form-input" type="number" value="20" max="10000"></div>
+              </div>
+
+              <div class="form-field">
+                <div class="form-label">Type récompense</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <label class="checkbox-row selected"><input type="radio" checked><span style="flex:1">Pourcentage</span></label>
+                  <label class="checkbox-row"><input type="radio"><span style="flex:1">Montant fixe</span></label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div><div class="form-label">Valeur (% max 100)</div><input class="form-input" type="number" value="100" max="100"></div>
+                <div><div class="form-label">Validité (jours)</div><input class="form-input" type="number" value="60" max="3650"></div>
+              </div>
+
+              <div class="form-field">
+                <div class="form-label">Déclencheur</div>
+                <select class="form-select"><option>Tout (both)</option><option>Caisse uniquement (physical)</option><option>RDV uniquement (online)</option></select>
+              </div>
+
+              <button class="btn-primary w-full" style="padding:12px">Enregistrer (PIN admin)</button>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Top 5 fidèles</div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm orange">AD</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Alice Dubois</div><div style="color:#6b7280">14 visites · 420 €</div></div>
+                  <div style="display:flex;gap:2px">
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                    <div style="width:12px;height:12px;background:#f97316;border-radius:50%"></div>
+                  </div>
+                  <button class="btn-secondary" style="font-size:10px;padding:4px 8px">Récompense</button>
+                </div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm green">ML</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Marc Lefèvre</div><div style="color:#6b7280">12 visites · 360 €</div></div>
+                  <div style="font-size:10px;color:#6b7280">10/10</div>
+                  <button class="btn-secondary" style="font-size:10px;padding:4px 8px">Récompense</button>
+                </div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm purple">SB</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Sarah Benali</div><div style="color:#6b7280">10 visites · 280 €</div></div>
+                  <div style="font-size:10px;color:#6b7280">8/10</div>
+                  <button class="btn-secondary" style="font-size:10px;padding:4px 8px"><span data-icon="gift" data-size="11"></span> +1</button>
+                </div>
+                <div style="padding:8px 0;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm yellow">MC</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Mohamed Chaabi</div><div style="color:#6b7280">6 visites · 240 €</div></div>
+                  <div style="font-size:10px;color:#6b7280">5/10</div>
+                  <button class="btn-secondary" style="font-size:10px;padding:4px 8px"><span data-icon="gift" data-size="11"></span> +1</button>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Historique récompenses utilisées</div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;font-size:11px;display:flex;justify-content:space-between"><span>Marc Lefèvre · 18/03/26</span><span class="badge success">Réclamée</span></div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;font-size:11px;display:flex;justify-content:space-between"><span>Alice Dubois · 02/03/26</span><span class="badge success">Réclamée</span></div>
+                <div style="padding:8px 0;font-size:11px;display:flex;justify-content:space-between"><span>Julien D. · 15/02/26</span><span class="badge neutral">Expirée</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Marketing</div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="subtabs"><div class="subtab active">Fidélité</div><div class="subtab">Promos</div><div class="subtab">SMS</div><div class="subtab">IA</div></div>
+      <div class="kpi-grid mob"><div class="kpi"><div class="kpi-label">Tampons</div><div class="kpi-value mob">12</div></div><div class="kpi"><div class="kpi-label">À réclamer</div><div class="kpi-value mob">8</div></div></div>
+      <div class="card"><div class="card-title">Top fidèles</div><div style="padding:6px 0;display:flex;gap:6px;align-items:center"><div class="avatar sm orange">AD</div><div style="flex:1;font-size:11px">Alice · 14 vis</div><button class="btn-secondary" style="font-size:10px;padding:3px 6px">+1</button></div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 Anniversaire -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Marketing · Anniversaire</strong> — Campagne auto : cron 09:00, code BDAY-XX1234 + email, anti-fraude rolling 330 j sur last_birthday_reward_at. Quota Brevo 300/j global.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing · Anniversaire</div><h1 class="page-title">Campagne anniversaire</h1></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Fidélité</div><div class="subtab active">Anniversaire</div><div class="subtab">Parrainage</div><div class="subtab">Promos</div><div class="subtab">Solde SMS</div><div class="subtab">IA</div></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Configuration</span><div class="toggle on"></div></div>
+              <div class="info-banner" style="font-size:11px">Cron 09:00 : tous les clients avec birth_date = aujourd'hui et opt-in marketing reçoivent un code promo + email.</div>
+              <div class="form-field"><div class="form-label">Type remise</div><select class="form-select"><option>Pourcentage</option><option>Montant fixe</option></select></div>
+              <div class="form-row">
+                <div><div class="form-label">Valeur</div><input class="form-input" type="number" value="20"></div>
+                <div><div class="form-label">Validité (jours)</div><input class="form-input" type="number" value="30" max="3650"></div>
+              </div>
+              <div class="form-field">
+                <div class="form-label">Template SMS</div>
+                <textarea class="form-textarea" style="min-height:90px">Joyeux anniversaire {prenom} ! 🎂 Nous vous offrons -{remise}% sur votre prochaine visite au salon. Code : {code}. Valable {validite}j.</textarea>
+                <div style="font-size:10px;color:#6b7280;margin-top:4px">Variables : {prenom} {remise} {code} {validite}</div>
+              </div>
+              <button class="btn-primary w-full">Enregistrer (PIN admin)</button>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Anniversaires ce mois (8)</div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm yellow">MC</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Mohamed Chaabi</div><div style="color:#6b7280">24 avril · il y a 2 jours</div></div>
+                  <span class="badge success">Envoyé</span>
+                </div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm green">ML</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Marc Lefèvre</div><div style="color:#6b7280">22 avril · aujourd'hui</div></div>
+                  <span class="badge warn">En cours</span>
+                </div>
+                <div style="padding:8px 0;display:flex;gap:10px;align-items:center">
+                  <div class="avatar sm purple">SB</div>
+                  <div style="flex:1;font-size:12px"><div style="font-weight:500">Sarah Benali</div><div style="color:#6b7280">28 avril · dans 6 jours</div></div>
+                  <span class="badge neutral">Planifié</span>
+                </div>
+              </div>
+
+              <div class="warn-banner" style="font-size:11px">Anti-fraude : client non éligible si déjà récompensé dans les 330 derniers jours.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Anniversaire</div></div><div class="mob-body"><div class="card"><div class="card-title">Configuration</div><div class="form-field"><div class="form-label">Remise (%)</div><input class="form-input" value="20"></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 3 Parrainage -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Marketing · Parrainage</strong> — Caps : percent ≤ 100, fixed ≤ 500 €, limit_count ≤ 10 000. Normalisation email anti-fraude (Gmail alias +). Flow : pending → validation atomique par commerçant → 2 promos + 2 rewards.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing · Parrainage</div><h1 class="page-title">Programme de parrainage</h1></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Fidélité</div><div class="subtab">Anniv.</div><div class="subtab active">Parrainage</div><div class="subtab">Promos</div><div class="subtab">Solde SMS</div><div class="subtab">IA</div></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Configuration</span><div class="toggle on"></div></div>
+
+              <div class="card-title" style="font-size:11px;color:#6b7280;margin-top:8px">Récompense du parrain</div>
+              <div class="form-row">
+                <div><div class="form-label">Type</div><select class="form-select"><option>Pourcentage</option><option>Montant fixe</option></select></div>
+                <div><div class="form-label">Valeur</div><input class="form-input" value="10"></div>
+              </div>
+
+              <div class="card-title" style="font-size:11px;color:#6b7280;margin-top:12px">Récompense du filleul</div>
+              <div class="form-row">
+                <div><div class="form-label">Type</div><select class="form-select"><option>Pourcentage</option></select></div>
+                <div><div class="form-label">Valeur</div><input class="form-input" value="10"></div>
+              </div>
+
+              <div class="form-row" style="margin-top:12px">
+                <div><div class="form-label">Limite</div><input class="form-input" type="number" value="10000" max="10000"></div>
+                <div><div class="form-label">Période</div><select class="form-select"><option>Illimité</option><option>À vie</option><option>Par mois</option><option>3 mois</option><option>Par an</option></select></div>
+              </div>
+
+              <div class="form-field"><div class="form-label">Conditions libres</div><textarea class="form-textarea" placeholder="Une réduction par filleul validé...">Récompenses valables 60 jours après validation du 1er RDV du filleul.</textarea></div>
+
+              <button class="btn-primary w-full" style="padding:12px">Enregistrer (PIN admin)</button>
+            </div>
+
+            <div>
+              <div class="info-banner" style="font-size:12px">
+                <strong>Phrase publique (non-authentifié)</strong><br>
+                Vous gagnez <strong>10%</strong> à chaque filleul validé, utilisable en caisse. Aucune limite. Validité : 60 jours.
+              </div>
+
+              <div class="card">
+                <div class="card-title">Parrainages en attente (3)</div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;border-left:2px solid #8b5cf6;padding-left:10px">
+                  <div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:500">Sarah Benali → Sophie M.</div><span class="badge purple">Pending</span></div>
+                  <div style="font-size:11px;color:#6b7280;margin-top:4px">RDV #1234 · 22/04/26</div>
+                  <div style="display:flex;gap:4px;margin-top:6px"><button class="btn-primary" style="font-size:11px;padding:4px 10px">Valider</button><button class="btn-secondary" style="font-size:11px;padding:4px 10px">Refuser</button></div>
+                </div>
+                <div style="padding:10px 0;border-left:2px solid #8b5cf6;padding-left:10px">
+                  <div style="display:flex;justify-content:space-between"><div style="font-size:12px;font-weight:500">Marc L. → Julien D.</div><span class="badge purple">Pending</span></div>
+                  <div style="font-size:11px;color:#6b7280;margin-top:4px">RDV #1231 · 21/04/26</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Historique (validés)</div>
+                <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;font-size:11px;display:flex;justify-content:space-between"><span>Alice D. → Marc L.</span><span class="badge success">Validé 18/03</span></div>
+                <div style="padding:8px 0;font-size:11px;display:flex;justify-content:space-between"><span>Pierre N. → Julien</span><span class="badge success">Validé 12/03</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Parrainage</div></div><div class="mob-body"><div class="card"><div style="padding:10px;border-left:2px solid #8b5cf6"><div style="font-size:12px;font-weight:500">Sarah → Sophie</div><div style="display:flex;gap:4px;margin-top:6px"><button class="btn-primary" style="font-size:11px;padding:4px 10px">Valider</button><button class="btn-secondary" style="font-size:11px;padding:4px 10px">Refuser</button></div></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 4 Promos -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Marketing · Promotions</strong> — Liste codes promo avec stats. Types percent/fixed, cibles all/new/specific, plage horaire, min_purchase. Codes auto (fidélité, anniv, parrainage) non modifiables.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing</div><h1 class="page-title">Codes promo</h1></div><div style="display:flex;gap:8px"><button class="btn-secondary"><span data-icon="send" data-size="13"></span> Envoyer par email</button><button class="btn-primary"><span data-icon="plus" data-size="13"></span> Nouveau code</button></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Fidélité</div><div class="subtab">Anniv.</div><div class="subtab">Parrainage</div><div class="subtab active">Promos <span class="count">6</span></div><div class="subtab">Solde SMS</div><div class="subtab">IA</div></div>
+
+          <div class="filter-bar">
+            <div class="filter-chip active">Actifs <span class="count">4</span></div>
+            <div class="filter-chip">Expirés <span class="count">2</span></div>
+            <div class="filter-chip">Auto <span class="count">18</span></div>
+          </div>
+
+          <div class="table">
+            <div class="table-row header" style="grid-template-columns:140px 100px 80px 80px 80px 110px 100px 60px">
+              <div>Code</div><div>Type</div><div>Valeur</div><div>Min</div><div>Usages</div><div>Cible</div><div>Expire</div><div>Actions</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:140px 100px 80px 80px 80px 110px 100px 60px">
+              <div style="font-family:monospace;font-weight:500">PRINTEMPS10</div>
+              <span class="badge info">Pourcentage</span>
+              <div>-10%</div>
+              <div>20 €</div>
+              <div>15/100</div>
+              <span class="badge neutral">Tous</span>
+              <div>30/06/26</div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:140px 100px 80px 80px 80px 110px 100px 60px">
+              <div style="font-family:monospace;font-weight:500">NOUVEAU15</div>
+              <span class="badge info">Pourcentage</span>
+              <div>-15%</div>
+              <div>-</div>
+              <div>8/∞</div>
+              <span class="badge success">Nouveaux</span>
+              <div>∞</div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:140px 100px 80px 80px 80px 110px 100px 60px">
+              <div style="font-family:monospace;font-weight:500">HAPPY-TUE</div>
+              <span class="badge info">Pourcentage</span>
+              <div>-20%</div>
+              <div>-</div>
+              <div>5/50</div>
+              <span class="badge neutral">Mar. 14-18h</span>
+              <div>31/05/26</div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:140px 100px 80px 80px 80px 110px 100px 60px">
+              <div style="font-family:monospace;font-weight:500">BARBE5</div>
+              <span class="badge purple">Fixe</span>
+              <div>-5 €</div>
+              <div>25 €</div>
+              <div>3/30</div>
+              <span class="badge neutral">Tous</span>
+              <div>15/05/26</div>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+            </div>
+            <div class="table-row" style="grid-template-columns:140px 100px 80px 80px 80px 110px 100px 60px">
+              <div style="font-family:monospace;font-weight:500;color:#6b7280">BDAY-ML42 <span class="badge neutral" style="font-size:9px">Auto</span></div>
+              <span class="badge info">Pourcentage</span>
+              <div>-20%</div>
+              <div>-</div>
+              <div>0/1</div>
+              <span class="badge warn">Marc L.</span>
+              <div>22/05/26</div>
+              <div style="color:#9ca3af;font-size:10px">Non mod.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Promos</div><div class="mob-icon-btn"><span data-icon="plus"></span></div></div><div class="mob-body">
+    <div class="card" style="padding:10px"><div style="display:flex;justify-content:space-between"><div style="font-family:monospace;font-weight:500;font-size:12px">PRINTEMPS10</div><span class="badge info">-10%</span></div><div style="font-size:10px;color:#6b7280;margin-top:4px">15/100 · exp 30/06</div></div>
+    <div class="card" style="padding:10px"><div style="display:flex;justify-content:space-between"><div style="font-family:monospace;font-weight:500;font-size:12px">NOUVEAU15</div><span class="badge info">-15%</span></div><div style="font-size:10px;color:#6b7280;margin-top:4px">8/∞ · nouveaux</div></div>
+  </div></div></div></div>
+</div>
+
+<!-- SCÈNE 5 Créer promo -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>Créer code promo</strong> — Form complet avec plage horaire (time_allday / time_from + time_until), target_clients, dates, min_purchase, quota.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing · Promos · Nouveau</div><h1 class="page-title">Créer un code promo</h1></div><button class="btn-secondary"><span data-icon="x" data-size="13"></span> Annuler</button></div>
+        <div class="body">
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Informations</div>
+              <div class="form-field"><div class="form-label">Code *</div><input class="form-input" placeholder="PROMO24" style="text-transform:uppercase;font-family:monospace"></div>
+              <div class="form-field">
+                <div class="form-label">Type</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <label class="checkbox-row selected"><input type="radio" checked><span style="flex:1">Pourcentage</span></label>
+                  <label class="checkbox-row"><input type="radio"><span style="flex:1">Montant fixe</span></label>
+                </div>
+              </div>
+              <div class="form-row">
+                <div><div class="form-label">Valeur</div><input class="form-input" type="number" placeholder="10" max="100"></div>
+                <div><div class="form-label">Achat min (€)</div><input class="form-input" type="number" placeholder="20"></div>
+              </div>
+              <div class="form-row">
+                <div><div class="form-label">Usages total</div><input class="form-input" type="number" placeholder="100"></div>
+                <div><div class="form-label">Usages / client</div><input class="form-input" type="number" placeholder="1"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Restrictions</div>
+              <div class="form-field">
+                <div class="form-label">Cible</div>
+                <select class="form-select"><option>Tous les clients</option><option>Nouveaux clients</option><option>Clients spécifiques</option></select>
+              </div>
+              <div class="form-row">
+                <div><div class="form-label">Début validité</div><input class="form-input" type="date"></div>
+                <div><div class="form-label">Fin validité</div><input class="form-input" type="date"></div>
+              </div>
+
+              <div class="form-field">
+                <div class="form-label">Plage horaire</div>
+                <label class="checkbox-row selected"><input type="radio" checked><span style="flex:1">Toute la journée</span></label>
+                <div style="height:6px"></div>
+                <label class="checkbox-row"><input type="radio"><span style="flex:1">Plage spécifique</span></label>
+                <div class="form-row" style="margin-top:6px">
+                  <div><div class="form-label">De</div><input class="form-input" type="time" value="14:00"></div>
+                  <div><div class="form-label">À</div><input class="form-input" type="time" value="18:00"></div>
+                </div>
+              </div>
+
+              <div class="form-field"><div class="form-label">Prestations autorisées</div><select class="form-select"><option>Toutes</option><option>Coupe uniquement</option></select></div>
+
+              <button class="btn-primary w-full" style="padding:12px">Créer le code (PIN admin)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Nouveau code</div></div><div class="mob-body"><div class="card"><div class="form-field"><div class="form-label">Code</div><input class="form-input" placeholder="PROMO24"></div><div class="form-field"><div class="form-label">Remise (%)</div><input class="form-input" value="10"></div></div><button class="btn-primary w-full" style="padding:14px">Créer</button></div></div></div></div>
+</div>
+
+<!-- SCÈNE 6 Envoyer email -->
+<div class="scene" data-scene="6">
+  <div class="intro-note"><strong>Envoyer un code par email</strong> — SendPromoEmailModal : sélection clients (tous, fidèles, inactifs, anniv, manuelle), aperçu, estimation quota Brevo 300/j, template.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Promos</h1></div>
+        <div class="body"><div style="opacity:0.2">[Liste promos]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:560px;border-radius:14px;padding:20px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:14px"><div style="font-size:16px;font-weight:500">Envoyer PRINTEMPS10 par email</div><button class="btn-secondary" style="padding:4px 8px"><span data-icon="x" data-size="12"></span></button></div>
+
+          <div class="form-field">
+            <div class="form-label">Cible</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <label class="checkbox-row selected"><input type="radio" checked><div style="flex:1"><div style="font-weight:500">Tous (148)</div><div style="font-size:10px;color:#6b7280">Avec opt-in marketing</div></div></label>
+              <label class="checkbox-row"><input type="radio"><div style="flex:1"><div style="font-weight:500">Fidèles (23)</div></div></label>
+              <label class="checkbox-row"><input type="radio"><div style="flex:1"><div style="font-weight:500">Inactifs (18)</div><div style="font-size:10px;color:#6b7280">3+ mois</div></div></label>
+              <label class="checkbox-row"><input type="radio"><div style="flex:1"><div style="font-weight:500">Sélection manuelle</div></div></label>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <div class="form-label">Sujet</div>
+            <input class="form-input" value="🌸 Profitez de -10% sur votre prochaine visite">
+          </div>
+
+          <div class="form-field">
+            <div class="form-label">Message</div>
+            <textarea class="form-textarea" style="min-height:100px">Bonjour {prenom},
+
+Profitez de -10% sur votre prochaine visite avec le code PRINTEMPS10.
+Valable jusqu'au 30/06. Achat min 20€.
+
+À bientôt chez Hair Coiff Lille !</textarea>
+          </div>
+
+          <div class="info-banner" style="font-size:11px">
+            <strong>Quota Brevo :</strong> 148 emails / 300 restants aujourd'hui. L'envoi sera étalé (quota global cluster-safe).
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn-secondary">Annuler</button><button class="btn-primary"><span data-icon="send" data-size="13"></span> Envoyer</button></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)"><div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;padding:16px"><div style="font-size:14px;font-weight:500;margin-bottom:12px">Envoyer PRINTEMPS10</div><div class="form-field"><div class="form-label">Cible</div><select class="form-select"><option>Tous (148)</option></select></div><div class="form-field"><div class="form-label">Sujet</div><input class="form-input" value="-10% prochaine visite"></div><button class="btn-primary w-full" style="padding:12px">Envoyer</button></div></div></div></div>
+</div>
+
+<!-- SCÈNE 7 Solde SMS -->
+<div class="scene" data-scene="7">
+  <div class="intro-note"><strong>Solde SMS</strong> — Balance, historique recharges / refunds / débits, cartes Stripe enregistrées. Prix SMS ≈ 0,0585€. Refund automatique sur échec d'envoi.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing</div><h1 class="page-title">Solde et historique SMS</h1></div><button class="btn-primary"><span data-icon="plus" data-size="13"></span> Recharger</button></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Fidélité</div><div class="subtab">Anniv.</div><div class="subtab">Parrainage</div><div class="subtab">Promos</div><div class="subtab active">Solde SMS <span class="count">253</span></div><div class="subtab">IA</div></div>
+
+          <div style="padding:20px;background:linear-gradient(135deg,#111827,#1f2937);border-radius:14px;color:#fff;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:500">Solde SMS</div>
+                <div style="font-size:48px;font-weight:500;line-height:1">253</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:4px">≈ 14,80 € · autonomie ~45 jours</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:11px;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:500">Consommation</div>
+                <div style="font-size:13px;margin-top:4px">Mois : <strong>168 SMS</strong></div>
+                <div style="font-size:13px">Rappels : 142 · Campagnes : 22 · Anniv : 4</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kpi-grid cols-3">
+            <div class="kpi"><div class="kpi-label">Rechargés (mois)</div><div class="kpi-value">200</div><div class="kpi-delta neutral">11,70 €</div></div>
+            <div class="kpi"><div class="kpi-label">Débités</div><div class="kpi-value">168</div></div>
+            <div class="kpi"><div class="kpi-label">Refundés (échecs)</div><div class="kpi-value">3</div><div class="kpi-delta">0,18 €</div></div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Historique transactions SMS</div>
+              <div class="table-row" style="grid-template-columns:100px 80px 1fr 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+                <div style="font-size:11px">22/04 14:30</div>
+                <span class="badge success">Recharge</span>
+                <div style="font-size:11px;color:#6b7280">Stripe · carte ****4242</div>
+                <div style="font-weight:500;color:#065f46;text-align:right">+100</div>
+              </div>
+              <div class="table-row" style="grid-template-columns:100px 80px 1fr 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+                <div style="font-size:11px">22/04 09:00</div>
+                <span class="badge info">Débit</span>
+                <div style="font-size:11px;color:#6b7280">Campagne PRINTEMPS10 · 22 SMS</div>
+                <div style="font-weight:500;color:#991b1b;text-align:right">-22</div>
+              </div>
+              <div class="table-row" style="grid-template-columns:100px 80px 1fr 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+                <div style="font-size:11px">22/04 08:00</div>
+                <span class="badge info">Débit</span>
+                <div style="font-size:11px;color:#6b7280">Rappels RDV (24h)</div>
+                <div style="font-weight:500;color:#991b1b;text-align:right">-12</div>
+              </div>
+              <div class="table-row" style="grid-template-columns:100px 80px 1fr 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+                <div style="font-size:11px">21/04 14:00</div>
+                <span class="badge warn">Refund</span>
+                <div style="font-size:11px;color:#6b7280">Échec envoi · numéro invalide</div>
+                <div style="font-weight:500;color:#065f46;text-align:right">+1</div>
+              </div>
+              <div class="table-row" style="grid-template-columns:100px 80px 1fr 80px;padding:10px 0">
+                <div style="font-size:11px">15/04 10:00</div>
+                <span class="badge success">Recharge</span>
+                <div style="font-size:11px;color:#6b7280">Stripe · carte ****4242</div>
+                <div style="font-weight:500;color:#065f46;text-align:right">+100</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Moyens de paiement enregistrés</div>
+                <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:10px;margin-bottom:6px;display:flex;gap:10px;align-items:center">
+                  <div class="icon-tag blue"><span data-icon="creditCard"></span></div>
+                  <div style="flex:1"><div style="font-weight:500;font-size:12px">Visa ****4242</div><div style="font-size:10px;color:#6b7280">Exp. 12/28 · par défaut</div></div>
+                  <span class="badge success">Par défaut</span>
+                  <button class="btn-secondary" style="padding:4px"><span data-icon="trash" data-size="11"></span></button>
+                </div>
+                <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:10px;display:flex;gap:10px;align-items:center">
+                  <div class="icon-tag neutral"><span data-icon="creditCard"></span></div>
+                  <div style="flex:1"><div style="font-weight:500;font-size:12px">Mastercard ****1234</div><div style="font-size:10px;color:#6b7280">Exp. 06/27</div></div>
+                  <button class="btn-secondary" style="font-size:10px;padding:4px 8px">Par défaut</button>
+                  <button class="btn-secondary" style="padding:4px"><span data-icon="trash" data-size="11"></span></button>
+                </div>
+                <button class="btn-secondary w-full mt-2"><span data-icon="plus" data-size="13"></span> Ajouter une carte</button>
+              </div>
+
+              <div class="warn-banner" style="font-size:11px">Solde bas ? Les SMS de rappels s'arrêteront à 0. Activez la recharge auto.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Solde SMS</div><div class="mob-icon-btn"><span data-icon="plus"></span></div></div>
+    <div class="mob-body">
+      <div style="padding:20px;background:#111827;border-radius:12px;color:#fff;text-align:center">
+        <div style="font-size:10px;color:rgba(255,255,255,0.6)">Solde</div>
+        <div style="font-size:36px;font-weight:500">253</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.6)">~45 jours</div>
+      </div>
+      <button class="btn-primary w-full" style="padding:14px">Recharger</button>
+      <div class="card"><div style="font-size:11px"><strong>22/04</strong> +100 SMS · Recharge 5,85€</div></div>
+      <div class="card"><div style="font-size:11px"><strong>22/04</strong> -22 SMS · Campagne</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 8 Recharger SMS -->
+<div class="scene" data-scene="8">
+  <div class="intro-note"><strong>Recharger SMS (Stripe)</strong> — 3 modes : nouvelle carte + save, carte enregistrée (off_session), automatic_payment_methods. Idempotency UNIQUE(sumup_checkout_id). Webhook Stripe atomique (creditSmsOnce).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Solde SMS</h1></div>
+        <div class="body"><div style="opacity:0.2">[Solde SMS]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:480px;border-radius:14px;padding:20px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:14px"><div style="font-size:16px;font-weight:500">Recharger mon solde SMS</div><button class="btn-secondary" style="padding:4px 8px"><span data-icon="x" data-size="12"></span></button></div>
+
+          <div class="form-field">
+            <div class="form-label">Montant à recharger</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+              <label class="checkbox-row"><input type="radio"><div style="flex:1;text-align:center"><div style="font-weight:500">50</div><div style="font-size:10px;color:#6b7280">2,93 €</div></div></label>
+              <label class="checkbox-row selected"><input type="radio" checked><div style="flex:1;text-align:center"><div style="font-weight:500">100</div><div style="font-size:10px;color:#6b7280">5,85 €</div></div></label>
+              <label class="checkbox-row"><input type="radio"><div style="flex:1;text-align:center"><div style="font-weight:500">500</div><div style="font-size:10px;color:#6b7280">29,25 €</div></div></label>
+              <label class="checkbox-row"><input type="radio"><div style="flex:1;text-align:center"><div style="font-weight:500">1000</div><div style="font-size:10px;color:#6b7280">58,50 €</div></div></label>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <div class="form-label">Méthode de paiement</div>
+            <label class="checkbox-row selected mb-2"><input type="radio" checked><div style="flex:1;display:flex;gap:8px;align-items:center"><div class="icon-tag blue"><span data-icon="creditCard"></span></div><div><div style="font-weight:500">Visa ****4242</div><div style="font-size:10px;color:#6b7280">Paiement 1 clic (off_session)</div></div></div></label>
+            <label class="checkbox-row"><input type="radio"><div style="flex:1"><div style="font-weight:500">Nouvelle carte</div><div style="font-size:10px;color:#6b7280">Avec option "enregistrer"</div></div></label>
+          </div>
+
+          <label class="checkbox-row mb-2"><input type="checkbox"><div style="flex:1"><div style="font-weight:500">Recharge automatique</div><div style="font-size:10px;color:#6b7280">Déclenchée quand solde &lt; 20 SMS</div></div></label>
+
+          <div style="padding:12px;background:#fafafa;border-radius:10px;margin-top:14px">
+            <div style="display:flex;justify-content:space-between;font-size:12px"><span>100 SMS</span><span>5,85 €</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#6b7280;margin-top:4px"><span>Prix unitaire</span><span>0,0585 €</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:500;border-top:0.5px solid #e5e7eb;padding-top:8px;margin-top:8px"><span>Total TTC</span><span>5,85 €</span></div>
+          </div>
+
+          <div class="info-banner" style="font-size:11px;margin-top:10px;margin-bottom:0">Idempotency : même PaymentIntent = un seul crédit. Webhook Stripe vérifie.</div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn-secondary">Annuler</button><button class="btn-primary"><span data-icon="creditCard" data-size="13"></span> Payer 5,85 €</button></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)"><div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;padding:16px"><div style="font-size:14px;font-weight:500;margin-bottom:12px">Recharger SMS</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label class="checkbox-row"><input type="radio"><span>100 · 5,85€</span></label><label class="checkbox-row selected"><input type="radio" checked><span>500 · 29,25€</span></label></div><button class="btn-primary w-full" style="padding:14px;margin-top:12px">Payer</button></div></div></div></div>
+</div>
+
+<!-- SCÈNE 9 IA -->
+<div class="scene" data-scene="9">
+  <div class="intro-note"><strong>Marketing IA</strong> — campaignsApi.autoplan suggère segments + messages + meilleurs créneaux. Bouton Appliquer lance la campagne (PIN admin + débit SMS estimé + refund auto sur échec).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="megaphone"></span>Marketing</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Marketing · IA</div><h1 class="page-title">Marketing Assistant IA</h1><p class="page-sub">Analyse hebdomadaire automatique</p></div><button class="btn-secondary"><span data-icon="refresh" data-size="13"></span> Relancer l'analyse</button></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Fidélité</div><div class="subtab">Anniv.</div><div class="subtab">Parrainage</div><div class="subtab">Promos</div><div class="subtab">Solde SMS</div><div class="subtab active">IA</div></div>
+
+          <div class="info-banner">
+            <strong>5 suggestions</strong> basées sur vos données 90j. Débit SMS estimé : 58 SMS (3,39 €). Refund auto sur échec.
+          </div>
+
+          <div class="card" style="border-left:2px solid #8b5cf6">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div style="display:flex;gap:10px;align-items:center">
+                <div class="icon-tag purple"><span data-icon="sparkles"></span></div>
+                <div><div style="font-weight:500">Relancer 12 clients inactifs (3+ mois)</div><div style="font-size:11px;color:#6b7280">Segment : 12 clients · CA perdu estimé : 420 €</div></div>
+              </div>
+              <div style="display:flex;gap:6px"><button class="btn-secondary" style="font-size:11px;padding:5px 10px">Ignorer</button><button class="btn-primary" style="font-size:11px;padding:5px 12px">Appliquer</button></div>
+            </div>
+            <div style="padding:10px;background:#eeedfe;border-radius:8px;font-size:11px;color:#3c3489;margin-left:38px"><strong>SMS proposé :</strong> "Bonjour {prenom}, cela fait un moment. On vous offre -15% avec le code REVIENS15 valable 7j. À bientôt chez Hair Coiff !"</div>
+          </div>
+
+          <div class="card" style="border-left:2px solid #3b82f6">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div style="display:flex;gap:10px;align-items:center">
+                <div class="icon-tag blue"><span data-icon="calendar"></span></div>
+                <div><div style="font-weight:500">Remplir les vendredis après-midi</div><div style="font-size:11px;color:#6b7280">Occupation 35% · potentiel +180 €/sem</div></div>
+              </div>
+              <div style="display:flex;gap:6px"><button class="btn-secondary" style="font-size:11px;padding:5px 10px">Ignorer</button><button class="btn-primary" style="font-size:11px;padding:5px 12px">Appliquer</button></div>
+            </div>
+            <div style="padding:10px;background:#eff6ff;border-radius:8px;font-size:11px;color:#1e40af;margin-left:38px"><strong>Promo HAPPY-FRI -20% vendredi 14h-18h</strong> · ciblage : 23 fidèles · SMS estimé : 23 · coût : 1,35 €</div>
+          </div>
+
+          <div class="card" style="border-left:2px solid #10b981">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div style="display:flex;gap:10px;align-items:center">
+                <div class="icon-tag green"><span data-icon="gift"></span></div>
+                <div><div style="font-weight:500">Offrir tampon bonus à 8 clients</div><div style="font-size:11px;color:#6b7280">À 1 tampon de la récompense · coût zéro</div></div>
+              </div>
+              <div style="display:flex;gap:6px"><button class="btn-secondary" style="font-size:11px;padding:5px 10px">Ignorer</button><button class="btn-primary" style="font-size:11px;padding:5px 12px">Appliquer</button></div>
+            </div>
+          </div>
+
+          <div class="card" style="border-left:2px solid #f97316">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div style="display:flex;gap:10px;align-items:center">
+                <div class="icon-tag orange"><span data-icon="userCheck"></span></div>
+                <div><div style="font-weight:500">Relancer nouveaux clients sans 2ème visite (J+30)</div><div style="font-size:11px;color:#6b7280">5 clients · automatique</div></div>
+              </div>
+              <div style="display:flex;gap:6px"><button class="btn-secondary" style="font-size:11px;padding:5px 10px">Ignorer</button><button class="btn-primary" style="font-size:11px;padding:5px 12px">Appliquer</button></div>
+            </div>
+          </div>
+
+          <div class="card" style="border-left:2px solid #ef4444">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+              <div style="display:flex;gap:10px;align-items:center">
+                <div class="icon-tag red"><span data-icon="alert"></span></div>
+                <div><div style="font-weight:500">3 clients à risque de churn</div><div style="font-size:11px;color:#6b7280">Multi-annulations (2+) · à accompagner</div></div>
+              </div>
+              <div style="display:flex;gap:6px"><button class="btn-secondary" style="font-size:11px;padding:5px 10px">Voir</button><button class="btn-primary" style="font-size:11px;padding:5px 12px">Appliquer</button></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Historique IA appliqué</div>
+            <div class="table-row" style="grid-template-columns:100px 1fr 80px 80px;padding:8px 0;border-bottom:0.5px solid #f3f4f6">
+              <div style="font-size:11px">15/04</div>
+              <div style="font-size:11px">Relance inactifs (promo REVIENS15)</div>
+              <span class="badge success">3 RDV</span>
+              <div style="font-size:11px;color:#065f46;text-align:right">+95 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:100px 1fr 80px 80px;padding:8px 0">
+              <div style="font-size:11px">08/04</div>
+              <div style="font-size:11px">Remplir mardi 14-18h (HAPPY-TUE)</div>
+              <span class="badge success">5 RDV</span>
+              <div style="font-size:11px;color:#065f46;text-align:right">+120 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">IA Marketing</div></div>
+    <div class="mob-body">
+      <div class="info-banner" style="font-size:11px">5 suggestions · 58 SMS · 3,39 €</div>
+      <div class="card" style="border-left:2px solid #8b5cf6;padding:10px"><div style="font-size:12px;font-weight:500">Relancer 12 inactifs</div><div style="font-size:10px;color:#6b7280">CA perdu : 420 €</div><button class="btn-primary w-full mt-2" style="padding:8px;font-size:11px">Appliquer</button></div>
+      <div class="card" style="border-left:2px solid #3b82f6;padding:10px"><div style="font-size:12px;font-weight:500">Remplir vendredis</div><div style="font-size:10px;color:#6b7280">+180 €/sem</div><button class="btn-primary w-full mt-2" style="padding:8px;font-size:11px">Appliquer</button></div>
+    </div>
+  </div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 08. Sidebar Navigation</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Sidebar Admin</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Admin 7 items</button>
+    <button data-scene="2">Tablette partagée</button>
+    <button data-scene="3">Employé perso</button>
+    <button data-scene="4">Mobile bottom nav</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Admin 7 items -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Sidebar Admin · 7 items en 3 sections</strong> — PRINCIPAL (Dashboard/Agenda/Caisse/Clients) · CROISSANCE (Marketing/Statistiques) · PARAMÉTRAGE (Réglages). Footer : Toggle dark/light + Déconnexion.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar" style="border-right:0.5px solid #e5e7eb">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Propriétaire · PIN ok</div></div></div>
+
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item active"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda <span style="margin-left:auto;background:#ef4444;color:#fff;padding:1px 6px;border-radius:99px;font-size:9px">3</span></div>
+        <div class="nav-item"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+
+        <div class="nav-section-label">Croissance</div>
+        <div class="nav-item"><span data-icon="megaphone"></span>Marketing</div>
+        <div class="nav-item"><span data-icon="chart"></span>Statistiques</div>
+
+        <div class="nav-section-label">Paramétrage</div>
+        <div class="nav-item"><span data-icon="settings"></span>Réglages</div>
+
+        <div class="nav-spacer"></div>
+
+        <div style="padding:10px 10px 0;border-top:0.5px solid #e5e7eb">
+          <div class="nav-item" style="gap:8px"><span data-icon="moon"></span>Mode sombre <div class="toggle" style="margin-left:auto"></div></div>
+          <div class="nav-item" style="gap:8px"><span data-icon="logout"></span>Déconnexion</div>
+        </div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Dashboard</div><h1 class="page-title">Tableau de bord</h1></div><div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-secondary"><span data-icon="bell" data-size="13"></span> <span style="background:#ef4444;color:#fff;padding:1px 5px;border-radius:99px;font-size:9px;margin-left:4px">3</span></button>
+          <button class="btn-primary"><span data-icon="zap" data-size="13"></span> Encaisser</button>
+        </div></div>
+        <div class="body">
+          <div class="info-banner">
+            <strong>Structure des 7 items :</strong>
+            <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;font-size:11px">
+              <div><strong style="color:#111827">PRINCIPAL (4)</strong><br>· Dashboard<br>· Agenda<br>· Caisse<br>· Clients</div>
+              <div><strong style="color:#111827">CROISSANCE (2)</strong><br>· Marketing<br>· Statistiques</div>
+              <div><strong style="color:#111827">PARAMÉTRAGE (1)</strong><br>· Réglages (4 sous-pages)</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Hiérarchie visuelle</div>
+            <p style="font-size:12px;color:#4b5563;line-height:1.7">Les sections groupent les items par finalité métier : PRINCIPAL pour le quotidien (encaisser, voir son agenda, répondre à un client), CROISSANCE pour les actions d'amélioration (campagne, analyse) et PARAMÉTRAGE pour la config avancée. Chaque section a un label discret (font-size:10px, text-transform:uppercase, letter-spacing:0.05em, color:#9ca3af) qui structure sans ajouter de bruit visuel.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Dashboard</div></div><div class="mob-body"><div class="card" style="padding:14px;text-align:center;font-size:11px;color:#6b7280">Vue mobile : bottom nav 5 items (voir scène 4)</div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 2 Tablette partagée -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Sidebar Tablette partagée · 3 items neutres + Admin</strong> — user_settings.tablet_mode_enabled=true. Affichage neutre (pas d'identification admin). Bouton "Accès admin" → PIN admin → session employee_session_timeout_min.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Mode tablette partagée</div></div></div>
+
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda global</div>
+        <div class="nav-item"><span data-icon="cash"></span>Encaisser</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+
+        <div class="nav-spacer"></div>
+
+        <div style="padding:10px 10px 0;border-top:0.5px solid #e5e7eb">
+          <button class="btn-secondary w-full" style="padding:10px;font-size:11px;gap:6px"><span data-icon="lock" data-size="12"></span> Accès admin (PIN)</button>
+        </div>
+      </aside>
+      <div>
+        <div class="topbar" style="background:#fff7ed;border-bottom:0.5px solid #fed7aa"><div><div class="breadcrumb" style="color:#9a3412">Mode tablette · aucun employé connecté</div><h1 class="page-title" style="color:#9a3412">Agenda global</h1><p class="page-sub" style="color:#9a3412">Toute action sensible demandera un PIN employé</p></div></div>
+        <div class="body">
+          <div class="warn-banner">
+            <strong>Sidebar volontairement minimaliste en mode tablette :</strong> les 3 items sont les actions que n'importe quel employé peut faire sans s'identifier. Chaque action sensible (encaisser, modifier, annuler, crédit, promo) demande le PIN de l'employé. L'accès admin complet est possible via le bouton du bas avec le PIN admin.
+          </div>
+          <div class="card">
+            <div class="card-title">Flux d'authentification</div>
+            <ol style="font-size:12px;color:#4b5563;line-height:1.8;padding-left:20px">
+              <li>Tablette au démarrage → sidebar neutre 3 items</li>
+              <li>Clic "Encaisser" → modale "Qui encaisse ?" (liste employés avec can_encash)</li>
+              <li>Choix employé → modale PIN employé 4 chiffres</li>
+              <li>PIN valide → session JWT employee_pin_session 2h serveur / 5-15 min UI</li>
+              <li>Timeout → retour automatique mode neutre</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar" style="background:#fff7ed"><div class="mob-topbar-title" style="color:#9a3412">Tablette partagée</div></div><div class="mob-body"><div class="card" style="padding:14px;font-size:11px;color:#4b5563">Mode pensé principalement pour tablette fixe au salon. Les employés naviguent sans se connecter, seules les actions sensibles demandent le PIN.</div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 3 Employé perso -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Sidebar Employé perso · 3 items</strong> — Session employé durable (téléphone perso, pas tablette). Mon agenda uniquement (colonne unique), Encaisser (si can_encash), Clients.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="avatar sm green">K</div><div><div class="brand-name">Karim</div><div class="brand-sub">Barbier senior · session 2h</div></div></div>
+
+        <div class="nav-item active"><span data-icon="calendar"></span>Mon agenda</div>
+        <div class="nav-item"><span data-icon="cash"></span>Encaisser</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+
+        <div class="nav-spacer"></div>
+
+        <div style="padding:10px 10px 0;border-top:0.5px solid #e5e7eb">
+          <div class="nav-item" style="gap:8px"><span data-icon="logout"></span>Déconnexion</div>
+        </div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Mon agenda</div><h1 class="page-title">Mercredi 22 avril · Karim</h1><p class="page-sub">4 RDV aujourd'hui · 145 € encaissés</p></div><button class="btn-primary"><span data-icon="zap" data-size="13"></span> Encaisser</button></div>
+        <div class="body">
+          <div class="info-banner">
+            <strong>Sidebar employé perso</strong> : session durable via PIN employé (doc du scope employee_pin_session, 2h serveur). Affiche uniquement les 3 actions quotidiennes. Pas d'accès aux Réglages, Marketing, Statistiques.
+          </div>
+          <div class="card">
+            <div class="card-title">Actions autorisées selon permissions</div>
+            <div style="font-size:12px;color:#4b5563;line-height:1.7">
+              Les items visibles dépendent de ses permissions :
+              <ul style="padding-left:20px;margin-top:6px">
+                <li>"Encaisser" visible uniquement si <code>can_encash=true</code></li>
+                <li>"Mon agenda" toujours visible (limité à ses propres RDV)</li>
+                <li>"Clients" toujours visible (consultation + notes)</li>
+                <li>Les actions internes (modifier RDV, annuler, crédit, promo) sont gated par leurs permissions respectives</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-left"><div class="avatar sm green">K</div><div><div class="mob-topbar-title">Karim</div><div class="mob-topbar-sub">Barbier senior</div></div></div></div><div class="mob-body"><div class="card"><div style="padding:8px 0;display:flex;gap:8px;align-items:center"><span data-icon="calendar" data-size="15"></span> Mon agenda</div><div style="padding:8px 0;display:flex;gap:8px;align-items:center"><span data-icon="cash" data-size="15"></span> Encaisser</div><div style="padding:8px 0;display:flex;gap:8px;align-items:center"><span data-icon="users" data-size="15"></span> Clients</div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 4 Mobile bottom nav -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Mobile Bottom Nav · 5 items + Plus</strong> — 4 principaux (Home, Agenda, Caisse, Clients) + menu "Plus" avec Marketing/Stats/Réglages/Dark mode/Déconnexion.</div>
+  <div class="viewport-desktop show">
+    <div class="shell"><div style="padding:40px;text-align:center;color:#6b7280;font-size:13px">Vue exclusivement mobile. Basculer sur mobile →</div></div>
+  </div>
+  <div class="viewport-mobile show"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-left"><div class="logo sm">H</div><div><div class="mob-topbar-title">Hair Coiff</div><div class="mob-topbar-sub">Admin</div></div></div><div class="mob-icon-btn"><span data-icon="bell"></span></div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="card"><div class="card-title">Navigation standard</div><div style="font-size:11px;color:#6b7280;line-height:1.6">5 items toujours visibles en bas. Le bouton "Plus" ouvre un menu vers Marketing, Statistiques, Réglages.</div></div>
+      <div class="card">
+        <div class="card-title">Menu "Plus"</div>
+        <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6"><span data-icon="megaphone"></span><span style="flex:1;font-size:12px">Marketing</span><span data-icon="chevronRight" data-size="13"></span></div>
+        <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6"><span data-icon="chart"></span><span style="flex:1;font-size:12px">Statistiques</span><span data-icon="chevronRight" data-size="13"></span></div>
+        <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6"><span data-icon="settings"></span><span style="flex:1;font-size:12px">Réglages</span><span data-icon="chevronRight" data-size="13"></span></div>
+        <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6"><span data-icon="moon"></span><span style="flex:1;font-size:12px">Mode sombre</span><div class="toggle"></div></div>
+        <div style="padding:10px 0;display:flex;gap:10px;align-items:center"><span data-icon="logout"></span><span style="flex:1;font-size:12px">Déconnexion</span></div>
+      </div>
+    </div>
+    <div class="mob-bottom-nav">
+      <div class="mob-nav-item active"><span data-icon="home"></span>Home</div>
+      <div class="mob-nav-item"><span data-icon="calendar"></span>Agenda</div>
+      <div class="mob-nav-item"><span data-icon="cash"></span>Caisse</div>
+      <div class="mob-nav-item"><span data-icon="users"></span>Clients</div>
+      <div class="mob-nav-item"><span data-icon="more"></span>Plus</div>
+    </div>
+  </div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

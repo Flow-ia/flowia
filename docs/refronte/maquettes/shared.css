@@ -1,0 +1,204 @@
+/* FlowIA FDS-2026 — Design System partagé pour toutes les maquettes */
+
+* { box-sizing: border-box; margin: 0; padding: 0 }
+html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fafafa; color: #111827; font-size: 13px; line-height: 1.5 }
+body { padding: 60px 20px 90px; min-height: 100vh }
+
+/* ─── Controls en haut et bas ───────────────────────────────────── */
+.top-controls { position: fixed; top: 12px; left: 20px; z-index: 100; display: flex; gap: 12px; align-items: center }
+.viewport-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500 }
+.control-group { display: flex; gap: 4px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 8px; padding: 3px }
+.control-group button { padding: 6px 12px; font-size: 11px; background: transparent; border: none; border-radius: 6px; cursor: pointer; color: #6b7280; font-family: inherit; font-weight: 500 }
+.control-group button.active { background: #111827; color: #fff }
+.page-footer-nav { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 100; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.08) }
+
+.intro-note { max-width: 1200px; margin: 0 auto 16px; padding: 12px 16px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; font-size: 12px; color: #4b5563; line-height: 1.6 }
+
+.scene { display: none; max-width: 1360px; margin: 0 auto 40px }
+.scene.active { display: block }
+
+/* ─── Viewports ──────────────────────────────────────────────────── */
+.viewport-desktop { display: none }
+.viewport-desktop.show { display: block }
+.viewport-mobile { display: none }
+.viewport-mobile.show { display: flex; justify-content: center }
+
+.phone { width: 390px; background: #000; border-radius: 34px; padding: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.15) }
+.phone-screen { background: #fafafa; border-radius: 28px; overflow: hidden; min-height: 780px; position: relative }
+
+/* ─── Shell desktop ─────────────────────────────────────────────── */
+.shell { display: grid; grid-template-columns: 240px 1fr; min-height: 780px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 12px; overflow: hidden }
+.sidebar { background: #fff; border-right: 0.5px solid #e5e7eb; padding: 16px 10px; display: flex; flex-direction: column }
+.sidebar-header { display: flex; align-items: center; gap: 10px; padding: 6px 8px 16px }
+.logo { width: 36px; height: 36px; border-radius: 10px; background: #111827; color: #fff; font-weight: 500; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0 }
+.logo.sm { width: 30px; height: 30px; border-radius: 8px; font-size: 12px }
+.brand-name { font-size: 13px; font-weight: 500; color: #111827 }
+.brand-sub { font-size: 11px; color: #6b7280 }
+.nav-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; font-weight: 500; padding: 14px 10px 6px }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font-size: 13px; color: #4b5563; border-radius: 8px; cursor: pointer; font-weight: 400; margin-bottom: 1px }
+.nav-item:hover { background: #fafafa }
+.nav-item.active { background: #f3f4f6; color: #111827; font-weight: 500 }
+.nav-item svg { width: 15px; height: 15px; flex-shrink: 0 }
+.nav-spacer { flex: 1 }
+
+/* ─── TopBar ─────────────────────────────────────────────────────── */
+.topbar { padding: 18px 24px; border-bottom: 0.5px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #fff }
+.breadcrumb { font-size: 11px; color: #9ca3af; margin-bottom: 4px }
+.page-title { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; color: #111827 }
+.page-sub { font-size: 11px; color: #6b7280; margin-top: 2px }
+.body { padding: 20px 24px }
+
+/* ─── Mobile ─────────────────────────────────────────────────────── */
+.mob-topbar { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-bottom: 0.5px solid #e5e7eb }
+.mob-topbar-left { display: flex; align-items: center; gap: 10px }
+.mob-topbar-title { font-size: 15px; font-weight: 500; color: #111827 }
+.mob-topbar-sub { font-size: 10px; color: #6b7280 }
+.mob-icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 0.5px solid #e5e7eb; display: flex; align-items: center; justify-content: center; cursor: pointer; background: #fff }
+.mob-icon-btn svg { width: 15px; height: 15px }
+.mob-body { padding: 12px; min-height: calc(100% - 60px - 60px); display: flex; flex-direction: column; gap: 10px }
+.mob-bottom-nav { position: absolute; bottom: 0; left: 0; right: 0; background: #fff; border-top: 0.5px solid #e5e7eb; display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 0 }
+.mob-nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: #9ca3af; cursor: pointer; font-weight: 500 }
+.mob-nav-item svg { width: 17px; height: 17px }
+.mob-nav-item.active { color: #111827 }
+
+/* ─── Cards ──────────────────────────────────────────────────────── */
+.card { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 12px }
+.card-title { font-size: 12px; font-weight: 500; color: #111827; margin-bottom: 12px }
+
+/* ─── KPIs ───────────────────────────────────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px }
+.kpi-grid.cols-3 { grid-template-columns: repeat(3, 1fr) }
+.kpi-grid.mob { grid-template-columns: 1fr 1fr }
+.kpi { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; padding: 14px }
+.kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 500; margin-bottom: 6px }
+.kpi-value { font-size: 22px; font-weight: 500; color: #111827; letter-spacing: -0.02em }
+.kpi-value.mob { font-size: 18px }
+.kpi-delta { font-size: 11px; color: #065f46; margin-top: 4px; font-weight: 500 }
+.kpi-delta.neg { color: #991b1b }
+.kpi-delta.neutral { color: #6b7280 }
+
+/* ─── Tables & rows ──────────────────────────────────────────────── */
+.table { background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; overflow: hidden; margin-bottom: 12px }
+.table-row { display: grid; padding: 12px 16px; border-bottom: 0.5px solid #f3f4f6; align-items: center; font-size: 12px }
+.table-row:last-child { border-bottom: 0 }
+.table-row.header { background: #fafafa; font-size: 10px; text-transform: uppercase; color: #9ca3af; font-weight: 500; letter-spacing: 0.05em }
+
+/* ─── Buttons ────────────────────────────────────────────────────── */
+.btn-primary { background: #111827; color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; font-family: inherit; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; justify-content: center }
+.btn-primary:hover { background: #1f2937 }
+.btn-secondary { background: #fff; color: #111827; border: 0.5px solid #e5e7eb; padding: 7px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; font-family: inherit; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; justify-content: center }
+.btn-secondary:hover { border-color: #111827 }
+.w-full { width: 100% }
+
+/* ─── Badges & chips ─────────────────────────────────────────────── */
+.badge { display: inline-flex; padding: 3px 8px; border-radius: 99px; font-size: 10px; font-weight: 500; align-items: center; gap: 4px }
+.badge.success { background: #f0fdf4; color: #065f46 }
+.badge.warn { background: #fffbeb; color: #92400e }
+.badge.danger { background: #fef2f2; color: #991b1b }
+.badge.info { background: #eef2ff; color: #4338ca }
+.badge.orange { background: #fff7ed; color: #9a3412 }
+.badge.green { background: #f0fdf4; color: #065f46 }
+.badge.purple { background: #eeedfe; color: #3c3489 }
+.badge.yellow { background: #fffbeb; color: #92400e }
+.badge.blue { background: #eff6ff; color: #1e40af }
+.badge.cyan { background: #ecfeff; color: #0e7490 }
+.badge.neutral { background: #f3f4f6; color: #4b5563 }
+
+/* ─── Filters ────────────────────────────────────────────────────── */
+.filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; align-items: center }
+.filter-chip { padding: 6px 12px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 99px; font-size: 11px; cursor: pointer; color: #4b5563; font-weight: 500; display: inline-flex; gap: 5px; align-items: center }
+.filter-chip.active { background: #111827; color: #fff; border-color: #111827 }
+.filter-chip .count { background: rgba(255,255,255,0.2); padding: 0 5px; border-radius: 99px; font-size: 10px }
+.filter-chip:not(.active) .count { background: #f3f4f6; color: #6b7280 }
+
+.search-bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 10px; margin-bottom: 12px }
+.search-bar svg { width: 14px; height: 14px; color: #9ca3af }
+.search-bar input { flex: 1; border: none; outline: none; font-family: inherit; font-size: 12px; background: transparent }
+
+/* ─── Forms ──────────────────────────────────────────────────────── */
+.form-field { margin-bottom: 12px }
+.form-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; margin-bottom: 6px }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 9px 12px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 12px; color: #111827; outline: none }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #111827 }
+.form-textarea { min-height: 70px; resize: vertical }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.checkbox-row { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: #fff; border: 0.5px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: 12px }
+.checkbox-row.selected { background: #fafafa; border-color: #111827 }
+
+/* ─── Layout helpers ─────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px }
+
+/* ─── Avatars ────────────────────────────────────────────────────── */
+.avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: #fff; flex-shrink: 0 }
+.avatar.sm { width: 24px; height: 24px; font-size: 10px; border-radius: 6px }
+.avatar.lg { width: 44px; height: 44px; font-size: 14px; border-radius: 10px }
+.avatar.orange { background: #f97316 }
+.avatar.green { background: #10b981 }
+.avatar.purple { background: #8b5cf6 }
+.avatar.yellow { background: #f59e0b }
+.avatar.blue { background: #3b82f6 }
+.avatar.red { background: #ef4444 }
+.avatar.gray { background: #6b7280 }
+.avatar.pink { background: #ec4899 }
+
+/* ─── Banners ────────────────────────────────────────────────────── */
+.info-banner { padding: 12px 14px; background: #eef2ff; border: 0.5px solid #c7d2fe; border-radius: 10px; font-size: 12px; color: #4338ca; line-height: 1.6; margin-bottom: 14px }
+.warn-banner { padding: 12px 14px; background: #fffbeb; border: 0.5px solid #fde68a; border-radius: 10px; font-size: 12px; color: #92400e; line-height: 1.6; margin-bottom: 14px }
+.success-banner { padding: 12px 14px; background: #f0fdf4; border: 0.5px solid #bbf7d0; border-radius: 10px; font-size: 12px; color: #065f46; line-height: 1.6; margin-bottom: 14px }
+.danger-banner { padding: 12px 14px; background: #fef2f2; border: 0.5px solid #fecaca; border-radius: 10px; font-size: 12px; color: #991b1b; line-height: 1.6; margin-bottom: 14px }
+
+/* ─── Toggle ─────────────────────────────────────────────────────── */
+.toggle { width: 34px; height: 20px; background: #e5e7eb; border-radius: 99px; position: relative; cursor: pointer; flex-shrink: 0 }
+.toggle::after { content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.15) }
+.toggle.on { background: #111827 }
+.toggle.on::after { left: 16px }
+
+/* ─── Icon tags ──────────────────────────────────────────────────── */
+.icon-tag { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0 }
+.icon-tag svg { width: 14px; height: 14px }
+.icon-tag.orange { background: #fff7ed; color: #9a3412 }
+.icon-tag.green { background: #f0fdf4; color: #065f46 }
+.icon-tag.purple { background: #eeedfe; color: #3c3489 }
+.icon-tag.blue { background: #eff6ff; color: #1e40af }
+.icon-tag.cyan { background: #ecfeff; color: #0e7490 }
+.icon-tag.yellow { background: #fffbeb; color: #92400e }
+.icon-tag.red { background: #fef2f2; color: #991b1b }
+.icon-tag.neutral { background: #f3f4f6; color: #4b5563 }
+
+/* ─── Progress bars ──────────────────────────────────────────────── */
+.progress-bar { height: 4px; background: #f3f4f6; border-radius: 99px; overflow: hidden }
+.progress-bar-fill { height: 100%; background: #111827; border-radius: 99px }
+.progress-bar-fill.orange { background: #f97316 }
+.progress-bar-fill.green { background: #10b981 }
+.progress-bar-fill.purple { background: #8b5cf6 }
+.progress-bar-fill.blue { background: #3b82f6 }
+
+/* ─── Sub tabs ───────────────────────────────────────────────────── */
+.subtabs { display: flex; gap: 4px; padding: 4px; background: #f3f4f6; border-radius: 10px; margin-bottom: 14px; overflow-x: auto }
+.subtab { padding: 7px 14px; border-radius: 7px; font-size: 12px; cursor: pointer; color: #6b7280; font-weight: 500; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center }
+.subtab.active { background: #fff; color: #111827 }
+.subtab .count { background: #e5e7eb; color: #6b7280; padding: 1px 6px; border-radius: 99px; font-size: 10px }
+.subtab.active .count { background: #111827; color: #fff }
+
+/* ─── Pagination ─────────────────────────────────────────────────── */
+.pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-size: 11px; color: #6b7280 }
+.pagination-nav { display: flex; gap: 4px }
+.pagination-btn { padding: 6px 10px; border: 0.5px solid #e5e7eb; background: #fff; border-radius: 6px; font-size: 11px; cursor: pointer; color: #4b5563; font-family: inherit }
+.pagination-btn.active { background: #111827; color: #fff; border-color: #111827 }
+
+/* ─── Utilities ──────────────────────────────────────────────────── */
+.mb-2 { margin-bottom: 8px }
+.mb-3 { margin-bottom: 12px }
+.mt-2 { margin-top: 8px }
+.mt-3 { margin-top: 12px }
+.text-muted { color: #6b7280 }
+.text-danger { color: #991b1b }
+.text-success { color: #065f46 }
+
+/* Payment methods color tokens (conformes à la doc 15) */
+.pm-cash { color: #065f46; background: #f0fdf4 }
+.pm-card { color: #4338ca; background: #eef2ff }
+.pm-transfer { color: #0e7490; background: #ecfeff }
+.pm-other { color: #92400e; background: #fffbeb }
+.pm-multi { color: #3c3489; background: #eeedfe }

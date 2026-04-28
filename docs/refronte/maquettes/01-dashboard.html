@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 01. Dashboard</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Dashboard</div>
+  <div class="control-group">
+    <button class="active" data-view="desktop">Desktop</button>
+    <button data-view="mobile">Mobile</button>
+  </div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Dashboard</button>
+    <button data-scene="2">NotifModal</button>
+    <button data-scene="3">Encaisser Sheet</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Dashboard -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Dashboard</strong> — Page d'accueil admin. 5 tuiles KPI (Historique gate PIN, Notifs, Agenda, Clients, Paramètres), stats du jour (CA + prestations), activité équipe temps réel, alertes proactives (récompenses à réclamer, SMS solde bas), bouton flottant Encaisser.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Propriétaire</div></div></div>
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item active"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda</div>
+        <div class="nav-item"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+        <div class="nav-section-label">Croissance</div>
+        <div class="nav-item"><span data-icon="megaphone"></span>Marketing</div>
+        <div class="nav-item"><span data-icon="chart"></span>Statistiques</div>
+        <div class="nav-section-label">Paramétrage</div>
+        <div class="nav-item"><span data-icon="settings"></span>Réglages</div>
+        <div class="nav-spacer"></div>
+        <div class="nav-item" style="gap:8px"><span data-icon="moon"></span>Mode sombre</div>
+        <div class="nav-item" style="gap:8px"><span data-icon="logout"></span>Déconnexion</div>
+      </aside>
+      <div>
+        <div class="topbar">
+          <div><div class="breadcrumb">Mercredi 22 avril</div><h1 class="page-title">Tableau de bord</h1><p class="page-sub">Hair Coiff Lille · PIN admin actif</p></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-secondary"><span data-icon="bell" data-size="13"></span><span style="background:#ef4444;color:#fff;padding:1px 5px;border-radius:99px;font-size:9px;margin-left:4px">3</span></button>
+            <button class="btn-primary"><span data-icon="zap" data-size="13"></span> Encaisser</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="kpi-grid">
+            <div class="kpi"><div class="kpi-label">CA du jour</div><div class="kpi-value">385 €</div><div class="kpi-delta">+42% vs hier</div></div>
+            <div class="kpi"><div class="kpi-label">Prestations</div><div class="kpi-value">12</div><div class="kpi-delta">+3 vs hier</div></div>
+            <div class="kpi"><div class="kpi-label">Ventes caisse</div><div class="kpi-value">45 €</div><div class="kpi-delta neutral">Produits</div></div>
+            <div class="kpi"><div class="kpi-label">Solde SMS</div><div class="kpi-value">253</div><div class="kpi-delta neutral">~45 j</div></div>
+          </div>
+
+          <div class="warn-banner">
+            <strong>3 alertes :</strong> Alice Dubois, Marc Lefèvre et Sarah Benali ont une récompense fidélité à réclamer (10/10 tampons).
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div class="card-title" style="margin:0">Prochains RDV aujourd'hui</div>
+                <button class="btn-secondary" style="font-size:11px;padding:5px 10px">Voir agenda</button>
+              </div>
+              <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6;border-left:2px solid #f97316;padding-left:12px">
+                <div style="font-family:monospace;font-size:14px;font-weight:500">14:30</div>
+                <div style="flex:1"><div style="font-size:12px;font-weight:500">Mohamed Chaabi</div><div style="font-size:11px;color:#6b7280">Coupe + Barbe · avec Karim · 45 €</div></div>
+                <span class="badge success">Confirmé</span>
+              </div>
+              <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6;border-left:2px solid #3b82f6;padding-left:12px">
+                <div style="font-family:monospace;font-size:14px;font-weight:500">15:00</div>
+                <div style="flex:1"><div style="font-size:12px;font-weight:500">Pierre Novak</div><div style="font-size:11px;color:#6b7280">Coupe classique · avec Lucas · 22 €</div></div>
+                <span class="badge success">Confirmé</span>
+              </div>
+              <div style="padding:10px 0;display:flex;gap:10px;align-items:center;border-left:2px solid #8b5cf6;padding-left:12px">
+                <div style="font-family:monospace;font-size:14px;font-weight:500">16:00</div>
+                <div style="flex:1"><div style="font-size:12px;font-weight:500">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">Coupe + Soin · avec Karim · 35 €</div></div>
+                <span class="badge info">À confirmer</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Activité équipe (aujourd'hui)</div>
+              <div style="padding:8px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6">
+                <div class="avatar sm green">K</div>
+                <div style="flex:1;font-size:12px"><div style="font-weight:500">Karim</div><div style="color:#6b7280">4 RDV · 145 €</div></div>
+                <span class="badge success">En poste</span>
+              </div>
+              <div style="padding:8px 0;display:flex;gap:10px;align-items:center;border-bottom:0.5px solid #f3f4f6">
+                <div class="avatar sm blue">L</div>
+                <div style="flex:1;font-size:12px"><div style="font-weight:500">Lucas</div><div style="color:#6b7280">5 RDV · 175 €</div></div>
+                <span class="badge success">En poste</span>
+              </div>
+              <div style="padding:8px 0;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm purple">S</div>
+                <div style="flex:1;font-size:12px"><div style="font-weight:500">Sofiane</div><div style="color:#6b7280">3 RDV · 65 €</div></div>
+                <span class="badge neutral">Congé</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Encaissements par moyen</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+                <div style="padding:12px;background:#f0fdf4;border-radius:8px;text-align:center">
+                  <div style="font-size:10px;color:#065f46;text-transform:uppercase;font-weight:500">Espèces</div>
+                  <div style="font-size:18px;font-weight:500;color:#065f46;margin-top:4px">185 €</div>
+                </div>
+                <div style="padding:12px;background:#eef2ff;border-radius:8px;text-align:center">
+                  <div style="font-size:10px;color:#4338ca;text-transform:uppercase;font-weight:500">Carte</div>
+                  <div style="font-size:18px;font-weight:500;color:#4338ca;margin-top:4px">155 €</div>
+                </div>
+                <div style="padding:12px;background:#ecfeff;border-radius:8px;text-align:center">
+                  <div style="font-size:10px;color:#0e7490;text-transform:uppercase;font-weight:500">Virement</div>
+                  <div style="font-size:18px;font-weight:500;color:#0e7490;margin-top:4px">0 €</div>
+                </div>
+                <div style="padding:12px;background:#fffbeb;border-radius:8px;text-align:center">
+                  <div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:500">Autre</div>
+                  <div style="font-size:18px;font-weight:500;color:#92400e;margin-top:4px">45 €</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Évolution CA 7 jours</div>
+              <div style="display:flex;align-items:flex-end;gap:8px;height:100px">
+                <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:45%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">J</div></div>
+                <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:60%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">V</div></div>
+                <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:85%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">S</div></div>
+                <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:70%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">D</div></div>
+                <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:55%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">L</div></div>
+                <div style="flex:1;text-align:center"><div style="background:#f3f4f6;height:50%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">M</div></div>
+                <div style="flex:1;text-align:center"><div style="background:#111827;height:75%;border-radius:3px;margin-bottom:4px"></div><div style="font-size:9px;color:#6b7280">Auj.</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Raccourcis</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:6px"><span data-icon="zap" data-size="16"></span>Encaisser</button>
+              <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:6px"><span data-icon="calendar" data-size="16"></span>Nouveau RDV</button>
+              <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:6px"><span data-icon="tag" data-size="16"></span>Créer promo</button>
+              <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:6px"><span data-icon="userPlus" data-size="16"></span>Nouveau client</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-left"><div class="logo sm">H</div><div><div class="mob-topbar-title">Dashboard</div><div class="mob-topbar-sub">Hair Coiff · Mer 22/04</div></div></div><div class="mob-icon-btn"><span data-icon="bell"></span></div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="kpi-grid mob">
+        <div class="kpi"><div class="kpi-label">CA jour</div><div class="kpi-value mob">385€</div></div>
+        <div class="kpi"><div class="kpi-label">RDV</div><div class="kpi-value mob">12</div></div>
+        <div class="kpi"><div class="kpi-label">Caisse</div><div class="kpi-value mob">45€</div></div>
+        <div class="kpi"><div class="kpi-label">SMS</div><div class="kpi-value mob">253</div></div>
+      </div>
+      <div class="warn-banner" style="font-size:11px">3 récompenses à réclamer</div>
+      <div class="card">
+        <div class="card-title">Prochains RDV</div>
+        <div style="padding:6px 0;display:flex;gap:8px;align-items:center;border-left:2px solid #f97316;padding-left:10px"><div style="font-family:monospace;font-size:12px;font-weight:500">14:30</div><div style="flex:1;font-size:11px"><div style="font-weight:500">Mohamed C.</div><div style="color:#6b7280">Coupe+Barbe · 45€</div></div></div>
+        <div style="padding:6px 0;display:flex;gap:8px;align-items:center;border-left:2px solid #3b82f6;padding-left:10px"><div style="font-family:monospace;font-size:12px;font-weight:500">15:00</div><div style="flex:1;font-size:11px"><div style="font-weight:500">Pierre N.</div><div style="color:#6b7280">Coupe · 22€</div></div></div>
+      </div>
+    </div>
+    <div class="mob-bottom-nav">
+      <div class="mob-nav-item active"><span data-icon="home"></span>Home</div>
+      <div class="mob-nav-item"><span data-icon="calendar"></span>Agenda</div>
+      <div class="mob-nav-item"><span data-icon="cash"></span>Caisse</div>
+      <div class="mob-nav-item"><span data-icon="users"></span>Clients</div>
+      <div class="mob-nav-item"><span data-icon="more"></span>Plus</div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 NotifModal -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>NotifModal</strong> — Centre de notifications pastel par type (new_appointment, reminder, caisse, daily_recap). Deep-link vers /agenda?date=&appt=. Bouton Marquer tout lu. Emojis retirés, icônes Lucide.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Propriétaire</div></div></div>
+        <div class="nav-item active"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div style="position:relative">
+        <div class="topbar"><div><div class="breadcrumb">Dashboard</div><h1 class="page-title">Tableau de bord</h1></div></div>
+        <div class="body"><div style="opacity:0.2"><div class="kpi-grid"><div class="kpi"><div class="kpi-label">CA jour</div><div class="kpi-value">385 €</div></div><div class="kpi"><div class="kpi-label">RDV</div><div class="kpi-value">12</div></div><div class="kpi"><div class="kpi-label">Caisse</div><div class="kpi-value">45 €</div></div><div class="kpi"><div class="kpi-label">SMS</div><div class="kpi-value">253</div></div></div></div></div>
+        <div style="position:absolute;top:70px;right:24px;width:400px;background:#fff;border:0.5px solid #e5e7eb;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.1);overflow:hidden">
+          <div style="padding:14px 16px;border-bottom:0.5px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:14px;font-weight:500">Notifications <span style="background:#ef4444;color:#fff;padding:1px 6px;border-radius:99px;font-size:10px">3</span></div>
+            <button class="btn-secondary" style="font-size:10px;padding:4px 8px">Tout marquer lu</button>
+          </div>
+          <div style="padding:14px 16px;border-bottom:0.5px solid #f3f4f6;background:#eff6ff;cursor:pointer;border-left:3px solid #3b82f6">
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div class="icon-tag blue"><span data-icon="calendar"></span></div>
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                  <span style="font-size:10px;color:#1e40af;text-transform:uppercase;font-weight:500">Nouveau RDV</span>
+                  <span style="font-size:10px;color:#6b7280">il y a 5 min</span>
+                </div>
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">Mohamed Chaabi</div>
+                <div style="font-size:11px;color:#4b5563">Coupe + Barbe · Karim · Sam 24 avril · <strong style="font-family:monospace;font-size:13px">16h00</strong></div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:14px 16px;border-bottom:0.5px solid #f3f4f6;background:#fffbeb;cursor:pointer;border-left:3px solid #f59e0b">
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div class="icon-tag yellow"><span data-icon="clock"></span></div>
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                  <span style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:500">Rappel RDV</span>
+                  <span style="font-size:10px;color:#6b7280">il y a 1h</span>
+                </div>
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">Marc Lefèvre</div>
+                <div style="font-size:11px;color:#4b5563">RDV demain · Karim · <strong style="font-family:monospace;font-size:13px">10h00</strong></div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:14px 16px;cursor:pointer;border-left:3px solid #10b981;background:#f0fdf4">
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div class="icon-tag green"><span data-icon="cash"></span></div>
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+                  <span style="font-size:10px;color:#065f46;text-transform:uppercase;font-weight:500">Encaissement</span>
+                  <span style="font-size:10px;color:#6b7280">il y a 2h</span>
+                </div>
+                <div style="font-size:13px;font-weight:500;margin-bottom:2px">Karim · 45 €</div>
+                <div style="font-size:11px;color:#4b5563">Coupe + Barbe · Espèces</div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:10px 16px;background:#fafafa;font-size:11px;color:#6b7280;text-align:center;cursor:pointer">Voir tout l'historique</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)">
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end"><div style="background:#fff;width:100%;border-radius:20px 20px 0 0;padding:16px;max-height:80%">
+      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 12px"></div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:12px">Notifications <span style="background:#ef4444;color:#fff;padding:1px 6px;border-radius:99px;font-size:10px">3</span></div>
+      <div style="padding:12px;background:#eff6ff;border-radius:10px;margin-bottom:8px;border-left:3px solid #3b82f6">
+        <div style="font-size:10px;color:#1e40af;font-weight:500;margin-bottom:4px">NOUVEAU RDV</div>
+        <div style="font-size:12px;font-weight:500">Mohamed Chaabi</div>
+        <div style="font-size:11px;color:#6b7280">Coupe+Barbe · Sam 24 · 16h00</div>
+      </div>
+      <div style="padding:12px;background:#fffbeb;border-radius:10px;margin-bottom:8px;border-left:3px solid #f59e0b">
+        <div style="font-size:10px;color:#92400e;font-weight:500;margin-bottom:4px">RAPPEL</div>
+        <div style="font-size:12px;font-weight:500">Marc Lefèvre</div>
+        <div style="font-size:11px;color:#6b7280">Demain 10h00</div>
+      </div>
+    </div></div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 3 Encaisser Sheet -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Encaisser Sheet (quick entry)</strong> — Flow rapide 4 étapes : Produits (catégories hiérarchiques + montant libre) → Employé → Paiement (simple/multi, code promo, crédit client) → Confirmation.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Propriétaire</div></div></div>
+        <div class="nav-item active"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div style="position:relative">
+        <div class="topbar"><div><div class="breadcrumb">Dashboard · Encaisser</div><h1 class="page-title">Encaissement rapide</h1></div><button class="btn-secondary"><span data-icon="x" data-size="13"></span> Fermer</button></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab"><span>1. Produits</span></div>
+            <div class="subtab"><span>2. Employé</span></div>
+            <div class="subtab active"><span>3. Paiement</span></div>
+            <div class="subtab"><span>4. OK</span></div>
+          </div>
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Panier</div>
+              <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between"><div><div style="font-weight:500">Coupe + Barbe</div><div style="font-size:11px;color:#6b7280">× 1</div></div><div style="font-weight:500">35 €</div></div>
+              <div style="padding:8px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between"><div><div style="font-weight:500">Soin après-rasage</div><div style="font-size:11px;color:#6b7280">× 1</div></div><div style="font-weight:500">10 €</div></div>
+              <div style="padding:10px 0;display:flex;justify-content:space-between;font-weight:500"><div>Total</div><div>45 €</div></div>
+
+              <div class="card-title" style="margin-top:16px">Client (optionnel)</div>
+              <div class="search-bar"><span data-icon="search"></span><input placeholder="Rechercher un client..."></div>
+              <div class="success-banner" style="margin-top:8px;margin-bottom:0;font-size:11px">Marc Lefèvre · Crédit disponible : <strong>15 €</strong></div>
+
+              <div class="card-title" style="margin-top:16px">Code promo / parrainage</div>
+              <div style="display:flex;gap:6px"><input class="form-input" placeholder="PRINTEMPS10" style="text-transform:uppercase"><button class="btn-secondary" style="font-size:11px">Appliquer</button></div>
+
+              <div style="padding:10px;background:#fff7ed;border-radius:8px;margin-top:10px;border-left:2px solid #f97316;font-size:11px;color:#9a3412;display:flex;gap:6px;align-items:center">
+                <span data-icon="gift" data-size="13"></span> Offre anniversaire disponible (-20%)
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Moyen de paiement</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
+                <label class="checkbox-row selected"><input type="radio" checked><span style="flex:1">Simple</span></label>
+                <label class="checkbox-row"><input type="radio"><span style="flex:1">Mixte</span></label>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:4px;background:#f0fdf4;color:#065f46;border-color:#bbf7d0"><span data-icon="cash" data-size="16"></span>Espèces</button>
+                <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:4px;background:#eef2ff;color:#4338ca;border-color:#c7d2fe"><span data-icon="creditCard" data-size="16"></span>Carte</button>
+                <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:4px"><span data-icon="bank" data-size="16"></span>Virement</button>
+                <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:4px"><span data-icon="more" data-size="16"></span>Autre</button>
+              </div>
+
+              <div class="card-title" style="margin-top:16px">Note interne</div>
+              <textarea class="form-textarea" placeholder="Note..."></textarea>
+
+              <div style="padding:12px;background:#111827;border-radius:10px;margin-top:14px;color:#fff;display:flex;justify-content:space-between;align-items:center">
+                <div><div style="font-size:10px;color:rgba(255,255,255,0.6);text-transform:uppercase">Total à encaisser</div><div style="font-size:24px;font-weight:500">45 €</div></div>
+                <button class="btn-primary" style="background:#fff;color:#111827;padding:12px 18px"><span data-icon="check" data-size="14"></span> Valider</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-left"><div class="mob-icon-btn"><span data-icon="x"></span></div><div><div class="mob-topbar-title">Encaisser</div><div class="mob-topbar-sub">Étape 3 / 4</div></div></div></div>
+    <div class="mob-body" style="padding-bottom:20px">
+      <div class="card">
+        <div class="card-title">Panier · 45 €</div>
+        <div style="font-size:11px;color:#6b7280">Coupe + Barbe · Soin après-rasage</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Paiement</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:4px;background:#f0fdf4;color:#065f46"><span data-icon="cash" data-size="16"></span>Espèces</button>
+          <button class="btn-secondary" style="padding:14px;flex-direction:column;gap:4px"><span data-icon="creditCard" data-size="16"></span>Carte</button>
+        </div>
+      </div>
+      <button class="btn-primary w-full" style="padding:14px">Valider 45 €</button>
+    </div>
+  </div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

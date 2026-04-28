@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 07. Réglages</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Réglages</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Accueil 4 cartes</button>
+    <button data-scene="2">Mon commerce</button>
+    <button data-scene="3">Réservations</button>
+    <button data-scene="4">Équipe · Membres</button>
+    <button data-scene="5">Équipe · Sécurité</button>
+    <button data-scene="6">Caisse config</button>
+    <button data-scene="7">Compte RGPD</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Accueil -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Réglages · Accueil</strong> — 4 cartes thématiques remplacent les 13+ onglets de l'ancien Settings. Chaque carte mène à ses sous-pages. PIN admin actif signalé par badge.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div></div></div>
+        <div class="nav-section-label">Paramétrage</div>
+        <div class="nav-item active"><span data-icon="settings"></span>Réglages</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Réglages</div><h1 class="page-title">Paramètres</h1><p class="page-sub">Hair Coiff Lille · <span class="badge success">PIN admin actif</span></p></div><button class="btn-secondary"><span data-icon="lock" data-size="13"></span> Verrouiller</button></div>
+        <div class="body">
+          <div class="two-col">
+            <div class="card" style="padding:24px;cursor:pointer;border-left:2px solid #f97316">
+              <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
+                <div class="icon-tag orange" style="width:44px;height:44px"><span data-icon="storefront" data-size="20"></span></div>
+                <div style="flex:1">
+                  <div style="font-size:16px;font-weight:500">Mon commerce</div>
+                  <div style="font-size:11px;color:#6b7280">Informations, horaires, photos, compte</div>
+                </div>
+                <span data-icon="chevronRight" data-size="16"></span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Informations salon</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Horaires + pauses</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Logo, photos, couverture</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Mon compte + RGPD</div>
+              </div>
+            </div>
+
+            <div class="card" style="padding:24px;cursor:pointer;border-left:2px solid #3b82f6">
+              <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
+                <div class="icon-tag blue" style="width:44px;height:44px"><span data-icon="calendar" data-size="20"></span></div>
+                <div style="flex:1">
+                  <div style="font-size:16px;font-weight:500">Réservations</div>
+                  <div style="font-size:11px;color:#6b7280">Config booking, prestations, notifications</div>
+                </div>
+                <span data-icon="chevronRight" data-size="16"></span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Config (slug, délais)</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Catégories booking</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Prestations (image 5Mo)</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Notifications SMS/Email</div>
+              </div>
+            </div>
+
+            <div class="card" style="padding:24px;cursor:pointer;border-left:2px solid #10b981">
+              <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
+                <div class="icon-tag green" style="width:44px;height:44px"><span data-icon="users" data-size="20"></span></div>
+                <div style="flex:1">
+                  <div style="font-size:16px;font-weight:500">Équipe</div>
+                  <div style="font-size:11px;color:#6b7280">Membres, horaires, absences, commissions, sécurité</div>
+                </div>
+                <span data-icon="chevronRight" data-size="16"></span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Membres (permissions)</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Horaires par employé</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Absences (8 types)</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Commissions</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Plages horaires</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Sécurité (PIN, tablette)</div>
+              </div>
+            </div>
+
+            <div class="card" style="padding:24px;cursor:pointer;border-left:2px solid #8b5cf6">
+              <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
+                <div class="icon-tag purple" style="width:44px;height:44px"><span data-icon="cash" data-size="20"></span></div>
+                <div style="flex:1">
+                  <div style="font-size:16px;font-weight:500">Caisse · Config</div>
+                  <div style="font-size:11px;color:#6b7280">Catégories, QR code inscription</div>
+                </div>
+                <span data-icon="chevronRight" data-size="16"></span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· Catégories hiérarchiques</div>
+                <div style="padding:6px;background:#fafafa;border-radius:6px;color:#4b5563">· QR code /j/:slug</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Réglages</div></div>
+    <div class="mob-body">
+      <div class="card" style="cursor:pointer;border-left:2px solid #f97316"><div style="display:flex;gap:10px;align-items:center"><div class="icon-tag orange"><span data-icon="storefront"></span></div><div style="flex:1"><div style="font-weight:500">Mon commerce</div><div style="font-size:10px;color:#6b7280">Infos · horaires · photos</div></div><span data-icon="chevronRight" data-size="14"></span></div></div>
+      <div class="card" style="cursor:pointer;border-left:2px solid #3b82f6"><div style="display:flex;gap:10px;align-items:center"><div class="icon-tag blue"><span data-icon="calendar"></span></div><div style="flex:1"><div style="font-weight:500">Réservations</div><div style="font-size:10px;color:#6b7280">Booking · prestations</div></div><span data-icon="chevronRight" data-size="14"></span></div></div>
+      <div class="card" style="cursor:pointer;border-left:2px solid #10b981"><div style="display:flex;gap:10px;align-items:center"><div class="icon-tag green"><span data-icon="users"></span></div><div style="flex:1"><div style="font-weight:500">Équipe</div><div style="font-size:10px;color:#6b7280">Membres · horaires · absences</div></div><span data-icon="chevronRight" data-size="14"></span></div></div>
+      <div class="card" style="cursor:pointer;border-left:2px solid #8b5cf6"><div style="display:flex;gap:10px;align-items:center"><div class="icon-tag purple"><span data-icon="cash"></span></div><div style="flex:1"><div style="font-weight:500">Caisse config</div><div style="font-size:10px;color:#6b7280">Catégories · QR</div></div><span data-icon="chevronRight" data-size="14"></span></div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 Mon commerce -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Mon commerce · Horaires + pauses</strong> — business_hours (open_time, close_time, is_open par jour) et business_breaks (break_start, break_end par jour).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="settings"></span>Réglages</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:10px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div><div class="breadcrumb">Réglages · Mon commerce</div><h1 class="page-title">Horaires du commerce</h1></div></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab"><span data-icon="info" data-size="12"></span> Informations</div>
+            <div class="subtab active"><span data-icon="clock" data-size="12"></span> Horaires</div>
+            <div class="subtab"><span data-icon="image" data-size="12"></span> Photos</div>
+            <div class="subtab"><span data-icon="lock" data-size="12"></span> Compte</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Horaires standard par jour</div>
+            <div class="table">
+              <div class="table-row header" style="grid-template-columns:120px 80px 110px 110px 140px 60px">
+                <div>Jour</div><div>Ouvert ?</div><div>Ouverture</div><div>Fermeture</div><div>Pause (optionnel)</div><div></div>
+              </div>
+              <div class="table-row" style="grid-template-columns:120px 80px 110px 110px 140px 60px">
+                <div style="font-weight:500">Lundi</div>
+                <div class="toggle on"></div>
+                <input class="form-input" type="time" value="09:00" style="padding:4px 8px;font-size:11px">
+                <input class="form-input" type="time" value="19:00" style="padding:4px 8px;font-size:11px">
+                <div style="font-size:11px;color:#6b7280">13:00 - 14:00</div>
+                <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+              </div>
+              <div class="table-row" style="grid-template-columns:120px 80px 110px 110px 140px 60px">
+                <div style="font-weight:500">Mardi</div>
+                <div class="toggle on"></div>
+                <input class="form-input" type="time" value="09:00" style="padding:4px 8px;font-size:11px">
+                <input class="form-input" type="time" value="19:00" style="padding:4px 8px;font-size:11px">
+                <div style="font-size:11px;color:#6b7280">13:00 - 14:00</div>
+                <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+              </div>
+              <div class="table-row" style="grid-template-columns:120px 80px 110px 110px 140px 60px">
+                <div style="font-weight:500">Mercredi</div>
+                <div class="toggle on"></div>
+                <input class="form-input" type="time" value="09:00" style="padding:4px 8px;font-size:11px">
+                <input class="form-input" type="time" value="19:00" style="padding:4px 8px;font-size:11px">
+                <div style="font-size:11px;color:#6b7280">13:00 - 14:00</div>
+                <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+              </div>
+              <div class="table-row" style="grid-template-columns:120px 80px 110px 110px 140px 60px">
+                <div style="font-weight:500">Samedi</div>
+                <div class="toggle on"></div>
+                <input class="form-input" type="time" value="09:00" style="padding:4px 8px;font-size:11px">
+                <input class="form-input" type="time" value="18:00" style="padding:4px 8px;font-size:11px">
+                <div style="font-size:11px;color:#6b7280">Sans pause</div>
+                <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="11"></span></button>
+              </div>
+              <div class="table-row" style="grid-template-columns:120px 80px 110px 110px 140px 60px">
+                <div style="font-weight:500;color:#9ca3af">Dimanche</div>
+                <div class="toggle"></div>
+                <div style="color:#9ca3af">—</div>
+                <div style="color:#9ca3af">—</div>
+                <div style="color:#9ca3af">Fermé</div>
+                <div></div>
+              </div>
+            </div>
+            <button class="btn-primary" style="margin-top:14px"><span data-icon="save" data-size="13"></span> Enregistrer (PIN admin)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Horaires</div></div><div class="mob-body"><div class="card" style="padding:10px"><div style="font-size:12px"><strong>Lundi</strong> · 09h-19h (pause 13h-14h)</div></div><div class="card" style="padding:10px"><div style="font-size:12px"><strong>Samedi</strong> · 09h-18h</div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 3 Réservations -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Réservations · Configuration</strong> — slug URL publique, anticipation (advance_booking_days), préavis min (min_notice_hours), cancellation_policy_hours, require_account, timezone, bouton testRecap.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="settings"></span>Réglages</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:10px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div><div class="breadcrumb">Réglages · Réservations</div><h1 class="page-title">Configuration booking</h1></div></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab active"><span data-icon="settings" data-size="12"></span> Config</div>
+            <div class="subtab"><span data-icon="tag" data-size="12"></span> Catégories</div>
+            <div class="subtab"><span data-icon="scissors" data-size="12"></span> Prestations</div>
+            <div class="subtab"><span data-icon="bell" data-size="12"></span> Notifications</div>
+          </div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Réservations publiques</span><div class="toggle on"></div></div>
+              
+              <div class="form-field"><div class="form-label">Slug (URL publique)</div><div style="display:flex;gap:6px"><input class="form-input" value="hair-coiff-lille" style="flex:1;font-family:monospace"><button class="btn-secondary" style="font-size:11px">Vérifier</button></div><div style="font-size:10px;color:#6b7280;margin-top:4px">URL : haircoifflille.fr/book/hair-coiff-lille</div></div>
+
+              <div class="form-row">
+                <div><div class="form-label">Anticipation max (j)</div><input class="form-input" type="number" value="30"></div>
+                <div><div class="form-label">Préavis min (h)</div><input class="form-input" type="number" value="1"></div>
+              </div>
+
+              <div class="form-field"><div class="form-label">Délai d'annulation (heures avant RDV)</div><input class="form-input" type="number" value="2"><div style="font-size:10px;color:#6b7280;margin-top:4px">Le client peut annuler jusqu'à X heures avant le RDV</div></div>
+
+              <label class="checkbox-row"><input type="checkbox"><div style="flex:1"><div style="font-weight:500">Compte client obligatoire</div><div style="font-size:10px;color:#6b7280">Si activé, le client doit créer un compte avant de réserver</div></div></label>
+
+              <button class="btn-primary w-full" style="padding:12px;margin-top:14px">Enregistrer (PIN admin)</button>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Test des notifications</div>
+                <div style="font-size:12px;color:#4b5563;margin-bottom:12px">Envoyer un récap de test à votre email (hors quotas Brevo 300/j global).</div>
+                <button class="btn-secondary w-full" style="padding:12px"><span data-icon="send" data-size="13"></span> Tester l'email récap</button>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Rappels SMS</div>
+                <label class="checkbox-row selected mb-2"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500">Rappel 24h avant</div></div></label>
+                <label class="checkbox-row selected mb-2"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500">Rappel 2h avant</div></div></label>
+                <div class="form-field"><div class="form-label">Délais (CSV minutes)</div><input class="form-input" value="1440,120" style="font-family:monospace"><div style="font-size:10px;color:#6b7280;margin-top:4px">1440=24h · 120=2h</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Réservations</div></div><div class="mob-body"><div class="card"><div class="form-field"><div class="form-label">Slug</div><input class="form-input" value="hair-coiff-lille" style="font-family:monospace"></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 4 Équipe Membres -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Équipe · Membres</strong> — Fiche employé accordion. TOUTES les permissions : can_cancel, can_modify, can_encash, can_use_promo, can_grant_credit, can_repay_credit, show_on_booking, show_in_caisse, is_active. EmployeePinManager (set/change/delete, toggle actif/inactif).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="settings"></span>Réglages</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:10px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div><div class="breadcrumb">Réglages · Équipe</div><h1 class="page-title">Membres de l'équipe</h1></div></div><button class="btn-primary"><span data-icon="userPlus" data-size="13"></span> Ajouter</button></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab active"><span data-icon="users" data-size="12"></span> Membres <span class="count">3</span></div>
+            <div class="subtab"><span data-icon="clock" data-size="12"></span> Horaires</div>
+            <div class="subtab"><span data-icon="grid" data-size="12"></span> Plages</div>
+            <div class="subtab"><span data-icon="percent" data-size="12"></span> Commissions</div>
+            <div class="subtab"><span data-icon="calendar" data-size="12"></span> Absences</div>
+            <div class="subtab"><span data-icon="lock" data-size="12"></span> Sécurité</div>
+          </div>
+
+          <div class="card" style="border-left:2px solid #10b981">
+            <div style="display:flex;gap:14px;align-items:center;margin-bottom:14px">
+              <div class="avatar lg green">K</div>
+              <div style="flex:1"><div style="font-size:15px;font-weight:500">Karim Benchekroun</div><div style="font-size:11px;color:#6b7280">Barbier senior · karim@haircoiff.fr · 06 12 34 56 78</div></div>
+              <span class="badge success">Actif · PIN ok</span>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="edit" data-size="13"></span></button>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="trash" data-size="13"></span></button>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="chevronDown" data-size="13"></span></button>
+            </div>
+
+            <div class="card-title" style="font-size:11px;color:#6b7280;margin-top:12px">Visibilité</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Visible page publique</div><div style="font-size:10px;color:#6b7280">show_on_booking</div></div></label>
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Visible en caisse</div><div style="font-size:10px;color:#6b7280">show_in_caisse</div></div></label>
+            </div>
+
+            <div class="card-title" style="font-size:11px;color:#6b7280">Permissions agenda</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Modifier RDV</div><div style="font-size:10px;color:#6b7280">can_modify</div></div></label>
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Annuler RDV</div><div style="font-size:10px;color:#6b7280">can_cancel</div></div></label>
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Encaisser</div><div style="font-size:10px;color:#6b7280">can_encash</div></div></label>
+            </div>
+
+            <div class="card-title" style="font-size:11px;color:#6b7280">Permissions financières</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Codes promo</div><div style="font-size:10px;color:#6b7280">can_use_promo</div></div></label>
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Accorder crédit</div><div style="font-size:10px;color:#6b7280">can_grant_credit</div></div></label>
+              <label class="checkbox-row selected"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500;font-size:12px">Consommer crédit</div><div style="font-size:10px;color:#6b7280">can_repay_credit</div></div></label>
+            </div>
+
+            <div style="margin-top:14px;padding:10px;background:#fafafa;border-radius:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="font-weight:500;font-size:12px">PIN employé</div>
+                  <div style="font-size:11px;color:#6b7280">Configuré · Session 2h serveur · UI 5 min</div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <button class="btn-secondary" style="font-size:11px;padding:6px 10px"><span data-icon="key" data-size="11"></span> Changer</button>
+                  <button class="btn-secondary" style="font-size:11px;padding:6px 10px;color:#991b1b;border-color:#fecaca"><span data-icon="trash" data-size="11"></span> Supprimer</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;gap:14px;align-items:center">
+              <div class="avatar lg blue">L</div>
+              <div style="flex:1"><div style="font-size:15px;font-weight:500">Lucas Martin</div><div style="font-size:11px;color:#6b7280">Barbier junior · lucas@haircoiff.fr</div></div>
+              <span class="badge success">Actif</span>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="chevronDown" data-size="13"></span></button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;gap:14px;align-items:center">
+              <div class="avatar lg purple">S</div>
+              <div style="flex:1"><div style="font-size:15px;font-weight:500">Sofiane Ait</div><div style="font-size:11px;color:#6b7280">Coiffeur · sofiane@haircoiff.fr</div></div>
+              <span class="badge warn">En congé</span>
+              <button class="btn-secondary" style="padding:4px"><span data-icon="chevronDown" data-size="13"></span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Équipe</div><div class="mob-icon-btn"><span data-icon="plus"></span></div></div><div class="mob-body"><div class="subtabs"><div class="subtab active">Membres</div><div class="subtab">Horaires</div><div class="subtab">Absences</div></div><div class="card" style="border-left:2px solid #10b981;padding:12px"><div style="display:flex;gap:10px;align-items:center"><div class="avatar sm green">K</div><div style="flex:1"><div style="font-weight:500;font-size:12px">Karim</div><div style="font-size:10px;color:#6b7280">Barbier senior · PIN ok</div></div><button class="btn-secondary" style="padding:4px"><span data-icon="more" data-size="13"></span></button></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 5 Équipe Sécurité -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>Équipe · Sécurité</strong> — NOUVEAU : mode tablette partagée (user_settings.tablet_mode_enabled), durée session (5/10/15/30 min), lock on tab close, reset PIN employés (PIN admin obligatoire).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="settings"></span>Réglages</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:10px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div><div class="breadcrumb">Réglages · Équipe · Sécurité</div><h1 class="page-title">Sécurité de l'équipe</h1></div></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Membres</div><div class="subtab">Horaires</div><div class="subtab">Plages</div><div class="subtab">Commissions</div><div class="subtab">Absences</div><div class="subtab active">Sécurité</div></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Mode tablette partagée</span><div class="toggle on"></div></div>
+              <div class="info-banner" style="font-size:11px">
+                Mode pour tablette à partager entre plusieurs employés. Chaque action sensible demande le PIN de l'employé. Timeout automatique.
+              </div>
+              <div class="form-field">
+                <div class="form-label">Durée de session employé</div>
+                <select class="form-select">
+                  <option>5 minutes</option>
+                  <option>10 minutes</option>
+                  <option selected>15 minutes (recommandé)</option>
+                  <option>30 minutes</option>
+                </select>
+              </div>
+              <label class="checkbox-row selected mb-2"><input type="checkbox" checked><div style="flex:1"><div style="font-weight:500">Verrouiller à la fermeture de l'onglet</div><div style="font-size:10px;color:#6b7280">Session expirée au retour</div></div></label>
+              <button class="btn-primary w-full" style="padding:12px">Enregistrer (PIN admin)</button>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Anti-brute-force PIN employé</div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;font-size:12px"><span>Tentatives max</span><strong>5 / 5 min</strong></div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;font-size:12px"><span>Lockout DB après 5 échecs</span><strong>30 min</strong></div>
+              <div style="padding:10px 0;display:flex;justify-content:space-between;font-size:12px"><span>Comptés par employé</span><strong>failed_attempts</strong></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Réinitialiser les PINs employés</div>
+            <div class="warn-banner" style="font-size:11px">Action irréversible. Le PIN précédent est effacé, un nouveau doit être défini à la première connexion.</div>
+            <div class="table">
+              <div class="table-row header" style="grid-template-columns:40px 1fr 100px 100px 120px">
+                <div></div><div>Employé</div><div>Dernière conn.</div><div>Tentatives</div><div>Actions</div>
+              </div>
+              <div class="table-row" style="grid-template-columns:40px 1fr 100px 100px 120px">
+                <div class="avatar sm green">K</div>
+                <div><div style="font-weight:500">Karim</div></div>
+                <div style="font-size:11px;color:#6b7280">Il y a 2 min</div>
+                <div style="font-size:11px">0 / 5</div>
+                <button class="btn-secondary" style="font-size:11px;padding:5px 10px">Réinit. PIN</button>
+              </div>
+              <div class="table-row" style="grid-template-columns:40px 1fr 100px 100px 120px">
+                <div class="avatar sm blue">L</div>
+                <div><div style="font-weight:500">Lucas</div></div>
+                <div style="font-size:11px;color:#6b7280">Il y a 8h</div>
+                <div style="font-size:11px">0 / 5</div>
+                <button class="btn-secondary" style="font-size:11px;padding:5px 10px">Réinit. PIN</button>
+              </div>
+              <div class="table-row" style="grid-template-columns:40px 1fr 100px 100px 120px">
+                <div class="avatar sm purple">S</div>
+                <div><div style="font-weight:500">Sofiane</div></div>
+                <div style="font-size:11px;color:#6b7280">Hier</div>
+                <div style="font-size:11px;color:#991b1b">3 / 5</div>
+                <button class="btn-secondary" style="font-size:11px;padding:5px 10px">Réinit. PIN</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Sécurité</div></div><div class="mob-body"><div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500">Mode tablette</div><div class="toggle on"></div></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 6 Caisse config -->
+<div class="scene" data-scene="6">
+  <div class="intro-note"><strong>Caisse · Catégories hiérarchiques</strong> — Groupes (parent) + produits (enfants). Drag-reorder. Repliés par défaut, nouvelle cat auto-ouverte. QR code inscription express /j/:slug.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="settings"></span>Réglages</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:10px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div><div class="breadcrumb">Réglages · Caisse</div><h1 class="page-title">Catégories de caisse</h1></div></div><button class="btn-primary"><span data-icon="plus" data-size="13"></span> Nouvelle catégorie</button></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab active"><span data-icon="tag" data-size="12"></span> Catégories</div><div class="subtab"><span data-icon="qr" data-size="12"></span> QR code</div></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Revenus</div>
+              <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px;background:#fafafa">
+                <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500;display:flex;gap:8px;align-items:center"><span data-icon="chevronDown" data-size="13"></span> <div class="icon-tag orange" style="width:24px;height:24px"><span data-icon="scissors" data-size="11"></span></div> Coiffure</div><div style="display:flex;gap:4px"><button class="btn-secondary" style="padding:3px"><span data-icon="edit" data-size="11"></span></button></div></div>
+                <div style="margin-top:10px;padding-left:30px">
+                  <div style="padding:8px 10px;border:0.5px solid #e5e7eb;border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;background:#fff"><span style="font-size:12px">Coupe classique</span><strong style="font-size:12px">22 €</strong></div>
+                  <div style="padding:8px 10px;border:0.5px solid #e5e7eb;border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;background:#fff"><span style="font-size:12px">Coupe + Barbe</span><strong style="font-size:12px">35 €</strong></div>
+                  <div style="padding:8px 10px;border:0.5px solid #e5e7eb;border-radius:6px;display:flex;justify-content:space-between;align-items:center;background:#fff"><span style="font-size:12px">Coupe enfant</span><strong style="font-size:12px">15 €</strong></div>
+                </div>
+              </div>
+              <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px">
+                <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500;display:flex;gap:8px;align-items:center"><span data-icon="chevronRight" data-size="13"></span> <div class="icon-tag green" style="width:24px;height:24px"><span data-icon="heart" data-size="11"></span></div> Soins</div><span style="font-size:11px;color:#6b7280">3 items</span></div>
+              </div>
+              <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500;display:flex;gap:8px;align-items:center"><span data-icon="chevronRight" data-size="13"></span> <div class="icon-tag purple" style="width:24px;height:24px"><span data-icon="tag" data-size="11"></span></div> Produits capillaires</div><span style="font-size:11px;color:#6b7280">8 items</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Dépenses</div>
+              <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px"><div style="display:flex;gap:8px;align-items:center"><div class="icon-tag red" style="width:24px;height:24px"><span data-icon="bank" data-size="11"></span></div> <span style="font-weight:500">Loyer</span></div></div>
+              <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px"><div style="display:flex;gap:8px;align-items:center"><div class="icon-tag yellow" style="width:24px;height:24px"><span data-icon="zap" data-size="11"></span></div> <span style="font-weight:500">Charges (EDF, eau)</span></div></div>
+              <div style="padding:12px;border:0.5px solid #e5e7eb;border-radius:8px"><div style="display:flex;gap:8px;align-items:center"><div class="icon-tag neutral" style="width:24px;height:24px"><span data-icon="tag" data-size="11"></span></div> <span style="font-weight:500">Fournitures</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Catégories</div></div><div class="mob-body"><div class="card" style="padding:10px"><div style="display:flex;gap:8px;align-items:center"><span data-icon="chevronDown" data-size="12"></span><strong style="font-size:12px">Coiffure</strong></div></div><div class="card" style="padding:10px"><div style="display:flex;gap:8px;align-items:center"><span data-icon="chevronRight" data-size="12"></span><strong style="font-size:12px">Soins</strong></div></div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 7 Compte RGPD -->
+<div class="scene" data-scene="7">
+  <div class="intro-note"><strong>Mon commerce · Compte & RGPD</strong> — Email (OTP), password, PIN admin, export données, suppression compte (cascade RGPD). TabCompte + gestion PIN.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="settings"></span>Réglages</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div style="display:flex;gap:10px;align-items:center"><button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="13"></span></button><div><div class="breadcrumb">Mon commerce · Compte</div><h1 class="page-title">Mon compte</h1></div></div></div>
+        <div class="body">
+          <div class="subtabs"><div class="subtab">Informations</div><div class="subtab">Horaires</div><div class="subtab">Photos</div><div class="subtab active">Compte</div></div>
+
+          <div class="two-col">
+            <div>
+              <div class="card">
+                <div class="card-title">Identifiants</div>
+                <div class="form-field"><div class="form-label">Email de connexion</div><div style="display:flex;gap:6px"><input class="form-input" value="admin@haircoifflille.fr" readonly style="flex:1;background:#fafafa"><button class="btn-secondary" style="font-size:11px">Changer</button></div><div style="font-size:10px;color:#6b7280;margin-top:4px">Changement avec OTP vers nouvelle adresse</div></div>
+                <div class="form-field"><div class="form-label">Mot de passe</div><button class="btn-secondary w-full"><span data-icon="key" data-size="13"></span> Changer le mot de passe</button></div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">PIN administrateur</div>
+                <div class="success-banner" style="font-size:11px">PIN configuré · JWT session 2h · UI revalidation 5 min · purge auto sortie /reglages</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+                  <button class="btn-secondary"><span data-icon="key" data-size="13"></span> Changer PIN</button>
+                  <button class="btn-secondary"><span data-icon="trash" data-size="13"></span> Supprimer PIN</button>
+                </div>
+                <div style="font-size:10px;color:#6b7280;margin-top:8px">Changement et suppression via OTP email si PIN oublié.</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Données personnelles (RGPD)</div>
+                <div style="padding:12px;background:#fafafa;border-radius:8px;margin-bottom:10px">
+                  <div style="font-size:12px;color:#4b5563;line-height:1.6">Anthropic garde vos données sécurisées. Consentement et audit trail conformes RGPD.</div>
+                </div>
+                <button class="btn-secondary w-full mb-2"><span data-icon="download" data-size="13"></span> Exporter toutes mes données (JSON)</button>
+                <button class="btn-secondary w-full" style="color:#991b1b;border-color:#fecaca"><span data-icon="trash" data-size="13"></span> Supprimer mon compte (cascade)</button>
+                <div style="font-size:10px;color:#6b7280;margin-top:8px">La suppression est cascade : tous les clients, RDV, transactions, employés sont effacés. Action irréversible.</div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Session actuelle</div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;font-size:12px"><span>Token JWT expire</span><strong>Dans 6j 23h</strong></div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;font-size:12px"><span>PIN session expire</span><strong>Dans 1h 48min</strong></div>
+                <button class="btn-secondary w-full mt-3"><span data-icon="logout" data-size="13"></span> Se déconnecter</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Compte</div></div><div class="mob-body"><div class="card"><div class="form-field"><div class="form-label">Email</div><input class="form-input" value="admin@haircoifflille.fr" readonly></div></div><button class="btn-secondary w-full mb-2"><span data-icon="download" data-size="13"></span> Exporter données</button><button class="btn-secondary w-full" style="color:#991b1b"><span data-icon="trash" data-size="13"></span> Supprimer compte</button></div></div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

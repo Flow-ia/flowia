@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 02. Agenda</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Agenda · Jour</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Jour (Multi)</button>
+    <button data-scene="2">Semaine</button>
+    <button data-scene="3">Mois</button>
+    <button data-scene="4">Liste</button>
+    <button data-scene="5">QuickAdd</button>
+    <button data-scene="6">Appt Action</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Jour Multi -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Agenda · Vue Jour (Multi-colonnes)</strong> — Colonne par employé, grille horaires 9h-19h, cards RDV avec borderLeft 2px accent, pills statut pastel. Deep-link `?appt=&date=` ouvre ApptActionModal. Persistance localStorage `ff_agenda_view_mode`.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div><div class="brand-sub">Propriétaire</div></div></div>
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item active"><span data-icon="calendar"></span>Agenda</div>
+        <div class="nav-item"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div>
+        <div class="topbar">
+          <div>
+            <div class="breadcrumb">Agenda</div>
+            <h1 class="page-title">Mercredi 22 avril 2026</h1>
+            <p class="page-sub">12 RDV · 10 confirmés · 5 encaissés</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-secondary" style="padding:6px"><span data-icon="chevronLeft" data-size="14"></span></button>
+            <button class="btn-secondary" style="font-size:11px">Aujourd'hui</button>
+            <button class="btn-secondary" style="padding:6px"><span data-icon="chevronRight" data-size="14"></span></button>
+            <div style="width:0.5px;height:24px;background:#e5e7eb;margin:0 4px"></div>
+            <div class="subtabs" style="margin:0">
+              <div class="subtab active">Jour</div>
+              <div class="subtab">Semaine</div>
+              <div class="subtab">Mois</div>
+            </div>
+            <button class="btn-secondary"><span data-icon="list" data-size="13"></span> Liste</button>
+            <button class="btn-primary"><span data-icon="plus" data-size="13"></span> Nouveau RDV</button>
+          </div>
+        </div>
+        <div class="body">
+          <div style="display:grid;grid-template-columns:60px repeat(3,1fr);gap:0;border:0.5px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff">
+            <div style="padding:10px;background:#fafafa;border-bottom:0.5px solid #e5e7eb"></div>
+            <div style="padding:10px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;display:flex;gap:8px;align-items:center"><div class="avatar sm green">K</div><div><div style="font-size:12px;font-weight:500">Karim</div><div style="font-size:10px;color:#6b7280">4 RDV</div></div></div>
+            <div style="padding:10px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;display:flex;gap:8px;align-items:center"><div class="avatar sm blue">L</div><div><div style="font-size:12px;font-weight:500">Lucas</div><div style="font-size:10px;color:#6b7280">5 RDV</div></div></div>
+            <div style="padding:10px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;display:flex;gap:8px;align-items:center"><div class="avatar sm purple">S</div><div><div style="font-size:12px;font-weight:500">Sofiane</div><div style="font-size:10px;color:#6b7280">3 RDV</div></div></div>
+
+            <div style="padding:10px;font-size:11px;color:#6b7280;font-family:monospace;border-bottom:0.5px solid #f3f4f6">09:00</div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eff6ff;border-left:2px solid #3b82f6;padding:8px;border-radius:6px;font-size:11px"><div style="font-weight:500">Ahmed R.</div><div style="color:#6b7280">Coupe · 22€</div></div></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+
+            <div style="padding:10px;font-size:11px;color:#6b7280;font-family:monospace;border-bottom:0.5px solid #f3f4f6">10:00</div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;border-left:2px solid #f97316;padding:8px;border-radius:6px;font-size:11px"><div style="font-weight:500">Marc L. <span class="badge success" style="font-size:9px;padding:1px 5px">Fidèle</span></div><div style="color:#6b7280">Coupe+Barbe · 35€</div></div></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#f0fdf4;border-left:2px solid #10b981;padding:8px;border-radius:6px;font-size:11px"><div style="font-weight:500">Pierre N.</div><div style="color:#6b7280">Coupe · 22€</div></div></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+
+            <div style="padding:10px;font-size:11px;color:#6b7280;font-family:monospace;border-bottom:0.5px solid #f3f4f6">11:00</div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eeedfe;border-left:2px solid #8b5cf6;padding:8px;border-radius:6px;font-size:11px"><div style="font-weight:500">Julien D.</div><div style="color:#6b7280">Coupe · 22€</div></div></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fefce8;padding:8px;border-radius:6px;font-size:10px;color:#78350f;font-weight:500;text-align:center">Pause déj.</div></div>
+
+            <div style="padding:10px;font-size:11px;color:#6b7280;font-family:monospace;border-bottom:0.5px solid #f3f4f6">14:30</div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;border-left:2px solid #f97316;padding:8px;border-radius:6px;font-size:11px"><div style="font-weight:500">Mohamed C. <span class="badge warn" style="font-size:9px;padding:1px 5px">Pending</span></div><div style="color:#6b7280">Coupe+Barbe · 45€</div></div></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:6px;min-height:50px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+
+            <div style="padding:10px;font-size:11px;color:#6b7280;font-family:monospace">16:00</div>
+            <div style="padding:6px;min-height:50px;border-left:0.5px solid #e5e7eb"><div style="background:#eeedfe;border-left:2px solid #8b5cf6;padding:8px;border-radius:6px;font-size:11px"><div style="font-weight:500">Marc L.</div><div style="color:#6b7280">Coupe+Soin · 35€</div></div></div>
+            <div style="padding:6px;min-height:50px;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:6px;min-height:50px;border-left:0.5px solid #e5e7eb"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-left"><div><div class="mob-topbar-title">Mer 22 avril</div><div class="mob-topbar-sub">12 RDV</div></div></div><div class="mob-icon-btn"><span data-icon="plus"></span></div></div>
+    <div class="mob-body" style="padding-bottom:80px">
+      <div class="subtabs" style="margin-bottom:10px"><div class="subtab active">Jour</div><div class="subtab">Sem</div><div class="subtab">Mois</div><div class="subtab">Liste</div></div>
+      <div class="card" style="padding:10px;border-left:2px solid #3b82f6"><div style="font-family:monospace;font-size:11px;color:#6b7280">09:00 · Karim</div><div style="font-size:12px;font-weight:500">Ahmed R. · Coupe · 22€</div></div>
+      <div class="card" style="padding:10px;border-left:2px solid #f97316"><div style="font-family:monospace;font-size:11px;color:#6b7280">10:00 · Karim</div><div style="font-size:12px;font-weight:500">Marc L. · Coupe+Barbe · 35€</div></div>
+      <div class="card" style="padding:10px;border-left:2px solid #10b981"><div style="font-family:monospace;font-size:11px;color:#6b7280">10:00 · Lucas</div><div style="font-size:12px;font-weight:500">Pierre N. · Coupe · 22€</div></div>
+      <div class="card" style="padding:10px;border-left:2px solid #8b5cf6"><div style="font-family:monospace;font-size:11px;color:#6b7280">11:00 · Lucas</div><div style="font-size:12px;font-weight:500">Julien D. · Coupe · 22€</div></div>
+      <div class="card" style="padding:10px;border-left:2px solid #f97316"><div style="font-family:monospace;font-size:11px;color:#6b7280">14:30 · Karim</div><div style="font-size:12px;font-weight:500">Mohamed C. · Coupe+Barbe · 45€ <span class="badge warn">Pending</span></div></div>
+    </div>
+    <div class="mob-bottom-nav">
+      <div class="mob-nav-item"><span data-icon="home"></span>Home</div>
+      <div class="mob-nav-item active"><span data-icon="calendar"></span>Agenda</div>
+      <div class="mob-nav-item"><span data-icon="cash"></span>Caisse</div>
+      <div class="mob-nav-item"><span data-icon="users"></span>Clients</div>
+      <div class="mob-nav-item"><span data-icon="more"></span>Plus</div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 Semaine -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Vue Semaine</strong> — Timeline 7 jours × heures, cellules colorées par service.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div></div></div><div class="nav-item active"><span data-icon="calendar"></span>Agenda</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Agenda · Semaine</div><h1 class="page-title">Sem. du 20 au 26 avril 2026</h1></div><div style="display:flex;gap:8px"><div class="subtabs" style="margin:0"><div class="subtab">Jour</div><div class="subtab active">Semaine</div><div class="subtab">Mois</div></div><button class="btn-primary"><span data-icon="plus" data-size="13"></span> RDV</button></div></div>
+        <div class="body">
+          <div style="display:grid;grid-template-columns:50px repeat(7,1fr);gap:0;border:0.5px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff;font-size:11px">
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb"></div>
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center"><div style="font-weight:500">Lun</div><div style="color:#6b7280">20</div></div>
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center"><div style="font-weight:500">Mar</div><div style="color:#6b7280">21</div></div>
+            <div style="padding:8px;background:#111827;color:#fff;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center"><div style="font-weight:500">Mer</div><div>22</div></div>
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center"><div style="font-weight:500">Jeu</div><div style="color:#6b7280">23</div></div>
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center"><div style="font-weight:500">Ven</div><div style="color:#6b7280">24</div></div>
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center"><div style="font-weight:500">Sam</div><div style="color:#6b7280">25</div></div>
+            <div style="padding:8px;background:#fafafa;border-bottom:0.5px solid #e5e7eb;border-left:0.5px solid #e5e7eb;text-align:center;color:#9ca3af"><div>Dim</div><div>26</div></div>
+
+            <div style="padding:6px;font-family:monospace;color:#6b7280;border-bottom:0.5px solid #f3f4f6">09h</div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eff6ff;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eff6ff;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#f0fdf4;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb;background:#fafafa"></div>
+
+            <div style="padding:6px;font-family:monospace;color:#6b7280;border-bottom:0.5px solid #f3f4f6">10h</div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eff6ff;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eeedfe;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eff6ff;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb;background:#fafafa"></div>
+
+            <div style="padding:6px;font-family:monospace;color:#6b7280;border-bottom:0.5px solid #f3f4f6">14h</div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#eeedfe;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb"><div style="background:#f0fdf4;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-bottom:0.5px solid #f3f4f6;border-left:0.5px solid #e5e7eb;background:#fafafa"></div>
+
+            <div style="padding:6px;font-family:monospace;color:#6b7280">16h</div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb"><div style="background:#eeedfe;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb"></div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb"><div style="background:#eff6ff;height:30px;border-radius:4px"></div></div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb"><div style="background:#fff7ed;height:30px;border-radius:4px"></div><div style="background:#f0fdf4;height:30px;border-radius:4px;margin-top:2px"></div></div>
+            <div style="padding:4px;min-height:38px;border-left:0.5px solid #e5e7eb;background:#fafafa"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Semaine</div></div><div class="mob-body"><div class="card" style="font-size:11px;text-align:center;color:#6b7280;padding:20px">Vue Semaine optimisée desktop · basculer en Jour sur mobile</div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 3 Mois -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Vue Mois</strong> — Calendrier avec couleur selon remplissage (vert=libre, ambre=moitié, rouge=plein).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="calendar"></span>Agenda</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Agenda · Mois</div><h1 class="page-title">Avril 2026</h1></div><div class="subtabs" style="margin:0"><div class="subtab">Jour</div><div class="subtab">Semaine</div><div class="subtab active">Mois</div></div></div>
+        <div class="body">
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;font-size:11px">
+            <div style="padding:6px;text-align:center;color:#6b7280;font-weight:500">Lun</div>
+            <div style="padding:6px;text-align:center;color:#6b7280;font-weight:500">Mar</div>
+            <div style="padding:6px;text-align:center;color:#6b7280;font-weight:500">Mer</div>
+            <div style="padding:6px;text-align:center;color:#6b7280;font-weight:500">Jeu</div>
+            <div style="padding:6px;text-align:center;color:#6b7280;font-weight:500">Ven</div>
+            <div style="padding:6px;text-align:center;color:#6b7280;font-weight:500">Sam</div>
+            <div style="padding:6px;text-align:center;color:#9ca3af;font-weight:500">Dim</div>
+
+            <!-- Sem 1 -->
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px;color:#9ca3af">30</div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">1</div><div style="margin-top:4px"><span class="badge success" style="font-size:9px;padding:1px 5px">8 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">2</div><div style="margin-top:4px"><span class="badge warn" style="font-size:9px;padding:1px 5px">12 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">3</div><div style="margin-top:4px"><span class="badge warn" style="font-size:9px;padding:1px 5px">14 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">4</div><div style="margin-top:4px"><span class="badge danger" style="font-size:9px;padding:1px 5px">Plein</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">5</div><div style="margin-top:4px"><span class="badge danger" style="font-size:9px;padding:1px 5px">18 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fafafa;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px;color:#9ca3af"><div>6</div><div style="font-size:10px;margin-top:4px">Fermé</div></div>
+
+            <!-- Sem 2 -->
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">7</div><div style="margin-top:4px"><span class="badge success" style="font-size:9px;padding:1px 5px">9 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">8</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">9</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">10</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">11</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">12</div></div>
+            <div style="padding:12px 8px;background:#fafafa;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px;color:#9ca3af">13</div>
+
+            <!-- Sem 3 -->
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">14</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">15</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">16</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">17</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">18</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">19</div></div>
+            <div style="padding:12px 8px;background:#fafafa;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px;color:#9ca3af">20</div>
+
+            <!-- Sem 4 (aujourd'hui) -->
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">20</div><div style="margin-top:4px"><span class="badge success" style="font-size:9px;padding:1px 5px">6 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">21</div><div style="margin-top:4px"><span class="badge warn" style="font-size:9px;padding:1px 5px">10 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#111827;color:#fff;border:0.5px solid #111827;border-radius:8px;min-height:80px"><div style="font-weight:500">22</div><div style="margin-top:4px"><span style="background:rgba(255,255,255,0.15);font-size:9px;padding:1px 5px;border-radius:99px">12 RDV</span></div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">23</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">24</div></div>
+            <div style="padding:12px 8px;background:#fff;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px"><div style="font-weight:500">25</div></div>
+            <div style="padding:12px 8px;background:#fafafa;border:0.5px solid #e5e7eb;border-radius:8px;min-height:80px;color:#9ca3af">26</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen"><div class="mob-topbar"><div class="mob-topbar-title">Avril 2026</div></div><div class="mob-body"><div class="card" style="font-size:11px;padding:14px;text-align:center;color:#6b7280">Mini calendrier avec 6 RDV / jour moyen · clic jour = ouvre vue Jour</div></div></div></div></div>
+</div>
+
+<!-- SCÈNE 4 Liste -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Vue Liste</strong> — Cards RDV borderLeft 2px accent, CSS Grid auto-fit minmax(240px,1fr), pill statut, heure monospace.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="calendar"></span>Agenda</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Agenda · Liste</div><h1 class="page-title">Mercredi 22 avril</h1><p class="page-sub">12 RDV aujourd'hui</p></div><div style="display:flex;gap:8px"><div class="subtabs" style="margin:0"><div class="subtab">Jour</div><div class="subtab">Semaine</div><div class="subtab">Mois</div></div><button class="btn-secondary" style="background:#111827;color:#fff"><span data-icon="list" data-size="13"></span> Liste</button></div></div>
+        <div class="body">
+          <div class="filter-bar">
+            <div class="filter-chip active">Tous <span class="count">12</span></div>
+            <div class="filter-chip">Karim <span class="count">4</span></div>
+            <div class="filter-chip">Lucas <span class="count">5</span></div>
+            <div class="filter-chip">Sofiane <span class="count">3</span></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+            <div class="card" style="padding:14px;border-left:2px solid #3b82f6;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:monospace;font-size:16px;font-weight:500">09:00</div><span class="badge success">Confirmé</span></div>
+              <div style="font-size:13px;font-weight:500">Ahmed R.</div>
+              <div style="font-size:11px;color:#6b7280">Coupe classique · Karim · 22 €</div>
+            </div>
+            <div class="card" style="padding:14px;border-left:2px solid #f97316;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:monospace;font-size:16px;font-weight:500">10:00</div><span class="badge success">Encaissé</span></div>
+              <div style="font-size:13px;font-weight:500">Marc L. · Fidèle</div>
+              <div style="font-size:11px;color:#6b7280">Coupe + Barbe · Karim · 35 €</div>
+            </div>
+            <div class="card" style="padding:14px;border-left:2px solid #10b981;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:monospace;font-size:16px;font-weight:500">10:00</div><span class="badge success">Confirmé</span></div>
+              <div style="font-size:13px;font-weight:500">Pierre N.</div>
+              <div style="font-size:11px;color:#6b7280">Coupe · Lucas · 22 €</div>
+            </div>
+            <div class="card" style="padding:14px;border-left:2px solid #8b5cf6;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:monospace;font-size:16px;font-weight:500">11:00</div><span class="badge success">Confirmé</span></div>
+              <div style="font-size:13px;font-weight:500">Julien D.</div>
+              <div style="font-size:11px;color:#6b7280">Coupe · Lucas · 22 €</div>
+            </div>
+            <div class="card" style="padding:14px;border-left:2px solid #f97316;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:monospace;font-size:16px;font-weight:500">14:30</div><span class="badge warn">À confirmer</span></div>
+              <div style="font-size:13px;font-weight:500">Mohamed C.</div>
+              <div style="font-size:11px;color:#6b7280">Coupe + Barbe · Karim · 45 €</div>
+            </div>
+            <div class="card" style="padding:14px;border-left:2px solid #8b5cf6;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-family:monospace;font-size:16px;font-weight:500">16:00</div><span class="badge success">Confirmé</span></div>
+              <div style="font-size:13px;font-weight:500">Marc L.</div>
+              <div style="font-size:11px;color:#6b7280">Coupe + Soin · Karim · 35 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Agenda · Liste</div></div>
+    <div class="mob-body">
+      <div class="card" style="padding:12px;border-left:2px solid #3b82f6"><div style="display:flex;justify-content:space-between"><div style="font-family:monospace;font-weight:500">09:00</div><span class="badge success">Confirmé</span></div><div style="font-size:12px;font-weight:500;margin-top:6px">Ahmed R.</div><div style="font-size:11px;color:#6b7280">Coupe · Karim · 22€</div></div>
+      <div class="card" style="padding:12px;border-left:2px solid #f97316"><div style="display:flex;justify-content:space-between"><div style="font-family:monospace;font-weight:500">10:00</div><span class="badge success">Encaissé</span></div><div style="font-size:12px;font-weight:500;margin-top:6px">Marc L.</div><div style="font-size:11px;color:#6b7280">Coupe+Barbe · 35€</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 5 QuickAdd -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>QuickAddApptModal</strong> — Création rapide RDV : employé, service, date, créneau, client (recherche + création), notes.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="calendar"></span>Agenda</div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><div><div class="breadcrumb">Agenda</div><h1 class="page-title">Nouveau RDV</h1></div></div>
+        <div class="body"><div style="opacity:0.2">[Agenda en arrière-plan]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:520px;border-radius:14px;padding:20px;max-height:90vh;overflow:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:16px;font-weight:500">Nouveau rendez-vous</div><button class="btn-secondary" style="padding:5px 8px"><span data-icon="x" data-size="13"></span></button></div>
+          <div class="form-field"><div class="form-label">Employé</div><select class="form-select"><option>Karim</option><option>Lucas</option><option>Sofiane</option></select></div>
+          <div class="form-field"><div class="form-label">Prestation</div><select class="form-select"><option>Coupe + Barbe (45 min · 35 €)</option><option>Coupe classique (30 min · 22 €)</option></select></div>
+          <div class="form-row">
+            <div><div class="form-label">Date</div><input class="form-input" type="date" value="2026-04-22"></div>
+            <div><div class="form-label">Créneau</div><select class="form-select"><option>15:30</option><option>16:00</option><option>16:30</option></select></div>
+          </div>
+          <div class="form-field"><div class="form-label">Client</div><div class="search-bar"><span data-icon="search"></span><input placeholder="Rechercher ou créer..."></div></div>
+          <div style="padding:10px;background:#f0fdf4;border-radius:8px;border-left:2px solid #10b981;font-size:11px;margin-bottom:12px;color:#065f46">Client sélectionné : <strong>Marc Lefèvre</strong> · 12 visites</div>
+          <div class="form-field"><div class="form-label">Note (optionnel)</div><textarea class="form-textarea" placeholder="Préférences, allergies..."></textarea></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn-secondary">Annuler</button><button class="btn-primary"><span data-icon="check" data-size="13"></span> Créer le RDV</button></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)">
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end"><div style="background:#fff;width:100%;border-radius:20px 20px 0 0;padding:16px;max-height:90%;overflow:auto">
+      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 12px"></div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:12px">Nouveau RDV</div>
+      <div class="form-field"><div class="form-label">Employé</div><select class="form-select"><option>Karim</option></select></div>
+      <div class="form-field"><div class="form-label">Prestation</div><select class="form-select"><option>Coupe + Barbe</option></select></div>
+      <div class="form-field"><div class="form-label">Date</div><input class="form-input" type="date"></div>
+      <div class="form-field"><div class="form-label">Client</div><input class="form-input" placeholder="Rechercher..."></div>
+      <button class="btn-primary w-full" style="padding:14px;margin-top:10px">Créer le RDV</button>
+    </div></div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 6 ApptAction -->
+<div class="scene" data-scene="6">
+  <div class="intro-note"><strong>ApptActionModal</strong> — Ouvert via deep-link `?appt=` ou clic RDV : Modifier, Annuler (gate can_cancel), Encaisser (gate can_encash), Supprimer (PIN admin).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="calendar"></span>Agenda</div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Mercredi 22 avril · Vue Jour</h1></div>
+        <div class="body"><div style="opacity:0.2">[Agenda]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:460px;border-radius:14px;padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="display:flex;gap:10px;align-items:center"><div class="avatar lg orange">ML</div><div><div style="font-size:15px;font-weight:500">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">Fidèle · 12 visites</div></div></div><span class="badge success">Confirmé</span></div>
+          <div style="padding:14px;background:#fafafa;border-radius:10px;margin-bottom:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+              <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Prestation</div><div style="font-weight:500;margin-top:2px">Coupe + Barbe</div></div>
+              <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Employé</div><div style="font-weight:500;margin-top:2px">Karim</div></div>
+              <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Date / Heure</div><div style="font-weight:500;margin-top:2px;font-family:monospace">Mer 22 · 10:00</div></div>
+              <div><div style="font-size:10px;color:#6b7280;text-transform:uppercase">Prix</div><div style="font-weight:500;margin-top:2px">35 €</div></div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:#6b7280;margin-bottom:6px;font-weight:500;text-transform:uppercase">Note</div>
+          <div style="font-size:12px;color:#4b5563;padding:10px;background:#fafafa;border-radius:8px;margin-bottom:14px">Préfère une coupe courte sur les côtés. Client fidèle, sympathique.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <button class="btn-primary"><span data-icon="zap" data-size="13"></span> Encaisser 35 €</button>
+            <button class="btn-secondary"><span data-icon="edit" data-size="13"></span> Modifier</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button class="btn-secondary" style="color:#991b1b;border-color:#fecaca"><span data-icon="x" data-size="13"></span> Annuler</button>
+            <button class="btn-secondary" style="color:#991b1b;border-color:#fecaca"><span data-icon="trash" data-size="13"></span> Supprimer (PIN)</button>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)">
+    <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;padding:16px">
+      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 12px"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><div class="avatar orange">ML</div><div><div style="font-weight:500">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">Coupe+Barbe · 10:00 · 35€</div></div></div>
+      <button class="btn-primary w-full" style="padding:12px;margin-bottom:8px">Encaisser 35 €</button>
+      <button class="btn-secondary w-full" style="padding:12px;margin-bottom:8px">Modifier</button>
+      <button class="btn-secondary w-full" style="padding:12px;color:#991b1b">Annuler</button>
+    </div>
+  </div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>

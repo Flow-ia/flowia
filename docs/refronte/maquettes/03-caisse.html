@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowIA 2026 — 03. Caisse</title>
+<link rel="stylesheet" href="shared.css">
+</head>
+<body>
+
+<div class="top-controls">
+  <div class="viewport-label" id="current-label">Caisse</div>
+  <div class="control-group"><button class="active" data-view="desktop">Desktop</button><button data-view="mobile">Mobile</button></div>
+</div>
+
+<div class="page-footer-nav">
+  <div class="control-group">
+    <button class="active" data-scene="1">Encaisser 4 étapes</button>
+    <button data-scene="2">Multi-paiements</button>
+    <button data-scene="3">Historique</button>
+    <button data-scene="4">Crédit client</button>
+    <button data-scene="5">Edit/Suppr PIN</button>
+  </div>
+</div>
+
+<!-- SCÈNE 1 Encaisser -->
+<div class="scene active" data-scene="1">
+  <div class="intro-note"><strong>Caisse · Encaisser (4 étapes)</strong> — Flow complet : Panier (catégories hiérarchiques + montant libre) → Employé (permission can_encash) → Paiement (simple ou multi, code promo check live, crédit client dispo, cartes réductions anniv/parrainage) → Confirmation. Idempotency key anti-double-clic, audit trail snapshot_before/after.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-header"><div class="logo">H</div><div><div class="brand-name">Hair Coiff Lille</div></div></div>
+        <div class="nav-section-label">Principal</div>
+        <div class="nav-item"><span data-icon="home"></span>Dashboard</div>
+        <div class="nav-item"><span data-icon="calendar"></span>Agenda</div>
+        <div class="nav-item active"><span data-icon="cash"></span>Caisse</div>
+        <div class="nav-item"><span data-icon="users"></span>Clients</div>
+        <div class="nav-spacer"></div>
+      </aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Caisse</div><h1 class="page-title">Encaisser</h1><p class="page-sub">Karim connecté · PIN employé valide 5 min</p></div><div class="subtabs" style="margin:0"><div class="subtab active">Encaisser</div><div class="subtab">Historique <span class="count">147</span></div><div class="subtab">Crédit <span class="count">8</span></div></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab active"><span>1. Panier</span></div>
+            <div class="subtab"><span>2. Employé</span></div>
+            <div class="subtab"><span>3. Paiement</span></div>
+            <div class="subtab"><span>4. OK</span></div>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <div class="card">
+                <div class="card-title">Catégories</div>
+                <div style="padding:10px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px;cursor:pointer;background:#fafafa">
+                  <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500;display:flex;gap:8px;align-items:center"><span data-icon="chevronDown" data-size="13"></span> Coiffure</div><span style="font-size:11px;color:#6b7280">5 prestations</span></div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
+                    <button class="btn-secondary" style="padding:10px;flex-direction:column;gap:4px;text-align:center;font-size:11px">Coupe classique<strong>22 €</strong></button>
+                    <button class="btn-secondary" style="padding:10px;flex-direction:column;gap:4px;text-align:center;font-size:11px">Coupe + Barbe<strong>35 €</strong></button>
+                    <button class="btn-secondary" style="padding:10px;flex-direction:column;gap:4px;text-align:center;font-size:11px">Coupe enfant<strong>15 €</strong></button>
+                    <button class="btn-secondary" style="padding:10px;flex-direction:column;gap:4px;text-align:center;font-size:11px">Soin barbe<strong>10 €</strong></button>
+                    <button class="btn-secondary" style="padding:10px;flex-direction:column;gap:4px;text-align:center;font-size:11px">Rasage<strong>18 €</strong></button>
+                  </div>
+                </div>
+                <div style="padding:10px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px;cursor:pointer">
+                  <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500;display:flex;gap:8px;align-items:center"><span data-icon="chevronRight" data-size="13"></span> Soins</div><span style="font-size:11px;color:#6b7280">3 produits</span></div>
+                </div>
+                <div style="padding:10px;border:0.5px solid #e5e7eb;border-radius:8px;margin-bottom:6px;cursor:pointer">
+                  <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:500;display:flex;gap:8px;align-items:center"><span data-icon="chevronRight" data-size="13"></span> Produits capillaires</div><span style="font-size:11px;color:#6b7280">8 produits</span></div>
+                </div>
+                <button class="btn-secondary w-full mt-2" style="padding:12px"><span data-icon="plus" data-size="13"></span> Montant libre</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Panier</span><button style="font-size:11px;color:#991b1b;background:none;border:none;cursor:pointer">Vider</button></div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                  <div><div style="font-weight:500">Coupe + Barbe</div><div style="font-size:11px;color:#6b7280">Coiffure</div></div>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn-secondary" style="padding:4px 8px;font-size:11px">−</button>
+                    <span style="font-weight:500">1</span>
+                    <button class="btn-secondary" style="padding:4px 8px;font-size:11px">+</button>
+                    <div style="min-width:60px;text-align:right;font-weight:500">35 €</div>
+                  </div>
+                </div>
+                <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+                  <div><div style="font-weight:500">Soin barbe</div><div style="font-size:11px;color:#6b7280">Coiffure</div></div>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn-secondary" style="padding:4px 8px;font-size:11px">−</button>
+                    <span style="font-weight:500">1</span>
+                    <button class="btn-secondary" style="padding:4px 8px;font-size:11px">+</button>
+                    <div style="min-width:60px;text-align:right;font-weight:500">10 €</div>
+                  </div>
+                </div>
+                <div style="padding:12px 0;display:flex;justify-content:space-between;font-size:15px;font-weight:500;border-top:0.5px solid #e5e7eb;margin-top:4px">
+                  <div>Total</div><div>45 €</div>
+                </div>
+                <button class="btn-primary w-full" style="padding:14px;margin-top:10px">Continuer <span data-icon="arrowRight" data-size="14"></span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Encaisser · 1/4</div><div class="mob-icon-btn"><span data-icon="x"></span></div></div>
+    <div class="mob-body" style="padding-bottom:100px">
+      <div class="card"><div class="card-title">Coiffure</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="btn-secondary" style="padding:10px;flex-direction:column;font-size:11px">Coupe<strong>22 €</strong></button><button class="btn-secondary" style="padding:10px;flex-direction:column;font-size:11px">Coupe+Barbe<strong>35 €</strong></button></div></div>
+      <div class="card"><div class="card-title">Panier · 45 €</div><div style="font-size:11px;color:#6b7280">Coupe+Barbe · Soin barbe</div></div>
+    </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:10px;background:#fff;border-top:0.5px solid #e5e7eb"><button class="btn-primary w-full" style="padding:14px">Continuer 45 €</button></div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 2 Multi-paiements -->
+<div class="scene" data-scene="2">
+  <div class="intro-note"><strong>Étape 3 · Paiement avec multi-paiements</strong> — Mixte : 30€ espèces + 15€ carte. Code promo check live. Crédit client disponible affiché. Cartes réductions automatiques (anniversaire 🎂, parrainage 🤝) affichées en pastel.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="cash"></span>Caisse</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Caisse · Encaisser</div><h1 class="page-title">Paiement</h1></div></div>
+        <div class="body">
+          <div class="subtabs">
+            <div class="subtab">1. Panier</div>
+            <div class="subtab">2. Employé · Karim</div>
+            <div class="subtab active">3. Paiement</div>
+            <div class="subtab">4. OK</div>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <div class="card">
+                <div class="card-title">Client (optionnel)</div>
+                <div class="search-bar"><span data-icon="search"></span><input value="Marc Lefèvre" readonly></div>
+                <div class="success-banner" style="margin-top:10px;margin-bottom:0;font-size:11px;display:flex;gap:8px;align-items:flex-start">
+                  <span data-icon="wallet" data-size="13"></span>
+                  <div><strong>Crédit disponible : 15 €</strong><br>Voulez-vous l'utiliser ?</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Code promo / parrainage</div>
+                <div style="display:flex;gap:6px"><input class="form-input" placeholder="Code..." style="text-transform:uppercase"><button class="btn-secondary" style="font-size:11px">Vérifier</button></div>
+
+                <div style="padding:10px;background:#fff7ed;border-radius:8px;margin-top:10px;border-left:2px solid #f97316;display:flex;justify-content:space-between;align-items:center">
+                  <div style="display:flex;gap:8px;align-items:center"><span data-icon="gift" data-size="14" style="color:#9a3412"></span><div><div style="font-size:12px;font-weight:500;color:#9a3412">Offre anniversaire</div><div style="font-size:11px;color:#6b7280">ANNIV-MA34 · -20%</div></div></div>
+                  <button class="btn-secondary" style="font-size:11px;padding:5px 10px">Appliquer</button>
+                </div>
+
+                <div style="padding:10px;background:#eeedfe;border-radius:8px;margin-top:6px;border-left:2px solid #8b5cf6;display:flex;justify-content:space-between;align-items:center">
+                  <div style="display:flex;gap:8px;align-items:center"><span data-icon="users" data-size="14" style="color:#3c3489"></span><div><div style="font-size:12px;font-weight:500;color:#3c3489">Parrainage en attente</div><div style="font-size:11px;color:#6b7280">Filleul de Sarah Benali</div></div></div>
+                  <div style="display:flex;gap:4px"><button class="btn-primary" style="font-size:11px;padding:5px 10px">Valider</button><button class="btn-secondary" style="font-size:11px;padding:5px 10px">Refuser</button></div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="card">
+                <div class="card-title">Mode de paiement</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
+                  <label class="checkbox-row"><input type="radio"><span style="flex:1">Simple</span></label>
+                  <label class="checkbox-row selected"><input type="radio" checked><span style="flex:1">Multi-paiements</span></label>
+                </div>
+
+                <div style="padding:10px;background:#f0fdf4;border-radius:8px;margin-bottom:6px;border-left:2px solid #10b981;display:flex;justify-content:space-between;align-items:center">
+                  <div style="display:flex;gap:8px;align-items:center"><span data-icon="cash" data-size="14" style="color:#065f46"></span><span style="font-weight:500;color:#065f46">Espèces</span></div>
+                  <div style="display:flex;gap:6px;align-items:center"><input class="form-input" type="number" value="30" style="width:80px;text-align:right;padding:4px 8px;font-size:12px"><span style="font-size:11px;color:#065f46;font-weight:500">€</span></div>
+                </div>
+
+                <div style="padding:10px;background:#eef2ff;border-radius:8px;margin-bottom:6px;border-left:2px solid #4338ca;display:flex;justify-content:space-between;align-items:center">
+                  <div style="display:flex;gap:8px;align-items:center"><span data-icon="creditCard" data-size="14" style="color:#4338ca"></span><span style="font-weight:500;color:#4338ca">Carte</span></div>
+                  <div style="display:flex;gap:6px;align-items:center"><input class="form-input" type="number" value="15" style="width:80px;text-align:right;padding:4px 8px;font-size:12px"><span style="font-size:11px;color:#4338ca;font-weight:500">€</span></div>
+                </div>
+
+                <button class="btn-secondary w-full" style="font-size:11px;padding:8px;margin-top:6px"><span data-icon="plus" data-size="12"></span> Ajouter un moyen</button>
+
+                <div style="margin-top:14px;padding:12px;background:#fafafa;border-radius:8px">
+                  <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-bottom:4px"><span>Total panier</span><span>45,00 €</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:11px;color:#9a3412;margin-bottom:4px"><span>Remise anniversaire</span><span>−9,00 €</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:500;border-top:0.5px solid #e5e7eb;padding-top:6px;margin-top:6px"><span>Total à encaisser</span><span>36,00 €</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-top:4px"><span>Saisie</span><span>45,00 €</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:11px;color:#991b1b;margin-top:4px"><strong>Écart</strong><strong>+9,00 €</strong></div>
+                </div>
+
+                <textarea class="form-textarea" placeholder="Note interne (optionnel)" style="margin-top:10px"></textarea>
+
+                <button class="btn-primary w-full" style="padding:14px;margin-top:10px">Valider 36 €</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Paiement · 3/4</div></div>
+    <div class="mob-body" style="padding-bottom:100px">
+      <div class="success-banner" style="font-size:11px">Crédit Marc Lefèvre : 15 €</div>
+      <div class="card"><div class="card-title">Multi-paiements</div>
+        <div style="padding:8px;background:#f0fdf4;border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between;font-size:11px"><span style="color:#065f46">Espèces</span><strong>30 €</strong></div>
+        <div style="padding:8px;background:#eef2ff;border-radius:6px;display:flex;justify-content:space-between;font-size:11px"><span style="color:#4338ca">Carte</span><strong>15 €</strong></div>
+      </div>
+      <div class="card"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:500"><span>Total</span><span>45 €</span></div></div>
+    </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:10px;background:#fff;border-top:0.5px solid #e5e7eb"><button class="btn-primary w-full" style="padding:14px">Valider</button></div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 3 Historique -->
+<div class="scene" data-scene="3">
+  <div class="intro-note"><strong>Caisse · Historique (gate PIN)</strong> — KPIs CA + prestations, filtre employé, grille 4 colonnes par moyen de paiement (multi éclatés), liste ligne par ligne avec heure/service/employé/moyen/montant. Refresh event ff-tx-refresh.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="cash"></span>Caisse</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Caisse</div><h1 class="page-title">Historique du jour</h1><p class="page-sub">Mer 22 avril · PIN admin actif</p></div><div class="subtabs" style="margin:0"><div class="subtab">Encaisser</div><div class="subtab active">Historique</div><div class="subtab">Crédit</div></div></div>
+        <div class="body">
+          <div class="filter-bar">
+            <div class="filter-chip active">Tous <span class="count">12</span></div>
+            <div class="filter-chip">Karim <span class="count">4</span></div>
+            <div class="filter-chip">Lucas <span class="count">5</span></div>
+            <div class="filter-chip">Sofiane <span class="count">3</span></div>
+            <div style="flex:1"></div>
+            <div style="display:flex;gap:6px"><input class="form-input" type="date" value="2026-04-22" style="font-size:11px;padding:5px 8px"></div>
+          </div>
+
+          <div class="kpi-grid cols-3">
+            <div class="kpi"><div class="kpi-label">CA du jour</div><div class="kpi-value">385 €</div><div class="kpi-delta">+42% vs hier</div></div>
+            <div class="kpi"><div class="kpi-label">Prestations</div><div class="kpi-value">12</div></div>
+            <div class="kpi"><div class="kpi-label">Panier moyen</div><div class="kpi-value">32 €</div></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Ventilation par moyen de paiement</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              <div style="padding:14px;background:#f0fdf4;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#065f46;text-transform:uppercase;font-weight:500">Espèces</div>
+                <div style="font-size:24px;font-weight:500;color:#065f46;margin:4px 0">185 €</div>
+                <div style="font-size:10px;color:#065f46;opacity:0.6">6 transactions · 48%</div>
+              </div>
+              <div style="padding:14px;background:#eef2ff;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#4338ca;text-transform:uppercase;font-weight:500">Carte</div>
+                <div style="font-size:24px;font-weight:500;color:#4338ca;margin:4px 0">155 €</div>
+                <div style="font-size:10px;color:#4338ca;opacity:0.6">4 transactions · 40%</div>
+              </div>
+              <div style="padding:14px;background:#ecfeff;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#0e7490;text-transform:uppercase;font-weight:500">Virement</div>
+                <div style="font-size:24px;font-weight:500;color:#0e7490;margin:4px 0">0 €</div>
+                <div style="font-size:10px;color:#0e7490;opacity:0.6">0 transaction · 0%</div>
+              </div>
+              <div style="padding:14px;background:#fffbeb;border-radius:10px;text-align:center">
+                <div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:500">Autre</div>
+                <div style="font-size:24px;font-weight:500;color:#92400e;margin:4px 0">45 €</div>
+                <div style="font-size:10px;color:#92400e;opacity:0.6">2 transactions · 12%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Détail ligne par ligne</div>
+            <div class="table-row" style="grid-template-columns:70px 1fr 100px 100px 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div style="font-family:monospace">09:00</div>
+              <div><div style="font-weight:500">Ahmed R.</div><div style="font-size:11px;color:#6b7280">Coupe · Karim</div></div>
+              <span class="badge green">Espèces</span>
+              <div>Karim</div>
+              <div style="font-weight:500;text-align:right">22 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:70px 1fr 100px 100px 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div style="font-family:monospace">10:00</div>
+              <div><div style="font-weight:500">Marc L.</div><div style="font-size:11px;color:#6b7280">Coupe+Barbe · Karim</div></div>
+              <span class="badge blue">Carte</span>
+              <div>Karim</div>
+              <div style="font-weight:500;text-align:right">35 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:70px 1fr 100px 100px 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div style="font-family:monospace">10:00</div>
+              <div><div style="font-weight:500">Pierre N.</div><div style="font-size:11px;color:#6b7280">Coupe · Lucas</div></div>
+              <span class="badge green">Espèces</span>
+              <div>Lucas</div>
+              <div style="font-weight:500;text-align:right">22 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:70px 1fr 100px 100px 80px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div style="font-family:monospace">11:00</div>
+              <div><div style="font-weight:500">Julien D.</div><div style="font-size:11px;color:#6b7280">Coupe+Soin · Lucas</div></div>
+              <div><span class="badge green">Esp. 15€</span><span class="badge blue" style="margin-left:4px">Cb 10€</span></div>
+              <div>Lucas</div>
+              <div style="font-weight:500;text-align:right">25 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:70px 1fr 100px 100px 80px;padding:10px 0">
+              <div style="font-family:monospace">14:30</div>
+              <div><div style="font-weight:500">Mohamed C.</div><div style="font-size:11px;color:#6b7280">Coupe+Barbe · Karim</div></div>
+              <span class="badge yellow">Autre</span>
+              <div>Karim</div>
+              <div style="font-weight:500;text-align:right">45 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Historique · 22 avril</div></div>
+    <div class="mob-body">
+      <div class="kpi-grid mob"><div class="kpi"><div class="kpi-label">CA</div><div class="kpi-value mob">385€</div></div><div class="kpi"><div class="kpi-label">Nb</div><div class="kpi-value mob">12</div></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="padding:10px;background:#f0fdf4;border-radius:8px;text-align:center"><div style="font-size:9px;color:#065f46">Espèces</div><div style="font-weight:500;color:#065f46">185€</div></div>
+        <div style="padding:10px;background:#eef2ff;border-radius:8px;text-align:center"><div style="font-size:9px;color:#4338ca">Carte</div><div style="font-weight:500;color:#4338ca">155€</div></div>
+      </div>
+      <div class="card" style="padding:10px"><div style="font-size:11px"><strong>09:00</strong> Ahmed R. · Coupe · <span class="badge green">Esp.</span> · 22€</div></div>
+      <div class="card" style="padding:10px"><div style="font-size:11px"><strong>10:00</strong> Marc L. · Coupe+Barbe · <span class="badge blue">Cb</span> · 35€</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 4 Crédit client -->
+<div class="scene" data-scene="4">
+  <div class="intro-note"><strong>Caisse · Crédit client</strong> — Gestion du crédit (grant = accorder, repay = consommer/rembourser). Grant nécessite permission `can_grant_credit` employé. Repay crée une transaction revenue source='credit'. RGPD : email/name peuvent être NULL.</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="cash"></span>Caisse</div><div class="nav-spacer"></div></aside>
+      <div>
+        <div class="topbar"><div><div class="breadcrumb">Caisse · Crédit</div><h1 class="page-title">Gestion des crédits clients</h1><p class="page-sub">8 clients avec crédit actif · Total : 240 €</p></div><div class="subtabs" style="margin:0"><div class="subtab">Encaisser</div><div class="subtab">Historique</div><div class="subtab active">Crédit</div></div></div>
+        <div class="body">
+          <div class="kpi-grid cols-3">
+            <div class="kpi"><div class="kpi-label">Total crédit octroyé</div><div class="kpi-value">240 €</div><div class="kpi-delta neutral">8 clients</div></div>
+            <div class="kpi"><div class="kpi-label">Crédit utilisé (mois)</div><div class="kpi-value">85 €</div></div>
+            <div class="kpi"><div class="kpi-label">Clients avec solde</div><div class="kpi-value">8</div></div>
+          </div>
+
+          <div class="search-bar"><span data-icon="search"></span><input placeholder="Rechercher un client..."></div>
+
+          <div class="two-col">
+            <div class="card">
+              <div class="card-title">Clients avec crédit actif</div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm orange">ML</div>
+                <div style="flex:1"><div style="font-weight:500">Marc Lefèvre</div><div style="font-size:11px;color:#6b7280">marc@exemple.fr</div></div>
+                <div style="text-align:right"><div style="font-weight:500;color:#065f46">15 €</div><div style="font-size:10px;color:#6b7280">3 grants · 1 repay</div></div>
+              </div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm green">SB</div>
+                <div style="flex:1"><div style="font-weight:500">Sarah Benali</div><div style="font-size:11px;color:#6b7280">sarah@exemple.fr</div></div>
+                <div style="text-align:right"><div style="font-weight:500;color:#065f46">45 €</div><div style="font-size:10px;color:#6b7280">1 grant</div></div>
+              </div>
+              <div style="padding:10px 0;border-bottom:0.5px solid #f3f4f6;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm purple">AD</div>
+                <div style="flex:1"><div style="font-weight:500">Alice Dubois</div><div style="font-size:11px;color:#6b7280">alice@exemple.fr</div></div>
+                <div style="text-align:right"><div style="font-weight:500;color:#065f46">30 €</div><div style="font-size:10px;color:#6b7280">2 grants</div></div>
+              </div>
+              <div style="padding:10px 0;display:flex;gap:10px;align-items:center">
+                <div class="avatar sm gray">?</div>
+                <div style="flex:1"><div style="font-weight:500" class="text-muted">Client anonyme</div><div style="font-size:11px;color:#6b7280">Email supprimé RGPD</div></div>
+                <div style="text-align:right"><div style="font-weight:500;color:#065f46">20 €</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Accorder un crédit</div>
+              <div class="form-field"><div class="form-label">Client</div><input class="form-input" placeholder="Rechercher..."></div>
+              <div class="form-field"><div class="form-label">Montant</div><input class="form-input" type="number" placeholder="50"></div>
+              <div class="form-field"><div class="form-label">Employé signataire</div><select class="form-select"><option>Karim (can_grant)</option><option>Lucas (can_grant)</option></select></div>
+              <div class="form-field"><div class="form-label">Note</div><textarea class="form-textarea" placeholder="Raison du crédit..."></textarea></div>
+              <button class="btn-primary w-full" style="padding:12px">Accorder le crédit</button>
+              <div class="info-banner" style="font-size:11px;margin-top:12px;margin-bottom:0">Seuls les employés avec la permission <strong>can_grant_credit</strong> apparaissent.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Historique (fiche Marc Lefèvre)</div>
+            <div class="table-row" style="grid-template-columns:110px 100px 1fr 100px 100px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div>22 avril</div>
+              <span class="badge success">Grant</span>
+              <div style="font-size:11px;color:#6b7280">Avance exceptionnelle · Karim</div>
+              <div style="font-weight:500;color:#065f46;text-align:right">+20 €</div>
+              <div style="text-align:right;font-size:11px;color:#6b7280">Solde : 15 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:110px 100px 1fr 100px 100px;padding:10px 0;border-bottom:0.5px solid #f3f4f6">
+              <div>18 avril</div>
+              <span class="badge info">Repay</span>
+              <div style="font-size:11px;color:#6b7280">Tx #1234 · Carte · Lucas</div>
+              <div style="font-weight:500;color:#991b1b;text-align:right">-10 €</div>
+              <div style="text-align:right;font-size:11px;color:#6b7280">Solde : -5 €</div>
+            </div>
+            <div class="table-row" style="grid-template-columns:110px 100px 1fr 100px 100px;padding:10px 0">
+              <div>10 avril</div>
+              <span class="badge success">Grant</span>
+              <div style="font-size:11px;color:#6b7280">1er grant · Karim</div>
+              <div style="font-weight:500;color:#065f46;text-align:right">+5 €</div>
+              <div style="text-align:right;font-size:11px;color:#6b7280">Solde : 5 €</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen">
+    <div class="mob-topbar"><div class="mob-topbar-title">Crédits</div></div>
+    <div class="mob-body">
+      <div class="kpi-grid mob"><div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value mob">240€</div></div><div class="kpi"><div class="kpi-label">Clients</div><div class="kpi-value mob">8</div></div></div>
+      <div class="card"><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm orange">ML</div><div style="flex:1"><div style="font-weight:500;font-size:12px">Marc Lefèvre</div></div><strong style="color:#065f46">15€</strong></div></div>
+      <div class="card"><div style="display:flex;gap:8px;align-items:center"><div class="avatar sm green">SB</div><div style="flex:1"><div style="font-weight:500;font-size:12px">Sarah Benali</div></div><strong style="color:#065f46">45€</strong></div></div>
+      <button class="btn-primary w-full" style="padding:14px">Accorder un crédit</button>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- SCÈNE 5 Edit/Suppr PIN -->
+<div class="scene" data-scene="5">
+  <div class="intro-note"><strong>Modification / Suppression transaction (PIN admin obligatoire)</strong> — Gate PinAccessModal, audit trail transaction_audit_log (snapshot_before + snapshot_after + raison).</div>
+  <div class="viewport-desktop show">
+    <div class="shell">
+      <aside class="sidebar"><div class="sidebar-header"><div class="logo">H</div></div><div class="nav-item active"><span data-icon="cash"></span>Caisse</div><div class="nav-spacer"></div></aside>
+      <div style="position:relative">
+        <div class="topbar"><h1 class="page-title">Historique</h1></div>
+        <div class="body"><div style="opacity:0.2">[Historique]</div></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:400px;border-radius:14px;padding:24px;text-align:center">
+          <div class="icon-tag" style="width:48px;height:48px;background:#fff7ed;color:#9a3412;margin:0 auto 12px"><span data-icon="lock" data-size="20"></span></div>
+          <div style="font-size:16px;font-weight:500;margin-bottom:8px">PIN admin requis</div>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:16px">La modification d'une transaction est une action sensible. Saisissez votre PIN pour continuer.</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px">
+            <div style="width:40px;height:50px;border:0.5px solid #e5e7eb;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:500">•</div>
+            <div style="width:40px;height:50px;border:0.5px solid #e5e7eb;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:500">•</div>
+            <div style="width:40px;height:50px;border:2px solid #111827;border-radius:8px;display:flex;align-items:center;justify-content:center"></div>
+            <div style="width:40px;height:50px;border:0.5px solid #e5e7eb;border-radius:8px"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+            <button class="btn-secondary" style="padding:14px">1</button>
+            <button class="btn-secondary" style="padding:14px">2</button>
+            <button class="btn-secondary" style="padding:14px">3</button>
+            <button class="btn-secondary" style="padding:14px">4</button>
+            <button class="btn-secondary" style="padding:14px">5</button>
+            <button class="btn-secondary" style="padding:14px">6</button>
+            <button class="btn-secondary" style="padding:14px">7</button>
+            <button class="btn-secondary" style="padding:14px">8</button>
+            <button class="btn-secondary" style="padding:14px">9</button>
+            <div></div>
+            <button class="btn-secondary" style="padding:14px">0</button>
+            <button class="btn-secondary" style="padding:14px"><span data-icon="x" data-size="13"></span></button>
+          </div>
+          <div style="font-size:10px;color:#6b7280">Tentative 1/3 · PIN oublié ?</div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+  <div class="viewport-mobile"><div class="phone"><div class="phone-screen" style="background:rgba(0,0,0,0.3)">
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><div style="background:#fff;width:90%;border-radius:14px;padding:20px;text-align:center">
+      <div style="font-size:14px;font-weight:500;margin-bottom:16px">PIN admin</div>
+      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:16px">
+        <div style="width:36px;height:46px;border:0.5px solid #e5e7eb;border-radius:8px;font-size:20px;display:flex;align-items:center;justify-content:center">•</div>
+        <div style="width:36px;height:46px;border:0.5px solid #e5e7eb;border-radius:8px;font-size:20px;display:flex;align-items:center;justify-content:center">•</div>
+        <div style="width:36px;height:46px;border:2px solid #111827;border-radius:8px"></div>
+        <div style="width:36px;height:46px;border:0.5px solid #e5e7eb;border-radius:8px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+        <button class="btn-secondary" style="padding:14px">1</button><button class="btn-secondary" style="padding:14px">2</button><button class="btn-secondary" style="padding:14px">3</button>
+        <button class="btn-secondary" style="padding:14px">4</button><button class="btn-secondary" style="padding:14px">5</button><button class="btn-secondary" style="padding:14px">6</button>
+      </div>
+    </div></div>
+  </div></div></div>
+</div>
+
+<script src="icons.js"></script>
+<script src="toggle.js"></script>
+</body>
+</html>
