@@ -309,17 +309,53 @@ export default function Step3Paiement({
           )}
         </div>
 
-        {/* Réductions disponibles — commit 24c. Cards cliquables, sélection
-            unique (no cumul). Click sur card = applique le code promo lié.
-            Un 2e click sur la même card désélectionne. Les parrainages
-            pending sont affichés en informatif (validation back automatique
-            à l'encaissement) et le crédit dans la card client au-dessus. */}
-        {(clientRewards.filter(r => r.status === 'available').length > 0 || pendingRefs.length > 0) && (
-          <div style={card}>
-            <p style={title}>{"Réductions disponibles"}</p>
-            <p style={{ margin:0, fontSize:11, color: t.muted, fontStyle:'italic' }}>
-              {"Cliquez pour appliquer. Une seule réduction par encaissement."}
+        <div style={card}>
+          <p style={title}>{"Code promo manuel"}</p>
+          <div style={{ display:'flex', gap:6 }}>
+            <input value={promoCode}
+                   onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoErr(''); }}
+                   onKeyDown={e => e.key === 'Enter' && checkPromo()}
+                   placeholder="Code…"
+                   style={{ ...inp, textTransform:'uppercase' }}/>
+            <button onClick={() => checkPromo()} disabled={promoLoad}
+                    style={{ padding:'8px 12px', borderRadius:8,
+                             border:`0.5px solid ${t.border}`,
+                             background:t.cardAlt, color:t.text,
+                             cursor:'pointer', fontFamily:'inherit',
+                             fontSize:12, fontWeight:500, whiteSpace:'nowrap' }}>
+              {promoLoad ? '…' : 'Vérifier'}
+            </button>
+          </div>
+          {promoErr && <p style={{ margin:0, fontSize:11, color:'#991b1b' }}>{promoErr}</p>}
+          {promoData && !promoErr && (
+            <p style={{ margin:0, fontSize:11, color:'#065f46' }}>
+              {"Remise appliquée : −" + fmt(discount) + " €"}
             </p>
+          )}
+        </div>
+
+        {/* Réductions disponibles — affichées sous « Code promo manuel » dès
+            qu'un client est identifié (par email). Cards cliquables, sélection
+            unique (non-cumul). Click = applique le code promo lié ; 2e click
+            désélectionne. Les parrainages pending sont en informatif
+            (validation back auto à l'encaissement) ; le crédit est dans la
+            card client au-dessus. La réduction sélectionnée est désactivée
+            instantanément à la validation : POST /transactions marque
+            client_rewards 'used' (atomique via client_reward_id) et le
+            frontend confirme avec referralsApi.useReward (idempotent). */}
+        {clientKnown && (
+          <div style={card}>
+            <p style={title}>{"Réductions disponibles pour ce client"}</p>
+            {clientRewards.filter(r => r.status === 'available').length === 0
+              && pendingRefs.length === 0 ? (
+              <p style={{ margin:0, fontSize:11, color: t.muted, fontStyle:'italic' }}>
+                {"Aucune réduction valide pour ce client."}
+              </p>
+            ) : (
+              <p style={{ margin:0, fontSize:11, color: t.muted, fontStyle:'italic' }}>
+                {"Cliquez pour appliquer. Une seule réduction par encaissement."}
+              </p>
+            )}
             {clientRewards.filter(r => r.status === 'available').map(r => {
               const isBday = r.reward_type === 'birthday';
               const accentBg   = isBday ? '#fff7ed' : '#eef2ff';
@@ -406,31 +442,6 @@ export default function Step3Paiement({
             })}
           </div>
         )}
-
-        <div style={card}>
-          <p style={title}>{"Code promo manuel"}</p>
-          <div style={{ display:'flex', gap:6 }}>
-            <input value={promoCode}
-                   onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoErr(''); }}
-                   onKeyDown={e => e.key === 'Enter' && checkPromo()}
-                   placeholder="Code…"
-                   style={{ ...inp, textTransform:'uppercase' }}/>
-            <button onClick={() => checkPromo()} disabled={promoLoad}
-                    style={{ padding:'8px 12px', borderRadius:8,
-                             border:`0.5px solid ${t.border}`,
-                             background:t.cardAlt, color:t.text,
-                             cursor:'pointer', fontFamily:'inherit',
-                             fontSize:12, fontWeight:500, whiteSpace:'nowrap' }}>
-              {promoLoad ? '…' : 'Vérifier'}
-            </button>
-          </div>
-          {promoErr && <p style={{ margin:0, fontSize:11, color:'#991b1b' }}>{promoErr}</p>}
-          {promoData && !promoErr && (
-            <p style={{ margin:0, fontSize:11, color:'#065f46' }}>
-              {"Remise appliquée : −" + fmt(discount) + " €"}
-            </p>
-          )}
-        </div>
       </div>
 
       {/* ── Colonne droite : Mode de paiement ── */}

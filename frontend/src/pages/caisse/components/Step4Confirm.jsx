@@ -88,6 +88,11 @@ export default function Step4Confirm({
         date, time,
         datetime_iso:    new Date(date + 'T' + time).toISOString(),
         promo_code_id:   promoData?.source === 'referral' ? null : (promoData?.promo?.id || null),
+        // client_reward_id : transmet la reward sélectionnée dans la même
+        // requête → backend marque cette ligne 'used' atomiquement (anti
+        // double-utilisation). Source de vérité côté serveur, non blocable
+        // par un retry réseau côté client.
+        client_reward_id: selectedRewardId || null,
         referral_code:   promoData?.source === 'referral' ? (promoCode || '').trim().toUpperCase() : undefined,
         discount_amount: discount || 0,
         original_amount: total,
@@ -97,6 +102,9 @@ export default function Step4Confirm({
         idempotency_key: idemKey,
       });
 
+      // Filet de sécurité côté front (idempotent) — le backend a déjà marqué
+      // la reward 'used' via client_reward_id. Ce 2e appel garantit la
+      // désactivation même si le front et le back se désynchronisent.
       if (selectedRewardId) {
         try { await referralsApi.useReward(selectedRewardId); } catch { /* non-bloquant */ }
       }

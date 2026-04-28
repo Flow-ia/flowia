@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { I } from '../../../../utils/icons';
-import { Confirm } from '../../../../components/UI';
 import { loyaltyApi } from '../../../../utils/api';
 import { Button, Label, SegmentedControl } from '../../../../components/primitives';
 
@@ -18,8 +17,6 @@ export default function TabLoyalty({ theme }) {
   const [stampEmail, setStampEmail] = useState('');
   const [stampName, setStampName]   = useState('');
   const [stamping, setStamping]     = useState(false);
-  const [delId, setDelId] = useState(null);
-
   const [promoHist, setPromoHist] = useState([]);
   const [showHist,  setShowHist]  = useState(false);
   const [histLoad,  setHistLoad]  = useState(false);
@@ -444,13 +441,6 @@ export default function TabLoyalty({ theme }) {
                       </>
                     )}
                   </div>
-                  <button onClick={() => setDelId(cl.id)}
-                          style={{ width:26, height:26, borderRadius:6, border:'none', cursor:'pointer',
-                                   background:'rgba(239,68,68,0.1)',
-                                   display:'flex', alignItems:'center', justifyContent:'center',
-                                   flexShrink:0, fontFamily:'inherit' }}>
-                    <I.Trash style={{ width:11, height:11, color:'#991b1b' }}/>
-                  </button>
                 </div>
                 <div style={{ display:'flex', gap:4 }}>
                   {Array.from({ length: program?.stamps_required || 10 }).map((_, j) => (
@@ -716,15 +706,6 @@ export default function TabLoyalty({ theme }) {
         )}
       </div>
 
-      <Confirm open={!!delId} onClose={() => setDelId(null)}
-               title="Supprimer ce client fidelite ?"
-               message="Ses tampons seront perdus."
-               theme={theme}
-               onConfirm={async () => {
-                 await loyaltyApi.removeClient(delId);
-                 setClients(p => p.filter(c => c.id !== delId));
-                 setDelId(null);
-               }}/>
     </div>
   );
 }

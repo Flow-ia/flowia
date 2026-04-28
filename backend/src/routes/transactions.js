@@ -150,6 +150,7 @@ router.post('/', async (req, res) => {
             client_email, client_name,
             promo_code_id, discount_amount, original_amount,
             client_note, items, payments, referral_code,
+            client_reward_id,
             idempotency_key } = req.body;
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
@@ -446,6 +447,23 @@ router.post('/', async (req, res) => {
           WHERE user_id=$1 AND promo_code_id=$2 AND status='available'`,
         [req.user.userId, promo_code_id]
       ).catch(() => {});
+    }
+
+    // Désactivation immédiate de la reward sélectionnée à la caisse —
+    // anti-fraude / anti-double-utilisation. UPDATE atomique : si la ligne
+    // est déjà 'used' (race avec un autre encaissement), aucun row ne
+    // matche → silencieux. Le filtrage user_id préserve le multi-tenant.
+    // Ce mécanisme est complémentaire de l'UPDATE par promo_code_id
+    // au-dessus : il couvre les rewards sans promo_code_id (rewards directes
+    // type "service offert") et garantit la désactivation de la ligne
+    // exacte choisie par l'employé.
+    if (client_reward_id) {
+      await pool.query(
+        `UPDATE client_rewards
+            SET status='used', used_at=NOW()
+          WHERE id=$1 AND user_id=$2 AND status='available'`,
+        [client_reward_id, req.user.userId]
+      ).catch(e => console.error('[REWARD USE INLINE ERR]', e.message));
     }
 
     // ── Parrainage : créer referral_uses + auto-valider (caisse = payé immédiat)
