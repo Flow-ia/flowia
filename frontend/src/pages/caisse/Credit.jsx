@@ -417,14 +417,23 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
                   style={{ ...inp, resize:'vertical' }}/>
       </div>
 
-      <button onClick={submit} disabled={busy}
-              style={{ padding:'11px 14px', borderRadius:8, border:'none',
-                       background: busy ? t.cardAlt : '#10b981',
-                       color: busy ? t.muted : '#fff',
-                       cursor: busy ? 'wait' : 'pointer',
-                       fontFamily:'inherit', fontSize:13, fontWeight:500 }}>
-        {busy ? 'Envoi…' : 'Accorder le crédit'}
-      </button>
+      {(() => {
+        const valNum   = parseFloat(amount);
+        const amountOk = Number.isFinite(valNum) && valNum > 0;
+        const formOk   = !!client?.id && !!empId && amountOk;
+        const disabled = busy || !formOk;
+        return (
+          <button onClick={submit} disabled={disabled}
+                  style={{ padding:'11px 14px', borderRadius:8, border:'none',
+                           background: disabled ? t.cardAlt : '#10b981',
+                           color: disabled ? t.muted : '#fff',
+                           cursor: busy ? 'wait' : (disabled ? 'not-allowed' : 'pointer'),
+                           fontFamily:'inherit', fontSize:13, fontWeight:500,
+                           transition:'background 0.15s, color 0.15s' }}>
+            {busy ? 'Envoi…' : 'Accorder le crédit'}
+          </button>
+        );
+      })()}
 
       <p style={{ margin:0, fontSize:10, color:t.muted }}>
         {"Le PIN de l'employé signataire est exigé pour valider le crédit."}
