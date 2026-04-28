@@ -85,7 +85,7 @@ async function main() {
     let ran = false;
     const r = await withLock(LOCK_KEY, async () => { ran = true; return 'done'; });
     assert(r.skipped === true, 'withLock retourne {skipped:true} quand le lock est pris ailleurs');
-    assert(ran === false,      'le callback n’est PAS exécuté');
+    assert(ran === false,      "le callback n'est PAS exécuté");
 
     await blocker.query('SELECT pg_advisory_unlock($1::bigint)', [big4]);
   } finally {
