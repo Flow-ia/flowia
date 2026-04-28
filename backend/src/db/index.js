@@ -1346,6 +1346,43 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_created_at ON marketing_optout_log(created_at DESC)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_marketing_optout_source ON marketing_optout_log(source)`);
 
+  // ── Indexes scaling (commit 31) ───────────────────────────────────────────
+  // Préparation à l'augmentation de volume (4 employés × 2 000 commerçants
+  // actifs → ~24M tx/an et 24M RDV/an). Les indexes existants couvrent les
+  // hot paths actuels ; ceux-ci anticipent les requêtes qui scaleront mal
+  // sans index dédié à 5M+ lignes par table. Tous CREATE IF NOT EXISTS
+  // (idempotent) + clauses WHERE filtrant les NULLs (indexes partiels plus
+  // compacts). Aucun gain visible aujourd'hui mais prévient les slow queries
+  // futures sans avoir à passer en partition (qui reste possible plus tard).
+  //
+  // Pourquoi ces indexes précis :
+  //   1. Stats / commissions par employé : (user_id, employee_id, date)
+  //      → l'index existant (user_id, employee_id, date, status) fonctionne
+  //        mais reste très large ; un index ciblé sur transactions est plus
+  //        compact et sera préféré pour les agrégats sans status filter.
+  //   2. Audit / recherche d'usage promo : (promo_code_id)
+  //      → sans index, scan complet de transactions pour retracer un code.
+  //   3. Cron rappels RDV : (user_id, status, date, start_time)
+  //      → filtre WHERE status='confirmed' AND date+time entre [now+22h, now+26h].
+  //        L'index existant exige employee_id non NULL filtré → pas pris pour
+  //        ce cron qui parcourt tous les RDV du commerçant.
+  //   4. Lookup RDV depuis transaction (refund, audit) : (transaction_id)
+  //   5. Répartition CA par moyen de paiement : (user_id, payment_method, date)
+  //   6. Fiche client par client_id (pas client_email — RGPD anonymisation
+  //      met email à NULL mais garde client_id) : (user_id, client_id)
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_emp_date
+    ON transactions(user_id, employee_id, date DESC) WHERE employee_id IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_promo_code
+    ON transactions(promo_code_id) WHERE promo_code_id IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_pm_date
+    ON transactions(user_id, payment_method, date DESC) WHERE payment_method IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_user_status_date_time
+    ON appointments(user_id, status, date, start_time)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_transaction
+    ON appointments(transaction_id) WHERE transaction_id IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_user_client_id
+    ON appointments(user_id, client_id) WHERE client_id IS NOT NULL`);
+
   await applyAdminSchema(pool);
 
 console.log('[DB] Tables initialisées');
