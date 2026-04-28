@@ -702,10 +702,14 @@ export const marketingApi = {
 };
 
 export const creditsApi = {
+  // GET /credits renvoie maintenant { rows, total, total_balance, active_clients_count }.
   list:       (params={}) => request('/credits?' + new URLSearchParams(params)),
   getClient:  (clientId)  => request('/credits/client/' + clientId),
-  grant:      (data)      => request('/credits/grant',  { method:'POST', body: JSON.stringify(data) }),
-  repay:      (data)      => request('/credits/repay',  { method:'POST', body: JSON.stringify(data) }),
+  // grant : actingEmployeeId injecte le header x-employee-pin (PIN obligatoire backend).
+  grant:      (data, actingEmployeeId) => request('/credits/grant',
+                  { method:'POST', body: JSON.stringify(data), actingEmployeeId }),
+  repay:      (data, actingEmployeeId) => request('/credits/repay',
+                  { method:'POST', body: JSON.stringify(data), actingEmployeeId }),
   remove:     (id)        => request('/credits/' + id,  { method:'DELETE' }),
 };
 async function gcRequest(path, options = {}, token = null) {

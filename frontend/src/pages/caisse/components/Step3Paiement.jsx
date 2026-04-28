@@ -110,9 +110,12 @@ export default function Step3Paiement({
         setClientMarketingOptIn(null); setClientKnown(false);
       });
     creditsApi.list({ search: low })
-      .then(list => {
+      .then(resp => {
         if (cancelled) return;
-        const match = (Array.isArray(list) ? list : []).find(c =>
+        // GET /credits renvoie { rows, total, ... } ; back-compat array.
+        const list = Array.isArray(resp?.rows) ? resp.rows
+                   : (Array.isArray(resp) ? resp : []);
+        const match = list.find(c =>
           String(c.client_email || '').toLowerCase() === low);
         setClientCredit(match && parseFloat(match.balance) > 0
           ? { balance: parseFloat(match.balance), id: match.id }

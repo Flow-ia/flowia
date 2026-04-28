@@ -7,9 +7,12 @@
 // Contrat préservé : grant enforce can_grant_credit côté back ; repay = via
 // l'étape Paiement de l'encaissement (crée transaction revenue source='credit'
 // + décrément balance + audit trail — ne pas dupliquer ici).
-import { useEffect, useState } from 'react';
-import { creditsApi } from '../../utils/api';
+import { useEffect, useRef, useState } from 'react';
+import { creditsApi, clientsApi, api } from '../../utils/api';
+import { useEmployeePinGate } from '../../components/EmployeePinModal';
 import { Icon } from '../../components/Icon';
+
+const PAGE_SIZE = 5;
 
 const AVATAR_PALETTE = [
   '#f59e0b', // orange
@@ -194,39 +197,115 @@ function ClientDetailModal({ clientId, theme: t, onClose }) {
 }
 
 // ── Form Accorder ─────────────────────────────────────────────────────────
+// Sécurité : un crédit est sensible côté commerçant. On impose donc :
+//   - sélection d'un client via la recherche unique (nom/prénom/email/tél)
+//     pour éviter une saisie email libre qui créerait une fiche orpheline ;
+//   - employé signataire obligatoire — uniquement ceux avec PIN actif ET
+//     can_grant_credit=true sont proposés ;
+//   - montant > 0 ;
+//   - PIN employé exigé via useEmployeePinGate (sessionStorage TTL 5 min,
+//     header x-employee-pin envoyé à POST /credits/grant).
+// Le backend re-valide tout (defense-in-depth).
 function GrantForm({ employees, theme: t, onGranted, showToast }) {
-  const [email, setEmail]   = useState('');
-  const [name,  setName]    = useState('');
+  const { requestPin, PinModalNode } = useEmployeePinGate();
+
+  const [q, setQ]               = useState('');
+  const [results, setResults]   = useState([]);
+  const [searching, setSearch]  = useState(false);
+  const [openDrop, setOpenDrop] = useState(false);
+  const [client, setClient]     = useState(null); // { id, first_name, last_name, email, phone }
+
   const [amount, setAmount] = useState('');
-  const [note,  setNote]    = useState('');
-  const [empId, setEmpId]   = useState('');
-  const [busy,  setBusy]    = useState(false);
+  const [note,   setNote]   = useState('');
+  const [empId,  setEmpId]  = useState('');
+  const [busy,   setBusy]   = useState(false);
 
-  const reset = () => { setEmail(''); setName(''); setAmount(''); setNote(''); setEmpId(''); };
+  // Liste des employés disponibles : actifs + can_grant_credit + PIN actif.
+  // On charge l'état PIN une fois au mount pour filtrer correctement.
+  const [pinByEmp, setPinByEmp] = useState({}); // { [employeeId]: { has_pin, is_active } }
+  useEffect(() => {
+    let cancelled = false;
+    api.getEmployeePins()
+      .then(rows => {
+        if (cancelled) return;
+        const map = {};
+        (rows || []).forEach(r => { map[r.employee_id] = { has_pin: !!r.has_pin, is_active: !!r.is_active }; });
+        setPinByEmp(map);
+      })
+      .catch(() => { if (!cancelled) setPinByEmp({}); });
+    return () => { cancelled = true; };
+  }, []);
 
-  const submit = async () => {
-    const val = parseFloat(amount);
-    if (!email.trim())    return showToast && showToast("Email client requis", 'error');
-    if (!val || val <= 0) return showToast && showToast('Montant invalide', 'error');
-    setBusy(true);
-    try {
-      await creditsApi.grant({
-        client_email: email.trim().toLowerCase(),
-        client_name:  name.trim() || undefined,
-        amount:       val,
-        note:         note.trim() || undefined,
-        employee_id:  empId || undefined,
-      });
-      if (showToast) showToast("Crédit accordé", 'ok');
-      try { window.dispatchEvent(new Event('ff-tx-refresh')); } catch { /* noop */ }
-      reset();
-      if (onGranted) onGranted();
-    } catch (e) {
-      if (showToast) showToast(e.message || 'Erreur', 'error');
-    } finally { setBusy(false); }
+  const eligibleEmployees = employees.filter(e =>
+    e.is_active !== false &&
+    e.can_grant_credit === true &&
+    pinByEmp[e.id]?.has_pin === true &&
+    pinByEmp[e.id]?.is_active === true
+  );
+
+  // Recherche client debounced 350 ms (1 input → first_name+last_name, email, phone côté back).
+  const reqIdRef = useRef(0);
+  useEffect(() => {
+    if (client) return; // pas de recherche tant qu'un client est sélectionné
+    const term = q.trim();
+    if (term.length < 2) { setResults([]); setSearch(false); return; }
+    setSearch(true);
+    const myId = ++reqIdRef.current;
+    const tm = setTimeout(() => {
+      clientsApi.search(term)
+        .then(rows => {
+          if (myId !== reqIdRef.current) return;
+          setResults(Array.isArray(rows) ? rows : []);
+          setSearch(false);
+        })
+        .catch(() => {
+          if (myId !== reqIdRef.current) return;
+          setResults([]); setSearch(false);
+        });
+    }, 350);
+    return () => clearTimeout(tm);
+  }, [q, client]);
+
+  const reset = () => {
+    setQ(''); setResults([]); setOpenDrop(false); setClient(null);
+    setAmount(''); setNote(''); setEmpId('');
   };
 
-  const canGrantList = employees.filter(e => e.is_active !== false && e.can_grant_credit === true);
+  const pickClient = (c) => {
+    setClient(c);
+    setQ(''); setResults([]); setOpenDrop(false);
+  };
+
+  const submit = async () => {
+    if (!client?.id)        return showToast && showToast('Sélectionnez un client.', 'error');
+    if (!empId)             return showToast && showToast('Sélectionnez un employé signataire.', 'error');
+    const val = parseFloat(amount);
+    if (!Number.isFinite(val) || val <= 0)
+      return showToast && showToast('Le montant doit être positif.', 'error');
+
+    const emp = employees.find(e => e.id === empId) || null;
+    if (!emp)               return showToast && showToast('Employé introuvable.', 'error');
+    if (!pinByEmp[emp.id]?.has_pin || !pinByEmp[emp.id]?.is_active)
+      return showToast && showToast("Cet employé n'a pas de PIN actif.", 'error');
+
+    await requestPin(emp, "Accorder un crédit", async () => {
+      setBusy(true);
+      try {
+        await creditsApi.grant({
+          client_id:   client.id,
+          amount:      val,
+          note:        note.trim() || undefined,
+          employee_id: emp.id,
+        }, emp.id);
+        if (showToast) showToast("Crédit accordé", 'ok');
+        try { window.dispatchEvent(new Event('ff-tx-refresh')); } catch { /* noop */ }
+        reset();
+        if (onGranted) onGranted();
+      } catch (e) {
+        if (showToast) showToast(e.message || 'Erreur', 'error');
+      } finally { setBusy(false); }
+    });
+  };
 
   const inp = {
     width:'100%', padding:'9px 12px', borderRadius:8,
@@ -234,6 +313,10 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
     color:t.text, fontSize:13, fontFamily:'inherit',
     boxSizing:'border-box', outline:'none',
   };
+
+  const clientLabel = client
+    ? `${[client.first_name, client.last_name].filter(Boolean).join(' ').trim() || client.email || 'Client'}${client.email ? ' · ' + client.email : ''}${client.phone ? ' · ' + client.phone : ''}`
+    : '';
 
   return (
     <div style={{ padding:14, borderRadius:12, background:t.card,
@@ -243,16 +326,69 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
         {"Accorder un crédit"}
       </p>
 
-      <div>
-        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Client (email) *"}</p>
-        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-               placeholder="client@exemple.fr" style={inp}/>
+      <div style={{ position:'relative' }}>
+        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>
+          {"Client * (nom, prénom, email ou téléphone)"}
+        </p>
+        {client ? (
+          <div style={{ display:'flex', alignItems:'center', gap:8,
+                        padding:'9px 12px', borderRadius:8,
+                        background:t.cardAlt, border:`0.5px solid ${t.borderInput}` }}>
+            <div style={{ flex:1, minWidth:0, fontSize:13, color:t.text,
+                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {clientLabel}
+            </div>
+            <button type="button" onClick={() => setClient(null)}
+                    style={{ padding:'4px 8px', border:'none', background:'transparent',
+                             cursor:'pointer', color:t.muted, fontSize:12, fontFamily:'inherit' }}>
+              {"Changer"}
+            </button>
+          </div>
+        ) : (
+          <>
+            <input type="text" value={q}
+                   onChange={e => { setQ(e.target.value); setOpenDrop(true); }}
+                   onFocus={() => setOpenDrop(true)}
+                   onBlur={() => setTimeout(() => setOpenDrop(false), 150)}
+                   placeholder="Rechercher un client…"
+                   style={inp}/>
+            {openDrop && q.trim().length >= 2 && (
+              <div style={{ position:'absolute', left:0, right:0, top:'100%',
+                            marginTop:4, zIndex:20, maxHeight:240, overflowY:'auto',
+                            background:t.card, border:`0.5px solid ${t.border}`,
+                            borderRadius:8,
+                            boxShadow:t.shadowModal || '0 8px 24px rgba(0,0,0,0.12)' }}>
+                {searching ? (
+                  <p style={{ margin:0, padding:'10px 12px', fontSize:12, color:t.muted }}>
+                    {"Recherche…"}
+                  </p>
+                ) : results.length === 0 ? (
+                  <p style={{ margin:0, padding:'10px 12px', fontSize:12, color:t.muted }}>
+                    {"Aucun client trouvé."}
+                  </p>
+                ) : results.map(r => {
+                  const nm = `${r.first_name || ''} ${r.last_name || ''}`.trim() || r.email || 'Client';
+                  return (
+                    <button key={r.id} type="button"
+                            onMouseDown={(e) => { e.preventDefault(); pickClient(r); }}
+                            style={{ display:'block', width:'100%', textAlign:'left',
+                                     padding:'9px 12px', border:'none',
+                                     borderBottom:`0.5px solid ${t.separator}`,
+                                     background:'transparent', cursor:'pointer',
+                                     fontFamily:'inherit', color:t.text, fontSize:13 }}>
+                      <div style={{ fontWeight:500 }}>{nm}</div>
+                      <div style={{ fontSize:11, color:t.muted, marginTop:2 }}>
+                        {[r.email, r.phone].filter(Boolean).join(' · ') || '—'}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
       </div>
-      <div>
-        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Nom (facultatif)"}</p>
-        <input type="text" value={name} onChange={e => setName(e.target.value)}
-               placeholder="Prénom Nom" style={inp}/>
-      </div>
+
       <div>
         <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Montant (€) *"}</p>
         <input type="number" step="0.01" min="0.01" value={amount}
@@ -261,13 +397,18 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
                         textAlign:'right' }}/>
       </div>
       <div>
-        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Employé signataire"}</p>
+        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Employé signataire *"}</p>
         <select value={empId} onChange={e => setEmpId(e.target.value)} style={inp}>
-          <option value="">{"Aucun (merchant admin)"}</option>
-          {canGrantList.map(e => (
-            <option key={e.id} value={e.id}>{e.name + " (can_grant)"}</option>
+          <option value="">{"— Sélectionner —"}</option>
+          {eligibleEmployees.map(e => (
+            <option key={e.id} value={e.id}>{e.name}</option>
           ))}
         </select>
+        {eligibleEmployees.length === 0 && (
+          <p style={{ margin:'4px 0 0', fontSize:10, color:'#991b1b' }}>
+            {"Aucun employé éligible : il faut un employé actif avec can_grant_credit ET un PIN actif."}
+          </p>
+        )}
       </div>
       <div>
         <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Note"}</p>
@@ -286,8 +427,10 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
       </button>
 
       <p style={{ margin:0, fontSize:10, color:t.muted }}>
-        {"Seuls les employés avec la permission can_grant_credit apparaissent dans la liste."}
+        {"Le PIN de l'employé signataire est exigé pour valider le crédit."}
       </p>
+
+      {PinModalNode}
     </div>
   );
 }
@@ -296,48 +439,57 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
 export default function Credit({ employees = [], theme, showToast, transactions = [] }) {
   const t = theme;
   const [q, setQ] = useState('');
+  const [page, setPage]         = useState(0); // 0-indexed
   const [list, setList]         = useState([]);
+  const [total, setTotal]       = useState(0);
+  const [kpiTotalGranted, setKpiTotalGranted]   = useState(0);
+  const [kpiClientsActive, setKpiClientsActive] = useState(0);
   const [loading, setLoading]   = useState(true);
   const [detailId, setDetailId] = useState(null);
 
-  // BUG FIX commit 7c : la recherche passe désormais par le back
-  // (GET /api/credits?search=...). Debounce 350 ms sur q. Vide =
-  // liste complète (only_active=true). Le back gère le LIKE sur
-  // client_email / client_name / first_name+last_name / phone (routes/credits.js).
-  const load = (searchQ) => {
+  // GET /credits?search&only_active&limit&offset → { rows, total, total_balance, active_clients_count }.
+  // Pagination 5 / page côté serveur pour ne pas charger toute la base
+  // d'un coup. Les KPI viennent du backend (toujours merchant-wide actifs)
+  // et restent stables pendant une recherche.
+  const load = (searchQ, pageIdx) => {
     setLoading(true);
-    const params = {};
+    const params = { limit: PAGE_SIZE, offset: pageIdx * PAGE_SIZE };
     const qt = (searchQ ?? '').trim();
     if (qt) params.search = qt;
     else    params.only_active = 'true';
     return creditsApi.list(params)
-      .then(r => { setList(Array.isArray(r) ? r : []); setLoading(false); })
+      .then(r => {
+        const rows = Array.isArray(r?.rows) ? r.rows : [];
+        setList(rows);
+        setTotal(Number(r?.total) || 0);
+        setKpiTotalGranted(Number(r?.total_balance) || 0);
+        setKpiClientsActive(Number(r?.active_clients_count) || 0);
+        setLoading(false);
+      })
       .catch(e => {
-        setList([]); setLoading(false);
+        setList([]); setTotal(0); setLoading(false);
         if (showToast) showToast(e.message || 'Erreur chargement crédits', 'error');
       });
   };
 
-  // Debounce 350 ms sur q. Chargement initial = q vide → only_active.
+  // Debounce 350 ms sur q. Reset à la page 0 quand la recherche change.
   useEffect(() => {
-    const tm = setTimeout(() => { load(q); }, q.trim() ? 350 : 0);
-    return () => clearTimeout(tm);
-  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+    setPage(0);
+  }, [q]);
 
   useEffect(() => {
-    const onRefresh = () => load(q);
+    const tm = setTimeout(() => { load(q, page); }, q.trim() && page === 0 ? 350 : 0);
+    return () => clearTimeout(tm);
+  }, [q, page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const onRefresh = () => load(q, page);
     window.addEventListener('ff-tx-refresh', onRefresh);
     return () => window.removeEventListener('ff-tx-refresh', onRefresh);
-  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [q, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Quand une recherche est active, on affiche aussi les clients au solde 0
-  // (pour retrouver un ancien bénéficiaire). KPIs se calculent uniquement
-  // sur les crédits actifs (balance > 0).
-  const activeList = list.filter(c => parseFloat(c.balance || 0) > 0);
-  const filtered   = q.trim() ? list : activeList;
-
-  const kpiTotalGranted = activeList.reduce((s, c) => s + parseFloat(c.balance || 0), 0);
-  const kpiClientsActive = activeList.length;
+  const filtered = list;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Crédit utilisé ce mois : transactions revenue source='credit' créées ce mois.
   const now = new Date();
@@ -464,6 +616,39 @@ export default function Credit({ employees = [], theme, showToast, transactions 
             );
           })}
 
+          {/* Pagination 5 / page — la base ne renvoie que la page courante. */}
+          {!loading && total > PAGE_SIZE && (
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                          gap:10, paddingTop:10, marginTop:6,
+                          borderTop:`0.5px solid ${t.separator}` }}>
+              <button type="button"
+                      disabled={page <= 0}
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      style={{ padding:'6px 10px', borderRadius:8,
+                               border:`0.5px solid ${t.border}`,
+                               background:'transparent',
+                               color: page <= 0 ? t.muted : t.text,
+                               cursor: page <= 0 ? 'not-allowed' : 'pointer',
+                               fontFamily:'inherit', fontSize:12 }}>
+                {"← Précédent"}
+              </button>
+              <span style={{ fontSize:11, color:t.muted }}>
+                {`Page ${page + 1} / ${totalPages} — ${total} client${total > 1 ? 's' : ''}`}
+              </span>
+              <button type="button"
+                      disabled={page + 1 >= totalPages}
+                      onClick={() => setPage(p => p + 1)}
+                      style={{ padding:'6px 10px', borderRadius:8,
+                               border:`0.5px solid ${t.border}`,
+                               background:'transparent',
+                               color: page + 1 >= totalPages ? t.muted : t.text,
+                               cursor: page + 1 >= totalPages ? 'not-allowed' : 'pointer',
+                               fontFamily:'inherit', fontSize:12 }}>
+                {"Suivant →"}
+              </button>
+            </div>
+          )}
+
           <p style={{ margin:'10px 0 0', fontSize:10, color:t.muted }}>
             {"L'utilisation d'un crédit se fait via l'étape Paiement de l'encaissement (crée une transaction revenue source='credit' + décrément du solde + audit trail)."}
           </p>
@@ -471,7 +656,7 @@ export default function Credit({ employees = [], theme, showToast, transactions 
 
         <GrantForm employees={employees} theme={t}
                    showToast={showToast}
-                   onGranted={load}/>
+                   onGranted={() => load(q, page)}/>
       </div>
 
       {detailId && (

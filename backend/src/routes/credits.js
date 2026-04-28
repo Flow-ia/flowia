@@ -10,6 +10,7 @@ const express  = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
+const { employeePinOptional } = require('../middleware/employeePinOptional');
 const router   = express.Router();
 router.use(authMiddleware);
 router.use(requireFeature('credits'));
@@ -41,26 +42,59 @@ async function resolveClient(userId, clientId, clientEmail) {
   return { email: rows[0].email, name: `${rows[0].first_name} ${rows[0].last_name}`.trim() };
 }
 
-// GET /api/credits — liste
+// GET /api/credits — liste paginée + agrégats KPI
+// Query : search, only_active, limit (défaut 5, max 50), offset (défaut 0).
+// Réponse : { rows, total, total_balance, active_clients_count }.
+//   - rows                 : page courante (filtrée par search/only_active)
+//   - total                : nb de crédits qui matchent les filtres (pour pagination)
+//   - total_balance        : somme des balances actives merchant-wide (KPI)
+//   - active_clients_count : nb de clients avec balance > 0 merchant-wide (KPI)
+// Les KPI sont indépendants des filtres pour rester stables pendant une recherche.
 router.get('/', async (req, res) => {
   try {
     const uid = req.user.userId;
     const { search, only_active } = req.query;
-    let q = `
-      SELECT cc.*, ca.id AS client_id, ca.first_name, ca.last_name, ca.phone, ca.global_client_id,
-        COALESCE(ca.first_name||' '||ca.last_name, cc.client_name, cc.client_email) AS full_name
+    const limit  = Math.max(1, Math.min(50, parseInt(req.query.limit, 10)  || 5));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+    // KPI merchant-wide (toujours actifs, indépendants de search)
+    const { rows: kpiRows } = await pool.query(
+      `SELECT COALESCE(SUM(balance),0)::float AS total_balance,
+              COUNT(*)::int AS active_clients_count
+         FROM client_credits
+         WHERE user_id=$1 AND balance > 0`,
+      [uid]
+    );
+
+    let baseQ = `
       FROM client_credits cc
       LEFT JOIN client_accounts ca ON ca.user_id=cc.user_id AND LOWER(ca.email)=LOWER(cc.client_email)
       WHERE cc.user_id=$1`;
     const params = [uid];
-    if (only_active === 'true') q += ` AND cc.balance > 0`;
+    if (only_active === 'true') baseQ += ` AND cc.balance > 0`;
     if (search) {
       params.push(`%${search.trim()}%`);
-      q += ` AND (cc.client_name ILIKE $${params.length} OR cc.client_email ILIKE $${params.length} OR (ca.first_name||' '||ca.last_name) ILIKE $${params.length} OR ca.phone ILIKE $${params.length})`;
+      baseQ += ` AND (cc.client_name ILIKE $${params.length} OR cc.client_email ILIKE $${params.length} OR (ca.first_name||' '||ca.last_name) ILIKE $${params.length} OR ca.phone ILIKE $${params.length})`;
     }
-    q += ` ORDER BY cc.balance DESC, cc.updated_at DESC`;
-    const { rows } = await pool.query(q, params);
-    res.json(rows);
+
+    const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int AS n ${baseQ}`, params);
+    const total = countRows[0].n;
+
+    params.push(limit, offset);
+    const listQ = `
+      SELECT cc.*, ca.id AS client_id, ca.first_name, ca.last_name, ca.phone, ca.global_client_id,
+        COALESCE(ca.first_name||' '||ca.last_name, cc.client_name, cc.client_email) AS full_name
+      ${baseQ}
+      ORDER BY cc.balance DESC, cc.updated_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const { rows } = await pool.query(listQ, params);
+
+    res.json({
+      rows,
+      total,
+      total_balance: parseFloat(kpiRows[0].total_balance) || 0,
+      active_clients_count: kpiRows[0].active_clients_count || 0,
+    });
   } catch (e) { console.error('[GET /credits]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -96,29 +130,51 @@ router.get('/client/:clientId', async (req, res) => {
 });
 
 // POST /api/credits/grant — accorder un crédit
-router.post('/grant', async (req, res) => {
+// Sécurité (commit caisse-credit) : opération sensible — un employé doit
+// être désigné explicitement, son PIN actif vérifié (header x-employee-pin
+// → req.employee via employeePinOptional) et le client résolu via client_id
+// (plus d'email libre côté front pour éviter la création silencieuse de
+// crédits sur un mauvais email saisi).
+router.post('/grant', employeePinOptional, async (req, res) => {
   const db = await pool.connect();
   try {
     const uid = req.user.userId;
-    const { client_id, client_email, client_name, amount, note, employee_id, appointment_id } = req.body;
-    if (!amount || parseFloat(amount) <= 0) return res.status(400).json({ error: 'Montant invalide.' });
-    const client = await resolveClient(uid, client_id, client_email);
-    if (!client) return res.status(400).json({ error: 'Client introuvable.' });
-    const name = client_name || client.name;
+    const { client_id, amount, note, employee_id, appointment_id } = req.body;
 
-    let empName = null;
-    if (employee_id) {
-      const { rows: empR } = await db.query(
-        'SELECT name, can_grant_credit FROM employees WHERE id=$1 AND user_id=$2 AND is_active=TRUE',
-        [employee_id, uid]
-      );
-      if (!empR.length) return res.status(404).json({ error: 'Employé introuvable.' });
-      if (empR[0].can_grant_credit === false)
-        return res.status(403).json({ error: "Cet employé n'a pas la permission d'accorder des crédits." });
-      empName = empR[0].name;
-    }
-
+    if (!client_id) return res.status(400).json({ error: 'Client requis.' });
+    if (!employee_id) return res.status(400).json({ error: 'Employé requis.' });
     const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    if (!req.employee) {
+      return res.status(403).json({
+        error: "Code PIN employé requis pour accorder un crédit.",
+        code: 'EMPLOYEE_PIN_REQUIRED',
+      });
+    }
+    if (String(req.employee.id) !== String(employee_id)) {
+      return res.status(403).json({
+        error: "Le PIN ne correspond pas à l'employé sélectionné.",
+        code: 'EMPLOYEE_PIN_MISMATCH',
+      });
+    }
+    if (req.employee.can_grant_credit === false) {
+      return res.status(403).json({ error: "Cet employé n'a pas la permission d'accorder des crédits." });
+    }
+    const empName = req.employee.name;
+
+    const { rows: ca } = await db.query(
+      'SELECT id, email, first_name, last_name FROM client_accounts WHERE id=$1 AND user_id=$2',
+      [client_id, uid]
+    );
+    if (!ca.length) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientEmail = (ca[0].email || '').toLowerCase().trim();
+    if (!clientEmail) {
+      return res.status(400).json({ error: "Le client doit avoir un email pour recevoir un crédit." });
+    }
+    const clientName = `${ca[0].first_name || ''} ${ca[0].last_name || ''}`.trim() || clientEmail;
+    const client = { email: clientEmail, name: clientName };
+    const name = clientName;
     await db.query('BEGIN');
     try {
       // getOrCreateCredit n'utilise pas `db` directement — on upsert inline

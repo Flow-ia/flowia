@@ -144,19 +144,22 @@ export default function ClientsPage() {
 
   const handleGrantCredit = async () => {
     if (!fiche || !creditAmt || parseFloat(creditAmt) <= 0) return showToast('Montant invalide', 'error');
+    if (!creditEmpId) return showToast('Sélectionnez un employé signataire.', 'error');
     const emp = employees.find(e => e.id === creditEmpId) || null;
+    if (!emp) return showToast('Employé introuvable.', 'error');
     await requestPin(
       emp,
       'Accorder un credit',
       async () => {
         setCreditBusy(true);
         try {
+          // Backend exige PIN employé (header x-employee-pin via actingEmployeeId).
           const r = await creditsApi.grant({
             client_id:   fiche.id,
             amount:      parseFloat(creditAmt),
             note:        creditNote.trim() || undefined,
-            employee_id: creditEmpId || undefined,
-          });
+            employee_id: emp.id,
+          }, emp.id);
           showToast(r.message || 'Crédit accorde ✓', 'ok');
           setCreditAmt(''); setCreditNote(''); setCreditEmpId(''); setCreditMode(null);
           await loadCredit(fiche.id);
