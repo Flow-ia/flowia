@@ -62,6 +62,51 @@ export async function forceMerchantSlug(id, { slug, lock }) {
   });
 }
 
+// ── Codes promo d'un commerçant (loyalty / birthday / referral / sms / manual)
+// Catégories renvoyées par le backend dans counts_by_category + chaque ligne.
+export async function listMerchantPromoCodes(merchantId, {
+  category = 'all', status = 'all', search = '', limit = 50, offset = 0,
+} = {}) {
+  const qs = new URLSearchParams();
+  if (category && category !== 'all') qs.set('category', category);
+  if (status   && status   !== 'all') qs.set('status',   status);
+  if (search)   qs.set('search', search);
+  qs.set('limit',  String(limit));
+  qs.set('offset', String(offset));
+  return await apiJson(
+    `/api/admin/merchants/${encodeURIComponent(merchantId)}/promo-codes?${qs.toString()}`
+  );
+}
+
+export async function activateMerchantPromoCode(merchantId, codeId) {
+  return await apiJson(
+    `/api/admin/merchants/${encodeURIComponent(merchantId)}/promo-codes/${encodeURIComponent(codeId)}/activate`,
+    { method: 'PATCH' }
+  );
+}
+
+export async function deactivateMerchantPromoCode(merchantId, codeId) {
+  return await apiJson(
+    `/api/admin/merchants/${encodeURIComponent(merchantId)}/promo-codes/${encodeURIComponent(codeId)}/deactivate`,
+    { method: 'PATCH' }
+  );
+}
+
+export async function deleteMerchantPromoCode(merchantId, codeId) {
+  return await apiJson(
+    `/api/admin/merchants/${encodeURIComponent(merchantId)}/promo-codes/${encodeURIComponent(codeId)}`,
+    { method: 'DELETE' }
+  );
+}
+
+export async function deleteMerchantPromoCodesByCategory(merchantId, category) {
+  const qs = new URLSearchParams({ category });
+  return await apiJson(
+    `/api/admin/merchants/${encodeURIComponent(merchantId)}/promo-codes?${qs.toString()}`,
+    { method: 'DELETE' }
+  );
+}
+
 // ── Clients (global_clients cross-merchant) ─────────────────────────────────
 export async function listClients({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
   const qs = new URLSearchParams();

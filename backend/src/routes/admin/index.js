@@ -35,6 +35,10 @@ router.use(cors({
 }));
 
 router.use('/auth', require('./auth'));
+// Sous-router promo-codes monté AVANT /merchants pour que la route plus
+// spécifique /merchants/:merchantId/promo-codes/* matche d'abord — sinon
+// merchants.js intercepterait via /:id.
+router.use('/merchants/:merchantId/promo-codes', require('./promo-codes'));
 router.use('/merchants', require('./merchants'));
 router.use('/clients',   require('./clients'));
 router.use('/stats',     require('./stats'));
