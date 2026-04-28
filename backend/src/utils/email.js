@@ -1,5 +1,20 @@
 require('dotenv').config();
 
+// ── Helpers HTML FDS-2026 ─────────────────────────────────────────────────
+// Toutes les valeurs dynamiques injectees dans les templates ci-dessous
+// passent par escapeHtml() (XSS dans les notifications utilisateur).
+const {
+  escapeHtml,
+  renderShell,
+  renderInfoTable,
+  renderNotice,
+  renderCodeBlock,
+  renderAmountSummary,
+  renderCta,
+  renderDivider,
+  renderHeading,
+} = require('./emailLayout');
+
 // ── Brevo (ex-Sendinblue) — API HTTPS, jamais bloqué par Render ───────────
 async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) {
   const body = {
@@ -33,38 +48,34 @@ async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) 
 
 // ── Email code vérification (OTP) ─────────────────────────────────────────
 async function sendVerificationEmail(to, code, subject = 'Votre code de vérification', context = 'default') {
-  const styles = {
-    default:       { emoji: '💰', badge: '' },
-    register:      { emoji: '🎉', badge: 'Inscription' },
-    pin_change:    { emoji: '🔐', badge: 'Sécurité PIN' },
-    lockout_alert: { emoji: '🚨', badge: 'Alerte Sécurité' },
-    email:         { emoji: '✉️', badge: 'Email' },
+  const badges = {
+    default:       '',
+    register:      'Inscription',
+    pin_change:    'Sécurité PIN',
+    lockout_alert: 'Alerte sécurité',
+    email:         'Vérification email',
   };
-  const st = styles[context] || styles.default;
+  const badge = badges[context] || badges.default;
+  const kicker = badge ? `FlowIA · ${badge}` : 'FlowIA';
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
-  <div style="max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
-    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;">
-      <div style="font-size:40px;margin-bottom:10px;">${st.emoji}</div>
-      <h1 style="color:white;margin:0;font-size:22px;font-weight:800;">FlowIA</h1>
-      ${st.badge ? `<span style="display:inline-block;margin-top:10px;background:rgba(255,255,255,0.15);color:#e2e8f0;padding:4px 14px;border-radius:99px;font-size:12px;font-weight:600;">${st.badge}</span>` : ''}
-    </div>
-    <div style="padding:40px 36px;text-align:center;">
-      <h2 style="color:#0f172a;font-size:20px;margin:0 0 10px;font-weight:800;">${subject}</h2>
-      <p style="color:#64748b;font-size:14px;margin:0 0 32px;">Entrez ce code dans l'application pour continuer :</p>
-      <div style="background:#f1f5f9;border:2px solid #e2e8f0;border-radius:20px;padding:28px 24px;margin-bottom:28px;">
-        <div style="letter-spacing:14px;font-size:40px;font-weight:900;color:#0f172a;font-family:monospace;">${code}</div>
-      </div>
-      <p style="color:#94a3b8;font-size:13px;margin:0;">⏱ Ce code expire dans <strong>15 minutes</strong>.</p>
-      <p style="color:#94a3b8;font-size:12px;margin:10px 0 0;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
-    </div>
-    <div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
-      <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
-    </div>
-  </div>
-</body></html>`;
+  const intro = context === 'lockout_alert'
+    ? `<p style="margin:0;">Une tentative répétée a été détectée sur votre compte. Utilisez le code ci-dessous pour confirmer qu'il s'agit bien de vous :</p>`
+    : `<p style="margin:0;">Entrez ce code à 6 chiffres dans l'application pour continuer :</p>`;
+
+  let sections = renderCodeBlock(code);
+  sections += renderNotice({
+    tone: context === 'lockout_alert' ? 'danger' : 'info',
+    text: `Ce code expire dans <strong style="font-weight:500;">15 minutes</strong>. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.`,
+  });
+
+  const html = renderShell({
+    preheader: `Votre code de vérification FlowIA`,
+    kicker,
+    title: escapeHtml(subject),
+    intro,
+    sections,
+    footerNote: `© ${new Date().getFullYear()} FlowIA`,
+  });
 
   try {
     await sendEmail({ to, subject, html });
@@ -86,160 +97,76 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
   const dateFr = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4ff;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
+  const safeClient = escapeHtml(clientName);
+  const safeBusiness = escapeHtml(businessName);
 
-    <!-- Header -->
-    <div style="background:linear-gradient(135deg,#6366f1 0%,#06b6d4 100%);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:20px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
-        <span style="font-size:32px;">📅</span>
-      </div>
-      <h1 style="color:white;margin:0;font-size:26px;font-weight:900;letter-spacing:-0.5px;">Rendez-vous confirmé !</h1>
-      <p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:15px;">Bonjour ${clientName}, votre réservation est enregistrée.</p>
-    </div>
+  // Lignes du tableau d'infos.
+  const infoRows = [
+    { label: 'Référence', value: `#${escapeHtml(refId)}`, valueIsMono: true },
+    { label: 'Établissement', value: safeBusiness },
+    { label: 'Date', value: escapeHtml(dateCapitalized) },
+    { label: 'Créneau', value: `${escapeHtml(startTime.substring(0,5))} – ${escapeHtml(endTime.substring(0,5))}` },
+  ];
+  if (employeeName) infoRows.push({ label: 'Avec', value: escapeHtml(employeeName) });
 
-    <!-- Carte RDV principale -->
-    <div style="background:white;padding:32px 36px;border-left:1px solid #e8eaf6;border-right:1px solid #e8eaf6;">
+  // Construction du detail prestations.
+  let servicesHtml = '';
+  if (items && items.length > 0) {
+    const lines = items.map(it => {
+      const qty = it.qty > 1 ? ` × ${escapeHtml(it.qty)}` : '';
+      const dur = it.duration_minutes > 0 ? ` · ${escapeHtml(it.duration_minutes)} min` : '';
+      const price = it.unit_price > 0
+        ? `<td style="padding:6px 0;font-size:13px;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#111;">${escapeHtml((it.unit_price * it.qty).toFixed(2))} €</td>`
+        : '<td></td>';
+      return `<tr><td style="padding:6px 0;font-size:13px;color:#111;">${escapeHtml(it.service_name)}${qty}${dur}</td>${price}</tr>`;
+    }).join('');
+    servicesHtml = renderHeading('Prestations') +
+      `<table style="width:100%;border-collapse:collapse;margin:0 0 8px 0;">${lines}</table>`;
+  } else if (serviceName) {
+    const sRows = [
+      { label: 'Service', value: escapeHtml(serviceName) },
+    ];
+    if (durationMinutes) sRows.push({ label: 'Durée', value: `${escapeHtml(durationMinutes)} min` });
+    if (price) sRows.push({ label: 'Prix', value: `${escapeHtml(Number(price).toFixed(2))} €`, valueIsMono: true });
+    servicesHtml = renderHeading('Prestation') + renderInfoTable(sRows);
+  }
 
-      <!-- Référence -->
-      <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(6,182,212,0.06));border:1px solid rgba(99,102,241,0.2);border-radius:16px;padding:16px 20px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <p style="color:#6366f1;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Numéro de réservation</p>
-          <p style="color:#1e1b4b;font-size:22px;font-weight:900;font-family:monospace;margin:0;letter-spacing:3px;">#${refId}</p>
-        </div>
-        <div style="width:44px;height:44px;background:rgba(99,102,241,0.12);border-radius:12px;display:flex;align-items:center;justify-content:center;">
-          <span style="font-size:20px;">🎫</span>
-        </div>
-      </div>
+  // Section promo si reduction.
+  let promoHtml = '';
+  if (discountAmount > 0) {
+    const promoItems = [
+      { label: 'Prix initial', value: `${(price != null ? Number(price).toFixed(2) : '—')} €`, line_through: true },
+      { label: 'Réduction', value: `-${Number(discountAmount).toFixed(2)} €` },
+    ];
+    promoHtml = renderHeading(promoCode ? `Code promo · ${promoCode}` : 'Réduction appliquée') +
+      renderAmountSummary({
+        items: promoItems,
+        total: { label: 'Prix final', value: `${finalPrice != null ? Number(finalPrice).toFixed(2) : '—'} €` },
+      });
+  }
 
-      <!-- Infos commerce -->
-      <p style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Détails du rendez-vous</p>
+  // Notes client (utilisateur peut avoir saisi du texte libre, escapeHtml strict).
+  const notesHtml = notes
+    ? renderNotice({ tone: 'info', text: `<strong style="font-weight:500;">Note :</strong> ${escapeHtml(notes)}` })
+    : '';
 
-      <!-- Commerce -->
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f1f5f9;">
-        <div style="width:40px;height:40px;background:linear-gradient(135deg,#6366f1,#06b6d4);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <span style="font-size:18px;">🏪</span>
-        </div>
-        <div>
-          <p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Commerce</p>
-          <p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${businessName}</p>
-        </div>
-      </div>
+  // CTA gestion des RDV.
+  const ctaHtml = bookingUrl
+    ? renderCta({ href: `${bookingUrl}/client/appointments`, label: 'Gérer mes rendez-vous' })
+    : '';
 
-      <!-- Service(s) -->
-      ${(items && items.length > 0) ? `
-        <p style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Services / Produits</p>
-        ${items.map(it => `
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #f1f5f9;">
-          <div style="width:36px;height:36px;background:rgba(99,102,241,0.1);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-            <span style="font-size:16px;">✂️</span>
-          </div>
-          <div style="flex:1;">
-            <p style="color:#0f172a;font-size:14px;font-weight:700;margin:0;">${it.service_name}</p>
-            ${it.qty > 1 ? `<p style="color:#94a3b8;font-size:11px;margin:2px 0 0;">× ${it.qty}</p>` : ''}
-            ${it.duration_minutes > 0 ? `<p style="color:#6366f1;font-size:11px;margin:2px 0 0;">${it.duration_minutes} min</p>` : ''}
-          </div>
-          <div style="text-align:right;">
-            ${it.unit_price > 0 ? `<p style="color:#0f172a;font-size:14px;font-weight:800;margin:0;">${(it.unit_price * it.qty).toFixed(2)} €</p>` : ''}
-            ${it.unit_price > 0 && it.qty > 1 ? `<p style="color:#94a3b8;font-size:11px;margin:2px 0 0;">${it.unit_price.toFixed(2)} € × ${it.qty}</p>` : ''}
-          </div>
-        </div>`).join('')}
-      ` : `
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f1f5f9;">
-        <div style="width:40px;height:40px;background:rgba(99,102,241,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <span style="font-size:18px;">✂️</span>
-        </div>
-        <div style="flex:1;">
-          <p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Service</p>
-          <p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${serviceName}</p>
-        </div>
-        <div style="text-align:right;">
-          <span style="background:rgba(99,102,241,0.1);color:#6366f1;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700;">${durationMinutes} min</span>
-          ${price ? `<p style="color:#0f172a;font-size:14px;font-weight:800;margin:4px 0 0;">${price} €</p>` : ''}
-        </div>
-      </div>
-      `}
+  const sections = renderInfoTable(infoRows) + servicesHtml + promoHtml + notesHtml + ctaHtml;
 
-      <!-- Employé -->
-      ${employeeName ? `
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f1f5f9;">
-        <div style="width:40px;height:40px;background:rgba(6,182,212,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <span style="font-size:18px;">👤</span>
-        </div>
-        <div>
-          <p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Avec</p>
-          <p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${employeeName}</p>
-        </div>
-      </div>` : ''}
+  const intro = `<p style="margin:0;">Bonjour ${safeClient}, votre rendez-vous chez ${safeBusiness} est enregistré.</p>`;
 
-      <!-- Date & Heure -->
-      <div style="background:linear-gradient(135deg,#f8faff,#f0fdff);border:1px solid #e0e7ff;border-radius:16px;padding:20px 24px;margin:20px 0;">
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div style="text-align:center;min-width:56px;">
-            <div style="background:linear-gradient(135deg,#6366f1,#06b6d4);border-radius:12px;padding:8px;display:inline-block;">
-              <p style="color:white;font-size:22px;font-weight:900;margin:0;line-height:1;">${dateObj.getDate()}</p>
-              <p style="color:rgba(255,255,255,0.85);font-size:10px;font-weight:700;margin:0;text-transform:uppercase;">${['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][dateObj.getMonth()]}</p>
-            </div>
-          </div>
-          <div>
-            <p style="color:#0f172a;font-size:16px;font-weight:800;margin:0 0 4px;">${dateCapitalized}</p>
-            <p style="color:#6366f1;font-size:20px;font-weight:900;margin:0;letter-spacing:-0.5px;">${startTime.substring(0,5)} – ${endTime.substring(0,5)}</p>
-          </div>
-        </div>
-      </div>
-
-      ${discountAmount > 0 ? `
-      <!-- Section Promo / Réduction -->
-      <div style="background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.05));border:1px solid rgba(16,185,129,0.25);border-radius:16px;padding:18px 20px;margin:16px 0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-          <div style="width:34px;height:34px;background:rgba(16,185,129,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-            <span style="font-size:18px;">🎉</span>
-          </div>
-          <div>
-            <p style="color:#065f46;font-size:12px;font-weight:700;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.5px;">Code promo appliqué</p>
-            ${promoCode ? `<p style="color:#10b981;font-size:14px;font-weight:900;margin:0;font-family:monospace;letter-spacing:2px;">${promoCode}</p>` : ''}
-          </div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid rgba(16,185,129,0.2);">
-          <span style="color:#6b7280;font-size:13px;">Prix initial</span>
-          <span style="color:#6b7280;font-size:13px;text-decoration:line-through;">${price ? price.toFixed(2) : '—'} €</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
-          <span style="color:#ef4444;font-size:13px;font-weight:700;">Réduction</span>
-          <span style="color:#ef4444;font-size:13px;font-weight:900;">-${discountAmount.toFixed(2)} €</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(16,185,129,0.12);border-radius:12px;margin-top:8px;">
-          <span style="color:#065f46;font-size:14px;font-weight:800;">Prix final</span>
-          <span style="color:#10b981;font-size:20px;font-weight:900;font-family:monospace;">${finalPrice != null ? finalPrice.toFixed(2) : '—'} €</span>
-        </div>
-      </div>` : ''}
-
-      ${notes ? `
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:20px;">
-        <p style="color:#92400e;font-size:12px;font-weight:700;margin:0 0 4px;">📝 Notes</p>
-        <p style="color:#78350f;font-size:14px;margin:0;">${notes}</p>
-      </div>` : ''}
-    </div>
-
-    <!-- CTA -->
-    <div style="background:white;padding:0 36px 32px;border-left:1px solid #e8eaf6;border-right:1px solid #e8eaf6;">
-      ${bookingUrl ? `
-      <a href="${bookingUrl}/client/appointments" style="display:block;background:linear-gradient(135deg,#6366f1,#06b6d4);color:white;text-align:center;padding:16px;border-radius:16px;text-decoration:none;font-weight:800;font-size:15px;margin-bottom:12px;">
-        Gérer mes rendez-vous →
-      </a>` : ''}
-      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0;">Pour annuler, contactez directement l'établissement ou gérez votre RDV en ligne.</p>
-    </div>
-
-    <!-- Footer -->
-    <div style="background:#f8fafc;border:1px solid #e8eaf6;border-radius:0 0 24px 24px;padding:20px 36px;text-align:center;">
-      <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;">Réservation gérée via <strong style="color:#6366f1;">FlowIA</strong></p>
-      <p style="color:#cbd5e1;font-size:11px;margin:0;">Référence : <span style="font-family:monospace;font-weight:700;">#${refId}</span> · ${new Date().getFullYear()}</p>
-    </div>
-
-  </div>
-</body></html>`;
+  const html = renderShell({
+    preheader: `Confirmation de rendez-vous #${refId} — ${dateCapitalized} à ${startTime.substring(0,5)}`,
+    kicker: 'FlowIA · Confirmation',
+    title: 'Rendez-vous confirmé',
+    intro,
+    sections,
+    footerNote: `Pour annuler ou modifier, contactez l'établissement ou gérez votre rendez-vous en ligne. Référence #${refId} · ${new Date().getFullYear()} FlowIA`,
+  });
 
   try {
     await sendEmail({ to, subject, html });
@@ -258,56 +185,45 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
   const subject = `Récap du ${dateCapitalized} — ${businessName}`;
   const fmtMoney = v => Number(v||0).toFixed(2).replace('.', ',');
-  const gradGreen = 'linear-gradient(135deg,#10b981,#059669)';
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:${gradGreen};border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="font-size:48px;margin-bottom:12px;">📊</div>
-      <h1 style="color:white;margin:0;font-size:26px;font-weight:900;">Récap de la journée</h1>
-      <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">${businessName} · ${dateCapitalized}</p>
-    </div>
-    <div style="background:white;padding:32px 36px;border-left:1px solid #d1fae5;border-right:1px solid #d1fae5;">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:28px;">
-        <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:16px;padding:16px;text-align:center;">
-          <p style="color:#059669;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">CA du jour</p>
-          <p style="color:#065f46;font-size:22px;font-weight:900;font-family:monospace;margin:0;">${fmtMoney(ca)} €</p>
-        </div>
-        <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.2);border-radius:16px;padding:16px;text-align:center;">
-          <p style="color:#6366f1;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">Prestations</p>
-          <p style="color:#312e81;font-size:22px;font-weight:900;font-family:monospace;margin:0;">${nbPrest}</p>
-        </div>
-        <div style="background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:16px;text-align:center;">
-          <p style="color:#d97706;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">RDV</p>
-          <p style="color:#78350f;font-size:22px;font-weight:900;font-family:monospace;margin:0;">${nbRdv}</p>
-        </div>
-      </div>
-      ${topEmployee ? `
-      <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:14px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
-        <span style="font-size:28px;">🏆</span>
-        <div>
-          <p style="color:#065f46;font-size:12px;font-weight:700;margin:0 0 2px;">Employé le plus actif</p>
-          <p style="color:#059669;font-size:16px;font-weight:900;margin:0;">${topEmployee.name} <span style="font-size:13px;color:#64748b;font-weight:600;">· ${topEmployee.count} prestation(s)</span></p>
-        </div>
-      </div>` : ''}
-      ${transactions.length > 0 ? `
-      <p style="color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">Dernières transactions</p>
-      ${transactions.slice(0,5).map(t => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0fdf4;">
-        <span style="font-size:13px;color:#374151;">${t.description || t.category_name || 'Transaction'}</span>
-        <span style="font-size:14px;font-weight:800;color:#10b981;font-family:monospace;">+${fmtMoney(t.amount)} €</span>
-      </div>`).join('')}` : `
-      <div style="text-align:center;padding:24px 0;">
-        <p style="color:#94a3b8;font-size:14px;margin:0;">Aucune transaction aujourd'hui</p>
-      </div>`}
-    </div>
-    <div style="background:#f0fdf4;border:1px solid #d1fae5;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;">Récap automatique · <strong style="color:#10b981;">FlowIA</strong></p>
-    </div>
-  </div>
-</body></html>`;
+  const kpiRows = [
+    { label: 'Chiffre d\'affaires', value: `${escapeHtml(fmtMoney(ca))} €`, valueIsMono: true },
+    { label: 'Prestations', value: escapeHtml(String(nbPrest || 0)), valueIsMono: true },
+    { label: 'Rendez-vous', value: escapeHtml(String(nbRdv || 0)), valueIsMono: true },
+  ];
+  if (topEmployee) {
+    kpiRows.push({
+      label: 'Top employé',
+      value: `${escapeHtml(topEmployee.name)} <span style="color:#6b7280;">· ${escapeHtml(String(topEmployee.count || 0))} prest.</span>`,
+    });
+  }
+
+  let txHtml = '';
+  if (transactions && transactions.length > 0) {
+    const lines = transactions.slice(0, 5).map(t => {
+      const desc = escapeHtml(t.description || t.category_name || 'Transaction');
+      const amt = `+${fmtMoney(t.amount)} €`;
+      return `<tr>
+        <td style="padding:8px 0;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${desc}</td>
+        <td style="padding:8px 0;font-size:13px;color:#111;text-align:right;font-family:ui-monospace,Menlo,monospace;border-top:1px solid #e5e7eb;">${escapeHtml(amt)}</td>
+      </tr>`;
+    }).join('');
+    txHtml = renderHeading('Dernières transactions') +
+      `<table style="width:100%;border-collapse:collapse;margin:0 0 8px 0;">${lines}</table>`;
+  } else {
+    txHtml = renderNotice({ tone: 'info', text: `Aucune transaction enregistrée aujourd'hui.` });
+  }
+
+  const sections = renderHeading('Indicateurs du jour') + renderInfoTable(kpiRows) + txHtml;
+
+  const html = renderShell({
+    preheader: `Récap ${dateCapitalized} — ${businessName}`,
+    kicker: 'FlowIA · Récap journalier',
+    title: 'Récap de la journée',
+    intro: `<p style="margin:0;">${escapeHtml(businessName)} — ${escapeHtml(dateCapitalized)}.</p>`,
+    sections,
+    footerNote: `Récap automatique généré par FlowIA`,
+  });
 
   try {
     await sendEmail({ to, subject, html });
@@ -323,42 +239,29 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
   const subject = `Rappel : votre rendez-vous ${hoursBeforeLabel ? 'dans ' + hoursBeforeLabel : ''} — ${businessName}`;
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4ff;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="font-size:48px;margin-bottom:12px;">⏰</div>
-      <h1 style="color:white;margin:0;font-size:26px;font-weight:900;">Rappel de rendez-vous</h1>
-      <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:15px;">Dans ${hoursBeforeLabel} · ${clientName}</p>
-    </div>
-    <div style="background:white;padding:32px 36px;border-left:1px solid #e0e7ff;border-right:1px solid #e0e7ff;">
-      <div style="background:linear-gradient(135deg,rgba(99,102,241,0.07),rgba(139,92,246,0.05));border:1px solid rgba(99,102,241,0.2);border-radius:18px;padding:20px 24px;margin-bottom:20px;">
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:14px;padding:10px 14px;text-align:center;flex-shrink:0;">
-            <p style="color:white;font-size:22px;font-weight:900;margin:0;line-height:1;">${dd}</p>
-            <p style="color:rgba(255,255,255,0.85);font-size:10px;font-weight:700;margin:0;text-transform:uppercase;">${['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][dm-1]}</p>
-          </div>
-          <div>
-            <p style="color:#312e81;font-size:15px;font-weight:800;margin:0 0 4px;">${dateCapitalized}</p>
-            <p style="color:#6366f1;font-size:22px;font-weight:900;margin:0;">${startTime.substring(0,5)}</p>
-          </div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #f5f3ff;">
-        <div style="width:40px;height:40px;background:rgba(99,102,241,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">✂️</div>
-        <div><p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Service</p><p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${serviceName}</p></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;">
-        <div style="width:40px;height:40px;background:rgba(99,102,241,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">🏪</div>
-        <div><p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Établissement</p><p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${businessName}</p></div>
-      </div>
-    </div>
-    <div style="background:#f5f3ff;border:1px solid #e0e7ff;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;">Rappel automatique via <strong style="color:#6366f1;">FlowIA</strong></p>
-    </div>
-  </div>
-</body></html>`;
+  const rows = [
+    { label: 'Date', value: escapeHtml(dateCapitalized) },
+    { label: 'Heure', value: escapeHtml(startTime.substring(0,5)) },
+    { label: 'Service', value: escapeHtml(serviceName) },
+    { label: 'Établissement', value: escapeHtml(businessName) },
+  ];
+
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(clientName)}, votre rendez-vous chez ${escapeHtml(businessName)} approche${hoursBeforeLabel ? ` (dans ${escapeHtml(hoursBeforeLabel)})` : ''}.</p>`;
+
+  const sections = renderInfoTable(rows) +
+    renderNotice({
+      tone: 'info',
+      text: `En cas d'imprévu, contactez l'établissement au plus tôt pour libérer le créneau.`,
+    });
+
+  const html = renderShell({
+    preheader: `Rappel rendez-vous ${dateCapitalized} ${startTime.substring(0,5)}`,
+    kicker: 'FlowIA · Rappel',
+    title: 'Rappel de rendez-vous',
+    intro,
+    sections,
+    footerNote: `Rappel automatique envoyé par FlowIA`,
+  });
 
   try {
     await sendEmail({ to, subject, html });
@@ -372,53 +275,33 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
   const discountStr = rewardType === 'percent'
     ? `-${rewardValue}%`
     : `-${Number(rewardValue).toFixed(2)} €`;
-  const subject = `🎉 Récompense fidélité débloquée : ${discountStr} chez ${businessName}`;
+  const subject = `Récompense fidélité débloquée : ${discountStr} chez ${businessName}`;
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fffbeb;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#f59e0b,#fbbf24);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="font-size:56px;margin-bottom:12px;">🎉</div>
-      <h1 style="color:white;margin:0;font-size:28px;font-weight:900;">Récompense débloquée !</h1>
-      <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:15px;">Félicitations ${clientName}, vous avez atteint ${stampsRequired} visites !</p>
-    </div>
+  const rows = [
+    { label: 'Récompense', value: escapeHtml(discountStr) },
+    { label: 'Détail', value: escapeHtml(rewardLabel || '—') },
+    { label: 'Établissement', value: escapeHtml(businessName) },
+    { label: 'Visites cumulées', value: escapeHtml(String(stampsRequired || 0)) },
+  ];
 
-    <div style="background:white;padding:32px 36px;border-left:1px solid #fde68a;border-right:1px solid #fde68a;">
-      <!-- Récompense -->
-      <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(251,191,36,0.06));border:2px solid rgba(245,158,11,0.3);border-radius:20px;padding:24px;text-align:center;margin-bottom:28px;">
-        <p style="color:#92400e;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Votre récompense</p>
-        <p style="color:#f59e0b;font-size:40px;font-weight:900;margin:0;font-family:monospace;">${discountStr}</p>
-        <p style="color:#78350f;font-size:14px;font-weight:600;margin:6px 0 0;">${rewardLabel}</p>
-      </div>
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(clientName)}, vous avez atteint ${escapeHtml(String(stampsRequired || 0))} visites chez ${escapeHtml(businessName)}. Voici votre code de réduction :</p>`;
 
-      <!-- Code promo -->
-      <p style="color:#92400e;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;text-align:center;">Votre code de réduction</p>
-      <div style="background:#fff7ed;border:2px dashed #f59e0b;border-radius:16px;padding:20px;text-align:center;margin-bottom:24px;">
-        <p style="font-family:monospace;font-size:28px;font-weight:900;color:#92400e;letter-spacing:4px;margin:0;">${rewardCode}</p>
-        <p style="color:#d97706;font-size:12px;margin:8px 0 0;">Valable 90 jours · Utilisable lors de votre prochaine réservation</p>
-      </div>
+  const sections =
+    renderCodeBlock(rewardCode) +
+    renderInfoTable(rows) +
+    renderNotice({
+      tone: 'info',
+      text: `Code valable 90 jours. Saisissez-le lors de votre prochaine réservation en ligne ou communiquez-le à votre prestataire à l'encaissement.`,
+    });
 
-      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:14px;padding:14px 18px;margin-bottom:20px;">
-        <p style="color:#92400e;font-size:13px;font-weight:600;margin:0;">
-          ℹ️ Saisissez ce code lors de votre prochaine réservation en ligne ou communiquez-le à votre prestataire lors de l&apos;encaissement.
-        </p>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div style="width:44px;height:44px;background:linear-gradient(135deg,#f59e0b,#fbbf24);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;">🏪</div>
-        <div>
-          <p style="color:#94a3b8;font-size:11px;margin:0 0 2px;">Établissement</p>
-          <p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${businessName}</p>
-        </div>
-      </div>
-    </div>
-
-    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
-      <p style="color:#92400e;font-size:12px;margin:0;">Programme fidélité géré via <strong style="color:#f59e0b;">FlowIA</strong></p>
-    </div>
-  </div>
-</body></html>`;
+  const html = renderShell({
+    preheader: `Récompense fidélité ${discountStr} — ${businessName}`,
+    kicker: 'FlowIA · Programme fidélité',
+    title: 'Récompense débloquée',
+    intro,
+    sections,
+    footerNote: `Programme fidélité géré via FlowIA`,
+  });
 
   try {
     await sendEmail({ to, subject, html });
@@ -429,35 +312,29 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
 // ── Email invitation client à créer son compte global ──────────────────────
 async function sendClientInvite(to, clientName, businessName, inviteUrl) {
   const subject = `${businessName} vous invite à créer votre compte client`;
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
-  <div style="max-width:480px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
-    <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:36px;text-align:center;">
-      <div style="font-size:40px;margin-bottom:10px;">🎉</div>
-      <h1 style="color:white;margin:0;font-size:22px;font-weight:800;">FlowIA</h1>
-      <span style="display:inline-block;margin-top:10px;background:rgba(255,255,255,0.15);color:#e2e8f0;padding:4px 14px;border-radius:99px;font-size:12px;font-weight:600;">Invitation client</span>
-    </div>
-    <div style="padding:40px 36px;">
-      <h2 style="color:#0f172a;font-size:20px;margin:0 0 12px;font-weight:800;">Bonjour ${clientName} 👋</h2>
-      <p style="color:#475569;font-size:15px;margin:0 0 20px;line-height:1.6;">
-        <strong>${businessName}</strong> vous invite à créer votre compte client pour accéder à votre espace personnel :
-      </p>
-      <ul style="color:#475569;font-size:14px;margin:0 0 28px;padding-left:20px;line-height:2;">
-        <li>📅 Réservez vos prochains rendez-vous en ligne</li>
-        <li>🎫 Suivez vos points fidélité et codes promo</li>
-        <li>📋 Consultez votre historique de prestations</li>
-      </ul>
-      <div style="text-align:center;margin-bottom:24px;">
-        <a href="${inviteUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;text-decoration:none;padding:16px 36px;border-radius:16px;font-weight:800;font-size:16px;">Créer mon compte →</a>
-      </div>
-      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0;">Ce lien est valable 7 jours. Si vous ne souhaitez pas créer de compte, ignorez cet email.</p>
-    </div>
-    <div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
-      <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
-    </div>
-  </div>
-</body></html>`;
+
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(clientName)},<br/>${escapeHtml(businessName)} vous invite à créer votre compte client pour accéder à votre espace personnel.</p>`;
+
+  const benefitsList = `<ul style="margin:0 0 8px 0;padding-left:20px;color:#374151;font-size:13px;line-height:1.8;">
+    <li>Réserver vos prochains rendez-vous en ligne</li>
+    <li>Suivre vos points fidélité et codes promo</li>
+    <li>Consulter votre historique de prestations</li>
+  </ul>`;
+
+  const sections =
+    renderHeading('Votre espace client') +
+    benefitsList +
+    renderCta({ href: inviteUrl, label: 'Créer mon compte' }) +
+    renderNotice({ tone: 'info', text: `Ce lien est valable 7 jours. Si vous ne souhaitez pas créer de compte, ignorez simplement cet email.` });
+
+  const html = renderShell({
+    preheader: `Invitation à créer votre compte client ${businessName}`,
+    kicker: 'FlowIA · Invitation',
+    title: 'Créez votre compte client',
+    intro,
+    sections,
+    footerNote: `© ${new Date().getFullYear()} FlowIA`,
+  });
   try {
     await sendEmail({ to, subject, html });
     return true;
@@ -475,51 +352,37 @@ async function sendAppointmentCancellation({ to, clientName, businessName, servi
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
   const MON = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff5f5;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#ef4444 0%,#f97316 100%);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:20px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:32px;">❌</div>
-      <h1 style="color:white;margin:0;font-size:24px;font-weight:900;">Rendez-vous annulé</h1>
-      <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px;">Bonjour ${clientName}, votre rendez-vous a été annulé par l'établissement.</p>
-    </div>
-    <div style="background:white;padding:32px 36px;border-left:1px solid #fecaca;border-right:1px solid #fecaca;">
-      <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:16px;padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <p style="color:#ef4444;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 4px;">Réservation annulée</p>
-          <p style="color:#7f1d1d;font-size:20px;font-weight:900;font-family:monospace;margin:0;letter-spacing:3px;">#${refId}</p>
-        </div>
-        <span style="font-size:28px;">🚫</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #fef2f2;">
-        <div style="width:40px;height:40px;background:linear-gradient(135deg,#ef4444,#f97316);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">🏪</div>
-        <div><p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Commerce</p><p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${businessName}</p></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #fef2f2;">
-        <div style="width:40px;height:40px;background:rgba(239,68,68,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">✂️</div>
-        <div><p style="color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 2px;">Service</p><p style="color:#0f172a;font-size:15px;font-weight:700;margin:0;">${serviceName}</p></div>
-      </div>
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:16px;padding:20px 24px;margin:20px 0;">
-        <div style="display:flex;align-items:center;gap:16px;">
-          <div style="background:linear-gradient(135deg,#ef4444,#f97316);border-radius:12px;padding:8px 12px;text-align:center;flex-shrink:0;">
-            <p style="color:white;font-size:22px;font-weight:900;margin:0;line-height:1;">${dd}</p>
-            <p style="color:rgba(255,255,255,0.85);font-size:10px;font-weight:700;margin:0;text-transform:uppercase;">${MON[dm-1]}</p>
-          </div>
-          <div>
-            <p style="color:#7f1d1d;font-size:15px;font-weight:800;margin:0 0 4px;">${dateCapitalized}</p>
-            <p style="color:#ef4444;font-size:18px;font-weight:900;margin:0;">${startTime.substring(0,5)}</p>
-          </div>
-        </div>
-      </div>
-      ${reason ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:16px;"><p style="color:#92400e;font-size:12px;font-weight:700;margin:0 0 4px;">📝 Motif</p><p style="color:#78350f;font-size:14px;margin:0;">${reason}</p></div>` : ''}
-      <p style="color:#64748b;font-size:13px;text-align:center;margin:0;">Pour tout renseignement, contactez directement l'établissement.</p>
-    </div>
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
-      <p style="color:#94a3b8;font-size:12px;margin:0;">Annulation via <strong style="color:#ef4444;">FlowIA</strong> · Réf. <span style="font-family:monospace;font-weight:700;">#${refId}</span></p>
-    </div>
-  </div>
-</body></html>`;
+  // Variable MON conservee pour ne pas casser la structure existante meme si
+  // plus utilisee dans le HTML : on garde les calculs au-dessus.
+  void MON;
+
+  const rows = [
+    { label: 'Référence', value: `#${escapeHtml(refId)}`, valueIsMono: true },
+    { label: 'Établissement', value: escapeHtml(businessName) },
+    { label: 'Service', value: escapeHtml(serviceName) },
+    { label: 'Date', value: escapeHtml(dateCapitalized) },
+    { label: 'Heure', value: escapeHtml(startTime.substring(0,5)) },
+  ];
+
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(clientName)}, votre rendez-vous chez ${escapeHtml(businessName)} a été annulé par l'établissement.</p>`;
+
+  const reasonHtml = reason
+    ? renderNotice({ tone: 'warning', text: `<strong style="font-weight:500;">Motif :</strong> ${escapeHtml(reason)}` })
+    : '';
+
+  const sections =
+    renderInfoTable(rows) +
+    reasonHtml +
+    renderNotice({ tone: 'info', text: `Pour tout renseignement ou pour reprendre rendez-vous, contactez directement l'établissement.` });
+
+  const html = renderShell({
+    preheader: `Annulation rendez-vous #${refId} — ${businessName}`,
+    kicker: 'FlowIA · Annulation',
+    title: 'Rendez-vous annulé',
+    intro,
+    sections,
+    footerNote: `Référence #${refId} · ${new Date().getFullYear()} FlowIA`,
+  });
 
   try {
     await sendEmail({ to, subject, html });
@@ -540,30 +403,26 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
 
   const subject = `Rappel prestation : ${clientName} dans ${delayLabel} — ${businessName}`;
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0fdf4;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="font-size:48px;margin-bottom:12px;">📋</div>
-      <h1 style="color:white;margin:0;font-size:24px;font-weight:900;">Rappel prestation</h1>
-      <p style="color:rgba(255,255,255,0.9);margin:8px 0 0;font-size:15px;">Dans ${delayLabel} · ${employeeName}</p>
-    </div>
-    <div style="background:white;padding:32px 36px;border:1px solid #d1fae5;border-top:none;">
-      <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:16px;padding:18px 22px;margin-bottom:20px;">
-        <p style="margin:0 0 4px;font-size:12px;color:#065f46;font-weight:700;text-transform:uppercase;">Client</p>
-        <p style="margin:0;font-size:20px;font-weight:900;color:#064e3b;">${clientName}</p>
-      </div>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr><td style="padding:10px 0;border-bottom:1px solid #f0fdf4;color:#065f46;font-size:12px;font-weight:700;text-transform:uppercase;">SERVICE</td><td style="padding:10px 0;border-bottom:1px solid #f0fdf4;color:#0f172a;font-size:15px;font-weight:700;">${serviceName}</td></tr>
-        <tr><td style="padding:10px 0;border-bottom:1px solid #f0fdf4;color:#065f46;font-size:12px;font-weight:700;text-transform:uppercase;">DATE</td><td style="padding:10px 0;border-bottom:1px solid #f0fdf4;color:#0f172a;font-size:15px;font-weight:700;">${dateCap}</td></tr>
-        <tr><td style="padding:10px 0;color:#065f46;font-size:12px;font-weight:700;text-transform:uppercase;">HEURE</td><td style="padding:10px 0;color:#10b981;font-size:22px;font-weight:900;">${String(startTime).slice(0,5)}</td></tr>
-      </table>
-    </div>
-    <div style="background:#f0fdf4;border:1px solid #d1fae5;border-radius:0 0 24px 24px;padding:16px;text-align:center;">
-      <p style="color:#6b7280;font-size:11px;margin:0;">Via <strong style="color:#10b981;">FlowIA</strong> · ${businessName}</p>
-    </div>
-  </div>
-</body></html>`;
+  const rows = [
+    { label: 'Client', value: escapeHtml(clientName) },
+    { label: 'Service', value: escapeHtml(serviceName) },
+    { label: 'Date', value: escapeHtml(dateCap) },
+    { label: 'Heure', value: escapeHtml(String(startTime).slice(0,5)) },
+    { label: 'Échéance', value: `dans ${escapeHtml(delayLabel)}` },
+  ];
+
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(employeeName)}, vous avez une prestation prévue dans ${escapeHtml(delayLabel)}.</p>`;
+
+  const sections = renderInfoTable(rows);
+
+  const html = renderShell({
+    preheader: `${clientName} · ${dateCap} ${String(startTime).slice(0,5)}`,
+    kicker: `FlowIA · ${escapeHtml(businessName)}`,
+    title: 'Rappel prestation',
+    intro,
+    sections,
+    footerNote: `Rappel équipe envoyé par FlowIA`,
+  });
   try {
     await sendEmail({ to, subject, html });
     console.log(`[MAIL EMP REMINDER OK] -> ${to}`);
@@ -575,25 +434,23 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
 async function sendPasswordReset({ to, clientName, code }) {
   const firstName = (clientName || '').split(' ')[0] || 'Client';
   const subject = 'Réinitialisation de votre mot de passe — FlowIA';
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,sans-serif;background:#f8fafc;margin:0;padding:40px 20px;">
-  <div style="max-width:460px;margin:0 auto;background:white;border-radius:24px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
-    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:36px;text-align:center;">
-      <h1 style="color:white;margin:0;font-size:22px;font-weight:800;">FlowIA</h1>
-    </div>
-    <div style="padding:40px 36px;text-align:center;">
-      <h2 style="color:#0f172a;font-size:20px;margin:0 0 10px;font-weight:800;">Réinitialisation mot de passe</h2>
-      <p style="color:#64748b;font-size:14px;margin:0 0 32px;">Bonjour ${firstName}, utilisez ce code pour réinitialiser votre mot de passe :</p>
-      <div style="background:#f1f5f9;border:2px solid #e2e8f0;border-radius:20px;padding:28px 24px;margin-bottom:28px;">
-        <div style="letter-spacing:14px;font-size:40px;font-weight:900;color:#0f172a;font-family:monospace;">${code}</div>
-      </div>
-      <p style="color:#94a3b8;font-size:13px;margin:0;">⏱ Ce code expire dans <strong>15 minutes</strong>.</p>
-    </div>
-    <div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
-      <p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
-    </div>
-  </div>
-</body></html>`;
+
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName)}, utilisez ce code pour réinitialiser votre mot de passe :</p>`;
+  const sections =
+    renderCodeBlock(code) +
+    renderNotice({
+      tone: 'warning',
+      text: `Ce code expire dans <strong style="font-weight:500;">15 minutes</strong>. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email et changez votre mot de passe par sécurité.`,
+    });
+
+  const html = renderShell({
+    preheader: `Code de réinitialisation FlowIA`,
+    kicker: 'FlowIA · Sécurité',
+    title: 'Réinitialisation mot de passe',
+    intro,
+    sections,
+    footerNote: `© ${new Date().getFullYear()} FlowIA`,
+  });
   try {
     await sendEmail({ to, subject, html });
     console.log(`[MAIL OK] ${subject} -> ${to}`);
@@ -655,40 +512,44 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
   }
   const textContent = textLines.join('\n');
 
-  // HTML sobre, sans gradient, peu d'emojis, ratio texte élevé
+  // Conditions : liste a puces sobre.
   const condHtml = conditions.length
-    ? `<p style="margin:20px 0 6px;color:#111;font-size:14px;font-weight:600;">Conditions :</p>
-       <ul style="margin:0;padding-left:20px;color:#333;font-size:14px;line-height:1.7;">
-         ${conditions.map(c => `<li>${c}</li>`).join('')}
-       </ul>`
+    ? renderHeading('Conditions') +
+      `<ul style="margin:0 0 8px 0;padding-left:20px;color:#374151;font-size:13px;line-height:1.7;">${conditions.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>`
     : '';
 
-  const contactHtml = (businessAddress || businessPhone)
-    ? `<p style="margin:20px 0 4px;color:#666;font-size:13px;">
-         ${businessAddress ? `Adresse : ${businessAddress}<br/>` : ''}
-         ${businessPhone ? `Téléphone : ${businessPhone}` : ''}
-       </p>`
+  // Contact en table cle/valeur.
+  const contactRows = [];
+  if (businessAddress) contactRows.push({ label: 'Adresse', value: escapeHtml(businessAddress) });
+  if (businessPhone)   contactRows.push({ label: 'Téléphone', value: escapeHtml(businessPhone), valueIsMono: true });
+  const contactHtml = contactRows.length
+    ? renderHeading('Contact') + renderInfoTable(contactRows)
     : '';
 
-  const html = `<!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
-<body style="margin:0;padding:24px 16px;background:#f6f6f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#111;">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e5e5;border-radius:6px;padding:28px 32px;">
-    <p style="margin:0 0 18px;color:#111;font-size:15px;">Bonjour ${firstName || clientName || ''},</p>
-    <p style="margin:0 0 18px;color:#111;font-size:15px;line-height:1.6;">
-      ${businessName} vous remet un code de réduction de <strong>${discountStr}</strong> utilisable lors de votre prochaine visite.
-    </p>
-    <p style="margin:22px 0 6px;color:#666;font-size:13px;">Votre code :</p>
-    <p style="margin:0 0 18px;font-family:Consolas,Menlo,monospace;font-size:22px;font-weight:700;color:#111;letter-spacing:2px;border:1px solid #ddd;padding:12px 16px;display:inline-block;border-radius:4px;background:#fafafa;">${code}</p>
-    ${condHtml}
-    <p style="margin:22px 0 0;color:#333;font-size:14px;line-height:1.6;">
-      Présentez ce code lors de votre prochain passage ou saisissez-le au moment de votre réservation en ligne.
-    </p>
-    ${contactHtml}
-    <p style="margin:22px 0 0;color:#111;font-size:14px;">À bientôt,<br/>${businessName}</p>
-    ${require('./unsubscribe').marketingFooterHtml({ token: unsubscribeToken, businessName, businessEmail, context: 'sendPromoEmail' })}
-  </div>
-</body></html>`;
+  const safeBusiness = escapeHtml(businessName);
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName || clientName || '')},<br/>${safeBusiness} vous remet un code de réduction de <strong style="font-weight:500;">${escapeHtml(discountStr)}</strong> utilisable lors de votre prochaine visite.</p>`;
+
+  const sections =
+    renderCodeBlock(code) +
+    condHtml +
+    `<p style="margin:16px 0 0 0;color:#374151;font-size:13px;line-height:1.6;">Présentez ce code lors de votre prochain passage ou saisissez-le au moment de votre réservation en ligne.</p>` +
+    contactHtml +
+    `<p style="margin:24px 0 0 0;color:#111;font-size:13px;">À bientôt,<br/>${safeBusiness}</p>`;
+
+  // marketingFooterHtml externe non escape : conserve tel quel pour ne pas
+  // alterer le contenu du footer RGPD desabonnement.
+  const marketingFooter = require('./unsubscribe').marketingFooterHtml({
+    token: unsubscribeToken, businessName, businessEmail, context: 'sendPromoEmail',
+  });
+
+  const html = renderShell({
+    preheader: `${discountStr} chez ${businessName} — code ${code}`,
+    kicker: `FlowIA · ${safeBusiness}`,
+    title: subject,
+    intro,
+    sections: sections + marketingFooter,
+    footerNote: null,
+  });
 
   const replyTo = businessEmail
     ? { email: businessEmail, name: businessName }
@@ -737,34 +598,42 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
     businessName,
   ].filter(Boolean).join('\n');
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f3ff;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="font-size:56px;margin-bottom:12px;">🤝</div>
-      <h1 style="color:white;margin:0;font-size:26px;font-weight:900;">Merci pour votre parrainage !</h1>
-      <p style="color:rgba(255,255,255,0.9);margin:10px 0 0;font-size:15px;">${filleulName || 'Votre filleul'} est venu chez ${businessName} grâce à vous.</p>
-    </div>
-    <div style="background:white;padding:32px 36px;border-left:1px solid #e0e7ff;border-right:1px solid #e0e7ff;">
-      <div style="background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.06));border:2px solid rgba(139,92,246,0.3);border-radius:20px;padding:24px;text-align:center;margin-bottom:24px;">
-        <p style="color:#4c1d95;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Votre récompense</p>
-        <p style="color:#8b5cf6;font-size:44px;font-weight:900;margin:0;font-family:monospace;">${discountStr}</p>
-      </div>
-      <p style="color:#6d28d9;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;text-align:center;">Votre code</p>
-      <div style="background:#faf5ff;border:2px dashed #8b5cf6;border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
-        <p style="font-family:monospace;font-size:26px;font-weight:900;color:#4c1d95;letter-spacing:3px;margin:0;">${code}</p>
-        ${validStr ? `<p style="color:#6d28d9;font-size:12px;margin:8px 0 0;">Valable jusqu'au ${validStr}</p>` : ''}
-      </div>
-      <p style="color:#4b5563;font-size:14px;line-height:1.6;margin:0 0 16px;">Présentez ce code lors de votre prochaine visite ou saisissez-le au moment de votre réservation en ligne.</p>
-      ${(businessAddress || businessPhone) ? `<p style="color:#6b7280;font-size:13px;margin:16px 0 0;">${businessAddress ? `📍 ${businessAddress}<br/>` : ''}${businessPhone ? `☎ ${businessPhone}` : ''}</p>` : ''}
-    </div>
-    <div style="background:#f5f3ff;border:1px solid #e0e7ff;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;">Programme parrainage <strong style="color:#8b5cf6;">${businessName}</strong></p>
-    </div>
-    ${require('./unsubscribe').marketingFooterHtml({ token: unsubscribeToken, businessName, businessEmail, context: 'sendReferralReward' })}
-  </div>
-</body></html>`;
+  const safeBusiness = escapeHtml(businessName);
+  const safeFilleul = escapeHtml(filleulName || 'Votre filleul');
+
+  const rows = [
+    { label: 'Récompense', value: escapeHtml(discountStr) },
+    { label: 'Établissement', value: safeBusiness },
+  ];
+  if (validStr) rows.push({ label: 'Valable jusqu\'au', value: escapeHtml(validStr) });
+
+  const contactRows = [];
+  if (businessAddress) contactRows.push({ label: 'Adresse', value: escapeHtml(businessAddress) });
+  if (businessPhone)   contactRows.push({ label: 'Téléphone', value: escapeHtml(businessPhone), valueIsMono: true });
+  const contactHtml = contactRows.length
+    ? renderHeading('Contact') + renderInfoTable(contactRows)
+    : '';
+
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName)},<br/>${safeFilleul} est venu chez ${safeBusiness} grâce à vous. Voici votre récompense :</p>`;
+
+  const sections =
+    renderCodeBlock(code) +
+    renderInfoTable(rows) +
+    `<p style="margin:16px 0 0 0;color:#374151;font-size:13px;line-height:1.6;">Présentez ce code lors de votre prochaine visite ou saisissez-le au moment de votre réservation en ligne.</p>` +
+    contactHtml;
+
+  const marketingFooter = require('./unsubscribe').marketingFooterHtml({
+    token: unsubscribeToken, businessName, businessEmail, context: 'sendReferralReward',
+  });
+
+  const html = renderShell({
+    preheader: `Votre récompense parrainage ${discountStr} chez ${businessName}`,
+    kicker: `FlowIA · ${safeBusiness}`,
+    title: 'Merci pour votre parrainage',
+    intro,
+    sections: sections + marketingFooter,
+    footerNote: null,
+  });
 
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
   const { unsubscribeHeaders } = require('./unsubscribe');
@@ -812,38 +681,44 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
     businessName,
   ].filter(Boolean).join('\n');
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff1f2;margin:0;padding:32px 16px;">
-  <div style="max-width:520px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#ec4899,#f97316);border-radius:24px 24px 0 0;padding:40px 36px;text-align:center;">
-      <div style="font-size:64px;margin-bottom:12px;">🎂</div>
-      <h1 style="color:white;margin:0;font-size:28px;font-weight:900;">Joyeux anniversaire !</h1>
-      <p style="color:rgba(255,255,255,0.95);margin:10px 0 0;font-size:16px;">${firstName ? firstName + ', ' : ''}${businessName} a un cadeau pour vous${monthLabel ? ' en ce mois de ' + monthLabel : ''}.</p>
-    </div>
-    <div style="background:white;padding:32px 36px;border-left:1px solid #fecdd3;border-right:1px solid #fecdd3;">
-      ${customMessage
-        ? `<p style="color:#831843;font-size:15px;line-height:1.7;margin:0 0 20px;font-style:italic;text-align:center;">"${customMessage}"</p>`
-        : `<p style="color:#831843;font-size:14px;line-height:1.7;margin:0 0 20px;text-align:center;">En ce mois de ${monthLabel}, profitez de <strong>${discountStr}</strong> sur votre prochaine visite chez <strong>${businessName}</strong>.</p>`}
-      <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(249,115,22,0.08));border:2px solid rgba(236,72,153,0.3);border-radius:20px;padding:24px;text-align:center;margin-bottom:24px;">
-        <p style="color:#9f1239;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Votre cadeau</p>
-        <p style="color:#ec4899;font-size:48px;font-weight:900;margin:0;font-family:monospace;">${discountStr}</p>
-        <p style="color:#831843;font-size:13px;margin:8px 0 0;">Sur votre prochaine visite</p>
-      </div>
-      <p style="color:#9f1239;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;text-align:center;">Votre code</p>
-      <div style="background:#fff1f2;border:2px dashed #ec4899;border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
-        <p style="font-family:monospace;font-size:26px;font-weight:900;color:#831843;letter-spacing:3px;margin:0;">${code}</p>
-        ${validStr ? `<p style="color:#be185d;font-size:12px;margin:8px 0 0;">Valable jusqu'au ${validStr}</p>` : ''}
-      </div>
-      <p style="color:#4b5563;font-size:14px;line-height:1.6;margin:0 0 16px;">Présentez ce code lors de votre prochaine visite ou saisissez-le au moment de votre réservation en ligne.</p>
-      ${(businessAddress || businessPhone) ? `<p style="color:#6b7280;font-size:13px;margin:16px 0 0;">${businessAddress ? `📍 ${businessAddress}<br/>` : ''}${businessPhone ? `☎ ${businessPhone}` : ''}</p>` : ''}
-    </div>
-    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:0 0 24px 24px;padding:18px 36px;text-align:center;">
-      <p style="color:#94a3b8;font-size:11px;margin:0;">Offre anniversaire <strong style="color:#ec4899;">${businessName}</strong></p>
-    </div>
-    ${require('./unsubscribe').marketingFooterHtml({ token: unsubscribeToken, businessName, businessEmail, context: 'sendBirthdayPromo' })}
-  </div>
-</body></html>`;
+  const safeBusiness = escapeHtml(businessName);
+
+  const introBody = customMessage
+    ? `<p style="margin:0;font-style:italic;">${escapeHtml(customMessage)}</p>`
+    : `<p style="margin:0;">Joyeux anniversaire${firstName ? ' ' + escapeHtml(firstName) : ''} ! En ce mois de ${escapeHtml(monthLabel)}, profitez de <strong style="font-weight:500;">${escapeHtml(discountStr)}</strong> sur votre prochaine visite chez ${safeBusiness}.</p>`;
+
+  const rows = [
+    { label: 'Cadeau', value: escapeHtml(discountStr) },
+    { label: 'Établissement', value: safeBusiness },
+  ];
+  if (validUntilShort) rows.push({ label: 'Valable jusqu\'au', value: escapeHtml(validUntilShort) });
+  else if (validStr)   rows.push({ label: 'Valable jusqu\'au', value: escapeHtml(validStr) });
+
+  const contactRows = [];
+  if (businessAddress) contactRows.push({ label: 'Adresse', value: escapeHtml(businessAddress) });
+  if (businessPhone)   contactRows.push({ label: 'Téléphone', value: escapeHtml(businessPhone), valueIsMono: true });
+  const contactHtml = contactRows.length
+    ? renderHeading('Contact') + renderInfoTable(contactRows)
+    : '';
+
+  const sections =
+    renderCodeBlock(code) +
+    renderInfoTable(rows) +
+    `<p style="margin:16px 0 0 0;color:#374151;font-size:13px;line-height:1.6;">Présentez ce code lors de votre prochaine visite ou saisissez-le au moment de votre réservation en ligne.</p>` +
+    contactHtml;
+
+  const marketingFooter = require('./unsubscribe').marketingFooterHtml({
+    token: unsubscribeToken, businessName, businessEmail, context: 'sendBirthdayPromo',
+  });
+
+  const html = renderShell({
+    preheader: `Joyeux anniversaire — ${discountStr} chez ${businessName}`,
+    kicker: `FlowIA · ${safeBusiness}`,
+    title: 'Joyeux anniversaire',
+    intro: introBody,
+    sections: sections + marketingFooter,
+    footerNote: null,
+  });
 
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
   const { unsubscribeHeaders } = require('./unsubscribe');
@@ -867,31 +742,32 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
 async function sendReferralWelcome({ to, filleulName, businessName, code, type, value }) {
   const valStr = type === 'percent' ? `${value}%` : `${Number(value).toFixed(2)} €`;
   const subject = `Bienvenue chez ${businessName || 'votre commerçant'} — parrainage appliqué`;
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:20px;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06)">
-  <div style="padding:28px 28px 10px;text-align:center">
-    <p style="font-size:42px;margin:0">🎁</p>
-    <h1 style="font-size:20px;font-weight:800;color:#111;margin:14px 0 8px">Bienvenue${filleulName ? ' ' + filleulName : ''} !</h1>
-    <p style="font-size:14px;color:#555;line-height:1.5;margin:0">
-      Vous avez créé votre compte via un lien de parrainage chez <strong>${businessName || 'votre commerçant'}</strong>.
-    </p>
-  </div>
-  <div style="padding:20px 28px">
-    <div style="background:#f5f3ff;border:2px dashed #8b5cf6;border-radius:14px;padding:18px;text-align:center">
-      <p style="font-size:11px;font-weight:700;text-transform:uppercase;color:#7c3aed;margin:0 0 6px;letter-spacing:0.05em">Parrainage actif</p>
-      <p style="font-family:monospace;font-size:22px;font-weight:900;color:#6d28d9;margin:0;letter-spacing:2px">${code}</p>
-      <p style="font-size:14px;color:#111;margin:10px 0 0"><strong>Remise de ${valStr}</strong> sur votre première visite</p>
-    </div>
-    <p style="font-size:13px;color:#555;line-height:1.6;margin:16px 0 0">
-      La remise s'applique automatiquement lors de votre premier rendez-vous ou encaissement,
-      selon les conditions du commerçant (nouveaux clients uniquement, quota parrain, non cumulable avec d'autres promotions).
-    </p>
-  </div>
-  <div style="padding:16px 28px;background:#fafafa;border-top:1px solid #eee;text-align:center">
-    <p style="font-size:11px;color:#888;margin:0">FlowIA — email automatique, ne pas répondre</p>
-  </div>
-</div></body></html>`;
+  const safeBusiness = escapeHtml(businessName || 'votre commerçant');
+
+  const intro = `<p style="margin:0;">Bienvenue${filleulName ? ' ' + escapeHtml(filleulName) : ''}, vous avez créé votre compte via un lien de parrainage chez ${safeBusiness}. Votre remise est déjà active :</p>`;
+
+  const rows = [
+    { label: 'Remise', value: escapeHtml(valStr) },
+    { label: 'Établissement', value: safeBusiness },
+    { label: 'Statut', value: 'Parrainage actif' },
+  ];
+
+  const sections =
+    renderCodeBlock(code) +
+    renderInfoTable(rows) +
+    renderNotice({
+      tone: 'info',
+      text: `La remise s'applique automatiquement lors de votre premier rendez-vous ou encaissement, selon les conditions du commerçant (nouveaux clients uniquement, quota parrain, non cumulable avec d'autres promotions).`,
+    });
+
+  const html = renderShell({
+    preheader: `Parrainage appliqué — remise de ${valStr}`,
+    kicker: `FlowIA · ${safeBusiness}`,
+    title: `Bienvenue${filleulName ? ' ' + escapeHtml(filleulName) : ''}`,
+    intro,
+    sections,
+    footerNote: `FlowIA — email automatique, ne pas répondre`,
+  });
   return sendEmail({ to, subject, html });
 }
 
@@ -1053,44 +929,35 @@ async function sendOptInInvite({ to, clientName, businessName, optInToken, busin
     `À bientôt,`,
     businessName,
   ].join('\n');
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:20px;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06)">
-  <div style="padding:32px 28px 20px;text-align:center">
-    <p style="font-size:36px;margin:0 0 12px">💌</p>
-    <h1 style="font-size:20px;font-weight:800;color:#111;margin:0 0 10px">
-      Souhaitez-vous recevoir nos offres ?
-    </h1>
-    <p style="font-size:14px;color:#555;line-height:1.6;margin:0">
-      Bonjour ${firstName ? firstName : 'cher client'},<br/>
-      <strong style="color:#111">${businessName}</strong> met à jour ses pratiques de communication conformément au RGPD.
-    </p>
-  </div>
-  <div style="padding:0 28px 28px">
-    <p style="font-size:14px;color:#555;line-height:1.6">
-      Pour continuer à recevoir nos offres commerciales (promotions, nouveautés) par email ou SMS,
-      confirmez votre inscription en un clic :
-    </p>
-    <p style="text-align:center;margin:24px 0">
-      <a href="${optInUrl}"
-         style="display:inline-block;padding:14px 28px;background:#10b981;color:#fff;
-                text-decoration:none;border-radius:12px;font-weight:700;font-size:15px">
-        ✓ Oui, je veux recevoir les offres
-      </a>
-    </p>
-    <p style="font-size:12px;color:#888;line-height:1.5;margin:16px 0 0">
-      Si vous ne souhaitez pas recevoir ces offres, <strong>vous n'avez rien à faire</strong>.
-      Ignorez simplement cet email.
-    </p>
-    <p style="font-size:12px;color:#888;line-height:1.5;margin:8px 0 0">
-      Vos notifications de rendez-vous (confirmations, rappels) continueront normalement dans tous les cas.
-    </p>
-    ${(businessEmail || businessPhone) ? `<p style="color:#6b7280;font-size:12px;margin:20px 0 0;border-top:1px solid #eee;padding-top:14px;">
-      ${businessEmail ? `📧 ${businessEmail}<br/>` : ''}${businessPhone ? `☎ ${businessPhone}` : ''}
-    </p>` : ''}
-  </div>
-</div>
-</body></html>`;
+  const safeBusiness = escapeHtml(businessName);
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName || 'cher client')},<br/>${safeBusiness} met à jour ses pratiques de communication conformément au RGPD. Pour continuer à recevoir nos offres commerciales (promotions, nouveautés) par email ou SMS, confirmez votre inscription en un clic :</p>`;
+
+  const contactRows = [];
+  if (businessEmail) contactRows.push({ label: 'Email', value: escapeHtml(businessEmail) });
+  if (businessPhone) contactRows.push({ label: 'Téléphone', value: escapeHtml(businessPhone), valueIsMono: true });
+  const contactHtml = contactRows.length
+    ? renderHeading('Contact') + renderInfoTable(contactRows)
+    : '';
+
+  const sections =
+    renderCta({ href: optInUrl, label: 'Oui, je veux recevoir les offres' }) +
+    renderNotice({
+      tone: 'info',
+      text: `Si vous ne souhaitez pas recevoir ces offres, vous n'avez rien à faire — ignorez simplement cet email. Vos notifications de rendez-vous (confirmations, rappels) continueront normalement dans tous les cas.`,
+    }) +
+    contactHtml;
+
+  // Pas de marketingFooterHtml ici : l'email opt-in est administratif (pas
+  // marketing) et le bouton CTA agit deja comme un opt-in/opt-out 1-clic.
+
+  const html = renderShell({
+    preheader: `Souhaitez-vous recevoir les offres de ${businessName} ?`,
+    kicker: `FlowIA · ${safeBusiness}`,
+    title: 'Souhaitez-vous recevoir nos offres ?',
+    intro,
+    sections,
+    footerNote: `Email administratif RGPD — FlowIA`,
+  });
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
   await sendEmail({ to, subject, html, text, replyTo });
   return true;
@@ -1133,34 +1000,32 @@ async function sendNewAppointmentMerchant({
     `Référence #${refId}`,
   ].filter(Boolean).join('\n');
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:24px 12px;">
-  <div style="max-width:520px;margin:0 auto;background:#fff;border:0.5px solid #e5e7eb;border-radius:14px;overflow:hidden;">
-    <div style="padding:24px 28px 16px;border-bottom:0.5px solid #e5e7eb;">
-      <p style="margin:0 0 4px;font-size:11px;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">${sourceLabel}</p>
-      <h1 style="margin:0;font-size:18px;font-weight:500;color:#111827;letter-spacing:-0.01em;">Nouvelle réservation</h1>
-      <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">${dateCap} à ${startTime || ''}${endTime ? ' - ' + endTime : ''}</p>
-    </div>
-    <div style="padding:18px 28px;">
-      <table style="width:100%;border-collapse:collapse;font-size:13px;color:#111827;">
-        <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Client</td><td style="padding:6px 0;font-weight:500;">${clientName || '—'}</td></tr>
-        ${clientEmail ? `<tr><td style="padding:6px 0;color:#6b7280;">Email</td><td style="padding:6px 0;">${clientEmail}</td></tr>` : ''}
-        ${clientPhone ? `<tr><td style="padding:6px 0;color:#6b7280;">Téléphone</td><td style="padding:6px 0;font-family:ui-monospace,Menlo,monospace;">${clientPhone}</td></tr>` : ''}
-        ${serviceName ? `<tr><td style="padding:6px 0;color:#6b7280;">Prestation</td><td style="padding:6px 0;">${serviceName}${durationMinutes ? ' · ' + durationMinutes + ' min' : ''}</td></tr>` : ''}
-        ${employeeName ? `<tr><td style="padding:6px 0;color:#6b7280;">Avec</td><td style="padding:6px 0;">${employeeName}</td></tr>` : ''}
-        ${price != null ? `<tr><td style="padding:6px 0;color:#6b7280;">Montant</td><td style="padding:6px 0;font-family:ui-monospace,Menlo,monospace;">${Number(price).toFixed(2)} €</td></tr>` : ''}
-      </table>
-      ${agendaUrl ? `
-      <div style="margin-top:18px;text-align:center;">
-        <a href="${agendaUrl}" style="display:inline-block;padding:11px 22px;border-radius:8px;background:#111827;color:#fff;font-size:13px;font-weight:500;text-decoration:none;">Ouvrir dans l'agenda</a>
-      </div>` : ''}
-    </div>
-    <div style="padding:12px 28px;background:#f9fafb;border-top:0.5px solid #e5e7eb;">
-      <p style="margin:0;font-size:11px;color:#9ca3af;font-family:ui-monospace,Menlo,monospace;">Référence #${refId}</p>
-    </div>
-  </div>
-</body></html>`;
+  const rows = [
+    { label: 'Référence', value: `#${escapeHtml(refId)}`, valueIsMono: true },
+    { label: 'Client', value: escapeHtml(clientName || '—') },
+  ];
+  if (clientEmail) rows.push({ label: 'Email', value: escapeHtml(clientEmail) });
+  if (clientPhone) rows.push({ label: 'Téléphone', value: escapeHtml(clientPhone), valueIsMono: true });
+  rows.push({ label: 'Date', value: escapeHtml(dateCap) });
+  rows.push({ label: 'Créneau', value: `${escapeHtml(startTime || '')}${endTime ? ' - ' + escapeHtml(endTime) : ''}` });
+  if (serviceName) rows.push({ label: 'Prestation', value: `${escapeHtml(serviceName)}${durationMinutes ? ' · ' + escapeHtml(durationMinutes) + ' min' : ''}` });
+  if (employeeName) rows.push({ label: 'Avec', value: escapeHtml(employeeName) });
+  if (price != null) rows.push({ label: 'Montant', value: `${escapeHtml(Number(price).toFixed(2))} €`, valueIsMono: true });
+
+  const intro = `<p style="margin:0;">${escapeHtml(sourceLabel)} chez ${escapeHtml(businessName || '')}.</p>`;
+
+  const sections =
+    renderInfoTable(rows) +
+    (agendaUrl ? renderCta({ href: agendaUrl, label: `Ouvrir dans l'agenda` }) : '');
+
+  const html = renderShell({
+    preheader: `Nouvelle réservation ${dateCap} à ${startTime || ''}`,
+    kicker: `FlowIA · ${escapeHtml(sourceLabel)}`,
+    title: 'Nouvelle réservation',
+    intro,
+    sections,
+    footerNote: `Référence #${refId}`,
+  });
 
   return sendEmail({ to, subject, html, text });
 }
