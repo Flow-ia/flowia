@@ -15,6 +15,15 @@ const {
   renderHeading,
 } = require('./emailLayout');
 
+// Lazy require de emailQueue pour éviter le cycle (emailQueue lazy-require
+// ce module pour le fallback sync). Au 1er appel, Node aura terminé le
+// chargement initial de emailQueue.js → safe.
+let _enqueue = null;
+function enqueue(payload, opts) {
+  if (!_enqueue) _enqueue = require('./emailQueue').enqueueEmail;
+  return _enqueue(payload, opts);
+}
+
 // ── Brevo (ex-Sendinblue) — API HTTPS, jamais bloqué par Render ───────────
 async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) {
   const body = {
@@ -226,8 +235,9 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
   });
 
   try {
-    await sendEmail({ to, subject, html });
-    console.log(`[MAIL RECAP OK] ${date} -> ${to}`);
+    // Migré vers queue (commit 30 — non-critique, cron quotidien)
+    await enqueue({ to, subject, html });
+    console.log(`[MAIL RECAP queued] ${date} -> ${to}`);
   } catch(err) { console.error(`[MAIL RECAP ERR] ${err.message}`); }
 }
 
@@ -264,8 +274,9 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
   });
 
   try {
-    await sendEmail({ to, subject, html });
-    console.log(`[MAIL REMINDER OK] -> ${to}`);
+    // Migré vers queue (commit 30 — non-critique, cron rappels RDV)
+    await enqueue({ to, subject, html });
+    console.log(`[MAIL REMINDER queued] -> ${to}`);
   } catch(err) { console.error(`[MAIL REMINDER ERR] ${err.message}`); }
 }
 
@@ -304,8 +315,9 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
   });
 
   try {
-    await sendEmail({ to, subject, html });
-    console.log(`[MAIL LOYALTY OK] ${rewardCode} -> ${to}`);
+    // Migré vers queue (commit 30 — non-critique, déclenché en transaction)
+    await enqueue({ to, subject, html });
+    console.log(`[MAIL LOYALTY queued] ${rewardCode} -> ${to}`);
   } catch(err) { console.error(`[MAIL LOYALTY ERR] ${err.message}`); }
 }
 
@@ -424,8 +436,9 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
     footerNote: `Rappel équipe envoyé par FlowIA`,
   });
   try {
-    await sendEmail({ to, subject, html });
-    console.log(`[MAIL EMP REMINDER OK] -> ${to}`);
+    // Migré vers queue (commit 30 — non-critique, cron rappels employés)
+    await enqueue({ to, subject, html });
+    console.log(`[MAIL EMP REMINDER queued] -> ${to}`);
   } catch(err) { console.error(`[MAIL EMP REMINDER ERR] ${err.message}`); }
 }
 
@@ -562,11 +575,12 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
   });
 
   try {
-    await sendEmail({
+    // Migré vers queue (commit 30 — non-critique, campagne marketing)
+    await enqueue({
       to, toName: clientName, subject, html, text: textContent,
       replyTo, headers,
     });
-    console.log(`[MAIL PROMO OK] ${promo?.code || '?'} -> ${to}`);
+    console.log(`[MAIL PROMO queued] ${promo?.code || '?'} -> ${to}`);
     return true;
   } catch(e) {
     console.error(`[MAIL PROMO ERR] ${promo?.code || '?'} -> ${to} | ${e.message}`);
@@ -639,8 +653,9 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
   const { unsubscribeHeaders } = require('./unsubscribe');
   const headers = unsubscribeHeaders({ token: unsubscribeToken, businessEmail, refId: code });
   try {
-    await sendEmail({ to, subject, html, text, replyTo, headers });
-    console.log(`[MAIL REFERRAL OK] ${code} -> ${to}`);
+    // Migré vers queue (commit 30 — non-critique, déclenché à validation parrainage)
+    await enqueue({ to, subject, html, text, replyTo, headers });
+    console.log(`[MAIL REFERRAL queued] ${code} -> ${to}`);
     return true;
   } catch(e) {
     console.error(`[MAIL REFERRAL ERR] ${e.message}`);
@@ -724,8 +739,9 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
   const { unsubscribeHeaders } = require('./unsubscribe');
   const headers = unsubscribeHeaders({ token: unsubscribeToken, businessEmail, refId: code });
   try {
-    await sendEmail({ to, subject, html, text, replyTo, headers });
-    console.log(`[MAIL BIRTHDAY OK] ${code} -> ${to}`);
+    // Migré vers queue (commit 30 — non-critique, cron mensuel anniversaire)
+    await enqueue({ to, subject, html, text, replyTo, headers });
+    console.log(`[MAIL BIRTHDAY queued] ${code} -> ${to}`);
     return true;
   } catch(e) {
     console.error(`[MAIL BIRTHDAY ERR] ${e.message}`);
@@ -768,7 +784,8 @@ async function sendReferralWelcome({ to, filleulName, businessName, code, type, 
     sections,
     footerNote: `FlowIA — email automatique, ne pas répondre`,
   });
-  return sendEmail({ to, subject, html });
+  // Migré vers queue (commit 30 — non-critique, envoyé après création code parrainage)
+  return enqueue({ to, subject, html });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -959,7 +976,8 @@ async function sendOptInInvite({ to, clientName, businessName, optInToken, busin
     footerNote: `Email administratif RGPD — FlowIA`,
   });
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
-  await sendEmail({ to, subject, html, text, replyTo });
+  // Migré vers queue (commit 30 — non-critique, invitation marketing opt-in)
+  await enqueue({ to, subject, html, text, replyTo });
   return true;
 }
 

@@ -31,7 +31,16 @@ try {
   console.warn('[emailQueue] pg-boss non installé — fallback sync uniquement');
 }
 
-const { sendEmail } = require('./email');
+// Lazy require de ./email pour éviter le cycle :
+// email.js require ./emailQueue (pour appeler enqueueEmail dans les
+// fonctions non-critiques), et emailQueue avait besoin de sendEmail.
+// Avec un getter lazy, l'import est résolu au 1er appel — email.js est
+// alors complètement chargé.
+let _emailMod = null;
+function getEmailMod() {
+  if (!_emailMod) _emailMod = require('./email');
+  return _emailMod;
+}
 
 const QUEUE_NAME = 'emails';
 let boss     = null;
@@ -96,7 +105,7 @@ async function enqueueEmail(payload, options = {}) {
   if (!boss || !started) {
     // Fallback sync : envoi immédiat. Conserve la même signature de retour
     // que sendEmail (généralement le response Brevo ou throw).
-    return sendEmail(payload);
+    return getEmailMod().sendEmail(payload);
   }
   try {
     const jobId = await boss.send(QUEUE_NAME, payload, {
@@ -110,7 +119,7 @@ async function enqueueEmail(payload, options = {}) {
     return { ok: true, queued: true, jobId };
   } catch (e) {
     console.error('[emailQueue] enqueue échec, fallback sync:', e.message);
-    return sendEmail(payload);
+    return getEmailMod().sendEmail(payload);
   }
 }
 
@@ -123,6 +132,7 @@ async function startEmailWorker(opts = {}) {
   const teamSize        = opts.teamSize        ?? 5;
   const teamConcurrency = opts.teamConcurrency ?? 1;
   // pg-boss v10+ : work() reçoit un batch de jobs (toujours un tableau).
+  const sendEmail = getEmailMod().sendEmail;
   await boss.work(QUEUE_NAME, { teamSize, teamConcurrency }, async (jobs) => {
     const list = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of list) {
