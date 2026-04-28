@@ -666,57 +666,55 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
   }
 
   function startCron() {
-    // Décaler chaque tâche pour ne pas tout lancer en même temps
-    setInterval(async () => {
-      try { await runRdvReminders();      } catch (e) { console.error('[CRON rdv]', e.message); }
-    }, 60 * 1000);
+    // Lock applicatif distribué Postgres (pg_try_advisory_lock) : remplace
+    // la garde historique `cluster.worker.id === 1`. Garantit qu'un seul
+    // tick s'exécute à un instant T, **même en multi-instance Render**
+    // (plusieurs containers + plusieurs workers cluster par container).
+    // Le lock est session-scoped : si l'instance crashe, la session PG
+    // meurt et le lock se libère automatiquement (pas de risque de
+    // blocage permanent).
+    const { withLock } = require('./utils/distributedLock');
 
-    setInterval(async () => {
-      try { await runEmployeeReminders(); } catch (e) { console.error('[CRON emp]', e.message); }
-    }, 60 * 1000);
+    // Helper local : exécute fn() à chaque tick si et seulement si le lock
+    // peut être acquis. Sinon log informatif et skip (autre instance fait
+    // le travail). Toute erreur de fn() est loggée puis le lock est libéré
+    // (try/finally interne à withLock).
+    const scheduleLocked = (intervalMs, lockKey, label, fn) => {
+      setInterval(async () => {
+        try {
+          await withLock(lockKey, fn);
+        } catch (e) {
+          console.error(`[CRON ${label}]`, e.message);
+        }
+      }, intervalMs);
+    };
 
-    setInterval(async () => {
-      try { await runDailyRecaps();       } catch (e) { console.error('[CRON recap]', e.message); }
-    }, 5 * 60 * 1000); // moins fréquent, toutes les 5 min
-
+    // Décaler chaque tâche pour ne pas tout lancer en même temps.
+    scheduleLocked(60 * 1000,           'cron:reminders:rdv',          'rdv',       runRdvReminders);
+    scheduleLocked(60 * 1000,           'cron:reminders:employee',     'emp',       runEmployeeReminders);
+    scheduleLocked(5 * 60 * 1000,       'cron:recaps:daily',           'recap',     runDailyRecaps);
     // File d'attente campagnes email — toutes les heures
-    setInterval(async () => {
-      try { await processCampaignQueue(); } catch (e) { console.error('[CRON queue]', e.message); }
-    }, 60 * 60 * 1000);
-
+    scheduleLocked(60 * 60 * 1000,      'worker:campaign:queue',       'queue',     processCampaignQueue);
     // File d'attente SMS — toutes les 30 min (campagnes IA planifiées par phase)
-    setInterval(async () => {
-      try { await processSmsQueue(); } catch (e) { console.error('[CRON sms]', e.message); }
-    }, 30 * 60 * 1000);
-
+    scheduleLocked(30 * 60 * 1000,      'worker:sms:queue',            'sms',       processSmsQueue);
     // Rappels email RDV — toutes les heures
-    setInterval(async () => {
-      try { await processAppointmentReminders(); } catch (e) { console.error('[CRON reminders]', e.message); }
-    }, 60 * 60 * 1000);
-
-    // Nettoyer les transactions pending depuis plus de 2h (paiement abandonne)
-    setInterval(async () => {
-      try {
-        await dbPool.query(`
-          UPDATE sms_transactions
-          SET status = 'expired'
-          WHERE status = 'pending'
-          AND created_at < NOW() - INTERVAL '2 hours'
-        `);
-      } catch(e) {
-        console.error('[CRON CLEANUP]', e.message);
-      }
-    }, 2 * 60 * 60 * 1000);
-
+    scheduleLocked(60 * 60 * 1000,      'cron:reminders:appointment',  'reminders', processAppointmentReminders);
+    // Nettoyer les transactions pending depuis plus de 2h (paiement abandonné)
+    scheduleLocked(2 * 60 * 60 * 1000,  'cron:cleanup:sms_pending',    'cleanup',   async () => {
+      await dbPool.query(`
+        UPDATE sms_transactions
+        SET status = 'expired'
+        WHERE status = 'pending'
+        AND created_at < NOW() - INTERVAL '2 hours'
+      `);
+    });
     // Anniversaires clients — commit 24b. Tente l'envoi toutes les heures,
     // mais le handler ne déclenche que le 1er du mois entre 09:00 et 10:00
     // (guards horaires internes). Anti-doublon annuel via SELECT préalable
     // sur client_rewards + filtre last_birthday_reward_at rolling 330j.
-    setInterval(async () => {
-      try { await runBirthdayPromos(); } catch (e) { console.error('[CRON birthday]', e.message); }
-    }, 60 * 60 * 1000);
+    scheduleLocked(60 * 60 * 1000,      'cron:birthday:monthly',       'birthday',  runBirthdayPromos);
 
-    console.log('⏰ Cron démarré (worker', process.pid, ')');
+    console.log('⏰ Cron démarré (worker', process.pid, ') — protégé par pg_advisory_lock');
   }
 
   // ── Cron anniversaire : génère promos + envoie emails ─────────────────────
@@ -909,14 +907,24 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
   initDB()
     .then(() => {
       app.listen(PORT, () => {
-        const isWorker1 = !cluster.worker || cluster.worker.id === 1;
+        // « isLocalLeader » remplace l'ancienne garde `cluster.worker.id === 1`
+        // qui servait de protection contre la double exécution des crons.
+        // Cette garantie est désormais portée par pg_advisory_lock (cf.
+        // utils/distributedLock.js) — efficace même en multi-instance Render.
+        // On garde cette condition uniquement comme **optimisation locale**
+        // pour ne pas multiplier les setInterval/log diagnostic au sein
+        // d'un même container avec cluster Node (1 worker leader par
+        // instance suffit ; les autres workers n'ouvrent que les requêtes
+        // HTTP). En mono-process (NODE_ENV != production), la condition
+        // est trivialement vraie.
+        const isLocalLeader = !cluster.worker || cluster.worker.id === 1;
         console.log(`✅ Worker ${process.pid} → http://localhost:${PORT}`);
         // Commit 28b — log diagnostic des URLs unsubscribe émises dans les
         // emails marketing. Si l'URL pointe vers un backend qui ne contient
         // pas la route `/api/pub/unsubscribe-page` (ex. backend prod sur
         // branche main pendant la refonte), les liens cliquables renverront
         // 404 « Cannot GET ». Ce log permet de détecter la config en 1 coup.
-        if (isWorker1) {
+        if (isLocalLeader) {
           try {
             const { unsubscribeUrl, backendUnsubscribeUrl } = require('./utils/unsubscribe');
             const stub = '00000000-0000-0000-0000-000000000000';
