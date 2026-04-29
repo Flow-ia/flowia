@@ -15,19 +15,27 @@ export function ReferralTab({
       {/* Code perso + partage */}
       <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
         <p style={{ fontSize:11, fontWeight: 500, color:th.muted, margin:'0 0 8px' }}>Mon code de parrainage</p>
-        <div style={{ background:th.cardAlt, border:`2px dashed #8b5cf6`, borderRadius:14,
+        {/* Cadre voucher : tirets fins théme-aware (clair vs sombre) au lieu
+            d'un purple hardcodé qui jurait en dark mode et ne respectait pas
+            les FDS-2026. */}
+        <div style={{ background:th.cardAlt,
+          border:`1px dashed ${th.mode==='dark' ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)'}`,
+          borderRadius:14,
           padding:'18px 16px', textAlign:'center', marginBottom:12 }}>
-          <p style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:24, fontWeight: 500, color:'#6d28d9',
+          <p style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:24, fontWeight: 500, color:th.text,
             letterSpacing:3, margin:0 }}>{refInfo.code}</p>
           <p style={{ fontSize:11, color:th.muted, margin:'6px 0 0' }}>
             {refInfo.uses_count || 0} filleul{(refInfo.uses_count||0) > 1 ? 's' : ''} enregistré{(refInfo.uses_count||0) > 1 ? 's' : ''}
           </p>
         </div>
+        {/* Bouton primaire : aligné sur th.accent / th.accentText (= noir/blanc
+            en clair, blanc/noir en sombre), comme les autres CTA booking. */}
         <button onClick={onCopyReferralLink} style={{ width:'100%', padding:'12px',
           borderRadius:11, cursor:'pointer', border:'none',
-          background:refCopied ? '#10b981' : '#8b5cf6',
-          color:'white', fontWeight: 500, fontSize:13 }}>
-          {refCopied ? '✓ Lien copié' : 'Copier mon lien de parrainage'}
+          background: refCopied ? '#10b981' : th.accent,
+          color: refCopied ? 'white' : th.accentText,
+          fontWeight: 500, fontSize:13 }}>
+          {refCopied ? 'Lien copié' : 'Copier mon lien de parrainage'}
         </button>
         {refInfo.program && (
           <p style={{ fontSize:12, color:th.muted, margin:'12px 0 0', lineHeight:1.5, textAlign:'center' }}>
@@ -134,9 +142,12 @@ export function ReferralTab({
                 <div key={h.id} style={{ padding:'10px 12px', borderRadius:10,
                   background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{ width:32, height:32, borderRadius:10, background:'#8b5cf620',
+                    {/* Avatar filleul : couleurs theme-aware au lieu du
+                        purple hardcodé (illisible en dark mode). */}
+                    <div style={{ width:32, height:32, borderRadius:10,
+                      background:th.cardAlt, border:`0.5px solid ${th.border}`,
                       display:'flex', alignItems:'center', justifyContent:'center',
-                      fontSize:13, fontWeight: 500, color:'#6d28d9', flexShrink:0 }}>
+                      fontSize:13, fontWeight: 500, color:th.text, flexShrink:0 }}>
                       {(name.charAt(0) || '?').toUpperCase()}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
