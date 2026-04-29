@@ -17,9 +17,12 @@ router.get('/settings', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM notification_settings WHERE user_id=$1`, [req.user.userId]);
     const s = rows[0] || {};
+    // PG renvoie TIME en HH:MM:SS — on tronque pour <input type="time">
+    // et pour la cohérence du round-trip GET/PUT.
+    const recapTime = s.daily_recap_time ? String(s.daily_recap_time).substring(0, 5) : '20:00';
     res.json({
       daily_recap_enabled:       s.daily_recap_enabled    ?? false,
-      daily_recap_time:          s.daily_recap_time       || '20:00',
+      daily_recap_time:          recapTime,
       daily_recap_email:         s.daily_recap_email      || null,
       reminder_enabled:          s.reminder_enabled       ?? false,
       reminder_delays:           s.reminder_delays        || '1440',
@@ -48,7 +51,10 @@ router.put('/settings', async (req, res) => {
 
     // Audit AA : validations strictes (aligné V/X).
     // Format HH:MM (00-23:00-59) pour daily_recap_time.
-    if (daily_recap_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(daily_recap_time)))
+    // PG renvoie les colonnes TIME en HH:MM:SS — on tronque à HH:MM pour
+    // accepter le round-trip GET → save sans modification utilisateur.
+    let recapTime = daily_recap_time ? String(daily_recap_time).substring(0, 5) : null;
+    if (recapTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(recapTime))
       return res.status(400).json({ error: 'Heure invalide (HH:MM).' });
     // Email propre si fourni.
     if (daily_recap_email) {
@@ -87,7 +93,7 @@ router.put('/settings', async (req, res) => {
        RETURNING *`,
       [req.user.userId,
        daily_recap_enabled ?? false,
-       daily_recap_time || '20:00',
+       recapTime || '20:00',
        daily_recap_email || null,
        reminder_enabled ?? false,
        delaysStr,

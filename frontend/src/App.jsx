@@ -1900,6 +1900,36 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
                          animation: blinking ? 'ffNotifPulse 1.6s ease-in-out infinite' : 'none' }}>
           <I.Bell style={{ width: 15, height: 15,
                            color: open ? t.text : (blinking ? '#991b1b' : t.muted) }} />
+          {/* Indicateur d'état push (haut-gauche) — aide visuelle pour les
+              employés : vert = notifs actives, rouge barré = silencieux.
+              Affiché uniquement si push supporté pour ne pas semer la
+              confusion sur des navigateurs incapables (vieux iOS Safari). */}
+          {pushSupported && (
+            <span title={pushEnabled ? 'Notifications actives' : 'Notifications silencieuses'}
+                  aria-label={pushEnabled ? 'Notifications actives' : 'Notifications silencieuses'}
+                  style={{ position: 'absolute', top: -3, left: -3,
+                           width: 12, height: 12, borderRadius: 99,
+                           background: pushEnabled ? '#10b981' : '#ef4444',
+                           border: `1.5px solid ${t.bg || '#fff'}`,
+                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                           pointerEvents: 'none' }}>
+              {pushEnabled ? (
+                /* Petite onde sonore — son actif */
+                <svg width="6" height="6" viewBox="0 0 24 24" fill="none"
+                     stroke="white" strokeWidth="3.5" strokeLinecap="round">
+                  <path d="M12 6v12"/>
+                  <path d="M7 9v6"/>
+                  <path d="M17 9v6"/>
+                </svg>
+              ) : (
+                /* Trait barré — muet */
+                <svg width="7" height="7" viewBox="0 0 24 24" fill="none"
+                     stroke="white" strokeWidth="3.5" strokeLinecap="round">
+                  <path d="M5 5l14 14"/>
+                </svg>
+              )}
+            </span>
+          )}
           {unreadCount > 0 && (
             <span style={{ position: 'absolute', top: -4, right: -4,
                            minWidth: 14, height: 14, borderRadius: 99,
@@ -2075,7 +2105,12 @@ export default function App() {
 
   const prevSoundCountRef = useRef(0);
   useEffect(() => {
-    const newAppts = (appNotifs || []).filter(n => n.type === 'new_appointment' && !n.is_read);
+    // Backend envoie new_appointment_public / _employee / _admin (push.js
+    // commit 25). On match toutes ces variantes, sinon le son n'est jamais
+    // joué pour les RDV créés depuis la page de réservation publique.
+    const newAppts = (appNotifs || []).filter(n =>
+      typeof n.type === 'string' && n.type.startsWith('new_appointment') && !n.is_read
+    );
     if (newAppts.length > prevSoundCountRef.current && soundCfg.new_appointment) {
       playSound('new_appointment', soundCfg.repeat || 2);
     }

@@ -179,8 +179,28 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
     };
   }, [loadNotifications]);
 
+  // Choix utilisateur persistant : 'on' = activé manuellement, 'off' = désactivé
+  // explicitement (on n'auto-active plus), null = jamais touché (auto-active OK).
+  const PREF_KEY = 'flowia_push_pref';
+  const readPref = () => { try { return localStorage.getItem(PREF_KEY); } catch { return null; } };
+  const writePref = (v) => { try { localStorage.setItem(PREF_KEY, v); } catch {} };
+
+  // Au boot : check si une subscription existe déjà côté navigateur. Si oui,
+  // l'utilisateur EST abonné — l'UI doit refléter "Push ON" même sans avoir
+  // appelé enablePush dans cette session. Sinon le bouton affichait "Push OFF"
+  // alors que les push fonctionnaient en réalité.
   useEffect(() => {
-    setPushSupported('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+    const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    setPushSupported(supported);
+    if (!supported) return;
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/');
+        if (!reg) return;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub && Notification.permission === 'granted') setPushEnabled(true);
+      } catch {}
+    })();
   }, []);
 
   const enablePush = useCallback(async () => {
@@ -188,9 +208,14 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
       const keyData = await notifApi.getVapidKey();
       if (!keyData?.publicKey) return { ok: false, reason: 'vapid_missing' };
       const r = await registerPush(keyData.publicKey);
-      if (!r.ok) return r;
+      if (!r.ok) {
+        // Refus explicite navigateur → on retient pour ne pas re-prompter
+        if (r.reason === 'denied') writePref('off');
+        return r;
+      }
       await notifApi.subscribePush(r.subscription.toJSON());
       setPushEnabled(true);
+      writePref('on');
       return { ok: true };
     } catch (e) {
       console.warn('[enablePush]', e);
@@ -215,8 +240,46 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
         await notifApi.unsubscribePush({ endpoint: sub.endpoint }).catch(() => {});
       }
       setPushEnabled(false);
+      writePref('off');
     } catch {}
   }, []);
+
+  // Auto-activation : si l'utilisateur n'a JAMAIS touché au toggle (pas de
+  // préférence stockée), ET que le navigateur a déjà la permission accordée
+  // (ex: PWA installée par notre InstallPrompt), on active la subscription
+  // silencieusement au premier mount. Pas de re-prompt navigateur.
+  useEffect(() => {
+    if (!enabled) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    if (readPref() === 'off') return; // user a explicitement coupé
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration('/');
+        if (!reg) return;
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          // Re-sync côté serveur (au cas où la sub ait été perdue en DB) puis ON
+          try { await notifApi.subscribePush(existing.toJSON()); } catch {}
+          setPushEnabled(true);
+          if (readPref() == null) writePref('on');
+          return;
+        }
+        // Pas de sub mais permission accordée → souscrit silencieusement
+        const keyData = await notifApi.getVapidKey();
+        if (!keyData?.publicKey) return;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+        });
+        await notifApi.subscribePush(sub.toJSON());
+        setPushEnabled(true);
+        if (readPref() == null) writePref('on');
+      } catch (e) {
+        console.warn('[auto-push]', e?.message);
+      }
+    })();
+  }, [enabled]);
 
   const markRead = useCallback(async (id) => {
     // J15 : ne décrémente le badge QUE si la notif n'était pas déjà lue.
