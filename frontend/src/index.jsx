@@ -14,6 +14,8 @@ import { TabletModeProvider } from './contexts/TabletModeProvider';
 import { AdminModeProvider } from './contexts/AdminModeContext';
 import { IdleLockProvider } from './hooks/useIdleLock';
 import LockScreen from './components/LockScreen';
+import InstallPrompt from './pwa/InstallPrompt';
+import { registerSW } from './pwa/registerSW';
 import './index.css';
 
 // ── Détection du domaine au montage ──────────────────────────────────────────
@@ -68,8 +70,15 @@ function RootSwitch() {
     <IdleLockProvider>
       <App />
       <LockScreen />
+      <InstallPrompt />
     </IdleLockProvider>
   );
+}
+
+// PWA — enregistre le SW uniquement côté commerçant. Le booking public
+// (haircoifflille.fr) n'a pas besoin d'être installable.
+if (!isBookingHost()) {
+  registerSW();
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

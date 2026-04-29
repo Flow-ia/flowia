@@ -1,0 +1,66 @@
+{
+  "name": "FlowIA — Gestion salon",
+  "short_name": "FlowIA",
+  "description": "Agenda, caisse, CRM et notifications temps réel pour votre commerce.",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#111318",
+  "theme_color": "#6366f1",
+  "lang": "fr-FR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "lifestyle"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Agenda du jour",
+      "short_name": "Agenda",
+      "description": "Voir les rendez-vous d'aujourd'hui",
+      "url": "/agenda?source=pwa-shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Caisse",
+      "short_name": "Caisse",
+      "description": "Encaisser une vente",
+      "url": "/caisse?source=pwa-shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Tableau de bord",
+      "short_name": "Dashboard",
+      "description": "Statistiques et activité du jour",
+      "url": "/?source=pwa-shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
