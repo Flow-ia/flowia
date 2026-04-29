@@ -3,6 +3,7 @@
 // + gestion OTP (saveCode/getCode/deleteCode) sur la table verification_codes.
 const jwt      = require('jsonwebtoken');
 const { pool } = require('../../db');
+const { extractClientToken } = require('../../utils/clientCookies');
 
 // Regex email commune aux routes register/reset/invite. Rejette `a@@b`, espaces,
 // caractères exotiques, emails >254 chars (RFC 5321 SMTP cap).
@@ -54,10 +55,13 @@ function blockedResponse(res) {
 }
 
 async function globalClientAuth(req, res, next) {
-  const h = req.headers.authorization;
-  if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non authentifié.' });
+  // Migration cookies HttpOnly : token lu depuis ff_gc_token / ff_client_token
+  // (priorité) puis fallback Authorization: Bearer pour les anciens clients
+  // dont le frontend stocke encore le token en localStorage.
+  const tok = extractClientToken(req);
+  if (!tok) return res.status(401).json({ error: 'Non authentifié.' });
   let dec;
-  try { dec = jwt.verify(h.slice(7), process.env.JWT_SECRET); }
+  try { dec = jwt.verify(tok, process.env.JWT_SECRET); }
   catch { return res.status(401).json({ error: 'Session expirée.' }); }
   if (dec.scope !== 'global_client') return res.status(401).json({ error: 'Token invalide.' });
   if (await isGlobalClientBlocked(dec.globalClientId)) return blockedResponse(res);
@@ -70,10 +74,10 @@ async function globalClientAuth(req, res, next) {
 // ce middleware car le client s'authentifie via ff_client_token (login
 // commerçant) — ff_gc_token n'est jamais écrit côté front.
 async function clientOrGlobalClientAuth(req, res, next) {
-  const h = req.headers.authorization;
-  if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'Non authentifié.' });
+  const tok = extractClientToken(req);
+  if (!tok) return res.status(401).json({ error: 'Non authentifié.' });
   let dec;
-  try { dec = jwt.verify(h.slice(7), process.env.JWT_SECRET); }
+  try { dec = jwt.verify(tok, process.env.JWT_SECRET); }
   catch { return res.status(401).json({ error: 'Session expirée.' }); }
   if (dec.scope === 'global_client' && dec.globalClientId) {
     if (await isGlobalClientBlocked(dec.globalClientId)) return blockedResponse(res);

@@ -2,6 +2,7 @@
 // Vue : Confirmation de réservation — icône succès, numéro, récap, actions.
 
 import { NavBar } from '../../booking/NavBar';
+import { pubApi, globalClientApi } from '../../../utils/api';
 
 export function SuccessView({
   th, slug, business, clientUser, bookedAppt, selSvc, selEmp, selDate, selSlot,
@@ -16,7 +17,7 @@ export function SuccessView({
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
         onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
         onMyAppts={()=>{navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
-        onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
+        onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
         onNavigateHome={(id)=>{ resetBooking(); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },300); }} />
 
       <div style={{ maxWidth:440, margin:'0 auto', padding:'48px 24px 80px',

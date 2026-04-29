@@ -79,7 +79,11 @@ export default function OAuthCallback() {
       let client = null;
       try { if (clientRaw) client = JSON.parse(clientRaw); } catch { /* noop */ }
       if (client) localStorage.setItem('ff_client_info', JSON.stringify(client));
-      localStorage.setItem('ff_client_token', token);
+      // Migration cookies HttpOnly : le backend a posé ff_client_token en
+      // cookie côté navigateur lors du redirect. Plus besoin de stocker
+      // le JWT en localStorage. Le marqueur ff_oauth_client garde le token
+      // en mémoire transitoire 500 ms pour les listeners de l'opener qui
+      // attendent le payload — sera supprimé après stabilisation.
       try { localStorage.setItem('ff_oauth_client', JSON.stringify({ token, client })); } catch {}
       try { bc && bc.postMessage({ type: 'client_login', token, client }); } catch {}
     }

@@ -91,9 +91,10 @@ export function Step5Info({
                 // RGPD commit 20 : phone déjà en E.164 dans clientPhone, validé par PhoneInput.
                 if (!phoneOk) { setPhoneErr('Numéro invalide pour le pays sélectionné.'); return; }
                 if (clientUser && !clientUser.phone) {
+                  // Cookie HttpOnly : on appelle directement l'API, le backend
+                  // lit le cookie et 401 si pas authentifié (catch silencieux).
                   try{
-                    const tk = localStorage.getItem('ff_client_token');
-                    if (tk) await pubApi.updateClientProfile(slug, {
+                    await pubApi.updateClientProfile(slug, {
                       first_name: clientUser.first_name, last_name: clientUser.last_name,
                       email: clientUser.email, phone: clientPhone,
                     });

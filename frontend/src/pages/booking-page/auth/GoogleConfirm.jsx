@@ -94,9 +94,10 @@ export default function GoogleConfirm() {
         phone:              phone || undefined,
         birth_date:         birthDate || null,
       });
-      if (!res?.token || !res?.client) throw new Error('Réponse invalide');
+      if (!res?.client) throw new Error('Réponse invalide');
       // Persistance cohérente avec AuthPanel.applyClientLogin.
-      localStorage.setItem('ff_client_token', res.token);
+      // Cookie ff_client_token déjà posé par le backend (HttpOnly) — on
+      // ne stocke plus que l'objet client (non sensible) en localStorage.
       localStorage.setItem('ff_client_info', JSON.stringify(res.client));
       try { localStorage.removeItem('ff_oauth_pre_register'); } catch {}
       // Redirect vers la page de réservation du commerce — onAuth-équivalent.

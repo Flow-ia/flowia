@@ -427,9 +427,13 @@ export const mediaApi = {
 const PUB_BASE = import.meta.env.VITE_API_URL || '/api';
 async function pubRequest(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  // Migration cookies HttpOnly : credentials:'include' joint le cookie
+  // ff_client_token au cross-site (backend Render ↔ frontend Vercel/custom).
+  // Le header Authorization est encore envoyé tant qu'un ancien token traîne
+  // en localStorage (transition jusqu'à expiry des sessions pré-migration).
   const clientToken = localStorage.getItem('ff_client_token');
   if (clientToken) headers['Authorization'] = `Bearer ${clientToken}`;
-  const res = await fetch(`${PUB_BASE}/pub${path}`, { ...options, headers });
+  const res = await fetch(`${PUB_BASE}/pub${path}`, { ...options, headers, credentials: 'include' });
   const data = await res.json();
   if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
   if (!res.ok) {
@@ -449,6 +453,9 @@ export const pubApi = {
   register:       (slug, b) => pubRequest(`/${slug}/client/register`,  { method: 'POST', body: JSON.stringify(b) }),
   quickRegister:  (slug, b) => pubRequest(`/${slug}/client/quick-register`, { method: 'POST', body: JSON.stringify(b) }),
   login:          (slug, b) => pubRequest(`/${slug}/client/login`,     { method: 'POST', body: JSON.stringify(b) }),
+  // POST logout : purge le cookie HttpOnly côté backend. À appeler en plus
+  // du nettoyage localStorage côté frontend.
+  logout:         (slug)    => pubRequest(`/${slug}/client/logout`,    { method: 'POST' }),
   myAppointments: (slug)    => pubRequest(`/${slug}/client/appointments`),
   // Commit 24c — réductions disponibles pour le client connecté chez ce
   // commerce. Retourne { discounts: [...], credit }. Utilisé Step6 booking.
@@ -714,14 +721,15 @@ export const creditsApi = {
 };
 async function gcRequest(path, options = {}, token = null) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-  // Fallback auto : ff_gc_token (compte global) puis ff_client_token (login
-  // commerçant, scope='client' avec globalClientId). Le back accepte les 2
-  // via clientOrGlobalClientAuth.
+  // Migration cookies HttpOnly : credentials:'include' attache les cookies
+  // ff_gc_token / ff_client_token (backend lit l'un OU l'autre via
+  // clientOrGlobalClientAuth). Header Authorization conservé en rétro-compat
+  // tant qu'un token localStorage subsiste (sessions pré-migration).
   const auth = token
     || localStorage.getItem('ff_gc_token')
     || localStorage.getItem('ff_client_token');
   if (auth) headers['Authorization'] = `Bearer ${auth}`;
-  const res  = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res  = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
   const data = await res.json();
   if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
   if (!res.ok) throw Object.assign(new Error(data.error || 'Erreur reseau'), { code: data.code });
@@ -731,6 +739,7 @@ async function gcRequest(path, options = {}, token = null) {
 export const globalClientApi = {
   register:       (data)        => gcRequest('/global-clients/register',        { method:'POST', body: JSON.stringify(data) }),
   login:          (data)        => gcRequest('/global-clients/login',           { method:'POST', body: JSON.stringify(data) }),
+  logout:         ()            => gcRequest('/global-clients/logout',          { method:'POST' }),
   activate:       (data)        => gcRequest('/global-clients/activate',        { method:'POST', body: JSON.stringify(data) }),
   me:             (token)       => gcRequest('/global-clients/me',              {}, token),
   updateMe:       (token, data) => gcRequest('/global-clients/me',              { method:'PUT',  body: JSON.stringify(data) }, token),

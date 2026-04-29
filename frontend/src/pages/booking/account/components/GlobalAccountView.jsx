@@ -115,10 +115,13 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
   const exportMyData = async () => {
     setExportLoad(true);
     try {
-      const token = gcToken || localStorage.getItem('ff_gc_token');
       const BASE = import.meta.env.VITE_API_URL || '/api';
+      // Cookie HttpOnly ff_gc_token / ff_client_token envoyé via credentials.
+      // Header Authorization conservé en rétro-compat ancien stockage.
+      const legacy = gcToken || localStorage.getItem('ff_gc_token') || localStorage.getItem('ff_client_token');
       const res = await fetch(`${BASE}/global-clients/me/export`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: legacy ? { Authorization: `Bearer ${legacy}` } : {},
       });
       if (!res.ok) throw new Error('Erreur export');
       const blob = await res.blob();

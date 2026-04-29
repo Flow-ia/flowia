@@ -7,6 +7,7 @@ const { sendPasswordReset } = require('../../utils/email');
 const { isValidEmail, isRealDate, saveCode, getCode, deleteCode } = require('./helpers');
 const { validatePhone } = require('../../utils/phone');
 const { parseBirthDate } = require('../../utils/birthDate');
+const { setGcCookie, clearGcCookie } = require('../../utils/clientCookies');
 
 module.exports = function attachAuthRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ module.exports = function attachAuthRoutes(router) {
         process.env.JWT_SECRET, { expiresIn: '30d' }
       );
 
+      setGcCookie(res, token);
       res.status(201).json({
         ok: true, token,
         client: {
@@ -144,6 +146,7 @@ module.exports = function attachAuthRoutes(router) {
         process.env.JWT_SECRET, { expiresIn: '30d' }
       );
 
+      setGcCookie(res, token);
       res.json({
         ok: true, token,
         client: { id: gc.id, email: gc.email, first_name: gc.first_name, last_name: gc.last_name, phone: gc.phone },
@@ -214,6 +217,7 @@ module.exports = function attachAuthRoutes(router) {
         process.env.JWT_SECRET, { expiresIn: '30d' }
       );
 
+      setGcCookie(res, token);
       res.json({
         ok: true, token,
         client: {
@@ -225,6 +229,14 @@ module.exports = function attachAuthRoutes(router) {
         },
       });
     } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // POST /api/global-clients/logout — purge le cookie HttpOnly côté navigateur
+  // ─────────────────────────────────────────────────────────────────────────────
+  router.post('/logout', (req, res) => {
+    clearGcCookie(res);
+    res.json({ ok: true });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

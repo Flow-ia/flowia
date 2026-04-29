@@ -1,12 +1,13 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
+const { extractClientToken } = require('../../utils/clientCookies');
 
 module.exports = function attachClientProfileRoutes(router) {
   // GET /:slug/client/appointments — liste RDV du client connecté
   router.get('/:slug/client/appointments', async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+      const tok = extractClientToken(req);
+      if (!tok) return res.status(401).json({ error: 'Non authentifié.' });
       // AUDIT #17 : filtre is_enabled (cohérence désactivation).
       const { rows: biz } = await pool.query(
         'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE', [req.params.slug]
@@ -14,7 +15,7 @@ module.exports = function attachClientProfileRoutes(router) {
       if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
       const userId = biz[0].user_id;
       let decoded;
-      try { decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET); }
+      try { decoded = jwt.verify(tok, process.env.JWT_SECRET); }
       catch { return res.status(401).json({ error: 'Token invalide.' }); }
       if (decoded.scope !== 'client' || decoded.merchantId !== userId)
         return res.status(403).json({ error: 'Accès refusé.' });
@@ -70,10 +71,10 @@ module.exports = function attachClientProfileRoutes(router) {
   // PUT /:slug/client/appointments/:id/cancel
   router.put('/:slug/client/appointments/:id/cancel', async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+      const tok = extractClientToken(req);
+      if (!tok) return res.status(401).json({ error: 'Non authentifié.' });
       let decoded;
-      try { decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET); }
+      try { decoded = jwt.verify(tok, process.env.JWT_SECRET); }
       catch { return res.status(401).json({ error: 'Token invalide.' }); }
       if (decoded.scope !== 'client') return res.status(403).json({ error: 'Accès refusé.' });
 
@@ -176,9 +177,11 @@ module.exports = function attachClientProfileRoutes(router) {
   // ── PUT /:slug/client/profile ── mise à jour du profil client ───────────
   router.put('/:slug/client/profile', async (req, res) => {
     try {
-      // Auth via Authorization header ou x-client-token
-      const rawToken = req.headers['x-client-token']
-        || (req.headers.authorization || '').replace('Bearer ', '');
+      // Auth via cookie HttpOnly (priorité) puis x-client-token (legacy)
+      // ou Authorization Bearer pour compat localStorage.
+      const rawToken = extractClientToken(req)
+        || req.headers['x-client-token']
+        || null;
       if (!rawToken) return res.status(401).json({ error: 'Non authentifié.' });
       let decoded;
       try { decoded = jwt.verify(rawToken, process.env.JWT_SECRET); }
@@ -290,10 +293,10 @@ module.exports = function attachClientProfileRoutes(router) {
   router.delete('/:slug/client/account', async (req, res) => {
     const client = await pool.connect();
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+      const tok = extractClientToken(req);
+      if (!tok) return res.status(401).json({ error: 'Non authentifié.' });
       let decoded;
-      try { decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET); }
+      try { decoded = jwt.verify(tok, process.env.JWT_SECRET); }
       catch { return res.status(401).json({ error: 'Token invalide.' }); }
       if (decoded.scope !== 'client') return res.status(403).json({ error: 'Accès refusé.' });
 
@@ -403,8 +406,8 @@ module.exports = function attachClientProfileRoutes(router) {
   //    du client authentifié) — filtre strict.
   router.get('/:slug/client/:id/available-discounts', async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) return res.status(401).json({ error: 'Non authentifié.' });
+      const tok = extractClientToken(req);
+      if (!tok) return res.status(401).json({ error: 'Non authentifié.' });
       const { rows: biz } = await pool.query(
         'SELECT user_id FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE',
         [req.params.slug]
@@ -412,7 +415,7 @@ module.exports = function attachClientProfileRoutes(router) {
       if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
       const userId = biz[0].user_id;
       let decoded;
-      try { decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET); }
+      try { decoded = jwt.verify(tok, process.env.JWT_SECRET); }
       catch { return res.status(401).json({ error: 'Token invalide.' }); }
       if (decoded.scope !== 'client' || decoded.merchantId !== userId)
         return res.status(403).json({ error: 'Accès refusé.' });

@@ -4,8 +4,16 @@ const { pool } = require('../../db');
 const { sendReferralWelcome } = require('../../utils/email');
 const { validatePhone } = require('../../utils/phone');
 const { parseBirthDate } = require('../../utils/birthDate');
+const { setClientCookie, clearClientCookie } = require('../../utils/clientCookies');
 
 module.exports = function attachClientAuthRoutes(router) {
+  // POST /:slug/client/logout — purge le cookie HttpOnly côté navigateur.
+  // Pas d'auth requise : appelable même avec une session expirée.
+  router.post('/:slug/client/logout', (req, res) => {
+    clearClientCookie(res);
+    res.json({ ok: true });
+  });
+
   // GET /:slug/client/check-email?email=xx
   // Vérifie si un email existe dans client_accounts (local) OU global_clients
   // Retourne : { exists, type: 'local'|'global'|'both'|null }
@@ -148,6 +156,7 @@ module.exports = function attachClientAuthRoutes(router) {
         { clientId: client.id, merchantId: userId, globalClientId: gcId, scope: 'client' },
         process.env.JWT_SECRET, { expiresIn: '30d' }
       );
+      setClientCookie(res, token);
 
       // Email de bienvenue filleul si inscription via lien de parrainage.
       // Check d'éligibilité COMPLET avant envoi (via resolveReferralForFilleul)
@@ -280,6 +289,7 @@ module.exports = function attachClientAuthRoutes(router) {
         { clientId: client.id, merchantId: userId, globalClientId: client.global_client_id || null, scope: 'client' },
         process.env.JWT_SECRET, { expiresIn: '30d' }
       );
+      setClientCookie(res, token);
       res.json({ ok: true, token, client: { ...client, has_global_account: !!client.global_client_id } });
     } catch (e) { console.error('[quick-register]', e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
@@ -382,6 +392,7 @@ module.exports = function attachClientAuthRoutes(router) {
         },
         process.env.JWT_SECRET, { expiresIn: '30d' }
       );
+      setClientCookie(res, token);
 
       res.json({
         ok: true, token,
@@ -629,6 +640,7 @@ module.exports = function attachClientAuthRoutes(router) {
         process.env.JWT_SECRET,
         { expiresIn: '30d' }
       );
+      setClientCookie(res, token);
 
       const clientObj = {
         id: local.id, email: gc.email,

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { getSlots, getEmployeeOpenClose } = require('./helpers');
+const { extractClientToken } = require('../../utils/clientCookies');
 
 module.exports = function attachMerchantInfoRoutes(router) {
   // ── GET /api/pub/:slug ────────────────────────────────────────────────────
@@ -156,11 +157,11 @@ module.exports = function attachMerchantInfoRoutes(router) {
       const minNoticeMin = (parseInt(biz[0].min_notice_hours) || 0) * 60;
       const bizTz = biz[0].timezone;
 
-      // Vérif blocage client (si connecté)
-      const authHeader = req.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
+      // Vérif blocage client (si connecté) — cookie HttpOnly ou header.
+      const tok = extractClientToken(req);
+      if (tok) {
         try {
-          const dec = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET);
+          const dec = jwt.verify(tok, process.env.JWT_SECRET);
           if (dec.scope === 'client' && dec.merchantId === userId && dec.clientId) {
             const { rows: blockCheck } = await pool.query(
               'SELECT is_booking_blocked FROM client_accounts WHERE id=$1 AND user_id=$2',

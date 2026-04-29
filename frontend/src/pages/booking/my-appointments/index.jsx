@@ -265,13 +265,14 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
   useEffect(() => {
     // Liste cross-commerçants : on interroge /global-clients/appointments
-    // (token client global) pour récupérer TOUS les RDV du client (tous
+    // (cookie ff_client_token) pour récupérer TOUS les RDV du client (tous
     // statuts, tous commerçants). Fallback sur /pub/:slug/client/appointments
-    // si pas de token global (ex: client encore au compte local legacy).
-    const gcToken = localStorage.getItem('ff_client_token');
-    const useGlobal = !!gcToken;
+    // si pas de session globale (ex: compte local legacy).
+    const hasSession = localStorage.getItem('ff_client_info')
+      || localStorage.getItem('ff_client_token');
+    const useGlobal = !!hasSession;
     const fetcher = useGlobal
-      ? globalClientApi.appointments(gcToken)
+      ? globalClientApi.appointments()
       : pubApi.myAppointments(slug);
     fetcher
       .then(setAppts)
@@ -338,8 +339,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
   // Tenter de charger le programme parrainage (si compte global connecté et programme actif)
   useEffect(() => {
-    const gcToken = localStorage.getItem('ff_gc_token');
-    if (!gcToken) return;
+    // Marker session global (cookie HttpOnly inaccessible JS) : on tente
+    // si on a un info client connecté, gcRequest enverra credentials:'include'.
+    const hasSession = localStorage.getItem('ff_client_info')
+      || localStorage.getItem('ff_gc_token');
+    if (!hasSession) return;
     let cancelled = false;
     (async () => {
       try {
@@ -406,6 +410,10 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     setDeleteLoading(true); setDeleteErr('');
     try {
       await globalClientApi.deleteAccount();
+      // Migration cookies HttpOnly : on demande au backend de purger les
+      // cookies (logout) en plus du nettoyage localStorage.
+      try { await globalClientApi.logout(); } catch {/* ignore */}
+      try { await pubApi.logout(slug); } catch {/* ignore */}
       localStorage.removeItem('ff_gc_token');
       localStorage.removeItem('ff_client_token');
       localStorage.removeItem('ff_client_info');

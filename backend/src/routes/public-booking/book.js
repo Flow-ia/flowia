@@ -6,6 +6,7 @@ const { resolveReferralForFilleul } = require('../referrals');
 const { associateGlobalClient } = require('../clients');
 const { validatePhone } = require('../../utils/phone');
 const { toMin, toStr, getSlots, getEmployeeRanges } = require('./helpers');
+const { extractClientToken } = require('../../utils/clientCookies');
 
 module.exports = function attachBookRoute(router) {
   // ── POST /api/pub/:slug/book ────────────────────────────────────────────
@@ -35,9 +36,13 @@ module.exports = function attachBookRoute(router) {
       // depuis client_accounts (source de vérité du compte connecté).
       let clientId = null;
       let tokenGlobalClientId = null;
-      if (client_token) {
+      // Migration cookies HttpOnly : le token n'est plus envoyé via le body
+      // par le frontend migré ; on lit en priorité le cookie ff_client_token
+      // (ou le header Authorization Bearer en rétro-compat).
+      const tokRaw = client_token || extractClientToken(req);
+      if (tokRaw) {
         try {
-          const dec = jwt.verify(client_token, process.env.JWT_SECRET);
+          const dec = jwt.verify(tokRaw, process.env.JWT_SECRET);
           if (dec.scope === 'client' && dec.merchantId === userId) {
             clientId = dec.clientId || null;
             tokenGlobalClientId = dec.globalClientId || null;

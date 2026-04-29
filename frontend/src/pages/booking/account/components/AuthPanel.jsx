@@ -120,9 +120,13 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   // de la popup. Persiste le token + infos côté opener au cas où la popup
   // aurait atterri sur une origine différente (localStorage isolé).
   useEffect(() => {
-    const applyClientLogin = (token, client) => {
+    const applyClientLogin = (_token, client) => {
       if (!client) return;
-      if (token) localStorage.setItem('ff_client_token', token);
+      // Migration cookies HttpOnly : le JWT n'est plus stocké en localStorage.
+      // Le backend a déjà posé le cookie ff_client_token côté navigateur lors
+      // du callback OAuth ; il sera envoyé auto via credentials:'include'.
+      // Seules les infos utilisateur (non sensibles) restent en localStorage
+      // pour servir d'indicateur "connecté" aux composants.
       localStorage.setItem('ff_client_info', JSON.stringify(client));
       cleanupGoogle();
       setGStatus('success');
@@ -197,7 +201,8 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         if (pwd.length < 6) { setErr('Mot de passe minimum 6 caracteres.'); setLoading(false); return; }
         r = await pubApi.register(slug, { email: email.trim(), password: pwd, first_name: first.trim(), last_name: last.trim(), phone: phone.trim(), birth_date: birthDate || null, referral_code: referralCode || undefined, marketing_opt_in: marketingOptIn });
       }
-      localStorage.setItem('ff_client_token', r.token);
+      // Migration cookies HttpOnly : backend a posé ff_client_token en cookie ;
+      // on persiste seulement l'objet client (non sensible) en localStorage.
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));
       // Signale au parent si c'est une inscription (pour popup post-register
       // qui demande mois/année de naissance + téléphone optionnels).
@@ -245,7 +250,6 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         birth_date: birthDate || null,
         marketing_opt_in: marketingOptIn,
       });
-      localStorage.setItem('ff_client_token', r.token);
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));
       onAuth(r.client, { justRegistered: true, quick: true });
     } catch(e) {

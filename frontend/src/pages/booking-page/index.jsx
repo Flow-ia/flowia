@@ -97,7 +97,8 @@ export default function BookingPage({ slug }) {
     if (gcToken && gcClient) {
       try {
         const client = JSON.parse(decodeURIComponent(gcClient));
-        localStorage.setItem('ff_client_token', gcToken);
+        // Migration cookies HttpOnly : cookie ff_client_token déjà posé par
+        // le backend au callback. On ne persiste plus que les infos client.
         localStorage.setItem('ff_client_info', JSON.stringify(client));
         setClientUser(client);
         // Nettoyer l'URL
@@ -122,12 +123,14 @@ export default function BookingPage({ slug }) {
     // (qui faisait tourner des fetches authentifiés sans token et renvoyait
     // du contenu partiel/cassé).
     if (path.includes('/client/')) {
-      const clientToken = localStorage.getItem('ff_client_token');
-      if (!clientToken || isJwtLocallyExpired(clientToken)) {
-        if (clientToken) {
-          localStorage.removeItem('ff_client_token');
-          localStorage.removeItem('ff_client_info');
-        }
+      // Migration cookies HttpOnly : le JWT est en cookie inaccessible JS.
+      // L'indicateur "connecté" côté UI est ff_client_info (présent uniquement
+      // après login validé). Si absent → pas de session → login. Si la
+      // session a expiré côté backend, le prochain fetch retournera 401 et
+      // les composants concernés rechargeront.
+      const sessionMarker = localStorage.getItem('ff_client_info')
+        || localStorage.getItem('ff_client_token'); // fallback ancien stockage
+      if (!sessionMarker) {
         setAuthInitMode('login');
         setShowAuthPanel(true);
         navigate(`/book/${slug}/login`, { replace: true });
@@ -139,7 +142,7 @@ export default function BookingPage({ slug }) {
       // Si le client est déjà connecté, court-circuiter l'AuthPanel et
       // rediriger vers sa page de compte (ou la page booking racine si
       // on vient d'un deep-link). Évite d'imposer une reconnexion inutile.
-      if (localStorage.getItem('ff_client_token')) {
+      if (localStorage.getItem('ff_client_info') || localStorage.getItem('ff_client_token')) {
         navigate(`/book/${slug}/client/profil`, { replace: true });
         setView('myAppts');
         setMyApptsInitTab('profile');
@@ -179,8 +182,11 @@ export default function BookingPage({ slug }) {
   // filleul ne peut s'appliquer qu'à un client avec un compte).
   useEffect(() => {
     if (!referralCode) return;
-    const token = localStorage.getItem('ff_client_token');
-    if (!token) {
+    // Détection session via marker non sensible (ff_client_info) + fallback
+    // ancien stockage tant qu'il existe.
+    const hasSession = localStorage.getItem('ff_client_info')
+      || localStorage.getItem('ff_client_token');
+    if (!hasSession) {
       setAuthInitMode('register');
       setShowAuthPanel(true);
     }
@@ -405,11 +411,13 @@ export default function BookingPage({ slug }) {
     setPromoErr('');
   }, [referralInfo, referralCode, selSvc]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Restore client session
+  // Restore client session — cookie HttpOnly invisible côté JS, on s'appuie
+  // sur la présence de ff_client_info (écrit après login) pour restaurer
+  // l'état UI. Si la session est expirée côté backend, le prochain fetch
+  // remontera 401 et le composant adapté nettoiera le marker.
   useEffect(() => {
-    const token = localStorage.getItem('ff_client_token');
     const stored = localStorage.getItem('ff_client_info');
-    if (token && stored) {
+    if (stored) {
       try {
         const info = JSON.parse(stored);
         setClientUser(info);
@@ -472,10 +480,13 @@ export default function BookingPage({ slug }) {
   // (uniquement si le client est connecté en compte global).
   useEffect(() => {
     if (view !== 'parrain') return;
-    // Accepte les 2 jetons : ff_gc_token (compte global) OU ff_client_token
-    // (login commerçant avec globalClientId). gcRequest relaie automatiquement.
-    const tok = localStorage.getItem('ff_gc_token') || localStorage.getItem('ff_client_token');
-    if (!tok) { setRefMyCode(null); setRefMyHistory([]); setRefMyRewards([]); return; }
+    // Marker session client (cookie HttpOnly invisible côté JS) + fallback
+    // ancien stockage. gcRequest envoie credentials:'include' qui propage
+    // les cookies ff_gc_token / ff_client_token au backend.
+    const hasSession = localStorage.getItem('ff_client_info')
+      || localStorage.getItem('ff_gc_token')
+      || localStorage.getItem('ff_client_token');
+    if (!hasSession) { setRefMyCode(null); setRefMyHistory([]); setRefMyRewards([]); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -552,12 +563,15 @@ export default function BookingPage({ slug }) {
 
   const handleBook = async () => {
     // Si compte requis et pas encore connecté → ouvrir auth + mémoriser qu'on voulait réserver
-    const localToken = localStorage.getItem('ff_client_token');
-    if (requireAccount && !clientUser && !localToken) { setShowAuthPanel(true); setPendingBook(true); return; }
+    // Détection session : ff_client_info (marker non sensible) ou ancien
+    // ff_client_token (transition). Le JWT lui-même est en cookie HttpOnly.
+    const hasSession = !!(localStorage.getItem('ff_client_info')
+      || localStorage.getItem('ff_client_token'));
+    if (requireAccount && !clientUser && !hasSession) { setShowAuthPanel(true); setPendingBook(true); return; }
     // Sans compte requis : permettre la réservation si les champs obligatoires sont remplis
-    if (!requireAccount && !clientUser && !localToken && (!clientName.trim() || !clientPhone.trim())) { setBookErr('Nom et téléphone obligatoires.'); return; }
+    if (!requireAccount && !clientUser && !hasSession && (!clientName.trim() || !clientPhone.trim())) { setBookErr('Nom et téléphone obligatoires.'); return; }
     // Connecté mais téléphone manquant → renvoyer à l'étape 5
-    if ((clientUser || localToken) && !clientPhone.trim()) { setBookErr('Téléphone obligatoire. Veuillez compléter votre profil.'); setStep(5); return; }
+    if ((clientUser || hasSession) && !clientPhone.trim()) { setBookErr('Téléphone obligatoire. Veuillez compléter votre profil.'); setStep(5); return; }
     setBooking(true); setBookErr('');
     try {
       // ── Re-vérification du code promo au moment de la confirmation ──────────
@@ -774,7 +788,7 @@ export default function BookingPage({ slug }) {
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/login`, {replace:false}); }}
         onMyAppts={()=>{ navigate(`/book/${slug}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
-        onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
+        onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
         onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
         onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 

@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
 const { sendVerificationEmail } = require('../utils/email');
 const { authMiddleware } = require('../middleware/auth');
+const { setClientCookie } = require('../utils/clientCookies');
 const router = express.Router();
 
 const SEED_CATS = [
@@ -1084,6 +1085,11 @@ router.get('/google/callback', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
+    // Cookie HttpOnly attaché au domaine backend ; le parent (frontend) le
+    // recevra à la prochaine requête fetch credentials:'include'. Le hash
+    // (#token=…) reste en place pour la rétro-compat tant que le frontend
+    // lit encore localStorage.ff_client_token.
+    setClientCookie(res, token);
 
     const clientObj = {
       id: local.id, email: gc.email,

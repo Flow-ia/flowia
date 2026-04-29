@@ -3,6 +3,7 @@
 
 import { NavBar } from '../../booking/NavBar';
 import { ReferralPage } from '../../booking/ReferralPage';
+import { pubApi, globalClientApi } from '../../../utils/api';
 
 export function ParrainView({
   th, slug, business, clientUser, refProgram,
@@ -16,7 +17,7 @@ export function ParrainView({
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
         onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/login`, {replace:false}); }}
         onMyAppts={()=>{navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
-        onLogout={()=>{ localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); setView('booking'); navigate(`/book/${slug}`,{replace:false}); }}
+        onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); setView('booking'); navigate(`/book/${slug}`,{replace:false}); }}
         onReferralPage={() => { /* déjà sur la page */ }}
         onNavigateHome={(id)=>{ setView('booking'); navigate(`/book/${slug}`,{replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
       <ReferralPage
