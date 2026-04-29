@@ -56,7 +56,7 @@ export function ProfileTab({
         {editing ? (
           /* ── Mode édition ── */
           <div style={{ padding:20, display:'flex', flexDirection:'column', gap:14 }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div className="pt-grid-stack" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
               <div>
                 <label style={{ display:'block', fontSize:11, fontWeight: 500,
                   color:th.muted, marginBottom:6 }}>
@@ -88,7 +88,7 @@ export function ProfileTab({
                 theme={{ text: th.text, muted: th.muted, inputBg: th.inputBg, inputBorder: th.inputBorder }}
               />
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
+            <div className="pt-grid-stack" style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
               <div>
                 <label style={{ display:'block', fontSize:11, fontWeight: 500,
                   color:th.muted, marginBottom:6 }}>

@@ -458,7 +458,17 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   return (
     <div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} *{box-sizing:border-box}`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} *{box-sizing:border-box}
+        /* Polish responsive — grilles 2 colonnes (prénom/nom, postal/ville)
+           collapsent en colonne unique sous 480px pour rester confortables
+           sur petits écrans Android. */
+        @media(max-width:480px){
+          .pt-grid-stack{ grid-template-columns:1fr!important; gap:10px!important }
+          .pt-sub-header-pad{ padding:12px 16px!important }
+        }
+        /* Tactile iOS : tous les inputs et boutons du compte client respectent
+           la cible Apple HIG min-height 44px. */
+        .pt-touch{ min-height:44px }`}</style>
 
       {/* ── Sub-header (non-sticky) : bouton retour + identité client ──
           La NavBar principale (avec logo + hamburger) est rendue par
