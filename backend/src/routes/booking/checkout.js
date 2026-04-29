@@ -10,7 +10,21 @@ module.exports = function attachCheckoutRoutes(router) {
   // POST /api/booking/appointments/:id/checkout
   router.post('/appointments/:id/checkout', async (req, res) => {
     try {
-      const { employee_id, payment_method, category_id, amount: customAmount } = req.body;
+      const { employee_id, payment_method, category_id, amount: customAmount,
+              payments: payList = [] } = req.body;
+      // Validation multi-paiement : array de {method, amount}. Si fourni avec
+      // plus d'une entrée, le payment_method final est 'multi' et les détails
+      // sont stockés dans transaction_payments (cohérent avec le flow caisse).
+      const cleanPayments = Array.isArray(payList)
+        ? payList
+            .map(p => ({ method: String(p?.method || '').trim(),
+                         amount: parseFloat(p?.amount) }))
+            .filter(p => p.method && p.amount > 0)
+        : [];
+      const isMulti = cleanPayments.length > 1;
+      const finalPaymentMethod = isMulti
+        ? 'multi'
+        : (cleanPayments[0]?.method || payment_method || 'cash');
 
       // AUDIT perms : enforcement strict si req.employee (header PIN valide).
       // 1. Si req.employee : check can_encash, override body.employee_id
@@ -50,7 +64,7 @@ module.exports = function attachCheckoutRoutes(router) {
           FROM claimed c
           LEFT JOIN booking_services bs ON bs.id = c.service_id
           LEFT JOIN employees e          ON e.id = c.employee_id`,
-        [payment_method || 'cash', req.params.id, req.user.userId]
+        [finalPaymentMethod, req.params.id, req.user.userId]
       );
       if (!apptR.length) {
         // Check pour distinguer 'not found' vs 'already paid'
@@ -63,11 +77,17 @@ module.exports = function attachCheckoutRoutes(router) {
       }
       const appt = apptR[0];
 
-      // Montant : priorité au custom de l'employé, sinon total_amount (déjà réduit si promo),
-      // sinon prix service. Si le RDV avait un promo, total_amount contient déjà le prix réduit.
-      const amount = customAmount != null
-        ? parseFloat(customAmount)
-        : (parseFloat(appt.total_amount) || parseFloat(appt.service_price) || 0);
+      // Montant : priorité aux split-payments (somme), puis au custom de l'employé,
+      // sinon total_amount (déjà réduit si promo), sinon prix service.
+      // Si le RDV avait un promo, total_amount contient déjà le prix réduit.
+      const paymentsTotal = cleanPayments.reduce((s, p) => s + (p.amount || 0), 0);
+      const amount = isMulti
+        ? paymentsTotal
+        : (cleanPayments[0]?.amount != null
+            ? cleanPayments[0].amount
+            : (customAmount != null
+                ? parseFloat(customAmount)
+                : (parseFloat(appt.total_amount) || parseFloat(appt.service_price) || 0)));
       // Discount : provient du RDV si promo était appliqué lors de la réservation
       const discountFromAppt = parseFloat(appt.discount_amount || 0);
       const now = new Date();
@@ -112,7 +132,7 @@ module.exports = function attachCheckoutRoutes(router) {
            amount, description, payment_method, employee_id, appointment_id, source, created_at,
            promo_code_id, discount_amount, original_amount`,
         [req.user.userId, amount, desc, appt.employee_id || null,
-         payment_method || 'cash', dateStr, timeStr,
+         finalPaymentMethod, dateStr, timeStr,
          now.toISOString(), req.params.id,
          appt.promo_code_id || null,
          discountFromAppt || 0,
@@ -120,6 +140,20 @@ module.exports = function attachCheckoutRoutes(router) {
          appt.client_email || null, globalClientId]
       );
       const tx = txR[0];
+
+      // Multi-paiement : insérer les lignes transaction_payments comme dans
+      // le flow caisse standard. Source de vérité pour l'historique éclaté
+      // (ex: 50€ carte + 30€ espèces).
+      if (isMulti) {
+        for (const p of cleanPayments) {
+          await pool.query(
+            `INSERT INTO transaction_payments (transaction_id, method, amount)
+             VALUES ($1,$2,$3)`,
+            [tx.id, p.method, p.amount]
+          );
+        }
+        tx.payments = cleanPayments;
+      }
 
       // Insérer transaction_items depuis appointment_items + calculer qty_total
       let qtyTotal = 1;
@@ -172,10 +206,16 @@ module.exports = function attachCheckoutRoutes(router) {
         try {
           // source : 'online' si RDV réservé en ligne, 'physical' si prestation sur place
           const loyaltySource = (appt.source === 'rdv') ? 'online' : 'physical';
+          // Cohérence : on crédite la fidélité sur le montant RÉEL encaissé
+          // (`amount`, qui inclut une éventuelle modification de prix par
+          // l'employé), pas sur `appt.total_amount` figé à la réservation.
+          // Sinon en mode points, le client gagnait des points sur le prix
+          // initial alors qu'il a payé une remise commerciale ou un montant
+          // ajusté.
           loyaltyResult = await incrementStamps(
             req.user.userId, appt.client_email, appt.client_name || null,
             qtyTotal || 1, loyaltySource,
-            parseFloat(appt.total_amount) || 0
+            amount
           );
         } catch(loyErr) { console.error('[LOYALTY ERROR]', loyErr.message); }
       }

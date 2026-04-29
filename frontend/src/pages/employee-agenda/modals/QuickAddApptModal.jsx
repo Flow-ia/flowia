@@ -23,8 +23,6 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
   const [saving,            setSaving]            = useState(false);
   const [confirmed,         setConfirmed]         = useState(null);
   const [conflictError,     setConflictError]     = useState('');
-  // Commit 25 — confirmation modale RDV passé.
-  const [confirmPast,       setConfirmPast]       = useState(false);
   const searchTimer = useRef(null);
 
   const activeEmps = (employees||[]).filter(e => e.is_active !== false);
@@ -148,12 +146,15 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
   const clientEmail = selectedClient?.email || (clientMode === 'new' ? newClient.email : '');
   const clientPhone = selectedClient?.phone || (clientMode === 'new' ? newClient.phone : '');
 
-  const canSave = clientOk && selEmpId && date && startTime && !conflictError;
-
-  // Commit 25 — friction si RDV daté avant aujourd'hui (cas walk-in
-  // a posteriori). Comparaison locale sur YYYY-MM-DD pour éviter les TZ.
+  // Bloquer la création d'un RDV dans le passé (date OU heure même jour).
+  // Walk-in a posteriori → passer par la caisse (création de transaction
+  // sans RDV). Aligné avec ApptActionModal.editIsPast.
   const todayStr = svLocal(new Date());
+  const nowHHMM = new Date().toTimeString().slice(0,5);
   const isPastDate = date && date < todayStr;
+  const isPastTime = date === todayStr && startTime && startTime < nowHHMM;
+  const isPast = isPastDate || isPastTime;
+  const canSave = clientOk && selEmpId && date && startTime && !conflictError && !isPast;
 
   const doSave = async () => {
     setConflictError('');
@@ -186,7 +187,6 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
 
   const handleSave = () => {
     if (!canSave || saving) return;
-    if (isPastDate) { setConfirmPast(true); return; }
     doSave();
   };
 
@@ -570,13 +570,29 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
           <div style={{ padding:'12px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <Label>Date *</Label>
-              <input type="date" value={date} onChange={e=>handleDateChange(e.target.value)} style={inputStyle} />
+              <input type="date" min={todayStr} value={date}
+                onChange={e=>handleDateChange(e.target.value)} style={inputStyle} />
             </div>
             <div>
               <Label>Heure *</Label>
-              <input type="time" value={startTime} onChange={e=>handleTimeChange(e.target.value)} style={inputStyle} />
+              <input type="time" value={startTime}
+                min={date === todayStr ? nowHHMM : undefined}
+                onChange={e=>handleTimeChange(e.target.value)} style={inputStyle} />
             </div>
           </div>
+          {isPast && (
+            <div style={{ margin:'0 14px 12px', padding:'10px 12px', borderRadius:8,
+              background:'rgba(239,68,68,0.08)',
+              border:'0.5px solid rgba(239,68,68,0.3)',
+              borderLeft:'2px solid #ef4444' }}>
+              <p style={{ margin:0, fontSize:12, color:'#991b1b', fontWeight:500 }}>
+                {isPastDate ? "Cette date est déjà passée." : "Cette heure est déjà passée."}
+              </p>
+              <p style={{ margin:'4px 0 0', fontSize:11, color:'#991b1b' }}>
+                Les RDV ne peuvent pas être créés dans le passé. Pour enregistrer une prestation déjà rendue, passez par la caisse.
+              </p>
+            </div>
+          )}
           {endTime && (
             <div style={{
               margin: '0 14px 12px',
@@ -874,42 +890,6 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
         </Button>
 
       </div>
-
-      {/* Confirmation RDV daté avant aujourd'hui — commit 25. */}
-      {confirmPast && (
-        <Modal open={true} onClose={() => setConfirmPast(false)} title="RDV dans le passé" theme={t}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 10, padding: 12, borderRadius: 10,
-                          background: '#fffbeb', border: '0.5px solid #fde68a',
-                          borderLeft: '2px solid #f59e0b' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400e"
-                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}>
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              <div>
-                <p style={{ fontSize: 14, fontWeight: 500, color: '#92400e', margin: 0 }}>
-                  RDV dans le passé
-                </p>
-                <p style={{ fontSize: 12, color: '#92400e', margin: '6px 0 0', lineHeight: 1.5 }}>
-                  Vous êtes sur le point de créer un RDV pour le {date} qui est antérieur à aujourd'hui.
-                  Cas d'usage : enregistrement a posteriori d'un walk-in.
-                </p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button variant="secondary" fullWidth onClick={() => setConfirmPast(false)}>
-                Annuler
-              </Button>
-              <Button fullWidth disabled={saving}
-                      onClick={() => { setConfirmPast(false); doSave(); }}>
-                {saving ? 'Enregistrement…' : 'Oui, créer ce RDV'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </Modal>
   );
 }

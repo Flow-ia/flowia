@@ -26,6 +26,12 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
   const [cancelReason,  setCancelReason]  = useState('');
   const [cancelNotify,  setCancelNotify]  = useState(true);
   const [payMethod,     setPayMethod]     = useState('card');
+  // Split paiement : 1 ou 2 méthodes max (suffit dans la grande majorité
+  // des cas terrain). `splitMode=false` → encaissement single (UI inchangée).
+  // `splitMode=true` → 2 lignes {method, amount}, somme doit égaler finalAmt.
+  const [splitMode,     setSplitMode]     = useState(false);
+  const [splitA,        setSplitA]        = useState({ method:'card', amount:'' });
+  const [splitB,        setSplitB]        = useState({ method:'cash', amount:'' });
 
   const st       = STATUS_CFG[appt.status]||STATUS_CFG.confirmed;
   const canAct   = appt.status !== 'cancelled' && appt.status !== 'completed';
@@ -35,6 +41,26 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
   const basePrice = parseFloat(appt.total_amount)||parseFloat(appt.service_price)||0;
   const [checkAmt, setCheckAmt] = useState(basePrice>0 ? basePrice.toFixed(2) : '');
   const finalAmt  = parseFloat(checkAmt)||0;
+  const splitTotal = (parseFloat(splitA.amount)||0) + (parseFloat(splitB.amount)||0);
+  const splitMatches = Math.abs(splitTotal - finalAmt) < 0.01;
+  const splitDistinct = splitA.method !== splitB.method;
+  const canCheckout = !saving && finalAmt > 0
+    && (!splitMode || (splitMatches && splitDistinct
+                       && (parseFloat(splitA.amount)||0) > 0
+                       && (parseFloat(splitB.amount)||0) > 0));
+
+  // Validation date/heure : interdit de déplacer un RDV dans le passé
+  // (employé ou commerçant). Pour rétro-encaisser sans RDV, passer par la
+  // caisse. La comparaison se fait en heure locale du navigateur.
+  const nowLocal = new Date();
+  const todayStr = nowLocal.toLocaleDateString('sv-SE');
+  const nowHHMM = nowLocal.toTimeString().slice(0,5);
+  const editIsPast = (() => {
+    if (!editForm.date || !editForm.start_time) return false;
+    if (editForm.date < todayStr) return true;
+    if (editForm.date === todayStr && editForm.start_time < nowHHMM) return true;
+    return false;
+  })();
 
   const TABS = [
     { id:'detail',   label:'Details' },
@@ -64,6 +90,10 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
   };
 
   const doEdit = async () => {
+    if (editIsPast) {
+      alert("Impossible de déplacer un RDV dans le passé. Passez par la caisse pour enregistrer une prestation déjà rendue.");
+      return;
+    }
     setSaving(true);
     try {
       const dur = appt.total_duration||appt.duration_minutes||30;
@@ -102,11 +132,24 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       async () => {
         setSaving(true);
         try {
-          const payload = { payment_method: payMethod, amount: finalAmt };
+          // Split → array `payments`. Single → champ `payment_method`.
+          // Le backend gère les 2 et insère transaction_payments si multi.
+          const payments = splitMode
+            ? [
+                { method: splitA.method, amount: parseFloat(splitA.amount)||0 },
+                { method: splitB.method, amount: parseFloat(splitB.amount)||0 },
+              ]
+            : [{ method: payMethod, amount: finalAmt }];
+          const finalMethod = splitMode ? 'multi' : payMethod;
+          const payload = {
+            payment_method: finalMethod,
+            amount: finalAmt,
+            payments,
+          };
           if (employee) payload.employee_id = employee.id;
           const res = await bookingApi.checkoutAppt(appt.id, payload, employee?.id);
           const refPatch = res?.referral_validated ? { referral_status: 'validated' } : {};
-          const merged = {...appt, status:'completed', paid:true, paid_method:payMethod, ...refPatch};
+          const merged = {...appt, status:'completed', paid:true, paid_method:finalMethod, ...refPatch};
           setAppt(merged); onUpdated(merged);
           if (res.transaction) onTxCreated(res.transaction);
           setTab('detail');
@@ -458,13 +501,29 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <Label>Date *</Label>
-              <input type="date" value={editForm.date} onChange={e=>setE('date',e.target.value)} style={inputStyle} />
+              <input type="date" min={todayStr} value={editForm.date}
+                onChange={e=>setE('date',e.target.value)} style={inputStyle} />
             </div>
             <div>
               <Label>Heure *</Label>
-              <input type="time" value={editForm.start_time} onChange={e=>setE('start_time',e.target.value)} style={inputStyle} />
+              <input type="time" value={editForm.start_time}
+                min={editForm.date === todayStr ? nowHHMM : undefined}
+                onChange={e=>setE('start_time',e.target.value)} style={inputStyle} />
             </div>
           </div>
+          {editIsPast && (
+            <div style={{ padding:'10px 12px', borderRadius:8,
+              background:'rgba(239,68,68,0.08)',
+              border:'0.5px solid rgba(239,68,68,0.3)',
+              borderLeft:'2px solid #ef4444' }}>
+              <p style={{ margin:0, fontSize:12, color:'#991b1b', fontWeight:500 }}>
+                Vous ne pouvez pas déplacer un RDV à une date ou heure passée.
+              </p>
+              <p style={{ margin:'4px 0 0', fontSize:11, color:'#991b1b' }}>
+                Pour enregistrer une prestation déjà rendue, passez par la caisse.
+              </p>
+            </div>
+          )}
           <div>
             <Label>Nom client</Label>
             <input value={editForm.client_name} onChange={e=>setE('client_name',e.target.value)} style={inputStyle} />
@@ -483,7 +542,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             <Label>Notes</Label>
             <textarea value={editForm.notes} onChange={e=>setE('notes',e.target.value)} rows={2} style={{ ...inputStyle, resize:'none' }} />
           </div>
-          <Button fullWidth disabled={saving || !editForm.client_name.trim()} onClick={doEdit}>
+          <Button fullWidth disabled={saving || !editForm.client_name.trim() || editIsPast} onClick={doEdit}>
             {saving ? (
               <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                 <Spin size={16}/> Enregistrement...
@@ -683,44 +742,113 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             </div>
             {checkAmt !== '' && basePrice > 0 && parseFloat(checkAmt) !== basePrice && (
               <p style={{ margin:'6px 0 0', fontSize:11, textAlign:'center', color:'#92400e' }}>
-                Montant modifie — base : {basePrice.toFixed(2)} €
+                Montant modifié — base : {basePrice.toFixed(2)} € · ce nouveau montant sera utilisé pour la fidélité et l'historique du client.
               </p>
             )}
           </div>
 
-          {/* Mode paiement */}
-          <div>
-            <Label>Mode de paiement</Label>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              {PAY_OPTIONS.map(p => {
-                const active = payMethod === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setPayMethod(p.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '12px 14px',
-                      borderRadius: 8,
-                      fontWeight: 500,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      background: active ? '#f0fdf4' : 'transparent',
-                      border: `0.5px solid ${active ? 'rgba(16,185,129,0.3)' : t.border}`,
-                      color: active ? '#065f46' : t.text,
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    <span style={{ fontSize:16 }}>{p.icon}</span>
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
+          {/* Toggle Single / Split */}
+          <div style={{ display:'flex', gap:8 }}>
+            <button type="button" onClick={() => setSplitMode(false)}
+              style={{ flex:1, padding:'10px', borderRadius:8, fontSize:12,
+                fontWeight:500, cursor:'pointer', fontFamily:'inherit',
+                background: !splitMode ? t.text : 'transparent',
+                color: !splitMode ? t.bg : t.text,
+                border: `0.5px solid ${t.border}` }}>
+              Paiement simple
+            </button>
+            <button type="button" onClick={() => {
+              setSplitMode(true);
+              if (!splitA.amount && !splitB.amount && finalAmt > 0) {
+                const half = (finalAmt / 2).toFixed(2);
+                setSplitA(p => ({ ...p, amount: half }));
+                setSplitB(p => ({ ...p, amount: (finalAmt - parseFloat(half)).toFixed(2) }));
+              }
+            }}
+              style={{ flex:1, padding:'10px', borderRadius:8, fontSize:12,
+                fontWeight:500, cursor:'pointer', fontFamily:'inherit',
+                background: splitMode ? t.text : 'transparent',
+                color: splitMode ? t.bg : t.text,
+                border: `0.5px solid ${t.border}` }}>
+              Paiement en 2 fois
+            </button>
           </div>
+
+          {/* Mode paiement */}
+          {!splitMode ? (
+            <div>
+              <Label>Mode de paiement</Label>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                {PAY_OPTIONS.map(p => {
+                  const active = payMethod === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPayMethod(p.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '12px 14px',
+                        borderRadius: 8,
+                        fontWeight: 500,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        background: active ? '#f0fdf4' : 'transparent',
+                        border: `0.5px solid ${active ? 'rgba(16,185,129,0.3)' : t.border}`,
+                        color: active ? '#065f46' : t.text,
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <span style={{ fontSize:16 }}>{p.icon}</span>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <Label>Répartition (2 méthodes distinctes)</Label>
+              {[{ key:'A', state:splitA, set:setSplitA, label:'Méthode 1' },
+                { key:'B', state:splitB, set:setSplitB, label:'Méthode 2' }].map(row => (
+                <div key={row.key} style={{ display:'grid', gridTemplateColumns:'1fr 110px', gap:8, alignItems:'center' }}>
+                  <select value={row.state.method}
+                    onChange={e => row.set(p => ({ ...p, method: e.target.value }))}
+                    style={{ ...inputStyle, padding:'10px 12px' }}>
+                    {PAY_OPTIONS.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                  <div style={{ position:'relative' }}>
+                    <input type="number" step="0.01" min="0"
+                      value={row.state.amount}
+                      onChange={e => row.set(p => ({ ...p, amount: e.target.value }))}
+                      placeholder="0.00"
+                      style={{ ...inputStyle, paddingRight:28, textAlign:'right',
+                        fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}/>
+                    <span style={{ position:'absolute', right:10, top:'50%',
+                      transform:'translateY(-50%)', fontSize:13, color:t.muted,
+                      pointerEvents:'none' }}>€</span>
+                  </div>
+                </div>
+              ))}
+              <div style={{ display:'flex', justifyContent:'space-between',
+                fontSize:12, padding:'8px 12px', borderRadius:8,
+                background: splitMatches && splitDistinct ? '#f0fdf4' : 'rgba(245,158,11,0.08)',
+                border: `0.5px solid ${splitMatches && splitDistinct ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
+                <span style={{ color: splitMatches ? '#065f46' : '#92400e', fontWeight:500 }}>
+                  {!splitDistinct ? 'Choisissez 2 méthodes différentes' :
+                   splitMatches ? 'Total OK' : `Écart : ${(splitTotal - finalAmt).toFixed(2)} €`}
+                </span>
+                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  color: splitMatches ? '#065f46' : '#92400e', fontWeight:500 }}>
+                  {splitTotal.toFixed(2)} / {finalAmt.toFixed(2)} €
+                </span>
+              </div>
+            </div>
+          )}
 
           <div style={{
             padding: '10px 14px',
@@ -729,7 +857,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             border: `0.5px solid ${t.border}`,
           }}>
             <p style={{ margin:0, fontSize:12, color:t.muted }}>
-              La transaction sera ajoutee dans la <span style={{ color:t.text, fontWeight:500 }}>Caisse</span> avec la source <span style={{ color:t.text, fontWeight:500 }}>RDV</span>.
+              La transaction sera ajoutée dans la <span style={{ color:t.text, fontWeight:500 }}>Caisse</span> avec la source <span style={{ color:t.text, fontWeight:500 }}>RDV</span>. Le montant final est aussi pris en compte par la fidélité et le profil client.
             </p>
           </div>
 
@@ -737,7 +865,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             fullWidth
             size="large"
             onClick={doCheckout}
-            disabled={saving || finalAmt < 0}
+            disabled={!canCheckout}
             style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}
           >
             {saving ? (<><Spin size={18}/>Encaissement…</>) : `Encaisser${finalAmt > 0 ? ' - ' + finalAmt.toFixed(2) + ' €' : ''}`}
