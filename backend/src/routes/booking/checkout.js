@@ -95,10 +95,37 @@ module.exports = function attachCheckoutRoutes(router) {
       const timeStr = now.toTimeString().substring(0,5);
 
       // Charger les items du RDV pour la description
-      const { rows: apptItems } = await pool.query(
-        'SELECT service_name, qty, unit_price FROM appointment_items WHERE appointment_id=$1 ORDER BY created_at',
+      const { rows: apptItemsRaw } = await pool.query(
+        'SELECT service_id, service_name, qty, unit_price FROM appointment_items WHERE appointment_id=$1 ORDER BY created_at',
         [req.params.id]
       );
+      // Cohérence montant ligne-par-ligne : si l'employé a modifié le total
+      // pendant l'encaissement (customAmount ou splits), les lignes
+      // transaction_items doivent refléter ce nouveau total — sinon
+      // l'historique caisse "ligne par ligne" affiche le prix d'origine
+      // (ex: 30€ Coupe) alors que la transaction montre 130€ encaissés.
+      // Stratégie :
+      //   - 1 seul item de qty 1 → on remplace son unit_price par `amount`
+      //   - sinon → on ajoute une ligne d'ajustement (Supplément / Remise)
+      //     avec le delta pour que la somme des lignes = amount
+      const apptItems = apptItemsRaw.map(it => ({ ...it }));
+      const itemsSum = apptItems.reduce(
+        (s, it) => s + ((parseFloat(it.unit_price) || 0) * (parseInt(it.qty) || 1)),
+        0
+      );
+      const delta = amount - itemsSum;
+      if (apptItems.length > 0 && Math.abs(delta) > 0.01) {
+        if (apptItems.length === 1 && (parseInt(apptItems[0].qty) || 1) === 1) {
+          apptItems[0].unit_price = amount;
+        } else {
+          apptItems.push({
+            service_id: null,
+            service_name: delta > 0 ? 'Supplément' : 'Remise',
+            qty: 1,
+            unit_price: delta,
+          });
+        }
+      }
       let desc;
       if (apptItems.length > 1) {
         const itemList = apptItems.map(it => it.qty > 1 ? `${it.service_name} ×${it.qty}` : it.service_name).join(', ');

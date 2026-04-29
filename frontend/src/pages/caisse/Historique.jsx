@@ -125,6 +125,24 @@ export default function Historique({
             qty, amount: unit * qty, emp, pmLabel, pmCfg, hour,
           });
         });
+        // Défense pour les transactions antérieures au fix backend (commit
+        // d8def69) : si l'employé avait modifié le total mais que les
+        // transaction_items conservent les prix d'origine, on ajoute une
+        // ligne d'ajustement pour que la somme des lignes = tx.amount.
+        const itemsSum = items.reduce(
+          (s, it) => s + ((parseFloat(it.unit_price) || 0) * (parseInt(it.qty) || 1)),
+          0
+        );
+        const txAmt = parseFloat(tx.amount) || 0;
+        const diff = txAmt - itemsSum;
+        if (Math.abs(diff) > 0.01) {
+          out.push({
+            id: tx.id + '_adj',
+            service: diff > 0 ? 'Supplément' : 'Remise',
+            qty: 1, amount: diff,
+            emp, pmLabel, pmCfg, hour,
+          });
+        }
       } else {
         out.push({
           id: tx.id,
