@@ -1,6 +1,6 @@
 // Service Worker — FlowIA (PWA + Web Push)
 // Bump SW_VERSION pour forcer un refresh chez tous les clients (push & cache).
-const SW_VERSION   = '2026-04-30-pwa-1';
+const SW_VERSION   = '2026-04-30-pwa-2';
 const CACHE_NAME   = 'flowia-shell-' + SW_VERSION;
 const OFFLINE_URL  = '/index.html';
 // App shell minimal — uniquement statiques sûrs. Vite hash les bundles JS/CSS,

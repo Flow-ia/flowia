@@ -15,6 +15,7 @@ import { AdminModeProvider } from './contexts/AdminModeContext';
 import { IdleLockProvider } from './hooks/useIdleLock';
 import LockScreen from './components/LockScreen';
 import InstallPrompt from './pwa/InstallPrompt';
+import UpdateBanner from './pwa/UpdateBanner';
 import { registerSW } from './pwa/registerSW';
 import './index.css';
 
@@ -71,6 +72,7 @@ function RootSwitch() {
       <App />
       <LockScreen />
       <InstallPrompt />
+      <UpdateBanner />
     </IdleLockProvider>
   );
 }

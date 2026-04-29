@@ -25,9 +25,14 @@ export function registerSW() {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(SW_URL, { scope: '/' })
       .then(reg => {
+        // Si un SW est déjà en attente au boot (cas typique : l'utilisateur
+        // a fermé/rouvert la PWA après un déploiement), on notifie tout de
+        // suite pour afficher le bandeau "Mise à jour disponible".
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          updateListeners.forEach(cb => { try { cb(reg); } catch {} });
+        }
+
         // Détection d'une nouvelle version disponible.
-        // Le composant InstallPrompt peut écouter et afficher un bandeau
-        // "Mise à jour disponible — recharger" sans forcer un reload brutal.
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;
           if (!nw) return;
@@ -37,11 +42,16 @@ export function registerSW() {
             }
           });
         });
-        // Vérifie une update au focus (utile sur PWA installée).
+
+        // Check d'update : (1) au retour au premier plan, (2) toutes les
+        // 30 min en arrière-plan tant que l'app reste ouverte. Couvre les
+        // commerçants qui laissent la PWA tourner toute la journée sans la
+        // fermer (cas typique : tablette caisse).
         const checkForUpdate = () => { reg.update().catch(() => {}); };
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') checkForUpdate();
         });
+        setInterval(checkForUpdate, 30 * 60 * 1000);
       })
       .catch(e => console.warn('[SW] register échec:', e?.message));
 
