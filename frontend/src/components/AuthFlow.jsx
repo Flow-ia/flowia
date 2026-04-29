@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { I } from '../utils/icons';
-import { Toast, useToast, CodeInput } from './UI';
+import { Toast, useToast, CodeInput, Confirm } from './UI';
 import { ThemeToggle } from './ThemeToggle';
 import { api } from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
@@ -1118,6 +1118,7 @@ function NewPwScreen({ show, email, verifyCode, onDone }) {
 // ═══════════════════════════════════════════════════════════════════════════
 export function MerchantOnboarding({ user, onComplete }) {
   const { theme: t } = useTheme();
+  const { logout } = useAuth();
   const [f, setF] = useState({
     firstName: user?.firstName || '',
     lastName:  user?.lastName  || '',
@@ -1129,6 +1130,23 @@ export function MerchantOnboarding({ user, onComplete }) {
   const [ld,  setLd]  = useState(false);
   const [err, setErr] = useState('');
   const [toast, show] = useToast();
+  // Annulation inscription : utile quand le commerçant a connecté un mauvais
+  // compte Google et veut tout reprendre à zéro. Supprime la fiche `users`
+  // fraîchement créée (peu de données : pas encore de salon configuré) puis
+  // déconnecte → retour /login pour réessayer avec le bon compte.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelLd, setCancelLd] = useState(false);
+  const [cancelErr, setCancelErr] = useState('');
+  const doCancel = async () => {
+    setCancelLd(true); setCancelErr('');
+    try {
+      await api.deleteMerchantAccount();
+      logout();
+    } catch (e) {
+      setCancelErr(e.message || 'Suppression impossible. Réessayez.');
+      setCancelLd(false);
+    }
+  };
 
   const canSubmit = f.firstName.trim() && f.lastName.trim() && f.businessName.trim()
                  && f.phone.trim() && f.address.trim() && f.city.trim() && f.postalCode.trim();
@@ -1260,8 +1278,43 @@ export function MerchantOnboarding({ user, onComplete }) {
               {ld ? 'Enregistrement...' : 'Valider et acceder a FlowIA'}
             </Button>
           </form>
+
+          {/* Annulation inscription — pour repartir d'un autre compte Google */}
+          <div style={{ marginTop:18, paddingTop:16,
+                        borderTop:`0.5px solid ${t.border}` }}>
+            <p style={{ fontSize:11, color:t.muted, margin:'0 0 8px',
+                        textAlign:'center', lineHeight:1.5 }}>
+              Mauvais compte Google ? Vous pouvez annuler cette inscription
+              et recommencer.
+            </p>
+            <button type="button" onClick={() => setCancelOpen(true)}
+                    disabled={cancelLd}
+                    style={{ width:'100%', padding:'10px', borderRadius:8,
+                             background:'transparent', color:'#991b1b',
+                             border:`0.5px solid ${t.border}`,
+                             fontSize:12, fontWeight:500,
+                             cursor: cancelLd ? 'wait' : 'pointer',
+                             fontFamily:'inherit' }}>
+              {cancelLd ? 'Annulation...' : "Annuler l'inscription"}
+            </button>
+            {cancelErr && (
+              <p style={{ color:'#991b1b', fontSize:11, fontWeight:500,
+                          margin:'8px 0 0', textAlign:'center' }}>
+                {cancelErr}
+              </p>
+            )}
+          </div>
         </div>
       </div>
+      <Confirm
+        open={cancelOpen}
+        onClose={() => { if (!cancelLd) setCancelOpen(false); }}
+        onConfirm={doCancel}
+        title="Annuler votre inscription ?"
+        message="Votre compte sera supprime definitivement et vous serez redirige vers la page de connexion. Vous pourrez recommencer avec un autre compte Google."
+        danger
+        theme={t}
+      />
     </div>
   );
 }
