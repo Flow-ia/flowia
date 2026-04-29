@@ -101,7 +101,7 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
         if (conflict) {
           const cs = String(conflict.start_time).substring(0,5);
           const ce = String(conflict.end_time).substring(0,5);
-          setConflictError(`L'employe a deja un RDV de ${cs} a ${ce} sur ce creneau.`);
+          setConflictError(`L'employé a déjà un rendez-vous de ${cs} à ${ce}, ce créneau chevauche.`);
         } else {
           setConflictError('');
         }
@@ -193,13 +193,21 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
       const empName = activeEmps.find(e => e.id === selEmpId)?.name;
       setConfirmed({ name: clientName, date, startTime, empName, sentEmail: !!clientEmail });
     } catch(e) {
-      const msg = e.message || 'Erreur';
-      if (msg.includes('deja un RDV') || msg.includes('conflit') || msg.includes('occupe')
-       || msg.includes('absent') || msg.includes('disponible') || msg.includes('chevauch')) {
-        setConflictError(msg);
-      } else {
-        alert(msg);
-      }
+      // Toutes les erreurs de save (conflit, absence, slot indispo, réseau)
+      // s'affichent maintenant dans la zone d'alerte rouge de la popup, plus
+      // jamais en alert() natif. Le pattern matching est fait sur version
+      // normalisée (accents retirés) pour couvrir les messages backend
+      // accentués comme 'déjà un RDV'.
+      const msg = e.message || 'Une erreur est survenue.';
+      setConflictError(msg);
+      // Scroll la zone d'erreur dans le viewport pour que l'employé la voie
+      // immédiatement (le formulaire peut être long sur mobile).
+      setTimeout(() => {
+        try {
+          document.querySelector('[data-quick-add-error]')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch {}
+      }, 50);
     } finally { setSaving(false); }
   };
 
@@ -842,26 +850,34 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
           />
         </div>
 
-        {/* ── ALERTE CONFLIT ── */}
+        {/* ── ALERTE CONFLIT / ERREUR SAVE ── */}
         {conflictError && (
-          <div style={{
-            padding: '12px 14px',
+          <div data-quick-add-error style={{
+            padding: '14px 16px',
             borderRadius: 12,
             background: '#fef2f2',
+            border: '0.5px solid rgba(239,68,68,0.3)',
             borderLeft: '2px solid #ef4444',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: 10,
+            gap: 12,
           }}>
-            <div style={{ flex:1 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+              stroke="#991b1b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ flexShrink:0, marginTop:1 }}>
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <div style={{ flex:1, minWidth:0 }}>
               <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#991b1b' }}>
-                Creneau indisponible
+                Créneau indisponible
               </p>
-              <p style={{ margin:'3px 0 0', fontSize:12, color:'#991b1b', lineHeight:1.5 }}>
+              <p style={{ margin:'4px 0 0', fontSize:12, color:'#991b1b', lineHeight:1.5 }}>
                 {conflictError}
               </p>
-              <p style={{ margin:'4px 0 0', fontSize:11, color:'#991b1b', fontWeight:500 }}>
-                Merci de choisir une autre heure, une autre date ou un autre employe.
+              <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', lineHeight:1.5 }}>
+                Choisissez une autre heure, une autre date ou un autre employé pour pouvoir créer ce rendez-vous.
               </p>
             </div>
             <button
