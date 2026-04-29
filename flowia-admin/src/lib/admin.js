@@ -107,6 +107,23 @@ export async function deleteMerchantPromoCodesByCategory(merchantId, category) {
   );
 }
 
+// ── Reset destructif d'un commerçant ─────────────────────────────────────────
+// feature ∈ transactions_walkin | transactions_appointment | transactions_all
+//          | appointments | all
+// Optionnel : from / to en YYYY-MM-DD pour limiter la plage.
+// confirmBusinessName doit egaler exactement le business_name du commercant.
+export async function resetMerchantData(id, { feature, from, to, confirmBusinessName }) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/reset`, {
+    method: 'POST',
+    body: JSON.stringify({
+      feature,
+      from: from || undefined,
+      to:   to   || undefined,
+      confirm_business_name: confirmBusinessName,
+    }),
+  });
+}
+
 // ── Clients (global_clients cross-merchant) ─────────────────────────────────
 export async function listClients({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
   const qs = new URLSearchParams();

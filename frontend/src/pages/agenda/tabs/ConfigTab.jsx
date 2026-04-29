@@ -297,7 +297,27 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             <p style={sectionTitle}>Adresse de votre page</p>
             <p style={sectionSubtitle}>URL que vos clients utiliseront pour reserver</p>
           </div>
-          {slugStatus === 'ok' && form.slug && (
+          {initSettings?.slug_locked === true ? (
+            <span title="URL imposee par notre equipe" style={{
+              fontSize: 11,
+              fontWeight: 500,
+              padding: '3px 8px',
+              borderRadius: 8,
+              background: '#fef3c7',
+              color: '#92400e',
+              whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              {"Verrouillee"}
+            </span>
+          ) : slugStatus === 'ok' && form.slug && (
             <span style={{
               fontSize: 11,
               fontWeight: 500,
@@ -309,6 +329,35 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             }}>Disponible</span>
           )}
         </div>
+
+        {/* Banniere d'explication quand l'URL est verrouillee par le super-admin.
+            Le champ input reste visible (montre la valeur courante) mais
+            l'utilisateur sait pourquoi il ne peut pas y toucher. */}
+        {initSettings?.slug_locked === true && (
+          <div style={{
+            display: 'flex',
+            gap: 10,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: '#fffbeb',
+            borderLeft: '2px solid #f59e0b',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="#92400e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                 style={{ flexShrink: 0, marginTop: 1 }}>
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 500, color: '#92400e', margin: 0, lineHeight: 1.4 }}>
+                {"Cette URL a ete imposee par notre equipe."}
+              </p>
+              <p style={{ fontSize: 11, color: '#92400e', margin: '4px 0 0', lineHeight: 1.5, opacity: 0.85 }}>
+                {"Elle ne peut pas etre modifiee. Pour toute demande de changement, contactez le support."}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Input slug avec prefixe */}
         <div style={{
@@ -395,8 +444,9 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
           </div>
         )}
 
-        {/* Regles de format */}
-        {form.slug.length > 0 && slugStatus !== 'ok' && slugStatus !== 'checking' && (
+        {/* Regles de format — masquees si slug verrouille (l'utilisateur ne
+            peut pas modifier de toute facon) */}
+        {!initSettings?.slug_locked && form.slug.length > 0 && slugStatus !== 'ok' && slugStatus !== 'checking' && (
           <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
             {[
               { ok: form.slug.length >= 3,           label: 'Minimum 3 caracteres' },
@@ -460,11 +510,15 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
           </div>
         )}
 
-        <p style={{ fontSize:11, color:t.dim, margin:0, lineHeight:1.5 }}>
-          Utilisez un nom court et memorable (ex :{' '}
-          <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>salon-marie</span>,{' '}
-          <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>barbershop-leo</span>).
-        </p>
+        {/* Tip d'aide masque si slug verrouille (suggerer des noms a un user
+            qui ne peut rien changer est trompeur). */}
+        {!initSettings?.slug_locked && (
+          <p style={{ fontSize:11, color:t.dim, margin:0, lineHeight:1.5 }}>
+            Utilisez un nom court et memorable (ex :{' '}
+            <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>salon-marie</span>,{' '}
+            <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>barbershop-leo</span>).
+          </p>
+        )}
       </div>
 
       {/* ── DESCRIPTION DE L'ACTIVITE ── */}

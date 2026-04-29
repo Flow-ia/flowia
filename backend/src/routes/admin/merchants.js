@@ -426,4 +426,209 @@ router.post('/:id/slug/force', async (req, res) => {
   }
 });
 
+// ── POST /:id/reset — reinitialiser des donnees du commercant ──────────────
+// Operation TRES destructive : delete reel (pas soft-delete).
+// Sécurité défense en profondeur :
+//   1. adminAuth (deja applique au router)
+//   2. confirm_business_name doit egaler EXACTEMENT u.business_name (case
+//      insensitive, trim) — empêche un clic accidentel
+//   3. transaction SQL atomique : tout ou rien
+//   4. plafond 200 000 lignes par operation (au-dela : refus + demander range)
+//   5. audit log obligatoire (admin id, IP, count, range)
+//
+// Features supportees :
+//   - transactions_walkin     : encaissements sans RDV (caisse directe)
+//   - transactions_appointment: encaissements lies a un RDV (depuis l'agenda)
+//                                + reset paid/transaction_id sur appointments
+//   - transactions_all        : tous les encaissements + reset paid sur RDV
+//   - appointments            : RDV (passe et futur), supprime aussi les
+//                                transactions qui les referencent (sinon
+//                                appointment_id deviendrait orphelin)
+//   - all                     : RDV + transactions sur place + via RDV
+//
+// Filtre temporel optionnel : { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }.
+// Sans range -> tout l'historique. Range applique sur transactions.date et
+// appointments.date.
+const RESET_FEATURES = new Set([
+  'transactions_walkin',
+  'transactions_appointment',
+  'transactions_all',
+  'appointments',
+  'all',
+]);
+const MAX_RESET_ROWS = 200000;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+router.post('/:id/reset', async (req, res) => {
+  const { feature, from, to, confirm_business_name } = req.body || {};
+
+  if (!feature || !RESET_FEATURES.has(feature)) {
+    return res.status(400).json({ error: 'Feature invalide.' });
+  }
+  if (from && !DATE_RE.test(String(from))) {
+    return res.status(400).json({ error: 'Date `from` invalide (YYYY-MM-DD).' });
+  }
+  if (to && !DATE_RE.test(String(to))) {
+    return res.status(400).json({ error: 'Date `to` invalide (YYYY-MM-DD).' });
+  }
+  if (from && to && String(from) > String(to)) {
+    return res.status(400).json({ error: '`from` doit etre <= `to`.' });
+  }
+  if (!confirm_business_name || typeof confirm_business_name !== 'string') {
+    return res.status(400).json({ error: 'confirm_business_name requis.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    // 1. Recupere le merchant + business_name pour confirmation
+    const { rows: u } = await client.query(
+      `SELECT id, business_name FROM users WHERE id=$1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!u.length) return res.status(404).json({ error: 'Commercant introuvable.' });
+
+    const expected = String(u[0].business_name || '').trim().toLowerCase();
+    const provided = String(confirm_business_name).trim().toLowerCase();
+    if (!expected || provided !== expected) {
+      return res.status(400).json({
+        error: "Confirmation incorrecte : tapez exactement le nom commercial du commerce.",
+      });
+    }
+
+    // 2. Build clauses dates
+    const dateParams = [];
+    let txDateClause   = '';
+    let apptDateClause = '';
+    if (from) { dateParams.push(from); txDateClause += ` AND date >= $${dateParams.length + 1}`;
+                                       apptDateClause += ` AND date >= $${dateParams.length + 1}`; }
+    if (to)   { dateParams.push(to);   txDateClause += ` AND date <= $${dateParams.length + 1}`;
+                                       apptDateClause += ` AND date <= $${dateParams.length + 1}`; }
+    // Note: les indices sont calcules apres ajout, mais on a bien $1=user_id en
+    // tete dans chaque query, donc dateParams[i] -> $(i+2). On reconstruit
+    // proprement en injectant dans l'ordre [user_id, ...dateParams].
+
+    // 3. Pre-count pour plafond + retour
+    const wantsTxWalkin    = feature === 'transactions_walkin'    || feature === 'transactions_all' || feature === 'all';
+    const wantsTxAppt      = feature === 'transactions_appointment'|| feature === 'transactions_all' || feature === 'all';
+    const wantsAppointments= feature === 'appointments'           || feature === 'all';
+
+    let totalToDelete = 0;
+    if (wantsTxWalkin) {
+      const { rows } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM transactions
+          WHERE user_id=$1 AND appointment_id IS NULL ${txDateClause}`,
+        [req.params.id, ...dateParams]
+      );
+      totalToDelete += rows[0].n;
+    }
+    if (wantsTxAppt) {
+      const { rows } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM transactions
+          WHERE user_id=$1 AND appointment_id IS NOT NULL ${txDateClause}`,
+        [req.params.id, ...dateParams]
+      );
+      totalToDelete += rows[0].n;
+    }
+    if (wantsAppointments) {
+      const { rows } = await client.query(
+        `SELECT COUNT(*)::int AS n FROM appointments
+          WHERE user_id=$1 ${apptDateClause}`,
+        [req.params.id, ...dateParams]
+      );
+      totalToDelete += rows[0].n;
+    }
+
+    if (totalToDelete === 0) {
+      return res.json({ ok: true, deleted: { transactions: 0, appointments: 0 }, note: 'Rien a supprimer.' });
+    }
+    if (totalToDelete > MAX_RESET_ROWS) {
+      return res.status(413).json({
+        error: `Trop de lignes a supprimer (${totalToDelete} > ${MAX_RESET_ROWS}). Reduisez la plage de dates.`,
+      });
+    }
+
+    // 4. Suppression atomique
+    let txDeleted   = 0;
+    let apptDeleted = 0;
+    await client.query('BEGIN');
+    try {
+      // 4a. Walkin transactions
+      if (wantsTxWalkin) {
+        const r = await client.query(
+          `DELETE FROM transactions
+            WHERE user_id=$1 AND appointment_id IS NULL ${txDateClause}`,
+          [req.params.id, ...dateParams]
+        );
+        txDeleted += r.rowCount || 0;
+      }
+      // 4b. Appointment-linked transactions : reset paid sur les RDV
+      // concernes AVANT de supprimer les transactions (sinon transaction_id
+      // pointerait sur une ligne disparue le temps du UPDATE).
+      if (wantsTxAppt) {
+        await client.query(
+          `UPDATE appointments
+              SET paid=FALSE, paid_method=NULL, transaction_id=NULL, updated_at=NOW()
+            WHERE user_id=$1 AND transaction_id IN (
+              SELECT id FROM transactions
+                WHERE user_id=$1 AND appointment_id IS NOT NULL ${txDateClause}
+            )`,
+          [req.params.id, ...dateParams]
+        );
+        const r = await client.query(
+          `DELETE FROM transactions
+            WHERE user_id=$1 AND appointment_id IS NOT NULL ${txDateClause}`,
+          [req.params.id, ...dateParams]
+        );
+        txDeleted += r.rowCount || 0;
+      }
+      // 4c. Appointments : avant de supprimer les RDV, on doit supprimer les
+      // transactions qui referencent ces RDV (la colonne transactions.appointment_id
+      // n'a PAS de FK dans la migration, mais l'integrite metier l'exige —
+      // sinon on aurait des transactions orphelines pointant vers un RDV
+      // disparu qui casseraient le drilldown caisse).
+      if (wantsAppointments) {
+        const r1 = await client.query(
+          `DELETE FROM transactions
+            WHERE user_id=$1 AND appointment_id IS NOT NULL
+              AND appointment_id IN (
+                SELECT id FROM appointments WHERE user_id=$1 ${apptDateClause}
+              )`,
+          [req.params.id, ...dateParams]
+        );
+        txDeleted += r1.rowCount || 0;
+        // appointment_items est ON DELETE CASCADE -> auto-purge
+        const r2 = await client.query(
+          `DELETE FROM appointments WHERE user_id=$1 ${apptDateClause}`,
+          [req.params.id, ...dateParams]
+        );
+        apptDeleted = r2.rowCount || 0;
+      }
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    }
+
+    // 5. Audit log
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: `merchant.reset.${feature}`,
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { feature, from: from || null, to: to || null, expected_total: totalToDelete },
+      payloadAfter:  { transactions_deleted: txDeleted, appointments_deleted: apptDeleted },
+      req,
+    });
+
+    return res.json({
+      ok: true,
+      deleted: { transactions: txDeleted, appointments: apptDeleted },
+    });
+  } catch (e) {
+    console.error('[admin/merchants reset]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

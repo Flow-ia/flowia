@@ -4,6 +4,7 @@ import { getMe } from '../lib/auth.js';
 import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance, getMerchantFeatures, setMerchantFeature, forceMerchantSlug } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
 import MerchantPromoCodesSection from './MerchantPromoCodesSection.jsx';
+import MerchantResetSection from './MerchantResetSection.jsx';
 
 // Liste des features blocables avec libelle FR. Doit rester aligne avec la
 // constante FEATURES de backend/src/middleware/requireFeature.js.
@@ -477,6 +478,9 @@ export default function MerchantDetailPage() {
 
       {/* Codes promo générés pour ce commerçant — fidélité/anniv/parrainage/SMS/manuel */}
       <MerchantPromoCodesSection merchantId={id} />
+
+      {/* Réinitialisation par feature — destructif, confirmation business_name */}
+      <MerchantResetSection merchant={merchant} />
 
       {!merchant.is_frozen && (
         <section className="card card-danger">
