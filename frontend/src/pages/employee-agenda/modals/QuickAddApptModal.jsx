@@ -16,8 +16,26 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
   const [bookingCats,       setBookingCats]       = useState([]);
   const [openCat,           setOpenCat]           = useState(null);
   const [cart,              setCart]              = useState([]);
-  const [date,              setDate]              = useState(svLocal(new Date()));
-  const [startTime,         setStartTime]         = useState('09:00');
+  // Défaut intelligent : aujourd'hui + prochain créneau 15 min après l'heure
+  // courante (évite l'erreur rouge "heure passée" qui apparaissait à
+  // l'ouverture quand on défaut sur 09:00 alors qu'il est déjà 14:30).
+  // Si la prochaine fenêtre de 15 min dépasse 23:45, on bascule sur demain
+  // 09:00 (cas rare, ouverture tardive du modal).
+  const initialDateTime = (() => {
+    const now = new Date();
+    const totalMin = now.getHours() * 60 + now.getMinutes();
+    const nextSlot = Math.ceil((totalMin + 1) / 15) * 15;
+    if (nextSlot >= 24 * 60) {
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return { d: svLocal(tomorrow), t: '09:00' };
+    }
+    const hh = String(Math.floor(nextSlot / 60)).padStart(2, '0');
+    const mm = String(nextSlot % 60).padStart(2, '0');
+    return { d: svLocal(now), t: `${hh}:${mm}` };
+  })();
+  const [date,              setDate]              = useState(initialDateTime.d);
+  const [startTime,         setStartTime]         = useState(initialDateTime.t);
   const [notes,             setNotes]             = useState('');
   const [selEmpId,          setSelEmpId]          = useState(defaultEmpId || '');
   const [saving,            setSaving]            = useState(false);
