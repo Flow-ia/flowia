@@ -190,6 +190,16 @@ function getEmployeePinToken(employeeId) {
   } catch { return null; }
 }
 
+// Emet un event global pour que OfflineBanner puisse afficher un bandeau
+// si le reseau ou le serveur sont down. 5xx = serveur down, network error =
+// reseau down. Apres un succes, emet 'ff-network-ok' pour clear le bandeau.
+function emitNetworkError() {
+  try { window.dispatchEvent(new Event('ff-network-error')); } catch {}
+}
+function emitNetworkOk() {
+  try { window.dispatchEvent(new Event('ff-network-ok')); } catch {}
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -201,7 +211,20 @@ async function request(path, options = {}) {
     if (pinT) headers['x-employee-pin'] = pinT;
   }
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { ...options, headers });
+  } catch (netErr) {
+    // Erreur reseau pure : DNS down, offline, fetch abort. On signale au
+    // OfflineBanner et on laisse l'erreur remonter (l'appelant existant
+    // gere ses toasts en aval).
+    emitNetworkError();
+    throw netErr;
+  }
+  // 5xx = serveur down. On signale aussi pour OfflineBanner (l'appelant
+  // continue a recevoir l'erreur, on ne change rien au comportement existant).
+  if (res.status >= 500) emitNetworkError();
+  else emitNetworkOk();
   handleMerchant401(res, path);
   const data = await res.json();
   if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }

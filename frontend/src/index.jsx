@@ -16,6 +16,8 @@ import { IdleLockProvider } from './hooks/useIdleLock';
 import LockScreen from './components/LockScreen';
 import InstallPrompt from './pwa/InstallPrompt';
 import UpdateBanner from './pwa/UpdateBanner';
+import OfflineBanner from './pwa/OfflineBanner';
+import RefreshFab from './pwa/RefreshFab';
 import { registerSW } from './pwa/registerSW';
 import './index.css';
 
@@ -73,6 +75,8 @@ function RootSwitch() {
       <LockScreen />
       <InstallPrompt />
       <UpdateBanner />
+      <OfflineBanner />
+      <RefreshFab />
     </IdleLockProvider>
   );
 }
