@@ -2,6 +2,7 @@
 // DELETE /me (suppression complète) + GET /me/export (portabilité)
 const { pool } = require('../../db');
 const { globalClientAuth, clientOrGlobalClientAuth } = require('./helpers');
+const { snapshotAllDebtsForGlobalClient } = require('../../utils/debtRecord');
 
 module.exports = function attachAccountRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -20,13 +21,21 @@ module.exports = function attachAccountRoutes(router) {
       const gid = req.globalClient.globalClientId;
 
       const { rows: gcRows } = await dbClient.query(
-        'SELECT email, first_name FROM global_clients WHERE id=$1', [gid]
+        'SELECT email, first_name, last_name, phone FROM global_clients WHERE id=$1', [gid]
       );
       if (!gcRows.length) return res.status(404).json({ error: 'Compte introuvable.' });
-      const { email } = gcRows[0];
+      const { email, first_name, last_name, phone } = gcRows[0];
 
+      let snapshotReport = { snapshotted: 0 };
       await dbClient.query('BEGIN');
       try {
+        // 0. AVANT toute anonymisation : snapshot des dettes (balance < 0)
+        // dans merchant_debt_records pour permettre le recouvrement legal
+        // (Art. 17.3.e RGPD). Coordonnees conservees EN CLAIR 2 ans.
+        snapshotReport = await snapshotAllDebtsForGlobalClient(dbClient, {
+          gcId: gid,
+          person: { first_name, last_name, email, phone },
+        });
         // 1. Anonymiser les RDV (liés par fiche locale OU par email) et capturer
         // les ids mis à jour. Capture critique : l'ancien code annulait ensuite
         // TOUS les RDV "Client anonyme" futurs — y compris ceux de suppressions
@@ -102,16 +111,71 @@ module.exports = function attachAccountRoutes(router) {
         throw txErr;
       }
 
-      console.log(`[RGPD] Suppression compte ${gid} — email anonymisé`);
+      console.log(`[RGPD] Suppression compte ${gid} — email anonymisé, ${snapshotReport.snapshotted} dette(s) archivee(s)`);
       res.json({
         ok: true,
-        message: 'Votre compte et vos données personnelles ont été supprimés. Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.',
+        message: snapshotReport.snapshotted > 0
+          ? `Votre compte et vos données personnelles ont été supprimés. ${snapshotReport.snapshotted} dette(s) en cours ont été archivées chez le(s) commerçant(s) concerné(s) à des fins de recouvrement (RGPD Art. 17.3.e — conservation 2 ans).`
+          : 'Votre compte et vos données personnelles ont été supprimés. Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.',
+        debts_recorded: snapshotReport.snapshotted,
       });
     } catch(e) {
       console.error('[DELETE ACCOUNT]', e.message);
       res.status(500).json({ error: 'Erreur serveur.' });
     } finally {
       dbClient.release();
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GET /api/global-clients/me/credits-summary — Resume credits/dettes par
+  // commercant. Utilise par le frontend AVANT DELETE /me pour afficher un
+  // avertissement clair :
+  //   - credits positifs : "vous avez X € chez Y, ce credit sera abandonne"
+  //   - dettes negatives : "vous avez -X € chez Y, vos coordonnees seront
+  //     conservees 2 ans pour le recouvrement"
+  // Accepte les deux scopes (global_client + client).
+  // ─────────────────────────────────────────────────────────────────────────────
+  router.get('/me/credits-summary', clientOrGlobalClientAuth, async (req, res) => {
+    try {
+      const gid = req.globalClient.globalClientId;
+      const { rows: gc } = await pool.query(
+        'SELECT email FROM global_clients WHERE id=$1', [gid]
+      );
+      const email = gc[0]?.email;
+      if (!email) return res.json({ credits: [], debts: [] });
+
+      // Multi-tenant scope : seuls les merchants ou ce global_client a une fiche.
+      const { rows } = await pool.query(
+        `SELECT cc.balance, u.business_name AS merchant_name, u.id AS merchant_id
+           FROM client_credits cc
+           JOIN users u ON u.id = cc.user_id
+          WHERE LOWER(cc.client_email) = LOWER($1)
+            AND cc.balance <> 0
+            AND cc.user_id IN (
+              SELECT user_id FROM client_accounts WHERE global_client_id = $2
+            )`,
+        [email, gid]
+      );
+
+      const credits = rows
+        .filter(r => parseFloat(r.balance) > 0)
+        .map(r => ({
+          merchant_id:   r.merchant_id,
+          merchant_name: r.merchant_name,
+          amount:        parseFloat(r.balance),
+        }));
+      const debts = rows
+        .filter(r => parseFloat(r.balance) < 0)
+        .map(r => ({
+          merchant_id:   r.merchant_id,
+          merchant_name: r.merchant_name,
+          amount:        Math.abs(parseFloat(r.balance)),
+        }));
+      res.json({ credits, debts });
+    } catch (e) {
+      console.error('[GET /me/credits-summary]', e.message);
+      res.status(500).json({ error: 'Erreur serveur.' });
     }
   });
 

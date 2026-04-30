@@ -18,6 +18,7 @@ const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { sendClientInvite } = require('../utils/email');
 const { validatePhone } = require('../utils/phone');
 const { parseBirthDate } = require('../utils/birthDate');
+const { snapshotDebtForLocalClient } = require('../utils/debtRecord');
 const crypto   = require('crypto');
 const router   = express.Router();
 router.use(authMiddleware);
@@ -378,6 +379,83 @@ router.post('/auto', async (req, res) => {
   }
 });
 
+// ─── Créances impayées (RGPD Art. 17.3.e) ─────────────────────────────────────
+// Snapshots de coordonnees clients prises au moment de la suppression de leur
+// compte (ou de leur fiche par le commercant) alors qu'ils avaient une dette.
+// Conservation 2 ans pour le recouvrement, purge auto. EN CLAIR (motif legal).
+//
+// IMPORTANT : ces routes doivent etre declarees AVANT router.get('/:id')
+// sinon Express matche '/debt-records' comme un id de client.
+
+// GET /api/clients/debt-records?status=open|paid|all
+router.get('/debt-records', async (req, res) => {
+  try {
+    const uid    = req.user.userId;
+    const status = String(req.query.status || 'open').toLowerCase();
+    const ALLOWED = new Set(['open', 'paid', 'all']);
+    const safeStatus = ALLOWED.has(status) ? status : 'open';
+
+    let q = `SELECT id, client_first_name, client_last_name, client_email, client_phone,
+                    debt_amount, debt_currency, debt_origin, status,
+                    recorded_at, paid_at, paid_note, retention_until
+               FROM merchant_debt_records WHERE user_id=$1`;
+    const params = [uid];
+    if (safeStatus !== 'all') {
+      params.push(safeStatus);
+      q += ` AND status = $${params.length}`;
+    }
+    q += ` ORDER BY recorded_at DESC LIMIT 500`;
+
+    const { rows } = await pool.query(q, params);
+    // Compte des "open" pour badge frontend
+    const { rows: cnt } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM merchant_debt_records WHERE user_id=$1 AND status='open'`,
+      [uid]
+    );
+    res.json({ records: rows, open_count: cnt[0].n });
+  } catch (e) {
+    console.error('[GET /debt-records]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// POST /api/clients/debt-records/:id/mark-paid — marquer comme payée
+router.post('/debt-records/:id/mark-paid', async (req, res) => {
+  try {
+    const uid  = req.user.userId;
+    const note = req.body?.note ? String(req.body.note).slice(0, 500) : null;
+    const { rowCount, rows } = await pool.query(
+      `UPDATE merchant_debt_records
+          SET status='paid', paid_at=NOW(), paid_note=$3
+        WHERE id=$1 AND user_id=$2 AND status='open'
+        RETURNING id, paid_at`,
+      [req.params.id, uid, note]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Créance introuvable ou déjà soldée.' });
+    res.json({ ok: true, paid_at: rows[0].paid_at });
+  } catch (e) {
+    console.error('[POST /debt-records/:id/mark-paid]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// DELETE /api/clients/debt-records/:id — effacement explicite par le commercant
+// (utile une fois la dette soldee/abandonnee pour ne plus garder les coordonnees)
+router.delete('/debt-records/:id', async (req, res) => {
+  try {
+    const uid = req.user.userId;
+    const { rowCount } = await pool.query(
+      `DELETE FROM merchant_debt_records WHERE id=$1 AND user_id=$2`,
+      [req.params.id, uid]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Créance introuvable.' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[DELETE /debt-records/:id]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ─── GET /:id — fiche complète avec historique ───────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
@@ -612,25 +690,88 @@ router.put('/:id', async (req, res) => {
 // RÈGLE 6 : supprime UNIQUEMENT la fiche locale (relation commerçant↔client)
 // Le compte global reste intact. Si le client revient via RDV, la fiche est recréée.
 router.delete('/:id', async (req, res) => {
+  const uid = req.user.userId;
+  const dbClient = await pool.connect();
   try {
-    const uid = req.user.userId;
-    const { rows } = await pool.query(
-      'SELECT id, global_client_id FROM client_accounts WHERE id=$1 AND user_id=$2',
+    const { rows } = await dbClient.query(
+      `SELECT id, email, global_client_id, first_name, last_name, phone
+         FROM client_accounts WHERE id=$1 AND user_id=$2`,
       [req.params.id, uid]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Client introuvable.' });
+    const client = rows[0];
 
-    // Supprimer uniquement la fiche locale
-    await pool.query('DELETE FROM client_accounts WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+    let snapshotted = 0;
+    await dbClient.query('BEGIN');
+    try {
+      // 1. Snapshot des dettes (balance < 0) AVANT anonymisation/suppression.
+      // Permet le recouvrement legal apres suppression de la fiche.
+      const r = await snapshotDebtForLocalClient(dbClient, {
+        merchantId: uid,
+        clientAccountId: client.id,
+      });
+      snapshotted = r.snapshotted;
 
+      // 2. Anonymisation cascade chez CE merchant uniquement (multi-tenant).
+      //    Les transactions/RDV/notes/credits gardent leurs montants pour la
+      //    compta mais perdent leurs donnees personnelles.
+      if (client.email) {
+        await dbClient.query(
+          `UPDATE transactions SET client_email=NULL, client_note=NULL
+            WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)`,
+          [uid, client.email]
+        );
+        await dbClient.query(
+          `UPDATE appointments SET client_email=NULL, client_phone=NULL,
+                  client_name='Client anonyme'
+            WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)`,
+          [uid, client.email]
+        );
+        await dbClient.query(
+          `UPDATE client_credits SET client_email=NULL, client_name='[Compte supprimé]'
+            WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)`,
+          [uid, client.email]
+        );
+        await dbClient.query(
+          `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
+            WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)`,
+          [uid, client.email]
+        );
+        // Loyalty : pas de valeur comptable, on supprime
+        await dbClient.query(
+          `DELETE FROM client_loyalty
+            WHERE user_id=$1 AND LOWER(client_email)=LOWER($2)`,
+          [uid, client.email]
+        );
+      }
+
+      // 3. Suppression de la fiche locale (le compte global reste intact)
+      await dbClient.query(
+        'DELETE FROM client_accounts WHERE id=$1 AND user_id=$2',
+        [client.id, uid]
+      );
+
+      await dbClient.query('COMMIT');
+    } catch (txErr) {
+      await dbClient.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    }
+
+    const baseMsg = client.global_client_id
+      ? 'Relation supprimée. Le compte plateforme du client reste intact et réapparaîtra si ce client effectue un nouveau RDV.'
+      : 'Fiche client supprimée et données personnelles anonymisées dans votre historique.';
     res.json({
       ok: true,
-      message: rows[0].global_client_id
-        ? 'Relation supprimée. Le compte plateforme du client reste intact et réapparaîtra si ce client effectue un nouveau RDV.'
-        : 'Client supprimé.',
+      message: snapshotted > 0
+        ? `${baseMsg} ${snapshotted} dette en cours archivée dans Créances impayées (à recouvrer sous 2 ans).`
+        : baseMsg,
+      debts_recorded: snapshotted,
     });
   } catch (e) {
+    console.error('[DELETE /clients/:id]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    dbClient.release();
   }
 });
 

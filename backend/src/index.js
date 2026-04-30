@@ -714,6 +714,15 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     // sur client_rewards + filtre last_birthday_reward_at rolling 330j.
     scheduleLocked(60 * 60 * 1000,      'cron:birthday:monthly',       'birthday',  runBirthdayPromos);
 
+    // Purge automatique des creances orphelines (RGPD Art. 17.3.e)
+    // dont la duree de retention legale est depassee. Quotidien suffit
+    // (on ne purge pas a la seconde pres apres 2 ans).
+    scheduleLocked(24 * 60 * 60 * 1000, 'cron:debt:purge',             'debt-purge', async () => {
+      const { purgeExpiredDebtRecords } = require('./utils/debtRecord');
+      const n = await purgeExpiredDebtRecords(dbPool);
+      if (n > 0) console.log(`[CRON debt-purge] ${n} créances expirées purgées`);
+    });
+
     console.log('⏰ Cron démarré (worker', process.pid, ') — protégé par pg_advisory_lock');
   }
 

@@ -715,6 +715,45 @@ async function initDB() {
   await runMigration(`ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20)`);
   await runMigration(`ALTER TABLE credit_transactions ADD COLUMN IF NOT EXISTS transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL`);
 
+  // ── merchant_debt_records ────────────────────────────────────────────────
+  // Registre des créances orphelines : quand un client supprime son compte
+  // alors qu'il a une dette (balance < 0) chez un commerçant, on prend un
+  // snapshot de ses coordonnées (en clair, RGPD Art. 17.3.e) pour permettre
+  // le recouvrement. Conservation 2 ans (B2C, L218-2 Code consommation),
+  // purgé automatiquement par le cron.
+  // SECURITE : table séparée des fiches client courantes -> isolation forte
+  // des données conservées au seul motif du recouvrement (pas de marketing).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS merchant_debt_records (
+      id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      -- Snapshot coordonnées EN CLAIR au moment de la suppression
+      client_first_name  VARCHAR(255),
+      client_last_name   VARCHAR(255),
+      client_email       VARCHAR(255),
+      client_phone       VARCHAR(50),
+      -- Créance
+      debt_amount        NUMERIC(10,2) NOT NULL CHECK (debt_amount > 0),
+      debt_currency      VARCHAR(3) DEFAULT 'EUR',
+      debt_origin        TEXT,
+      original_credit_id UUID,
+      -- Cycle de vie
+      status             VARCHAR(20) NOT NULL DEFAULT 'open'
+                         CHECK (status IN ('open','paid','written_off')),
+      recorded_at        TIMESTAMPTZ DEFAULT NOW(),
+      paid_at             TIMESTAMPTZ,
+      paid_note          TEXT,
+      paid_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+      -- Métadonnées RGPD
+      legal_basis        TEXT DEFAULT 'RGPD Art. 17.3.e — Recouvrement de creance',
+      retention_until    DATE NOT NULL
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_debt_records_user_status
+    ON merchant_debt_records(user_id, status, recorded_at DESC)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_debt_records_retention
+    ON merchant_debt_records(retention_until) WHERE status = 'open'`);
+
   // ── Système de code PIN employé ──────────────────────────────────────────────
   await runMigration(`
     CREATE TABLE IF NOT EXISTS employee_pins (
