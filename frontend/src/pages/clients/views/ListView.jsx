@@ -77,14 +77,14 @@ export default function ListView({
           <div style={{ display:'flex', gap:6, flexShrink:0 }}>
             {debtsCount > 0 && (
               <button type="button" onClick={() => setView('debts')}
-                      title="Créances impayées (RGPD recouvrement)"
+                      title="Créances (dettes) impayées — recouvrement RGPD"
                       style={{ display:'inline-flex', alignItems:'center', gap:6,
                                padding:'7px 10px', borderRadius:8,
                                background:'rgba(239,68,68,0.08)', color:'#991b1b',
                                border:'0.5px solid rgba(239,68,68,0.25)',
                                fontSize:12, fontWeight:500, cursor:'pointer',
                                fontFamily:'inherit' }}>
-                Créances
+                Créances (dettes)
                 <span style={{ minWidth:18, height:18, padding:'0 5px',
                                borderRadius:99, background:'#991b1b', color:'#fff',
                                fontSize:10, fontWeight:500,

@@ -115,7 +115,7 @@ module.exports = function attachAccountRoutes(router) {
       res.json({
         ok: true,
         message: snapshotReport.snapshotted > 0
-          ? `Votre compte et vos données personnelles ont été supprimés. ${snapshotReport.snapshotted} dette(s) en cours ont été archivées chez le(s) commerçant(s) concerné(s) à des fins de recouvrement (RGPD Art. 17.3.e — conservation 2 ans).`
+          ? `Votre compte et vos données personnelles ont été supprimés. ${snapshotReport.snapshotted} créance(s) (dette(s)) en cours ont été archivées chez le(s) commerçant(s) concerné(s) à des fins de recouvrement (RGPD Art. 17.3.e — conservation 2 ans).`
           : 'Votre compte et vos données personnelles ont été supprimés. Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.',
         debts_recorded: snapshotReport.snapshotted,
       });

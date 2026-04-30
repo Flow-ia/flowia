@@ -379,7 +379,7 @@ router.post('/auto', async (req, res) => {
   }
 });
 
-// ─── Créances impayées (RGPD Art. 17.3.e) ─────────────────────────────────────
+// ─── Créances (dettes) impayées (RGPD Art. 17.3.e) ───────────────────────────
 // Snapshots de coordonnees clients prises au moment de la suppression de leur
 // compte (ou de leur fiche par le commercant) alors qu'ils avaient une dette.
 // Conservation 2 ans pour le recouvrement, purge auto. EN CLAIR (motif legal).
@@ -431,7 +431,7 @@ router.post('/debt-records/:id/mark-paid', async (req, res) => {
         RETURNING id, paid_at`,
       [req.params.id, uid, note]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Créance introuvable ou déjà soldée.' });
+    if (!rowCount) return res.status(404).json({ error: 'Créance (dette) introuvable ou déjà soldée.' });
     res.json({ ok: true, paid_at: rows[0].paid_at });
   } catch (e) {
     console.error('[POST /debt-records/:id/mark-paid]', e.message);
@@ -448,7 +448,7 @@ router.delete('/debt-records/:id', async (req, res) => {
       `DELETE FROM merchant_debt_records WHERE id=$1 AND user_id=$2`,
       [req.params.id, uid]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Créance introuvable.' });
+    if (!rowCount) return res.status(404).json({ error: 'Créance (dette) introuvable.' });
     res.json({ ok: true });
   } catch (e) {
     console.error('[DELETE /debt-records/:id]', e.message);
@@ -763,7 +763,7 @@ router.delete('/:id', async (req, res) => {
     res.json({
       ok: true,
       message: snapshotted > 0
-        ? `${baseMsg} ${snapshotted} dette en cours archivée dans Créances impayées (à recouvrer sous 2 ans).`
+        ? `${baseMsg} ${snapshotted} créance (dette) en cours archivée dans la page Créances (dettes) — à recouvrer sous 2 ans.`
         : baseMsg,
       debts_recorded: snapshotted,
     });

@@ -44,7 +44,7 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
       const r = await clientsApi.listDebts(status);
       setRecords(r.records || []);
       setOpenCount(r.open_count || 0);
-    } catch { showToast('Impossible de charger les créances', 'error'); }
+    } catch { showToast('Impossible de charger les créances (dettes)', 'error'); }
     finally { setLoading(false); }
   }, [status, showToast]);
 
@@ -54,7 +54,7 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
     setBusyId(id);
     try {
       await clientsApi.markDebtPaid(id, note);
-      showToast('Créance marquée comme payée', 'ok');
+      showToast('Créance (dette) marquée comme payée', 'ok');
       setPaidNoteOpen(null); setPaidNote('');
       await load();
     } catch (e) { showToast(e.message || 'Erreur', 'error'); }
@@ -65,7 +65,7 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
     setBusyId(id);
     try {
       await clientsApi.removeDebt(id);
-      showToast('Créance effacée', 'ok');
+      showToast('Créance (dette) effacée', 'ok');
       setConfirmDelId(null);
       await load();
     } catch (e) { showToast(e.message || 'Erreur', 'error'); }
@@ -88,7 +88,7 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
         </div>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
           <div style={{ minWidth:0, flex:1 }}>
-            <h1 style={{ margin:0, fontSize:20, fontWeight:500, color:t.text }}>Créances impayées</h1>
+            <h1 style={{ margin:0, fontSize:20, fontWeight:500, color:t.text }}>Créances impayées (dettes)</h1>
             <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.5 }}>
               {"Coordonnées conservées 2 ans pour le recouvrement (RGPD Art. 17.3.e). Au-delà, effacement automatique."}
             </p>
@@ -138,14 +138,14 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
           <div style={{ textAlign:'center', padding:'48px 16px',
                         background:t.card, border:`0.5px dashed ${t.border}`, borderRadius:12 }}>
             <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:'0 0 6px' }}>
-              {"Aucune créance"}
+              {"Aucune créance (dette)"}
             </p>
             <p style={{ fontSize:12, color:t.muted, margin:0 }}>
               {status === 'open'
-                ? "Aucune créance impayée pour le moment."
+                ? "Aucune créance (dette) impayée pour le moment."
                 : status === 'paid'
-                ? "Aucune créance réglée à afficher."
-                : "Aucun enregistrement de créance."}
+                ? "Aucune créance (dette) réglée à afficher."
+                : "Aucun enregistrement de créance (dette)."}
             </p>
           </div>
         )}
@@ -283,7 +283,7 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
           <div style={{ background:t.card, borderRadius:12, padding:20,
                         maxWidth:420, width:'100%', border:'0.5px solid rgba(239,68,68,0.3)' }}>
             <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:15, color:'#991b1b' }}>
-              Effacer cette créance ?
+              Effacer cette créance (dette) ?
             </p>
             <p style={{ margin:'0 0 16px', fontSize:12, color:t.muted, lineHeight:1.5 }}>
               {"Les coordonnées du client seront définitivement effacées de votre registre. Action irréversible."}
