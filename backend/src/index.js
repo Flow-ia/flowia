@@ -393,6 +393,27 @@ function startServer() {
     const hour = new Date().getHours();
     if (hour < 8 || hour > 20) return;
     try {
+      // Pre-purge : marquer 'expired' tous les jobs qui referencent un
+      // promo_code dont la valid_until est depassee. Evite d'envoyer un
+      // code mort au client (frustration + image marque). On detecte le
+      // code via une regex sur le message (les emails de campagne IA
+      // injectent le code en clair, ex 'SOLDES-XXXX'). Plus robuste :
+      // si campaign_id reference un promo_code via lien explicite.
+      // Best-effort : on ne droppe que les codes dont la presence est
+      // certaine via match exact dans le message.
+      await dbPool.query(`
+        UPDATE campaign_queue q
+           SET status='expired', error='Code promo deja expire au moment de l envoi'
+         WHERE q.status='pending'
+           AND q.channel='email'
+           AND EXISTS (
+             SELECT 1 FROM promo_codes pc
+              WHERE pc.user_id = q.user_id
+                AND pc.valid_until < CURRENT_DATE
+                AND q.message LIKE '%' || pc.code || '%'
+           )
+      `).catch(e => console.warn('[CRON queue pre-purge expired]', e.message));
+
       const { rows } = await dbPool.query(`
         SELECT q.*,
                ca.unsubscribe_token AS ca_unsubscribe_token,
@@ -748,9 +769,23 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     const { force = false, userIdFilter = null } = options;
     const now = new Date();
     if (!force) {
+      // Refonte etalement : on tourne CHAQUE jour du mois a 9h (pas juste le
+      // 1er). Cela permet d'etaler les envois sur plusieurs jours quand le
+      // commercant a > 190 anniversaires dans le mois (quota EMAIL_DAILY_LIMIT_USER).
+      // Auparavant : tout etait envoye le 1er a 9h, ceux dépassant le quota
+      // étaient perdus jusqu'à l'année suivante.
       if (now.getHours() !== 9) return { ok: true, sent: 0, skipped: 'not_9am' };
-      if (now.getDate() !== 1) return { ok: true, sent: 0, skipped: 'not_first_of_month' };
     }
+    // Helper local : valid_until d'un code anniversaire = MAX(fin du mois courant,
+    // aujourd'hui + 14j). Garantit que tout code envoye en fin de mois reste
+    // valable au moins 2 semaines pour le client.
+    const computeBirthdayValidUntil = (today) => {
+      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      const plus14 = new Date(today); plus14.setDate(plus14.getDate() + 14);
+      const max = endOfMonth > plus14 ? endOfMonth : plus14;
+      // YYYY-MM-DD pour colonne DATE
+      return max.toISOString().slice(0, 10);
+    };
     try {
       const params = [];
       let where = 'bc.is_enabled = TRUE';
@@ -766,7 +801,7 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       );
       if (!campaigns.length) return { ok: true, sent: 0, skipped: 'no_campaign_enabled' };
 
-      const { sendBirthdayPromo } = require('./utils/email');
+      const { sendBirthdayPromo, checkUserEmailQuota } = require('./utils/email');
       let totalSent = 0;
 
       const y = now.getFullYear();
@@ -778,13 +813,21 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       const monthName = monthNames[monthNum - 1];
 
       for (const camp of campaigns) {
-        // Clients de ce commerçant nés ce mois-ci. On filtre uniquement sur
-        // EXTRACT(MONTH FROM birth_date) — le jour de naissance n'est plus
-        // utilisé (le picker ne collecte que mois+année, jour forcé à 01).
-        // Anti-fraude 330j porté UNIQUEMENT par client_accounts (scope user_id
-        // → par commerçant), pour ne pas bloquer un client multi-commerces.
-        const { rows: clients } = await dbPool.query(
-          `SELECT DISTINCT ca.id, ca.email, ca.first_name, ca.last_name, ca.unsubscribe_token
+        // ── Etalement : combien envoyer aujourd'hui pour CE commercant ? ──
+        // Cible = ceil(restants ce mois / jours restants jusqu'à fin du mois).
+        // Borne haute = quota disponible aujourd'hui (190 - deja envoyes).
+        // Exemple : 400 anniversaires en mai, on est le 1er :
+        //   restants=400, jours=31 -> cible=13/jour, quota 190 OK
+        // Exemple : 400 anniversaires en mai, on est le 25 :
+        //   restants=300 (s'il en reste), jours=7 -> cible=43/jour, quota 190 OK
+        // Si le commercant envoie aussi des campagnes manuelles, son quota du
+        // jour est plus bas -> on s'adapte automatiquement.
+        const todayDate    = now.getDate();
+        const lastDayMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const daysRemaining = Math.max(1, lastDayMonth - todayDate + 1);
+
+        const { rows: cnt } = await dbPool.query(
+          `SELECT COUNT(DISTINCT ca.id)::int AS n
              FROM client_accounts ca
             WHERE ca.user_id = $1
               AND ca.birth_date IS NOT NULL
@@ -794,6 +837,36 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               AND (ca.last_birthday_reward_at IS NULL
                    OR ca.last_birthday_reward_at < NOW() - INTERVAL '330 days')`,
           [camp.user_id]
+        );
+        const remaining = cnt[0].n;
+        if (remaining === 0) continue;
+
+        const userQuota = await checkUserEmailQuota(camp.user_id);
+        const targetToday = Math.min(
+          Math.ceil(remaining / daysRemaining),
+          userQuota.available_today,
+        );
+        if (targetToday <= 0) {
+          console.log(`[CRON birthday] ${camp.business_name} : quota epuise (${userQuota.sent_today}/${userQuota.daily_limit}), retry demain`);
+          continue;
+        }
+
+        // Clients de ce commerçant nés ce mois-ci, tries pour avoir une
+        // distribution stable (created_at ASC = anciens clients d'abord).
+        // Anti-fraude 330j porte UNIQUEMENT par client_accounts (scope user_id).
+        const { rows: clients } = await dbPool.query(
+          `SELECT DISTINCT ca.id, ca.email, ca.first_name, ca.last_name, ca.unsubscribe_token
+             FROM client_accounts ca
+            WHERE ca.user_id = $1
+              AND ca.birth_date IS NOT NULL
+              AND ca.marketing_opt_in = TRUE
+              AND EXTRACT(MONTH FROM ca.birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
+              AND ca.email IS NOT NULL AND ca.email <> ''
+              AND (ca.last_birthday_reward_at IS NULL
+                   OR ca.last_birthday_reward_at < NOW() - INTERVAL '330 days')
+            ORDER BY ca.created_at ASC
+            LIMIT $2`,
+          [camp.user_id, targetToday]
         );
         if (!clients.length) continue;
 
@@ -811,8 +884,20 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               [camp.user_id, emailLow, y]
             );
             if (already.length) continue;
+
+            // Garde-fou cluster : on conserve un cap global 300/jour pour
+            // proteger l'IP Brevo (rate-limiting plateforme). Si atteint,
+            // on stop tout (pas juste ce commercant) jusqu'au lendemain.
             const sentToday = await getGlobalEmailCount();
-            if (sentToday >= 300) { console.log('[CRON birthday] limite email atteinte'); return; }
+            if (sentToday >= 300) { console.log('[CRON birthday] cap global cluster atteint'); return; }
+
+            // Re-check quota commercant a chaque iteration (peut avoir change
+            // entre temps si campagne manuelle envoyee en parallele).
+            const liveQuota = await checkUserEmailQuota(camp.user_id);
+            if (liveQuota.available_today <= 0) {
+              console.log(`[CRON birthday] ${camp.business_name} : quota epuise live, stop`);
+              break;
+            }
 
             // Format code : BDAY-{client_id_short}-{year}.
             // Brief 24b : "BDAY-A1B2-2026". client_id_short = 4 premiers chars
@@ -833,17 +918,20 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                                                   + Math.random().toString(36).slice(2, 4).toUpperCase();
                 code = `BDAY-${shortId || 'C'}-${y}`;
                 try {
-                  // valid_until = dernier jour du mois courant (ex 30/04/2026
-                  // si on est le 01/04/2026). DATE_TRUNC + 1 mois - 1 jour.
+                  // valid_until = MAX(fin du mois, today + 14j). Garantit qu'un
+                  // code envoye le 28 du mois reste valable au moins 14j (ex :
+                  // envoi 28/05 -> expire 11/06). Avant : tous les codes
+                  // expiraient le dernier jour du mois courant, ceux envoyes
+                  // tard etaient quasi morts.
+                  const validUntilStr = computeBirthdayValidUntil(now);
                   const { rows } = await txClient.query(
                     `INSERT INTO promo_codes
                        (user_id, code, type, value, max_uses, valid_from, valid_until,
                         is_active, target_clients, owner_client_email)
-                     VALUES ($1,$2,$3,$4,1,CURRENT_DATE,
-                             (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::DATE,
+                     VALUES ($1,$2,$3,$4,1,CURRENT_DATE, $6::DATE,
                              TRUE,'specific',$5)
                      RETURNING id, valid_until`,
-                    [camp.user_id, code, camp.discount_type, camp.discount_value, emailLow]
+                    [camp.user_id, code, camp.discount_type, camp.discount_value, emailLow, validUntilStr]
                   );
                   promoRow = rows[0];
                   inserted = true;
@@ -855,21 +943,19 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                 }
               }
               if (!inserted) throw new Error(`code collision 3x for ${emailLow}`);
-              // expires_at = 1er du mois suivant à 00:00 UTC = moment exact où
-              // la promo bascule "valide" → "expirée" côté backend via
-              // `valid_until >= CURRENT_DATE`.
+              // expires_at = valid_until + 1 jour (timestamp = minuit le
+              // lendemain de la derniere date valide). Aligne avec le
+              // valid_until adapte (MAX(fin_mois, today+14j)).
               await txClient.query(
                 `INSERT INTO client_rewards
                    (user_id, client_email, reward_type, status, promo_code_id, expires_at)
-                 VALUES ($1,$2,'birthday','available',$3,
-                         (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month')::timestamptz)`,
-                [camp.user_id, emailLow, promoRow.id]
+                 VALUES ($1,$2,'birthday','available',$3, ($4::DATE + INTERVAL '1 day')::timestamptz)`,
+                [camp.user_id, emailLow, promoRow.id, promoRow.valid_until]
               );
-              await txClient.query(
-                `UPDATE client_accounts SET last_birthday_reward_at = NOW()
-                  WHERE user_id=$1 AND LOWER(email)=$2`,
-                [camp.user_id, emailLow]
-              );
+              // NB : on NE marque PAS last_birthday_reward_at dans ce COMMIT.
+              // Sera mis a jour APRES sendBirthdayPromo confirme. Si l'envoi
+              // echoue, le client reste eligible au retry demain (sinon il
+              // serait perdu pour 330j).
               await txClient.query('COMMIT');
             } catch (txErr) {
               try { await txClient.query('ROLLBACK'); } catch(_) {}
@@ -880,26 +966,44 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
             const promo = [promoRow];
 
             const clientName = [c.first_name, c.last_name].filter(Boolean).join(' ');
-            await sendBirthdayPromo({
-              to: c.email,
-              clientName,
-              businessName: camp.business_name || 'Votre commerçant',
-              code,
-              type: camp.discount_type,
-              value: camp.discount_value,
-              validUntil: promo[0].valid_until,
-              monthName,
-              monthNum,
-              customMessage: camp.message,
-              businessEmail: camp.biz_email,
-              businessPhone: camp.biz_phone,
-              businessAddress: camp.biz_address,
-              unsubscribeToken: c.unsubscribe_token,
-            });
-            await incrGlobalEmailCount();
-            await incrUserEmailCount(camp.user_id);
-            totalSent++;
-            await cronSleep(300);
+            try {
+              await sendBirthdayPromo({
+                to: c.email,
+                clientName,
+                businessName: camp.business_name || 'Votre commerçant',
+                code,
+                type: camp.discount_type,
+                value: camp.discount_value,
+                validUntil: promo[0].valid_until,
+                monthName,
+                monthNum,
+                customMessage: camp.message,
+                businessEmail: camp.biz_email,
+                businessPhone: camp.biz_phone,
+                businessAddress: camp.biz_address,
+                unsubscribeToken: c.unsubscribe_token,
+              });
+              // Envoi reussi : marquer last_birthday_reward_at + incr quotas.
+              // Avant : tout etait fait dans le COMMIT precedent, donc un
+              // echec d'envoi marquait le client comme "deja recu" et le
+              // perdait pour 330j (bug). Maintenant : retry demain possible.
+              await dbPool.query(
+                `UPDATE client_accounts SET last_birthday_reward_at = NOW()
+                  WHERE user_id=$1 AND LOWER(email)=$2`,
+                [camp.user_id, emailLow]
+              );
+              await incrGlobalEmailCount();
+              await incrUserEmailCount(camp.user_id);
+              totalSent++;
+              await cronSleep(300);
+            } catch (sendErr) {
+              // Echec envoi : cleanup promo_code + client_rewards pour que le
+              // retry demain regenere proprement (sinon anti-doublon annuel
+              // bloquerait le retry car client_rewards existe).
+              console.error('[CRON birthday SEND FAIL]', emailLow, sendErr.message);
+              await dbPool.query(`DELETE FROM client_rewards WHERE promo_code_id=$1`, [promoRow.id]).catch(() => {});
+              await dbPool.query(`DELETE FROM promo_codes WHERE id=$1`, [promoRow.id]).catch(() => {});
+            }
           } catch (e) {
             console.error('[CRON birthday client]', emailLow, e.message);
           }
