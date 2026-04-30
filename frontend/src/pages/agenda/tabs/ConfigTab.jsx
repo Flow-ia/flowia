@@ -52,6 +52,11 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
   };
 
   const handleSlugChange = (raw) => {
+    // Defense en profondeur : si le slug est verrouille par l'admin, on
+    // ignore tout changement local meme si le 'disabled' HTML a ete bypass
+    // via DevTools. Le backend rejette aussi (403 SLUG_LOCKED), mais inutile
+    // d'ecrire dans le state local une valeur qui ne sera jamais sauvegardee.
+    if (initSettings?.slug_locked === true) return;
     const cleaned = raw
       .toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')

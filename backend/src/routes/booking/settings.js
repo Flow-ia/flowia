@@ -25,22 +25,37 @@ module.exports = function attachSettingsRoutes(router) {
               require_account, google_business_url } = req.body;
 
       // Admin commit 10 — slug verrouille par admin : refuser toute tentative
-      // de modification cote merchant. Le merchant doit contacter le support
-      // pour faire lever le verrou. On lit l'etat actuel + slug deja en base.
+      // de modification cote merchant. Defense en profondeur sur 3 couches :
+      //   1. Pre-check JS ici : 403 explicite si tentative de changement
+      //   2. Force slug = current avant UPSERT (au cas ou le check passe)
+      //   3. CASE WHEN dans le UPSERT SQL (verrou final cote DB — empeche
+      //      meme une bypass JS de modifier la colonne)
       const { rows: current } = await pool.query(
         'SELECT slug, slug_locked FROM booking_settings WHERE user_id=$1',
         [req.user.userId]
       );
-      if (current.length && current[0].slug_locked && slug !== current[0].slug) {
+      const isLocked = current.length && current[0].slug_locked === true;
+      const currentSlug = current.length ? current[0].slug : null;
+      // Comparaison normalisee (trim + lowercase) pour absorber un envoi
+      // avec casse differente. Un slug envoye undefined/null ne compte pas
+      // comme "tentative de change" si l'utilisateur PATCHait une autre
+      // section sans inclure le champ slug.
+      const sentSlug = (slug == null) ? null : String(slug).trim().toLowerCase();
+      const curSlugN = currentSlug ? String(currentSlug).trim().toLowerCase() : null;
+      if (isLocked && sentSlug != null && sentSlug !== curSlugN) {
         return res.status(403).json({
           error: "Votre URL de reservation a ete imposee par notre equipe et ne peut pas etre modifiee. Merci de contacter le support pour toute demande.",
           code: 'SLUG_LOCKED',
         });
       }
-      // Vérifier unicité du slug
-      if (slug) {
+      // Couche 2 : force la valeur a celle en DB si verrouille (si jamais
+      // le check ci-dessus etait contourne par un cas inattendu).
+      const slugToWrite = isLocked ? currentSlug : (slug || null);
+
+      // Vérifier unicité du slug (uniquement si on tente d'en ecrire un)
+      if (slugToWrite) {
         const { rows: existing } = await pool.query(
-          'SELECT id FROM booking_settings WHERE slug=$1 AND user_id!=$2', [slug, req.user.userId]
+          'SELECT id FROM booking_settings WHERE slug=$1 AND user_id!=$2', [slugToWrite, req.user.userId]
         );
         if (existing.length) return res.status(409).json({ error: 'Ce slug est déjà utilisé.' });
       }
@@ -49,16 +64,21 @@ module.exports = function attachSettingsRoutes(router) {
       const canPol = ALLOWED.includes(parseInt(cancellation_policy_hours))
         ? parseInt(cancellation_policy_hours) : 2;
 
+      // Couche 3 : meme si tout le reste echoue, le CASE WHEN dans le UPDATE
+      // empeche d'ecraser slug si slug_locked=TRUE en DB. Filet de securite
+      // ultime au niveau Postgres.
       const { rows } = await pool.query(
         `INSERT INTO booking_settings (user_id, is_enabled, slug, business_description, address, phone, timezone, advance_booking_days, min_notice_hours, cancellation_policy_hours, require_account, google_business_url)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          ON CONFLICT (user_id) DO UPDATE SET
-           is_enabled=$2, slug=$3, business_description=$4, address=$5, phone=$6,
+           is_enabled=$2,
+           slug = CASE WHEN booking_settings.slug_locked = TRUE THEN booking_settings.slug ELSE $3 END,
+           business_description=$4, address=$5, phone=$6,
            timezone=$7, advance_booking_days=$8, min_notice_hours=$9,
            cancellation_policy_hours=$10, require_account=$11,
            google_business_url=$12, updated_at=NOW()
          RETURNING *`,
-        [req.user.userId, is_enabled ?? false, slug || null, business_description || null,
+        [req.user.userId, is_enabled ?? false, slugToWrite, business_description || null,
          address || null, phone || null, timezone || 'Europe/Paris',
          advance_booking_days ?? 30, min_notice_hours ?? 1, canPol,
          require_account ?? false, google_business_url || null]
