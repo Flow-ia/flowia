@@ -127,17 +127,54 @@ merchantRouter.put('/program', pinAdminMiddleware, async (req, res) => {
 });
 
 // ── GET /api/referrals/codes — liste des codes générés pour ce commerçant ──
+// Pagination serveur (limit 5 par defaut, cap 100). Search etendu nom/prenom/
+// telephone via LEFT JOIN client_accounts. Renvoie { rows, total } pour que
+// le frontend ne charge jamais plus que la page courante (perf : un commercant
+// avec 500 parrains ne fait plus saturer son navigateur).
 merchantRouter.get('/codes', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT rc.id, rc.code, rc.owner_client_email, rc.uses_count, rc.created_at
-         FROM referral_codes rc
-        WHERE rc.user_id=$1
-        ORDER BY rc.created_at DESC
-        LIMIT 500`,
-      [req.user.userId]
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 5));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const search = String(req.query.search || '').trim();
+
+    // CTE base : on joint client_accounts pour pouvoir chercher sur nom/phone
+    // et exposer ces champs au frontend (affichage de "Marie Dupont" plutot que
+    // juste l'email du parrain). Match LEFT JOIN car certains codes peuvent
+    // pointer un email sans fiche locale.
+    let baseQ = `
+      WITH base AS (
+        SELECT rc.id, rc.code, rc.owner_client_email, rc.uses_count, rc.created_at,
+               ca.first_name, ca.last_name, ca.phone
+          FROM referral_codes rc
+          LEFT JOIN client_accounts ca
+                 ON ca.user_id = rc.user_id
+                AND LOWER(ca.email) = LOWER(rc.owner_client_email)
+         WHERE rc.user_id = $1
+      )
+      SELECT * FROM base WHERE 1=1
+    `;
+    const params = [req.user.userId];
+    if (search) {
+      params.push(`%${search}%`);
+      baseQ += ` AND (
+        owner_client_email ILIKE $${params.length}
+        OR (first_name||' '||last_name) ILIKE $${params.length}
+        OR phone ILIKE $${params.length}
+      )`;
+    }
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM (${baseQ}) AS sub`,
+      params
     );
-    res.json(rows);
+    const total = countRows[0].n;
+
+    params.push(limit, offset);
+    const listQ = `${baseQ} ORDER BY uses_count DESC, created_at DESC
+                   LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const { rows } = await pool.query(listQ, params);
+
+    res.json({ rows, total });
   } catch (e) { console.error('[REF CODES GET]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 

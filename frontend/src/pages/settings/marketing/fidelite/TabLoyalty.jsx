@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { I } from '../../../../utils/icons';
 import { loyaltyApi } from '../../../../utils/api';
 import { Button, Label, SegmentedControl } from '../../../../components/primitives';
@@ -8,6 +8,7 @@ export default function TabLoyalty({ theme }) {
   const LOYALTY_PAGE_SIZE = 5;
   const [program, setProgram]   = useState(null);
   const [clients, setClients]   = useState([]);
+  const [clientsTotal, setClientsTotal] = useState(0);
   const [loading, setLoading]   = useState(true);
   const [editProg, setEditProg] = useState(false);
   const [saving, setSaving]     = useState(false);
@@ -34,13 +35,36 @@ export default function TabLoyalty({ theme }) {
   const [showLoyaltyStats, setShowLoyaltyStats] = useState(false);
   const [loyaltyStatsLoad, setLoyaltyStatsLoad] = useState(false);
 
+  // Pagination 100% serveur (limit 5/page) + debounce 350ms + min 2 chars sur
+  // search + seqRef anti race-condition. Empeche le frontend de telecharger
+  // tous les clients fidelite d'un coup (un commercant avec 1000 clients
+  // saturait sinon son navigateur pour n'en afficher que 5).
+  const loadSeqRef = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
-      const [p, cl] = await Promise.all([loyaltyApi.getProgram(), loyaltyApi.getClients({ search })]);
-      setProgram(p); setClients(cl);
-    } finally { setLoading(false); }
-  }, [search]);
+      const trimmed = (search || '').trim();
+      const sendSearch = trimmed.length >= 2 ? trimmed : '';
+      const [p, r] = await Promise.all([
+        loyaltyApi.getProgram(),
+        loyaltyApi.getClients({
+          search: sendSearch,
+          limit:  LOYALTY_PAGE_SIZE,
+          offset: (page - 1) * LOYALTY_PAGE_SIZE,
+        }),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setProgram(p);
+      // Backwards-compat : ancien backend renvoie un tableau direct
+      const rows  = Array.isArray(r) ? r : (r.rows || []);
+      const total = Array.isArray(r) ? rows.length : (r.total || 0);
+      setClients(rows);
+      setClientsTotal(total);
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
+  }, [search, page]);
 
   const loadLoyaltyStats = async () => {
     setLoyaltyStatsLoad(true);
@@ -49,7 +73,13 @@ export default function TabLoyalty({ theme }) {
     finally { setLoyaltyStatsLoad(false); }
   };
 
-  useEffect(() => { load(); }, [load]);
+  // Debounce sur le terme de recherche (350ms si >=2 chars), sinon load immediat
+  useEffect(() => {
+    const trimmed = (search || '').trim();
+    const needsDebounce = trimmed.length >= 2;
+    const tm = setTimeout(() => load(), needsDebounce ? 350 : 0);
+    return () => clearTimeout(tm);
+  }, [load]);
 
   const saveProg = async () => {
     setSaving(true);
@@ -57,7 +87,9 @@ export default function TabLoyalty({ theme }) {
     finally { setSaving(false); }
   };
 
-  useEffect(() => { setPage(1); }, [search, clients.length]);
+  // Reset page uniquement quand la recherche change (pas quand clients.length
+  // change, sinon boucle infinie : load() change clients -> trigger -> load).
+  useEffect(() => { setPage(1); }, [search]);
 
   const loadHistory = async () => {
     setHistLoad(true);
@@ -392,7 +424,7 @@ export default function TabLoyalty({ theme }) {
       ) : (
         <div style={{ background:t.card, borderRadius:12,
                       border:`0.5px solid ${t.border}`, overflow:'hidden' }}>
-          {clients.slice((page - 1) * LOYALTY_PAGE_SIZE, page * LOYALTY_PAGE_SIZE).map((cl, i, arr) => {
+          {clients.map((cl, i, arr) => {
             const isPoints = (program?.loyalty_mode || 'stamps') === 'points';
             return (
               <div key={cl.id}
@@ -451,8 +483,8 @@ export default function TabLoyalty({ theme }) {
               </div>
             );
           })}
-          {clients.length > LOYALTY_PAGE_SIZE && (() => {
-            const total = clients.length;
+          {clientsTotal > LOYALTY_PAGE_SIZE && (() => {
+            const total = clientsTotal;
             const pages = Math.max(1, Math.ceil(total / LOYALTY_PAGE_SIZE));
             const cur   = Math.min(page, pages);
             const from  = (cur - 1) * LOYALTY_PAGE_SIZE + 1;

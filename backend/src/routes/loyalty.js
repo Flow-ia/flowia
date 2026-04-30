@@ -91,16 +91,68 @@ router.put('/program', pinAdminMiddleware, async (req, res) => {
 });
 
 // ── GET /api/loyalty/clients ──────────────────────────────────────────────────
+// Pagination serveur (limit 5 par defaut, cap 100). Search etendu sur nom,
+// email ET phone via LEFT JOIN client_accounts. Renvoie { rows, total } pour
+// que le frontend ne charge jamais plus que la page courante.
+//
+// Backwards-compat : si aucun param de pagination n'est passe, renvoie un
+// tableau direct (ancien format), evite de casser d'autres callers eventuels.
 router.get('/clients', async (req, res) => {
   try {
-    const { search } = req.query;
-    let q    = `SELECT * FROM client_loyalty WHERE user_id=$1`;
-    const p  = [req.user.userId];
-    if (search) { p.push(`%${search}%`); q += ` AND (client_name ILIKE $2 OR client_email ILIKE $2)`; }
-    q += ' ORDER BY stamps DESC, last_visit DESC NULLS LAST';
-    const { rows } = await pool.query(q, p);
-    res.json(rows);
-  } catch(e) { res.status(500).json({ error: 'Erreur serveur.' }); }
+    const search   = String(req.query.search || '').trim();
+    const hasPaging = req.query.limit != null || req.query.offset != null;
+    const limit  = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 5));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+    let baseQ = `
+      WITH base AS (
+        SELECT cl.*,
+               ca.first_name, ca.last_name, ca.phone
+          FROM client_loyalty cl
+          LEFT JOIN client_accounts ca
+                 ON ca.user_id = cl.user_id
+                AND LOWER(ca.email) = LOWER(cl.client_email)
+         WHERE cl.user_id = $1
+      )
+      SELECT * FROM base WHERE 1=1
+    `;
+    const params = [req.user.userId];
+    if (search) {
+      params.push(`%${search}%`);
+      baseQ += ` AND (
+        client_name ILIKE $${params.length}
+        OR client_email ILIKE $${params.length}
+        OR (first_name||' '||last_name) ILIKE $${params.length}
+        OR phone ILIKE $${params.length}
+      )`;
+    }
+
+    if (!hasPaging) {
+      // Backwards-compat : ancien comportement (tableau direct, sans cap autre
+      // que la limite implicite). On garde la securite : cap a 500.
+      const { rows } = await pool.query(
+        `${baseQ} ORDER BY stamps DESC, last_visit DESC NULLS LAST LIMIT 500`,
+        params
+      );
+      return res.json(rows);
+    }
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM (${baseQ}) AS sub`,
+      params
+    );
+    const total = countRows[0].n;
+
+    params.push(limit, offset);
+    const listQ = `${baseQ} ORDER BY stamps DESC, last_visit DESC NULLS LAST
+                   LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    const { rows } = await pool.query(listQ, params);
+
+    res.json({ rows, total });
+  } catch(e) {
+    console.error('[GET /loyalty/clients]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
 });
 
 

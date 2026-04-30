@@ -691,7 +691,11 @@ export const referralsApi = {
   getProgram:    ()  => request('/referrals/program'),
   // PUT /referrals/program exige PIN admin (audit W) → adminRequest.
   updateProgram: (b) => adminRequest('/referrals/program', { method:'PUT', body: JSON.stringify(b) }),
-  listCodes:     ()  => request('/referrals/codes'),
+  // listCodes accepte un objet de params { search, limit, offset } pour
+  // la pagination serveur. Sans param : ancien comportement (1ere page).
+  listCodes:     (q={}) => request('/referrals/codes?' + new URLSearchParams(
+                                     Object.entries(q).filter(([,v]) => v !== undefined && v !== '')
+                                   )),
   checkCode:     (b) => request('/referrals/check', { method:'POST', body: JSON.stringify(b) }),
   getStats:      ()  => request('/referrals/stats'),
   // Caisse (commerçant) : récupère pending + rewards pour un client
