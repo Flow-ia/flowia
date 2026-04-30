@@ -5,6 +5,7 @@ const bcrypt   = require('bcryptjs');
 const { globalClientAuth } = require('./helpers');
 const { validatePhone } = require('../../utils/phone');
 const { parseBirthDate } = require('../../utils/birthDate');
+const { cascadePhoneChange } = require('../../utils/clientCascade');
 
 module.exports = function attachProfileRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +171,25 @@ module.exports = function attachProfileRoutes(router) {
           `UPDATE client_accounts SET phone=$1, phone_e164=$2 WHERE global_client_id=$3`,
           [phoneRawForUpdate, phoneE164ForUpdate, gcId]
         ).catch(() => {});
+        // Cascade vers transactions/appointments (denormalise client_phone)
+        // pour que l'historique du client affiche le nouveau numero.
+        // Best-effort : on ne fait pas planter la requete si la cascade
+        // echoue (pas de conflit possible -- pas de UNIQUE sur phone).
+        const txClient = await pool.connect();
+        try {
+          await txClient.query('BEGIN');
+          await cascadePhoneChange(txClient, {
+            gcId,
+            newPhoneRaw:  phoneRawForUpdate,
+            newPhoneE164: phoneE164ForUpdate,
+          });
+          await txClient.query('COMMIT');
+        } catch (cascadeErr) {
+          await txClient.query('ROLLBACK').catch(() => {});
+          console.warn('[GC PATCH /me cascade phone]', cascadeErr.message);
+        } finally {
+          txClient.release();
+        }
       }
       if (first_name != null && first_name.trim()) {
         await pool.query(
@@ -244,6 +264,25 @@ module.exports = function attachProfileRoutes(router) {
          WHERE global_client_id=$1`,
         [rows[0].id, rows[0].first_name, rows[0].last_name, rows[0].phone||'', rows[0].phone_e164||'']
       );
+
+      // Cascade phone vers transactions/appointments si modifie
+      if (phoneRaw || phoneE164) {
+        const txClient = await pool.connect();
+        try {
+          await txClient.query('BEGIN');
+          await cascadePhoneChange(txClient, {
+            gcId: req.globalClient.globalClientId,
+            newPhoneRaw:  phoneRaw,
+            newPhoneE164: phoneE164,
+          });
+          await txClient.query('COMMIT');
+        } catch (cascadeErr) {
+          await txClient.query('ROLLBACK').catch(() => {});
+          console.warn('[GC PUT /me cascade phone]', cascadeErr.message);
+        } finally {
+          txClient.release();
+        }
+      }
 
       res.json(rows[0]);
     } catch(e) { console.error('[gc]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }

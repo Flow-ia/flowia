@@ -5,6 +5,7 @@ const bcrypt   = require('bcryptjs');
 const crypto   = require('crypto');
 const { sendVerificationEmail } = require('../../utils/email');
 const { clientOrGlobalClientAuth, saveCode, getCode, deleteCode } = require('./helpers');
+const { cascadeEmailChange } = require('../../utils/clientCascade');
 
 module.exports = function attachChangeCredentialsRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -57,19 +58,23 @@ module.exports = function attachChangeCredentialsRoutes(router) {
   // Body: { code } — re-check anti-race sur l'unicité avant update.
   // ─────────────────────────────────────────────────────────────────────────────
   router.post('/me/change-email/confirm', clientOrGlobalClientAuth, async (req, res) => {
+    const gid  = req.globalClient.globalClientId;
+    const code = String(req.body?.code || '').trim();
+    if (!code) return res.status(400).json({ error: 'Code requis.' });
+
+    const rec = await getCode(`gc_chg_email_${gid}`);
+    if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
+    if (rec.code.trim() !== code) return res.status(400).json({ error: 'Code incorrect.' });
+
+    const newEmail = rec.data.newEmail;
+
+    // Toute l'operation tourne dans une seule transaction SQL atomique :
+    // si la cascade echoue (ex: conflit UNIQUE par-merchant), on rollback
+    // global_clients/client_accounts pour eviter un etat incoherent.
+    const client = await pool.connect();
     try {
-      const gid  = req.globalClient.globalClientId;
-      const code = String(req.body?.code || '').trim();
-      if (!code) return res.status(400).json({ error: 'Code requis.' });
-
-      const rec = await getCode(`gc_chg_email_${gid}`);
-      if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
-      if (rec.code.trim() !== code) return res.status(400).json({ error: 'Code incorrect.' });
-
-      const newEmail = rec.data.newEmail;
-
-      // Re-vérif anti-race
-      const { rows: dup } = await pool.query(
+      // Re-verif anti-race AVANT BEGIN (lecture simple)
+      const { rows: dup } = await client.query(
         'SELECT id FROM global_clients WHERE LOWER(email)=LOWER($1) AND id<>$2',
         [newEmail, gid]
       );
@@ -78,27 +83,54 @@ module.exports = function attachChangeCredentialsRoutes(router) {
         return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte.' });
       }
 
+      // Recupere l'email courant pour cibler la cascade
+      const { rows: cur } = await client.query(
+        'SELECT email FROM global_clients WHERE id=$1', [gid]
+      );
+      if (!cur.length) return res.status(404).json({ error: 'Compte introuvable.' });
+      const oldEmail = cur[0].email;
+
+      await client.query('BEGIN');
       try {
-        await pool.query(
+        // 1. Compte global
+        await client.query(
           'UPDATE global_clients SET email=$1, updated_at=NOW() WHERE id=$2',
           [newEmail, gid]
         );
-      } catch (e) {
-        if (e.code === '23505') return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte.' });
-        throw e;
+        // 2. Fiches par-merchant
+        await client.query(
+          'UPDATE client_accounts SET email=LOWER($1) WHERE global_client_id=$2',
+          [newEmail, gid]
+        );
+        // 3. Cascade : fidelite, credits, vouchers, codes parrainage,
+        //    historique transactions/RDV/notes/usages promo. Multi-tenant
+        //    scope les UPDATE aux user_id ou ce global_client a un compte.
+        const cascadeReport = await cascadeEmailChange(client, { gcId: gid, oldEmail, newEmail });
+        await client.query('COMMIT');
+
+        await deleteCode(`gc_chg_email_${gid}`);
+        return res.json({ ok: true, new_email: newEmail, cascade: cascadeReport });
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        // Conflit UNIQUE detecte par le helper : message clair + 409
+        if (txErr.code === 'CASCADE_CONFLICT') {
+          return res.status(409).json({
+            error: txErr.message,
+            code: 'CASCADE_CONFLICT',
+            conflicts: txErr.conflicts || [],
+          });
+        }
+        // Conflit UNIQUE PG natif (cas extreme) -> 409
+        if (txErr.code === '23505') {
+          return res.status(409).json({ error: 'Cet email est déjà utilisé par un autre compte.' });
+        }
+        throw txErr;
       }
-
-      // Sync les fiches locales liées
-      await pool.query(
-        'UPDATE client_accounts SET email=LOWER($1) WHERE global_client_id=$2',
-        [newEmail, gid]
-      ).catch(() => {});
-
-      await deleteCode(`gc_chg_email_${gid}`);
-      res.json({ ok: true, new_email: newEmail });
     } catch (e) {
       console.error('[gc change-email confirm]', e);
-      res.status(500).json({ error: 'Erreur serveur.' });
+      return res.status(500).json({ error: 'Erreur serveur.' });
+    } finally {
+      client.release();
     }
   });
 
