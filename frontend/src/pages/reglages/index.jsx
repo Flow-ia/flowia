@@ -28,7 +28,7 @@ const DOMAINS = [
     subtitle: 'Config booking, prestations, notifications',
     color: '#3b82f6',
     icon: 'calendar',
-    items: ['Configuration (slug, délais)', 'Catégories booking', 'Prestations (image 5Mo)', 'Notifications SMS/Email'],
+    items: ['Configuration (slug, délais)', 'Prestations sur site (image 5Mo)', 'Notifications SMS/Email'],
   },
   {
     id: 'equipe',
@@ -41,10 +41,10 @@ const DOMAINS = [
   {
     id: 'caisse-config',
     label: 'Caisse · Config',
-    subtitle: 'Catégories, QR code inscription',
+    subtitle: 'Prestations sur place, QR code inscription',
     color: '#8b5cf6',
     icon: 'cash',
-    items: ['Catégories hiérarchiques', 'QR code /j/:slug'],
+    items: ['Prestations sur place (catégories hiérarchiques)', 'QR code /j/:slug'],
   },
 ];
 

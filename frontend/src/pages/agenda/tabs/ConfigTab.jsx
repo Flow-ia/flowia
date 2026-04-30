@@ -314,7 +314,10 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
           </div>
         )}
 
-        {/* Badge lien actif */}
+        {/* Badge "Page active" — l'URL et le bouton Copier sont affiches
+            UNIQUEMENT dans la section "Adresse de votre page" plus bas pour
+            eviter le double affichage (l'utilisateur le repete deux fois si
+            les 2 blocs montrent la meme chose). */}
         {form.is_enabled && bookingUrl && (
           <div style={{
             margin: '0 16px 16px',
@@ -327,32 +330,14 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             borderLeft: '2px solid #10b981',
           }}>
             <span style={{
-              fontSize: 11,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              flex: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: '#065f46',
-            }}>{bookingUrl}</span>
-            <button
-              type="button"
-              onClick={()=>{navigator.clipboard.writeText(bookingUrl);showToast('Lien copie !');}}
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: '4px 10px',
-                borderRadius: 8,
-                background: 'transparent',
-                border: '0.5px solid rgba(16,185,129,0.35)',
-                color: '#065f46',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                flexShrink: 0,
-              }}
-            >
-              Copier
-            </button>
+              width: 6, height: 6, borderRadius: '50%',
+              background: '#10b981', flexShrink: 0,
+            }}/>
+            <p style={{ fontSize:11, color:'#065f46', margin:0, lineHeight:1.5, fontWeight:500 }}>
+              {"Page de reservation publique active. Lien et bouton Copier disponibles dans la section "}
+              <span style={{ fontStyle:'italic' }}>Adresse de votre page</span>
+              {" ci-dessous."}
+            </p>
           </div>
         )}
       </div>
