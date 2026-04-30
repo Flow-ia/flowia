@@ -1,10 +1,12 @@
 // src/pages/clients/views/ListView.jsx
+import { useState, useEffect } from 'react';
 import Avatar from '../components/Avatar';
 import SortDropdown from '../components/SortDropdown';
 import { Toast } from '../../../components/UI';
 import { Button } from '../../../components/primitives';
 import { I } from '../../../utils/icons';
 import { PAGE_SIZE } from '../constants';
+import { clientsApi } from '../../../utils/api';
 
 // Filtres segmentes — desormais traites en SQL cote backend (params ?filter=...)
 // pour preserver la pagination serveur. Le predicate frontend a ete supprime
@@ -42,6 +44,18 @@ export default function ListView({
   const visibleCount  = total;
   const totalPages    = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Compteur de creances impayees (RGPD post-suppression). Charge en arriere-plan
+  // au mount, mis a jour si on revient de la vue debts. Pas critique donc
+  // best-effort sans affichage d'erreur.
+  const [debtsCount, setDebtsCount] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    clientsApi.listDebts('open')
+      .then(r => { if (!cancelled) setDebtsCount(r.open_count || 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div style={{ background: theme.bg, minHeight: '100vh', paddingBottom: 96 }}>
       <Toast msg={toast?.msg} type={toast?.type} />
@@ -60,14 +74,34 @@ export default function ListView({
               {loading ? '...' : `${visibleCount} client${visibleCount !== 1 ? 's' : ''}${search.trim() ? ` pour "${search}"` : ''}${isFiltered ? ' (filtre)' : ''}`}
             </p>
           </div>
-          <Button
-            size="small"
-            onClick={() => { setForm({ first_name:'', last_name:'', email:'', phone:'', notes:'' }); setView('create'); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-          >
-            <I.Plus width={13} height={13} />
-            Nouveau
-          </Button>
+          <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+            {debtsCount > 0 && (
+              <button type="button" onClick={() => setView('debts')}
+                      title="Créances impayées (RGPD recouvrement)"
+                      style={{ display:'inline-flex', alignItems:'center', gap:6,
+                               padding:'7px 10px', borderRadius:8,
+                               background:'rgba(239,68,68,0.08)', color:'#991b1b',
+                               border:'0.5px solid rgba(239,68,68,0.25)',
+                               fontSize:12, fontWeight:500, cursor:'pointer',
+                               fontFamily:'inherit' }}>
+                Créances
+                <span style={{ minWidth:18, height:18, padding:'0 5px',
+                               borderRadius:99, background:'#991b1b', color:'#fff',
+                               fontSize:10, fontWeight:500,
+                               display:'inline-flex', alignItems:'center', justifyContent:'center' }}>
+                  {debtsCount > 99 ? '99+' : debtsCount}
+                </span>
+              </button>
+            )}
+            <Button
+              size="small"
+              onClick={() => { setForm({ first_name:'', last_name:'', email:'', phone:'', notes:'' }); setView('create'); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <I.Plus width={13} height={13} />
+              Nouveau
+            </Button>
+          </div>
         </div>
 
         {/* Barre de recherche + dropdown tri */}

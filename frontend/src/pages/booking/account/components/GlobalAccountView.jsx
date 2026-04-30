@@ -2,7 +2,7 @@
 // Espace client global (multi-commerces) : login / register / dashboard
 // (RDV + fidélité + profil + mot de passe + export RGPD + suppression).
 // Extrait inchangé depuis booking/Account.jsx.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { globalClientApi } from '../../../../utils/api';
 import { STATUS_COLORS, STATUS_LABELS, fmtD } from '../helpers';
 
@@ -40,6 +40,10 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
   const [showRgpd,   setShowRgpd]   = useState(false);
   const [exportLoad, setExportLoad] = useState(false);
   const [delErr,     setDelErr]     = useState('');
+  // Avertissement credits/dettes avant suppression (RGPD Art. 17.3.e).
+  // Charge a l'ouverture du dashboard, affiche dans la zone Suppression.
+  const [creditsSummary, setCreditsSummary] = useState({ credits: [], debts: [] });
+  const [showDeleteWarn, setShowDeleteWarn] = useState(false);
   // Forgot password dans GlobalAccountView
   const [gcForgotEmail, setGcForgotEmail] = useState('');
   const [gcResetCode,   setGcResetCode]   = useState('');
@@ -102,14 +106,37 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
     finally { setPwdLoad(false); }
   };
 
-  const deleteAccount = async () => {
+  // Charge le resume credits/dettes au mount du dashboard. Le commercant
+  // utilise ces infos pour afficher un avertissement clair avant la
+  // suppression definitive du compte (RGPD Art. 17.3.e — coordonnees
+  // conservees 2 ans pour le recouvrement si dette).
+  useEffect(() => {
+    if (mode !== 'dashboard') return;
+    let cancelled = false;
+    globalClientApi.creditsSummary(gcToken)
+      .then(r => { if (!cancelled) setCreditsSummary(r || { credits: [], debts: [] }); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [mode, gcToken]);
+
+  const requestDeleteAccount = () => {
     if (delConfirm !== 'SUPPRIMER') { setDelErr('Saisissez SUPPRIMER pour confirmer.'); return; }
+    setDelErr('');
+    // Si credits ou dettes en cours -> modal d'avertissement explicite
+    // avant suppression effective. Sinon, suppression directe.
+    const hasCredits = creditsSummary.credits?.length > 0;
+    const hasDebts   = creditsSummary.debts?.length > 0;
+    if (hasCredits || hasDebts) { setShowDeleteWarn(true); return; }
+    confirmDeleteAccount();
+  };
+
+  const confirmDeleteAccount = async () => {
     setDelLoad(true); setDelErr('');
     try {
       await globalClientApi.deleteAccount(gcToken);
       onLogout();
-    } catch(e) { setDelErr(e.message || 'Erreur lors de la suppression'); setDelLoad(false); }
-  }
+    } catch(e) { setDelErr(e.message || 'Erreur lors de la suppression'); setDelLoad(false); setShowDeleteWarn(false); }
+  };
 
   // Export RGPD — télécharge les données personnelles en JSON
   const exportMyData = async () => {
@@ -489,7 +516,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                     background:th.inputBg, border: '0.5px solid rgba(239,68,68,0.3)',
                     color:th.text, fontSize:13, marginBottom:10, boxSizing:'border-box' }} />
                 {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{delErr}</p>}
-                <button onClick={deleteAccount} disabled={delLoad || delConfirm !== 'SUPPRIMER'}
+                <button onClick={requestDeleteAccount} disabled={delLoad || delConfirm !== 'SUPPRIMER'}
                   style={{ width:'100%', padding:'13px', borderRadius:14,
                     background:'rgba(239,68,68,0.12)', color:'#ef4444',
                     border: '0.5px solid rgba(239,68,68,0.25)',
@@ -498,6 +525,84 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                   {delLoad ? '...' : '🗑 Supprimer définitivement mon compte'}
                 </button>
               </div>
+
+              {/* Modal d'avertissement RGPD : credits perdus + dettes archivees */}
+              {showDeleteWarn && (
+                <div style={{ position:'fixed', inset:0, zIndex:1100,
+                              display:'flex', alignItems:'center', justifyContent:'center',
+                              padding:16, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)' }}
+                     onClick={(e) => { if (e.target === e.currentTarget && !delLoad) setShowDeleteWarn(false); }}>
+                  <div style={{ background:th.card, borderRadius:20, padding:24,
+                                maxWidth:520, width:'100%', maxHeight:'85vh', overflowY:'auto',
+                                border:`0.5px solid ${th.border}`, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+                    <p style={{ margin:'0 0 12px', fontWeight:500, fontSize:17, color:'#ef4444' }}>
+                      Avant de supprimer votre compte
+                    </p>
+
+                    {creditsSummary.credits?.length > 0 && (
+                      <div style={{ marginBottom:16, padding:'12px 14px', borderRadius:12,
+                                    background:'rgba(245,158,11,0.08)', border:'0.5px solid rgba(245,158,11,0.2)' }}>
+                        <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#92400e' }}>
+                          Crédits que vous allez abandonner :
+                        </p>
+                        {creditsSummary.credits.map((c, i) => (
+                          <div key={i} style={{ display:'flex', justifyContent:'space-between',
+                                                fontSize:12, color:'#7c2d12', padding:'4px 0' }}>
+                            <span>{c.merchant_name}</span>
+                            <span style={{ fontWeight:500 }}>{c.amount.toFixed(2)} €</span>
+                          </div>
+                        ))}
+                        <p style={{ margin:'8px 0 0', fontSize:11, color:'#92400e', lineHeight:1.5 }}>
+                          Ces crédits seront perdus. Si vous souhaitez les récupérer, contactez le commerçant
+                          concerné avant de supprimer votre compte.
+                        </p>
+                      </div>
+                    )}
+
+                    {creditsSummary.debts?.length > 0 && (
+                      <div style={{ marginBottom:16, padding:'12px 14px', borderRadius:12,
+                                    background:'rgba(239,68,68,0.08)', border:'0.5px solid rgba(239,68,68,0.25)' }}>
+                        <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#991b1b' }}>
+                          Dettes en cours auprès de :
+                        </p>
+                        {creditsSummary.debts.map((d, i) => (
+                          <div key={i} style={{ display:'flex', justifyContent:'space-between',
+                                                fontSize:12, color:'#991b1b', padding:'4px 0' }}>
+                            <span>{d.merchant_name}</span>
+                            <span style={{ fontWeight:500 }}>−{d.amount.toFixed(2)} €</span>
+                          </div>
+                        ))}
+                        <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', lineHeight:1.6 }}>
+                          La suppression de votre compte <strong>ne vous libère pas de ces dettes</strong>.
+                          Vos coordonnées (nom, email, téléphone) seront <strong>conservées 2 ans</strong>
+                          par le(s) commerçant(s) concerné(s) pour permettre le recouvrement, conformément
+                          à l'<strong>Article 17.3.e du RGPD</strong>. Au-delà, elles seront automatiquement effacées.
+                        </p>
+                      </div>
+                    )}
+
+                    {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight:500 }}>{delErr}</p>}
+
+                    <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                      <button onClick={() => { if (!delLoad) setShowDeleteWarn(false); }}
+                              disabled={delLoad}
+                              style={{ flex:1, padding:'12px', borderRadius:12,
+                                       background:'transparent', color:th.text,
+                                       border:`0.5px solid ${th.border}`,
+                                       fontWeight:500, fontSize:13, cursor:delLoad?'wait':'pointer' }}>
+                        Annuler
+                      </button>
+                      <button onClick={confirmDeleteAccount} disabled={delLoad}
+                              style={{ flex:2, padding:'12px', borderRadius:12,
+                                       background:'#ef4444', color:'#fff',
+                                       border:'none', fontWeight:500, fontSize:13,
+                                       cursor:delLoad?'wait':'pointer', opacity:delLoad?0.7:1 }}>
+                        {delLoad ? 'Suppression...' : 'Supprimer quand même'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Modal Politique de confidentialité RGPD */}
               {showRgpd && (

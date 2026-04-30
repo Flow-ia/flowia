@@ -632,6 +632,11 @@ export const clientsApi = {
     adminRequest('/clients/' + id + '/marketing-opt-in', {
       method:'PATCH', body: JSON.stringify({ marketing_opt_in }),
     }),
+  // Creances impayees (RGPD Art. 17.3.e — recouvrement post-suppression)
+  listDebts:    (status='open') => request('/clients/debt-records?status=' + encodeURIComponent(status)),
+  markDebtPaid: (id, note)      => request('/clients/debt-records/' + id + '/mark-paid', {
+                                     method:'POST', body: JSON.stringify({ note: note || null }) }),
+  removeDebt:   (id)            => request('/clients/debt-records/' + id, { method:'DELETE' }),
 };
 
 // ── Campagnes SMS/Email ───────────────────────────────────────────────────────
@@ -744,6 +749,9 @@ export const globalClientApi = {
   me:             (token)       => gcRequest('/global-clients/me',              {}, token),
   updateMe:       (token, data) => gcRequest('/global-clients/me',              { method:'PUT',  body: JSON.stringify(data) }, token),
   deleteAccount:  (token)       => gcRequest('/global-clients/me',              { method:'DELETE' }, token),
+  // Resume credits/dettes par commercant — utilise par la modal d'avertissement
+  // avant suppression de compte. Renvoie { credits: [...], debts: [...] }.
+  creditsSummary: (token)       => gcRequest('/global-clients/me/credits-summary', {}, token),
   appointments:   (token)       => gcRequest('/global-clients/appointments',    {}, token),
   myVisits:       (params = {}) => {
     const qs = new URLSearchParams();

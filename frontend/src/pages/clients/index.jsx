@@ -9,6 +9,7 @@ import { PAGE_SIZE } from './constants';
 import ListView from './views/ListView';
 import CreateView from './views/CreateView';
 import FicheView from './views/FicheView';
+import DebtsView from './views/DebtsView';
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 export default function ClientsPage() {
@@ -331,6 +332,15 @@ export default function ClientsPage() {
       loadList={loadList} openFiche={openFiche}
       setView={setView} setForm={setForm}
       filter={filter} setFilter={setFilter}
+    />
+  );
+
+  // ══ VUE CRÉANCES IMPAYÉES ═══════════════════════════════════════════════════
+  if (view === 'debts') return (
+    <DebtsView
+      theme={theme} toast={toast} showToast={showToast}
+      stickyHeader={stickyHeader} card={card}
+      setView={setView}
     />
   );
 
