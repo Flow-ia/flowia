@@ -8,6 +8,7 @@ const { isValidEmail, isRealDate, saveCode, getCode, deleteCode } = require('./h
 const { validatePhone } = require('../../utils/phone');
 const { parseBirthDate } = require('../../utils/birthDate');
 const { setGcCookie, clearGcCookie } = require('../../utils/clientCookies');
+const { restoreOrphanDebts } = require('../../utils/debtRecord');
 
 module.exports = function attachAuthRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -103,6 +104,15 @@ module.exports = function attachAuthRoutes(router) {
         );
       }
 
+      // ANTI-FUITE : si ce nouveau compte ressuscite un email qui avait des
+      // dettes archivees au registre Creances, on les restaure automatiquement
+      // dans client_credits + on lie au nouveau compte. Empeche un client de
+      // fuir sa dette via re-inscription. Best-effort (ne bloque pas le register).
+      let restored = { restored: 0, merchants: [] };
+      try {
+        restored = await restoreOrphanDebts(pool, { gcId: gc.id, email: emailLow });
+      } catch (e) { console.warn('[register restoreOrphanDebts]', e.message); }
+
       const token = jwt.sign(
         { globalClientId: gc.id, email: gc.email, scope: 'global_client' },
         process.env.JWT_SECRET, { expiresIn: '30d' }
@@ -115,6 +125,7 @@ module.exports = function attachAuthRoutes(router) {
           id: gc.id, email: gc.email,
           first_name: gc.first_name, last_name: gc.last_name, phone: gc.phone,
         },
+        restored_debts: restored.merchants,
       });
     } catch (e) {
       console.error('[global-clients register]', e);
@@ -211,6 +222,12 @@ module.exports = function attachAuthRoutes(router) {
           [gcUpdated.id, gcUpdated.first_name, gcUpdated.last_name || '', gcUpdated.phone, gcUpdated.email]
         );
       }
+
+      // ANTI-FUITE : si l'email active correspond a une dette orpheline
+      // (registre Creances), on la restaure dans le compte. Empeche un
+      // client de fuir sa dette via re-invitation.
+      try { await restoreOrphanDebts(pool, { gcId: gcUpdated.id, email: gcUpdated.email.toLowerCase() }); }
+      catch (e) { console.warn('[gc activate restoreOrphanDebts]', e.message); }
 
       const token = jwt.sign(
         { globalClientId: gcUpdated.id, email: gcUpdated.email, scope: 'global_client' },

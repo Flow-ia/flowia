@@ -5,6 +5,7 @@ const { sendReferralWelcome } = require('../../utils/email');
 const { validatePhone } = require('../../utils/phone');
 const { parseBirthDate } = require('../../utils/birthDate');
 const { setClientCookie, clearClientCookie } = require('../../utils/clientCookies');
+const { restoreOrphanDebts } = require('../../utils/debtRecord');
 
 module.exports = function attachClientAuthRoutes(router) {
   // POST /:slug/client/logout — purge le cookie HttpOnly côté navigateur.
@@ -151,6 +152,11 @@ module.exports = function attachClientAuthRoutes(router) {
         'UPDATE client_accounts SET global_client_id=$1 WHERE LOWER(email)=$2 AND global_client_id IS NULL',
         [gcId, emailLow]
       );
+
+      // ANTI-FUITE : restaurer les dettes orphelines (registre Creances) si
+      // ce nouveau compte ressuscite un email qui en avait. Best-effort.
+      try { await restoreOrphanDebts(pool, { gcId, email: emailLow }); }
+      catch (e) { console.warn('[client/register restoreOrphanDebts]', e.message); }
 
       const token = jwt.sign(
         { clientId: client.id, merchantId: userId, globalClientId: gcId, scope: 'client' },
@@ -364,6 +370,12 @@ module.exports = function attachClientAuthRoutes(router) {
           [userId, emailLow, gc.password_hash, gc.first_name, gc.last_name||'', gc.phone||null, gc.id]
         );
         local = created[0];
+        // ANTI-FUITE : si le commercant avait supprime cette fiche locale
+        // alors qu'il y avait une dette, le debt_record a ete cree. Le client
+        // revient ici (login) -> on restaure automatiquement la creance pour
+        // que le commercant la retrouve dans son module Credit normal.
+        try { await restoreOrphanDebts(pool, { gcId: gc.id, email: emailLow }); }
+        catch (e) { console.warn('[client/login restoreOrphanDebts]', e.message); }
       }
 
       // 5. Lier fiche locale au compte global si pas encore fait
@@ -611,6 +623,13 @@ module.exports = function attachClientAuthRoutes(router) {
           WHERE LOWER(email)=LOWER($2) AND global_client_id IS NULL`,
         [gc.id, emailLow]
       ).catch(e => console.warn('[oauth finalize fan-out]', e.message));
+
+      // ANTI-FUITE : restaurer les dettes orphelines (registre Creances) si
+      // ce nouveau compte Google ressuscite un email qui en avait. Un client
+      // ne peut pas fuir sa dette en supprimant son compte puis en se
+      // reinscrivant via Google avec le meme email. Best-effort.
+      try { await restoreOrphanDebts(pool, { gcId: gc.id, email: emailLow }); }
+      catch (e) { console.warn('[oauth finalize restoreOrphanDebts]', e.message); }
 
       // 4. Welcome parrainage si ref_code présent dans le pre_token.
       if (payload.ref_code) {
