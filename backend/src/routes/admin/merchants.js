@@ -373,56 +373,111 @@ router.patch('/:id/features', async (req, res) => {
 // Body { slug, lock: true } — slug normalisé/validé cote serveur, unicite
 // verifiee, audit log. lock=true => le merchant ne peut plus changer son slug.
 router.post('/:id/slug/force', async (req, res) => {
+  // 1. Sanity check sur l'admin authentifie (defense en profondeur)
+  if (!req.admin?.id) {
+    console.error('[admin/merchants slug force] req.admin.id manquant');
+    return res.status(401).json({ error: 'Session admin invalide.' });
+  }
+  // 2. Normalisation slug : enleve accents, garde a-z 0-9 et tirets
   const rawSlug = String(req.body?.slug || '').trim().toLowerCase();
   const lock    = req.body?.lock === true;
-  // Normalisation : enleve accents, garde a-z 0-9 et tirets, deduplique tirets.
-  const slug = rawSlug.normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  const slug = rawSlug
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // accents combinants
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
   if (!slug || slug.length < 3) {
     return res.status(400).json({ error: 'Slug invalide (min 3 caracteres a-z 0-9 -).' });
   }
 
-  try {
-    // Le slug est UNIQUE en base — on verifie d'abord pour retourner un 409
-    // explicite plutot qu'une erreur PG cryptique.
-    const { rows: clash } = await pool.query(
-      `SELECT user_id FROM booking_settings WHERE slug = $1 AND user_id <> $2 LIMIT 1`,
-      [slug, req.params.id]
-    );
-    if (clash.length) {
-      return res.status(409).json({ error: 'Slug deja utilise par un autre commerce.' });
+  // 3. Op DB avec retry automatique si la colonne slug_locked manque
+  // (migration adminSchema pas appliquee sur cet env).
+  let attempt = 0;
+  while (attempt < 2) {
+    attempt++;
+    try {
+      // Unicite (409 explicite plutot qu'erreur PG cryptique)
+      const { rows: clash } = await pool.query(
+        `SELECT user_id FROM booking_settings WHERE slug = $1 AND user_id <> $2 LIMIT 1`,
+        [slug, req.params.id]
+      );
+      if (clash.length) {
+        return res.status(409).json({ error: 'Slug deja utilise par un autre commerce.' });
+      }
+
+      // Existence ligne booking_settings + valeurs avant pour audit.
+      // UPSERT plutot que UPDATE seul : si le merchant n'a pas encore de
+      // ligne booking_settings (compte tout neuf), on la cree. Avant le code
+      // retournait 404 dans ce cas, ce qui empechait l'admin d'imposer
+      // un slug a un nouveau commercant.
+      const { rows: before } = await pool.query(
+        `SELECT user_id, slug, slug_locked FROM booking_settings WHERE user_id = $1 LIMIT 1`,
+        [req.params.id]
+      );
+
+      if (before.length) {
+        await pool.query(
+          `UPDATE booking_settings
+              SET slug = $2,
+                  slug_locked = $3,
+                  slug_locked_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
+                  slug_locked_by_admin_id = CASE WHEN $3 THEN $4 ELSE NULL END,
+                  updated_at = NOW()
+            WHERE user_id = $1`,
+          [req.params.id, slug, lock, req.admin.id]
+        );
+      } else {
+        // Nouveau commerce sans booking_settings encore -> on cree
+        await pool.query(
+          `INSERT INTO booking_settings
+             (user_id, is_enabled, slug, slug_locked, slug_locked_at, slug_locked_by_admin_id)
+           VALUES ($1, FALSE, $2, $3,
+                   CASE WHEN $3 THEN NOW() ELSE NULL END,
+                   CASE WHEN $3 THEN $4 ELSE NULL END)`,
+          [req.params.id, slug, lock, req.admin.id]
+        );
+      }
+
+      await logAuditAction({
+        adminId: req.admin.id, adminEmail: req.admin.email,
+        action: lock ? 'merchant.slug.force_lock' : 'merchant.slug.force_unlock',
+        targetType: 'merchant', targetId: req.params.id,
+        payloadBefore: before.length
+          ? { slug: before[0].slug, slug_locked: before[0].slug_locked }
+          : { created: true },
+        payloadAfter:  { slug, slug_locked: lock },
+        req,
+      });
+
+      return res.json({ ok: true, slug, slug_locked: lock });
+    } catch (e) {
+      // PG 42703 = "undefined column" -> migration adminSchema pas tournee.
+      // On la rejoue UNE fois et on retry. Si echec persistant, on log
+      // tout et on remonte un 500 detaille pour le client (visible dans la
+      // Network tab) et complet dans les logs serveur.
+      const isMissingColumn = e.code === '42703' && /slug_locked/i.test(e.message || '');
+      if (isMissingColumn && attempt === 1) {
+        console.warn('[admin/merchants slug force] colonne slug_locked manquante — applique adminSchema...');
+        try {
+          const { applyAdminSchema } = require('../../db/adminSchema');
+          await applyAdminSchema(pool);
+          continue; // retry
+        } catch (migErr) {
+          console.error('[admin/merchants slug force] migration de rattrapage echouee:', migErr.message);
+        }
+      }
+      console.error('[admin/merchants slug force] code=%s message=%s\nstack=%s',
+        e.code, e.message, e.stack);
+      if (e.code === '23505') return res.status(409).json({ error: 'Slug deja utilise.' });
+      // Renvoie un message detaille pour faciliter le debug (visible Network).
+      // Pas de fuite de schema sensible : on garde uniquement code + message court.
+      return res.status(500).json({
+        error: 'Erreur serveur slug/force.',
+        code: e.code || 'UNKNOWN',
+        detail: String(e.message || '').slice(0, 200),
+      });
     }
-
-    const { rows: before } = await pool.query(
-      `SELECT user_id, slug, slug_locked FROM booking_settings WHERE user_id = $1 LIMIT 1`,
-      [req.params.id]
-    );
-    if (!before.length) return res.status(404).json({ error: 'Booking settings introuvables pour ce merchant.' });
-
-    await pool.query(
-      `UPDATE booking_settings
-          SET slug = $2,
-              slug_locked = $3,
-              slug_locked_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
-              slug_locked_by_admin_id = CASE WHEN $3 THEN $4 ELSE NULL END
-        WHERE user_id = $1`,
-      [req.params.id, slug, lock, req.admin.id]
-    );
-
-    await logAuditAction({
-      adminId: req.admin.id, adminEmail: req.admin.email,
-      action: lock ? 'merchant.slug.force_lock' : 'merchant.slug.force_unlock',
-      targetType: 'merchant', targetId: req.params.id,
-      payloadBefore: { slug: before[0].slug, slug_locked: before[0].slug_locked },
-      payloadAfter:  { slug, slug_locked: lock },
-      req,
-    });
-
-    return res.json({ ok: true, slug, slug_locked: lock });
-  } catch (e) {
-    console.error('[admin/merchants slug force]', e.message);
-    if (e.code === '23505') return res.status(409).json({ error: 'Slug deja utilise.' });
-    return res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 

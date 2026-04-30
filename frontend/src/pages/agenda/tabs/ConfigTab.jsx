@@ -37,6 +37,17 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
   const RESERVED = ['admin','api','app','www','mail','ftp','booking','book','login','register','dashboard','settings','static','assets','null','undefined','test','demo','dev'];
   const [slugStatus, setSlugStatus]   = useState('idle');
   const [slugError,  setSlugError]    = useState('');
+  // UX : sections collapsibles (sauf Activation/Adresse-page qui restent
+  // toujours visibles en haut). Ouvert par defaut au premier rendu pour ne
+  // pas surprendre les commercants existants — on peut basculer false plus
+  // tard si on veut un affichage plus compact.
+  const [expanded, setExpanded] = useState({
+    description: true,
+    rules:       true,
+    hours:       true,
+    breaks:      true,
+  });
+  const toggleSection = (k) => setExpanded(p => ({ ...p, [k]: !p[k] }));
   const checkTimerRef = useRef(null);
 
   const validateSlugFormat = (s) => {
@@ -186,6 +197,69 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
     : slugStatus === 'checking'
     ? '#f59e0b'
     : t.borderInput;
+
+  // ── Composant accordeon local : header cliquable + body collapsible.
+  // Garde l'apparence sectionCard existante, ajoute juste un header avec
+  // chevron et masque le body quand ferme. Aucune fonctionnalite touchee.
+  const Section = ({ id, title, subtitle, accent, children, bodyStyle }) => {
+    const open = expanded[id];
+    return (
+      <div style={{
+        ...sectionCard,
+        padding: 0,
+        overflow: 'hidden',
+        ...(accent ? { border: `0.5px solid ${accent}` } : {}),
+      }}>
+        <button
+          type="button"
+          onClick={() => toggleSection(id)}
+          aria-expanded={open}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '14px 16px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontFamily: 'inherit',
+            color: t.text,
+          }}
+        >
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={sectionTitle}>{title}</p>
+            {subtitle && <p style={sectionSubtitle}>{subtitle}</p>}
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+               style={{
+                 flexShrink: 0,
+                 color: t.muted,
+                 transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+                 transition: 'transform .2s ease',
+               }}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        {open && (
+          <div style={{
+            padding: '0 16px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            borderTop: `0.5px solid ${t.separator || t.border}`,
+            paddingTop: 14,
+            ...bodyStyle,
+          }}>
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14, paddingBottom:32 }}>
@@ -526,12 +600,12 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
         )}
       </div>
 
-      {/* ── DESCRIPTION DE L'ACTIVITE ── */}
-      <div style={{ ...sectionCard, display:'flex', flexDirection:'column', gap:10 }}>
-        <div>
-          <p style={sectionTitle}>Description de l{"'"}activite</p>
-          <p style={sectionSubtitle}>Texte presente aux clients sur la page de reservation</p>
-        </div>
+      {/* ── DESCRIPTION DE L'ACTIVITE (accordeon) ── */}
+      <Section
+        id="description"
+        title={"Description de l'activite"}
+        subtitle="Texte presente aux clients sur la page de reservation"
+      >
         <textarea
           value={form.business_description||''}
           onChange={e=>setForm(f=>({...f,business_description:e.target.value}))}
@@ -552,11 +626,10 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             <span style={{ fontWeight:500 }}>Informations du commerce</span>. Ce sont ces valeurs qui sont affichees sur le site de reservation.
           </p>
         </div>
-      </div>
+      </Section>
 
-      {/* ── REGLES DE RESERVATION ── */}
-      <div style={{ ...sectionCard, display:'flex', flexDirection:'column', gap:12 }}>
-        <p style={sectionTitle}>Regles de reservation</p>
+      {/* ── REGLES DE RESERVATION (accordeon) ── */}
+      <Section id="rules" title="Regles de reservation" bodyStyle={{ gap: 12 }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <div>
             <Label>Reservation a l{"'"}avance (jours)</Label>
@@ -599,14 +672,14 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             Au-dela de ce delai, le client devra vous contacter directement pour annuler.
           </p>
         </div>
-      </div>
+      </Section>
 
-      {/* ── HORAIRES D'OUVERTURE ── */}
-      <div style={{ ...sectionCard, display:'flex', flexDirection:'column', gap:10 }}>
-        <div>
-          <p style={sectionTitle}>Horaires d{"'"}ouverture</p>
-          <p style={sectionSubtitle}>Les jours fermes s{"'"}affichent en rouge dans le calendrier</p>
-        </div>
+      {/* ── HORAIRES D'OUVERTURE (accordeon) ── */}
+      <Section
+        id="hours"
+        title={"Horaires d'ouverture"}
+        subtitle={"Les jours fermes s'affichent en rouge dans le calendrier"}
+      >
         {hrs.map((h,i)=>(
           <div key={i} style={{ display:'flex', alignItems:'center', gap:12 }}>
             <Toggle
@@ -646,14 +719,15 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
         <p style={{ fontSize:11, color:t.dim, margin:0 }}>
           Pour les horaires nocturnes (ex : 13h → 02h), entrez 13:00 et 02:00.
         </p>
-      </div>
+      </Section>
 
-      {/* ── PAUSES & COUPURES ── */}
-      <div style={{ ...sectionCard, display:'flex', flexDirection:'column', gap:12 }}>
-        <div>
-          <p style={sectionTitle}>Pauses &amp; coupures</p>
-          <p style={sectionSubtitle}>Aucune reservation possible pendant ces creneaux</p>
-        </div>
+      {/* ── PAUSES & COUPURES (accordeon) ── */}
+      <Section
+        id="breaks"
+        title={"Pauses & coupures"}
+        subtitle="Aucune reservation possible pendant ces creneaux"
+        bodyStyle={{ gap: 12 }}
+      >
         {!breaksLoaded ? (
           <div style={{ display:'flex', justifyContent:'center', padding:'12px 0' }}>
             <div style={{
@@ -754,7 +828,7 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             )}
           </>
         )}
-      </div>
+      </Section>
 
       <Button fullWidth onClick={save} disabled={saving}>
         {saving ? 'Sauvegarde...' : 'Sauvegarder'}
