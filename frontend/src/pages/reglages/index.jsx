@@ -17,10 +17,10 @@ const DOMAINS = [
   {
     id: 'mon-commerce',
     label: 'Mon commerce',
-    subtitle: 'Informations, photos, compte',
+    subtitle: 'Informations, photos, compte, sécurité',
     color: '#f97316',
     icon: 'storefront',
-    items: ['Informations salon', 'Logo, photos, couverture', 'Mon compte + RGPD'],
+    items: ['Informations salon', 'Logo, photos, couverture', 'Mon compte + RGPD', 'Sécurité (PIN, tablette, mode veille)'],
   },
   {
     id: 'reservations',
@@ -28,15 +28,15 @@ const DOMAINS = [
     subtitle: 'Config booking, prestations, notifications',
     color: '#3b82f6',
     icon: 'calendar',
-    items: ['Configuration (slug, délais)', 'Prestations sur site (image 5Mo)', 'Notifications SMS/Email'],
+    items: ['Configuration (Lien, délais)', 'Prestations sur site (image 5Mo)', 'Notifications SMS/Email'],
   },
   {
     id: 'equipe',
     label: 'Équipe',
-    subtitle: 'Membres, horaires, absences, commissions, sécurité',
+    subtitle: 'Membres, horaires, absences, commissions',
     color: '#10b981',
     icon: 'users',
-    items: ['Membres (permissions)', 'Horaires par employé', 'Plages horaires', 'Commissions', 'Absences (8 types)', 'Sécurité (PIN, tablette)'],
+    items: ['Membres (permissions)', 'Horaires par employé', 'Commissions', 'Absences (8 types)'],
   },
   {
     id: 'caisse-config',
