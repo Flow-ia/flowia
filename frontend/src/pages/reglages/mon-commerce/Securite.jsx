@@ -79,6 +79,60 @@ export default function Securite({ theme, showToast }) {
     lock_screen_idle_minutes: 15,
   });
   const [busy, setBusy] = useState(false);
+  // UX : 3 sections collapsibles, fermees par defaut. Le commercant deplie
+  // a la demande -- evite la saturation visuelle de la page.
+  const [expanded, setExpanded] = useState({
+    session: false,
+    idle:    false,
+    team:    false,
+  });
+  const toggleSection = (k) => setExpanded(p => ({ ...p, [k]: !p[k] }));
+
+  // Composant accordeon local : reprend l'apparence des cartes existantes
+  // (icone coloree + titre + subtitle) en les rendant cliquables, avec
+  // chevron rotatif et contenu masque tant que ferme.
+  const Section = ({ id, iconName, iconBg, iconColor, title, subtitle, children }) => {
+    const open = expanded[id];
+    return (
+      <div style={CARD(t)}>
+        <button
+          type="button"
+          onClick={() => toggleSection(id)}
+          aria-expanded={open}
+          style={{
+            width: '100%',
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: 0, margin: 0,
+            background: 'transparent', border: 'none',
+            cursor: 'pointer', textAlign: 'left',
+            fontFamily: 'inherit', color: t.text,
+          }}
+        >
+          <div style={{ width:36, height:36, borderRadius:8,
+                        background: iconBg, color: iconColor,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        flexShrink: 0 }}>
+            <Icon name={iconName} size={16} color={iconColor}/>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>{title}</p>
+            <p style={{ margin:0, fontSize:11, color:t.muted }}>{subtitle}</p>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+               style={{
+                 flexShrink: 0,
+                 color: t.muted,
+                 transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+                 transition: 'transform .2s ease',
+               }}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        {open && children}
+      </div>
+    );
+  };
 
   useEffect(() => {
     userSettingsApi.get()
@@ -149,22 +203,13 @@ export default function Securite({ theme, showToast }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* ── Carte 1 : Session commerçant ───────────────────────────────────── */}
-      <div style={CARD(t)}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:36, height:36, borderRadius:8,
-                        background:'#eef2ff', color:'#4338ca',
-                        display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <Icon name="key" size={16} color="#4338ca"/>
-          </div>
-          <div>
-            <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>{"Session commerçant"}</p>
-            <p style={{ margin:0, fontSize:11, color:t.muted }}>
-              {"Durée avant déconnexion automatique du compte commerçant"}
-            </p>
-          </div>
-        </div>
-
+      {/* ── Carte 1 : Session commerçant (accordeon) ─────────────────────── */}
+      <Section
+        id="session"
+        iconName="key" iconBg="#eef2ff" iconColor="#4338ca"
+        title="Session commerçant"
+        subtitle="Durée avant déconnexion automatique du compte commerçant"
+      >
         <Row theme={t}
              title="Durée de session"
              desc="S'applique à la prochaine connexion. Permet aux employés de garder l'application ouverte sans se reconnecter.">
@@ -176,24 +221,15 @@ export default function Securite({ theme, showToast }) {
             ))}
           </select>
         </Row>
-      </div>
+      </Section>
 
-      {/* ── Carte 2 : Mode veille ──────────────────────────────────────────── */}
-      <div style={CARD(t)}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:36, height:36, borderRadius:8,
-                        background:'#fef3c7', color:'#92400e',
-                        display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <Icon name="lock" size={16} color="#92400e"/>
-          </div>
-          <div>
-            <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>{"Mode veille"}</p>
-            <p style={{ margin:0, fontSize:11, color:t.muted }}>
-              {"Verrouille l'application après inactivité (déverrouillage par PIN employé ou admin)"}
-            </p>
-          </div>
-        </div>
-
+      {/* ── Carte 2 : Mode veille (accordeon) ────────────────────────────── */}
+      <Section
+        id="idle"
+        iconName="lock" iconBg="#fef3c7" iconColor="#92400e"
+        title="Mode veille"
+        subtitle="Verrouille l'application après inactivité (déverrouillage par PIN employé ou admin)"
+      >
         <Row theme={t}
              title="Activer le mode veille"
              desc="Quand activé, l'application se verrouille après la durée d'inactivité choisie.">
@@ -217,24 +253,15 @@ export default function Securite({ theme, showToast }) {
             ))}
           </select>
         </Row>
-      </div>
+      </Section>
 
-      {/* ── Carte 3 : Sécurité équipe (existant) ───────────────────────────── */}
-      <div style={CARD(t)}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <div style={{ width:36, height:36, borderRadius:8,
-                        background:'#eef2ff', color:'#4338ca',
-                        display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <Icon name="users" size={16} color="#4338ca"/>
-          </div>
-          <div>
-            <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>{"Sécurité équipe"}</p>
-            <p style={{ margin:0, fontSize:11, color:t.muted }}>
-              {"Mode tablette, session employé, seuil SMS"}
-            </p>
-          </div>
-        </div>
-
+      {/* ── Carte 3 : Sécurité équipe (accordeon) ────────────────────────── */}
+      <Section
+        id="team"
+        iconName="users" iconBg="#eef2ff" iconColor="#4338ca"
+        title="Sécurité équipe"
+        subtitle="Mode tablette, session employé, seuil SMS"
+      >
         <div>
           {/* Refonte FDS-2026 commit 15 : ce toggle est conservé pour persister
               la valeur en BDD (rétro-compat) mais le système commit 11
@@ -273,7 +300,7 @@ export default function Securite({ theme, showToast }) {
                    style={{ ...INPUT(t), width:110, textAlign:'right' }}/>
           </Row>
         </div>
-      </div>
+      </Section>
 
       <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10 }}>
         <p style={{ margin:0, fontSize:11, color:t.muted, flex:1 }}>
