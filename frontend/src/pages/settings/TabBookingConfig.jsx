@@ -4,17 +4,27 @@ import { I } from '../../utils/icons';
 import { ConfigTab } from '../Agenda';
 import { StatusBadge } from '../../components/primitives';
 
-// Wrapper : rend la config du site de reservation (ConfigTab d'Agenda.jsx)
-// dans un accordeon ferme par defaut, pour laisser la place aux categories/services.
-export default function TabBookingConfig({ theme, showToast }) {
+// Wrapper : rend la config du site de reservation (ConfigTab d'Agenda.jsx).
+//
+// Deux modes :
+//   - flat=false (defaut) : accordeon ferme avec header "Config site de
+//     reservation" + status badge. Utilise dans la page Categories ou
+//     plusieurs sections coexistent et il faut economiser la place.
+//   - flat=true : pas de wrapper, charge au mount, rend ConfigTab direct.
+//     Utilise sur la page dediee /reglages/reservations/configuration ou
+//     les sections internes de ConfigTab sont elles-memes en accordeons.
+export default function TabBookingConfig({ theme, showToast, flat = false }) {
   const t = theme;
   const [open, setOpen]         = useState(false);
   const [settings, setSettings] = useState(null);
   const [hours, setHours]       = useState([]);
   const [loaded, setLoaded]     = useState(false);
 
+  // En mode flat, on charge tout de suite. En mode accordeon, on attend
+  // l'ouverture pour eviter un appel reseau si le commercant n'ouvre jamais.
   useEffect(() => {
-    if (!open || loaded) return;
+    if (!flat && !open) return;
+    if (loaded) return;
     Promise.all([bookingApi.getSettings(), bookingApi.getHours()])
       .then(([s, h]) => {
         setSettings(s?.settings || null);
@@ -22,9 +32,35 @@ export default function TabBookingConfig({ theme, showToast }) {
         setLoaded(true);
       })
       .catch(() => { setLoaded(true); showToast('Erreur chargement configuration', 'error'); });
-  }, [open, loaded, showToast]);
+  }, [flat, open, loaded, showToast]);
 
   const onSaved = (s, h) => { setSettings(s); setHours(h); };
+
+  const Loader = () => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:32 }}>
+      <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24"
+           style={{ color:t.text }}>
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2"/>
+        <path d="M12 2 a10 10 0 0 1 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    </div>
+  );
+
+  // Mode plat : ConfigTab directement, sans wrapper carte ni header parent.
+  // Les sections internes (Description, Regles, Horaires, Pauses) sont
+  // elles-memes des accordeons dans ConfigTab.
+  if (flat) {
+    if (!loaded) return <Loader />;
+    return (
+      <ConfigTab
+        settings={settings}
+        hours={hours}
+        onSaved={onSaved}
+        showToast={showToast}
+        theme={theme}
+      />
+    );
+  }
 
   const isActive = settings?.is_enabled;
 
@@ -65,15 +101,7 @@ export default function TabBookingConfig({ theme, showToast }) {
 
       {open && (
         <div style={{ padding:12, borderTop:`0.5px solid ${t.separator}` }}>
-          {!loaded ? (
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:32 }}>
-              <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24"
-                   style={{ color:t.text }}>
-                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2"/>
-                <path d="M12 2 a10 10 0 0 1 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </div>
-          ) : (
+          {!loaded ? <Loader /> : (
             <ConfigTab
               settings={settings}
               hours={hours}

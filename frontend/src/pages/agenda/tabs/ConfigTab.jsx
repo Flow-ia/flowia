@@ -38,14 +38,13 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
   const [slugStatus, setSlugStatus]   = useState('idle');
   const [slugError,  setSlugError]    = useState('');
   // UX : sections collapsibles (sauf Activation/Adresse-page qui restent
-  // toujours visibles en haut). Ouvert par defaut au premier rendu pour ne
-  // pas surprendre les commercants existants — on peut basculer false plus
-  // tard si on veut un affichage plus compact.
+  // toujours visibles en haut). Fermees par defaut pour un affichage compact —
+  // le commercant deplie a la demande.
   const [expanded, setExpanded] = useState({
-    description: true,
-    rules:       true,
-    hours:       true,
-    breaks:      true,
+    description: false,
+    rules:       false,
+    hours:       false,
+    breaks:      false,
   });
   const toggleSection = (k) => setExpanded(p => ({ ...p, [k]: !p[k] }));
   const checkTimerRef = useRef(null);
