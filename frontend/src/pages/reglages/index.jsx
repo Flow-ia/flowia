@@ -17,10 +17,10 @@ const DOMAINS = [
   {
     id: 'mon-commerce',
     label: 'Mon commerce',
-    subtitle: 'Informations, horaires, photos, compte',
+    subtitle: 'Informations, photos, compte',
     color: '#f97316',
     icon: 'storefront',
-    items: ['Informations salon', 'Horaires + pauses', 'Logo, photos, couverture', 'Mon compte + RGPD'],
+    items: ['Informations salon', 'Logo, photos, couverture', 'Mon compte + RGPD'],
   },
   {
     id: 'reservations',

@@ -5,9 +5,10 @@ import { Button } from '../../components/primitives';
 
 export default function TabNotifs({ theme, showToast }) {
   const t = theme;
-  const [cfg, setCfg]       = useState(null);
-  const [loading, setLoad]  = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [cfg, setCfg]         = useState(null);
+  const [loading, setLoad]    = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [soundsOpen, setSoundsOpen] = useState(false);
 
   const DELAY_OPTS = [
     { v:'60',   l:'1 heure avant' },
@@ -142,9 +143,9 @@ export default function TabNotifs({ theme, showToast }) {
 
   return (
     <div>
-      {/* Recap journalier */}
+      {/* Recap journalier — entete supprimee : la rangee toggle/sub-label
+          se suffit a elle-meme. */}
       <div style={cardS}>
-        {sectionHeader('Recap journalier')}
         <div style={rowS}>
           <div>
             <p style={labelS}>Activer le recap journalier</p>
@@ -175,9 +176,8 @@ export default function TabNotifs({ theme, showToast }) {
         )}
       </div>
 
-      {/* Rappels RDV clients */}
+      {/* Rappels RDV clients — entete supprimee. */}
       <div style={cardS}>
-        {sectionHeader('Rappels RDV clients')}
         <div style={rowS}>
           <div>
             <p style={labelS}>Activer les rappels</p>
@@ -200,9 +200,8 @@ export default function TabNotifs({ theme, showToast }) {
         )}
       </div>
 
-      {/* Rappels employes */}
+      {/* Rappels employes — entete supprimee. */}
       <div style={cardS}>
-        {sectionHeader('Rappels employes')}
         <div style={rowS}>
           <div>
             <p style={labelS}>Rappels pour les employes</p>
@@ -225,60 +224,98 @@ export default function TabNotifs({ theme, showToast }) {
         )}
       </div>
 
-      {/* Sons & alertes */}
+      {/* Sons & alertes — accordeon ferme par defaut (gros bloc avec
+          plusieurs sous-options). Header cliquable avec chevron rotatif. */}
       <div style={cardS}>
-        {sectionHeader('Sons & alertes')}
+        <button
+          type="button"
+          onClick={() => setSoundsOpen(o => !o)}
+          aria-expanded={soundsOpen}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '12px 16px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontFamily: 'inherit',
+            color: t.text,
+            borderBottom: soundsOpen ? `0.5px solid ${t.separator}` : 'none',
+          }}
+        >
+          <p style={{ fontSize:13, fontWeight:500, color:t.text, margin:0 }}>
+            Sons &amp; alertes
+          </p>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+               style={{
+                 flexShrink: 0,
+                 color: t.muted,
+                 transform: soundsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                 transition: 'transform .2s ease',
+               }}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
 
-        {[
-          { type:'caisse',          keyOn:'sound_caisse',     label:'Son validation encaissement', sub:'Joue apres validation du paiement (caisse + PIN)' },
-          { type:'new_appointment', keyOn:'sound_new_appt',   label:'Son nouveau rendez-vous',     sub:"Joue des reception d'un nouveau RDV" },
-          { type:'reminder',        keyOn:'sound_reminder',   label:'Son rappel de rendez-vous',   sub:'Alerte sonore quand un RDV approche' },
-        ].map(({ type, keyOn, label, sub }) => (
-          <div key={type}
-               style={{ ...rowS, borderBottom:`0.5px solid ${t.separator}` }}>
-            <div style={{ flex:1 }}>
-              <p style={labelS}>{label}</p>
-              <p style={subS}>{sub}</p>
-            </div>
-            <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-              <button onClick={() => testSound(type)}
-                      style={{ padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:500,
-                               cursor:'pointer', fontFamily:'inherit',
-                               border:`0.5px solid ${t.border}`,
-                               background:t.cardAlt, color:t.muted }}>
-                ▶ Tester
-              </button>
-              <Tog on={cfg[keyOn] ?? true}
-                   onChange={() => setCfg(p => ({ ...p, [keyOn]: !(p[keyOn] ?? true) }))}/>
-            </div>
-          </div>
-        ))}
-
-        {(cfg.sound_reminder ?? true) && (
-          <div style={{ padding:'12px 16px', borderBottom:`0.5px solid ${t.separator}` }}>
-            <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Alerte RDV avant :</p>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              {SOUND_RDV_OPTS.map(d => (
-                <button key={d.v} onClick={() => setCfg(p => ({ ...p, sound_rdv_before: d.v }))}
-                        style={chip((cfg.sound_rdv_before || 15) === d.v, '#4338ca')}>
-                  {d.l}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div style={{ padding:'12px 16px' }}>
-          <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Repeter les sons :</p>
-          <div style={{ display:'flex', gap:6 }}>
-            {SOUND_REPEAT_OPTS.map(d => (
-              <button key={d.v} onClick={() => setCfg(p => ({ ...p, sound_repeat: d.v }))}
-                      style={chip((cfg.sound_repeat || 2) === d.v, '#4338ca')}>
-                {d.l}
-              </button>
+        {soundsOpen && (
+          <>
+            {[
+              { type:'caisse',          keyOn:'sound_caisse',     label:'Son validation encaissement', sub:'Joue apres validation du paiement (caisse + PIN)' },
+              { type:'new_appointment', keyOn:'sound_new_appt',   label:'Son nouveau rendez-vous',     sub:"Joue des reception d'un nouveau RDV" },
+              { type:'reminder',        keyOn:'sound_reminder',   label:'Son rappel de rendez-vous',   sub:'Alerte sonore quand un RDV approche' },
+            ].map(({ type, keyOn, label, sub }) => (
+              <div key={type}
+                   style={{ ...rowS, borderBottom:`0.5px solid ${t.separator}` }}>
+                <div style={{ flex:1 }}>
+                  <p style={labelS}>{label}</p>
+                  <p style={subS}>{sub}</p>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+                  <button onClick={() => testSound(type)}
+                          style={{ padding:'5px 10px', borderRadius:8, fontSize:11, fontWeight:500,
+                                   cursor:'pointer', fontFamily:'inherit',
+                                   border:`0.5px solid ${t.border}`,
+                                   background:t.cardAlt, color:t.muted }}>
+                    ▶ Tester
+                  </button>
+                  <Tog on={cfg[keyOn] ?? true}
+                       onChange={() => setCfg(p => ({ ...p, [keyOn]: !(p[keyOn] ?? true) }))}/>
+                </div>
+              </div>
             ))}
-          </div>
-        </div>
+
+            {(cfg.sound_reminder ?? true) && (
+              <div style={{ padding:'12px 16px', borderBottom:`0.5px solid ${t.separator}` }}>
+                <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Alerte RDV avant :</p>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {SOUND_RDV_OPTS.map(d => (
+                    <button key={d.v} onClick={() => setCfg(p => ({ ...p, sound_rdv_before: d.v }))}
+                            style={chip((cfg.sound_rdv_before || 15) === d.v, '#4338ca')}>
+                      {d.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ padding:'12px 16px' }}>
+              <p style={{ fontSize:12, color:t.muted, margin:'0 0 8px' }}>Repeter les sons :</p>
+              <div style={{ display:'flex', gap:6 }}>
+                {SOUND_REPEAT_OPTS.map(d => (
+                  <button key={d.v} onClick={() => setCfg(p => ({ ...p, sound_repeat: d.v }))}
+                          style={chip((cfg.sound_repeat || 2) === d.v, '#4338ca')}>
+                    {d.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <Button variant="primary" fullWidth type="button" onClick={save} disabled={saving}>

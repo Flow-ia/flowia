@@ -314,32 +314,6 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
           </div>
         )}
 
-        {/* Badge "Page active" — l'URL et le bouton Copier sont affiches
-            UNIQUEMENT dans la section "Adresse de votre page" plus bas pour
-            eviter le double affichage (l'utilisateur le repete deux fois si
-            les 2 blocs montrent la meme chose). */}
-        {form.is_enabled && bookingUrl && (
-          <div style={{
-            margin: '0 16px 16px',
-            padding: '8px 12px',
-            borderRadius: 8,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: '#f0fdf4',
-            borderLeft: '2px solid #10b981',
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: '#10b981', flexShrink: 0,
-            }}/>
-            <p style={{ fontSize:11, color:'#065f46', margin:0, lineHeight:1.5, fontWeight:500 }}>
-              {"Page de reservation publique active. Lien et bouton Copier disponibles dans la section "}
-              <span style={{ fontStyle:'italic' }}>Adresse de votre page</span>
-              {" ci-dessous."}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* ── ADRESSE DE LA PAGE (SLUG) ── */}
