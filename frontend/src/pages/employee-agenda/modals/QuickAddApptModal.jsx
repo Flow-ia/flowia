@@ -117,15 +117,18 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
     setClientSearch(v);
     setSelectedClient(null);
     clearTimeout(searchTimer.current);
-    if (!v.trim()) { setClientResults([]); return; }
+    const trimmed = v.trim();
+    // Min 2 caracteres : evite de balancer une requete des le 1er char (qui
+    // ramenerait quasiment toute la base et surchargerait le backend pour rien).
+    if (trimmed.length < 2) { setClientResults([]); setClientSearchBusy(false); return; }
     setClientSearchBusy(true);
     searchTimer.current = setTimeout(async () => {
       try {
-        const res = await clientsApi.search(v.trim());
+        const res = await clientsApi.search(trimmed);
         setClientResults(Array.isArray(res) ? res : (res.clients || []));
       } catch { setClientResults([]); }
       finally { setClientSearchBusy(false); }
-    }, 300);
+    }, 350);
   };
 
   const pickClient = (cl) => {

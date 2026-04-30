@@ -147,67 +147,98 @@ async function linkToGlobal(localId, email, phone) {
 }
 
 // ─── GET / — liste clients du commerçant ─────────────────────────────────────
+// Query params:
+//   search  : ILIKE sur first_name/last_name/email/phone
+//   sort    : name | visits | recent | spending
+//   limit/offset : pagination serveur (limit cap 200)
+//   filter  : all | loyal | birthday_month | with_credit | new | inactive | blocked
+//             — applique en SQL via une CTE pour pagination serveur correcte
 router.get('/', async (req, res) => {
   try {
-    const { search, sort = 'name' } = req.query;
+    const { search, sort = 'name', filter = 'all' } = req.query;
     // Cap strict pour éviter OOM sur gros merchants (parseInt NaN fallback → 100).
     const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit)  || 100));
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
     const uid = req.user.userId;
 
-    // loyalty_mode vient de loyalty_programs (pas de client_loyalty)
+    // Whitelist du filtre — empeche injection via le query param.
+    const ALLOWED_FILTERS = new Set(['all','loyal','birthday_month','with_credit','new','inactive','blocked']);
+    const safeFilter = ALLOWED_FILTERS.has(filter) ? filter : 'all';
+
+    // CTE = la liste de base avec toutes les colonnes derivees, puis on applique
+    // search/filter/sort/pagination dessus. Permet de filtrer sur tx_count,
+    // has_credit, last_visit, etc. sans subquery dupliques.
     let q = `
-      SELECT
-        ca.id, ca.email, ca.first_name, ca.last_name, ca.phone,
-        ca.notes AS account_notes, ca.created_at,
-        ca.birth_date, ca.is_booking_blocked,
-        COALESCE(ca.first_name||' '||ca.last_name, ca.email) AS full_name,
-        CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
-        cl.id AS loyalty_id, cl.stamps, cl.points, cl.total_stamps_ever,
-        cl.total_points_ever, cl.rewards_earned, cl.last_visit,
-        cl.client_name AS loyalty_name,
-        COALESCE(lp.loyalty_mode, 'stamps') AS loyalty_mode,
-        COALESCE(
-          (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email), 0
-        )::int AS tx_count,
-        COALESCE(
-          (SELECT SUM(t.amount) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email AND t.type='revenue'), 0
-        )::numeric AS total_spent,
-        COALESCE(
-          (SELECT COUNT(*) FROM appointments a WHERE a.user_id=$1 AND a.client_email=ca.email), 0
-        )::int AS apt_count,
-        COALESCE(
-          (SELECT COUNT(*) FROM client_notes cn WHERE cn.user_id=$1 AND cn.client_email=ca.email), 0
-        )::int AS notes_count,
-        -- Refonte FDS-2026 commit 8 : flag pour filtre "Avec crédit" côté front.
-        EXISTS(
-          SELECT 1 FROM client_credits cc
-           WHERE cc.user_id=$1 AND LOWER(cc.client_email)=LOWER(ca.email) AND cc.balance > 0
-        ) AS has_credit,
-        ca.global_client_id,
-        gc.is_verified AS has_global_account,
-        gc.invite_sent_at
-      FROM client_accounts ca
-      LEFT JOIN client_loyalty cl ON cl.user_id=ca.user_id AND cl.client_email=ca.email
-      LEFT JOIN loyalty_programs lp ON lp.user_id=ca.user_id
-      LEFT JOIN global_clients gc ON gc.id=ca.global_client_id
-      WHERE ca.user_id=$1
+      WITH base AS (
+        SELECT
+          ca.id, ca.email, ca.first_name, ca.last_name, ca.phone,
+          ca.notes AS account_notes, ca.created_at,
+          ca.birth_date, ca.is_booking_blocked,
+          COALESCE(ca.first_name||' '||ca.last_name, ca.email) AS full_name,
+          CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
+          cl.id AS loyalty_id, cl.stamps, cl.points, cl.total_stamps_ever,
+          cl.total_points_ever, cl.rewards_earned, cl.last_visit,
+          cl.client_name AS loyalty_name,
+          COALESCE(lp.loyalty_mode, 'stamps') AS loyalty_mode,
+          COALESCE(
+            (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email), 0
+          )::int AS tx_count,
+          COALESCE(
+            (SELECT SUM(t.amount) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email AND t.type='revenue'), 0
+          )::numeric AS total_spent,
+          COALESCE(
+            (SELECT COUNT(*) FROM appointments a WHERE a.user_id=$1 AND a.client_email=ca.email), 0
+          )::int AS apt_count,
+          COALESCE(
+            (SELECT COUNT(*) FROM client_notes cn WHERE cn.user_id=$1 AND cn.client_email=ca.email), 0
+          )::int AS notes_count,
+          EXISTS(
+            SELECT 1 FROM client_credits cc
+             WHERE cc.user_id=$1 AND LOWER(cc.client_email)=LOWER(ca.email) AND cc.balance > 0
+          ) AS has_credit,
+          ca.global_client_id,
+          gc.is_verified AS has_global_account,
+          gc.invite_sent_at
+        FROM client_accounts ca
+        LEFT JOIN client_loyalty cl ON cl.user_id=ca.user_id AND cl.client_email=ca.email
+        LEFT JOIN loyalty_programs lp ON lp.user_id=ca.user_id
+        LEFT JOIN global_clients gc ON gc.id=ca.global_client_id
+        WHERE ca.user_id=$1
+      )
+      SELECT * FROM base WHERE 1=1
     `;
     const params = [uid];
 
     if (search) {
       params.push(`%${search.trim()}%`);
       q += ` AND (
-        (ca.first_name||' '||ca.last_name) ILIKE $${params.length}
-        OR ca.email ILIKE $${params.length}
-        OR ca.phone ILIKE $${params.length}
+        (first_name||' '||last_name) ILIKE $${params.length}
+        OR email ILIKE $${params.length}
+        OR phone ILIKE $${params.length}
       )`;
+    }
+
+    // Predicates filtre — alignes sur la logique frontend historique
+    // (cf. frontend/src/pages/clients/views/ListView.jsx#applyFilter).
+    if (safeFilter === 'loyal') {
+      q += ` AND (tx_count >= 3 OR COALESCE(stamps,0) > 0 OR COALESCE(points,0) > 0)`;
+    } else if (safeFilter === 'birthday_month') {
+      // Mois courant cote serveur (UTC) — coherent avec le predicate front.
+      q += ` AND birth_date IS NOT NULL AND EXTRACT(MONTH FROM birth_date) = EXTRACT(MONTH FROM NOW() AT TIME ZONE 'UTC')`;
+    } else if (safeFilter === 'with_credit') {
+      q += ` AND has_credit = TRUE`;
+    } else if (safeFilter === 'new') {
+      q += ` AND created_at > NOW() - INTERVAL '30 days'`;
+    } else if (safeFilter === 'inactive') {
+      q += ` AND last_visit IS NOT NULL AND last_visit < NOW() - INTERVAL '90 days'`;
+    } else if (safeFilter === 'blocked') {
+      q += ` AND is_booking_blocked = TRUE`;
     }
 
     const orderMap = {
       name:     'full_name',
       visits:   'tx_count DESC, apt_count',
-      recent:   'ca.created_at DESC',
+      recent:   'created_at DESC',
       spending: 'total_spent DESC',
     };
     q += ` ORDER BY ${orderMap[sort]||'full_name'} LIMIT $${params.length+1} OFFSET $${params.length+2}`;
@@ -215,15 +246,48 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(q, params);
 
-    let countQ = `SELECT COUNT(*) FROM client_accounts ca WHERE ca.user_id=$1`;
+    // COUNT total dans la meme CTE pour cohérence stricte avec les memes
+    // predicates (search + filter). Pagination correcte cote front.
+    let countQ = `
+      WITH base AS (
+        SELECT
+          ca.email, ca.first_name, ca.last_name, ca.phone,
+          ca.created_at, ca.birth_date, ca.is_booking_blocked,
+          cl.stamps, cl.points, cl.last_visit,
+          COALESCE(
+            (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email), 0
+          )::int AS tx_count,
+          EXISTS(
+            SELECT 1 FROM client_credits cc
+             WHERE cc.user_id=$1 AND LOWER(cc.client_email)=LOWER(ca.email) AND cc.balance > 0
+          ) AS has_credit
+        FROM client_accounts ca
+        LEFT JOIN client_loyalty cl ON cl.user_id=ca.user_id AND cl.client_email=ca.email
+        WHERE ca.user_id=$1
+      )
+      SELECT COUNT(*)::int AS n FROM base WHERE 1=1
+    `;
     const countP = [uid];
     if (search) {
       countP.push(`%${search.trim()}%`);
-      countQ += ` AND ((ca.first_name||' '||ca.last_name) ILIKE $2 OR ca.email ILIKE $2 OR ca.phone ILIKE $2)`;
+      countQ += ` AND ((first_name||' '||last_name) ILIKE $${countP.length} OR email ILIKE $${countP.length} OR phone ILIKE $${countP.length})`;
+    }
+    if (safeFilter === 'loyal') {
+      countQ += ` AND (tx_count >= 3 OR COALESCE(stamps,0) > 0 OR COALESCE(points,0) > 0)`;
+    } else if (safeFilter === 'birthday_month') {
+      countQ += ` AND birth_date IS NOT NULL AND EXTRACT(MONTH FROM birth_date) = EXTRACT(MONTH FROM NOW() AT TIME ZONE 'UTC')`;
+    } else if (safeFilter === 'with_credit') {
+      countQ += ` AND has_credit = TRUE`;
+    } else if (safeFilter === 'new') {
+      countQ += ` AND created_at > NOW() - INTERVAL '30 days'`;
+    } else if (safeFilter === 'inactive') {
+      countQ += ` AND last_visit IS NOT NULL AND last_visit < NOW() - INTERVAL '90 days'`;
+    } else if (safeFilter === 'blocked') {
+      countQ += ` AND is_booking_blocked = TRUE`;
     }
     const { rows: cr } = await pool.query(countQ, countP);
 
-    res.json({ clients: rows, total: parseInt(cr[0].count) });
+    res.json({ clients: rows, total: cr[0].n });
   } catch (e) {
     console.error('[GET /clients]', e);
     res.status(500).json({ error: 'Erreur serveur.' });

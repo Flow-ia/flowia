@@ -151,6 +151,40 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
   const [clientSearch,   setClientSearch]   = useState('');
   const [clientSuggests, setClientSuggests] = useState([]);
   const [clientSearchBusy, setClientSearchBusy] = useState(false);
+  // Debounce + seq ID pour annuler les reponses perimees quand l'utilisateur
+  // tape vite. Sans ca, une frappe rapide envoyait une requete par caractere
+  // (surcharge backend) et les reponses pouvaient arriver dans le desordre.
+  const clientSearchSeqRef = useRef(0);
+  useEffect(() => {
+    const v = clientSearch;
+    // Si le champ contient l'affichage d'un client deja selectionne, on ignore.
+    if (v === (clientName + (clientEmail ? ' - ' + clientEmail : '')) && clientName) {
+      setClientSuggests([]);
+      return;
+    }
+    const trimmed = v.trim();
+    // Min 2 caracteres avant requete (sinon ramene quasi toute la base).
+    if (trimmed.length < 2) {
+      setClientSuggests([]);
+      setClientSearchBusy(false);
+      return;
+    }
+    const seq = ++clientSearchSeqRef.current;
+    setClientSearchBusy(true);
+    const tm = setTimeout(async () => {
+      try {
+        const r = await loyaltyApi.searchClients(trimmed);
+        if (seq !== clientSearchSeqRef.current) return; // perime
+        setClientSuggests(r || []);
+      } catch {
+        if (seq === clientSearchSeqRef.current) setClientSuggests([]);
+      } finally {
+        if (seq === clientSearchSeqRef.current) setClientSearchBusy(false);
+      }
+    }, 350);
+    return () => clearTimeout(tm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientSearch]);
   const [busy, setBusy]           = useState(false);
   const [editPrice, setEditPrice] = useState(null);
   const [openCat,   setOpenCat]   = useState(null);
@@ -1014,16 +1048,15 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
               <div style={{ position:'relative', marginBottom:8 }}>
                 <input placeholder="Client — nom, email, telephone…"
                        value={clientSearch}
-                       onChange={async e => {
-                         const v = e.target.value; setClientSearch(v);
+                       onChange={e => {
+                         const v = e.target.value;
+                         setClientSearch(v);
+                         // Si l'utilisateur efface ou modifie le champ apres avoir selectionne,
+                         // on de-selectionne le client courant. La recherche/debounce est
+                         // gere par le useEffect dedie sur clientSearch.
                          if (v !== (clientName + (clientEmail ? ' - ' + clientEmail : ''))) {
                            setClientEmail(''); setClientName('');
                          }
-                         if (v.trim().length < 2) { setClientSuggests([]); return; }
-                         setClientSearchBusy(true);
-                         try { const r = await loyaltyApi.searchClients(v); setClientSuggests(r || []); }
-                         catch { setClientSuggests([]); }
-                         finally { setClientSearchBusy(false); }
                        }}
                        style={inpStyle}/>
                 {clientSuggests.length > 0 && (

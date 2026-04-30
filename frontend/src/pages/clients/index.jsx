@@ -1,5 +1,5 @@
 // src/pages/clients/index.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { clientsApi, creditsApi } from '../../utils/api';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../components/UI';
@@ -93,31 +93,47 @@ export default function ClientsPage() {
     marginBottom: 6,
   };
 
-  // Charger 10 clients à la fois (pagination server-side). Quand un filtre
-  // segmenté est actif (filter != 'all'), on charge jusqu'à 500 clients
-  // pour que le predicate front ait la main sur un corpus complet.
+  // Pagination 100% serveur, y compris pour les filtres segmentes (loyal,
+  // birthday_month, with_credit, new, inactive, blocked) — backend gere les
+  // predicates en SQL avec WITH base AS (...) puis filter+limit+offset.
+  // Charge PAGE_SIZE=5 clients par requete, jamais plus, quel que soit le filtre.
+  // Min 2 caracteres pour la recherche (sinon req renvoie tout, surcharge inutile).
+  const loadListSeqRef = useRef(0);
   const loadList = useCallback(async (forceSearch = search, forcePage = page) => {
+    const seq = ++loadListSeqRef.current;
     setLoading(true);
     try {
-      const isFiltered = filter !== 'all';
+      const trimmed = String(forceSearch || '').trim();
+      // Min 2 chars pour la recherche : sinon on ignore le terme cote frontend.
+      const sendSearch = trimmed.length >= 2 ? trimmed : '';
       const r = await clientsApi.list({
-        search: forceSearch,
+        search: sendSearch,
         sort,
-        limit:  isFiltered ? 500 : PAGE_SIZE,
-        offset: isFiltered ? 0   : forcePage * PAGE_SIZE,
+        filter,
+        limit:  PAGE_SIZE,
+        offset: forcePage * PAGE_SIZE,
       });
+      // Drop si reponse perimee (l'utilisateur a tape autre chose entre-temps)
+      if (seq !== loadListSeqRef.current) return;
       setClients(r.clients || []);
       setTotal(r.total || 0);
-    } catch { showToast('Impossible de charger les clients', 'error'); }
-    finally { setLoading(false); }
+    } catch {
+      if (seq === loadListSeqRef.current) showToast('Impossible de charger les clients', 'error');
+    } finally {
+      if (seq === loadListSeqRef.current) setLoading(false);
+    }
   }, [search, sort, page, filter]);
 
   // Reset page quand la recherche, le tri ou le filtre change
   useEffect(() => { setPage(0); }, [search, sort, filter]);
 
-  // Chargement auto (mount + changement page/tri/filter) + debounce sur recherche
+  // Chargement auto (mount + changement page/tri/filter) + debounce sur recherche.
+  // Si l'utilisateur a tape >= 2 chars, on attend 350ms (debounce). Sinon on
+  // charge tout de suite (cas changement page/tri/filter sans saisie).
   useEffect(() => {
-    const t = setTimeout(() => { setHasSearched(true); loadList(); }, search.trim() ? 350 : 0);
+    const trimmed = search.trim();
+    const needsDebounce = trimmed.length >= 2;
+    const t = setTimeout(() => { setHasSearched(true); loadList(); }, needsDebounce ? 350 : 0);
     return () => clearTimeout(t);
   }, [search, sort, page, filter]);
 

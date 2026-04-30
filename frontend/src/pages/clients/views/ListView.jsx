@@ -6,9 +6,9 @@ import { Button } from '../../../components/primitives';
 import { I } from '../../../utils/icons';
 import { PAGE_SIZE } from '../constants';
 
-// Refonte FDS-2026 commit 8 : filtres segmentés côté front.
-// Chaque id mappe un predicate sur les colonnes exposées par GET /api/clients :
-// tx_count, has_credit, birth_date, is_booking_blocked, created_at, last_visit.
+// Filtres segmentes — desormais traites en SQL cote backend (params ?filter=...)
+// pour preserver la pagination serveur. Le predicate frontend a ete supprime
+// pour eviter de charger 500 clients d'un coup.
 const FILTERS = [
   { id: 'all',            label: 'Tous'        },
   { id: 'loyal',          label: 'Fidèles'     },
@@ -18,33 +18,6 @@ const FILTERS = [
   { id: 'inactive',       label: 'Inactifs'    },
   { id: 'blocked',        label: 'Bloqués'     },
 ];
-
-function applyFilter(list, filter) {
-  if (filter === 'all') return list;
-  const now = Date.now();
-  const MS_DAY = 86400000;
-  return list.filter(cl => {
-    switch (filter) {
-      case 'loyal':
-        return (cl.tx_count || 0) >= 3 || (cl.stamps || 0) > 0 || (cl.points || 0) > 0;
-      case 'birthday_month': {
-        if (!cl.birth_date) return false;
-        const m = new Date(cl.birth_date).getUTCMonth();
-        return m === new Date().getUTCMonth();
-      }
-      case 'with_credit':
-        return !!cl.has_credit;
-      case 'new':
-        return cl.created_at && (now - new Date(cl.created_at).getTime()) < 30 * MS_DAY;
-      case 'inactive':
-        return cl.last_visit && (now - new Date(cl.last_visit).getTime()) > 90 * MS_DAY;
-      case 'blocked':
-        return !!cl.is_booking_blocked;
-      default:
-        return true;
-    }
-  });
-}
 
 // ══ VUE LISTE ═══════════════════════════════════════════════════════════════
 export default function ListView({
@@ -63,9 +36,10 @@ export default function ListView({
     loadList(search, 0);
   };
 
+  // Filtrage 100% serveur desormais — la liste reçue est deja la bonne page.
   const isFiltered    = filter !== 'all';
-  const visibleList   = isFiltered ? applyFilter(clients, filter) : clients;
-  const visibleCount  = isFiltered ? visibleList.length : total;
+  const visibleList   = clients;
+  const visibleCount  = total;
   const totalPages    = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
@@ -321,9 +295,9 @@ export default function ListView({
           </div>
         )}
 
-        {/* Pagination — masquée quand un filtre segmenté est actif
-            (mode exploration, limit 500 côté fetch). */}
-        {!loading && total > 0 && !isFiltered && (
+        {/* Pagination — affichee dans tous les cas (filtre inclus) car le
+            backend pagine deja les resultats filtres en SQL. */}
+        {!loading && total > 0 && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
