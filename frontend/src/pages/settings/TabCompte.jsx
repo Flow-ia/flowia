@@ -45,7 +45,9 @@ export default function TabCompte({ showToast, theme, onLock }) {
 
   return (
     <div>
-      {/* Identite non modifiable + bandeau info */}
+      {/* Identite non modifiable (le bandeau d'info redirigeant vers
+          Categories est supprime : le commercant n'a pas besoin d'etre
+          rappele a chaque visite ou se trouvent ses infos). */}
       <div style={cardS}>
         <div style={sectionHead}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -63,14 +65,6 @@ export default function TabCompte({ showToast, theme, onLock }) {
             </div>
           </div>
         </div>
-        <div style={{ padding:'10px 18px', display:'flex', alignItems:'flex-start', gap:10,
-                      background:'#eef2ff' }}>
-          <I.Zap style={{ width:14, height:14, color:'#4338ca', flexShrink:0, marginTop:2 }}/>
-          <p style={{ margin:0, fontSize:12, color:'#4338ca', lineHeight:1.5 }}>
-            Les <strong style={{ fontWeight:500 }}>informations du commerce</strong> (nom, telephone, adresse, ville, Google Business)
-            {' '}sont gerees dans <strong style={{ fontWeight:500 }}>Categories → Config commerce</strong>.
-          </p>
-        </div>
       </div>
 
       <EmailCard
@@ -84,32 +78,37 @@ export default function TabCompte({ showToast, theme, onLock }) {
         theme={theme} cardS={cardS} sectionHead={sectionHead}
         inp={inp} EditBtn={EditBtn} showToast={showToast} userEmail={user?.email}/>
 
-      {/* RGPD — info statique */}
-      <div style={{ background:t.cardAlt, borderRadius:12,
-                    border:`0.5px solid ${t.border}`, overflow:'hidden', marginBottom:12 }}>
-        <div style={{ padding:'12px 16px', borderBottom:`0.5px solid ${t.separator}`,
-                      display:'flex', alignItems:'center', gap:8 }}>
-          <I.Lock style={{ width:14, height:14, color:t.muted }}/>
-          <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text }}>Mes donnees & RGPD</p>
+      {/* RGPD — lien statique vers la ressource externe (CNIL).
+          Le detail des dispositifs (consentement, portabilite, effacement,
+          securite) est documente sur le site public et dans la page Politique
+          de confidentialite, pas besoin de le repeter ici. */}
+      <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on"
+         target="_blank" rel="noopener noreferrer"
+         style={{
+           display: 'flex', alignItems: 'center', gap: 12,
+           padding: '14px 16px', borderRadius: 12,
+           background: t.cardAlt,
+           border: `0.5px solid ${t.border}`,
+           textDecoration: 'none',
+           marginBottom: 12,
+           transition: 'background 0.15s ease',
+         }}>
+        <I.Lock style={{ width:15, height:15, color:t.muted, flexShrink:0 }}/>
+        <div style={{ flex:1, minWidth:0 }}>
+          <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text }}>
+            {"Donnees & RGPD"}
+          </p>
+          <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.4 }}>
+            {"Guide CNIL — RGPD pour les TPE/PME"}
+          </p>
         </div>
-        <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:8 }}>
-          {[
-            ['Consentement', "Enregistre a l'inscription avec horodatage et IP"],
-            ['Portabilite',  'Vos clients peuvent exporter leurs donnees depuis leur profil'],
-            ['Effacement',   'Suppression en cascade disponible depuis le profil client'],
-            ['Securite',     'Mots de passe hashes bcrypt, communications TLS'],
-          ].map(([ttl, desc]) => (
-            <div key={ttl} style={{ display:'flex', gap:10 }}>
-              <p style={{ margin:0, fontSize:12, fontWeight:500, color:t.text, minWidth:110 }}>{ttl}</p>
-              <p style={{ margin:0, fontSize:12, color:t.muted, flex:1 }}>{desc}</p>
-            </div>
-          ))}
-          <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on" target="_blank" rel="noopener noreferrer"
-             style={{ fontSize:11, color:'#4338ca', textDecoration:'underline', marginTop:4 }}>
-            Guide CNIL — RGPD pour les TPE/PME
-          </a>
-        </div>
-      </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke={t.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+             style={{ flexShrink: 0 }}>
+          <path d="M7 17L17 7"/>
+          <polyline points="7 7 17 7 17 17"/>
+        </svg>
+      </a>
 
       <DangerZone theme={theme} logout={logout}/>
 
