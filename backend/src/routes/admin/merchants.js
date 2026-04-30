@@ -500,17 +500,32 @@ router.post('/:id/slug/force', async (req, res) => {
 //                                transactions qui les referencent (sinon
 //                                appointment_id deviendrait orphelin)
 //   - all                     : RDV + transactions sur place + via RDV
+//   - credits                 : tous les credits/dettes des clients +
+//                                historique credit_transactions + purge
+//                                registre Creances orphelines. Apres : aucun
+//                                client n'a plus d'ardoise ni d'avoir chez
+//                                ce commercant. NE TOUCHE PAS aux fiches
+//                                client ni aux transactions/RDV.
+//   - clients                 : suppression complete du fichier clients
+//                                (cascade anonymisation transactions/RDV/
+//                                credits/notes + purge loyalty + purge fiches
+//                                + purge debt-records). Les comptes globaux
+//                                FlowIA des clients (cross-merchant) ne sont
+//                                PAS touches.
 //
-// Filtre temporel optionnel : { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }.
-// Sans range -> tout l'historique. Range applique sur transactions.date et
-// appointments.date.
+// Filtre temporel optionnel : { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } —
+// applicable UNIQUEMENT aux features transactions_*, appointments, all.
+// Sans effet pour 'credits' et 'clients' (operations factory reset globales).
 const RESET_FEATURES = new Set([
   'transactions_walkin',
   'transactions_appointment',
   'transactions_all',
   'appointments',
   'all',
+  'credits',
+  'clients',
 ]);
+const NO_DATE_FEATURES = new Set(['credits', 'clients']);
 const MAX_RESET_ROWS = 200000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -548,6 +563,105 @@ router.post('/:id/reset', async (req, res) => {
       return res.status(400).json({
         error: "Confirmation incorrecte : tapez exactement le nom commercial du commerce.",
       });
+    }
+
+    // ── BRANCH dedie : reset 'credits' / 'clients' (factory reset, pas de date) ──
+    // Ces 2 features sont des wipes complets, sans plage temporelle. Logique
+    // distincte de la cascade transactions/RDV pour rester lisible.
+    if (NO_DATE_FEATURES.has(feature)) {
+      const counts = {};
+      await client.query('BEGIN');
+      try {
+        if (feature === 'credits') {
+          // 1. Historique credit_transactions (FK CASCADE sur client_credits
+          //    mais on supprime explicitement pour le compte de retour propre)
+          const r1 = await client.query(
+            `DELETE FROM credit_transactions
+              WHERE credit_id IN (SELECT id FROM client_credits WHERE user_id=$1)`,
+            [req.params.id]
+          );
+          counts.credit_transactions = r1.rowCount || 0;
+          // 2. Soldes
+          const r2 = await client.query(
+            `DELETE FROM client_credits WHERE user_id=$1`,
+            [req.params.id]
+          );
+          counts.client_credits = r2.rowCount || 0;
+          // 3. Registre Creances orphelines (les dettes des comptes supprimes
+          //    n'ont plus de raison d'etre puisque le commercant fait table rase)
+          const r3 = await client.query(
+            `DELETE FROM merchant_debt_records WHERE user_id=$1`,
+            [req.params.id]
+          );
+          counts.debt_records = r3.rowCount || 0;
+        }
+
+        if (feature === 'clients') {
+          // 1. Cascade anonymisation : montants conserves pour la compta,
+          //    coordonnees personnelles effacees. Idem que DELETE /api/clients/:id
+          //    individuel mais en bulk pour TOUTES les fiches du merchant.
+          const r1 = await client.query(
+            `UPDATE transactions SET client_email=NULL, client_note=NULL
+              WHERE user_id=$1 AND client_email IS NOT NULL`,
+            [req.params.id]
+          );
+          counts.transactions_anonymized = r1.rowCount || 0;
+          const r2 = await client.query(
+            `UPDATE appointments SET client_email=NULL, client_phone=NULL,
+                    client_name='Client anonyme'
+              WHERE user_id=$1 AND client_email IS NOT NULL`,
+            [req.params.id]
+          );
+          counts.appointments_anonymized = r2.rowCount || 0;
+          const r3 = await client.query(
+            `UPDATE client_credits SET client_email=NULL, client_name='[Compte supprimé]'
+              WHERE user_id=$1 AND client_email IS NOT NULL`,
+            [req.params.id]
+          );
+          counts.client_credits_anonymized = r3.rowCount || 0;
+          const r4 = await client.query(
+            `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
+              WHERE user_id=$1 AND client_email IS NOT NULL`,
+            [req.params.id]
+          );
+          counts.client_notes_anonymized = r4.rowCount || 0;
+          // 2. Loyalty : pas de valeur comptable -> hard delete
+          const r5 = await client.query(
+            `DELETE FROM client_loyalty WHERE user_id=$1`,
+            [req.params.id]
+          );
+          counts.client_loyalty_deleted = r5.rowCount || 0;
+          // 3. Fiches clients : hard delete. Les comptes globaux (cross-merchant)
+          //    restent intacts -- ils n'appartiennent pas au commercant.
+          const r6 = await client.query(
+            `DELETE FROM client_accounts WHERE user_id=$1`,
+            [req.params.id]
+          );
+          counts.client_accounts_deleted = r6.rowCount || 0;
+          // 4. Registre Creances : meme logique que credits, on purge.
+          const r7 = await client.query(
+            `DELETE FROM merchant_debt_records WHERE user_id=$1`,
+            [req.params.id]
+          );
+          counts.debt_records_deleted = r7.rowCount || 0;
+        }
+        await client.query('COMMIT');
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      }
+
+      // Audit log
+      await logAuditAction({
+        adminId: req.admin.id, adminEmail: req.admin.email,
+        action: `merchant.reset.${feature}`,
+        targetType: 'merchant', targetId: req.params.id,
+        payloadBefore: { feature },
+        payloadAfter:  counts,
+        req,
+      });
+
+      return res.json({ ok: true, deleted: counts });
     }
 
     // 2. Build clauses dates

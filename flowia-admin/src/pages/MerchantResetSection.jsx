@@ -5,6 +5,10 @@
 import { useState } from 'react';
 import { resetMerchantData } from '../lib/admin.js';
 
+// Features qui supportent un range de dates (transactions/RDV/all).
+// Les autres ('credits', 'clients') sont des wipes globaux sans plage temporelle.
+const NO_DATE_FEATURES = new Set(['credits', 'clients']);
+
 const FEATURES = [
   {
     key: 'transactions_walkin',
@@ -30,6 +34,16 @@ const FEATURES = [
     key: 'all',
     label: 'TOUT (RDV + encaissements)',
     desc: "Remise a zero complete : tous les RDV + toutes les transactions. Le commerce, ses employes, sa configuration et ses clients restent intacts.",
+  },
+  {
+    key: 'credits',
+    label: 'Crédits & dettes (factory reset)',
+    desc: "Remet a ZERO tous les credits/avoirs et toutes les ardoises (dettes) des clients chez ce commercant. Vide aussi le registre Creances orphelines. Apres : aucun client n'a plus de solde non nul. NE TOUCHE PAS aux fiches client ni a l'historique de transactions/RDV.",
+  },
+  {
+    key: 'clients',
+    label: 'Fichier clients (factory reset)',
+    desc: "SUPPRIME TOUTES les fiches clients de ce commercant + les notes + la fidelite + les credits + le registre Creances. Les transactions/RDV passes sont anonymises (montants conserves pour la compta, coordonnees personnelles effacees). Les comptes plateforme FlowIA des clients (qui leur permettent de reserver chez d'autres commercants) restent intacts.",
   },
 ];
 
@@ -112,19 +126,25 @@ export default function MerchantResetSection({ merchant }) {
             {featCfg?.desc}
           </p>
 
-          <div style={{ display: 'flex', gap: 12 }}>
-            <label className="field" style={{ flex: 1 }}>
-              <span>{"Du (optionnel)"}</span>
-              <input type="date" value={from} onChange={e => setFrom(e.target.value)} max={to || undefined}/>
-            </label>
-            <label className="field" style={{ flex: 1 }}>
-              <span>{"Au (optionnel)"}</span>
-              <input type="date" value={to} onChange={e => setTo(e.target.value)} min={from || undefined}/>
-            </label>
-          </div>
-          <p style={{ fontSize: 11, color: '#7c2d12', margin: '-4px 0 4px', opacity: 0.85 }}>
-            {"Sans plage : tout l'historique est supprime."}
-          </p>
+          {/* Date range affiche uniquement pour les features qui le supportent.
+              Credits et clients = factory reset, plage temporelle inapplicable. */}
+          {!NO_DATE_FEATURES.has(feature) && (
+            <>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <label className="field" style={{ flex: 1 }}>
+                  <span>{"Du (optionnel)"}</span>
+                  <input type="date" value={from} onChange={e => setFrom(e.target.value)} max={to || undefined}/>
+                </label>
+                <label className="field" style={{ flex: 1 }}>
+                  <span>{"Au (optionnel)"}</span>
+                  <input type="date" value={to} onChange={e => setTo(e.target.value)} min={from || undefined}/>
+                </label>
+              </div>
+              <p style={{ fontSize: 11, color: '#7c2d12', margin: '-4px 0 4px', opacity: 0.85 }}>
+                {"Sans plage : tout l'historique est supprime."}
+              </p>
+            </>
+          )}
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-danger" onClick={() => setConfirmOpen(true)} style={{ flex: 1 }}>
@@ -155,10 +175,22 @@ export default function MerchantResetSection({ merchant }) {
               fontSize: 13, lineHeight: 1.5, color: '#7c2d12',
             }}>
               <div><strong>{"Action :"}</strong> {featCfg?.label}</div>
-              <div><strong>{"Periode :"}</strong> {from || to ? `${from || '...'} -> ${to || '...'}` : 'Tout l\'historique'}</div>
+              {!NO_DATE_FEATURES.has(feature) && (
+                <div><strong>{"Periode :"}</strong> {from || to ? `${from || '...'} -> ${to || '...'}` : 'Tout l\'historique'}</div>
+              )}
               <div><strong>{"Commercant :"}</strong> {expectedName}</div>
+              {feature === 'credits' && (
+                <div style={{ marginTop: 6, fontSize: 12 }}>
+                  {"Apres cette action : aucun client n'aura plus d'ardoise (dette) ni d'avoir chez ce commercant. Le registre Creances orphelines sera vide."}
+                </div>
+              )}
+              {feature === 'clients' && (
+                <div style={{ marginTop: 6, fontSize: 12 }}>
+                  {"Apres cette action : le fichier clients sera vide. Les comptes plateforme FlowIA des clients (qui leur permettent de reserver chez d'autres commercants) restent intacts. L'historique transactions/RDV est conserve pour la compta mais anonymise."}
+                </div>
+              )}
               <div style={{ marginTop: 6, fontSize: 12 }}>
-                {"Cette suppression est DEFINITIVE et ne peut pas etre annulee."}
+                {"Cette action est DEFINITIVE et ne peut pas etre annulee."}
               </div>
             </div>
 
