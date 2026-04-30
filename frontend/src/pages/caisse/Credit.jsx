@@ -8,6 +8,7 @@
 // l'étape Paiement de l'encaissement (crée transaction revenue source='credit'
 // + décrément balance + audit trail — ne pas dupliquer ici).
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { creditsApi, clientsApi, api } from '../../utils/api';
 import { useEmployeePinGate } from '../../components/EmployeePinModal';
 import { Icon } from '../../components/Icon';
@@ -447,6 +448,7 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
 // ── Page principale ────────────────────────────────────────────────────────
 export default function Credit({ employees = [], theme, showToast, transactions = [] }) {
   const t = theme;
+  const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [page, setPage]         = useState(0); // 0-indexed
   const [list, setList]         = useState([]);
@@ -576,6 +578,15 @@ export default function Credit({ employees = [], theme, showToast, transactions 
             const email = c.client_email || '';
             const displayName = c.full_name || c.client_name || email || 'Client';
             const isAnonymous = !email; // RGPD anonymisation
+            // Si la ligne est anonymisee MAIS qu'un snapshot debt_record existe
+            // (le client a ete supprime APRES la mise en place du registre),
+            // on recupere ses coordonnees pour permettre le recouvrement legal.
+            const hasDebtRecord = !!c.debt_record_id;
+            const debtFullName = hasDebtRecord
+              ? [c.debt_first_name, c.debt_last_name].filter(Boolean).join(' ') || 'Client supprimé'
+              : null;
+            const balanceNum = parseFloat(c.balance || 0);
+            const isDebt = balanceNum < 0;
             const nbGrants = parseFloat(c.total_granted || 0) > 0 ? 1 : 0;
             const nbRepays = parseFloat(c.total_repaid  || 0) > 0 ? 1 : 0;
             const summary = [
@@ -588,38 +599,68 @@ export default function Credit({ employees = [], theme, showToast, transactions 
                             padding:'11px 12px', minHeight:48,
                             borderBottom:`0.5px solid ${t.separator}` }}>
                 <div style={{ width:36, height:36, borderRadius:99,
-                              background: isAnonymous ? '#9ca3af' : avatarColorFor(email),
+                              background: isAnonymous && !hasDebtRecord ? '#9ca3af'
+                                        : isAnonymous && hasDebtRecord ? '#fb923c'
+                                        : avatarColorFor(email),
                               color:'#fff', display:'flex',
                               alignItems:'center', justifyContent:'center',
                               fontSize:13, fontWeight:500, flexShrink:0 }}>
-                  {isAnonymous ? '?' : initialsOf(displayName, email)}
+                  {isAnonymous
+                    ? (hasDebtRecord ? initialsOf(debtFullName, c.debt_email || '') : '?')
+                    : initialsOf(displayName, email)}
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <p style={{ margin:0, fontSize:13, fontWeight:500,
-                              color: isAnonymous ? t.muted : t.text,
-                              fontStyle: isAnonymous ? 'italic' : 'normal',
+                              color: isAnonymous && !hasDebtRecord ? t.muted : t.text,
+                              fontStyle: isAnonymous && !hasDebtRecord ? 'italic' : 'normal',
                               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {isAnonymous ? 'Client anonyme' : displayName}
+                    {isAnonymous
+                      ? (hasDebtRecord ? debtFullName : 'Client anonyme')
+                      : displayName}
+                    {hasDebtRecord && (
+                      <span title="Compte client supprimé — coordonnées du registre Créances (dettes)"
+                            style={{ marginLeft:6, fontSize:9, fontWeight:500,
+                                     padding:'1px 6px', borderRadius:8,
+                                     background:'#fff7ed', color:'#9a3412',
+                                     verticalAlign:'middle' }}>
+                        Compte supprimé
+                      </span>
+                    )}
                   </p>
                   <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted,
                               overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {isAnonymous ? 'Email anonymisé RGPD' : (email || summary)}
+                    {isAnonymous
+                      ? (hasDebtRecord
+                          ? `${c.debt_email || ''}${c.debt_email && c.debt_phone ? ' · ' : ''}${c.debt_phone || ''}`
+                          : "Email anonymisé RGPD — coordonnées non récupérables (compte supprimé avant mise en place du registre)")
+                      : (email || summary)}
                   </p>
                 </div>
                 <div style={{ textAlign:'right', flexShrink:0 }}>
-                  <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#065f46',
+                  <p style={{ margin:0, fontSize:13, fontWeight:500,
+                              color: isDebt ? '#991b1b' : '#065f46',
                               fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                     {fmt(c.balance)}
                   </p>
-                  <button onClick={() => setDetailId(c.client_id || c.id)}
-                          disabled={!c.client_id}
-                          style={{ marginTop:3, minHeight:30, padding:'3px 6px',
-                                   border:'none',
-                                   background:'transparent', cursor: c.client_id ? 'pointer' : 'not-allowed',
-                                   color: c.client_id ? t.muted : t.dim || t.muted,
-                                   fontFamily:'inherit', fontSize:11 }}>
-                    {c.client_id ? 'Voir détail →' : '—'}
-                  </button>
+                  {hasDebtRecord ? (
+                    <button onClick={() => navigate('/clients?view=debts')}
+                            style={{ marginTop:3, minHeight:30, padding:'3px 6px',
+                                     border:'none', background:'transparent',
+                                     cursor:'pointer', color:'#9a3412',
+                                     fontFamily:'inherit', fontSize:11, fontWeight:500 }}>
+                      Voir dans Créances (dettes) →
+                    </button>
+                  ) : (
+                    <button onClick={() => setDetailId(c.client_id || c.id)}
+                            disabled={!c.client_id}
+                            style={{ marginTop:3, minHeight:30, padding:'3px 6px',
+                                     border:'none',
+                                     background:'transparent', cursor: c.client_id ? 'pointer' : 'not-allowed',
+                                     color: c.client_id ? t.muted : t.dim || t.muted,
+                                     fontFamily:'inherit', fontSize:11 }}>
+                      {c.client_id ? 'Voir détail →' : '—'}
+                    </button>
+                  )}
                 </div>
               </div>
             );

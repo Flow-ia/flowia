@@ -1,5 +1,6 @@
 // src/pages/clients/index.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { clientsApi, creditsApi } from '../../utils/api';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../components/UI';
@@ -18,7 +19,17 @@ export default function ClientsPage() {
   const [toast, showToast] = useToast();
   const { requestPin, PinModalNode } = useEmployeePinGate();
 
-  const [view,      setView]      = useState('list');
+  // Init view depuis ?view=debts dans l'URL pour permettre les deep-links
+  // depuis la page Caisse -> Credit ("Voir dans Créances (dettes) →").
+  const location = useLocation();
+  const navigate = useNavigate();
+  const initialView = (() => {
+    try {
+      const v = new URLSearchParams(location.search).get('view');
+      return v === 'debts' ? 'debts' : 'list';
+    } catch { return 'list'; }
+  })();
+  const [view,      setView]      = useState(initialView);
   const [activeTab, setTab]       = useState('info');
   const [clients,   setClients]   = useState([]);
   const [total,     setTotal]     = useState(0);

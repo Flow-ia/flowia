@@ -66,15 +66,28 @@ router.get('/', async (req, res) => {
       [uid]
     );
 
+    // LEFT JOIN merchant_debt_records pour recuperer les coordonnees des
+    // clients dont le compte a ete supprime (RGPD Art. 17.3.e). Sans ca,
+    // les lignes anonymisees s'affichaient comme "Client anonyme · Email
+    // anonymisé RGPD" sans permettre le recouvrement. Maintenant si un
+    // snapshot existe, on expose nom/email/phone du registre.
     let baseQ = `
       FROM client_credits cc
       LEFT JOIN client_accounts ca ON ca.user_id=cc.user_id AND LOWER(ca.email)=LOWER(cc.client_email)
+      LEFT JOIN merchant_debt_records mdr
+             ON mdr.user_id = cc.user_id
+            AND mdr.original_credit_id = cc.id
+            AND mdr.status = 'open'
       WHERE cc.user_id=$1`;
     const params = [uid];
     if (only_active === 'true') baseQ += ` AND cc.balance > 0`;
     if (search) {
       params.push(`%${search.trim()}%`);
-      baseQ += ` AND (cc.client_name ILIKE $${params.length} OR cc.client_email ILIKE $${params.length} OR (ca.first_name||' '||ca.last_name) ILIKE $${params.length} OR ca.phone ILIKE $${params.length})`;
+      baseQ += ` AND (cc.client_name ILIKE $${params.length} OR cc.client_email ILIKE $${params.length}
+                  OR (ca.first_name||' '||ca.last_name) ILIKE $${params.length} OR ca.phone ILIKE $${params.length}
+                  OR (mdr.client_first_name||' '||mdr.client_last_name) ILIKE $${params.length}
+                  OR mdr.client_email ILIKE $${params.length}
+                  OR mdr.client_phone ILIKE $${params.length})`;
     }
 
     const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int AS n ${baseQ}`, params);
@@ -83,7 +96,13 @@ router.get('/', async (req, res) => {
     params.push(limit, offset);
     const listQ = `
       SELECT cc.*, ca.id AS client_id, ca.first_name, ca.last_name, ca.phone, ca.global_client_id,
-        COALESCE(ca.first_name||' '||ca.last_name, cc.client_name, cc.client_email) AS full_name
+        COALESCE(ca.first_name||' '||ca.last_name, cc.client_name, cc.client_email) AS full_name,
+        mdr.id              AS debt_record_id,
+        mdr.client_first_name AS debt_first_name,
+        mdr.client_last_name  AS debt_last_name,
+        mdr.client_email      AS debt_email,
+        mdr.client_phone      AS debt_phone,
+        mdr.recorded_at       AS debt_recorded_at
       ${baseQ}
       ORDER BY cc.balance DESC, cc.updated_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}`;
