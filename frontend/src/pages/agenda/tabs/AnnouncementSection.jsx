@@ -25,6 +25,17 @@ function toLocalInput(iso) {
   return new Date(d.getTime() - tz).toISOString().slice(0, 16);
 }
 
+// Convertit datetime-local (YYYY-MM-DDTHH:MM, sans tz) en ISO UTC.
+// Sans cela, PG interprete la string brute comme heure du serveur (UTC),
+// donc 14:00 saisi en France devenait 14:00 UTC = 16:00 FR -> bandeau
+// invisible 2h apres l'heure souhaitee.
+function localInputToISO(local) {
+  if (!local) return null;
+  const d = new Date(local); // interprete comme heure locale du navigateur
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 export default function AnnouncementSection({ theme: t, showToast }) {
   const [open,    setOpen]    = useState(false);
   const [loaded,  setLoaded]  = useState(false);
@@ -65,8 +76,8 @@ export default function AnnouncementSection({ theme: t, showToast }) {
         message:          form.message.trim(),
         color:            form.color,
         is_enabled:       form.is_enabled,
-        starts_at:        form.starts_at || null,
-        ends_at:          form.ends_at   || null,
+        starts_at:        localInputToISO(form.starts_at),
+        ends_at:          localInputToISO(form.ends_at),
         daily_start_time: form.daily_start_time || null,
         daily_end_time:   form.daily_end_time   || null,
       });

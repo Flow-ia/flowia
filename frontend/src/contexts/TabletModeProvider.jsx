@@ -30,9 +30,16 @@ export function TabletModeProvider({ children }) {
   const expiresRef = useRef(0);
 
   // ── Lecture initiale de user_settings (401 tolérant : avant login).
+  // Skip carrement l'appel si pas de token commercant : evite le 401
+  // visible dans la console (notamment sur le domaine booking public ou
+  // aucun token n'existe).
   useEffect(() => {
     let cancelled = false;
+    const hasToken = () => {
+      try { return !!localStorage.getItem('ff_token'); } catch { return false; }
+    };
     const load = () => {
+      if (!hasToken()) return; // pas de session merchant -> pas d'appel
       userSettingsApi.get()
         .then(s => {
           if (cancelled) return;
