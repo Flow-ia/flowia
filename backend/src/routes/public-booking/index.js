@@ -45,4 +45,7 @@ require('./promo')(router);
 // ─ Google Places rating
 require('./google-rating')(router);
 
+// ─ Annonce / bandeau commercant
+require('./announcement')(router);
+
 module.exports = router;

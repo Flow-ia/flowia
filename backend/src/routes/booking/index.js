@@ -45,5 +45,7 @@ require('./checkout')(router);
 require('./breaks')(router);
 // ─ Plages horaires multiples par employé
 require('./employee-slots')(router);
+// ─ Annonce / bandeau page de réservation publique
+require('./announcement')(router);
 
 module.exports = router;

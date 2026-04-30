@@ -754,6 +754,29 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_debt_records_retention
     ON merchant_debt_records(retention_until) WHERE status = 'open'`);
 
+  // ── merchant_announcement ─────────────────────────────────────────────────
+  // Bandeau d'annonce affiche en haut de la page de reservation publique du
+  // commercant (entre infos et section "Nos prestations"). Une seule annonce
+  // par commercant (PRIMARY KEY user_id). Active uniquement si :
+  //   - is_enabled = TRUE
+  //   - now() entre starts_at et ends_at (si renseignes, sinon ignore)
+  //   - heure courante entre daily_start_time et daily_end_time (si renseignes)
+  // Couleur whitelistee cote backend pour eviter injection CSS.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS merchant_announcement (
+      user_id          UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      message          TEXT,
+      color            VARCHAR(20) DEFAULT 'orange',
+      is_enabled       BOOLEAN     DEFAULT FALSE,
+      starts_at        TIMESTAMPTZ,
+      ends_at          TIMESTAMPTZ,
+      daily_start_time TIME,
+      daily_end_time   TIME,
+      created_at       TIMESTAMPTZ DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
   // ── Système de code PIN employé ──────────────────────────────────────────────
   await runMigration(`
     CREATE TABLE IF NOT EXISTS employee_pins (

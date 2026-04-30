@@ -5,6 +5,7 @@
 import { mediaUrl, employeeImgUrl } from '../../booking/shared';
 import { MobileHoursBlock } from '../../booking/SideCard';
 import { AccordionGroup } from '../../booking/Services';
+import AnnouncementBanner from '../components/AnnouncementBanner';
 
 export function Step1Home({
   th, slug, business, services, employees, refProgram, googleRating,
@@ -70,6 +71,9 @@ export function Step1Home({
           </button>
         )}
       </div>
+
+      {/* Annonce / bandeau commercant (si activee et periode active) */}
+      <AnnouncementBanner slug={slug} />
 
       {/* ── SECTION PRESTATIONS ── */}
       <section id="section-prestations" style={{ marginBottom:24 }}>

@@ -5,6 +5,7 @@ import { DAYS_FR } from '../constants';
 import { Button, Label } from '../../../components/primitives';
 import { I } from '../../../utils/icons';
 import Toggle from '../components/Toggle';
+import AnnouncementSection from './AnnouncementSection';
 
 export default function ConfigTab({ settings: initSettings, hours: initHours, onSaved, showToast, theme: t }) {
   const [form, setForm] = useState({
@@ -787,6 +788,9 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
           </>
         )}
       </Section>
+
+      {/* Annonce / bandeau page de réservation publique */}
+      <AnnouncementSection theme={t} showToast={showToast} />
 
       <Button fullWidth onClick={save} disabled={saving}>
         {saving ? 'Sauvegarde...' : 'Sauvegarder'}

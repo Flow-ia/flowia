@@ -329,6 +329,12 @@ export const api = {
   deleteTransaction:  (id)     => adminRequest(`/transactions/${id}`,  { method: 'DELETE' }),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
+// Annonce/bandeau de la page de reservation publique
+export const announcementApi = {
+  get:  ()  => request('/booking/announcement'),
+  save: (b) => request('/booking/announcement', { method: 'PUT', body: JSON.stringify(b) }),
+};
+
 export const bookingApi = {
 
   // Agenda employé
@@ -469,6 +475,7 @@ async function pubRequest(path, options = {}) {
 }
 export const pubApi = {
   getBusiness:    (slug)    => pubRequest(`/${slug}`),
+  getAnnouncement:(slug)    => pubRequest(`/${slug}/announcement`),
   getServices:    (slug)    => pubRequest(`/${slug}/services`),
   getEmployees:   (slug)    => pubRequest(`/${slug}/employees`),
   getSlots:       (slug, q) => pubRequest(`/${slug}/slots?` + new URLSearchParams(q)),
