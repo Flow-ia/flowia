@@ -36,6 +36,51 @@ function localInputToISO(local) {
   return d.toISOString();
 }
 
+// Evalue si l'annonce serait visible MAINTENANT avec les valeurs courantes
+// du formulaire. Reproduit la logique du backend (public-booking/announcement.js)
+// pour donner au commercant un retour immediat sur l'etat de visibilite —
+// cause #1 d'incomprehension : "j'ai active mais je ne vois rien" alors qu'une
+// plage horaire quotidienne ou une periode exclut l'instant courant.
+function computeVisibility(form) {
+  if (!form.is_enabled) return { visible: false, reason: "L'annonce n'est pas activee." };
+  if (!form.message || !form.message.trim())
+    return { visible: false, reason: 'Le message est vide.' };
+
+  const now = new Date();
+
+  if (form.starts_at) {
+    const start = new Date(form.starts_at);
+    if (!isNaN(start.getTime()) && start.getTime() > now.getTime()) {
+      return { visible: false, reason: `La periode demarre le ${start.toLocaleString('fr-FR')}.` };
+    }
+  }
+  if (form.ends_at) {
+    const end = new Date(form.ends_at);
+    if (!isNaN(end.getTime()) && end.getTime() < now.getTime()) {
+      return { visible: false, reason: `La periode a expire le ${end.toLocaleString('fr-FR')}.` };
+    }
+  }
+
+  // Plage horaire quotidienne : on compare avec l'heure locale du navigateur
+  // (le commercant configure ces heures dans son propre fuseau horaire, ce
+  // qu'on reproduit au mieux ici).
+  const pad = n => String(n).padStart(2, '0');
+  const nowHHMM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  if (form.daily_start_time && nowHHMM < form.daily_start_time) {
+    return {
+      visible: false,
+      reason: `Hors plage quotidienne : visible de ${form.daily_start_time}${form.daily_end_time ? ' a ' + form.daily_end_time : ''}. Il est ${nowHHMM}.`,
+    };
+  }
+  if (form.daily_end_time && nowHHMM > form.daily_end_time) {
+    return {
+      visible: false,
+      reason: `Hors plage quotidienne : visible ${form.daily_start_time ? 'de ' + form.daily_start_time + ' ' : ''}jusqu'a ${form.daily_end_time}. Il est ${nowHHMM}.`,
+    };
+  }
+  return { visible: true, reason: null };
+}
+
 export default function AnnouncementSection({ theme: t, showToast }) {
   const [open,    setOpen]    = useState(false);
   const [loaded,  setLoaded]  = useState(false);
@@ -105,6 +150,7 @@ export default function AnnouncementSection({ theme: t, showToast }) {
   };
 
   const colorCfg = COLORS.find(c => c.id === form.color) || COLORS[1];
+  const visibility = computeVisibility(form);
 
   const inp = {
     width: '100%', padding: '10px 12px', borderRadius: 8,
@@ -137,11 +183,20 @@ export default function AnnouncementSection({ theme: t, showToast }) {
           </p>
         </div>
         {form.is_enabled && (
-          <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px',
-                         borderRadius: 99, background: '#f0fdf4', color: '#065f46',
-                         flexShrink: 0 }}>
-            Active
-          </span>
+          visibility.visible ? (
+            <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px',
+                           borderRadius: 99, background: '#f0fdf4', color: '#065f46',
+                           flexShrink: 0 }}>
+              Visible
+            </span>
+          ) : (
+            <span title={visibility.reason || ''}
+                  style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px',
+                           borderRadius: 99, background: '#fffbeb', color: '#92400e',
+                           flexShrink: 0 }}>
+              Masquee
+            </span>
+          )
         )}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -184,6 +239,42 @@ export default function AnnouncementSection({ theme: t, showToast }) {
                   </p>
                 </div>
               </label>
+
+              {/* Indicateur de visibilite en direct : evalue les valeurs
+                  courantes du formulaire (pas forcement sauvegardees) pour
+                  dire si le bandeau serait visible MAINTENANT sur la page
+                  publique. Cause #1 de "j'ai active mais je ne vois rien" :
+                  une plage horaire quotidienne qui exclut l'instant present. */}
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: visibility.visible ? '#f0fdf4' : '#fffbeb',
+                borderLeft: `2px solid ${visibility.visible ? '#10b981' : '#f59e0b'}`,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                  marginTop: 5,
+                  background: visibility.visible ? '#10b981' : '#f59e0b',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{
+                    margin: 0, fontSize: 12, fontWeight: 500,
+                    color: visibility.visible ? '#065f46' : '#92400e',
+                  }}>
+                    {visibility.visible
+                      ? 'Visible maintenant sur votre page de reservation'
+                      : 'Bandeau actuellement masque sur votre page'}
+                  </p>
+                  {!visibility.visible && visibility.reason && (
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#92400e', lineHeight: 1.4 }}>
+                      {visibility.reason}
+                    </p>
+                  )}
+                </div>
+              </div>
 
               {/* Message */}
               <div>
@@ -237,9 +328,21 @@ export default function AnnouncementSection({ theme: t, showToast }) {
 
               {/* Période (optionnel) */}
               <div>
-                <p style={{ fontSize: 12, color: t.muted, margin: '0 0 6px' }}>
-                  Période d{"'"}affichage (optionnel — vide = en permanence)
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '0 0 6px' }}>
+                  <p style={{ fontSize: 12, color: t.muted, margin: 0 }}>
+                    {"Periode d'affichage (laissez vide pour afficher en permanence)"}
+                  </p>
+                  {(form.starts_at || form.ends_at) && (
+                    <button type="button"
+                            onClick={() => setForm(f => ({ ...f, starts_at: '', ends_at: '' }))}
+                            style={{ fontSize: 11, fontWeight: 500, color: t.text,
+                                     background: 'transparent', border: `0.5px solid ${t.borderStrong}`,
+                                     borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                                     fontFamily: 'inherit', flexShrink: 0 }}>
+                      Effacer
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 11, color: t.dim, marginBottom: 4, display: 'block' }}>Du</label>
@@ -260,9 +363,21 @@ export default function AnnouncementSection({ theme: t, showToast }) {
 
               {/* Plage horaire quotidienne (optionnel) */}
               <div>
-                <p style={{ fontSize: 12, color: t.muted, margin: '0 0 6px' }}>
-                  Heures quotidiennes (optionnel — vide = 24h/24)
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: '0 0 6px' }}>
+                  <p style={{ fontSize: 12, color: t.muted, margin: 0 }}>
+                    Plage horaire quotidienne (laissez vide pour afficher toute la journee)
+                  </p>
+                  {(form.daily_start_time || form.daily_end_time) && (
+                    <button type="button"
+                            onClick={() => setForm(f => ({ ...f, daily_start_time: '', daily_end_time: '' }))}
+                            style={{ fontSize: 11, fontWeight: 500, color: t.text,
+                                     background: 'transparent', border: `0.5px solid ${t.borderStrong}`,
+                                     borderRadius: 8, padding: '3px 8px', cursor: 'pointer',
+                                     fontFamily: 'inherit', flexShrink: 0 }}>
+                      Effacer
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 11, color: t.dim, marginBottom: 4, display: 'block' }}>De</label>
@@ -271,7 +386,7 @@ export default function AnnouncementSection({ theme: t, showToast }) {
                            style={inp}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: t.dim, marginBottom: 4, display: 'block' }}>À</label>
+                    <label style={{ fontSize: 11, color: t.dim, marginBottom: 4, display: 'block' }}>A</label>
                     <input type="time" value={form.daily_end_time}
                            onChange={e => setForm(f => ({ ...f, daily_end_time: e.target.value }))}
                            style={inp}/>
