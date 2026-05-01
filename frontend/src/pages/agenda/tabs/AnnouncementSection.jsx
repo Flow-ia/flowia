@@ -70,6 +70,20 @@ export default function AnnouncementSection({ theme: t, showToast }) {
   }, [open, loaded, showToast]);
 
   const save = async () => {
+    // Pre-validation cote frontend pour eviter aller-retour 400.
+    // Coherence dates : si les 2 sont remplis, debut doit etre < fin.
+    if (form.starts_at && form.ends_at) {
+      const a = new Date(form.starts_at).getTime();
+      const b = new Date(form.ends_at).getTime();
+      if (Number.isFinite(a) && Number.isFinite(b) && a > b) {
+        return showToast?.('La date de fin doit être après la date de début.', 'err');
+      }
+    }
+    // Coherence heures quotidiennes
+    if (form.daily_start_time && form.daily_end_time
+        && form.daily_start_time > form.daily_end_time) {
+      return showToast?.("L'heure de fin doit être après l'heure de début.", 'err');
+    }
     setSaving(true);
     try {
       await announcementApi.save({
@@ -82,7 +96,11 @@ export default function AnnouncementSection({ theme: t, showToast }) {
         daily_end_time:   form.daily_end_time   || null,
       });
       showToast?.('Annonce enregistrée');
-    } catch (e) { showToast?.(e.message || 'Erreur', 'err'); }
+    } catch (e) {
+      // Affiche l'erreur backend telle quelle (deja explicite : "La date de
+      // debut doit etre avant la date de fin", "L'heure de debut...", etc.)
+      showToast?.(e.message || 'Erreur', 'err');
+    }
     finally { setSaving(false); }
   };
 

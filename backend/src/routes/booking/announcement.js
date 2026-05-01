@@ -13,7 +13,6 @@ const ALLOWED_COLORS = new Set([
   'green', 'orange', 'yellow', 'red', 'blue', 'gray', 'purple',
 ]);
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z?)?$/;
 
 function normalizeTime(v) {
   if (v == null || v === '') return null;
@@ -21,11 +20,15 @@ function normalizeTime(v) {
   return HHMM_RE.test(s) ? s : null;
 }
 
+// Accepte tout format parseable par Date (ISO 8601, datetime-local sans tz,
+// etc.). Renvoie un ISO UTC standard que PG comprend sans ambiguite.
+// Si invalide -> null silencieux (le check "fourni mais invalide" remonte
+// un 400 explicite plus bas).
 function normalizeDateTime(v) {
   if (v == null || v === '') return null;
-  // input HTML datetime-local renvoie 'YYYY-MM-DDTHH:MM'. PG accepte.
-  if (!ISO_DATE_RE.test(String(v))) return null;
-  return v;
+  const d = new Date(String(v));
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 module.exports = function attachAnnouncementRoutes(router) {
@@ -68,14 +71,31 @@ module.exports = function attachAnnouncementRoutes(router) {
       const safeDailyStart = normalizeTime(daily_start_time);
       const safeDailyEnd   = normalizeTime(daily_end_time);
 
-      // Coherence : si starts_at et ends_at -> starts < ends
-      if (safeStart && safeEnd && new Date(safeStart) >= new Date(safeEnd)) {
-        return res.status(400).json({ error: "La date de début doit être avant la date de fin." });
+      // Coherence : si BOTH starts_at et ends_at fournis ET egaux ou inverses
+      // -> 400 explicite. Strictement > pour permettre l'annulation par
+      // saisie identique (egal = pas de plage active = bandeau jamais visible).
+      if (safeStart && safeEnd && new Date(safeStart) > new Date(safeEnd)) {
+        return res.status(400).json({
+          error: "La date de début doit être avant la date de fin.",
+          code: 'DATES_REVERSED',
+          received: { starts_at, ends_at, parsed_start: safeStart, parsed_end: safeEnd },
+        });
       }
-      // Coherence : si daily_start et daily_end -> start < end (sauf cross-midnight a venir)
-      if (safeDailyStart && safeDailyEnd && safeDailyStart >= safeDailyEnd) {
-        return res.status(400).json({ error: "L'heure de début doit être avant l'heure de fin." });
+      // Idem heures quotidiennes : strict > (egal autorise mais inutile)
+      if (safeDailyStart && safeDailyEnd && safeDailyStart > safeDailyEnd) {
+        return res.status(400).json({
+          error: "L'heure de début doit être avant l'heure de fin.",
+          code: 'TIMES_REVERSED',
+          received: { daily_start_time, daily_end_time },
+        });
       }
+      console.log('[PUT /booking/announcement]', {
+        user_id: req.user.userId,
+        is_enabled, color: safeColor,
+        msg_len: safeMsg.length,
+        starts_at: safeStart, ends_at: safeEnd,
+        daily_start_time: safeDailyStart, daily_end_time: safeDailyEnd,
+      });
 
       await pool.query(
         `INSERT INTO merchant_announcement
