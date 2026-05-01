@@ -1445,6 +1445,71 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_user_client_id
     ON appointments(user_id, client_id) WHERE client_id IS NOT NULL`);
 
+  // ── Stripe Connect Standard (paiements en ligne réservations) ─────────────
+  // Chaque commerçant connecte SON compte Stripe via OAuth (pattern Setmore).
+  // Les clients paient directement le commerçant ; FlowIA prélève
+  // optionnellement une application_fee définie par `commission_rate` (% sur
+  // chaque réservation, défaut 0 % — configurable par admin/commerçant).
+  // Voir routes/stripe-connect.js (commit 2) et public-booking/payment.js
+  // (commit 3) pour l'implémentation. STRIPE_CONNECT_CLIENT_ID et
+  // STRIPE_CONNECT_WEBHOOK_SECRET requis sur Render (cf. .env.example).
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_email VARCHAR(255)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_charges_enabled BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN DEFAULT FALSE`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_connected_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS online_payments_enabled BOOLEAN DEFAULT FALSE`);
+  // commission_rate : % FlowIA prélevé via application_fee_amount sur chaque
+  // PaymentIntent. 0.00 = aucune commission (le commerçant ne voit rien sur
+  // ses transactions Stripe). Configurable de 0.00 à 100.00 (en pratique 0-5).
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,2) NOT NULL DEFAULT 0`);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_commission_rate_range'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_commission_rate_range
+          CHECK (commission_rate >= 0 AND commission_rate <= 100);
+      END IF;
+    END$$;
+  `);
+  // Lookup rapide par stripe_account_id (webhook account.updated, payment_intent.*)
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_stripe_account_id
+    ON users(stripe_account_id) WHERE stripe_account_id IS NOT NULL`);
+
+  // Colonnes paiement sur appointments
+  // payment_status : none = pas de paiement / payer sur place
+  //                  pending = PaymentIntent créé, pas encore confirmé
+  //                  paid = encaissé (webhook payment_intent.succeeded)
+  //                  refunded = remboursé (webhook charge.refunded)
+  //                  failed = échec (carte refusée, expirée, etc.)
+  // Le booléen `paid` existant reste maintenu en parallèle (TRUE quand
+  // payment_status='paid') pour ne pas casser les requêtes legacy.
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'none'`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_amount_cents INT`);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='appointments' AND constraint_name='appointments_payment_status_check'
+      ) THEN
+        ALTER TABLE appointments ADD CONSTRAINT appointments_payment_status_check
+          CHECK (payment_status IN ('none','pending','paid','refunded','failed'));
+      END IF;
+    END$$;
+  `);
+  // Idempotence webhook : un PaymentIntent = un seul appointment max.
+  // Empêche un retry webhook d'attribuer le même paiement 2 fois.
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_stripe_pi
+    ON appointments(stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_payment_status
+    ON appointments(user_id, payment_status, date) WHERE payment_status <> 'none'`);
+
   await applyAdminSchema(pool);
 
 console.log('[DB] Tables initialisées');
