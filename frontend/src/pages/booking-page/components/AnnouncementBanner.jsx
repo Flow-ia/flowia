@@ -22,6 +22,11 @@ const COLOR_MAP = {
 // que tout le message reste accessible meme sur petit ecran.
 const MARQUEE_THRESHOLD = 80;
 
+// Vitesse de defilement (px/seconde). Le client voit ~60-80 caracteres
+// passer par seconde, vitesse confortable pour lire en diagonale sans
+// trop attendre. Calcule duration = (container_width + message_width) / speed.
+const MARQUEE_SPEED_PX_PER_SEC = 80;
+
 export default function AnnouncementBanner({ slug }) {
   const [announcement, setAnnouncement] = useState(null);
 
@@ -37,9 +42,12 @@ export default function AnnouncementBanner({ slug }) {
   if (!announcement?.message) return null;
   const cfg = COLOR_MAP[announcement.color] || COLOR_MAP.orange;
   const isLong = announcement.message.length > MARQUEE_THRESHOLD;
-  // Vitesse defilement adaptative : ~60 chars/s. Min 12s pour pas trop vite,
-  // max 60s pour pas trop lent.
-  const duration = Math.min(60, Math.max(12, announcement.message.length / 6));
+  // Approximation : ~7 px par caractere a fontSize 13. Total a defiler =
+  // largeur container (~360 mobile) + largeur du texte. Min 8s pour pas
+  // trop vite, max 45s pour ne pas figer un long message.
+  const approxTextWidth = announcement.message.length * 7;
+  const approxTotalDistance = 360 + approxTextWidth;
+  const duration = Math.min(45, Math.max(8, approxTotalDistance / MARQUEE_SPEED_PX_PER_SEC));
 
   return (
     <div role="status" aria-live="polite" style={{
@@ -55,18 +63,29 @@ export default function AnnouncementBanner({ slug }) {
       {isLong ? (
         <>
           <style>{`
+            /* Le texte demarre cale a droite du container (translateX(0) +
+               paddingLeft 100% du container) et sort par la gauche
+               (translateX(-100%) = largeur de l'element). Avant : on partait
+               de translateX(100%) ce qui ajoutait un retard de ~20% de la
+               duree avant que le premier caractere devienne visible -> le
+               client voyait un bandeau vide pendant plusieurs secondes. */
             @keyframes ffAnnouncementMarquee {
-              0%   { transform: translateX(100%); }
+              0%   { transform: translateX(0); }
               100% { transform: translateX(-100%); }
             }
           `}</style>
           <div style={{
             whiteSpace: 'nowrap',
             display: 'inline-block',
+            // IMPORTANT : utiliser paddingLeft + paddingTop/Bottom individuels,
+            // PAS la shorthand `padding` qui ecraserait paddingLeft (bug
+            // precedent : `padding: '10px 0'` annulait le `paddingLeft: '100%'`
+            // place au-dessus -> le texte demarrait a la position 0 au lieu
+            // du bord droit du container).
             paddingLeft: '100%',
+            paddingTop: 10, paddingBottom: 10, paddingRight: 0,
             animation: `ffAnnouncementMarquee ${duration}s linear infinite`,
             fontSize: 13, fontWeight: 500,
-            padding: '10px 0',
           }}>
             {announcement.message}
           </div>
