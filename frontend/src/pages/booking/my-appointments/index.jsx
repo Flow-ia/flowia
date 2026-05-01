@@ -387,6 +387,12 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   // Modal suppression de compte (RGPD)
   const [deleteModal, setDeleteModal]       = useState(false);
   const [deleteConfirm, setDeleteConfirm]   = useState('');
+  // Resume credits/dettes pour avertissement RGPD Art. 17.3.e avant suppression.
+  // Charge a l'ouverture de la modal de suppression (lazy : evite fetch inutile
+  // si l'user ne supprime jamais son compte). Best-effort : si l'API echoue,
+  // la modal s'ouvre quand meme avec credits/dettes vides (ne bloque pas le
+  // droit RGPD a l'effacement).
+  const [creditsSummary, setCreditsSummary] = useState({ credits: [], debts: [] });
   const [deleteLoading, setDeleteLoading]   = useState(false);
   const [deleteErr, setDeleteErr]           = useState('');
   const deleteConfirmOk = deleteConfirm.trim().toLowerCase() === DELETE_PHRASE;
@@ -395,6 +401,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     setDeleteConfirm('');
     setDeleteErr('');
     setDeleteModal(true);
+    // Lazy-load credits/dettes au moment d'ouvrir la modal. Affiche les
+    // avertissements RGPD : credits abandonnes et dettes archivees 2 ans.
+    globalClientApi.creditsSummary()
+      .then(r => setCreditsSummary(r || { credits: [], debts: [] }))
+      .catch(() => setCreditsSummary({ credits: [], debts: [] }));
   };
   const closeDeleteModal = () => {
     if (deleteLoading) return;
@@ -668,6 +679,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
         deleteLoading={deleteLoading}
         deleteErr={deleteErr}
         slug={slug}
+        creditsSummary={creditsSummary}
         onChangeConfirm={e => { setDeleteConfirm(e.target.value); if (deleteErr) setDeleteErr(''); }}
         onClose={closeDeleteModal}
         onConfirm={doDeleteAccount}

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { extractClientToken } = require('../../utils/clientCookies');
+const { snapshotAllDebtsForGlobalClient } = require('../../utils/debtRecord');
 
 module.exports = function attachClientProfileRoutes(router) {
   // GET /:slug/client/appointments — liste RDV du client connecté
@@ -321,7 +322,35 @@ module.exports = function attachClientProfileRoutes(router) {
 
       const emailLow = clientEmail.toLowerCase();
 
+      // Recupere coordonnees pour snapshot dettes (RGPD Art. 17.3.e)
+      let snapshotPerson = { email: emailLow, first_name: null, last_name: null, phone: null };
+      if (gcId) {
+        const { rows: gcInfo } = await client.query(
+          'SELECT first_name, last_name, phone FROM global_clients WHERE id=$1', [gcId]
+        );
+        if (gcInfo[0]) {
+          snapshotPerson.first_name = gcInfo[0].first_name;
+          snapshotPerson.last_name  = gcInfo[0].last_name;
+          snapshotPerson.phone      = gcInfo[0].phone;
+        }
+      }
+
       await client.query('BEGIN');
+
+      // 0. AVANT toute anonymisation : snapshot des dettes (balance < 0)
+      // dans merchant_debt_records pour permettre le recouvrement legal
+      // (Art. 17.3.e RGPD). Coordonnees conservees EN CLAIR 2 ans.
+      let snapshotted = 0;
+      if (gcId) {
+        try {
+          const r = await snapshotAllDebtsForGlobalClient(client, {
+            gcId, person: snapshotPerson,
+          });
+          snapshotted = r.snapshotted;
+        } catch (e) {
+          console.warn('[client/account DELETE snapshot]', e.message);
+        }
+      }
 
       // 1. Annuler RDV futurs
       const { rowCount: cancelledFuture } = await client.query(
@@ -355,6 +384,32 @@ module.exports = function attachClientProfileRoutes(router) {
       await client.query(
         `UPDATE promo_usage_logs SET client_email=NULL, client_name='Client anonyme'
          WHERE LOWER(client_email)=$1`,
+        [emailLow]
+      ).catch(() => {});
+
+      // 3bis. Anonymiser TOUTES les autres tables avec client_email pour
+      // que rien ne reste identifiable cote merchant. Le snapshot des dettes
+      // (etape 0) a deja capture les coordonnees pour le recouvrement.
+      // Sans ces UPDATE, le commercant voyait encore le nom/email dans
+      // /caisse Credit, /clients, etc. apres suppression du compte.
+      await client.query(
+        `UPDATE client_credits SET client_email=NULL, client_name='[Compte supprimé]'
+         WHERE LOWER(client_email)=$1`,
+        [emailLow]
+      ).catch(() => {});
+      await client.query(
+        `UPDATE transactions SET client_email=NULL, client_note=NULL
+         WHERE LOWER(client_email)=$1`,
+        [emailLow]
+      ).catch(() => {});
+      await client.query(
+        `UPDATE client_notes SET client_email=NULL, client_name='[Compte supprimé]'
+         WHERE LOWER(client_email)=$1`,
+        [emailLow]
+      ).catch(() => {});
+      // Loyalty et rewards : pas de valeur compta -> hard delete
+      await client.query(
+        `DELETE FROM client_loyalty WHERE LOWER(client_email)=$1`,
         [emailLow]
       ).catch(() => {});
 
