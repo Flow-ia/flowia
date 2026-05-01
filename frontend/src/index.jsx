@@ -22,9 +22,10 @@ import { registerSW } from './pwa/registerSW';
 import './index.css';
 
 // ── Détection du domaine au montage ──────────────────────────────────────────
-// haircoifflille.fr (+ www.) → page réservation publique avec slug par défaut
-// commercant.haircoifflille.fr / localhost / autres → app commerçant (admin)
-// Les routes /book/:slug/* restent actives sur les deux domaines (rétro-compat).
+// VITE_BOOKING_DOMAIN (ex haircoifflille.fr) → page réservation publique avec
+// slug par défaut (custom domain commerçant). Plusieurs domaines via CSV.
+// flowiapro.com / localhost / autres → app commerçant (admin).
+// Les routes /book/:slug/* restent actives sur les deux modes (rétro-compat).
 const BOOKING_DOMAIN    = (import.meta.env.VITE_BOOKING_DOMAIN    || '').toLowerCase();
 const COMMERCANT_DOMAIN = (import.meta.env.VITE_COMMERCANT_DOMAIN || '').toLowerCase();
 const BOOKING_SLUG      = import.meta.env.VITE_BOOKING_SLUG || '';
@@ -81,8 +82,8 @@ function RootSwitch() {
   );
 }
 
-// PWA — enregistre le SW uniquement côté commerçant. Le booking public
-// (haircoifflille.fr) n'a pas besoin d'être installable.
+// PWA — enregistre le SW uniquement côté commerçant. Les pages publiques de
+// réservation (custom domains type haircoifflille.fr) ne sont pas installables.
 if (!isBookingHost()) {
   registerSW();
 }

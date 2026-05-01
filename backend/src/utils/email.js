@@ -28,8 +28,8 @@ function enqueue(payload, opts) {
 async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) {
   const body = {
     sender: {
-      name: process.env.SENDER_NAME || 'Hair Coiff Lille',
-      email: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@haircoifflille.fr'
+      name: process.env.SENDER_NAME || 'FlowIA',
+      email: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@flowiapro.com'
     },
     to:       [{ email: to, ...(toName ? { name: toName } : {}) }],
     subject,

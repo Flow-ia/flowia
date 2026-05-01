@@ -4,11 +4,11 @@
 // "https://a.fr,https://b.fr,https://c.fr/book/slug" -> URL cassee).
 //
 // Source de verite, par ordre de priorite :
-// 1. PUBLIC_BOOKING_ORIGIN (env dediee, recommandee : ex `https://haircoifflille.fr`)
+// 1. PUBLIC_BOOKING_ORIGIN (env dediee, recommandee : ex `https://flowiapro.com`)
 // 2. Premiere URL de FRONTEND_URL qui n'est PAS un sous-domaine technique
 //    (commercant.*, www.*, admin.*) -> on prefere le domaine racine vu par le client
 // 3. Premiere URL brute de FRONTEND_URL (fallback)
-// 4. https://haircoifflille.fr (defaut hardcode pour eviter les liens vides)
+// 4. https://flowiapro.com (defaut hardcode pour eviter les liens vides)
 //
 // Aucun trailing slash, pas d'espace, valide URL parsee.
 
@@ -41,7 +41,7 @@ function publicBookingOrigin() {
   for (const u of list) {
     try { new URL(u); return u; } catch { /* ignore */ }
   }
-  return 'https://haircoifflille.fr';
+  return 'https://flowiapro.com';
 }
 
 // URL de la page publique de reservation d'un commerce (Step1Home).
