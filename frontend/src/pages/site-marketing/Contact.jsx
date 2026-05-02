@@ -3,6 +3,8 @@ import { useTheme } from '../../hooks/useTheme';
 import { I } from '../../utils/icons';
 import { PageHero } from './components/Shared';
 
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+
 export default function Contact() {
   const { theme: t } = useTheme();
   const [name,    setName]    = useState('');
@@ -10,14 +12,37 @@ export default function Contact() {
   const [phone,   setPhone]   = useState('');
   const [topic,   setTopic]   = useState('demo');
   const [message, setMessage] = useState('');
+  const [website, setWebsite] = useState(''); // honeypot anti-bot
   const [sent,    setSent]    = useState(false);
+  const [busy,    setBusy]    = useState(false);
+  const [err,     setErr]     = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const subject = `[FlowIA] ${TOPICS.find(t => t.value === topic)?.label || ''} — ${name}`;
-    const body = `Nom : ${name}\nEmail : ${email}\nTéléphone : ${phone}\n\n${message}`;
-    window.location.href = `mailto:contact@flowiapro.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setSent(true);
+    setErr('');
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setErr('Nom, email et message sont obligatoires.'); return;
+    }
+    setBusy(true);
+    try {
+      const url = `${API_BASE}${API_BASE.endsWith('/api') ? '' : '/api'}/pub/contact`;
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name, email, phone, topic, message, website }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(data?.error || "Impossible d'envoyer votre message. Réessayez plus tard.");
+        setBusy(false);
+        return;
+      }
+      setSent(true);
+    } catch {
+      setErr("Erreur réseau. Vérifiez votre connexion et réessayez.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const inp = {
@@ -40,11 +65,11 @@ export default function Contact() {
         subtitle="Une question, une démo, un devis ? Notre équipe vous répond sous 24h ouvrées (souvent en moins d'une heure)."
       />
 
-      <section style={{ padding: '40px 24px 56px' }}>
+      <section style={{ padding: '40px 16px 56px' }}>
         <div style={{
           maxWidth: 1000, margin: '0 auto',
-          display: 'grid', gap: 48,
-          gridTemplateColumns: 'minmax(280px, 1fr) minmax(320px, 2fr)',
+          display: 'grid', gap: 32,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
         }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 500, color: t.text, margin: 0, marginBottom: 18 }}>
@@ -77,8 +102,9 @@ export default function Contact() {
           </div>
 
           <div style={{
-            padding: 28, borderRadius: 14,
+            padding: 'clamp(18px, 4vw, 28px)', borderRadius: 14,
             background: t.canvas, border: `0.5px solid ${t.border}`,
+            minWidth: 0,
           }}>
             {sent ? (
               <div style={{ textAlign: 'center', padding: '32px 16px' }}>
@@ -91,48 +117,66 @@ export default function Contact() {
                   <I.Check style={{ width: 24, height: 24, color: '#10b981' }} />
                 </div>
                 <h3 style={{ fontSize: 18, fontWeight: 500, color: t.text, margin: 0, marginBottom: 8 }}>
-                  Votre logiciel email s'est ouvert
+                  Message envoyé !
                 </h3>
                 <p style={{ fontSize: 14, color: t.textSub, margin: 0, lineHeight: 1.6 }}>
-                  Si rien ne s'est passé, écrivez-nous directement à <a href="mailto:contact@flowiapro.com" style={{ color: t.text }}>contact@flowiapro.com</a>.
+                  {"Notre équipe vous répond sous 24h ouvrées (souvent plus vite). Si urgent, vous pouvez aussi écrire à "}
+                  <a href="mailto:contact@flowiapro.com" style={{ color: t.text }}>contact@flowiapro.com</a>.
                 </p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Honeypot anti-bot — champ cache aux humains, rempli par les bots. */}
+                <input type="text" name="website" value={website} onChange={e => setWebsite(e.target.value)}
+                  tabIndex={-1} autoComplete="off" aria-hidden="true"
+                  style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} />
+
                 <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                   <div>
                     <label style={label}>Nom complet *</label>
-                    <input type="text" required value={name} onChange={e => setName(e.target.value)} style={inp} />
+                    <input type="text" required value={name} onChange={e => setName(e.target.value)} disabled={busy} style={inp} />
                   </div>
                   <div>
                     <label style={label}>Email *</label>
-                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} style={inp} />
+                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={busy} style={inp} />
                   </div>
                 </div>
                 <div>
                   <label style={label}>Téléphone</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={inp} placeholder="06 12 34 56 78" />
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} style={inp} placeholder="06 12 34 56 78" />
                 </div>
                 <div>
                   <label style={label}>Votre demande *</label>
-                  <select value={topic} onChange={e => setTopic(e.target.value)} style={inp}>
+                  <select value={topic} onChange={e => setTopic(e.target.value)} disabled={busy} style={inp}>
                     {TOPICS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={label}>Message</label>
-                  <textarea value={message} onChange={e => setMessage(e.target.value)} rows={5}
+                  <label style={label}>Message *</label>
+                  <textarea required value={message} onChange={e => setMessage(e.target.value)} disabled={busy} rows={5}
                     placeholder="Parlez-nous de votre salon, vos besoins…"
                     style={{ ...inp, resize: 'vertical', minHeight: 100 }} />
                 </div>
-                <button type="submit" style={{
-                  fontSize: 15, fontWeight: 500, color: t.bg,
-                  background: t.text, border: 'none',
+
+                {err && (
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 8,
+                    background: '#fef2f2', border: '0.5px solid #fecaca',
+                    color: '#991b1b', fontSize: 13, lineHeight: 1.5,
+                  }}>
+                    {err}
+                  </div>
+                )}
+
+                <button type="submit" disabled={busy} style={{
+                  fontSize: 15, fontWeight: 500,
+                  color: t.bg, background: t.text, border: 'none',
                   padding: '13px 22px', borderRadius: 10,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                  marginTop: 4,
+                  cursor: busy ? 'wait' : 'pointer',
+                  opacity: busy ? 0.6 : 1,
+                  fontFamily: 'inherit', marginTop: 4,
                 }}>
-                  {"Envoyer le message"}
+                  {busy ? 'Envoi en cours…' : 'Envoyer le message'}
                 </button>
                 <p style={{ fontSize: 12, color: t.muted, margin: 0, lineHeight: 1.5 }}>
                   {"En soumettant ce formulaire, vous acceptez que vos données soient utilisées pour répondre à votre demande. Aucune donnée n'est transmise à des tiers."}

@@ -99,13 +99,24 @@ export function getStatusPalette(t) {
   };
 }
 
-const ThemeContext = createContext(null);
+export const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(LIGHT);
   const toggle = () => setTheme(t => t.mode === 'light' ? DARK : LIGHT);
   return (
     <ThemeContext.Provider value={{ theme, toggle, isLight: theme.mode === 'light', isDark: theme.mode === 'dark' }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+// Provider qui force le LIGHT mode quoi qu'il arrive — utilise sur le site
+// marketing flowiapro.com pour ne JAMAIS basculer en dark, meme si l'utilisateur
+// a active le dark mode dans l'app commercant.
+export function LightThemeProvider({ children }) {
+  return (
+    <ThemeContext.Provider value={{ theme: LIGHT, toggle: () => {}, isLight: true, isDark: false }}>
       {children}
     </ThemeContext.Provider>
   );

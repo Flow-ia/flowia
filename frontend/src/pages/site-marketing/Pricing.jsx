@@ -183,10 +183,12 @@ export default function Pricing() {
           <div style={{
             background: t.canvas, borderRadius: 12,
             border: `0.5px solid ${t.border}`,
-            overflow: 'hidden',
+            overflow: 'auto',
+            WebkitOverflowScrolling: 'touch',
           }}>
             <table style={{
               width: '100%', borderCollapse: 'collapse', fontSize: 14,
+              minWidth: 540,
             }}>
               <thead>
                 <tr style={{ background: t.cardAlt }}>

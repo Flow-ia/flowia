@@ -10,6 +10,7 @@ export default function Landing() {
   return (
     <>
       <Hero t={t} />
+      <GrowthStats t={t} />
       <Features t={t} />
       <AIShowcase t={t} />
       <ThreeSteps t={t} />
@@ -75,7 +76,7 @@ function Lede({ children, t, align = 'left', maxWidth = 640 }) {
 function Hero({ t }) {
   return (
     <section style={{
-      padding: '56px 24px 40px',
+      padding: 'clamp(48px, 7vw, 72px) 16px 48px',
       background: t.canvas,
       borderBottom: `0.5px solid ${t.border}`,
     }}>
@@ -93,18 +94,27 @@ function Hero({ t }) {
         </span>
 
         <h1 style={{
-          fontSize: 'clamp(34px, 5.5vw, 56px)', fontWeight: 500,
-          color: t.text, lineHeight: 1.05, letterSpacing: -1.2,
-          margin: 0, marginBottom: 14,
-          maxWidth: 880, marginLeft: 'auto', marginRight: 'auto',
+          fontSize: 'clamp(32px, 6vw, 60px)', fontWeight: 500,
+          color: t.text, lineHeight: 1.02, letterSpacing: -1.4,
+          margin: 0, marginBottom: 16,
+          maxWidth: 920, marginLeft: 'auto', marginRight: 'auto',
         }}>
-          {"Le logiciel qui simplifie la gestion de votre salon"}
+          {"Augmentez votre chiffre d'affaires"}
+          <br/>
+          <span style={{
+            background: 'linear-gradient(90deg, #8b5cf6 0%, #6366f1 50%, #06b6d4 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>
+            {"grâce à l'intelligence artificielle"}
+          </span>
         </h1>
         <p style={{
-          fontSize: 18, color: t.textSub, lineHeight: 1.5,
-          maxWidth: 680, margin: '0 auto 24px',
+          fontSize: 'clamp(15px, 2.4vw, 19px)', color: t.textSub, lineHeight: 1.5,
+          maxWidth: 720, margin: '0 auto 28px',
         }}>
-          {"Réservations en ligne 24/7, caisse, fidélité, marketing IA et bien plus. Tout votre salon dans une seule application."}
+          {"FlowIA réunit agenda, caisse, fidélité et marketing IA dans une seule application. L'IA travaille pour vous : campagnes ciblées, prévisions de CA, détection des clients à reconquérir."}
         </p>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -130,6 +140,73 @@ function Hero({ t }) {
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <I.Check style={{ width: 14, height: 14, color: '#10b981' }} /> Support 7j/7
           </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Stats panel facon Revolut — gros nombres impactants pour montrer la valeur
+// concrete de FlowIA (CA, no-shows, croissance) directement sous le hero.
+function GrowthStats({ t }) {
+  const stats = [
+    { v: '+30 %', label: 'de chiffre d\'affaires moyen après 6 mois',     color: '#8b5cf6' },
+    { v: '70 %',  label: 'de no-shows en moins grâce aux rappels SMS',     color: '#10b981' },
+    { v: '24/7',  label: 'de réservations en ligne, sans intervention',    color: '#6366f1' },
+    { v: '500+',  label: 'salons utilisent FlowIA chaque jour en France',  color: '#f59e0b' },
+  ];
+  return (
+    <section style={{
+      padding: '48px 16px',
+      background: '#0b0b14',
+      color: '#fff',
+    }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <p style={{
+          fontSize: 12, fontWeight: 500, color: '#a1a1aa',
+          textTransform: 'uppercase', letterSpacing: 0.8,
+          margin: 0, marginBottom: 12, textAlign: 'center',
+        }}>
+          {"Des résultats concrets"}
+        </p>
+        <h2 style={{
+          fontSize: 'clamp(22px, 3.5vw, 32px)', fontWeight: 500,
+          color: '#fff', lineHeight: 1.15, letterSpacing: -0.6,
+          margin: 0, marginBottom: 36, textAlign: 'center',
+        }}>
+          {"FlowIA fait grandir votre activité"}
+        </h2>
+        <div style={{
+          display: 'grid', gap: 18,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+        }}>
+          {stats.map(s => (
+            <div key={s.label} style={{
+              padding: 'clamp(20px, 3vw, 28px)',
+              borderRadius: 16,
+              background: 'rgba(255,255,255,0.04)',
+              border: '0.5px solid rgba(255,255,255,0.08)',
+              transition: 'transform 0.2s ease, background 0.2s ease',
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}>
+              <p style={{
+                fontSize: 'clamp(36px, 6vw, 56px)', fontWeight: 500,
+                color: s.color, letterSpacing: -1.5, lineHeight: 1,
+                margin: 0, marginBottom: 12,
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+              }}>
+                {s.v}
+              </p>
+              <p style={{
+                fontSize: 14, color: '#d4d4d8', lineHeight: 1.5,
+                margin: 0,
+              }}>
+                {s.label}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
