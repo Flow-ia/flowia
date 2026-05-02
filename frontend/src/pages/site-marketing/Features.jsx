@@ -212,22 +212,21 @@ const DETAILS = {
 
 export default function Features() {
   const { theme: t } = useTheme();
-  const [activeAnchor, setActiveAnchor] = useState('');
+  const [activeGroup, setActiveGroup] = useState('');
 
-  // Met à jour l'ancre active dans la nav rapide pour mettre en surbrillance
-  // la section visible.
+  // Met à jour le groupe actif dans la nav rapide en regardant quelle section
+  // de groupe est visible. La nav contient 4 pills (un par groupe) au lieu
+  // de 17 (un par feature) — beaucoup plus lisible.
   useEffect(() => {
     const onScroll = () => {
-      const ids = Object.keys(DETAILS);
       let current = '';
-      for (const id of ids) {
-        const el = document.getElementById(id);
+      for (const g of FEATURE_GROUPS) {
+        const el = document.getElementById(`group-${g.slug}`);
         if (!el) continue;
         const rect = el.getBoundingClientRect();
-        if (rect.top < 140 && rect.bottom > 140) { current = id; break; }
-        if (rect.top < 140) current = id;
+        if (rect.top < 140) current = g.slug;
       }
-      setActiveAnchor(current);
+      setActiveGroup(current);
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -242,22 +241,34 @@ export default function Features() {
         subtitle="FlowIA réunit en une seule application l'agenda, la caisse, le marketing IA, la fidélité et bien plus encore."
       />
 
-      {/* Nav rapide sticky par catégorie */}
-      <CategoryNav t={t} activeAnchor={activeAnchor} />
+      {/* Nav rapide sticky par groupe (4 pills) */}
+      <CategoryNav t={t} activeGroup={activeGroup} />
 
       {FEATURE_GROUPS.map((group, gi) => (
-        <section key={group.label} style={{
-          padding: '48px 24px 16px',
-          borderTop: gi === 0 ? `0.5px solid ${t.border}` : 'none',
-        }}>
+        <section key={group.slug}
+          id={`group-${group.slug}`}
+          style={{
+            padding: '48px 24px 16px',
+            scrollMarginTop: 110,
+            borderTop: gi === 0 ? `0.5px solid ${t.border}` : 'none',
+          }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <p style={{
-              fontSize: 11, fontWeight: 500, color: t.muted,
-              textTransform: 'uppercase', letterSpacing: 0.7,
-              margin: 0, marginBottom: 18,
-            }}>
-              {group.label}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 8,
+                background: group.color + '15',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <group.Ic style={{ width: 14, height: 14, color: group.color }} />
+              </div>
+              <p style={{
+                fontSize: 11, fontWeight: 500, color: t.muted,
+                textTransform: 'uppercase', letterSpacing: 0.7,
+                margin: 0,
+              }}>
+                {group.label}
+              </p>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {group.items.map((it, idx) => {
                 const d = DETAILS[it.id];
@@ -293,32 +304,35 @@ export default function Features() {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-function CategoryNav({ t, activeAnchor }) {
+// Nav rapide groupée — 4 pills (un par groupe FEATURE_GROUPS) au lieu de 17.
+// Click sur une pill -> scroll smooth vers la section du groupe.
+function CategoryNav({ t, activeGroup }) {
   return (
     <div style={{
       position: 'sticky', top: 64, zIndex: 30,
-      background: t.canvas,
+      background: t.navBg,
       borderBottom: `0.5px solid ${t.border}`,
-      overflowX: 'auto',
+      backdropFilter: 'saturate(140%) blur(8px)',
     }}>
       <div style={{
-        maxWidth: 1100, margin: '0 auto', padding: '12px 24px',
-        display: 'flex', gap: 6, whiteSpace: 'nowrap',
+        maxWidth: 1100, margin: '0 auto', padding: '10px 24px',
+        display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap',
       }}>
-        {FEATURE_GROUPS.flatMap(g => g.items).map(it => {
-          const active = activeAnchor === it.id;
+        {FEATURE_GROUPS.map(g => {
+          const active = activeGroup === g.slug;
           return (
-            <a key={it.id} href={`#${it.id}`} style={{
-              fontSize: 12, fontWeight: 500,
+            <a key={g.slug} href={`#group-${g.slug}`} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 13, fontWeight: 500,
               color: active ? t.text : t.muted,
-              padding: '6px 10px', borderRadius: 99,
+              padding: '7px 14px', borderRadius: 99,
               background: active ? t.cardAlt : 'transparent',
-              border: `0.5px solid ${active ? t.borderStrong : 'transparent'}`,
+              border: `0.5px solid ${active ? t.borderStrong : t.border}`,
               textDecoration: 'none',
               transition: 'all 0.15s ease',
-              flexShrink: 0,
             }}>
-              {it.title}
+              <g.Ic style={{ width: 13, height: 13, color: active ? g.color : t.muted }} />
+              {g.short}
             </a>
           );
         })}

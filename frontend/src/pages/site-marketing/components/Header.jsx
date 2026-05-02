@@ -7,16 +7,19 @@ const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
 // Liste centrale — réutilisée dans Features.jsx (chaque entry a un anchor #id
 // qui doit exister dans Features.jsx pour que la nav scrolle au bon endroit).
+// Chaque groupe a un `slug` pour la nav rapide groupée (4 pills au lieu de 17).
 export const FEATURE_GROUPS = [
   {
-    label: 'Intelligence artificielle',
+    slug: 'ia', label: 'Intelligence artificielle', short: 'IA',
+    Ic: I.Sparkles, color: '#8b5cf6',
     items: [
       { id: 'ia',                 Ic: I.Sparkles, color: '#8b5cf6', title: 'Marketing IA',           desc: "Campagnes générées et ciblées automatiquement." },
       { id: 'previsions',         Ic: I.TrendUp,  color: '#06b6d4', title: 'Prévisions IA',          desc: "Anticipez votre activité et vos creux." },
     ],
   },
   {
-    label: 'Réservation & site',
+    slug: 'reservation', label: 'Réservation & site', short: 'Réservation',
+    Ic: I.Calendar, color: '#6366f1',
     items: [
       { id: 'reservation',        Ic: I.Calendar, color: '#6366f1', title: 'Site de réservation',    desc: "Page publique 100 % personnalisable." },
       { id: 'annonce',            Ic: I.Bell,     color: '#f59e0b', title: 'Annonce gratuite',       desc: "Bandeau d'info en haut de votre site." },
@@ -25,7 +28,8 @@ export const FEATURE_GROUPS = [
     ],
   },
   {
-    label: 'Marketing & relation client',
+    slug: 'marketing', label: 'Marketing & relation client', short: 'Marketing',
+    Ic: I.Send, color: '#f59e0b',
     items: [
       { id: 'sms',                Ic: I.Send,     color: '#f59e0b', title: 'Marketing SMS',          desc: "Campagnes SMS ciblées et rappels auto." },
       { id: 'email',              Ic: I.Mail,     color: '#6366f1', title: 'Marketing email',        desc: "Campagnes email transactionnelles." },
@@ -36,7 +40,8 @@ export const FEATURE_GROUPS = [
     ],
   },
   {
-    label: 'Caisse & gestion',
+    slug: 'caisse', label: 'Caisse & gestion', short: 'Caisse',
+    Ic: I.Wallet, color: '#10b981',
     items: [
       { id: 'caisse',             Ic: I.Wallet,    color: '#10b981', title: 'Caisse intégrée',        desc: "Encaissez en quelques secondes." },
       { id: 'clients',            Ic: I.User,      color: '#6366f1', title: 'Fichier clients',        desc: "Historique, fiches, segmentation." },
