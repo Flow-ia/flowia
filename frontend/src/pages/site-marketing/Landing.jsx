@@ -668,7 +668,7 @@ function PricingTeaser({ t }) {
       cta: 'Essayer 14 jours', highlight: true,
     },
     {
-      name: 'Équipe', price: '59', period: '/mois',
+      name: 'Équipe', price: '49', period: '/mois',
       desc: "Pour les salons multi-employés et multi-sites.",
       features: ['Tout du plan Pro', 'Employés illimités', 'Multi-sites', 'API & exports avancés', 'Account manager dédié'],
       cta: 'Nous contacter', highlight: false,

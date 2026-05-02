@@ -8,6 +8,14 @@ const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
 // Détail riche pour chaque feature, indexé par id (les ids matchent ceux du
 // mega-menu Header pour que /fonctionnalites#<id> scrolle au bon endroit).
+//
+// Chaque feature a :
+//  - label : pill 'eyebrow' au-dessus du titre
+//  - title, desc, bullets : contenu
+//  - cta : libellé du bouton CTA personnalisé
+//  - img : photo Unsplash illustrant la fonctionnalité (fallback gradient si erreur)
+const IMG = (id) => `https://images.unsplash.com/${id}?w=1200&q=80&auto=format&fit=crop`;
+
 const DETAILS = {
   ia: {
     label: 'IA',
@@ -20,6 +28,8 @@ const DETAILS = {
       "A/B testing automatique des messages",
       "Pas de configuration : ça marche dès la première semaine",
     ],
+    cta: "Découvrir notre IA",
+    img: IMG('photo-1677442136019-21780ecad995'),
   },
   previsions: {
     label: 'IA',
@@ -31,6 +41,8 @@ const DETAILS = {
       "Détection automatique des best-sellers",
       "Recommandations d'actions (campagnes, promotions)",
     ],
+    cta: "Voir les prévisions",
+    img: IMG('photo-1551288049-bebda4e38f71'),
   },
   reservation: {
     label: 'Site',
@@ -43,6 +55,8 @@ const DETAILS = {
       "Acompte ou paiement total en ligne (optionnel)",
       "Connexion Google ou compte simple en 30 secondes",
     ],
+    cta: "Découvrir la personnalisation",
+    img: IMG('photo-1559028012-481c04fa702d'),
   },
   annonce: {
     label: 'Site',
@@ -54,6 +68,8 @@ const DETAILS = {
       "Activation/désactivation instantanée",
       "Aperçu en direct avant publication",
     ],
+    cta: "Activer une annonce",
+    img: IMG('photo-1567593810070-7a3d471af022'),
   },
   tarifs: {
     label: 'Configuration',
@@ -65,6 +81,8 @@ const DETAILS = {
       "Prestations actives/inactives en un clic",
       "Tarifs spécifiques par employé (optionnel)",
     ],
+    cta: "Configurer mes tarifs",
+    img: IMG('photo-1607082348824-0a96f2a4b9da'),
   },
   employes: {
     label: 'Configuration',
@@ -76,6 +94,8 @@ const DETAILS = {
       "Horaires individuels, congés, absences",
       "PIN court par employé pour la tablette partagée",
     ],
+    cta: "Gérer mon équipe",
+    img: IMG('photo-1556761175-5973dc0f32e7'),
   },
   sms: {
     label: 'Marketing',
@@ -88,6 +108,8 @@ const DETAILS = {
       "Coût réel sans marge (à partir de 0,045 €/SMS)",
       "Quotas et budget contrôlés",
     ],
+    cta: "Lancer mes campagnes SMS",
+    img: IMG('photo-1521295121783-8a321d551ad2'),
   },
   email: {
     label: 'Marketing',
@@ -100,6 +122,8 @@ const DETAILS = {
       "Désinscription 1 clic dans chaque email",
       "Statistiques d'ouverture et de clic",
     ],
+    cta: "Envoyer mes emails",
+    img: IMG('photo-1596526131083-e8c633c948d2'),
   },
   fidelite: {
     label: 'Marketing',
@@ -112,6 +136,8 @@ const DETAILS = {
       "Solde et historique visibles côté client",
       "Activation/désactivation par catégorie",
     ],
+    cta: "Activer la fidélité",
+    img: IMG('photo-1556745753-b2904692b3cd'),
   },
   parrainage: {
     label: 'Marketing',
@@ -124,6 +150,8 @@ const DETAILS = {
       "Conditions affichées en clair au client",
       "Suivi des parrainages dans l'admin",
     ],
+    cta: "Configurer le parrainage",
+    img: IMG('photo-1559526324-4b87b5e36e44'),
   },
   anniversaire: {
     label: 'Marketing',
@@ -136,6 +164,8 @@ const DETAILS = {
       "Anti-fraude rolling 330 jours",
       "Offre paramétrable (% ou €)",
     ],
+    cta: "Activer les anniversaires",
+    img: IMG('photo-1530103862676-de8c9debad1d'),
   },
   rappels: {
     label: 'Marketing',
@@ -147,6 +177,8 @@ const DETAILS = {
       "Réduction des no-shows jusqu'à 70 %",
       "Désactivable par client si demandé",
     ],
+    cta: "Activer les rappels",
+    img: IMG('photo-1501139083538-0139583c060f'),
   },
   caisse: {
     label: 'Caisse',
@@ -159,6 +191,8 @@ const DETAILS = {
       "Remboursements RGPD-conformes",
       "Verrouillage par PIN administrateur",
     ],
+    cta: "Découvrir la caisse",
+    img: IMG('photo-1556740758-90de374c12ad'),
   },
   clients: {
     label: 'Gestion',
@@ -171,6 +205,8 @@ const DETAILS = {
       "Notes et tags par client",
       "Export RGPD complet à la demande",
     ],
+    cta: "Voir mon fichier clients",
+    img: IMG('photo-1551836022-deb4988cc6c0'),
   },
   credits: {
     label: 'Caisse',
@@ -183,6 +219,8 @@ const DETAILS = {
       "Anti-fuite après suppression de compte",
       "Audit trail des opérations",
     ],
+    cta: "Suivre mes crédits",
+    img: IMG('photo-1554224155-6726b3ff858f'),
   },
   exports: {
     label: 'Comptabilité',
@@ -195,6 +233,8 @@ const DETAILS = {
       "Compatible la plupart des logiciels comptables",
       "Verrouillé par PIN admin",
     ],
+    cta: "Configurer mes exports",
+    img: IMG('photo-1454165804606-c3d57bc86b40'),
   },
   statistiques: {
     label: 'Pilotage',
@@ -207,6 +247,8 @@ const DETAILS = {
       "Statistiques par moyen de paiement",
       "Verrouillage par PIN admin",
     ],
+    cta: "Voir mes statistiques",
+    img: IMG('photo-1543286386-713bdd548da4'),
   },
 };
 
@@ -346,26 +388,16 @@ function FeatureCard({ t, item, detail, flipped }) {
   return (
     <div id={item.id} style={{
       scrollMarginTop: 120,
-      borderRadius: 14,
+      borderRadius: 16,
       background: t.canvas,
       border: `0.5px solid ${t.border}`,
-      padding: 28,
-      display: 'grid', gap: 32,
-      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-      alignItems: 'center',
+      overflow: 'hidden',
+      display: 'grid', gap: 0,
+      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+      alignItems: 'stretch',
     }}>
-      <div style={{ order: flipped ? 1 : 0 }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          fontSize: 11, fontWeight: 500,
-          padding: '4px 10px', borderRadius: 99,
-          background: item.color + '15', color: item.color,
-          border: `0.5px solid ${item.color}33`,
-          marginBottom: 14,
-        }}>
-          <item.Ic style={{ width: 12, height: 12 }} />
-          {detail.label}
-        </div>
+      <div style={{ order: flipped ? 1 : 0, padding: 28, display: 'flex', flexDirection: 'column' }}>
+        <FeatureLabel t={t} color={item.color} Ic={item.Ic} text={detail.label} />
         <h3 style={{
           fontSize: 'clamp(20px, 2.6vw, 26px)', fontWeight: 500,
           color: t.text, lineHeight: 1.25, letterSpacing: -0.3,
@@ -376,7 +408,7 @@ function FeatureCard({ t, item, detail, flipped }) {
         <p style={{ fontSize: 15, color: t.textSub, lineHeight: 1.6, margin: 0, marginBottom: 16 }}>
           {detail.desc}
         </p>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {detail.bullets.map(b => (
             <li key={b} style={{ display: 'flex', gap: 8, fontSize: 14, color: t.textSub }}>
               <I.Check style={{ width: 14, height: 14, color: '#10b981', flexShrink: 0, marginTop: 3 }} />
@@ -384,22 +416,77 @@ function FeatureCard({ t, item, detail, flipped }) {
             </li>
           ))}
         </ul>
+        {detail.cta && (
+          <div style={{ marginTop: 'auto' }}>
+            <a href={COMMERCANT_URL + '/register'} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 14, fontWeight: 500,
+              color: item.color,
+              textDecoration: 'none',
+              padding: '10px 16px', borderRadius: 10,
+              background: 'transparent',
+              border: `0.5px solid ${item.color}55`,
+              transition: 'background 0.15s ease',
+              fontFamily: 'inherit',
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = item.color + '0f'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+              {detail.cta} <I.ChevR style={{ width: 14, height: 14 }} />
+            </a>
+          </div>
+        )}
       </div>
+      <FeatureVisual t={t} color={item.color} Ic={item.Ic} img={detail.img} alt={detail.title} />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Pill 'eyebrow' au-dessus du titre — outline, uppercase, FDS-2026.
+function FeatureLabel({ t, color, Ic, text }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      width: 'fit-content',
+      fontSize: 10, fontWeight: 500,
+      padding: '3px 9px', borderRadius: 99,
+      background: 'transparent',
+      color, letterSpacing: 0.7,
+      border: `0.5px solid ${color}55`,
+      textTransform: 'uppercase',
+      marginBottom: 14,
+    }}>
+      {Ic && <Ic style={{ width: 11, height: 11 }} />}
+      {text}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Image illustrative avec fallback gradient + icone si erreur de chargement.
+function FeatureVisual({ t, color, Ic, img, alt }) {
+  const [errored, setErrored] = useState(false);
+  if (!img || errored) {
+    return (
       <div style={{
-        padding: 24, borderRadius: 14,
-        background: t.cardAlt,
-        border: `0.5px solid ${t.border}`,
-        minHeight: 200,
+        background: `linear-gradient(135deg, ${color}22, ${color}55)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: 240,
       }}>
         <div style={{
-          width: 72, height: 72, borderRadius: 18,
-          background: item.color + '15',
+          width: 88, height: 88, borderRadius: 22,
+          background: '#ffffff', boxShadow: t.shadowSm,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <item.Ic style={{ width: 32, height: 32, color: item.color }} />
+          <Ic style={{ width: 36, height: 36, color }} />
         </div>
       </div>
+    );
+  }
+  return (
+    <div style={{ minHeight: 240, overflow: 'hidden' }}>
+      <img src={img} alt={alt} loading="lazy" onError={() => setErrored(true)}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
     </div>
   );
 }

@@ -174,11 +174,11 @@ function IndustryCard({ t, item, index }) {
       <div style={{ padding: 28 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
           <span style={{
-            fontSize: 11, fontWeight: 500,
-            padding: '4px 10px', borderRadius: 99,
-            background: item.color + '15', color: item.color,
-            border: `0.5px solid ${item.color}33`,
-            letterSpacing: 0.3, textTransform: 'uppercase',
+            fontSize: 10, fontWeight: 500,
+            padding: '3px 9px', borderRadius: 99,
+            background: 'transparent', color: item.color,
+            border: `0.5px solid ${item.color}55`,
+            letterSpacing: 0.7, textTransform: 'uppercase',
           }}>
             {String(index + 1).padStart(2, '0')} · {item.tagline}
           </span>

@@ -39,7 +39,7 @@ export default function Pricing() {
       cta: "Démarrer l'essai 14 jours", highlight: true,
     },
     {
-      name: 'Équipe', monthly: 59, yearly: 49,
+      name: 'Équipe', monthly: 49, yearly: 39,
       desc: "Pour les salons multi-employés et multi-sites.",
       features: [
         'Tout du plan Pro',
