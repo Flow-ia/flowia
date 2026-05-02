@@ -29,7 +29,7 @@ const DETAILS = {
       "Pas de configuration : ça marche dès la première semaine",
     ],
     cta: "Découvrir notre IA",
-    img: IMG('photo-1677442136019-21780ecad995'),
+    img: IMG('photo-1487412947147-5cebf100ffc2'),
   },
   previsions: {
     label: 'IA',
@@ -42,7 +42,7 @@ const DETAILS = {
       "Recommandations d'actions (campagnes, promotions)",
     ],
     cta: "Voir les prévisions",
-    img: IMG('photo-1551288049-bebda4e38f71'),
+    img: IMG('photo-1620331317932-4d7e7f73af32'),
   },
   reservation: {
     label: 'Site',
@@ -56,7 +56,7 @@ const DETAILS = {
       "Connexion Google ou compte simple en 30 secondes",
     ],
     cta: "Découvrir la personnalisation",
-    img: IMG('photo-1559028012-481c04fa702d'),
+    img: IMG('photo-1492106087820-71f1a00d2b11'),
   },
   annonce: {
     label: 'Site',
@@ -69,7 +69,7 @@ const DETAILS = {
       "Aperçu en direct avant publication",
     ],
     cta: "Activer une annonce",
-    img: IMG('photo-1567593810070-7a3d471af022'),
+    img: IMG('photo-1560066984-138dadb4c035'),
   },
   tarifs: {
     label: 'Configuration',
@@ -82,7 +82,7 @@ const DETAILS = {
       "Tarifs spécifiques par employé (optionnel)",
     ],
     cta: "Configurer mes tarifs",
-    img: IMG('photo-1607082348824-0a96f2a4b9da'),
+    img: IMG('photo-1571781926291-c477ebfd024b'),
   },
   employes: {
     label: 'Configuration',
@@ -95,7 +95,7 @@ const DETAILS = {
       "PIN court par employé pour la tablette partagée",
     ],
     cta: "Gérer mon équipe",
-    img: IMG('photo-1556761175-5973dc0f32e7'),
+    img: IMG('photo-1522337360788-8b13dee7a37e'),
   },
   sms: {
     label: 'Marketing',
@@ -109,7 +109,7 @@ const DETAILS = {
       "Quotas et budget contrôlés",
     ],
     cta: "Lancer mes campagnes SMS",
-    img: IMG('photo-1521295121783-8a321d551ad2'),
+    img: IMG('photo-1605497788044-5a32c7078486'),
   },
   email: {
     label: 'Marketing',
@@ -123,7 +123,7 @@ const DETAILS = {
       "Statistiques d'ouverture et de clic",
     ],
     cta: "Envoyer mes emails",
-    img: IMG('photo-1596526131083-e8c633c948d2'),
+    img: IMG('photo-1503951914875-452162b0f3f1'),
   },
   fidelite: {
     label: 'Marketing',
@@ -137,7 +137,7 @@ const DETAILS = {
       "Activation/désactivation par catégorie",
     ],
     cta: "Activer la fidélité",
-    img: IMG('photo-1556745753-b2904692b3cd'),
+    img: IMG('photo-1559599101-f09722fb4948'),
   },
   parrainage: {
     label: 'Marketing',
@@ -151,7 +151,7 @@ const DETAILS = {
       "Suivi des parrainages dans l'admin",
     ],
     cta: "Configurer le parrainage",
-    img: IMG('photo-1559526324-4b87b5e36e44'),
+    img: IMG('photo-1570172619644-dfd03ed5d881'),
   },
   anniversaire: {
     label: 'Marketing',
@@ -165,7 +165,7 @@ const DETAILS = {
       "Offre paramétrable (% ou €)",
     ],
     cta: "Activer les anniversaires",
-    img: IMG('photo-1530103862676-de8c9debad1d'),
+    img: IMG('photo-1530653333484-13e7e8eaa3c7'),
   },
   rappels: {
     label: 'Marketing',
@@ -178,7 +178,7 @@ const DETAILS = {
       "Désactivable par client si demandé",
     ],
     cta: "Activer les rappels",
-    img: IMG('photo-1501139083538-0139583c060f'),
+    img: IMG('photo-1599387737005-7787e8d0a2dd'),
   },
   caisse: {
     label: 'Caisse',
@@ -192,7 +192,7 @@ const DETAILS = {
       "Verrouillage par PIN administrateur",
     ],
     cta: "Découvrir la caisse",
-    img: IMG('photo-1556740758-90de374c12ad'),
+    img: IMG('photo-1604654894610-df63bc536371'),
   },
   clients: {
     label: 'Gestion',
@@ -206,7 +206,7 @@ const DETAILS = {
       "Export RGPD complet à la demande",
     ],
     cta: "Voir mon fichier clients",
-    img: IMG('photo-1551836022-deb4988cc6c0'),
+    img: IMG('photo-1521590832167-7bcbfaa6381f'),
   },
   credits: {
     label: 'Caisse',
@@ -220,7 +220,7 @@ const DETAILS = {
       "Audit trail des opérations",
     ],
     cta: "Suivre mes crédits",
-    img: IMG('photo-1554224155-6726b3ff858f'),
+    img: IMG('photo-1556228720-195a672e8a03'),
   },
   exports: {
     label: 'Comptabilité',
@@ -234,7 +234,7 @@ const DETAILS = {
       "Verrouillé par PIN admin",
     ],
     cta: "Configurer mes exports",
-    img: IMG('photo-1454165804606-c3d57bc86b40'),
+    img: IMG('photo-1544161515-4ab6ce6db874'),
   },
   statistiques: {
     label: 'Pilotage',
@@ -248,7 +248,7 @@ const DETAILS = {
       "Verrouillage par PIN admin",
     ],
     cta: "Voir mes statistiques",
-    img: IMG('photo-1543286386-713bdd548da4'),
+    img: IMG('photo-1487412947147-5cebf100ffc2'),
   },
 };
 
