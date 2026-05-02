@@ -257,7 +257,7 @@ export const api = {
   updateProfile:      (b) => request('/auth/profile',         { method: 'PUT',  body: JSON.stringify(b) }),
   completeOnboarding: (b) => request('/auth/onboarding',      { method: 'POST', body: JSON.stringify(b) }),
   merchantGoogleAuthUrl: () => {
-    const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
+    const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '376153951158-jm80phb46sl1fisbgeq587v83ho7ft5e.apps.googleusercontent.com';
     const redirectUri = `${BACKEND || window.location.origin}/api/auth/google/merchant/callback`;
     // On transmet l'origine de l'opener via `state` pour que le callback
@@ -510,7 +510,7 @@ export const pubApi = {
       method: 'POST', body: JSON.stringify(body),
     }),
   googleAuthUrl:  (slug, ref, marketingOptIn) => {
-    const BASE = (import.meta.env.VITE_API_URL || '/api').replace('/api', '');
+    const BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
     // origin = sous-domaine de l'opener, relayé dans `state` par le
     // /client/auth/google pour router correctement le postMessage du
     // callback vers le bon sous-domaine frontend (validation allowlist).
