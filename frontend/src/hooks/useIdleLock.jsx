@@ -38,8 +38,14 @@ export function IdleLockProvider({ children }) {
 
   // Charge la config depuis user_settings (best-effort : si user pas connecté
   // ou erreur réseau, on reste sur le default désactivé).
+  // Skip silencieux quand pas de token : evite un 401 parasite dans la
+  // console au boot (avant le redirect /login).
   const loadConfig = useCallback(async () => {
     try {
+      if (typeof localStorage !== 'undefined' && !localStorage.getItem('ff_token')) {
+        setConfig({ enabled: false, idleMinutes: 0 });
+        return;
+      }
       const s = await userSettingsApi.get();
       setConfig({
         enabled: !!s.lock_screen_enabled,

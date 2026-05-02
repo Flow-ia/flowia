@@ -732,7 +732,14 @@ router.get('/google/merchant/callback', async (req, res) => {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) throw new Error('Token Google invalide');
+    if (!tokenData.access_token) {
+      // Log Google's raw error for Render-side diagnosis (redirect_uri_mismatch,
+      // invalid_grant, invalid_client, etc.) — without logging client_secret.
+      console.error('[GOOGLE OAUTH] echange code echoue, status=' + tokenRes.status,
+        '- redirect_uri_envoye=' + redirectUri,
+        '- google_response=', JSON.stringify(tokenData));
+      throw new Error(tokenData.error_description || tokenData.error || 'Token Google invalide');
+    }
 
     // 2. Récupérer les infos du profil Google
     const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -939,7 +946,14 @@ router.get('/google/callback', async (req, res) => {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) throw new Error('Token Google invalide');
+    if (!tokenData.access_token) {
+      // Log Google's raw error for Render-side diagnosis (redirect_uri_mismatch,
+      // invalid_grant, invalid_client, etc.) — without logging client_secret.
+      console.error('[GOOGLE OAUTH] echange code echoue, status=' + tokenRes.status,
+        '- redirect_uri_envoye=' + redirectUri,
+        '- google_response=', JSON.stringify(tokenData));
+      throw new Error(tokenData.error_description || tokenData.error || 'Token Google invalide');
+    }
 
     // 2. Récupérer les infos du profil Google
     const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
