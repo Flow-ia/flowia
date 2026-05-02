@@ -131,18 +131,6 @@ function Hero({ t }) {
             <I.Check style={{ width: 14, height: 14, color: '#10b981' }} /> Support 7j/7
           </span>
         </div>
-
-        <div style={{
-          marginTop: 36,
-          borderRadius: 16,
-          border: `0.5px solid ${t.border}`,
-          background: t.cardAlt,
-          boxShadow: t.shadowLg,
-          padding: 24,
-          maxWidth: 980, marginLeft: 'auto', marginRight: 'auto',
-        }}>
-          <MockDashboard t={t} />
-        </div>
       </div>
     </section>
   );
