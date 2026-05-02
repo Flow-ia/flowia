@@ -11,6 +11,7 @@ export default function Landing() {
     <>
       <Hero t={t} />
       <Features t={t} />
+      <AIShowcase t={t} />
       <ThreeSteps t={t} />
       <Testimonials t={t} />
       <Integrations t={t} />
@@ -24,7 +25,7 @@ export default function Landing() {
   );
 }
 
-function Section({ children, bg, t, paddingY = 96 }) {
+function Section({ children, bg, t, paddingY = 56 }) {
   return (
     <section style={{
       background: bg || 'transparent',
@@ -61,8 +62,8 @@ function H2({ children, t, align = 'left', maxWidth }) {
 function Lede({ children, t, align = 'left', maxWidth = 640 }) {
   return (
     <p style={{
-      fontSize: 17, color: t.textSub, lineHeight: 1.55,
-      margin: 0, marginBottom: 24, textAlign: align,
+      fontSize: 16, color: t.textSub, lineHeight: 1.5,
+      margin: 0, marginBottom: 18, textAlign: align,
       maxWidth,
       marginLeft: align === 'center' ? 'auto' : undefined,
       marginRight: align === 'center' ? 'auto' : undefined,
@@ -74,7 +75,7 @@ function Lede({ children, t, align = 'left', maxWidth = 640 }) {
 function Hero({ t }) {
   return (
     <section style={{
-      padding: '88px 24px 64px',
+      padding: '56px 24px 40px',
       background: t.canvas,
       borderBottom: `0.5px solid ${t.border}`,
     }}>
@@ -83,29 +84,30 @@ function Hero({ t }) {
           display: 'inline-flex', alignItems: 'center', gap: 6,
           fontSize: 12, fontWeight: 500,
           padding: '6px 12px', borderRadius: 99,
-          background: t.cardAlt, border: `0.5px solid ${t.border}`,
-          color: t.textSub, letterSpacing: 0.3, marginBottom: 24,
+          background: 'linear-gradient(90deg, #eeedfe, #eef2ff)',
+          border: `0.5px solid #c4b5fd`,
+          color: '#5b21b6', letterSpacing: 0.3, marginBottom: 18,
         }}>
           <I.Sparkles style={{ width: 13, height: 13 }} />
-          {"Logiciel de gestion 100 % français"}
+          {"Propulsé par l'IA · 100 % français"}
         </span>
 
         <h1 style={{
-          fontSize: 'clamp(36px, 6vw, 60px)', fontWeight: 500,
+          fontSize: 'clamp(34px, 5.5vw, 56px)', fontWeight: 500,
           color: t.text, lineHeight: 1.05, letterSpacing: -1.2,
-          margin: 0, marginBottom: 18,
+          margin: 0, marginBottom: 14,
           maxWidth: 880, marginLeft: 'auto', marginRight: 'auto',
         }}>
           {"Le logiciel qui simplifie la gestion de votre salon"}
         </h1>
         <p style={{
-          fontSize: 19, color: t.textSub, lineHeight: 1.55,
-          maxWidth: 680, margin: '0 auto 36px',
+          fontSize: 18, color: t.textSub, lineHeight: 1.5,
+          maxWidth: 680, margin: '0 auto 24px',
         }}>
-          {"Réservations en ligne 24/7, caisse, fidélité, marketing SMS, IA et bien plus. Tout votre salon dans une seule application, simple à prendre en main."}
+          {"Réservations en ligne 24/7, caisse, fidélité, marketing IA et bien plus. Tout votre salon dans une seule application."}
         </p>
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           <a href={COMMERCANT_URL + '/register'} style={primaryBtn(t)}>
             {"Essayer gratuitement"}
           </a>
@@ -115,8 +117,8 @@ function Hero({ t }) {
         </div>
 
         <div style={{
-          marginTop: 28,
-          display: 'flex', gap: 18, justifyContent: 'center', alignItems: 'center',
+          marginTop: 18,
+          display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center',
           flexWrap: 'wrap', fontSize: 13, color: t.muted,
         }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -131,12 +133,12 @@ function Hero({ t }) {
         </div>
 
         <div style={{
-          marginTop: 56,
+          marginTop: 36,
           borderRadius: 16,
           border: `0.5px solid ${t.border}`,
           background: t.cardAlt,
           boxShadow: t.shadowLg,
-          padding: 32,
+          padding: 24,
           maxWidth: 980, marginLeft: 'auto', marginRight: 'auto',
         }}>
           <MockDashboard t={t} />
@@ -146,67 +148,15 @@ function Hero({ t }) {
   );
 }
 
-function MockDashboard({ t }) {
-  const cards = [
-    { Ic: I.TrendUp,  label: "Chiffre d'affaires",  value: '4 280 €', sub: '+18 % cette semaine', color: '#10b981' },
-    { Ic: I.Calendar, label: 'Rendez-vous du jour', value: '24',      sub: '6 confirmés à venir', color: '#6366f1' },
-    { Ic: I.Users,    label: 'Clients fidèles',     value: '312',     sub: '+12 ce mois',         color: '#f59e0b' },
-  ];
-  return (
-    <div>
-      <div style={{
-        display: 'grid', gap: 14,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        marginBottom: 18,
-      }}>
-        {cards.map(c => (
-          <div key={c.label} style={{
-            background: t.canvas, borderRadius: 12,
-            border: `0.5px solid ${t.border}`,
-            borderLeft: `2px solid ${c.color}`,
-            padding: 16, textAlign: 'left',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <c.Ic style={{ width: 14, height: 14, color: c.color }} />
-              <span style={{ fontSize: 11, fontWeight: 500, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                {c.label}
-              </span>
-            </div>
-            <p style={{ margin: 0, fontSize: 24, fontWeight: 500, color: t.text }}>{c.value}</p>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: t.muted }}>{c.sub}</p>
-          </div>
-        ))}
-      </div>
-      <div style={{
-        background: t.canvas, borderRadius: 12,
-        border: `0.5px solid ${t.border}`,
-        padding: 16, textAlign: 'left',
-      }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: t.muted, margin: 0, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-          Agenda du jour
-        </p>
-        {['09:00 — Anaïs · Coupe + brushing', '10:30 — Jordan · Barbe', '14:00 — Sarah · Manucure gel', '16:30 — Karim · Coupe homme'].map(line => (
-          <div key={line} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 0', borderTop: `0.5px solid ${t.border}`,
-          }}>
-            <span style={{ fontSize: 14, color: t.text }}>{line}</span>
-            <span style={{
-              fontSize: 11, fontWeight: 500, padding: '3px 8px', borderRadius: 99,
-              background: '#ecfdf5', color: '#065f46', border: '0.5px solid #a7f3d0',
-            }}>
-              Confirmé
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 function Features({ t }) {
   const items = [
+    {
+      Ic: I.Sparkles, color: '#8b5cf6', bg: '#eeedfe',
+      title: 'Marketing IA',
+      desc: "L'intelligence artificielle de FlowIA propose le bon message au bon client au bon moment. Plus besoin de réfléchir à qui contacter ni quand.",
+      badge: 'IA',
+    },
     {
       Ic: I.Calendar, color: '#6366f1', bg: '#eef2ff',
       title: 'Réservation en ligne 24/7',
@@ -228,11 +178,6 @@ function Features({ t }) {
       desc: "Cumul de points automatique, récompenses paramétrables, programmes anniversaire et parrainage prêts à l'emploi.",
     },
     {
-      Ic: I.Sparkles, color: '#8b5cf6', bg: '#eeedfe',
-      title: 'Marketing IA',
-      desc: "Lancez des campagnes SMS personnalisées en 2 clics. L'IA propose le bon message au bon client au bon moment.",
-    },
-    {
       Ic: I.Users, color: '#06b6d4', bg: '#ecfeff',
       title: 'Gestion équipe & PIN',
       desc: "Plusieurs employés, agendas dédiés, droits par rôle. Mode tablette partagée avec PIN — pas de session par employé à gérer.",
@@ -241,34 +186,47 @@ function Features({ t }) {
 
   return (
     <Section t={t}>
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <SectionLabel t={t}>Tout-en-un</SectionLabel>
         <H2 t={t} align="center">Toutes les fonctionnalités dont votre salon a besoin</H2>
         <Lede t={t} align="center">
-          {"FlowIA réunit l'agenda, la caisse, la fidélité et le marketing dans une seule interface. Adieu les outils éparpillés."}
+          {"Agenda, caisse, fidélité, marketing IA — tout dans une seule interface."}
         </Lede>
       </div>
       <div style={{
-        display: 'grid', gap: 18,
+        display: 'grid', gap: 16,
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
       }}>
         {items.map(it => (
           <div key={it.title} style={{
-            padding: 24, borderRadius: 12,
+            padding: 22, borderRadius: 12,
             background: t.canvas,
             border: `0.5px solid ${t.border}`,
+            position: 'relative',
             transition: 'transform 0.15s ease, box-shadow 0.15s ease',
           }}
             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = t.shadowMd; }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+            {it.badge && (
+              <span style={{
+                position: 'absolute', top: 14, right: 14,
+                fontSize: 10, fontWeight: 500,
+                padding: '3px 8px', borderRadius: 99,
+                background: 'linear-gradient(90deg, #8b5cf6, #6366f1)',
+                color: '#fff', letterSpacing: 0.5,
+                textTransform: 'uppercase',
+              }}>
+                {it.badge}
+              </span>
+            )}
             <div style={{
-              width: 40, height: 40, borderRadius: 10,
-              background: it.bg, marginBottom: 18,
+              width: 38, height: 38, borderRadius: 10,
+              background: it.bg, marginBottom: 14,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <it.Ic style={{ width: 20, height: 20, color: it.color }} />
+              <it.Ic style={{ width: 18, height: 18, color: it.color }} />
             </div>
-            <h3 style={{ fontSize: 17, fontWeight: 500, color: t.text, margin: 0, marginBottom: 8 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 500, color: t.text, margin: 0, marginBottom: 6 }}>
               {it.title}
             </h3>
             <p style={{ fontSize: 14, color: t.textSub, lineHeight: 1.55, margin: 0 }}>
@@ -282,6 +240,118 @@ function Features({ t }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+function AIShowcase({ t }) {
+  return (
+    <section style={{
+      padding: '64px 24px',
+      background: 'linear-gradient(135deg, #faf5ff 0%, #eef2ff 100%)',
+      borderTop: `0.5px solid ${t.border}`,
+      borderBottom: `0.5px solid ${t.border}`,
+    }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{
+          display: 'grid', gap: 40,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          alignItems: 'center',
+        }}>
+          <div>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 11, fontWeight: 500,
+              padding: '4px 10px', borderRadius: 99,
+              background: '#ffffff', border: `0.5px solid #c4b5fd`,
+              color: '#5b21b6', letterSpacing: 0.4, marginBottom: 14,
+              textTransform: 'uppercase',
+            }}>
+              <I.Sparkles style={{ width: 12, height: 12 }} />
+              Intelligence artificielle
+            </span>
+            <h2 style={{
+              fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 500,
+              color: '#1e1b4b', lineHeight: 1.15, letterSpacing: -0.6,
+              margin: 0, marginBottom: 14,
+            }}>
+              {"L'IA qui fait grandir votre salon"}
+            </h2>
+            <p style={{ fontSize: 16, color: '#3730a3', lineHeight: 1.55, margin: 0, marginBottom: 18 }}>
+              {"FlowIA analyse votre activité et propose les bonnes actions. Campagnes SMS générées automatiquement, prévisions de chiffre d'affaires, détection des clients dormants."}
+            </p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+              {[
+                'Suggestions de campagnes basées sur vos données',
+                "Génération automatique du texte (SMS et email)",
+                "Détection des clients en risque de fuite",
+                "Prévisions de CA sur 4 semaines",
+              ].map(b => (
+                <li key={b} style={{ display: 'flex', gap: 8, fontSize: 14, color: '#3730a3' }}>
+                  <I.Check style={{ width: 14, height: 14, color: '#8b5cf6', flexShrink: 0, marginTop: 3 }} />
+                  {b}
+                </li>
+              ))}
+            </ul>
+            <Link to="/fonctionnalites#ia" style={{
+              fontSize: 14, fontWeight: 500, color: '#fff',
+              background: 'linear-gradient(90deg, #8b5cf6, #6366f1)',
+              padding: '11px 18px', borderRadius: 10,
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              Découvrir l'IA <I.ChevR style={{ width: 13, height: 13 }} />
+            </Link>
+          </div>
+          <div style={{
+            background: '#fff', borderRadius: 16,
+            border: `0.5px solid ${t.border}`,
+            boxShadow: t.shadowLg,
+            padding: 22,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 10,
+                background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <I.Sparkles style={{ width: 16, height: 16, color: '#fff' }} />
+              </div>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', margin: 0 }}>FlowIA Assistant</p>
+                <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>Suggestion · il y a 2 min</p>
+              </div>
+            </div>
+            <div style={{
+              padding: 14, borderRadius: 10,
+              background: '#faf5ff', border: '0.5px solid #c4b5fd',
+              marginBottom: 12,
+            }}>
+              <p style={{ fontSize: 13, color: '#1e1b4b', margin: 0, lineHeight: 1.55 }}>
+                {"23 clientes n'ont pas pris RDV depuis 3 mois. Une campagne SMS \"On vous a vues, mais ça fait longtemps\" pourrait en faire revenir 6 à 8 cette semaine."}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{
+                flex: 1, padding: '9px 12px', borderRadius: 8,
+                background: 'linear-gradient(90deg, #8b5cf6, #6366f1)', color: '#fff',
+                border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}>
+                Lancer la campagne
+              </button>
+              <button style={{
+                padding: '9px 12px', borderRadius: 8,
+                background: '#fff', color: '#374151',
+                border: '0.5px solid #e5e7eb', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}>
+                Voir détails
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 function ThreeSteps({ t }) {
   const steps = [
     { n: '01', title: 'Créez votre page de réservation', desc: "Renseignez vos prestations, vos horaires et vos employés. Tout est paramétrable en moins de 10 minutes." },
@@ -290,7 +360,7 @@ function ThreeSteps({ t }) {
   ];
   return (
     <Section t={t} bg={t.cardAlt}>
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <SectionLabel t={t}>Démarrage simple</SectionLabel>
         <H2 t={t} align="center">3 étapes pour digitaliser votre salon</H2>
         <Lede t={t} align="center">
@@ -346,7 +416,7 @@ function Testimonials({ t }) {
   ];
   return (
     <Section t={t}>
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <SectionLabel t={t}>Ils nous font confiance</SectionLabel>
         <H2 t={t} align="center">Plus de 500 salons utilisent FlowIA chaque jour</H2>
       </div>
@@ -395,7 +465,7 @@ function Integrations({ t }) {
   ];
   return (
     <Section t={t} bg={t.cardAlt}>
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <SectionLabel t={t}>Connectez vos outils</SectionLabel>
         <H2 t={t} align="center">{"S'intègre à votre écosystème"}</H2>
         <Lede t={t} align="center">
@@ -618,7 +688,7 @@ function PricingTeaser({ t }) {
   ];
   return (
     <Section t={t} bg={t.cardAlt}>
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <SectionLabel t={t}>Tarifs</SectionLabel>
         <H2 t={t} align="center">{"Une tarification simple, sans surprise"}</H2>
         <Lede t={t} align="center">
@@ -706,7 +776,7 @@ function Faq({ t }) {
   const [open, setOpen] = useState(0);
   return (
     <Section t={t}>
-      <div style={{ textAlign: 'center', marginBottom: 56 }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <SectionLabel t={t}>FAQ</SectionLabel>
         <H2 t={t} align="center">Questions fréquentes</H2>
       </div>

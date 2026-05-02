@@ -12,10 +12,10 @@ export default function LegalNotice() {
         <Prose>
           <ProseH2>Éditeur du site</ProseH2>
           <p>
-            {"Le site flowiapro.com et l'application FlowIA sont édités par FlowIA SAS, société par actions simplifiée au capital social de 1 000 €, immatriculée au registre du commerce et des sociétés."}
+            {"Le site flowiapro.com et l'application FlowIA sont édités par FlowIA, immatriculée au registre du commerce et des sociétés."}
           </p>
           <p>
-            <strong>Adresse :</strong> France<br/>
+            <strong>Adresse :</strong> Marseille, France<br/>
             <strong>Email :</strong> contact@flowiapro.com<br/>
             <strong>Directeur de la publication :</strong> Représentant légal de FlowIA SAS
           </p>

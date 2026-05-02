@@ -60,14 +60,14 @@ export default function Footer() {
     <footer style={{
       borderTop: `0.5px solid ${t.border}`,
       background: t.cardAlt,
-      padding: '56px 24px 28px',
-      marginTop: 96,
+      padding: '40px 24px 24px',
+      marginTop: 56,
     }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 40, marginBottom: 48,
+          gap: 32, marginBottom: 32,
         }}>
           <div style={{ minWidth: 200 }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 14 }}>

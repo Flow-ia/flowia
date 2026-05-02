@@ -28,7 +28,7 @@ export default function ClientPortal() {
         subtitle="Retrouvez vos rendez-vous, votre historique et vos points de fidélité depuis le site de votre salon."
       />
 
-      <section style={{ padding: '40px 24px 80px' }}>
+      <section style={{ padding: '32px 24px 56px' }}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
           <div style={{
             padding: 32, borderRadius: 14,

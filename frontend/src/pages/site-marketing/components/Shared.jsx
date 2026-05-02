@@ -5,7 +5,7 @@ export function PageHero({ label, title, subtitle }) {
   const { theme: t } = useTheme();
   return (
     <section style={{
-      padding: '88px 24px 56px',
+      padding: '56px 24px 36px',
       background: t.canvas,
       borderBottom: `0.5px solid ${t.border}`,
       textAlign: 'center',
@@ -15,17 +15,17 @@ export function PageHero({ label, title, subtitle }) {
           <p style={{
             fontSize: 12, fontWeight: 500, color: t.muted,
             textTransform: 'uppercase', letterSpacing: 0.8,
-            margin: 0, marginBottom: 14,
+            margin: 0, marginBottom: 12,
           }}>{label}</p>
         )}
         <h1 style={{
-          fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 500,
+          fontSize: 'clamp(30px, 4.5vw, 44px)', fontWeight: 500,
           color: t.text, lineHeight: 1.1, letterSpacing: -0.8,
-          margin: 0, marginBottom: 18,
+          margin: 0, marginBottom: 14,
         }}>{title}</h1>
         {subtitle && (
           <p style={{
-            fontSize: 18, color: t.textSub, lineHeight: 1.55,
+            fontSize: 16, color: t.textSub, lineHeight: 1.5,
             margin: 0,
           }}>{subtitle}</p>
         )}
@@ -34,7 +34,7 @@ export function PageHero({ label, title, subtitle }) {
   );
 }
 
-export function Container({ children, maxWidth = 1100, paddingY = 72 }) {
+export function Container({ children, maxWidth = 1100, paddingY = 48 }) {
   return (
     <section style={{ padding: `${paddingY}px 24px` }}>
       <div style={{ maxWidth, margin: '0 auto' }}>{children}</div>

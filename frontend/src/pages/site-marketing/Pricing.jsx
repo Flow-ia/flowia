@@ -172,7 +172,7 @@ export default function Pricing() {
         </div>
       </Container>
 
-      <section style={{ padding: '0 24px 88px' }}>
+      <section style={{ padding: '0 24px 56px' }}>
         <div style={{ maxWidth: 980, margin: '0 auto' }}>
           <h2 style={{
             fontSize: 22, fontWeight: 500, color: t.text,

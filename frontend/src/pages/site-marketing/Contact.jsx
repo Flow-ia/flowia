@@ -40,7 +40,7 @@ export default function Contact() {
         subtitle="Une question, une démo, un devis ? Notre équipe vous répond sous 24h ouvrées (souvent en moins d'une heure)."
       />
 
-      <section style={{ padding: '56px 24px 96px' }}>
+      <section style={{ padding: '40px 24px 56px' }}>
         <div style={{
           maxWidth: 1000, margin: '0 auto',
           display: 'grid', gap: 48,
