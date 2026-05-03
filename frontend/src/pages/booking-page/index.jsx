@@ -884,28 +884,78 @@ export default function BookingPage({ slug }) {
           {!showAuthPanel && step >= 2 && (
             <div className="bk-steps" style={{ maxWidth:600, width:'100%', animation:'fadeIn .15s ease' }}>
 
-              {/* Bouton retour */}
+              {/* Bouton retour — shadcn ghost */}
               <button
                 onClick={()=> step===2?goToStep(1):step===3?goToStep(2):step===4?goToStep(3):step===5?goToStep(4):goToStep(5)}
-                style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight: 500,
-                  color:th.muted, background:'none', border:'none', cursor:'pointer',
-                  padding:'0 0 20px', marginBottom:4 }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                  style={{width:16,height:16}}><polyline points="15 18 9 12 15 6"/></svg>
-                {step===2 ? (selEmp&&!selSvc ? selEmp.name : 'Nos prestations')
-                  : step===3 ? (selSvc?.name || selEmp?.name)
-                  : step===4 ? (selEmp?._anyEmployee ? 'Premier disponible' : selEmp?.name)
-                  : step===5 ? selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})
-                  : 'Informations'}
+                style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:13, fontWeight: 500,
+                  color:th.muted, background:'transparent', border:'none', cursor:'pointer',
+                  padding:'6px 10px 6px 6px', marginBottom:14, marginLeft:-6, borderRadius:8,
+                  fontFamily:'inherit', transition:'background 0.15s ease, color 0.15s ease' }}
+                onMouseEnter={(e)=>{ e.currentTarget.style.background = th.bgHover; e.currentTarget.style.color = th.text; }}
+                onMouseLeave={(e)=>{ e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = th.muted; }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  style={{width:14,height:14}}><polyline points="15 18 9 12 15 6"/></svg>
+                Retour
               </button>
 
-              {/* Barre de progression */}
-              <div style={{ display:'flex', gap:4, marginBottom:28 }}>
-                {[1,2,3,4,5,6].map(i=>(
-                  <div key={i} style={{ flex:i===step?2:1, height:3, borderRadius:99,
-                    background: i<=step ? th.accent : th.border,
-                    opacity: i<=step ? 1 : 0.3, transition:'all .3s' }}/>
-                ))}
+              {/* Stepper shadcn — ronds numérotés + connecteurs */}
+              <div style={{ display:'flex', alignItems:'center', gap:0, marginBottom:8, width:'100%' }}>
+                {[
+                  { n:1, label:'Service' },
+                  { n:2, label:'Détails' },
+                  { n:3, label:'Date' },
+                  { n:4, label:'Heure' },
+                  { n:5, label:'Infos' },
+                  { n:6, label:'Confirmer' },
+                ].map((s, i) => {
+                  const done = s.n < step;
+                  const cur  = s.n === step;
+                  const future = s.n > step;
+                  return (
+                    <div key={s.n} style={{ display:'flex', alignItems:'center', flex: i === 5 ? '0 0 auto' : 1 }}>
+                      <div style={{
+                        width:26, height:26, borderRadius:99,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize:12, fontWeight:500, fontFamily:'inherit',
+                        flexShrink:0,
+                        background: done ? th.accent : (cur ? th.accent : th.bg),
+                        color: done ? th.accentText : (cur ? th.accentText : th.muted),
+                        border: `1px solid ${done || cur ? th.accent : th.border}`,
+                        boxShadow: cur ? `0 0 0 3px ${th.accent}1a` : 'none',
+                        transition:'all 0.25s ease',
+                      }}>
+                        {done ? (
+                          <svg viewBox="0 0 12 12" width="12" height="12" fill="none">
+                            <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        ) : s.n}
+                      </div>
+                      {i < 5 && (
+                        <div style={{
+                          flex:1, height:2, margin:'0 6px', borderRadius:99,
+                          background: done ? th.accent : th.border,
+                          opacity: future ? 0.6 : 1,
+                          transition:'background 0.3s ease',
+                        }}/>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Label étape courante */}
+              <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:24, flexWrap:'wrap' }}>
+                <span style={{ fontSize:11, fontWeight:500, color:th.muted, textTransform:'uppercase', letterSpacing:1 }}>
+                  Étape {step} sur 6
+                </span>
+                <span style={{ fontSize:11, color:th.muted }}>·</span>
+                <span style={{ fontSize:13, fontWeight:500, color:th.text }}>
+                  {step===2 ? (selEmp&&!selSvc ? selEmp.name : 'Choix prestation / employé')
+                    : step===3 ? 'Choisir une date'
+                    : step===4 ? 'Choisir un créneau'
+                    : step===5 ? 'Vos informations'
+                    : 'Récapitulatif'}
+                </span>
               </div>
 
               {/* ── ÉTAPE 2 ── */}
