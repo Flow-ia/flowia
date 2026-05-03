@@ -85,8 +85,8 @@ export function ReferralTab({
                 <span style={{
                   fontSize:10, fontWeight: 500,
                   padding:'3px 8px', borderRadius:99,
-                  background:isUsed ? '#e5e7eb' : accent + '20',
-                  color:isUsed ? '#6b7280' : accent,
+                  background:isUsed ? th.border : accent + '20',
+                  color:isUsed ? th.muted : accent,
                 }}>{isUsed ? 'Utilisée' : 'Disponible'}</span>
               </div>
             </div>

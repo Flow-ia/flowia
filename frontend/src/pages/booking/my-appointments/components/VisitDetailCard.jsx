@@ -39,7 +39,7 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
           gap:12, flexWrap:'wrap' }}>
           <div style={{ minWidth:0, flex:'1 1 200px' }}>
             <span style={{ fontSize:10, padding:'3px 8px', borderRadius:99, fontWeight: 500,
-              background:'rgba(99,102,241,0.10)', color:'#6366f1',
+              background:'rgba(99,102,241,0.10)', color:th.ax.blue,
               display:'inline-flex', alignItems:'center', gap:4, marginBottom:8 }}>
               <span style={{ fontSize:9 }}>📍</span>Passage sur place
             </span>

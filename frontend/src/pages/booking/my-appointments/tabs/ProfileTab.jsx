@@ -150,7 +150,7 @@ export function ProfileTab({
             {profOk && (
               <div style={{ margin:'12px 20px 0', padding:'10px 14px', borderRadius:9,
                 background:'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
-                color:'#16a34a', fontSize:13, fontWeight: 500 }}>
+                color:th.ax.emerald, fontSize:13, fontWeight: 500 }}>
                 ✓ {profOk}
               </div>
             )}
