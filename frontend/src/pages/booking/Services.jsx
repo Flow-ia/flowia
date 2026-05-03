@@ -8,7 +8,7 @@ export function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
   const [open, setOpen] = useState(false); // fermé par défaut
 
   return (
-    <div style={{ borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
+    <div>
       {/* En-tête accordéon */}
       {label && (
         <button onClick={() => setOpen(p => !p)}

@@ -54,14 +54,12 @@ export function MobileHoursBlock({ th, hours }) {
       </button>
       {open && (
         <div style={{ borderTop: `0.5px solid ${th.border}`, background:th.card }}>
-          {WEEK_ORDER.map((dow, i) => {
+          {WEEK_ORDER.map((dow) => {
             const h = hours[dow];
             const isToday = dow === curDow;
-            const isLast  = i === WEEK_ORDER.length - 1;
             return (
               <div key={dow} style={{ display:'flex', alignItems:'center',
-                justifyContent:'space-between', padding:'7px 12px',
-                borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
+                justifyContent:'space-between', padding:'7px 12px' }}>
                 <span style={{ fontSize:12, fontWeight: isToday ? 800 : 500,
                   color: isToday ? th.text : th.muted }}>
                   {DAY_SHORT[dow]}
@@ -170,7 +168,7 @@ export function SideCard({ th, slug, business, onReserve }) {
         {/* Bouton Réserver */}
         <div style={{ padding:'16px 20px', borderBottom: `0.5px solid ${th.border}` }}>
           <button onClick={onReserve}
-            style={{ width:'100%', padding:'13px', borderRadius:10,
+            style={{ width:'100%', padding:'13px', borderRadius:99,
               background:th.accent, border:'none', fontWeight: 500, fontSize:15,
               color:th.accentText, cursor:'pointer',
               boxShadow: 'none' }}>
@@ -190,14 +188,12 @@ export function SideCard({ th, slug, business, onReserve }) {
               )}
             </div>
             <div>
-              {WEEK_ORDER.map((dow, i) => {
+              {WEEK_ORDER.map((dow) => {
                 const h = hours[dow];
                 const isToday = dow === curDow;
-                const isLast  = i === WEEK_ORDER.length - 1;
                 return (
                   <div key={dow} className="bk-hours-row" style={{ display:'flex', alignItems:'center',
-                    justifyContent:'space-between', padding:'8px 18px',
-                    borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
+                    justifyContent:'space-between', padding:'8px 18px' }}>
                     <span style={{ fontSize:13, fontWeight: isToday ? 800 : 500,
                       color: isToday ? th.text : th.muted }}>
                       {DAY_FULL[dow]}

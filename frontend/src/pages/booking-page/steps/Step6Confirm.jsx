@@ -224,7 +224,7 @@ export function Step6Confirm({
       {bookErr && <p style={{fontSize:12,color:'#ef4444',marginBottom:12,fontWeight: 500}}>{bookErr}</p>}
 
       <button onClick={handleBook} disabled={booking}
-        style={{width:'100%',padding:'16px',borderRadius:12,
+        style={{width:'100%',padding:'16px',borderRadius:99,
           background:th.accent,border:'none',fontWeight: 500,fontSize:15,
           color:th.accentText,cursor:booking?'wait':'pointer',
           opacity:booking?0.7:1,letterSpacing:'-0.01em',

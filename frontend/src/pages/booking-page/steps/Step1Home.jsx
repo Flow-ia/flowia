@@ -304,51 +304,9 @@ export function Step1Home({
         <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
           margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
 
-        {/* Carte Google Maps embed — si adresse disponible */}
-        {(business?.address || business?.city) && (() => {
-          const addrQ = encodeURIComponent(
-            [business.address, business.postal_code, business.city]
-            .filter(Boolean).join(' ')
-          );
-          const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
-          // Embed direct via www.google.com (au lieu de maps.google.com qui
-          // redirige) pour limiter la surface CSP frame-src et éviter que
-          // certains navigateurs mobiles refusent l'iframe sur redirect.
-          const embedUrl = `https://www.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
-          return (
-            <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
-              border: `0.5px solid ${th.border}` }}>
-              <iframe
-                className="bk-iframe"
-                src={embedUrl}
-                width="100%"
-                height="240"
-                style={{ border:'none', display:'block' }}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                title="Localisation du commerce"
-              />
-              {/* Lien "Ouvrir dans Maps" */}
-              <a href={mapsLink} target="_blank" rel="noopener noreferrer"
-                style={{ display:'flex', alignItems:'center', gap:8,
-                  padding:'10px 14px', background:th.card,
-                  borderTop: `0.5px solid ${th.border}`,
-                  fontSize:13, fontWeight: 500, color:'#2563eb', textDecoration:'none' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  style={{width:13,height:13}}>
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-                {[business.address, business.postal_code, business.city].filter(Boolean).join(' ')}
-              </a>
-            </div>
-          );
-        })()}
-
-        {/* Card infos : adresse textuelle + téléphone */}
+        {/* Card infos : adresse textuelle + téléphone (en haut) */}
         <div style={{ background:th.card, border: `0.5px solid ${th.border}`,
-          borderRadius:12, overflow:'hidden' }}>
+          borderRadius:12, overflow:'hidden', marginBottom:16 }}>
           {(business?.address || business?.city || business?.postal_code) && (
             <div style={{ display:'flex', alignItems:'flex-start', gap:12,
               padding:'14px 18px',
@@ -385,6 +343,48 @@ export function Step1Home({
             </a>
           )}
         </div>
+
+        {/* Carte Google Maps embed (en bas) — si adresse disponible */}
+        {(business?.address || business?.city) && (() => {
+          const addrQ = encodeURIComponent(
+            [business.address, business.postal_code, business.city]
+            .filter(Boolean).join(' ')
+          );
+          const mapsLink = `https://www.google.com/maps/search/?api=1&query=${addrQ}`;
+          // Embed direct via www.google.com (au lieu de maps.google.com qui
+          // redirige) pour limiter la surface CSP frame-src et éviter que
+          // certains navigateurs mobiles refusent l'iframe sur redirect.
+          const embedUrl = `https://www.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
+          return (
+            <div style={{ borderRadius:14, overflow:'hidden',
+              border: `0.5px solid ${th.border}` }}>
+              <iframe
+                className="bk-iframe"
+                src={embedUrl}
+                width="100%"
+                height="240"
+                style={{ border:'none', display:'block' }}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Localisation du commerce"
+              />
+              {/* Lien "Ouvrir dans Maps" */}
+              <a href={mapsLink} target="_blank" rel="noopener noreferrer"
+                style={{ display:'flex', alignItems:'center', gap:8,
+                  padding:'10px 14px', background:th.card,
+                  borderTop: `0.5px solid ${th.border}`,
+                  fontSize:13, fontWeight: 500, color:'#2563eb', textDecoration:'none' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  style={{width:13,height:13}}>
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                {[business.address, business.postal_code, business.city].filter(Boolean).join(' ')}
+              </a>
+            </div>
+          );
+        })()}
       </section>
 
       {/* ── FOOTER ── */}
