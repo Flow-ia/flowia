@@ -26,37 +26,40 @@ export function SuccessView({
         {/* Icône succès */}
         <div style={{ width:72, height:72, borderRadius:20, background:th.ax.emerald,
           display:'flex', alignItems:'center', justifyContent:'center', marginBottom:24,
-          boxShadow:'0 8px 24px rgba(34,197,94,0.25)' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"
+          boxShadow: th.shadowLg }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"
             strokeLinecap="round" strokeLinejoin="round" style={{width:36,height:36}}>
             <polyline points="20 6 9 17 4 12"/>
           </svg>
         </div>
 
-        <h1 style={{ fontSize:24, fontWeight: 500, color:th.text, margin:'0 0 8px',
-          letterSpacing:'-0.03em', textAlign:'center' }}>
-          Réservation confirmée !
+        <h1 style={{ fontSize:26, fontWeight: 500, color:th.text, margin:'0 0 8px',
+          letterSpacing:'-0.03em', textAlign:'center', lineHeight:1.15 }}>
+          Réservation confirmée
         </h1>
-        <p style={{ fontSize:14, color:th.muted, margin:'0 0 28px', textAlign:'center' }}>
-          {clientEmail ? 'Un email de confirmation a été envoye.' : 'Votre RDV est enregistre.'}
+        <p style={{ fontSize:14, color:th.muted, margin:'0 0 32px', textAlign:'center',
+          lineHeight:1.5 }}>
+          {clientEmail ? 'Un email de confirmation a été envoyé.' : 'Votre RDV est enregistré.'}
         </p>
 
         {/* Numéro de réservation */}
         <div style={{ width:'100%', background:th.cardAlt, border: `1px solid ${th.border}`,
-          borderRadius:14, padding:'16px 20px', textAlign:'center', marginBottom:16 }}>
+          borderRadius:14, padding:'18px 20px', textAlign:'center', marginBottom:14,
+          boxShadow: th.shadowSm }}>
           <p style={{ fontSize:11, fontWeight: 500,
-            letterSpacing:'0.08em', color:th.muted, margin:'0 0 6px' }}>
+            letterSpacing:1, textTransform:'uppercase', color:th.muted, margin:'0 0 6px' }}>
             Numéro de réservation
           </p>
-          <p style={{ fontSize:24, fontWeight: 500, color:th.text, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            margin:0 }}>
+          <p style={{ fontSize:24, fontWeight: 500, color:th.text,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            margin:0, letterSpacing:'-0.01em' }}>
             #{bookedAppt.id.substring(0,8).toUpperCase()}
           </p>
         </div>
 
         {/* Récap */}
         <div style={{ width:'100%', background:th.card, border: `1px solid ${th.border}`,
-          borderRadius:14, overflow:'hidden', marginBottom:24 }}>
+          borderRadius:14, overflow:'hidden', marginBottom:24, boxShadow: th.shadowSm }}>
           {[
             ['Service',  selSvc?.name],
             ['Employe',  selEmp?._anyEmployee ? 'Premier disponible' : selEmp?.name],
@@ -75,16 +78,19 @@ export function SuccessView({
               borderTop: i===0 ? 'none' : `1px solid ${th.border}` }}>
               <span style={{ fontSize:13, color:th.muted }}>{label}</span>
               {val === '__PROMO__' ? (
-                <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ display:'flex', alignItems:'center', gap:8,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                   <span style={{ fontSize:13, textDecoration:'line-through', color:th.dim }}>
                     {Number(selSvc.price).toFixed(2)} €
                   </span>
-                  <span style={{ fontSize:13, fontWeight: 500, color:'#16a34a' }}>
+                  <span style={{ fontSize:13, fontWeight: 500, color:th.ax.emerald }}>
                     {(Number(selSvc.price||0) - Number(bookedAppt.discount_amount||0)).toFixed(2)} €
                   </span>
                 </span>
               ) : (
-                <span style={{ fontSize:13, fontWeight: 500, color:th.text }}>{val}</span>
+                <span style={{ fontSize:13, fontWeight: 500, color:th.text,
+                  fontFamily: (label==='Heure'||label==='Prix'||label==='Duree') ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit'
+                }}>{val}</span>
               )}
             </div>
           ))}
@@ -94,16 +100,23 @@ export function SuccessView({
         <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10 }}>
           {clientUser && (
             <button onClick={() => { navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts'); }}
-              style={{ width:'100%', padding:'15px', borderRadius:12, border:'none',
+              style={{ width:'100%', padding:'14px', borderRadius:10,
+                border: `1px solid ${th.accent}`,
                 background:th.accent, color:th.accentText, fontWeight: 500, fontSize:14,
-                cursor:'pointer', boxShadow: 'none' }}>
+                cursor:'pointer', fontFamily:'inherit',
+                transition:'opacity 0.15s ease' }}
+              onMouseEnter={e=>{ e.currentTarget.style.opacity = '0.9'; }}
+              onMouseLeave={e=>{ e.currentTarget.style.opacity = '1'; }}>
               Voir mes rendez-vous →
             </button>
           )}
           <button onClick={resetBooking}
-            style={{ width:'100%', padding:'14px', borderRadius:12, cursor:'pointer',
-              background:th.card, border: `1px solid ${th.border}`,
-              color:th.text, fontWeight: 500, fontSize:14 }}>
+            style={{ width:'100%', padding:'14px', borderRadius:10, cursor:'pointer',
+              background:th.bg, border: `1px solid ${th.border}`,
+              color:th.text, fontWeight: 500, fontSize:14, fontFamily:'inherit',
+              transition:'background 0.15s ease, border-color 0.15s ease' }}
+            onMouseEnter={e=>{ e.currentTarget.style.background = th.bgHover; e.currentTarget.style.borderColor = th.borderHv; }}
+            onMouseLeave={e=>{ e.currentTarget.style.background = th.bg; e.currentTarget.style.borderColor = th.border; }}>
             Prendre un autre RDV
           </button>
         </div>
