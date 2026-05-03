@@ -244,7 +244,7 @@ export default function GoogleConfirm() {
       </div>
 
       {err && (
-        <p style={{ margin:'10px 0 0', fontSize:12, color:'#dc2626',
+        <p style={{ margin:'10px 0 0', fontSize:12, color:th.ax.rose,
           fontWeight:500 }}>{err}</p>
       )}
 

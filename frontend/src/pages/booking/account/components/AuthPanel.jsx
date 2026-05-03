@@ -284,15 +284,15 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     if (!emailType || emailType === 'free') return null;
     if (emailType === 'global' || emailType === 'both') return (
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', marginTop:4 }}>
-        <span style={{ width:6, height:6, borderRadius:99, background:'#10b981', flexShrink:0 }}/>
+        <span style={{ width:6, height:6, borderRadius:99, background:th.ax.emerald, flexShrink:0 }}/>
         <div>
-          <p style={{ margin:0, fontSize:12, fontWeight: 500, color:'#10b981' }}>Compte plateforme reconnu</p>
+          <p style={{ margin:0, fontSize:12, fontWeight: 500, color:th.ax.emerald }}>Compte plateforme reconnu</p>
           <p style={{ margin:0, fontSize:11, color:'rgba(16,185,129,0.8)' }}>Connectez-vous avec votre mot de passe habituel</p>
         </div>
       </div>
     );
     if (emailType === 'local') return (
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', marginTop:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:th.ax.amberBg, border: `1px solid ${th.ax.amber}33`, marginTop:4 }}>
         <span style={{ fontSize:14 }}>💡</span>
         <div>
           <p style={{ margin:0, fontSize:12, fontWeight: 500, color:'#d97706' }}>Compte existant</p>
@@ -332,8 +332,8 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         {/* Badge compte requis */}
         {requireAccount && mode !== 'forgot' && mode !== 'forgot_code' && mode !== 'quick' && (
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px',
-            borderRadius:10, background:'rgba(245,158,11,0.08)',
-            border: '1px solid rgba(245,158,11,0.2)', marginBottom:16 }}>
+            borderRadius:10, background:th.ax.amberBg,
+            border: `1px solid ${th.ax.amber}33`, marginBottom:16 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"
               style={{width:15,height:15,flexShrink:0}}>
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -381,10 +381,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             <ConsentCheckboxes slug={slug} th={th} onChange={handleConsents} compact/>
             {err && (
               <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
-                borderRadius:9, background:'rgba(239,68,68,0.06)',
-                border: '1px solid rgba(239,68,68,0.2)' }}>
+                borderRadius:9, background:th.ax.roseBg,
+                border: `1px solid ${th.ax.rose}33` }}>
                 <span style={{fontSize:13,flexShrink:0}}>⚠️</span>
-                <p style={{margin:0,fontSize:12,color:'#dc2626',fontWeight: 500}}>{err}</p>
+                <p style={{margin:0,fontSize:12,color:th.ax.rose,fontWeight: 500}}>{err}</p>
               </div>
             )}
             <button onClick={quickSubmit}
@@ -440,7 +440,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                 onKeyDown={e=>e.key==='Enter'&&sendResetCode()}
                 style={S.inp}/>
             </div>
-            {err && <p style={{fontSize:12,color:'#ef4444',margin:'0 0 10px',fontWeight: 500}}>{err}</p>}
+            {err && <p style={{fontSize:12,color:th.ax.rose,margin:'0 0 10px',fontWeight: 500}}>{err}</p>}
             {ok  && <p style={{fontSize:12,color:'#16a34a',margin:'0 0 10px',fontWeight: 500}}>{ok}</p>}
             <button onClick={sendResetCode} disabled={loading||!email.trim()}
               style={{...S.btnPrimary, opacity:loading||!email.trim()?0.5:1}}>
@@ -480,7 +480,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                   style={S.inp}/>
               </div>
             </div>
-            {err && <p style={{fontSize:12,color:'#ef4444',margin:'0 0 10px',fontWeight: 500}}>{err}</p>}
+            {err && <p style={{fontSize:12,color:th.ax.rose,margin:'0 0 10px',fontWeight: 500}}>{err}</p>}
             <button onClick={confirmReset}
               disabled={loading||code.length<6||newPwd.length<6}
               style={{...S.btnPrimary, opacity:loading||code.length<6||newPwd.length<6?0.5:1}}>
@@ -577,10 +577,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             {/* Erreur */}
             {err && (
               <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
-                borderRadius:9, background:'rgba(239,68,68,0.06)',
-                border: '1px solid rgba(239,68,68,0.2)' }}>
+                borderRadius:9, background:th.ax.roseBg,
+                border: `1px solid ${th.ax.rose}33` }}>
                 <span style={{fontSize:13,flexShrink:0}}>⚠️</span>
-                <p style={{margin:0,fontSize:12,color:'#dc2626',fontWeight: 500}}>{err}</p>
+                <p style={{margin:0,fontSize:12,color:th.ax.rose,fontWeight: 500}}>{err}</p>
               </div>
             )}
             {ok && <p style={{fontSize:12,color:'#16a34a',fontWeight: 500}}>{ok}</p>}

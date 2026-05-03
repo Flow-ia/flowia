@@ -60,7 +60,7 @@ export function Step3Date({
                   opacity:disabled&&!isClosed&&!isFull?0.3:1,
                   cursor:disabled?'default':'pointer', position:'relative' }}>
                 {d.getDate()}
-                {isClosed&&!isPast&&<span style={{position:'absolute',bottom:2,left:'50%',transform:'translateX(-50%)',width:3,height:3,borderRadius:99,background:'#ef4444',display:'block'}}/>}
+                {isClosed&&!isPast&&<span style={{position:'absolute',bottom:2,left:'50%',transform:'translateX(-50%)',width:3,height:3,borderRadius:99,background:th.ax.rose,display:'block'}}/>}
                 {isFull&&!isPast&&<span style={{position:'absolute',bottom:2,left:'50%',transform:'translateX(-50%)',width:3,height:3,borderRadius:99,background:'#f97316',display:'block'}}/>}
               </button>
             );
@@ -68,7 +68,7 @@ export function Step3Date({
         </div>
         <div style={{display:'flex',gap:16,marginTop:12}}>
           <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:th.muted}}>
-            <div style={{width:8,height:8,borderRadius:99,background:'#ef4444'}}/>Fermé
+            <div style={{width:8,height:8,borderRadius:99,background:th.ax.rose}}/>Fermé
           </div>
           <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:th.muted}}>
             <div style={{width:8,height:8,borderRadius:99,background:'#f97316'}}/>Complet

@@ -58,12 +58,12 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
                 {orig.toFixed(2)} €
               </p>
             )}
-            <p style={{ fontSize:22, fontWeight: 500, color:'#10b981',
+            <p style={{ fontSize:22, fontWeight: 500, color:th.ax.emerald,
               margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
               {total.toFixed(2)} €
             </p>
             {hasDisc && (
-              <p style={{ fontSize:10, fontWeight: 500, color:'#10b981',
+              <p style={{ fontSize:10, fontWeight: 500, color:th.ax.emerald,
                 margin:'2px 0 0' }}>
                 − {disc.toFixed(2)} € remise
               </p>

@@ -26,7 +26,7 @@ export function DeleteAccountModal({
       <div className="bk-modal-inner" style={{ background:th.card, border: `1px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
-        <div style={{ width:52, height:52, borderRadius:14, background:'rgba(239,68,68,0.1)',
+        <div style={{ width:52, height:52, borderRadius:14, background:th.ax.roseBg,
           display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"
             style={{width:26,height:26}}>
@@ -49,19 +49,19 @@ export function DeleteAccountModal({
         {/* Credits avoir : avertissement abandon */}
         {credits.length > 0 && (
           <div style={{ marginBottom:14, padding:'12px 14px', borderRadius:12,
-                        background:'rgba(245,158,11,0.08)',
-                        border:'1px solid rgba(245,158,11,0.2)' }}>
-            <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#92400e' }}>
+                        background:th.ax.amberBg,
+                        border:`1px solid ${th.ax.amber}33` }}>
+            <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:th.ax.amber }}>
               Crédits que vous allez abandonner :
             </p>
             {credits.map((c, i) => (
               <div key={i} style={{ display:'flex', justifyContent:'space-between',
-                                    fontSize:12, color:'#7c2d12', padding:'4px 0' }}>
+                                    fontSize:12, color:th.ax.amber, padding:'4px 0' }}>
                 <span>{c.merchant_name}</span>
                 <span style={{ fontWeight:500 }}>{Number(c.amount).toFixed(2)} €</span>
               </div>
             ))}
-            <p style={{ margin:'8px 0 0', fontSize:11, color:'#92400e', lineHeight:1.5 }}>
+            <p style={{ margin:'8px 0 0', fontSize:11, color:th.ax.amber, lineHeight:1.5 }}>
               Ces crédits seront perdus. Si vous souhaitez les récupérer, contactez le commerçant
               concerné avant de supprimer votre compte.
             </p>
@@ -71,19 +71,19 @@ export function DeleteAccountModal({
         {/* Dettes : avertissement RGPD Art. 17.3.e */}
         {debts.length > 0 && (
           <div style={{ marginBottom:14, padding:'12px 14px', borderRadius:12,
-                        background:'rgba(239,68,68,0.08)',
-                        border:'1px solid rgba(239,68,68,0.25)' }}>
-            <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#991b1b' }}>
+                        background:th.ax.roseBg,
+                        border:`1px solid ${th.ax.rose}55` }}>
+            <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:th.ax.rose }}>
               Dettes en cours auprès de :
             </p>
             {debts.map((d, i) => (
               <div key={i} style={{ display:'flex', justifyContent:'space-between',
-                                    fontSize:12, color:'#991b1b', padding:'4px 0' }}>
+                                    fontSize:12, color:th.ax.rose, padding:'4px 0' }}>
                 <span>{d.merchant_name}</span>
                 <span style={{ fontWeight:500 }}>−{Number(d.amount).toFixed(2)} €</span>
               </div>
             ))}
-            <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', lineHeight:1.6 }}>
+            <p style={{ margin:'8px 0 0', fontSize:11, color:th.ax.rose, lineHeight:1.6 }}>
               La suppression de votre compte <strong>ne vous libère pas de ces dettes</strong>.
               Vos coordonnées (nom, email, téléphone) seront <strong>conservées 2 ans</strong>
               par le(s) commerçant(s) concerné(s) pour permettre le recouvrement, conformément
@@ -94,7 +94,7 @@ export function DeleteAccountModal({
         <p style={{ fontSize:13, color:th.muted, margin:'0 0 8px', lineHeight:1.5 }}>
           Pour confirmer, saisissez&nbsp;:
         </p>
-        <p style={{ fontSize:15, fontWeight: 500, color:'#ef4444', margin:'0 0 10px',
+        <p style={{ fontSize:15, fontWeight: 500, color:th.ax.rose, margin:'0 0 10px',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing:1 }}>
           {DELETE_PHRASE}
         </p>
@@ -104,9 +104,9 @@ export function DeleteAccountModal({
           autoComplete="off" autoCapitalize="none" spellCheck={false}
           disabled={deleteLoading}
           style={{ ...inpStyle, marginBottom:10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing:1,
-            borderColor: deleteErr ? '#ef4444' : th.inputBorder }}/>
+            borderColor: deleteErr ? th.ax.rose : th.inputBorder }}/>
         {deleteErr && (
-          <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
+          <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'0 0 12px' }}>
             {deleteErr}
           </p>
         )}
@@ -121,7 +121,7 @@ export function DeleteAccountModal({
             disabled={deleteLoading || !deleteConfirmOk}
             style={{ flex:1, padding:'12px', borderRadius:11,
               cursor: (deleteLoading || !deleteConfirmOk) ? 'not-allowed' : 'pointer',
-              background:'#ef4444', border:'none',
+              background:th.ax.rose, border:'none',
               color:'white', fontWeight: 500, fontSize:13,
               opacity: (deleteLoading || !deleteConfirmOk) ? 0.5 : 1 }}>
             {deleteLoading ? '...' : 'Supprimer définitivement'}

@@ -24,7 +24,7 @@ export function SuccessView({
         display:'flex', flexDirection:'column', alignItems:'center' }}>
 
         {/* Icône succès */}
-        <div style={{ width:72, height:72, borderRadius:20, background:'#22c55e',
+        <div style={{ width:72, height:72, borderRadius:20, background:th.ax.emerald,
           display:'flex', alignItems:'center', justifyContent:'center', marginBottom:24,
           boxShadow:'0 8px 24px rgba(34,197,94,0.25)' }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"

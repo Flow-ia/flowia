@@ -64,7 +64,7 @@ export function Step5Info({
           {/* Champ téléphone obligatoire si manquant (ex: après Google OAuth).
               RGPD commit 20 : PhoneInput avec validation libphonenumber-js. */}
           {!clientPhone.trim() && (
-            <div style={{background:'rgba(245,158,11,0.06)',border: '1px solid rgba(245,158,11,0.25)',
+            <div style={{background:th.ax.amberBg,border: `1px solid ${th.ax.amber}55`,
               borderRadius:10,padding:'12px 14px',marginBottom:14}}>
               <p style={{fontSize:12,fontWeight: 500,color:'#d97706',margin:'0 0 8px'}}>
                 Complétez votre profil pour continuer
@@ -130,7 +130,7 @@ export function Step5Info({
           />
         </div>
       )}
-      {bookErr && <p style={{fontSize:12,color:'#ef4444',marginTop:10,fontWeight: 500}}>{bookErr}</p>}
+      {bookErr && <p style={{fontSize:12,color:th.ax.rose,marginTop:10,fontWeight: 500}}>{bookErr}</p>}
     </div>
   );
 }

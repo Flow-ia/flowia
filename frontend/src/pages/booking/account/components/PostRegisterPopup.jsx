@@ -111,7 +111,7 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
           </div>
         )}
 
-        {err && <p style={{ margin: '6px 0 10px', fontSize: 12, color: '#ef4444', fontWeight: 500 }}>{err}</p>}
+        {err && <p style={{ margin: '6px 0 10px', fontSize: 12, color: th.ax.rose, fontWeight: 500 }}>{err}</p>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button onClick={onClose}

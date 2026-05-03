@@ -236,8 +236,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               <input type="email" placeholder="Votre email" value={gcForgotEmail} onChange={e=>setGcForgotEmail(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&sendGcResetCode()} style={inp} />
             </div>
-            {gcForgotErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotErr}</p>}
-            {gcForgotOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotOk}</p>}
+            {gcForgotErr && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotErr}</p>}
+            {gcForgotOk  && <p style={{ color:th.ax.emerald, fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotOk}</p>}
             <button onClick={sendGcResetCode} disabled={gcForgotLoad || !gcForgotEmail.trim()}
               style={{ width:'100%', padding:'15px', borderRadius:16, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:15, cursor:'pointer', opacity:(gcForgotLoad||!gcForgotEmail.trim())?0.6:1 }}>
               {gcForgotLoad ? '...' : 'Envoyer le code'}
@@ -252,7 +252,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               style={{ background:'none', border:'none', color:th.muted, fontSize:13, cursor:'pointer', marginBottom:16 }}>← Retour</button>
             <p style={{ margin:'0 0 6px', fontWeight: 500, fontSize:16, color:th.text }}>Code de réinitialisation</p>
             <p style={{ margin:'0 0 16px', fontSize:13, color:th.muted }}>Vérifiez votre boîte mail et entrez le code à 6 chiffres.</p>
-            {gcForgotOk && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotOk}</p>}
+            {gcForgotOk && <p style={{ color:th.ax.emerald, fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotOk}</p>}
             <div style={{ marginBottom:10 }}>
               <input placeholder="Code à 6 chiffres" value={gcResetCode} onChange={e=>setGcResetCode(e.target.value.replace(/\D/g,'').slice(0,6))}
                 maxLength={6} style={{ ...inp, textAlign:'center', fontSize:22, fontWeight: 500, letterSpacing:'0.3em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
@@ -261,7 +261,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               <input type="password" placeholder="Nouveau mot de passe (min. 6 car.)" value={gcNewPwd} onChange={e=>setGcNewPwd(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&confirmGcReset()} style={inp} />
             </div>
-            {gcForgotErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotErr}</p>}
+            {gcForgotErr && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{gcForgotErr}</p>}
             <button onClick={confirmGcReset} disabled={gcForgotLoad || gcResetCode.length < 6 || gcNewPwd.length < 6}
               style={{ width:'100%', padding:'15px', borderRadius:16, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:15, cursor:'pointer', opacity:(gcForgotLoad||gcResetCode.length<6||gcNewPwd.length<6)?0.6:1 }}>
               {gcForgotLoad ? '...' : 'Changer le mot de passe'}
@@ -311,7 +311,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               <input placeholder="Mot de passe" type="password" value={pwd} onChange={e=>setPwd(e.target.value)}
                 onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())} style={inp} />
             </div>
-            {err && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{err}</p>}
+            {err && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 12px', fontWeight: 500 }}>{err}</p>}
             <button onClick={mode==='login'?handleLogin:handleRegister} disabled={loading}
               style={{ width:'100%', padding:'15px', borderRadius:16, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:15, cursor:'pointer', opacity:loading?0.7:1 }}>
               {loading ? '...' : (mode==='login' ? 'Se connecter' : 'Creer mon compte')}
@@ -341,7 +341,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               <p style={{ margin:'0 0 2px', fontWeight: 500, fontSize:16, color:th.text }}>{gcUser.first_name} {gcUser.last_name}</p>
               <p style={{ margin:0, fontSize:12, color:th.muted }}>{gcUser.email}</p>
             </div>
-            <button onClick={onLogout} style={{ padding:'6px 12px', borderRadius:10, background:'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color:'#ef4444', fontWeight: 500, fontSize:12, cursor:'pointer' }}>
+            <button onClick={onLogout} style={{ padding:'6px 12px', borderRadius:10, background:th.ax.roseBg, border: `1px solid ${th.ax.rose}33`, color:th.ax.rose, fontWeight: 500, fontSize:12, cursor:'pointer' }}>
               Déco.
             </button>
           </div>
@@ -374,7 +374,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                     {fmtD(a.date)} · {(a.start_time||'').slice(0,5)}
                     {a.employee_name ? ` · ${a.employee_name}` : ''}
                   </p>
-                  {a.total_amount && <p style={{ margin:'4px 0 0', fontSize:13, fontWeight: 500, color:'#10b981' }}>{Number(a.total_amount).toFixed(2)} €</p>}
+                  {a.total_amount && <p style={{ margin:'4px 0 0', fontSize:13, fontWeight: 500, color:th.ax.emerald }}>{Number(a.total_amount).toFixed(2)} €</p>}
                 </div>
               ))}
             </div>
@@ -397,12 +397,12 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                         <p style={{ margin:0, fontSize:11, color:th.muted }}>{l.reward_label}</p>
                       </div>
                       <div style={{ textAlign:'right' }}>
-                        <span style={{ fontSize:20, fontWeight: 500, color:'#f59e0b', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{current}</span>
+                        <span style={{ fontSize:20, fontWeight: 500, color:th.ax.amber, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{current}</span>
                         <span style={{ fontSize:12, color:th.muted }}>/{required} {mode==='points'?'pts':'🎫'}</span>
                       </div>
                     </div>
-                    <div style={{ height:6, background:'rgba(245,158,11,0.15)', borderRadius:99, overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${pct}%`, background: '#f59e0b', borderRadius:99, transition:'width 0.5s' }} />
+                    <div style={{ height:6, background:th.ax.amberBg, borderRadius:99, overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:`${pct}%`, background: th.ax.amber, borderRadius:99, transition:'width 0.5s' }} />
                     </div>
                     {l.last_visit && <p style={{ margin:'8px 0 0', fontSize:11, color:th.muted }}>Dernière visite : {fmtD(l.last_visit)}</p>}
                   </div>
@@ -455,8 +455,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                     onFocus={e=>{ if(!editPhone) initProfileEdit(); }}
                     onChange={e=>setEditPhone(e.target.value)} style={inp} />
                 </div>
-                {profErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{profErr}</p>}
-                {profOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{profOk}</p>}
+                {profErr && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{profErr}</p>}
+                {profOk  && <p style={{ color:th.ax.emerald, fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{profOk}</p>}
                 <button onClick={saveProfile} disabled={profLoad}
                   style={{ width:'100%', padding:'13px', borderRadius:14, background: th.accent, color:'white', border:'none', fontWeight: 500, fontSize:14, cursor:'pointer', opacity:profLoad?0.7:1 }}>
                   {profLoad ? '...' : 'Enregistrer les modifications'}
@@ -471,8 +471,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                   <input type="password" placeholder="Nouveau mot de passe (min. 6 car.)" value={newPwd2} onChange={e=>setNewPwd2(e.target.value)}
                     onKeyDown={e=>e.key==='Enter'&&savePassword()} style={inp} />
                 </div>
-                {pwdErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{pwdErr}</p>}
-                {pwdOk  && <p style={{ color:'#10b981', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{pwdOk}</p>}
+                {pwdErr && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{pwdErr}</p>}
+                {pwdOk  && <p style={{ color:th.ax.emerald, fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{pwdOk}</p>}
                 <button onClick={savePassword} disabled={pwdLoad || !curPwd || !newPwd2}
                   style={{ width:'100%', padding:'13px', borderRadius:14, background:'rgba(99,102,241,0.1)', color:'#6366f1', border: '1px solid rgba(99,102,241,0.25)', fontWeight: 500, fontSize:14, cursor:'pointer', opacity:(pwdLoad||!curPwd||!newPwd2)?0.5:1 }}>
                   {pwdLoad ? '...' : 'Modifier le mot de passe'}
@@ -504,8 +504,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               </div>
 
               {/* Suppression de compte */}
-              <div style={{ background:'rgba(239,68,68,0.04)', borderRadius:20, padding:20, border: '1px solid rgba(239,68,68,0.15)' }}>
-                <p style={{ margin:'0 0 6px', fontWeight: 500, fontSize:15, color:'#ef4444' }}>🗑 Supprimer mon compte</p>
+              <div style={{ background:th.ax.roseBg, borderRadius:20, padding:20, border: `1px solid ${th.ax.rose}33` }}>
+                <p style={{ margin:'0 0 6px', fontWeight: 500, fontSize:15, color:th.ax.rose }}>🗑 Supprimer mon compte</p>
                 <p style={{ margin:'0 0 14px', fontSize:12, color:th.muted, lineHeight:1.5 }}>
                   Vos données personnelles (nom, email, téléphone) seront <strong>définitivement effacées</strong>.
                   Les historiques de transactions sont conservés de façon anonyme pour la comptabilité des commerçants.
@@ -513,13 +513,13 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                 <input placeholder="Tapez SUPPRIMER pour confirmer" value={delConfirm}
                   onChange={e=>{ setDelConfirm(e.target.value.toUpperCase()); setDelErr(''); }}
                   style={{ width:'100%', padding:'12px 14px', borderRadius:10, outline:'none',
-                    background:th.inputBg, border: '1px solid rgba(239,68,68,0.3)',
+                    background:th.inputBg, border: `1px solid ${th.ax.rose}55`,
                     color:th.text, fontSize:13, marginBottom:10, boxSizing:'border-box' }} />
-                {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{delErr}</p>}
+                {delErr && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 10px', fontWeight: 500 }}>{delErr}</p>}
                 <button onClick={requestDeleteAccount} disabled={delLoad || delConfirm !== 'SUPPRIMER'}
                   style={{ width:'100%', padding:'13px', borderRadius:14,
-                    background:'rgba(239,68,68,0.12)', color:'#ef4444',
-                    border: '1px solid rgba(239,68,68,0.25)',
+                    background:th.ax.roseBg, color:th.ax.rose,
+                    border: `1px solid ${th.ax.rose}55`,
                     fontWeight: 500, fontSize:14, cursor:'pointer',
                     opacity:(delLoad||delConfirm!=='SUPPRIMER')?0.5:1 }}>
                   {delLoad ? '...' : '🗑 Supprimer définitivement mon compte'}
@@ -535,24 +535,24 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                   <div style={{ background:th.card, borderRadius:20, padding:24,
                                 maxWidth:520, width:'100%', maxHeight:'85vh', overflowY:'auto',
                                 border:`1px solid ${th.border}`, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
-                    <p style={{ margin:'0 0 12px', fontWeight:500, fontSize:17, color:'#ef4444' }}>
+                    <p style={{ margin:'0 0 12px', fontWeight:500, fontSize:17, color:th.ax.rose }}>
                       Avant de supprimer votre compte
                     </p>
 
                     {creditsSummary.credits?.length > 0 && (
                       <div style={{ marginBottom:16, padding:'12px 14px', borderRadius:12,
-                                    background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)' }}>
-                        <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#92400e' }}>
+                                    background:th.ax.amberBg, border:`1px solid ${th.ax.amber}33` }}>
+                        <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:th.ax.amber }}>
                           Crédits que vous allez abandonner :
                         </p>
                         {creditsSummary.credits.map((c, i) => (
                           <div key={i} style={{ display:'flex', justifyContent:'space-between',
-                                                fontSize:12, color:'#7c2d12', padding:'4px 0' }}>
+                                                fontSize:12, color:th.ax.amber, padding:'4px 0' }}>
                             <span>{c.merchant_name}</span>
                             <span style={{ fontWeight:500 }}>{c.amount.toFixed(2)} €</span>
                           </div>
                         ))}
-                        <p style={{ margin:'8px 0 0', fontSize:11, color:'#92400e', lineHeight:1.5 }}>
+                        <p style={{ margin:'8px 0 0', fontSize:11, color:th.ax.amber, lineHeight:1.5 }}>
                           Ces crédits seront perdus. Si vous souhaitez les récupérer, contactez le commerçant
                           concerné avant de supprimer votre compte.
                         </p>
@@ -561,18 +561,18 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
 
                     {creditsSummary.debts?.length > 0 && (
                       <div style={{ marginBottom:16, padding:'12px 14px', borderRadius:12,
-                                    background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)' }}>
-                        <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#991b1b' }}>
+                                    background:th.ax.roseBg, border:`1px solid ${th.ax.rose}55` }}>
+                        <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:th.ax.rose }}>
                           Dettes en cours auprès de :
                         </p>
                         {creditsSummary.debts.map((d, i) => (
                           <div key={i} style={{ display:'flex', justifyContent:'space-between',
-                                                fontSize:12, color:'#991b1b', padding:'4px 0' }}>
+                                                fontSize:12, color:th.ax.rose, padding:'4px 0' }}>
                             <span>{d.merchant_name}</span>
                             <span style={{ fontWeight:500 }}>−{d.amount.toFixed(2)} €</span>
                           </div>
                         ))}
-                        <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', lineHeight:1.6 }}>
+                        <p style={{ margin:'8px 0 0', fontSize:11, color:th.ax.rose, lineHeight:1.6 }}>
                           La suppression de votre compte <strong>ne vous libère pas de ces dettes</strong>.
                           Vos coordonnées (nom, email, téléphone) seront <strong>conservées 2 ans</strong>
                           par le(s) commerçant(s) concerné(s) pour permettre le recouvrement, conformément
@@ -581,7 +581,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                       </div>
                     )}
 
-                    {delErr && <p style={{ color:'#ef4444', fontSize:13, margin:'0 0 10px', fontWeight:500 }}>{delErr}</p>}
+                    {delErr && <p style={{ color:th.ax.rose, fontSize:13, margin:'0 0 10px', fontWeight:500 }}>{delErr}</p>}
 
                     <div style={{ display:'flex', gap:8, marginTop:12 }}>
                       <button onClick={() => { if (!delLoad) setShowDeleteWarn(false); }}
@@ -594,7 +594,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                       </button>
                       <button onClick={confirmDeleteAccount} disabled={delLoad}
                               style={{ flex:2, padding:'12px', borderRadius:12,
-                                       background:'#ef4444', color:'#fff',
+                                       background:th.ax.rose, color:'#fff',
                                        border:'none', fontWeight:500, fontSize:13,
                                        cursor:delLoad?'wait':'pointer', opacity:delLoad?0.7:1 }}>
                         {delLoad ? 'Suppression...' : 'Supprimer quand même'}

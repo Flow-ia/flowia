@@ -65,7 +65,7 @@ export function VisitsTab({
             <div style={{paddingTop:40}}><Spinner color="#6366f1"/></div>
           ) : visitsErr ? (
             <div style={{ textAlign:'center', paddingTop:40 }}>
-              <p style={{ color:'#ef4444', fontWeight: 500, fontSize:13, margin:'0 0 12px' }}>
+              <p style={{ color:th.ax.rose, fontWeight: 500, fontSize:13, margin:'0 0 12px' }}>
                 {visitsErr}
               </p>
               <button onClick={() => { setVisitsPage(p => p); setVisitsErr(''); }}
@@ -123,7 +123,7 @@ export function VisitsTab({
                         </p>
                       </div>
                       <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-                        <p style={{ fontSize:15, fontWeight: 500, color:'#10b981',
+                        <p style={{ fontSize:15, fontWeight: 500, color:th.ax.emerald,
                           margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {total.toFixed(2)} €
                         </p>

@@ -12,9 +12,9 @@ export function ReferralBanner({
 
   const ineligible = referralInfo.eligible === false;
   const bg     = ineligible ? '#fffbeb' : '#eef2ff';
-  const accent = ineligible ? '#f59e0b' : '#6366f1';
-  const color  = ineligible ? '#92400e' : '#4338ca';
-  const codeColor = ineligible ? '#92400e' : '#4338ca';
+  const accent = ineligible ? th.ax.amber : '#6366f1';
+  const color  = ineligible ? th.ax.amber : '#4338ca';
+  const codeColor = ineligible ? th.ax.amber : '#4338ca';
 
   return (
     <div style={{ maxWidth:1100, margin:'0 auto 16px', padding:'0 16px' }}>

@@ -32,7 +32,7 @@ export function ReferralTab({
             en clair, blanc/noir en sombre), comme les autres CTA booking. */}
         <button onClick={onCopyReferralLink} style={{ width:'100%', padding:'12px',
           borderRadius:11, cursor:'pointer', border:'none',
-          background: refCopied ? '#10b981' : th.accent,
+          background: refCopied ? th.ax.emerald : th.accent,
           color: refCopied ? 'white' : th.accentText,
           fontWeight: 500, fontSize:13 }}>
           {refCopied ? 'Lien copié' : 'Copier mon lien de parrainage'}
@@ -59,7 +59,7 @@ export function ReferralTab({
           .sort((a, b) => new Date(b.used_at || 0) - new Date(a.used_at || 0));
         const renderCard = (r, opts = {}) => {
           const isBday = r.reward_type === 'birthday';
-          const accent = isBday ? '#ec4899' : '#8b5cf6';
+          const accent = isBday ? th.ax.rose : th.ax.violet;
           const valStr = r.type === 'percent' ? `-${r.value}%` : `-${Number(r.value).toFixed(2)} €`;
           const isUsed = opts.isUsed;
           const expStr = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : null;
@@ -134,8 +134,8 @@ export function ReferralTab({
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {refHistory.map(h => {
               const name = [h.filleul_first_name, h.filleul_last_name].filter(Boolean).join(' ') || h.filleul_email;
-              const statusColor = h.status === 'validated' ? '#10b981'
-                                : h.status === 'cancelled' ? '#ef4444' : '#f59e0b';
+              const statusColor = h.status === 'validated' ? th.ax.emerald
+                                : h.status === 'cancelled' ? th.ax.rose : th.ax.amber;
               const statusLabel = h.status === 'validated' ? 'Récompensé'
                                 : h.status === 'cancelled' ? 'Annulé' : 'En attente';
               return (

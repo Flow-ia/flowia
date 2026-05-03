@@ -20,7 +20,7 @@ export function BlockedView({ th, business }) {
           marginBottom: 24,
           textAlign: 'left',
         }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#991b1b' }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: th.ax.rose }}>
             Reservation impossible
           </p>
         </div>

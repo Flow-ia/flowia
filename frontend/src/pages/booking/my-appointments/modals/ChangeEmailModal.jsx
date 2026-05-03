@@ -53,9 +53,9 @@ export function ChangeEmailModal({
               placeholder="nouveau@email.com" autoComplete="email"
               disabled={emailLoading}
               style={{ ...inpStyle, marginBottom:10,
-                borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
+                borderColor: emailErr ? th.ax.rose : th.inputBorder }}/>
             {emailErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'0 0 12px' }}>
                 {emailErr}
               </p>
             )}
@@ -91,9 +91,9 @@ export function ChangeEmailModal({
               maxLength={6} disabled={emailLoading}
               style={{ ...inpStyle, marginBottom:10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontSize:18, letterSpacing:4, textAlign:'center',
-                borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
+                borderColor: emailErr ? th.ax.rose : th.inputBorder }}/>
             {emailErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'0 0 12px' }}>
                 {emailErr}
               </p>
             )}

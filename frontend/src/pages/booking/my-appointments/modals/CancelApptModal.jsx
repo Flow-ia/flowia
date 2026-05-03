@@ -11,7 +11,7 @@ export function CancelApptModal({ th, cancelModal, cancelLoading, onClose, onCon
       <div className="bk-modal-inner" style={{ background:th.card, border: `1px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:400, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
-        <div style={{ width:52, height:52, borderRadius:14, background:'rgba(239,68,68,0.1)',
+        <div style={{ width:52, height:52, borderRadius:14, background:th.ax.roseBg,
           display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"
             style={{width:26,height:26}}>
@@ -39,7 +39,7 @@ export function CancelApptModal({ th, cancelModal, cancelLoading, onClose, onCon
           </button>
           <button onClick={onConfirm} disabled={cancelLoading}
             style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-              background:'#ef4444', border:'none',
+              background:th.ax.rose, border:'none',
               color:'white', fontWeight: 500, fontSize:13,
               opacity:cancelLoading?0.7:1 }}>
             {cancelLoading ? '...' : 'Confirmer l\'annulation'}

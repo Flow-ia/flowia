@@ -63,7 +63,7 @@ export function ChangePwdModal({
                   <input type="password" value={pwdCurrent}
                     onChange={onChangeCurrent}
                     autoComplete="current-password" disabled={pwdLoading}
-                    style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                    style={{ ...inpStyle, borderColor: pwdErr ? th.ax.rose : th.inputBorder }}/>
                   <button type="button" onClick={onSwitchToForgot} disabled={pwdLoading}
                     style={{ marginTop:6, background:'none', border:'none', padding:0,
                       cursor:'pointer', color:th.accent, fontSize:12, fontWeight: 500,
@@ -97,7 +97,7 @@ export function ChangePwdModal({
                   onChange={onChangeNew}
                   autoComplete="new-password" disabled={pwdLoading}
                   placeholder="6 caractères minimum"
-                  style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                  style={{ ...inpStyle, borderColor: pwdErr ? th.ax.rose : th.inputBorder }}/>
               </div>
               <div>
                 <label style={{ display:'block', fontSize:11, fontWeight: 500,
@@ -107,11 +107,11 @@ export function ChangePwdModal({
                 <input type="password" value={pwdNew2}
                   onChange={onChangeNew2}
                   autoComplete="new-password" disabled={pwdLoading}
-                  style={{ ...inpStyle, borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                  style={{ ...inpStyle, borderColor: pwdErr ? th.ax.rose : th.inputBorder }}/>
               </div>
             </div>
             {pwdErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'12px 0 0' }}>
+              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'12px 0 0' }}>
                 {pwdErr}
               </p>
             )}
@@ -147,9 +147,9 @@ export function ChangePwdModal({
               maxLength={6} disabled={pwdLoading}
               style={{ ...inpStyle, marginBottom:10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontSize:18, letterSpacing:4, textAlign:'center',
-                borderColor: pwdErr ? '#ef4444' : th.inputBorder }}/>
+                borderColor: pwdErr ? th.ax.rose : th.inputBorder }}/>
             {pwdErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'0 0 12px' }}>
                 {pwdErr}
               </p>
             )}

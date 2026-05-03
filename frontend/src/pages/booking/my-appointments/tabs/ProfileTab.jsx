@@ -117,16 +117,16 @@ export function ProfileTab({
               border: '1px solid rgba(16,185,129,0.2)', cursor:'pointer', marginTop:4 }}>
               <input type="checkbox" checked={editOptIn}
                 onChange={e=>setEditOptIn(e.target.checked)}
-                style={{ marginTop:2, flexShrink:0, accentColor:'#10b981', cursor:'pointer' }}/>
+                style={{ marginTop:2, flexShrink:0, accentColor:th.ax.emerald, cursor:'pointer' }}/>
               <span style={{ fontSize:12, color:th.text, lineHeight:1.5 }}>
-                <strong style={{ color:'#10b981' }}>Offres commerciales</strong>
+                <strong style={{ color:th.ax.emerald }}>Offres commerciales</strong>
                 <span style={{ display:'block', fontSize:11, color:th.muted, marginTop:2 }}>
                   Recevoir les promos et nouveautés par SMS/email. Décocher à tout moment.
                 </span>
               </span>
             </label>
             {profErr && (
-              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:0 }}>{profErr}</p>
+              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:0 }}>{profErr}</p>
             )}
             <div style={{ display:'flex', gap:10, marginTop:4 }}>
               <button onClick={onCancelEdit}
@@ -241,7 +241,7 @@ export function ProfileTab({
         }
       }} style={{ width:'100%', padding:'13px', borderRadius:12, cursor:'pointer',
         background:'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)',
-        color:'#ef4444', fontWeight: 500, fontSize:13 }}>
+        color:th.ax.rose, fontWeight: 500, fontSize:13 }}>
         Se déconnecter
       </button>
 

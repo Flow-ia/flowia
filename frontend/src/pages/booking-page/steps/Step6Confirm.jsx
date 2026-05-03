@@ -188,7 +188,7 @@ export function Step6Confirm({
               onKeyDown={e=>e.key==='Enter'&&checkPromo()}
               placeholder="PROMO10 ou code parrainage"
               style={{flex:1,padding:'11px 14px',borderRadius:9,outline:'none',
-                background:th.inputBg,border: `1px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
+                background:th.inputBg,border: `1px solid ${promoData?(promoData.source==='referral'?th.ax.violet:th.ax.emerald):promoErr?th.ax.rose:th.inputBorder}`,
                 color:th.text,fontSize:13,fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}/>
             <button onClick={checkPromo} disabled={promoLoading||!promoCode.trim()}
               style={{padding:'11px 18px',borderRadius:9,border: `1px solid ${th.border}`,
@@ -217,11 +217,11 @@ export function Step6Confirm({
               </span>
             </div>
           )}
-          {promoErr && <p style={{fontSize:12,color:'#ef4444',marginTop:6,fontWeight: 500}}>{promoErr}</p>}
+          {promoErr && <p style={{fontSize:12,color:th.ax.rose,marginTop:6,fontWeight: 500}}>{promoErr}</p>}
         </div>
       )}
 
-      {bookErr && <p style={{fontSize:12,color:'#ef4444',marginBottom:12,fontWeight: 500}}>{bookErr}</p>}
+      {bookErr && <p style={{fontSize:12,color:th.ax.rose,marginBottom:12,fontWeight: 500}}>{bookErr}</p>}
 
       <button onClick={handleBook} disabled={booking}
         style={{width:'100%',padding:'16px',borderRadius:12,
