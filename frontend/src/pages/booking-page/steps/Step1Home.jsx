@@ -17,21 +17,23 @@ export function Step1Home({
 
       {/* Infos commerçant mobile */}
       <div className="bk-mo" style={{ marginBottom:16, padding:20,
-        background:th.card, borderRadius:16, border: `1px solid ${th.border}` }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+        background:th.card, borderRadius:14, border: `1px solid ${th.border}`,
+        boxShadow: th.shadowSm }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:14 }}>
           <div style={{ width:56, height:56, borderRadius:12, overflow:'hidden', flexShrink:0,
-            background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
+            background:th.cardAlt, border:`1px solid ${th.border}`,
+            display:'flex', alignItems:'center', justifyContent:'center' }}>
             {business?.profile_url
               ? <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                   style={{ width:'100%', height:'100%', objectFit:'cover' }}
                   onError={e=>e.target.style.display='none'}/>
-              : <span style={{ fontSize:22, fontWeight: 500, color:'#374151' }}>
+              : <span style={{ fontSize:22, fontWeight: 500, color:th.muted }}>
                   {(business?.business_name||'B').charAt(0).toUpperCase()}
                 </span>}
           </div>
           <div>
-            <h1 style={{ fontSize:18, fontWeight: 500, color:th.text, margin:'0 0 4px',
-              letterSpacing:'-0.02em' }}>{business?.business_name}</h1>
+            <h1 style={{ fontSize:19, fontWeight: 500, color:th.text, margin:'0 0 4px',
+              letterSpacing:'-0.025em', lineHeight:1.2 }}>{business?.business_name}</h1>
           </div>
         </div>
         {business?.address && (
@@ -62,11 +64,14 @@ export function Step1Home({
         )}
         {refProgram && refProgram !== 'none' && refProgram.is_enabled === true && (
           <button onClick={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
-            style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
-              background:'#8b5cf615', border: '1px solid #8b5cf640',
-              color:'#6d28d9', fontWeight: 500, fontSize:12,
+            style={{ marginTop:12, padding:'10px 14px', borderRadius:10, cursor:'pointer',
+              background:th.ax.violetBg, border: `1px solid ${th.ax.violet}33`,
+              color:th.ax.violet, fontWeight: 500, fontSize:12,
               display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center',
-              whiteSpace:'nowrap' }}>
+              whiteSpace:'nowrap', fontFamily:'inherit',
+              transition:'background 0.15s ease, border-color 0.15s ease' }}
+            onMouseEnter={e=>{ e.currentTarget.style.borderColor = `${th.ax.violet}66`; }}
+            onMouseLeave={e=>{ e.currentTarget.style.borderColor = `${th.ax.violet}33`; }}>
             🤝 Programme parrainage
           </button>
         )}
@@ -76,14 +81,14 @@ export function Step1Home({
       <AnnouncementBanner slug={slug} />
 
       {/* ── SECTION PRESTATIONS ── */}
-      <section id="section-prestations" style={{ marginBottom:24 }}>
-        <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
-          margin:'0 0 20px', letterSpacing:'-0.02em' }}>Nos prestations</h2>
+      <section id="section-prestations" style={{ marginBottom:32 }}>
+        <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
+          margin:'0 0 20px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Nos prestations</h2>
         {services.length === 0 ? (
           <p style={{ color:th.muted, fontSize:14 }}>Aucune prestation disponible.</p>
         ) : (
-          <div style={{ border: `1px solid ${th.border}`, borderRadius:12,
-            overflow:'hidden', background:th.card }}>
+          <div style={{ border: `1px solid ${th.border}`, borderRadius:14,
+            overflow:'hidden', background:th.card, boxShadow: th.shadowSm }}>
             {[
               ...svcGroups.map(g => ({ label:g.label, svcs:g.svcs })),
               ...(svcNoCat.length>0 ? [{ label:null, svcs:svcNoCat }] : []),
@@ -99,9 +104,9 @@ export function Step1Home({
       </section>
 
       {/* ── SECTION ÉQUIPE ── */}
-      <section id="section-equipe" style={{ marginBottom:24 }}>
-        <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
-          margin:'0 0 16px', letterSpacing:'-0.02em' }}>Équipe</h2>
+      <section id="section-equipe" style={{ marginBottom:32 }}>
+        <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
+          margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Équipe</h2>
         <div className="bk-emp-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
           {employees.map(e => (
             <div key={e.id}
@@ -113,14 +118,16 @@ export function Step1Home({
                 goToStep(2, null, e);
               }}
               style={{ background:th.card, border: `1px solid ${th.border}`,
-                borderRadius:12, padding:'16px 14px',
-                display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}
-              onMouseEnter={ev=>ev.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'}
-              onMouseLeave={ev=>ev.currentTarget.style.boxShadow='none'}>
+                borderRadius:12, padding:'14px',
+                display:'flex', alignItems:'center', gap:12, cursor:'pointer',
+                boxShadow: th.shadowSm,
+                transition:'border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease' }}
+              onMouseEnter={ev=>{ ev.currentTarget.style.boxShadow = th.shadowMd; ev.currentTarget.style.borderColor = th.borderHv; }}
+              onMouseLeave={ev=>{ ev.currentTarget.style.boxShadow = th.shadowSm; ev.currentTarget.style.borderColor = th.border; }}>
               <div style={{ width:48, height:48, borderRadius:99, flexShrink:0,
                 background: e.has_image ? 'transparent' : th.cardAlt, overflow:'hidden',
                 display:'flex', alignItems:'center', justifyContent:'center',
-                border: e.has_image ? `1px solid ${th.border}` : 'none' }}>
+                border: `1px solid ${th.border}` }}>
                 {e.has_image ? (
                   <img src={employeeImgUrl(e.id, e.image_version)} alt={e.name}
                     style={{ width:'100%', height:'100%', objectFit:'cover' }}
@@ -130,7 +137,7 @@ export function Step1Home({
                     }} />
                 ) : (
                   <span style={{ fontSize:20, fontWeight: 500,
-                    color:e.avatar_color||'#374151' }}>
+                    color: e.avatar_color || th.muted }}>
                     {e.name.charAt(0)}
                   </span>
                 )}
@@ -138,7 +145,7 @@ export function Step1Home({
               <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ fontSize:14, fontWeight: 500, color:th.text,
                   margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis',
-                  whiteSpace:'nowrap' }}>{e.name}</p>
+                  whiteSpace:'nowrap', letterSpacing:'-0.01em' }}>{e.name}</p>
                 {e.role && <p style={{ fontSize:12, color:th.muted, margin:0 }}>{e.role}</p>}
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -152,13 +159,13 @@ export function Step1Home({
 
       {/* ── SECTION COMMENTAIRES Google ── */}
       {business?.google_business_url && (
-        <section id="section-avis" style={{ marginBottom:24 }}>
-          <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
-            margin:'0 0 16px', letterSpacing:'-0.02em' }}>Commentaires</h2>
+        <section id="section-avis" style={{ marginBottom:32 }}>
+          <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
+            margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Commentaires</h2>
 
           {/* Widget avis Google — style page Google Maps */}
           <div style={{ background:th.card, border: `1px solid ${th.border}`,
-            borderRadius:14, overflow:'hidden' }}>
+            borderRadius:14, overflow:'hidden', boxShadow: th.shadowSm }}>
 
             {/* En-tête : logo Google + titre */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
@@ -281,15 +288,19 @@ export function Step1Home({
 
       {/* ── SECTION PHOTOS (en bas de la section avis) ── */}
       {business?.cover_urls?.length > 0 && (
-        <section id="section-photos" style={{ marginBottom:24 }}>
-          <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
-            margin:'0 0 16px', letterSpacing:'-0.02em' }}>Photos</h2>
+        <section id="section-photos" style={{ marginBottom:32 }}>
+          <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
+            margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Photos</h2>
           <div style={{ display:'grid',
             gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
             {business.cover_urls.map((c, i) => (
               <div key={c.id||i} style={{ aspectRatio:'4/3',
-                borderRadius:14, overflow:'hidden',
-                background:th.cardAlt, border: `1px solid ${th.border}` }}>
+                borderRadius:12, overflow:'hidden',
+                background:th.cardAlt, border: `1px solid ${th.border}`,
+                boxShadow: th.shadowSm,
+                transition:'transform 0.25s ease, box-shadow 0.25s ease' }}
+                onMouseEnter={ev=>{ ev.currentTarget.style.boxShadow = th.shadowMd; ev.currentTarget.style.transform = 'scale(1.01)'; }}
+                onMouseLeave={ev=>{ ev.currentTarget.style.boxShadow = th.shadowSm; ev.currentTarget.style.transform = 'scale(1)'; }}>
                 <img src={mediaUrl(c.url)} alt={`Photo ${i+1}`}
                   loading="lazy"
                   style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
@@ -300,9 +311,9 @@ export function Step1Home({
       )}
 
       {/* ── SECTION ADRESSE (deplacee en bas : prestations + equipe prioritaires) ── */}
-      <section id="section-adresse" style={{ marginBottom:24 }}>
-        <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
-          margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
+      <section id="section-adresse" style={{ marginBottom:32 }}>
+        <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
+          margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Adresse</h2>
 
         {/* Carte Google Maps embed — si adresse disponible */}
         {(business?.address || business?.city) && (() => {
@@ -316,8 +327,8 @@ export function Step1Home({
           // certains navigateurs mobiles refusent l'iframe sur redirect.
           const embedUrl = `https://www.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
           return (
-            <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
-              border: `1px solid ${th.border}` }}>
+            <div style={{ borderRadius:14, overflow:'hidden', marginBottom:14,
+              border: `1px solid ${th.border}`, boxShadow: th.shadowSm }}>
               <iframe
                 className="bk-iframe"
                 src={embedUrl}
@@ -348,7 +359,7 @@ export function Step1Home({
 
         {/* Card infos : adresse textuelle + téléphone */}
         <div style={{ background:th.card, border: `1px solid ${th.border}`,
-          borderRadius:12, overflow:'hidden' }}>
+          borderRadius:12, overflow:'hidden', boxShadow: th.shadowSm }}>
           {(business?.address || business?.city || business?.postal_code) && (
             <div style={{ display:'flex', alignItems:'flex-start', gap:12,
               padding:'14px 18px',
