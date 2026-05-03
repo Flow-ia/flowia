@@ -17,23 +17,21 @@ export function Step1Home({
 
       {/* Infos commerçant mobile */}
       <div className="bk-mo" style={{ marginBottom:16, padding:20,
-        background:th.card, borderRadius:14, border: `1px solid ${th.border}`,
-        boxShadow: th.shadowSm }}>
-        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:14 }}>
+        background:th.card, borderRadius:16, border: `0.5px solid ${th.border}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
           <div style={{ width:56, height:56, borderRadius:12, overflow:'hidden', flexShrink:0,
-            background:th.cardAlt, border:`1px solid ${th.border}`,
-            display:'flex', alignItems:'center', justifyContent:'center' }}>
+            background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
             {business?.profile_url
               ? <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                   style={{ width:'100%', height:'100%', objectFit:'cover' }}
                   onError={e=>e.target.style.display='none'}/>
-              : <span style={{ fontSize:22, fontWeight: 500, color:th.muted }}>
+              : <span style={{ fontSize:22, fontWeight: 500, color:'#374151' }}>
                   {(business?.business_name||'B').charAt(0).toUpperCase()}
                 </span>}
           </div>
           <div>
-            <h1 style={{ fontSize:19, fontWeight: 500, color:th.text, margin:'0 0 4px',
-              letterSpacing:'-0.025em', lineHeight:1.2 }}>{business?.business_name}</h1>
+            <h1 style={{ fontSize:18, fontWeight: 500, color:th.text, margin:'0 0 4px',
+              letterSpacing:'-0.02em' }}>{business?.business_name}</h1>
           </div>
         </div>
         {business?.address && (
@@ -64,14 +62,11 @@ export function Step1Home({
         )}
         {refProgram && refProgram !== 'none' && refProgram.is_enabled === true && (
           <button onClick={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
-            style={{ marginTop:12, padding:'10px 14px', borderRadius:10, cursor:'pointer',
-              background:th.ax.violetBg, border: `1px solid ${th.ax.violet}33`,
-              color:th.ax.violet, fontWeight: 500, fontSize:12,
+            style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
+              background:'#8b5cf615', border: '0.5px solid #8b5cf640',
+              color:'#6d28d9', fontWeight: 500, fontSize:12,
               display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center',
-              whiteSpace:'nowrap', fontFamily:'inherit',
-              transition:'background 0.15s ease, border-color 0.15s ease' }}
-            onMouseEnter={e=>{ e.currentTarget.style.borderColor = `${th.ax.violet}66`; }}
-            onMouseLeave={e=>{ e.currentTarget.style.borderColor = `${th.ax.violet}33`; }}>
+              whiteSpace:'nowrap' }}>
             🤝 Programme parrainage
           </button>
         )}
@@ -81,14 +76,14 @@ export function Step1Home({
       <AnnouncementBanner slug={slug} />
 
       {/* ── SECTION PRESTATIONS ── */}
-      <section id="section-prestations" style={{ marginBottom:32 }}>
-        <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
-          margin:'0 0 20px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Nos prestations</h2>
+      <section id="section-prestations" style={{ marginBottom:24 }}>
+        <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
+          margin:'0 0 20px', letterSpacing:'-0.02em' }}>Nos prestations</h2>
         {services.length === 0 ? (
           <p style={{ color:th.muted, fontSize:14 }}>Aucune prestation disponible.</p>
         ) : (
-          <div style={{ border: `1px solid ${th.border}`, borderRadius:14,
-            overflow:'hidden', background:th.card, boxShadow: th.shadowSm }}>
+          <div style={{ border: `0.5px solid ${th.border}`, borderRadius:12,
+            overflow:'hidden', background:th.card }}>
             {[
               ...svcGroups.map(g => ({ label:g.label, svcs:g.svcs })),
               ...(svcNoCat.length>0 ? [{ label:null, svcs:svcNoCat }] : []),
@@ -104,9 +99,9 @@ export function Step1Home({
       </section>
 
       {/* ── SECTION ÉQUIPE ── */}
-      <section id="section-equipe" style={{ marginBottom:32 }}>
-        <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
-          margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Équipe</h2>
+      <section id="section-equipe" style={{ marginBottom:24 }}>
+        <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
+          margin:'0 0 16px', letterSpacing:'-0.02em' }}>Équipe</h2>
         <div className="bk-emp-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
           {employees.map(e => (
             <div key={e.id}
@@ -117,17 +112,15 @@ export function Step1Home({
                 setSelSvc(null); setSelDate(null); setSelSlot(null); setMonthKey('');
                 goToStep(2, null, e);
               }}
-              style={{ background:th.card, border: `1px solid ${th.border}`,
-                borderRadius:12, padding:'14px',
-                display:'flex', alignItems:'center', gap:12, cursor:'pointer',
-                boxShadow: th.shadowSm,
-                transition:'border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease' }}
-              onMouseEnter={ev=>{ ev.currentTarget.style.boxShadow = th.shadowMd; ev.currentTarget.style.borderColor = th.borderHv; }}
-              onMouseLeave={ev=>{ ev.currentTarget.style.boxShadow = th.shadowSm; ev.currentTarget.style.borderColor = th.border; }}>
+              style={{ background:th.card, border: `0.5px solid ${th.border}`,
+                borderRadius:12, padding:'16px 14px',
+                display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}
+              onMouseEnter={ev=>ev.currentTarget.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'}
+              onMouseLeave={ev=>ev.currentTarget.style.boxShadow='none'}>
               <div style={{ width:48, height:48, borderRadius:99, flexShrink:0,
                 background: e.has_image ? 'transparent' : th.cardAlt, overflow:'hidden',
                 display:'flex', alignItems:'center', justifyContent:'center',
-                border: `1px solid ${th.border}` }}>
+                border: e.has_image ? `1px solid ${th.border}` : 'none' }}>
                 {e.has_image ? (
                   <img src={employeeImgUrl(e.id, e.image_version)} alt={e.name}
                     style={{ width:'100%', height:'100%', objectFit:'cover' }}
@@ -137,7 +130,7 @@ export function Step1Home({
                     }} />
                 ) : (
                   <span style={{ fontSize:20, fontWeight: 500,
-                    color: e.avatar_color || th.muted }}>
+                    color:e.avatar_color||'#374151' }}>
                     {e.name.charAt(0)}
                   </span>
                 )}
@@ -145,7 +138,7 @@ export function Step1Home({
               <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ fontSize:14, fontWeight: 500, color:th.text,
                   margin:'0 0 2px', overflow:'hidden', textOverflow:'ellipsis',
-                  whiteSpace:'nowrap', letterSpacing:'-0.01em' }}>{e.name}</p>
+                  whiteSpace:'nowrap' }}>{e.name}</p>
                 {e.role && <p style={{ fontSize:12, color:th.muted, margin:0 }}>{e.role}</p>}
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -159,17 +152,17 @@ export function Step1Home({
 
       {/* ── SECTION COMMENTAIRES Google ── */}
       {business?.google_business_url && (
-        <section id="section-avis" style={{ marginBottom:32 }}>
-          <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
-            margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Commentaires</h2>
+        <section id="section-avis" style={{ marginBottom:24 }}>
+          <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
+            margin:'0 0 16px', letterSpacing:'-0.02em' }}>Commentaires</h2>
 
           {/* Widget avis Google — style page Google Maps */}
-          <div style={{ background:th.card, border: `1px solid ${th.border}`,
-            borderRadius:14, overflow:'hidden', boxShadow: th.shadowSm }}>
+          <div style={{ background:th.card, border: `0.5px solid ${th.border}`,
+            borderRadius:14, overflow:'hidden' }}>
 
             {/* En-tête : logo Google + titre */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-              padding:'14px 18px', borderBottom: `1px solid ${th.border}` }}>
+              padding:'14px 18px', borderBottom: `0.5px solid ${th.border}` }}>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <svg viewBox="0 0 24 24" width="18" height="18" style={{flexShrink:0}}>
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -182,7 +175,7 @@ export function Step1Home({
                 </span>
               </div>
               <a href={business.google_business_url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize:12, color:th.ax.blue, fontWeight: 500, textDecoration:'none',
+                style={{ fontSize:12, color:'#2563eb', fontWeight: 500, textDecoration:'none',
                   display:'flex', alignItems:'center', gap:4 }}>
                 Voir la fiche
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -229,7 +222,7 @@ export function Step1Home({
                 <a href={business.google_business_url} target="_blank" rel="noopener noreferrer"
                   style={{ flex:1, display:'flex', alignItems:'center', gap:10,
                     padding:'14px 16px', borderRadius:12, textDecoration:'none',
-                    background:th.cardAlt, border: `1px solid ${th.border}`,
+                    background:th.cardAlt, border: `0.5px solid ${th.border}`,
                     color:th.text }}>
                   <span style={{ fontSize:13, fontWeight: 500, flex:1 }}>
                     Consulter les avis détaillés sur Google
@@ -243,7 +236,7 @@ export function Step1Home({
             ) : (
               <div style={{ padding:'16px 18px',
                 display:'flex', alignItems:'center', gap:10,
-                borderBottom: `1px solid ${th.border}` }}>
+                borderBottom: `0.5px solid ${th.border}` }}>
                 <svg viewBox="0 0 24 24" fill="#FBBC05" style={{width:16,height:16,flexShrink:0}}>
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
@@ -261,7 +254,7 @@ export function Step1Home({
                 style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6,
                   padding:'10px', borderRadius:10, textDecoration:'none', fontSize:13,
                   fontWeight: 500, color:th.text,
-                  background:th.cardAlt, border: `1px solid ${th.border}` }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                   style={{width:14,height:14}}>
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -288,19 +281,15 @@ export function Step1Home({
 
       {/* ── SECTION PHOTOS (en bas de la section avis) ── */}
       {business?.cover_urls?.length > 0 && (
-        <section id="section-photos" style={{ marginBottom:32 }}>
-          <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
-            margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Photos</h2>
+        <section id="section-photos" style={{ marginBottom:24 }}>
+          <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
+            margin:'0 0 16px', letterSpacing:'-0.02em' }}>Photos</h2>
           <div style={{ display:'grid',
             gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
             {business.cover_urls.map((c, i) => (
               <div key={c.id||i} style={{ aspectRatio:'4/3',
-                borderRadius:12, overflow:'hidden',
-                background:th.cardAlt, border: `1px solid ${th.border}`,
-                boxShadow: th.shadowSm,
-                transition:'transform 0.25s ease, box-shadow 0.25s ease' }}
-                onMouseEnter={ev=>{ ev.currentTarget.style.boxShadow = th.shadowMd; ev.currentTarget.style.transform = 'scale(1.01)'; }}
-                onMouseLeave={ev=>{ ev.currentTarget.style.boxShadow = th.shadowSm; ev.currentTarget.style.transform = 'scale(1)'; }}>
+                borderRadius:14, overflow:'hidden',
+                background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
                 <img src={mediaUrl(c.url)} alt={`Photo ${i+1}`}
                   loading="lazy"
                   style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
@@ -311,9 +300,9 @@ export function Step1Home({
       )}
 
       {/* ── SECTION ADRESSE (deplacee en bas : prestations + equipe prioritaires) ── */}
-      <section id="section-adresse" style={{ marginBottom:32 }}>
-        <h2 style={{ fontSize:22, fontWeight: 500, color:th.text,
-          margin:'0 0 18px', letterSpacing:'-0.025em', lineHeight:1.2 }}>Adresse</h2>
+      <section id="section-adresse" style={{ marginBottom:24 }}>
+        <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
+          margin:'0 0 16px', letterSpacing:'-0.02em' }}>Adresse</h2>
 
         {/* Carte Google Maps embed — si adresse disponible */}
         {(business?.address || business?.city) && (() => {
@@ -327,8 +316,8 @@ export function Step1Home({
           // certains navigateurs mobiles refusent l'iframe sur redirect.
           const embedUrl = `https://www.google.com/maps?q=${addrQ}&output=embed&hl=fr&z=15`;
           return (
-            <div style={{ borderRadius:14, overflow:'hidden', marginBottom:14,
-              border: `1px solid ${th.border}`, boxShadow: th.shadowSm }}>
+            <div style={{ borderRadius:14, overflow:'hidden', marginBottom:16,
+              border: `0.5px solid ${th.border}` }}>
               <iframe
                 className="bk-iframe"
                 src={embedUrl}
@@ -343,8 +332,8 @@ export function Step1Home({
               <a href={mapsLink} target="_blank" rel="noopener noreferrer"
                 style={{ display:'flex', alignItems:'center', gap:8,
                   padding:'10px 14px', background:th.card,
-                  borderTop: `1px solid ${th.border}`,
-                  fontSize:13, fontWeight: 500, color:th.ax.blue, textDecoration:'none' }}>
+                  borderTop: `0.5px solid ${th.border}`,
+                  fontSize:13, fontWeight: 500, color:'#2563eb', textDecoration:'none' }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                   style={{width:13,height:13}}>
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -358,8 +347,8 @@ export function Step1Home({
         })()}
 
         {/* Card infos : adresse textuelle + téléphone */}
-        <div style={{ background:th.card, border: `1px solid ${th.border}`,
-          borderRadius:12, overflow:'hidden', boxShadow: th.shadowSm }}>
+        <div style={{ background:th.card, border: `0.5px solid ${th.border}`,
+          borderRadius:12, overflow:'hidden' }}>
           {(business?.address || business?.city || business?.postal_code) && (
             <div style={{ display:'flex', alignItems:'flex-start', gap:12,
               padding:'14px 18px',
@@ -400,7 +389,7 @@ export function Step1Home({
 
       {/* ── FOOTER ── */}
       <div className="bk-footer-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
-        paddingTop:24, borderTop: `1px solid ${th.border}` }}>
+        paddingTop:24, borderTop: `0.5px solid ${th.border}` }}>
         <div>
           <p style={{ fontSize:14, fontWeight: 500, color:th.text, margin:'0 0 10px' }}>
             Nous contacter
@@ -408,7 +397,7 @@ export function Step1Home({
           {business?.phone && (
             <a href={`tel:${business.phone}`}
               style={{ display:'flex', alignItems:'center', gap:7, fontSize:13,
-                color:th.ax.blue, textDecoration:'none', marginBottom:6 }}>
+                color:'#2563eb', textDecoration:'none', marginBottom:6 }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                 style={{width:14,height:14}}>
                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.35 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 6.29 6.29l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
@@ -423,7 +412,7 @@ export function Step1Home({
           </p>
           <a href={`/book/${slug}/politique`} target="_blank" rel="noopener noreferrer"
             style={{ display:'flex', alignItems:'center', gap:7, fontSize:13,
-              color:th.ax.blue, textDecoration:'none' }}>
+              color:'#2563eb', textDecoration:'none' }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               style={{width:14,height:14}}>
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>

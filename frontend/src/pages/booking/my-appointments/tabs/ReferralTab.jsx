@@ -13,7 +13,7 @@ export function ReferralTab({
     <div style={{ display:'flex', flexDirection:'column', gap:14, animation:'fadeIn .2s ease' }}>
 
       {/* Code perso + partage */}
-      <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
         <p style={{ fontSize:11, fontWeight: 500, color:th.muted, margin:'0 0 8px' }}>Mon code de parrainage</p>
         {/* Cadre voucher : tirets fins théme-aware (clair vs sombre) au lieu
             d'un purple hardcodé qui jurait en dark mode et ne respectait pas
@@ -32,7 +32,7 @@ export function ReferralTab({
             en clair, blanc/noir en sombre), comme les autres CTA booking. */}
         <button onClick={onCopyReferralLink} style={{ width:'100%', padding:'12px',
           borderRadius:11, cursor:'pointer', border:'none',
-          background: refCopied ? th.ax.emerald : th.accent,
+          background: refCopied ? '#10b981' : th.accent,
           color: refCopied ? 'white' : th.accentText,
           fontWeight: 500, fontSize:13 }}>
           {refCopied ? 'Lien copié' : 'Copier mon lien de parrainage'}
@@ -59,14 +59,14 @@ export function ReferralTab({
           .sort((a, b) => new Date(b.used_at || 0) - new Date(a.used_at || 0));
         const renderCard = (r, opts = {}) => {
           const isBday = r.reward_type === 'birthday';
-          const accent = isBday ? th.ax.rose : th.ax.violet;
+          const accent = isBday ? '#ec4899' : '#8b5cf6';
           const valStr = r.type === 'percent' ? `-${r.value}%` : `-${Number(r.value).toFixed(2)} €`;
           const isUsed = opts.isUsed;
           const expStr = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : null;
           return (
             <div key={r.id} style={{
               padding:'12px 14px', borderRadius:11,
-              border: `1px solid ${isUsed ? th.border : accent + '40'}`,
+              border: `0.5px solid ${isUsed ? th.border : accent + '40'}`,
               background:isUsed ? th.cardAlt : accent + '0f',
               opacity:isUsed ? 0.65 : 1,
             }}>
@@ -85,8 +85,8 @@ export function ReferralTab({
                 <span style={{
                   fontSize:10, fontWeight: 500,
                   padding:'3px 8px', borderRadius:99,
-                  background:isUsed ? th.border : accent + '20',
-                  color:isUsed ? th.muted : accent,
+                  background:isUsed ? '#e5e7eb' : accent + '20',
+                  color:isUsed ? '#6b7280' : accent,
                 }}>{isUsed ? 'Utilisée' : 'Disponible'}</span>
               </div>
             </div>
@@ -95,7 +95,7 @@ export function ReferralTab({
         return (
           <>
             {available.length > 0 && (
-              <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
+              <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
                 <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 12px' }}>
                   Mes réductions disponibles
                 </p>
@@ -105,7 +105,7 @@ export function ReferralTab({
               </div>
             )}
             {used.length > 0 && (
-              <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
+              <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
                 <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 4px' }}>
                   Historique des récompenses utilisées
                 </p>
@@ -122,7 +122,7 @@ export function ReferralTab({
       })()}
 
       {/* Historique filleuls */}
-      <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
         <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 12px' }}>
           Mes filleuls
         </p>
@@ -134,18 +134,18 @@ export function ReferralTab({
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {refHistory.map(h => {
               const name = [h.filleul_first_name, h.filleul_last_name].filter(Boolean).join(' ') || h.filleul_email;
-              const statusColor = h.status === 'validated' ? th.ax.emerald
-                                : h.status === 'cancelled' ? th.ax.rose : th.ax.amber;
+              const statusColor = h.status === 'validated' ? '#10b981'
+                                : h.status === 'cancelled' ? '#ef4444' : '#f59e0b';
               const statusLabel = h.status === 'validated' ? 'Récompensé'
                                 : h.status === 'cancelled' ? 'Annulé' : 'En attente';
               return (
                 <div key={h.id} style={{ padding:'10px 12px', borderRadius:10,
-                  background:th.cardAlt, border: `1px solid ${th.border}` }}>
+                  background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                     {/* Avatar filleul : couleurs theme-aware au lieu du
                         purple hardcodé (illisible en dark mode). */}
                     <div style={{ width:32, height:32, borderRadius:10,
-                      background:th.cardAlt, border:`1px solid ${th.border}`,
+                      background:th.cardAlt, border:`0.5px solid ${th.border}`,
                       display:'flex', alignItems:'center', justifyContent:'center',
                       fontSize:13, fontWeight: 500, color:th.text, flexShrink:0 }}>
                       {(name.charAt(0) || '?').toUpperCase()}

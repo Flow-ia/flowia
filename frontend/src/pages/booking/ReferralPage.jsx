@@ -97,7 +97,7 @@ export function ReferralPage({
   const isDark = th.mode === "dark";
   const surfaceAlt   = isDark ? "rgba(255,255,255,0.04)" : "#f5f5f4";
   const dashedBorder = isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)";
-  const hairBorder   = `1px solid ${dashedBorder}`;
+  const hairBorder   = `0.5px solid ${dashedBorder}`;
 
   // Couleurs sémantiques (mêmes valeurs entre light/dark, alpha gère le contraste)
   const COL = {
@@ -120,7 +120,7 @@ export function ReferralPage({
     animation: "fadeIn .2s ease",
   };
   const card = {
-    background: th.card, border: `1px solid ${dashedBorder}`,
+    background: th.card, border: `0.5px solid ${dashedBorder}`,
     borderRadius: 8, padding: "1.75rem",
   };
 
@@ -263,7 +263,7 @@ export function ReferralPage({
 
           {/* Bloc auth — même UX que /info : suggestion + 3 boutons (FDS-2026). */}
           <div style={{
-            background: th.card, border: `1px solid ${th.border || dashedBorder}`,
+            background: th.card, border: `0.5px solid ${th.border || dashedBorder}`,
             borderRadius: 12, padding: 16,
           }}>
             <p style={{ fontSize: 13, fontWeight: 500, color: th.text, margin: "0 0 3px" }}>
@@ -286,7 +286,7 @@ export function ReferralPage({
               <button onClick={onRegister || onLogin}
                 style={{
                   padding: "11px", borderRadius: 10, background: th.card,
-                  border: `1px solid ${th.border || dashedBorder}`,
+                  border: `0.5px solid ${th.border || dashedBorder}`,
                   fontWeight: 500, fontSize: 13, color: th.text, cursor: "pointer",
                 }}>
                 {"Créer un compte"}
@@ -313,7 +313,7 @@ export function ReferralPage({
               style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 8, padding: "11px", borderRadius: 10, background: th.card,
-                border: `1px solid ${th.border || dashedBorder}`,
+                border: `0.5px solid ${th.border || dashedBorder}`,
                 cursor: "pointer", fontWeight: 500, fontSize: 13, color: th.text,
               }}>
               <svg width="16" height="16" viewBox="0 0 24 24">
@@ -521,7 +521,7 @@ export function ReferralPage({
             }}>
               <div className="bk-ref-code" style={{
                 flex: 1, background: th.card,
-                border: `1px solid ${dashedBorder}`,
+                border: `0.5px solid ${dashedBorder}`,
                 borderRadius: 8, padding: "14px 18px",
                 fontFamily: "monospace", fontSize: 20, fontWeight: 500,
                 letterSpacing: 2, color: th.text,
@@ -601,7 +601,7 @@ export function ReferralPage({
         {/* Bandeau quota — uniquement si une limite est configurée */}
         {limitMax && (
           <div style={{
-            background: COL.amberBg, border: `1px solid ${COL.amberBd}`,
+            background: COL.amberBg, border: `0.5px solid ${COL.amberBd}`,
             borderRadius: 8, padding: "12px 14px", marginBottom: "1.5rem",
           }}>
             <p style={{ fontSize: 13, color: COL.amberText, margin: 0, fontWeight: 500 }}>
@@ -763,7 +763,7 @@ function limitPeriodLabel(refProgram) {
 
 function shareBtn(th, dashedBorder) {
   return {
-    background: "transparent", border: `1px solid ${dashedBorder}`,
+    background: "transparent", border: `0.5px solid ${dashedBorder}`,
     padding: "8px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer",
     color: th.text,
   };

@@ -11,19 +11,18 @@ export function ReferralBanner({
     : `${Number(referralInfo.discount_value).toFixed(2)} €`;
 
   const ineligible = referralInfo.eligible === false;
-  const bg     = ineligible ? th.ax.amberBg : th.ax.blueBg;
-  const accent = ineligible ? th.ax.amber : th.ax.blue;
-  const color  = ineligible ? th.ax.amber : th.ax.blue;
-  const codeColor = ineligible ? th.ax.amber : th.ax.blue;
+  const bg     = ineligible ? '#fffbeb' : '#eef2ff';
+  const accent = ineligible ? '#f59e0b' : '#6366f1';
+  const color  = ineligible ? '#92400e' : '#4338ca';
+  const codeColor = ineligible ? '#92400e' : '#4338ca';
 
   return (
     <div style={{ maxWidth:1100, margin:'0 auto 16px', padding:'0 16px' }}>
       <div style={{
-        padding: '14px 16px',
-        borderRadius: 12,
+        padding: '12px 14px',
+        borderRadius: 8,
         background: bg,
-        border: `1px solid ${accent}33`,
-        borderLeft: `3px solid ${accent}`,
+        borderLeft: `2px solid ${accent}`,
         display: 'flex',
         alignItems: 'flex-start',
         gap: 12,

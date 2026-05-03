@@ -24,7 +24,7 @@ export function ChangeEmailModal({
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
       alignItems:'center', justifyContent:'center', padding:16,
       background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-      <div className="bk-modal-inner" style={{ background:th.card, border: `1px solid ${th.border}`,
+      <div className="bk-modal-inner" style={{ background:th.card, border: `0.5px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
         <div style={{ width:52, height:52, borderRadius:14, background:'rgba(99,102,241,0.1)',
@@ -53,16 +53,16 @@ export function ChangeEmailModal({
               placeholder="nouveau@email.com" autoComplete="email"
               disabled={emailLoading}
               style={{ ...inpStyle, marginBottom:10,
-                borderColor: emailErr ? th.ax.rose : th.inputBorder }}/>
+                borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
             {emailErr && (
-              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
                 {emailErr}
               </p>
             )}
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={onClose} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border: `1px solid ${th.border}`,
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Annuler
               </button>
@@ -91,16 +91,16 @@ export function ChangeEmailModal({
               maxLength={6} disabled={emailLoading}
               style={{ ...inpStyle, marginBottom:10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontSize:18, letterSpacing:4, textAlign:'center',
-                borderColor: emailErr ? th.ax.rose : th.inputBorder }}/>
+                borderColor: emailErr ? '#ef4444' : th.inputBorder }}/>
             {emailErr && (
-              <p style={{ fontSize:12, color:th.ax.rose, fontWeight: 500, margin:'0 0 12px' }}>
+              <p style={{ fontSize:12, color:'#ef4444', fontWeight: 500, margin:'0 0 12px' }}>
                 {emailErr}
               </p>
             )}
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={() => setEmailStep(1)} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border: `1px solid ${th.border}`,
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Retour
               </button>

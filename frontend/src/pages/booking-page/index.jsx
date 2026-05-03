@@ -753,13 +753,6 @@ export default function BookingPage({ slug }) {
         @keyframes spin  { to { transform:rotate(360deg); } }
         @keyframes fadeIn{ from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         *{ box-sizing:border-box }
-        /* Focus ring shadcn — appliqué globalement aux inputs/textareas/selects
-           du booking site. Évite de wirer un useState{focused} sur chaque champ. */
-        input:focus-visible, textarea:focus-visible, select:focus-visible {
-          outline: none !important;
-          border-color: ${th.ring} !important;
-          box-shadow: 0 0 0 3px ${th.ring}1a !important;
-        }
         /* Règles layout spécifiques à la vue booking (sidebar, grid services,
            footer, étapes). Les styles NavBar/drawer sont auto-inclus par le
            composant NavBar pour fonctionner sur toutes les vues. */
@@ -983,7 +976,7 @@ export default function BookingPage({ slug }) {
         <div className="bk-mo" style={{
           position:'fixed', bottom:0, left:0, right:0, zIndex:40,
           padding:'12px 16px', background:th.navBg,
-          borderTop: `1px solid ${th.border}`,
+          borderTop: `0.5px solid ${th.border}`,
           boxShadow: '0 -1px 3px rgba(0,0,0,0.05)',
         }}>
           <button

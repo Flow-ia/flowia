@@ -54,7 +54,7 @@ export function VisitsTab({
             {(visitsQuery || visitsDate) && (
               <button onClick={() => { setVisitsQuery(''); setVisitsDate(''); }}
                 style={{ padding:'0 14px', borderRadius:12, cursor:'pointer',
-                  background:th.cardAlt, border: `1px solid ${th.border}`,
+                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:12 }}>
                 Réinitialiser
               </button>
@@ -65,7 +65,7 @@ export function VisitsTab({
             <div style={{paddingTop:40}}><Spinner color="#6366f1"/></div>
           ) : visitsErr ? (
             <div style={{ textAlign:'center', paddingTop:40 }}>
-              <p style={{ color:th.ax.rose, fontWeight: 500, fontSize:13, margin:'0 0 12px' }}>
+              <p style={{ color:'#ef4444', fontWeight: 500, fontSize:13, margin:'0 0 12px' }}>
                 {visitsErr}
               </p>
               <button onClick={() => { setVisitsPage(p => p); setVisitsErr(''); }}
@@ -77,7 +77,7 @@ export function VisitsTab({
             <div style={{ textAlign:'center', paddingTop:40 }}>
               <div style={{ marginBottom:14, display:'flex', justifyContent:'center' }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-                  style={{width:48,height:48,color:th.dim}}>
+                  style={{width:48,height:48,color:'#d1d5db'}}>
                   <path d="M20 10c0 7-8 13-8 13s-8-6-8-13a8 8 0 0 1 16 0z"/>
                   <circle cx="12" cy="10" r="3"/>
                 </svg>
@@ -107,7 +107,7 @@ export function VisitsTab({
                   return (
                     <button key={v.id} onClick={() => onOpenVisit(v)}
                       style={{ width:'100%', textAlign:'left', cursor:'pointer',
-                        background:th.card, border: `1px solid ${th.border}`,
+                        background:th.card, border: `0.5px solid ${th.border}`,
                         borderRadius:14, padding:'14px 16px',
                         display:'flex', alignItems:'center', justifyContent:'space-between',
                         gap:12, transition:'transform .08s, border-color .12s' }}
@@ -123,7 +123,7 @@ export function VisitsTab({
                         </p>
                       </div>
                       <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-                        <p style={{ fontSize:15, fontWeight: 500, color:th.ax.emerald,
+                        <p style={{ fontSize:15, fontWeight: 500, color:'#10b981',
                           margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                           {total.toFixed(2)} €
                         </p>
@@ -154,7 +154,7 @@ export function VisitsTab({
                         disabled={pageSafe <= 1}
                         style={{ padding:'8px 12px', borderRadius:10,
                           cursor: pageSafe<=1 ? 'not-allowed' : 'pointer',
-                          background:th.cardAlt, border: `1px solid ${th.border}`,
+                          background:th.cardAlt, border: `0.5px solid ${th.border}`,
                           color:th.text, fontWeight: 500, fontSize:12,
                           opacity: pageSafe<=1 ? 0.4 : 1 }}>
                         ← Précédent
@@ -166,7 +166,7 @@ export function VisitsTab({
                         disabled={pageSafe >= totalPages}
                         style={{ padding:'8px 12px', borderRadius:10,
                           cursor: pageSafe>=totalPages ? 'not-allowed' : 'pointer',
-                          background:th.cardAlt, border: `1px solid ${th.border}`,
+                          background:th.cardAlt, border: `0.5px solid ${th.border}`,
                           color:th.text, fontWeight: 500, fontSize:12,
                           opacity: pageSafe>=totalPages ? 0.4 : 1 }}>
                         Suivant →

@@ -2,7 +2,7 @@
 // Carte latérale sticky (logo + statut + horaires + adresse + contact) +
 // MobileHoursBlock (version mobile compacte du même bloc horaires).
 import { useState } from 'react';
-import { mediaUrl, primaryBtn, primaryHover } from './shared';
+import { mediaUrl } from './shared';
 
 export function MobileHoursBlock({ th, hours }) {
   const parseHM = s => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
@@ -15,9 +15,9 @@ export function MobileHoursBlock({ th, hours }) {
   const closeM = today && today.is_open ? parseHM(today.close_time) : null;
   let status;
   if (today?.is_open && openM != null && closeM != null && curHM >= openM && curHM < closeM) {
-    status = { label:'Ouvert', detail:`Ferme à ${today.close_time}`, color: th.ax.emerald };
+    status = { label:'Ouvert', detail:`Ferme à ${today.close_time}`, color:'#10b981' };
   } else if (today?.is_open && openM != null && curHM < openM) {
-    status = { label:'Fermé', detail:`Ouvre à ${today.open_time}`, color: th.ax.rose };
+    status = { label:'Fermé', detail:`Ouvre à ${today.open_time}`, color:'#ef4444' };
   } else {
     let next = null;
     for (let i = 1; i <= 7; i++) {
@@ -26,20 +26,20 @@ export function MobileHoursBlock({ th, hours }) {
       if (h?.is_open && h.open_time) { next = { dow, time:h.open_time, inDays:i }; break; }
     }
     status = next
-      ? { label:'Fermé', detail:`Ouvre ${next.time} ${next.inDays === 1 ? 'demain' : DAY_SHORT[next.dow]}`, color: th.ax.rose }
-      : { label:'Fermé', detail:null, color: th.ax.rose };
+      ? { label:'Fermé', detail:`Ouvre ${next.time} ${next.inDays === 1 ? 'demain' : DAY_SHORT[next.dow]}`, color:'#ef4444' }
+      : { label:'Fermé', detail:null, color:'#ef4444' };
   }
 
   const WEEK_ORDER = [1,2,3,4,5,6,0];
   const [open, setOpen] = useState(false);
 
   return (
-    <div style={{ marginTop:10, border: `1px solid ${th.border}`, borderRadius:10,
+    <div style={{ marginTop:10, border: `0.5px solid ${th.border}`, borderRadius:10,
       background:th.cardAlt, overflow:'hidden' }}>
       <button onClick={() => setOpen(o => !o)}
         style={{ width:'100%', display:'flex', alignItems:'center', gap:6,
           padding:'9px 12px', background:'none', border:'none', cursor:'pointer',
-          textAlign:'left', fontFamily:'inherit' }}>
+          textAlign:'left' }}>
         <span style={{ width:8, height:8, borderRadius:99, background:status.color, flexShrink:0 }} />
         <span style={{ fontSize:12, fontWeight: 500, color:status.color }}>{status.label}</span>
         {status.detail && (
@@ -53,7 +53,7 @@ export function MobileHoursBlock({ th, hours }) {
         </svg>
       </button>
       {open && (
-        <div style={{ borderTop: `1px solid ${th.border}`, background:th.card }}>
+        <div style={{ borderTop: `0.5px solid ${th.border}`, background:th.card }}>
           {WEEK_ORDER.map((dow, i) => {
             const h = hours[dow];
             const isToday = dow === curDow;
@@ -62,11 +62,11 @@ export function MobileHoursBlock({ th, hours }) {
               <div key={dow} style={{ display:'flex', alignItems:'center',
                 justifyContent:'space-between', padding:'7px 12px',
                 borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
-                <span style={{ fontSize:12, fontWeight: isToday ? 500 : 400,
+                <span style={{ fontSize:12, fontWeight: isToday ? 800 : 500,
                   color: isToday ? th.text : th.muted }}>
                   {DAY_SHORT[dow]}
                 </span>
-                <span style={{ fontSize:12, fontWeight: isToday ? 500 : 400,
+                <span style={{ fontSize:12, fontWeight: isToday ? 700 : 400,
                   color: isToday ? th.text : (h?.is_open ? th.text : th.muted),
                   fontVariantNumeric:'tabular-nums' }}>
                   {h?.is_open && h.open_time && h.close_time
@@ -97,9 +97,9 @@ export function SideCard({ th, slug, business, onReserve }) {
   const closeM = today && today.is_open ? parseHM(today.close_time) : null;
   let status;
   if (today?.is_open && openM != null && closeM != null && curHM >= openM && curHM < closeM) {
-    status = { label: 'Ouvert', detail: `Ferme à ${today.close_time}`, color: th.ax.emerald };
+    status = { label: 'Ouvert', detail: `Ferme à ${today.close_time}`, color: '#10b981' };
   } else if (today?.is_open && openM != null && curHM < openM) {
-    status = { label: 'Fermé', detail: `Ouvre à ${today.open_time}`, color: th.ax.rose };
+    status = { label: 'Fermé', detail: `Ouvre à ${today.open_time}`, color: '#ef4444' };
   } else {
     let next = null;
     for (let i = 1; i <= 7; i++) {
@@ -109,9 +109,9 @@ export function SideCard({ th, slug, business, onReserve }) {
     }
     if (next) {
       const whenLbl = next.inDays === 1 ? 'demain' : DAY_SHORT[next.dow];
-      status = { label: 'Fermé', detail: `Ouvre ${next.time} ${whenLbl}`, color: th.ax.rose };
+      status = { label: 'Fermé', detail: `Ouvre ${next.time} ${whenLbl}`, color: '#ef4444' };
     } else {
-      status = { label: 'Fermé', detail: null, color: th.ax.rose };
+      status = { label: 'Fermé', detail: null, color: '#ef4444' };
     }
   }
 
@@ -127,22 +127,22 @@ export function SideCard({ th, slug, business, onReserve }) {
     <div className="bk-do bk-sb"
       style={{ width:290, flexShrink:0, paddingTop:16,
         position:'sticky', top:80, alignSelf:'flex-start' }}>
-      <div style={{ background:th.sidebarBg, border: `1px solid ${th.border}`,
-        borderRadius:16, overflow:'hidden', boxShadow: th.shadowSm }}>
+      <div style={{ background:th.sidebarBg, border: `0.5px solid ${th.border}`,
+        borderRadius:16, overflow:'hidden' }}>
 
         {/* Logo + nom + lien avis Google */}
         <div style={{ padding:'24px 20px 18px', textAlign:'center',
-          borderBottom: `1px solid ${th.border}` }}>
+          borderBottom: `0.5px solid ${th.border}` }}>
           <div className="bk-side-logo" style={{ width:80, height:80, borderRadius:99, margin:'0 auto 12px',
             overflow:'hidden', background:th.cardAlt,
             display:'flex', alignItems:'center', justifyContent:'center',
-            border: `1px solid ${th.border}` }}>
+            border: `0.5px solid ${th.border}` }}>
             {business?.profile_url ? (
               <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                 style={{ width:'100%', height:'100%', objectFit:'cover' }}
                 onError={e=>{ e.target.style.display='none'; }}/>
             ) : null}
-            <span style={{ fontSize:28, fontWeight: 500, color: th.muted,
+            <span style={{ fontSize:28, fontWeight: 500, color:'#374151',
               display: business?.profile_url ? 'none' : 'block' }}>
               {(business?.business_name||'B').charAt(0).toUpperCase()}
             </span>
@@ -154,7 +154,7 @@ export function SideCard({ th, slug, business, onReserve }) {
           {business?.google_business_url && (
             <a href={business.google_business_url} target="_blank" rel="noopener noreferrer"
               style={{ display:'inline-flex', alignItems:'center', gap:6,
-                fontSize:12, fontWeight: 500, color: th.ax.blue,
+                fontSize:12, fontWeight: 500, color:'#2563eb',
                 textDecoration:'none' }}>
               <svg viewBox="0 0 24 24" width="13" height="13" style={{flexShrink:0}}>
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -168,19 +168,21 @@ export function SideCard({ th, slug, business, onReserve }) {
         </div>
 
         {/* Bouton Réserver */}
-        <div style={{ padding:'16px 20px', borderBottom: `1px solid ${th.border}` }}>
+        <div style={{ padding:'16px 20px', borderBottom: `0.5px solid ${th.border}` }}>
           <button onClick={onReserve}
-            style={{ ...primaryBtn(th, true), height: 44, padding: '12px', fontSize: 15 }}
-            {...primaryHover}>
+            style={{ width:'100%', padding:'13px', borderRadius:10,
+              background:th.accent, border:'none', fontWeight: 500, fontSize:15,
+              color:th.accentText, cursor:'pointer',
+              boxShadow: 'none' }}>
             Réserver
           </button>
         </div>
 
         {/* Statut ouvert/fermé + Tableau horaires */}
         {Object.keys(hours).length > 0 && (
-          <div style={{ borderBottom: `1px solid ${th.border}` }}>
+          <div style={{ borderBottom: `0.5px solid ${th.border}` }}>
             <div style={{ padding:'12px 18px', display:'flex', alignItems:'center', gap:6,
-              background:th.cardAlt, borderBottom: `1px solid ${th.border}` }}>
+              background:th.cardAlt, borderBottom: `0.5px solid ${th.border}` }}>
               <span style={{ width:8, height:8, borderRadius:99, background:status.color, flexShrink:0 }} />
               <span style={{ fontSize:13, fontWeight: 500, color:status.color }}>{status.label}</span>
               {status.detail && (
@@ -196,11 +198,11 @@ export function SideCard({ th, slug, business, onReserve }) {
                   <div key={dow} className="bk-hours-row" style={{ display:'flex', alignItems:'center',
                     justifyContent:'space-between', padding:'8px 18px',
                     borderBottom: isLast ? 'none' : `1px solid ${th.border}` }}>
-                    <span style={{ fontSize:13, fontWeight: isToday ? 500 : 400,
+                    <span style={{ fontSize:13, fontWeight: isToday ? 800 : 500,
                       color: isToday ? th.text : th.muted }}>
                       {DAY_FULL[dow]}
                     </span>
-                    <span style={{ fontSize:13, fontWeight: isToday ? 500 : 400,
+                    <span style={{ fontSize:13, fontWeight: isToday ? 700 : 400,
                       color: isToday ? th.text : (h?.is_open ? th.text : th.muted),
                       fontVariantNumeric:'tabular-nums' }}>
                       {h?.is_open && h.open_time && h.close_time
@@ -216,7 +218,7 @@ export function SideCard({ th, slug, business, onReserve }) {
 
         {/* Adresse + lien Maps */}
         {(business?.address || business?.city || business?.postal_code) && (
-          <div style={{ padding:'14px 18px', borderBottom: `1px solid ${th.border}` }}>
+          <div style={{ padding:'14px 18px', borderBottom: `0.5px solid ${th.border}` }}>
             {business?.address && (
               <p style={{ fontSize:13, color:th.text, margin:'0 0 2px', lineHeight:1.5 }}>
                 {business.address}
@@ -230,7 +232,7 @@ export function SideCard({ th, slug, business, onReserve }) {
             {mapsUrl && (
               <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
                 style={{ display:'inline-flex', alignItems:'center', gap:6,
-                  fontSize:13, fontWeight: 500, color: th.ax.blue, textDecoration:'none' }}>
+                  fontSize:13, fontWeight: 500, color:'#2563eb', textDecoration:'none' }}>
                 Ouvrir dans Maps
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                   style={{width:13,height:13}}>
@@ -247,7 +249,7 @@ export function SideCard({ th, slug, business, onReserve }) {
             <button onClick={() => setContactOpen(o => !o)}
               style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
                 padding:'12px 18px', background:'none', border:'none', cursor:'pointer',
-                fontSize:13, fontWeight: 500, color:th.text, textAlign:'left', fontFamily:'inherit' }}>
+                fontSize:13, fontWeight: 500, color:th.text, textAlign:'left' }}>
               Nous contacter
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                 style={{ width:14, height:14, color:th.muted,
@@ -257,7 +259,7 @@ export function SideCard({ th, slug, business, onReserve }) {
               </svg>
             </button>
             {contactOpen && (
-              <div style={{ borderTop: `1px solid ${th.border}` }}>
+              <div style={{ borderTop: `0.5px solid ${th.border}` }}>
                 {business?.phone && (
                   <a href={`tel:${business.phone}`}
                     style={{ display:'flex', alignItems:'center', gap:10,

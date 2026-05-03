@@ -186,12 +186,12 @@ export default function GoogleConfirm() {
       {/* Bloc Google read-only */}
       <div style={{ display:'flex', alignItems:'center', gap:12,
         padding:'12px 14px', borderRadius:11,
-        background:th.inputBg, border:`1px solid ${th.border}`,
+        background:th.inputBg, border:`0.5px solid ${th.border}`,
         marginBottom:14 }}>
         {payload.picture ? (
           <img src={payload.picture} alt=""
             style={{ width:40, height:40, borderRadius:99, flexShrink:0,
-              objectFit:'cover', border:`1px solid ${th.border}` }}/>
+              objectFit:'cover', border:`0.5px solid ${th.border}` }}/>
         ) : (
           <div style={{ width:40, height:40, borderRadius:99, flexShrink:0,
             background:th.accent, color:th.accentText, fontWeight:500, fontSize:14,
@@ -237,14 +237,14 @@ export default function GoogleConfirm() {
 
       {/* ConsentCheckboxes (commit 17) */}
       <div style={{
-        outline: contractError ? '1px solid #ef4444' : 'none',
+        outline: contractError ? '0.5px solid #ef4444' : 'none',
         outlineOffset: 2, borderRadius: 10,
       }}>
         <ConsentCheckboxes slug={slug} th={th} onChange={setConsents}/>
       </div>
 
       {err && (
-        <p style={{ margin:'10px 0 0', fontSize:12, color:th.ax.rose,
+        <p style={{ margin:'10px 0 0', fontSize:12, color:'#dc2626',
           fontWeight:500 }}>{err}</p>
       )}
 
@@ -285,7 +285,7 @@ function Wrapper({ th, children }) {
       display:'flex', alignItems:'center', justifyContent:'center',
       padding:'24px 16px' }}>
       <div style={{ width:'100%', maxWidth:480, background:th.card,
-        border:`1px solid ${th.border}`, borderRadius:14,
+        border:`0.5px solid ${th.border}`, borderRadius:14,
         padding:24 }}>
         {children}
       </div>

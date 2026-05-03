@@ -23,7 +23,7 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
       <button onClick={onBack}
         style={{ display:'flex', alignItems:'center', gap:6,
           padding:'8px 12px', borderRadius:10, marginBottom:14, cursor:'pointer',
-          background:th.cardAlt, border: `1px solid ${th.border}`,
+          background:th.cardAlt, border: `0.5px solid ${th.border}`,
           color:th.text, fontWeight: 500, fontSize:12 }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
           style={{width:14,height:14}}>
@@ -32,14 +32,14 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
         Retour aux passages
       </button>
 
-      <div style={{ background:th.card, border: `1px solid ${th.border}`,
+      <div style={{ background:th.card, border: `0.5px solid ${th.border}`,
         borderRadius:18, padding:20, display:'flex', flexDirection:'column', gap:14 }}>
         {/* Header : commerçant + total (wrap sur mobile) */}
         <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
           gap:12, flexWrap:'wrap' }}>
           <div style={{ minWidth:0, flex:'1 1 200px' }}>
             <span style={{ fontSize:10, padding:'3px 8px', borderRadius:99, fontWeight: 500,
-              background:'rgba(99,102,241,0.10)', color:th.ax.blue,
+              background:'rgba(99,102,241,0.10)', color:'#6366f1',
               display:'inline-flex', alignItems:'center', gap:4, marginBottom:8 }}>
               <span style={{ fontSize:9 }}>📍</span>Passage sur place
             </span>
@@ -58,12 +58,12 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
                 {orig.toFixed(2)} €
               </p>
             )}
-            <p style={{ fontSize:22, fontWeight: 500, color:th.ax.emerald,
+            <p style={{ fontSize:22, fontWeight: 500, color:'#10b981',
               margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
               {total.toFixed(2)} €
             </p>
             {hasDisc && (
-              <p style={{ fontSize:10, fontWeight: 500, color:th.ax.emerald,
+              <p style={{ fontSize:10, fontWeight: 500, color:'#10b981',
                 margin:'2px 0 0' }}>
                 − {disc.toFixed(2)} € remise
               </p>
@@ -73,7 +73,7 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
 
         {/* Adresse commerçant */}
         {v.business_address && (
-          <div style={{ background:th.cardAlt, border: `1px solid ${th.border}`,
+          <div style={{ background:th.cardAlt, border: `0.5px solid ${th.border}`,
             borderRadius:12, padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               style={{width:14,height:14,color:th.muted,flexShrink:0,marginTop:2}}>
@@ -120,7 +120,7 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
 
         {/* Footer : employé + paiement (wrap sur mobile) */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-          gap:10, paddingTop:12, borderTop: `1px solid ${th.border}`, flexWrap:'wrap' }}>
+          gap:10, paddingTop:12, borderTop: `0.5px solid ${th.border}`, flexWrap:'wrap' }}>
           {v.employee_name && (
             <p style={{ fontSize:12, color:th.muted, margin:0 }}>
               Avec <span style={{ fontWeight: 500, color:th.text }}>{v.employee_name}</span>

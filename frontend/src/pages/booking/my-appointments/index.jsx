@@ -470,12 +470,6 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     <div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} *{box-sizing:border-box}
-        /* Focus ring shadcn (appliqué globalement aux forms my-appointments) */
-        input:focus-visible, textarea:focus-visible, select:focus-visible {
-          outline: none !important;
-          border-color: ${th.ring} !important;
-          box-shadow: 0 0 0 3px ${th.ring}1a !important;
-        }
         /* Polish responsive — grilles 2 colonnes (prénom/nom, postal/ville)
            collapsent en colonne unique sous 480px pour rester confortables
            sur petits écrans Android. */
@@ -490,31 +484,27 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       {/* ── Sub-header (non-sticky) : bouton retour + identité client ──
           La NavBar principale (avec logo + hamburger) est rendue par
           BookingPage et reste le seul header sticky de la page. */}
-      <div style={{ background:th.bg, borderBottom: `1px solid ${th.border}` }}>
-        <div style={{ maxWidth:720, margin:'0 auto', padding:'14px 24px',
-          display:'flex', alignItems:'center', gap:14 }}>
+      <div style={{ background:th.navBg, borderBottom: `0.5px solid ${th.navBorder}` }}>
+        <div style={{ maxWidth:720, margin:'0 auto', padding:'12px 24px',
+          display:'flex', alignItems:'center', gap:16 }}>
           <button onClick={onBack} aria-label="Retour"
-            style={{ width:36, height:36, borderRadius:8, border: `1px solid ${th.border}`,
-              background:th.bg, display:'flex', alignItems:'center', justifyContent:'center',
-              cursor:'pointer', flexShrink:0, fontFamily:'inherit',
-              transition:'background 0.15s ease, border-color 0.15s ease' }}
-            onMouseEnter={e=>{ e.currentTarget.style.background = th.bgHover; e.currentTarget.style.borderColor = th.borderHv; }}
-            onMouseLeave={e=>{ e.currentTarget.style.background = th.bg; e.currentTarget.style.borderColor = th.border; }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{width:14,height:14,color:th.text}}>
+            style={{ width:34, height:34, borderRadius:8, border: `0.5px solid ${th.border}`,
+              background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
+              cursor:'pointer', flexShrink:0 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              style={{width:16,height:16,color:th.text}}>
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
-          <div style={{ display:'flex', alignItems:'center', gap:12, flex:1, minWidth:0 }}>
-            <div style={{ width:38, height:38, borderRadius:99, flexShrink:0,
+          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, minWidth:0 }}>
+            <div style={{ width:36, height:36, borderRadius:99, flexShrink:0,
               background:th.accent, display:'flex', alignItems:'center', justifyContent:'center',
-              color:th.accentText, fontWeight: 500, fontSize:15, letterSpacing:'-0.01em' }}>
+              color:th.accentText, fontWeight: 500, fontSize:15 }}>
               {(clientInfo?.first_name||'?').charAt(0).toUpperCase()}
             </div>
             <div style={{ minWidth:0 }}>
-              <p style={{ fontWeight: 500, fontSize:15, color:th.text, margin:0,
-                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                letterSpacing:'-0.01em' }}>
+              <p style={{ fontWeight: 500, fontSize:14, color:th.text, margin:0,
+                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                 {clientInfo?.first_name} {clientInfo?.last_name}
               </p>
               <p style={{ fontSize:12, color:th.muted, margin:0 }}>{clientInfo?.email}</p>
@@ -524,7 +514,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ background:th.navBg, borderBottom: `1px solid ${th.border}` }}>
+      <div style={{ background:th.navBg, borderBottom: `0.5px solid ${th.border}` }}>
         <div className="bk-tabs bk-nav-pad" style={{ maxWidth:720, margin:'0 auto', padding:'0 24px',
           display:'flex', gap:0 }}>
           {[
@@ -566,12 +556,10 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
             ].map(([tab, label]) => (
             <button key={tab} onClick={()=>setActiveTab(tab)}
               style={{ padding:'14px 20px', fontSize:13, fontWeight: 500, cursor:'pointer',
-                background:'none', border:'none', fontFamily:'inherit',
+                background:'none', border:'none',
                 color: activeTab===tab ? th.text : th.muted,
                 borderBottom: activeTab===tab ? `2px solid ${th.accent}` : '2px solid transparent',
-                transition:'all .15s ease' }}
-              onMouseEnter={e=>{ if(activeTab !== tab) e.currentTarget.style.color = th.text; }}
-              onMouseLeave={e=>{ if(activeTab !== tab) e.currentTarget.style.color = th.muted; }}>
+                transition:'all .15s' }}>
               {label}
             </button>
           ))}
