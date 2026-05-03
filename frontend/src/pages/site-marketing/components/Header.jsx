@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useTheme } from '../../../hooks/useTheme';
 import { I } from '../../../utils/icons';
+import { S } from './shadcn';
 
 const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
@@ -11,49 +11,48 @@ const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 export const FEATURE_GROUPS = [
   {
     slug: 'ia', label: 'Intelligence artificielle', short: 'IA',
-    Ic: I.Sparkles, color: '#8b5cf6',
+    Ic: I.Sparkles, color: S.ax.violet,
     items: [
-      { id: 'ia',                 Ic: I.Sparkles, color: '#8b5cf6', title: 'Marketing IA',           desc: "Campagnes générées et ciblées automatiquement." },
-      { id: 'previsions',         Ic: I.TrendUp,  color: '#06b6d4', title: 'Prévisions IA',          desc: "Anticipez votre activité et vos creux." },
+      { id: 'ia',         Ic: I.Sparkles, color: S.ax.violet, title: 'Marketing IA',  desc: "Campagnes générées et ciblées automatiquement." },
+      { id: 'previsions', Ic: I.TrendUp,  color: S.ax.cyan,   title: 'Prévisions IA', desc: "Anticipez votre activité et vos creux." },
     ],
   },
   {
     slug: 'reservation', label: 'Réservation & site', short: 'Réservation',
-    Ic: I.Calendar, color: '#6366f1',
+    Ic: I.Calendar, color: S.ax.blue,
     items: [
-      { id: 'reservation',        Ic: I.Calendar, color: '#6366f1', title: 'Site de réservation',    desc: "Page publique 100 % personnalisable." },
-      { id: 'annonce',            Ic: I.Bell,     color: '#f59e0b', title: 'Annonce gratuite',       desc: "Bandeau d'info en haut de votre site." },
-      { id: 'tarifs',             Ic: I.Tag,      color: '#10b981', title: 'Tarifs & catégories',    desc: "Personnalisez vos prestations et prix." },
-      { id: 'employes',           Ic: I.Users,    color: '#06b6d4', title: 'Employés & permissions', desc: "Gérez votre équipe et leurs droits." },
+      { id: 'reservation', Ic: I.Calendar, color: S.ax.blue,    title: 'Site de réservation',    desc: "Page publique 100 % personnalisable." },
+      { id: 'annonce',     Ic: I.Bell,     color: S.ax.amber,   title: 'Annonce gratuite',       desc: "Bandeau d'info en haut de votre site." },
+      { id: 'tarifs',      Ic: I.Tag,      color: S.ax.emerald, title: 'Tarifs & catégories',    desc: "Personnalisez vos prestations et prix." },
+      { id: 'employes',    Ic: I.Users,    color: S.ax.cyan,    title: 'Employés & permissions', desc: "Gérez votre équipe et leurs droits." },
     ],
   },
   {
     slug: 'marketing', label: 'Marketing & relation client', short: 'Marketing',
-    Ic: I.Send, color: '#f59e0b',
+    Ic: I.Send, color: S.ax.amber,
     items: [
-      { id: 'sms',                Ic: I.Send,     color: '#f59e0b', title: 'Marketing SMS',          desc: "Campagnes SMS ciblées et rappels auto." },
-      { id: 'email',              Ic: I.Mail,     color: '#6366f1', title: 'Marketing email',        desc: "Campagnes email transactionnelles." },
-      { id: 'fidelite',           Ic: I.Heart,    color: '#ef4444', title: 'Fidélité',               desc: "Programme de points et récompenses." },
-      { id: 'parrainage',         Ic: I.Gift,     color: '#10b981', title: 'Parrainage',             desc: "Récompensez parrains et filleuls." },
-      { id: 'anniversaire',       Ic: I.Star,     color: '#f59e0b', title: 'Anniversaires',          desc: "Campagnes anniversaire automatiques." },
-      { id: 'rappels',            Ic: I.Clock,    color: '#06b6d4', title: 'Rappels automatiques',   desc: "SMS de rappel 24h avant le RDV." },
+      { id: 'sms',          Ic: I.Send,  color: S.ax.amber,   title: 'Marketing SMS',        desc: "Campagnes SMS ciblées et rappels auto." },
+      { id: 'email',        Ic: I.Mail,  color: S.ax.indigo,  title: 'Marketing email',      desc: "Campagnes email transactionnelles." },
+      { id: 'fidelite',     Ic: I.Heart, color: S.ax.rose,    title: 'Fidélité',             desc: "Programme de points et récompenses." },
+      { id: 'parrainage',   Ic: I.Gift,  color: S.ax.emerald, title: 'Parrainage',           desc: "Récompensez parrains et filleuls." },
+      { id: 'anniversaire', Ic: I.Star,  color: S.ax.amber,   title: 'Anniversaires',        desc: "Campagnes anniversaire automatiques." },
+      { id: 'rappels',      Ic: I.Clock, color: S.ax.cyan,    title: 'Rappels automatiques', desc: "SMS de rappel 24h avant le RDV." },
     ],
   },
   {
     slug: 'caisse', label: 'Caisse & gestion', short: 'Caisse',
-    Ic: I.Wallet, color: '#10b981',
+    Ic: I.Wallet, color: S.ax.emerald,
     items: [
-      { id: 'caisse',             Ic: I.Wallet,    color: '#10b981', title: 'Caisse intégrée',        desc: "Encaissez en quelques secondes." },
-      { id: 'clients',            Ic: I.User,      color: '#6366f1', title: 'Fichier clients',        desc: "Historique, fiches, segmentation." },
-      { id: 'credits',            Ic: I.CreditCard, color: '#f59e0b', title: 'Crédits & avoirs',      desc: "Suivi des dettes et avoirs clients." },
-      { id: 'exports',            Ic: I.FileText,  color: '#6366f1', title: 'Exports comptables',     desc: "Export CSV/PDF mensuel automatique." },
-      { id: 'statistiques',       Ic: I.BarCh,     color: '#06b6d4', title: 'Statistiques',           desc: "Tableau de bord et reporting détaillé." },
+      { id: 'caisse',       Ic: I.Wallet,     color: S.ax.emerald, title: 'Caisse intégrée',    desc: "Encaissez en quelques secondes." },
+      { id: 'clients',      Ic: I.User,       color: S.ax.indigo,  title: 'Fichier clients',    desc: "Historique, fiches, segmentation." },
+      { id: 'credits',      Ic: I.CreditCard, color: S.ax.amber,   title: 'Crédits & avoirs',   desc: "Suivi des dettes et avoirs clients." },
+      { id: 'exports',      Ic: I.FileText,   color: S.ax.indigo,  title: 'Exports comptables', desc: "Export CSV/PDF mensuel automatique." },
+      { id: 'statistiques', Ic: I.BarCh,      color: S.ax.cyan,    title: 'Statistiques',       desc: "Tableau de bord et reporting détaillé." },
     ],
   },
 ];
 
 export default function Header() {
-  const { theme: t } = useTheme();
   const loc = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -85,8 +84,8 @@ export default function Header() {
   ];
 
   const linkStyle = (active) => ({
-    fontSize: 14, fontWeight: 500, color: active ? t.text : t.muted,
-    textDecoration: 'none', padding: '8px 12px', borderRadius: 8,
+    fontSize: 14, fontWeight: 500, color: active ? S.fg : S.fgMuted,
+    textDecoration: 'none', padding: '8px 12px', borderRadius: S.r,
     transition: 'color 0.15s ease, background 0.15s ease',
     cursor: 'pointer', whiteSpace: 'nowrap',
     display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -105,9 +104,10 @@ export default function Header() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 50,
-      background: scrolled ? t.navBg : t.canvas,
-      borderBottom: `0.5px solid ${scrolled ? t.navBorder : 'transparent'}`,
-      backdropFilter: scrolled ? 'saturate(140%) blur(8px)' : 'none',
+      background: scrolled ? 'rgba(255,255,255,0.85)' : S.bg,
+      borderBottom: `1px solid ${scrolled ? S.border : 'transparent'}`,
+      backdropFilter: scrolled ? 'saturate(160%) blur(10px)' : 'none',
+      WebkitBackdropFilter: scrolled ? 'saturate(160%) blur(10px)' : 'none',
       transition: 'background 0.2s ease, border-color 0.2s ease',
     }}>
       <div style={{
@@ -116,7 +116,7 @@ export default function Header() {
       }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
-          <span style={{ fontSize: 18, fontWeight: 500, color: t.text, letterSpacing: -0.2 }}>FlowIA</span>
+          <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>FlowIA</span>
         </Link>
 
         {!isMobile && (
@@ -127,21 +127,21 @@ export default function Header() {
                 onMouseLeave={scheduleCloseMega}
                 style={{ position: 'relative' }}>
                 <Link to={l.to} style={linkStyle(loc.pathname === l.to || megaOpen)}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = t.cardAlt; e.currentTarget.style.color = t.text; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = (loc.pathname === l.to || megaOpen) ? t.text : t.muted; }}>
+                  onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.color = S.fg; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = (loc.pathname === l.to || megaOpen) ? S.fg : S.fgMuted; }}>
                   {l.label}
-                  <I.ChevR style={{
-                    width: 12, height: 12, marginLeft: 2,
-                    transform: megaOpen ? 'rotate(90deg)' : 'rotate(90deg)',
-                    transition: 'transform 0.15s ease',
-                    opacity: 0.7,
-                  }} />
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{
+                    transform: megaOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s ease', opacity: 0.6,
+                  }}>
+                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </Link>
               </div>
             ) : (
               <Link key={l.to} to={l.to} style={linkStyle(loc.pathname === l.to)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = t.cardAlt; e.currentTarget.style.color = t.text; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = loc.pathname === l.to ? t.text : t.muted; }}>
+                onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.color = S.fg; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = loc.pathname === l.to ? S.fg : S.fgMuted; }}>
                 {l.label}
               </Link>
             ))}
@@ -151,25 +151,28 @@ export default function Header() {
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Link to="/portail-client" style={{
-              fontSize: 14, fontWeight: 500, color: t.text,
-              textDecoration: 'none', padding: '9px 16px', borderRadius: 8,
-              border: `0.5px solid ${t.borderStrong}`,
-              transition: 'background 0.15s ease',
+              fontSize: 14, fontWeight: 500, color: S.fg,
+              textDecoration: 'none', padding: '9px 16px', borderRadius: S.r,
+              border: `1px solid ${S.border}`, background: S.bg,
+              transition: 'background 0.15s ease, border-color 0.15s ease',
             }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = t.cardAlt; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+              onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.borderColor = S.borderHv; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = S.bg; e.currentTarget.style.borderColor = S.border; }}>
               Portail client
             </Link>
             <a href={COMMERCANT_URL} style={{
-              fontSize: 14, fontWeight: 500, color: t.bg,
-              textDecoration: 'none', padding: '9px 16px', borderRadius: 8,
-              background: t.text, border: 'none',
+              fontSize: 14, fontWeight: 500, color: S.fgInv,
+              textDecoration: 'none', padding: '9px 16px', borderRadius: S.r,
+              background: S.fg, border: `1px solid ${S.fg}`,
               display: 'inline-flex', alignItems: 'center', gap: 6,
               transition: 'opacity 0.15s ease',
             }}
-              onMouseEnter={(e) => { e.currentTarget.style.opacity = 0.85; }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = 0.9; }}
               onMouseLeave={(e) => { e.currentTarget.style.opacity = 1; }}>
-              Portail pro <I.ChevR style={{ width: 14, height: 14 }} />
+              Portail pro
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </a>
           </div>
         )}
@@ -177,13 +180,17 @@ export default function Header() {
         {isMobile && (
           <button onClick={() => setMobileOpen(o => !o)} aria-label="Menu"
             style={{
-              width: 38, height: 38, borderRadius: 8,
-              background: 'transparent', border: `0.5px solid ${t.border}`,
+              width: 40, height: 40, borderRadius: S.r,
+              background: S.bg, border: `1px solid ${S.border}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: t.text,
+              cursor: 'pointer', color: S.fg,
             }}>
             {mobileOpen ? (
-              <I.X style={{ width: 18, height: 18 }} />
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6"  x2="6" y2="18"/>
+                <line x1="6"  y1="6"  x2="18" y2="18"/>
+              </svg>
             ) : (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -201,23 +208,23 @@ export default function Header() {
         <div onMouseEnter={openMega} onMouseLeave={scheduleCloseMega}
           style={{
             position: 'absolute', top: '100%', left: 0, right: 0,
-            background: t.canvas,
-            borderTop: `0.5px solid ${t.border}`,
-            borderBottom: `0.5px solid ${t.border}`,
-            boxShadow: t.shadowLg,
+            background: S.bg,
+            borderTop: `1px solid ${S.border}`,
+            borderBottom: `1px solid ${S.border}`,
+            boxShadow: S.shadowLg,
             zIndex: 49,
           }}>
           <div style={{
-            maxWidth: 1200, margin: '0 auto', padding: '28px 24px',
-            display: 'grid', gap: 28,
+            maxWidth: 1200, margin: '0 auto', padding: '32px 24px',
+            display: 'grid', gap: 32,
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
           }}>
             {FEATURE_GROUPS.map(group => (
               <div key={group.label}>
                 <p style={{
-                  fontSize: 11, fontWeight: 500, color: t.muted,
-                  textTransform: 'uppercase', letterSpacing: 0.6,
-                  margin: 0, marginBottom: 12,
+                  fontSize: 11, fontWeight: 500, color: S.fgSubtle,
+                  textTransform: 'uppercase', letterSpacing: 1,
+                  margin: 0, marginBottom: 14,
                 }}>
                   {group.label}
                 </p>
@@ -227,25 +234,26 @@ export default function Header() {
                       onClick={() => { setMegaOpen(false); navigate(`/fonctionnalites#${it.id}`); }}
                       style={{
                         display: 'flex', gap: 12, padding: '8px 10px',
-                        borderRadius: 8, border: 'none', background: 'transparent',
+                        borderRadius: S.r, border: 'none', background: 'transparent',
                         cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                         transition: 'background 0.12s ease',
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = t.cardAlt; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                       <div style={{
-                        width: 28, height: 28, borderRadius: 8,
-                        background: it.color + '15',
+                        width: 32, height: 32, borderRadius: S.rSm,
+                        background: it.color + '14',
+                        border: `1px solid ${it.color}22`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         flexShrink: 0, marginTop: 2,
                       }}>
                         <it.Ic style={{ width: 14, height: 14, color: it.color }} />
                       </div>
                       <div>
-                        <p style={{ fontSize: 13, fontWeight: 500, color: t.text, margin: 0, lineHeight: 1.3 }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0, lineHeight: 1.3 }}>
                           {it.title}
                         </p>
-                        <p style={{ fontSize: 12, color: t.muted, margin: '2px 0 0', lineHeight: 1.4 }}>
+                        <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0', lineHeight: 1.4 }}>
                           {it.desc}
                         </p>
                       </div>
@@ -256,24 +264,27 @@ export default function Header() {
             ))}
           </div>
           <div style={{
-            background: t.cardAlt,
-            padding: '14px 24px',
-            borderTop: `0.5px solid ${t.border}`,
+            background: S.bgMuted,
+            padding: '16px 24px',
+            borderTop: `1px solid ${S.border}`,
           }}>
             <div style={{
               maxWidth: 1200, margin: '0 auto',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               gap: 16, flexWrap: 'wrap',
             }}>
-              <p style={{ fontSize: 13, color: t.textSub, margin: 0 }}>
+              <p style={{ fontSize: 13, color: S.fgMuted, margin: 0 }}>
                 {"Découvrez toutes les fonctionnalités de FlowIA en détail."}
               </p>
               <Link to="/fonctionnalites" onClick={() => setMegaOpen(false)} style={{
-                fontSize: 13, fontWeight: 500, color: t.text,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 13, fontWeight: 500, color: S.fg,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
                 textDecoration: 'none',
               }}>
-                Voir toutes les fonctionnalités <I.ChevR style={{ width: 12, height: 12 }} />
+                Voir toutes les fonctionnalités
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </Link>
             </div>
           </div>
@@ -283,34 +294,35 @@ export default function Header() {
       {/* Mobile menu */}
       {isMobile && mobileOpen && (
         <div style={{
-          borderTop: `0.5px solid ${t.border}`,
-          background: t.canvas,
-          padding: '12px 16px 18px',
+          borderTop: `1px solid ${S.border}`,
+          background: S.bg,
+          padding: '14px 16px 20px',
           display: 'flex', flexDirection: 'column', gap: 4,
           maxHeight: 'calc(100vh - 70px)', overflowY: 'auto',
         }}>
           {navLinks.map(l => (
             <Link key={l.to} to={l.to} style={{
               fontSize: 15, fontWeight: 500,
-              color: loc.pathname === l.to ? t.text : t.textSub,
-              textDecoration: 'none', padding: '12px 12px', borderRadius: 8,
-              background: loc.pathname === l.to ? t.cardAlt : 'transparent',
+              color: loc.pathname === l.to ? S.fg : S.fg2,
+              textDecoration: 'none', padding: '12px 12px', borderRadius: S.r,
+              background: loc.pathname === l.to ? S.bgHover : 'transparent',
             }}>
               {l.label}
             </Link>
           ))}
-          <div style={{ height: 1, background: t.border, margin: '8px 0' }} />
+          <div style={{ height: 1, background: S.border, margin: '8px 0' }} />
           <Link to="/portail-client" style={{
-            fontSize: 15, fontWeight: 500, color: t.text,
-            textDecoration: 'none', padding: '12px 12px', borderRadius: 8,
-            border: `0.5px solid ${t.borderStrong}`, textAlign: 'center',
+            fontSize: 15, fontWeight: 500, color: S.fg,
+            textDecoration: 'none', padding: '12px 14px', borderRadius: S.r,
+            border: `1px solid ${S.border}`, textAlign: 'center', background: S.bg,
           }}>
             Portail client
           </Link>
           <a href={COMMERCANT_URL} style={{
-            fontSize: 15, fontWeight: 500, color: t.bg,
-            textDecoration: 'none', padding: '12px 12px', borderRadius: 8,
-            background: t.text, textAlign: 'center', marginTop: 4,
+            fontSize: 15, fontWeight: 500, color: S.fgInv,
+            textDecoration: 'none', padding: '12px 14px', borderRadius: S.r,
+            background: S.fg, textAlign: 'center', marginTop: 4,
+            border: `1px solid ${S.fg}`,
           }}>
             Portail pro
           </a>

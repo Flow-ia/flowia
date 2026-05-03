@@ -1,70 +1,65 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../hooks/useTheme';
-import { I } from '../../utils/icons';
+import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, cardHover, CheckIcon, CaretDown } from './components/shadcn';
 
 const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
 export default function Landing() {
-  const { theme: t } = useTheme();
   return (
     <>
-      <Hero t={t} />
-      <GrowthStats t={t} />
-      <Features t={t} />
-      <AIShowcase t={t} />
-      <ThreeSteps t={t} />
-      <Testimonials t={t} />
-      <Integrations t={t} />
-      <Payments t={t} />
-      <QrSection t={t} />
-      <Support t={t} />
-      <PricingTeaser t={t} />
-      <Faq t={t} />
-      <FinalCTA t={t} />
+      <Hero />
+      <Stats />
+      <Features />
+      <AIShowcase />
+      <Testimonials />
+      <Pricing />
+      <Faq />
+      <FinalCTA />
     </>
   );
 }
 
-function Section({ children, bg, t, paddingY = 56 }) {
+// ── Layout helpers ───────────────────────────────────────────────────────────
+function Section({ children, bg = S.bg, paddingY = 80, borderTop = false }) {
   return (
     <section style={{
-      background: bg || 'transparent',
+      background: bg,
       padding: `${paddingY}px 24px`,
-      borderTop: bg && bg !== 'transparent' ? `0.5px solid ${t.border}` : 'none',
+      borderTop: borderTop ? `1px solid ${S.border}` : 'none',
     }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>{children}</div>
+      <div style={{ maxWidth: 1120, margin: '0 auto' }}>{children}</div>
     </section>
   );
 }
 
-function SectionLabel({ children, t }) {
+function Eyebrow({ children }) {
   return (
     <p style={{
-      fontSize: 12, fontWeight: 500, color: t.muted,
-      textTransform: 'uppercase', letterSpacing: 0.8,
-      margin: 0, marginBottom: 12,
+      fontSize: 12, fontWeight: 500, color: S.fgSubtle,
+      textTransform: 'uppercase', letterSpacing: 1,
+      margin: 0, marginBottom: 14,
     }}>{children}</p>
   );
 }
 
-function H2({ children, t, align = 'left', maxWidth }) {
+function H2({ children, align = 'left', maxWidth }) {
   return (
     <h2 style={{
-      fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 500,
-      color: t.text, lineHeight: 1.15, letterSpacing: -0.5,
-      margin: 0, marginBottom: 14, textAlign: align,
-      maxWidth, marginLeft: align === 'center' ? 'auto' : undefined,
+      fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 500,
+      color: S.fg, lineHeight: 1.15, letterSpacing: '-0.025em',
+      margin: 0, marginBottom: 12, textAlign: align,
+      maxWidth,
+      marginLeft: align === 'center' ? 'auto' : undefined,
       marginRight: align === 'center' ? 'auto' : undefined,
     }}>{children}</h2>
   );
 }
 
-function Lede({ children, t, align = 'left', maxWidth = 640 }) {
+function Lede({ children, align = 'left', maxWidth = 640 }) {
   return (
     <p style={{
-      fontSize: 16, color: t.textSub, lineHeight: 1.5,
-      margin: 0, marginBottom: 18, textAlign: align,
+      fontSize: 16, color: S.fgMuted, lineHeight: 1.6,
+      margin: 0, marginBottom: 24, textAlign: align,
       maxWidth,
       marginLeft: align === 'center' ? 'auto' : undefined,
       marginRight: align === 'center' ? 'auto' : undefined,
@@ -72,737 +67,629 @@ function Lede({ children, t, align = 'left', maxWidth = 640 }) {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function Hero({ t }) {
+// ── 1. Hero ──────────────────────────────────────────────────────────────────
+function Hero() {
   return (
     <section style={{
-      padding: 'clamp(48px, 7vw, 72px) 16px 48px',
-      background: t.canvas,
-      borderBottom: `0.5px solid ${t.border}`,
+      padding: 'clamp(72px, 9vw, 104px) 24px 40px',
+      background: S.bg,
+      borderBottom: `1px solid ${S.border}`,
     }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto', textAlign: 'center' }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           fontSize: 12, fontWeight: 500,
-          padding: '6px 12px', borderRadius: 99,
-          background: 'linear-gradient(90deg, #eeedfe, #eef2ff)',
-          border: `0.5px solid #c4b5fd`,
-          color: '#5b21b6', letterSpacing: 0.3, marginBottom: 18,
+          padding: '4px 12px', borderRadius: 99,
+          background: S.bgMuted, border: `1px solid ${S.border}`,
+          color: S.fg2, marginBottom: 22,
         }}>
-          <I.Sparkles style={{ width: 13, height: 13 }} />
-          {"Propulsé par l'IA · 100 % français"}
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: S.ax.emerald }} />
+          {"Nouveau · Marketing IA inclus"}
         </span>
 
         <h1 style={{
-          fontSize: 'clamp(32px, 6vw, 60px)', fontWeight: 500,
-          color: t.text, lineHeight: 1.02, letterSpacing: -1.4,
-          margin: 0, marginBottom: 16,
-          maxWidth: 920, marginLeft: 'auto', marginRight: 'auto',
+          fontSize: 'clamp(36px, 6.4vw, 64px)', fontWeight: 500,
+          color: S.fg, lineHeight: 1.02, letterSpacing: '-0.04em',
+          margin: 0, marginBottom: 18,
+          maxWidth: 880, marginLeft: 'auto', marginRight: 'auto',
         }}>
-          {"Augmentez votre chiffre d'affaires"}
-          <br/>
-          <span style={{
-            background: 'linear-gradient(90deg, #8b5cf6 0%, #6366f1 50%, #06b6d4 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}>
-            {"grâce à l'intelligence artificielle"}
-          </span>
+          {"L'app qui fait tourner votre salon."}
         </h1>
         <p style={{
-          fontSize: 'clamp(15px, 2.4vw, 19px)', color: t.textSub, lineHeight: 1.5,
-          maxWidth: 720, margin: '0 auto 28px',
+          fontSize: 'clamp(15px, 2.2vw, 18px)', color: S.fgMuted, lineHeight: 1.6,
+          maxWidth: 620, margin: '0 auto 32px',
         }}>
-          {"FlowIA réunit agenda, caisse, fidélité et marketing IA dans une seule application. L'IA travaille pour vous : campagnes ciblées, prévisions de CA, détection des clients à reconquérir."}
+          {"Agenda, réservation, caisse, fidélité, marketing IA — dans une seule app."}
         </p>
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <a href={COMMERCANT_URL + '/register'} style={primaryBtn(t)}>
-            {"Essayer gratuitement"}
-          </a>
-          <Link to="/fonctionnalites" style={secondaryBtn(t)}>
-            {"Voir les fonctionnalités"}
-          </Link>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <PrimaryCta href={COMMERCANT_URL + '/register'}>{"Essayer 14 jours"}</PrimaryCta>
+          <SecondaryCta to="/fonctionnalites">{"Voir la démo"}</SecondaryCta>
         </div>
+        <p style={{ fontSize: 13, color: S.fgSubtle, margin: '0 0 56px' }}>
+          {"Sans carte bancaire · Sans engagement · Installation immédiate"}
+        </p>
 
-        <div style={{
-          marginTop: 18,
-          display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center',
-          flexWrap: 'wrap', fontSize: 13, color: t.muted,
-        }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <I.Check style={{ width: 14, height: 14, color: '#10b981' }} /> Sans carte bancaire
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <I.Check style={{ width: 14, height: 14, color: '#10b981' }} /> Installation immédiate
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <I.Check style={{ width: 14, height: 14, color: '#10b981' }} /> Support 7j/7
-          </span>
-        </div>
+        <HeroAgendaScreen />
       </div>
     </section>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Stats panel facon Revolut — gros nombres impactants pour montrer la valeur
-// concrete de FlowIA (CA, no-shows, croissance) directement sous le hero.
-function GrowthStats({ t }) {
-  const stats = [
-    { v: '+30 %', label: 'de chiffre d\'affaires moyen après 6 mois',     color: '#8b5cf6' },
-    { v: '70 %',  label: 'de no-shows en moins grâce aux rappels SMS',     color: '#10b981' },
-    { v: '24/7',  label: 'de réservations en ligne, sans intervention',    color: '#6366f1' },
-    { v: '500+',  label: 'salons utilisent FlowIA chaque jour en France',  color: '#f59e0b' },
+function HeroAgendaScreen() {
+  const appts = [
+    { time: '09:00', name: 'Karim B.',  service: 'Coupe + barbe', dur: '45 min', accent: S.ax.emerald, accentBg: S.ax.emeraldBg, tag: 'Confirmé' },
+    { time: '10:00', name: 'Sofia M.',  service: 'Couleur',       dur: '90 min', accent: S.ax.violet,  accentBg: S.ax.violetBg,  tag: 'Confirmé' },
+    { time: '11:30', name: 'Yanis D.',  service: 'Coupe homme',   dur: '30 min', accent: S.ax.blue,    accentBg: S.ax.blueBg,    tag: 'Confirmé' },
+    { time: '12:15', name: 'Léa T.',    service: 'Brushing',      dur: '30 min', accent: S.ax.amber,   accentBg: S.ax.amberBg,   tag: 'En attente' },
+    { time: '13:00', name: 'Adam K.',   service: 'Barbe',         dur: '20 min', accent: S.ax.cyan,    accentBg: S.ax.cyanBg,    tag: 'Nouveau' },
   ];
   return (
-    <section style={{
-      padding: '48px 16px',
-      background: '#0b0b14',
-      color: '#fff',
+    <div style={{
+      maxWidth: 980, margin: '0 auto',
+      borderRadius: S.rXl, background: S.bg,
+      border: `1px solid ${S.border}`,
+      boxShadow: S.shadowXl,
+      overflow: 'hidden',
     }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <p style={{
-          fontSize: 12, fontWeight: 500, color: '#a1a1aa',
-          textTransform: 'uppercase', letterSpacing: 0.8,
-          margin: 0, marginBottom: 12, textAlign: 'center',
-        }}>
-          {"Des résultats concrets"}
-        </p>
-        <h2 style={{
-          fontSize: 'clamp(22px, 3.5vw, 32px)', fontWeight: 500,
-          color: '#fff', lineHeight: 1.15, letterSpacing: -0.6,
-          margin: 0, marginBottom: 36, textAlign: 'center',
-        }}>
-          {"FlowIA fait grandir votre activité"}
-        </h2>
-        <div style={{
-          display: 'grid', gap: 18,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
-        }}>
-          {stats.map(s => (
-            <div key={s.label} style={{
-              padding: 'clamp(20px, 3vw, 28px)',
-              borderRadius: 16,
-              background: 'rgba(255,255,255,0.04)',
-              border: '0.5px solid rgba(255,255,255,0.08)',
-              transition: 'transform 0.2s ease, background 0.2s ease',
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}>
-              <p style={{
-                fontSize: 'clamp(36px, 6vw, 56px)', fontWeight: 500,
-                color: s.color, letterSpacing: -1.5, lineHeight: 1,
-                margin: 0, marginBottom: 12,
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              }}>
-                {s.v}
-              </p>
-              <p style={{
-                fontSize: 14, color: '#d4d4d8', lineHeight: 1.5,
-                margin: 0,
-              }}>
-                {s.label}
-              </p>
-            </div>
+      <BrowserChrome url="commercant.flowiapro.com" />
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', minHeight: 440 }}>
+        <div style={{ borderRight: `1px solid ${S.border}`, padding: '14px 10px', background: S.bgMuted }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 6px 14px', borderBottom: `1px solid ${S.border}`, marginBottom: 12 }}>
+            <span style={{ width: 22, height: 22, borderRadius: 6, background: S.fg }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: S.fg }}>FlowIA</span>
+          </div>
+          {[
+            { l: 'Agenda', active: true },
+            { l: 'Réservation' }, { l: 'Caisse' }, { l: 'Clients' },
+            { l: 'Fidélité' }, { l: 'Marketing IA' }, { l: 'Statistiques' }, { l: 'Réglages' },
+          ].map(it => (
+            <div key={it.l} style={{
+              fontSize: 13, padding: '7px 8px', marginBottom: 2, borderRadius: S.rSm,
+              color: it.active ? S.fg : S.fgMuted,
+              background: it.active ? S.bgHover : 'transparent',
+              fontWeight: it.active ? 500 : 400,
+            }}>{it.l}</div>
           ))}
         </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <p style={{ fontSize: 16, fontWeight: 500, color: S.fg, margin: 0, letterSpacing: '-0.01em' }}>{"Lundi 12 mai"}</p>
+              <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0' }}>{"5 rendez-vous · 312 € prévus"}</p>
+            </div>
+            <span style={{ fontSize: 11, padding: '4px 10px', background: S.ax.emeraldBg, color: S.ax.emerald, borderRadius: 99, fontWeight: 500, border: `1px solid ${S.ax.emerald}33` }}>
+              {"+12 RDV cette semaine"}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {appts.map((a, i) => (
+              <div key={i} style={{
+                display: 'grid', gridTemplateColumns: '64px 4px 1fr auto', gap: 12, alignItems: 'center',
+                padding: '12px 14px', borderRadius: S.r,
+                border: `1px solid ${S.border}`, background: S.bg,
+              }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: S.fg, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{a.time}</span>
+                <span style={{ width: 4, height: 28, borderRadius: 2, background: a.accent }} />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0 }}>{a.name}</p>
+                  <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0' }}>{a.service + ' · ' + a.dur}</p>
+                </div>
+                <span style={{
+                  fontSize: 11, padding: '3px 8px', borderRadius: S.rSm,
+                  background: a.accentBg, color: a.accent, fontWeight: 500,
+                  border: `1px solid ${a.accent}33`,
+                }}>{a.tag}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrowserChrome({ url }) {
+  return (
+    <div style={{
+      height: 32, background: S.bgMuted,
+      borderBottom: `1px solid ${S.border}`,
+      display: 'flex', alignItems: 'center', padding: '0 14px',
+    }}>
+      <span style={{ width: 9, height: 9, borderRadius: 5, background: '#ff5f57', marginRight: 6 }} />
+      <span style={{ width: 9, height: 9, borderRadius: 5, background: '#febc2e', marginRight: 6 }} />
+      <span style={{ width: 9, height: 9, borderRadius: 5, background: '#28c840' }} />
+      <span style={{ marginLeft: 16, fontSize: 11, color: S.fgSubtle }}>{url}</span>
+    </div>
+  );
+}
+
+// ── 2. Stats ─────────────────────────────────────────────────────────────────
+function Stats() {
+  const stats = [
+    { v: '+30 %', label: "de chiffre d'affaires moyen" },
+    { v: '−70 %', label: 'de no-shows en moins' },
+    { v: '24/7',  label: 'de réservations en ligne' },
+    { v: '500+',  label: 'salons actifs en France' },
+  ];
+  return (
+    <section style={{ padding: '64px 24px', background: S.bgInverse, color: S.fgInv }}>
+      <div style={{
+        maxWidth: 1120, margin: '0 auto',
+        display: 'grid', gap: 24,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+      }}>
+        {stats.map(s => (
+          <div key={s.label} style={{ padding: '8px 16px', textAlign: 'center' }}>
+            <p style={{
+              fontSize: 'clamp(32px, 5.5vw, 52px)', fontWeight: 500,
+              color: S.fgInv, letterSpacing: '-0.03em', lineHeight: 1,
+              margin: 0, marginBottom: 10,
+            }}>{s.v}</p>
+            <p style={{ fontSize: 14, color: S.fgInvMut, margin: 0, lineHeight: 1.5 }}>{s.label}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function Features({ t }) {
-  const items = [
-    {
-      Ic: I.Sparkles, color: '#8b5cf6', bg: '#eeedfe',
-      title: 'Marketing IA',
-      desc: "L'intelligence artificielle de FlowIA propose le bon message au bon client au bon moment. Plus besoin de réfléchir à qui contacter ni quand.",
-      badge: 'IA',
-    },
-    {
-      Ic: I.Calendar, color: '#6366f1', bg: '#eef2ff',
-      title: 'Réservation en ligne 24/7',
-      desc: "Vos clients réservent quand ils veulent, depuis votre site, Google ou un QR code. Plus de coups de fil pour caler un créneau.",
-    },
-    {
-      Ic: I.Bell, color: '#f59e0b', bg: '#fffbeb',
-      title: 'Rappels automatiques SMS',
-      desc: "Réduisez les no-shows de 70 %. Les SMS de rappel partent seuls 24h avant, et vos clients peuvent confirmer en un clic.",
-    },
-    {
-      Ic: I.Wallet, color: '#10b981', bg: '#ecfdf5',
-      title: 'Caisse intégrée',
-      desc: "Encaissez en quelques secondes. Espèces, carte, virement, multi-paiements : tout est tracé et exportable pour votre comptable.",
-    },
-    {
-      Ic: I.Heart, color: '#ef4444', bg: '#fef2f2',
-      title: 'Fidélité & parrainage',
-      desc: "Cumul de points automatique, récompenses paramétrables, programmes anniversaire et parrainage prêts à l'emploi.",
-    },
-    {
-      Ic: I.Users, color: '#06b6d4', bg: '#ecfeff',
-      title: 'Gestion équipe & PIN',
-      desc: "Plusieurs employés, agendas dédiés, droits par rôle. Mode tablette partagée avec PIN — pas de session par employé à gérer.",
-    },
-  ];
-
+// ── 3. Features ──────────────────────────────────────────────────────────────
+function Features() {
   return (
-    <Section t={t}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <SectionLabel t={t}>Tout-en-un</SectionLabel>
-        <H2 t={t} align="center">Toutes les fonctionnalités dont votre salon a besoin</H2>
-        <Lede t={t} align="center">
-          {"Agenda, caisse, fidélité, marketing IA — tout dans une seule interface."}
+    <Section paddingY={88}>
+      <div style={{ textAlign: 'center', marginBottom: 48 }}>
+        <Eyebrow>Tout-en-un</Eyebrow>
+        <H2 align="center">{"Tout ce dont votre salon a besoin"}</H2>
+        <Lede align="center" maxWidth={560}>
+          {"Une seule app. Toutes les fonctions essentielles, sans complexité."}
         </Lede>
       </div>
       <div style={{
         display: 'grid', gap: 16,
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
       }}>
-        {items.map(it => (
-          <div key={it.title} style={{
-            padding: 22, borderRadius: 12,
-            background: t.canvas,
-            border: `0.5px solid ${t.border}`,
-            position: 'relative',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-          }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = t.shadowMd; }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
-            {it.badge && (
-              <span style={{
-                position: 'absolute', top: 14, right: 14,
-                fontSize: 10, fontWeight: 500,
-                padding: '3px 8px', borderRadius: 99,
-                background: 'linear-gradient(90deg, #8b5cf6, #6366f1)',
-                color: '#fff', letterSpacing: 0.5,
-                textTransform: 'uppercase',
-              }}>
-                {it.badge}
-              </span>
-            )}
-            <div style={{
-              width: 38, height: 38, borderRadius: 10,
-              background: it.bg, marginBottom: 14,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <it.Ic style={{ width: 18, height: 18, color: it.color }} />
-            </div>
-            <h3 style={{ fontSize: 16, fontWeight: 500, color: t.text, margin: 0, marginBottom: 6 }}>
-              {it.title}
-            </h3>
-            <p style={{ fontSize: 14, color: t.textSub, lineHeight: 1.55, margin: 0 }}>
-              {it.desc}
-            </p>
-          </div>
-        ))}
+        <FeatureCard title="Réservation 24/7"
+          desc="Vos clients réservent en 30 secondes, jour et nuit."
+          mock={<MockBooking />} />
+        <FeatureCard title="Marketing IA" badge="IA"
+          desc="L'IA cible le bon client avec le bon message."
+          mock={<MockAI />} />
+        <FeatureCard title="Rappels SMS"
+          desc="−70 % de no-shows, 100 % automatique."
+          mock={<MockSMS />} />
+        <FeatureCard title="Caisse intégrée"
+          desc="Multi-paiements, exports comptables auto."
+          mock={<MockCaisse />} />
+        <FeatureCard title="Fidélité & parrainage"
+          desc="Points cumulés, récompenses prêtes à l'emploi."
+          mock={<MockFidelite />} />
+        <FeatureCard title="Équipe & PIN tablette"
+          desc="Multi-employés, droits par rôle, tablette partagée."
+          mock={<MockPin />} />
       </div>
     </Section>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function AIShowcase({ t }) {
-  return (
-    <section style={{
-      padding: '64px 24px',
-      background: 'linear-gradient(135deg, #faf5ff 0%, #eef2ff 100%)',
-      borderTop: `0.5px solid ${t.border}`,
-      borderBottom: `0.5px solid ${t.border}`,
-    }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{
-          display: 'grid', gap: 40,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          alignItems: 'center',
-        }}>
-          <div>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 11, fontWeight: 500,
-              padding: '4px 10px', borderRadius: 99,
-              background: '#ffffff', border: `0.5px solid #c4b5fd`,
-              color: '#5b21b6', letterSpacing: 0.4, marginBottom: 14,
-              textTransform: 'uppercase',
-            }}>
-              <I.Sparkles style={{ width: 12, height: 12 }} />
-              Intelligence artificielle
-            </span>
-            <h2 style={{
-              fontSize: 'clamp(26px, 4vw, 36px)', fontWeight: 500,
-              color: '#1e1b4b', lineHeight: 1.15, letterSpacing: -0.6,
-              margin: 0, marginBottom: 14,
-            }}>
-              {"L'IA qui fait grandir votre salon"}
-            </h2>
-            <p style={{ fontSize: 16, color: '#3730a3', lineHeight: 1.55, margin: 0, marginBottom: 18 }}>
-              {"FlowIA analyse votre activité et propose les bonnes actions. Campagnes SMS générées automatiquement, prévisions de chiffre d'affaires, détection des clients dormants."}
-            </p>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-              {[
-                'Suggestions de campagnes basées sur vos données',
-                "Génération automatique du texte (SMS et email)",
-                "Détection des clients en risque de fuite",
-                "Prévisions de CA sur 4 semaines",
-              ].map(b => (
-                <li key={b} style={{ display: 'flex', gap: 8, fontSize: 14, color: '#3730a3' }}>
-                  <I.Check style={{ width: 14, height: 14, color: '#8b5cf6', flexShrink: 0, marginTop: 3 }} />
-                  {b}
-                </li>
-              ))}
-            </ul>
-            <Link to="/fonctionnalites#ia" style={{
-              fontSize: 14, fontWeight: 500, color: '#fff',
-              background: 'linear-gradient(90deg, #8b5cf6, #6366f1)',
-              padding: '11px 18px', borderRadius: 10,
-              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-              Découvrir l'IA <I.ChevR style={{ width: 13, height: 13 }} />
-            </Link>
-          </div>
-          <div style={{
-            background: '#fff', borderRadius: 16,
-            border: `0.5px solid ${t.border}`,
-            boxShadow: t.shadowLg,
-            padding: 22,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 10,
-                background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <I.Sparkles style={{ width: 16, height: 16, color: '#fff' }} />
-              </div>
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', margin: 0 }}>FlowIA Assistant</p>
-                <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>Suggestion · il y a 2 min</p>
-              </div>
-            </div>
-            <div style={{
-              padding: 14, borderRadius: 10,
-              background: '#faf5ff', border: '0.5px solid #c4b5fd',
-              marginBottom: 12,
-            }}>
-              <p style={{ fontSize: 13, color: '#1e1b4b', margin: 0, lineHeight: 1.55 }}>
-                {"23 clientes n'ont pas pris RDV depuis 3 mois. Une campagne SMS \"On vous a vues, mais ça fait longtemps\" pourrait en faire revenir 6 à 8 cette semaine."}
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button style={{
-                flex: 1, padding: '9px 12px', borderRadius: 8,
-                background: 'linear-gradient(90deg, #8b5cf6, #6366f1)', color: '#fff',
-                border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}>
-                Lancer la campagne
-              </button>
-              <button style={{
-                padding: '9px 12px', borderRadius: 8,
-                background: '#fff', color: '#374151',
-                border: '0.5px solid #e5e7eb', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}>
-                Voir détails
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-function ThreeSteps({ t }) {
-  const steps = [
-    { n: '01', title: 'Créez votre page de réservation', desc: "Renseignez vos prestations, vos horaires et vos employés. Tout est paramétrable en moins de 10 minutes." },
-    { n: '02', title: 'Personnalisez votre image',       desc: "Logo, couleurs, photos, conditions, politique d'annulation — votre salon, votre identité." },
-    { n: '03', title: 'Partagez et gérez',                desc: "Site web, Google, Instagram, QR code en vitrine : vos clients réservent en 30 secondes, vous gérez tout depuis FlowIA." },
-  ];
-  return (
-    <Section t={t} bg={t.cardAlt}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <SectionLabel t={t}>Démarrage simple</SectionLabel>
-        <H2 t={t} align="center">3 étapes pour digitaliser votre salon</H2>
-        <Lede t={t} align="center">
-          {"Pas de formation requise. La plupart de nos commerçants sont opérationnels le jour même."}
-        </Lede>
-      </div>
-      <div style={{
-        display: 'grid', gap: 18,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-      }}>
-        {steps.map(s => (
-          <div key={s.n} style={{
-            padding: 28, borderRadius: 12,
-            background: t.canvas,
-            border: `0.5px solid ${t.border}`,
-          }}>
-            <p style={{
-              fontSize: 12, fontWeight: 500, color: t.muted,
-              fontFamily: 'monospace', letterSpacing: 0.6,
-              margin: 0, marginBottom: 14,
-            }}>{s.n}</p>
-            <h3 style={{ fontSize: 18, fontWeight: 500, color: t.text, margin: 0, marginBottom: 8, lineHeight: 1.3 }}>
-              {s.title}
-            </h3>
-            <p style={{ fontSize: 14, color: t.textSub, lineHeight: 1.6, margin: 0 }}>
-              {s.desc}
-            </p>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-function Testimonials({ t }) {
-  const items = [
-    {
-      name: 'Sofiane Belkacem', role: 'Hair Coiff Lille — Barbier',
-      quote: "Avant FlowIA, je passais 1h par jour au téléphone à caler des RDV. Maintenant c'est 0. Je me concentre sur mes clients en chaise.",
-      stars: 5,
-    },
-    {
-      name: 'Camille Roussel', role: 'Studio Camille — Coiffeuse',
-      quote: "Les rappels SMS ont fait disparaître les no-shows. J'ai gagné 800 €/mois rien qu'avec ça. Je ne reviendrai jamais en arrière.",
-      stars: 5,
-    },
-    {
-      name: 'Élodie Marchand', role: 'Beauty Box — Esthéticienne',
-      quote: "Le programme de fidélité tourne tout seul, mes clientes adorent. Et le support répond en moins de 5 minutes quand j'ai un doute.",
-      stars: 5,
-    },
-  ];
-  return (
-    <Section t={t}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <SectionLabel t={t}>Ils nous font confiance</SectionLabel>
-        <H2 t={t} align="center">Plus de 500 salons utilisent FlowIA chaque jour</H2>
-      </div>
-      <div style={{
-        display: 'grid', gap: 18,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-      }}>
-        {items.map(it => (
-          <div key={it.name} style={{
-            padding: 24, borderRadius: 12,
-            background: t.canvas,
-            border: `0.5px solid ${t.border}`,
-          }}>
-            <div style={{ display: 'flex', gap: 2, marginBottom: 14 }}>
-              {Array.from({ length: it.stars }).map((_, i) => (
-                <I.Star key={i} style={{ width: 14, height: 14, color: '#f59e0b', fill: '#f59e0b' }} />
-              ))}
-            </div>
-            <p style={{ fontSize: 15, color: t.text, lineHeight: 1.6, margin: 0, marginBottom: 18 }}>
-              {"« " + it.quote + " »"}
-            </p>
-            <div style={{ borderTop: `0.5px solid ${t.border}`, paddingTop: 14 }}>
-              <p style={{ fontSize: 14, fontWeight: 500, color: t.text, margin: 0 }}>{it.name}</p>
-              <p style={{ fontSize: 12, color: t.muted, margin: '2px 0 0' }}>{it.role}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-function Integrations({ t }) {
-  const items = [
-    {
-      name: 'Stripe',
-      title: 'Encaissez en ligne',
-      desc: "Acceptez les paiements de vos clients à la réservation et reversez-vous les fonds automatiquement. Sécurisé, fiable, sans frais cachés côté FlowIA.",
-    },
-    {
-      name: 'Google Calendar',
-      title: 'Synchronisez votre agenda',
-      desc: "Vos rendez-vous FlowIA apparaissent dans votre Google Agenda, et inversement. Une seule vue pour votre vie pro et perso.",
-    },
-  ];
-  return (
-    <Section t={t} bg={t.cardAlt}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <SectionLabel t={t}>Connectez vos outils</SectionLabel>
-        <H2 t={t} align="center">{"S'intègre à votre écosystème"}</H2>
-        <Lede t={t} align="center">
-          {"FlowIA se connecte aux services que vous utilisez déjà pour ne rien chambouler dans votre quotidien."}
-        </Lede>
-      </div>
-      <div style={{
-        display: 'grid', gap: 18,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        maxWidth: 760, margin: '0 auto',
-      }}>
-        {items.map(it => (
-          <div key={it.name} style={{
-            padding: 28, borderRadius: 14,
-            background: t.canvas,
-            border: `0.5px solid ${t.border}`,
-          }}>
-            <p style={{
-              fontSize: 11, fontWeight: 500, color: t.muted,
-              textTransform: 'uppercase', letterSpacing: 0.6,
-              margin: 0, marginBottom: 10,
-            }}>
-              {it.name}
-            </p>
-            <h3 style={{ fontSize: 17, fontWeight: 500, color: t.text, margin: 0, marginBottom: 10 }}>
-              {it.title}
-            </h3>
-            <p style={{ fontSize: 14, color: t.textSub, lineHeight: 1.6, margin: 0 }}>
-              {it.desc}
-            </p>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-function Payments({ t }) {
-  return (
-    <Section t={t}>
-      <div style={{
-        display: 'grid', gap: 48,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        alignItems: 'center',
-      }}>
-        <div>
-          <SectionLabel t={t}>Encaissements</SectionLabel>
-          <H2 t={t}>Encaissez en ligne ou en boutique</H2>
-          <Lede t={t} maxWidth={520}>
-            {"Vos clients règlent à la réservation ou en caisse. Les fonds arrivent directement sur votre compte bancaire — FlowIA ne prélève rien sur vos encaissements."}
-          </Lede>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {['Carte bancaire en ligne (acomptes ou montant total)',
-              'Multi-paiements en caisse (espèces, carte, virement)',
-              'Avoirs, crédits clients et remboursements RGPD',
-              'Export comptable mensuel automatique'].map(li => (
-              <li key={li} style={{ display: 'flex', gap: 10, fontSize: 14, color: t.textSub }}>
-                <I.Check style={{ width: 16, height: 16, color: '#10b981', flexShrink: 0, marginTop: 2 }} />
-                {li}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div style={{
-          padding: 28, borderRadius: 16,
-          background: t.cardAlt,
-          border: `0.5px solid ${t.border}`,
-        }}>
-          <p style={{ fontSize: 12, fontWeight: 500, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5, margin: 0, marginBottom: 16 }}>
-            Encaissement caisse
-          </p>
-          <div style={{
-            background: t.canvas, borderRadius: 12,
-            border: `0.5px solid ${t.border}`,
-            padding: 18, marginBottom: 14,
-          }}>
-            <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Coupe + barbe</p>
-            <p style={{ fontSize: 32, fontWeight: 500, color: t.text, margin: '4px 0 0', fontFamily: 'monospace' }}>
-              42,00 €
-            </p>
-          </div>
-          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(2, 1fr)' }}>
-            {[
-              { label: 'Espèces', color: '#10b981', bg: '#ecfdf5' },
-              { label: 'Carte',   color: '#6366f1', bg: '#eef2ff' },
-              { label: 'Virement',color: '#06b6d4', bg: '#ecfeff' },
-              { label: 'Multi',   color: '#f59e0b', bg: '#fffbeb' },
-            ].map(p => (
-              <div key={p.label} style={{
-                padding: '10px 14px', borderRadius: 10,
-                background: p.bg, color: p.color,
-                border: `0.5px solid ${p.color}33`,
-                fontSize: 13, fontWeight: 500, textAlign: 'center',
-              }}>{p.label}</div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </Section>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-function QrSection({ t }) {
-  return (
-    <Section t={t} bg={t.cardAlt}>
-      <div style={{
-        display: 'grid', gap: 48,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        alignItems: 'center',
-      }}>
-        <div>
-          <SectionLabel t={t}>QR Code</SectionLabel>
-          <H2 t={t}>Donnez à vos clients le pouvoir de réserver à tout moment</H2>
-          <Lede t={t} maxWidth={520}>
-            {"Affichez un QR code en vitrine, sur vos cartes de visite, sur Instagram. Vos clients scannent, réservent, vous remplissez votre agenda même quand vous êtes fermé."}
-          </Lede>
-          <a href={COMMERCANT_URL + '/register'} style={primaryBtn(t)}>
-            {"Commencer gratuitement"}
-          </a>
-        </div>
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 32, borderRadius: 16,
-          background: t.canvas,
-          border: `0.5px solid ${t.border}`,
-        }}>
-          <FakeQR t={t} />
-        </div>
-      </div>
-    </Section>
-  );
-}
-
-function FakeQR({ t }) {
-  const cells = Array.from({ length: 21 * 21 }).map((_, i) => {
-    const x = i % 21, y = Math.floor(i / 21);
-    const isCorner = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13);
-    const cornerEdge =
-      (x === 0 || x === 6 || y === 0 || y === 6) && (x < 7 && y < 7) ||
-      (x === 14 || x === 20 || y === 0 || y === 6) && (x > 13 && y < 7) ||
-      (x === 0 || x === 6 || y === 14 || y === 20) && (x < 7 && y > 13);
-    const cornerInner =
-      (x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
-      (x >= 16 && x <= 18 && y >= 2 && y <= 4) ||
-      (x >= 2 && x <= 4 && y >= 16 && y <= 18);
-    const random = ((x * 7 + y * 13 + x * y) % 5) === 0;
-    const filled = isCorner ? (cornerEdge || cornerInner) : random;
-    return filled;
-  });
+function FeatureCard({ title, desc, mock, badge }) {
   return (
     <div style={{
-      display: 'grid', gap: 0, padding: 14, background: '#fff', borderRadius: 12,
-      gridTemplateColumns: 'repeat(21, 8px)', gridTemplateRows: 'repeat(21, 8px)',
-      border: `0.5px solid ${t.border}`,
-    }}>
-      {cells.map((on, i) => (
-        <div key={i} style={{ width: 8, height: 8, background: on ? t.text : '#fff' }} />
-      ))}
+      borderRadius: S.rLg,
+      background: S.bg,
+      border: `1px solid ${S.border}`,
+      overflow: 'hidden', position: 'relative',
+      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+    }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = S.borderHv; e.currentTarget.style.boxShadow = S.shadowMd; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = S.border; e.currentTarget.style.boxShadow = 'none'; }}>
+      <div style={{
+        height: 144, background: S.bgMuted,
+        borderBottom: `1px solid ${S.border}`,
+        padding: 16, position: 'relative', overflow: 'hidden',
+        display: 'flex', alignItems: 'stretch', justifyContent: 'center',
+      }}>
+        {mock}
+        {badge && (
+          <span style={{
+            position: 'absolute', top: 10, right: 10,
+            fontSize: 10, fontWeight: 500,
+            padding: '3px 8px', borderRadius: 99,
+            background: S.fg, color: S.fgInv,
+            letterSpacing: 0.5, textTransform: 'uppercase',
+          }}>{badge}</span>
+        )}
+      </div>
+      <div style={{ padding: 20 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>{title}</h3>
+        <p style={{ fontSize: 13, color: S.fgMuted, lineHeight: 1.55, margin: 0 }}>{desc}</p>
+      </div>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function Support({ t }) {
+// ── Mini UI mocks ────────────────────────────────────────────────────────────
+function MockBooking() {
+  const services = [
+    { s: 'Coupe homme',   p: '22 €' },
+    { s: 'Coupe + barbe', p: '32 €', sel: true },
+    { s: 'Couleur',       p: '55 €' },
+  ];
   return (
-    <Section t={t}>
-      <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto' }}>
-        <SectionLabel t={t}>Support inclus</SectionLabel>
-        <H2 t={t} align="center">{"Une équipe à vos côtés, 7 jours sur 7"}</H2>
-        <Lede t={t} align="center">
-          {"Tous nos clients bénéficient d'un support humain par chat, email et téléphone. Temps de réponse moyen : 4 minutes."}
-        </Lede>
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap', marginTop: 32 }}>
-          {[
-            { Ic: I.Mail,  label: 'Email',      sub: 'contact@flowiapro.com' },
-            { Ic: I.Phone, label: 'Téléphone',  sub: 'Lun-Dim · 8h-22h' },
-            { Ic: I.Send,  label: 'Chat live',  sub: 'Réponse en < 5 min' },
-          ].map(c => (
-            <div key={c.label} style={{
-              padding: '14px 20px', borderRadius: 12,
-              background: t.cardAlt, border: `0.5px solid ${t.border}`,
-              display: 'flex', alignItems: 'center', gap: 12, minWidth: 200,
-            }}>
-              <c.Ic style={{ width: 18, height: 18, color: t.text }} />
-              <div style={{ textAlign: 'left' }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: t.text, margin: 0 }}>{c.label}</p>
-                <p style={{ fontSize: 12, color: t.muted, margin: 0 }}>{c.sub}</p>
+    <div style={{
+      width: 180, alignSelf: 'center',
+      borderRadius: S.r, background: S.bg,
+      border: `1px solid ${S.border}`,
+      padding: 10, display: 'flex', flexDirection: 'column', gap: 5,
+    }}>
+      <p style={{ fontSize: 10, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 2 }}>
+        {"Hair Coiff Lille"}
+      </p>
+      {services.map((it, i) => (
+        <div key={i} style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '6px 8px', borderRadius: S.rSm, fontSize: 10,
+          background: it.sel ? S.bgHover : S.bgMuted,
+          border: `1px solid ${it.sel ? S.borderHv : S.border}`,
+          color: S.fg,
+        }}>
+          <span>{it.s}</span><span style={{ fontWeight: 500 }}>{it.p}</span>
+        </div>
+      ))}
+      <span style={{
+        marginTop: 2, fontSize: 10, fontWeight: 500,
+        padding: '6px 8px', borderRadius: S.rSm,
+        background: S.fg, color: S.fgInv, textAlign: 'center',
+      }}>{"Réserver"}</span>
+    </div>
+  );
+}
+
+function MockAI() {
+  return (
+    <div style={{
+      width: '100%', alignSelf: 'stretch',
+      borderRadius: S.r, background: S.bg,
+      border: `1px solid ${S.border}`,
+      padding: 12, display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 18, height: 18, borderRadius: S.rSm, background: S.ax.violet }} />
+        <span style={{ fontSize: 11, fontWeight: 500, color: S.fg }}>{"Suggestion IA"}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: S.fgSubtle }}>{"il y a 2 min"}</span>
+      </div>
+      <p style={{ fontSize: 11, color: S.fgMuted, lineHeight: 1.45, margin: 0 }}>
+        {"23 clientes inactives depuis 3 mois → campagne SMS recommandée"}
+      </p>
+      <span style={{
+        marginTop: 'auto', fontSize: 10, fontWeight: 500,
+        padding: '6px 8px', borderRadius: S.rSm,
+        background: S.fg, color: S.fgInv, textAlign: 'center',
+      }}>{"Lancer la campagne"}</span>
+    </div>
+  );
+}
+
+function MockSMS() {
+  return (
+    <div style={{
+      width: '100%', maxWidth: 220, alignSelf: 'center',
+      borderRadius: S.rLg, background: S.bgHover,
+      padding: 12, display: 'flex', flexDirection: 'column', gap: 6,
+      border: `1px solid ${S.border}`,
+    }}>
+      <p style={{ fontSize: 9, color: S.fgSubtle, textAlign: 'center', margin: 0 }}>
+        {"SMS · Hair Coiff Lille"}
+      </p>
+      <div style={{
+        background: S.bg, borderRadius: '12px 12px 12px 4px',
+        padding: '7px 10px', fontSize: 10, color: S.fg, lineHeight: 1.4,
+        alignSelf: 'flex-start', maxWidth: '85%',
+        border: `1px solid ${S.border}`,
+      }}>
+        {"Sofia, RDV demain 14h. Confirmer ?"}
+      </div>
+      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+        <span style={{ fontSize: 9, padding: '4px 10px', borderRadius: 99, background: S.ax.emerald, color: S.fgInv, fontWeight: 500 }}>
+          {"OUI"}
+        </span>
+        <span style={{ fontSize: 9, padding: '4px 10px', borderRadius: 99, background: S.bg, color: S.fgMuted, border: `1px solid ${S.border}` }}>
+          {"Annuler"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MockCaisse() {
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center' }}>
+      <div style={{
+        background: S.bg, borderRadius: S.r, padding: '8px 10px',
+        border: `1px solid ${S.border}`,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 10, color: S.fgSubtle }}>{"Coupe + barbe"}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: S.fg, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>32,00 €</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
+        {[
+          { l: 'Espèces', c: S.ax.emerald, b: S.ax.emeraldBg },
+          { l: 'Carte',   c: S.ax.blue,    b: S.ax.blueBg },
+          { l: 'Virem.',  c: S.ax.cyan,    b: S.ax.cyanBg },
+          { l: 'Multi',   c: S.ax.amber,   b: S.ax.amberBg },
+        ].map(p => (
+          <span key={p.l} style={{
+            fontSize: 9, fontWeight: 500, padding: '6px 4px', borderRadius: S.rSm,
+            background: p.b, color: p.c, textAlign: 'center',
+            border: `1px solid ${p.c}33`,
+          }}>{p.l}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MockFidelite() {
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div style={{ background: S.bg, borderRadius: S.r, padding: 12, border: `1px solid ${S.border}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: S.fg, fontWeight: 500 }}>Sofia M.</span>
+          <span style={{ fontSize: 11, color: S.ax.emerald, fontWeight: 500 }}>140 / 200 pts</span>
+        </div>
+        <div style={{ height: 6, background: S.bgHover, borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ width: '70%', height: '100%', background: S.ax.emerald }} />
+        </div>
+        <p style={{ fontSize: 9, color: S.fgSubtle, margin: '8px 0 0' }}>
+          {"Plus que 60 pts → coupe offerte"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MockPin() {
+  return (
+    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: S.bg, borderRadius: S.r, padding: 12, border: `1px solid ${S.border}`, width: 132 }}>
+        <p style={{ fontSize: 10, color: S.fgSubtle, textAlign: 'center', margin: '0 0 6px' }}>
+          {"Karim · PIN"}
+        </p>
+        <div style={{ display: 'flex', gap: 5, justifyContent: 'center', marginBottom: 8 }}>
+          {[1, 2, 3, 4].map(i => (
+            <span key={i} style={{
+              width: 8, height: 8, borderRadius: 4,
+              background: i < 4 ? S.fg : S.border,
+            }} />
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
+            <span key={d} style={{
+              fontSize: 11, padding: '4px 0', textAlign: 'center',
+              background: S.bgMuted, borderRadius: S.rSm, color: S.fg,
+            }}>{d}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 4. AI Showcase ───────────────────────────────────────────────────────────
+function AIShowcase() {
+  return (
+    <Section bg={S.bgMuted} paddingY={88} borderTop>
+      <div style={{
+        display: 'grid', gap: 48,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        alignItems: 'center',
+      }}>
+        <div>
+          <Eyebrow>Marketing IA</Eyebrow>
+          <H2>{"L'IA qui fait grandir votre CA"}</H2>
+          <Lede maxWidth={500}>
+            {"FlowIA détecte les clients à reconquérir, génère les SMS, prévoit votre CA. Vous validez en un clic."}
+          </Lede>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              'Campagnes SMS générées automatiquement',
+              "Détection des clients à risque",
+              'Prévisions de CA sur 4 semaines',
+            ].map(b => (
+              <li key={b} style={{ fontSize: 14, color: S.fg2, paddingLeft: 22, position: 'relative', lineHeight: 1.5 }}>
+                <span style={{
+                  position: 'absolute', left: 0, top: 4,
+                  width: 14, height: 14, borderRadius: 7,
+                  background: S.ax.violetBg,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke={S.ax.violet} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div style={{
+          background: S.bg, borderRadius: S.rXl,
+          border: `1px solid ${S.border}`,
+          boxShadow: S.shadowLg, overflow: 'hidden',
+        }}>
+          <BrowserChrome url="Marketing IA" />
+          <div style={{ padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ width: 32, height: 32, borderRadius: S.r, background: S.ax.violet }} />
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0 }}>{"FlowIA Assistant"}</p>
+                <p style={{ fontSize: 11, color: S.fgSubtle, margin: 0 }}>{"Suggestion · il y a 2 min"}</p>
               </div>
             </div>
-          ))}
+            <div style={{
+              padding: 14, borderRadius: S.r,
+              background: S.bgMuted, border: `1px solid ${S.border}`,
+              marginBottom: 12,
+            }}>
+              <p style={{ fontSize: 13, color: S.fg, margin: 0, lineHeight: 1.55 }}>
+                {"23 clientes n'ont pas pris RDV depuis 3 mois. Estimation : +6 à +8 retours sur cette campagne."}
+              </p>
+            </div>
+            <div style={{
+              padding: 12, borderRadius: S.r,
+              background: S.bg, border: `1px solid ${S.border}`,
+              marginBottom: 14,
+            }}>
+              <p style={{ fontSize: 11, color: S.fgSubtle, margin: '0 0 6px' }}>{"SMS suggéré"}</p>
+              <p style={{ fontSize: 12, color: S.fg, margin: 0, lineHeight: 1.5 }}>
+                {"Sofia, on vous a vue il y a longtemps ! −20 % sur votre prochaine coupe avec le code SOFIA20. Hair Coiff Lille."}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{
+                flex: 1, padding: '9px 12px', borderRadius: S.r,
+                background: S.fg, color: S.fgInv,
+                border: 'none', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}>{"Lancer la campagne"}</button>
+              <button style={{
+                padding: '9px 14px', borderRadius: S.r,
+                background: S.bg, color: S.fg,
+                border: `1px solid ${S.border}`, fontSize: 12, cursor: 'pointer',
+                fontFamily: 'inherit', fontWeight: 500,
+              }}>{"Modifier"}</button>
+            </div>
+          </div>
         </div>
       </div>
     </Section>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function PricingTeaser({ t }) {
+// ── 5. Testimonials ──────────────────────────────────────────────────────────
+function Testimonials() {
+  const items = [
+    { name: 'Sofiane Belkacem', role: 'Hair Coiff Lille',  quote: "0 appel par jour. Je me concentre sur mes clients en chaise." },
+    { name: 'Camille Roussel',  role: 'Studio Camille',    quote: "+800 €/mois rien qu'avec les rappels SMS. Imparable." },
+    { name: 'Élodie Marchand',  role: 'Beauty Box',        quote: "La fidélité tourne seule. Mes clientes adorent." },
+  ];
+  return (
+    <Section paddingY={88}>
+      <H2 align="center">{"500+ salons utilisent FlowIA chaque jour"}</H2>
+      <div style={{
+        marginTop: 36, display: 'grid', gap: 16,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      }}>
+        {items.map(it => (
+          <div key={it.name} style={{
+            padding: 24, borderRadius: S.rLg,
+            background: S.bg, border: `1px solid ${S.border}`,
+          }}>
+            <p style={{ fontSize: 14, color: S.fg, lineHeight: 1.6, margin: 0, marginBottom: 18 }}>
+              {"« " + it.quote + " »"}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{
+                width: 36, height: 36, borderRadius: 18,
+                background: S.bgHover, color: S.fg,
+                fontSize: 12, fontWeight: 500,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: `1px solid ${S.border}`,
+              }}>
+                {it.name.split(' ').map(p => p[0]).join('')}
+              </span>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0 }}>{it.name}</p>
+                <p style={{ fontSize: 11, color: S.fgSubtle, margin: 0 }}>{it.role}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+// ── 6. Pricing ───────────────────────────────────────────────────────────────
+function Pricing() {
   const plans = [
     {
-      name: 'Découverte', price: '0', period: '/mois',
-      desc: "Pour démarrer et tester FlowIA sur votre salon.",
-      features: ["Jusqu'à 50 RDV/mois", '1 employé', 'Page de réservation', 'Caisse de base', 'Support email'],
+      name: 'Découverte', price: '0',
+      desc: "Pour démarrer.",
+      features: ["50 RDV/mois", '1 employé', 'Caisse de base', 'Support email'],
       cta: 'Commencer', highlight: false,
     },
     {
-      name: 'Pro', price: '29', period: '/mois',
-      desc: "La formule complète pour faire grandir votre salon.",
+      name: 'Pro', price: '29',
+      desc: "Pour faire grandir.",
       features: ['RDV illimités', "Jusqu'à 5 employés", 'SMS rappels & marketing', 'Fidélité & parrainage', 'Marketing IA', 'Support prioritaire 7j/7'],
       cta: 'Essayer 14 jours', highlight: true,
     },
     {
-      name: 'Équipe', price: '49', period: '/mois',
-      desc: "Pour les salons multi-employés et multi-sites.",
-      features: ['Tout du plan Pro', 'Employés illimités', 'Multi-sites', 'API & exports avancés', 'Account manager dédié'],
+      name: 'Équipe', price: '49',
+      desc: "Multi-sites.",
+      features: ['Tout le plan Pro', 'Employés illimités', 'Multi-sites', 'API & exports', 'Account manager dédié'],
       cta: 'Nous contacter', highlight: false,
     },
   ];
   return (
-    <Section t={t} bg={t.cardAlt}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <SectionLabel t={t}>Tarifs</SectionLabel>
-        <H2 t={t} align="center">{"Une tarification simple, sans surprise"}</H2>
-        <Lede t={t} align="center">
-          {"Sans engagement. Annulez à tout moment. 14 jours d'essai gratuit sur le plan Pro."}
-        </Lede>
+    <Section bg={S.bgMuted} paddingY={88} borderTop>
+      <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <Eyebrow>Tarifs</Eyebrow>
+        <H2 align="center">{"Simple, sans engagement"}</H2>
+        <Lede align="center">{"14 jours d'essai gratuit. Annulez quand vous voulez."}</Lede>
       </div>
       <div style={{
-        display: 'grid', gap: 18,
+        display: 'grid', gap: 16,
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        maxWidth: 980, margin: '0 auto',
+        maxWidth: 1000, margin: '0 auto',
       }}>
         {plans.map(p => (
           <div key={p.name} style={{
-            padding: 28, borderRadius: 14,
-            background: t.canvas,
-            border: p.highlight ? `1px solid ${t.text}` : `0.5px solid ${t.border}`,
+            padding: 28, borderRadius: S.rLg,
+            background: S.bg,
+            border: p.highlight ? `1px solid ${S.fg}` : `1px solid ${S.border}`,
             position: 'relative',
-            boxShadow: p.highlight ? t.shadowMd : 'none',
+            boxShadow: p.highlight ? S.shadowLg : S.shadowSm,
           }}>
             {p.highlight && (
               <span style={{
                 position: 'absolute', top: -10, left: 24,
-                fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 99,
-                background: t.text, color: t.bg, letterSpacing: 0.4,
+                fontSize: 10, fontWeight: 500, padding: '3px 10px', borderRadius: 99,
+                background: S.fg, color: S.fgInv, letterSpacing: 0.5,
                 textTransform: 'uppercase',
-              }}>
-                Populaire
-              </span>
+              }}>{"Populaire"}</span>
             )}
-            <p style={{ fontSize: 14, fontWeight: 500, color: t.text, margin: 0, marginBottom: 6 }}>{p.name}</p>
-            <p style={{ fontSize: 13, color: t.muted, lineHeight: 1.5, margin: 0, marginBottom: 18 }}>{p.desc}</p>
+            <p style={{ fontSize: 14, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>{p.name}</p>
+            <p style={{ fontSize: 13, color: S.fgSubtle, margin: 0, marginBottom: 18 }}>{p.desc}</p>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 22 }}>
-              <span style={{ fontSize: 40, fontWeight: 500, color: t.text, letterSpacing: -1 }}>{p.price} €</span>
-              <span style={{ fontSize: 14, color: t.muted }}>{p.period}</span>
+              <span style={{ fontSize: 38, fontWeight: 500, color: S.fg, letterSpacing: '-0.03em' }}>{p.price + ' €'}</span>
+              <span style={{ fontSize: 13, color: S.fgSubtle }}>{"/mois"}</span>
             </div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginBottom: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {p.features.map(f => (
-                <li key={f} style={{ display: 'flex', gap: 10, fontSize: 13, color: t.textSub }}>
-                  <I.Check style={{ width: 14, height: 14, color: '#10b981', flexShrink: 0, marginTop: 3 }} />
+                <li key={f} style={{ fontSize: 13, color: S.fg2, paddingLeft: 22, position: 'relative', lineHeight: 1.5 }}>
+                  <span style={{
+                    position: 'absolute', left: 0, top: 3,
+                    width: 14, height: 14, borderRadius: 7,
+                    background: S.ax.emeraldBg,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                      <path d="M2.5 6L5 8.5L9.5 3.5" stroke={S.ax.emerald} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
                   {f}
                 </li>
               ))}
             </ul>
             <Link to="/tarifs" style={{
-              ...(p.highlight ? primaryBtn(t) : secondaryBtn(t)),
+              ...(p.highlight ? primaryBtnStyle() : ghostBtnStyle()),
               display: 'block', textAlign: 'center', width: '100%', boxSizing: 'border-box',
-            }}>
-              {p.cta}
-            </Link>
+            }}>{p.cta}</Link>
           </div>
         ))}
       </div>
@@ -810,61 +697,43 @@ function PricingTeaser({ t }) {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function Faq({ t }) {
+// ── 7. FAQ ───────────────────────────────────────────────────────────────────
+function Faq() {
   const items = [
-    {
-      q: "Qu'est-ce qu'une page de réservation FlowIA ?",
-      a: "C'est votre vitrine en ligne dédiée à la prise de rendez-vous. Vos clients voient vos prestations, vos employés, vos disponibilités, et réservent en 30 secondes. Vous la partagez par lien, QR code ou directement depuis votre site web.",
-    },
-    {
-      q: "Puis-je essayer FlowIA gratuitement ?",
-      a: "Oui. Le plan Découverte est gratuit à vie pour les petits salons. Le plan Pro est offert 14 jours sans carte bancaire — vous testez en conditions réelles, et vous décidez ensuite.",
-    },
-    {
-      q: "Mes données et celles de mes clients sont-elles en sécurité ?",
-      a: "Vos données sont hébergées en Europe, chiffrées en transit et au repos, et conformes RGPD. Vous gardez la propriété complète, vous pouvez exporter ou supprimer à tout moment.",
-    },
-    {
-      q: "Comment se passe la migration depuis mon ancien outil ?",
-      a: "Notre équipe vous accompagne gratuitement pour importer vos clients, vos prestations et vos rendez-vous existants. Comptez 24 à 48h selon la taille de votre base.",
-    },
-    {
-      q: "Y a-t-il un engagement ou des frais cachés ?",
-      a: "Aucun. Pas d'engagement, pas de frais de mise en place. Vous payez au mois, vous arrêtez quand vous voulez. Les SMS sont facturés au coût réel sans marge.",
-    },
-    {
-      q: "FlowIA fonctionne-t-il sur mobile et tablette ?",
-      a: "Oui, FlowIA est une application web responsive — elle fonctionne parfaitement sur ordinateur, tablette et téléphone. Le mode tablette partagée avec PIN est idéal pour les salons avec plusieurs employés.",
-    },
+    { q: "Puis-je essayer FlowIA gratuitement ?",
+      a: "Oui. Plan Découverte gratuit à vie. Plan Pro offert 14 jours sans carte bancaire." },
+    { q: "Mes données sont-elles en sécurité ?",
+      a: "Hébergement Europe, chiffrement, conforme RGPD. Export et suppression à tout moment." },
+    { q: "Migration depuis mon ancien outil ?",
+      a: "On importe vos clients, prestations et RDV gratuitement (24 à 48h selon volume)." },
+    { q: "Engagement ou frais cachés ?",
+      a: "Aucun. Au mois, sans engagement. SMS facturés au coût réel sans marge." },
+    { q: "Compatible mobile et tablette ?",
+      a: "Oui. App web responsive, mode tablette partagée avec PIN par employé." },
   ];
   const [open, setOpen] = useState(0);
   return (
-    <Section t={t}>
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <SectionLabel t={t}>FAQ</SectionLabel>
-        <H2 t={t} align="center">Questions fréquentes</H2>
-      </div>
-      <div style={{ maxWidth: 760, margin: '0 auto' }}>
+    <Section paddingY={88}>
+      <H2 align="center">{"Questions fréquentes"}</H2>
+      <div style={{ maxWidth: 720, margin: '32px auto 0', borderTop: `1px solid ${S.border}` }}>
         {items.map((it, i) => (
-          <div key={it.q} style={{
-            borderBottom: `0.5px solid ${t.border}`,
-          }}>
+          <div key={it.q} style={{ borderBottom: `1px solid ${S.border}` }}>
             <button onClick={() => setOpen(open === i ? -1 : i)} style={{
               width: '100%', padding: '20px 4px', background: 'transparent',
               border: 'none', cursor: 'pointer', fontFamily: 'inherit',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               gap: 16, textAlign: 'left',
             }}>
-              <span style={{ fontSize: 16, fontWeight: 500, color: t.text }}>{it.q}</span>
-              <I.ChevR style={{
-                width: 16, height: 16, color: t.muted,
-                transform: open === i ? 'rotate(90deg)' : 'rotate(0)',
+              <span style={{ fontSize: 15, fontWeight: 500, color: S.fg, letterSpacing: '-0.01em' }}>{it.q}</span>
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" style={{
+                transform: open === i ? 'rotate(180deg)' : 'rotate(0)',
                 transition: 'transform 0.2s ease', flexShrink: 0,
-              }} />
+              }}>
+                <path d="M3 4.5L6 7.5L9 4.5" stroke={S.fgMuted} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </button>
             {open === i && (
-              <div style={{ padding: '0 4px 20px', fontSize: 15, color: t.textSub, lineHeight: 1.65 }}>
+              <div style={{ padding: '0 4px 20px', fontSize: 14, color: S.fgMuted, lineHeight: 1.65 }}>
                 {it.a}
               </div>
             )}
@@ -875,48 +744,29 @@ function Faq({ t }) {
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function FinalCTA({ t }) {
+// ── 8. Final CTA ─────────────────────────────────────────────────────────────
+function FinalCTA() {
   return (
-    <Section t={t} bg={t.cardAlt}>
-      <div style={{
-        textAlign: 'center', maxWidth: 720, margin: '0 auto',
-        padding: '32px 24px',
-      }}>
-        <H2 t={t} align="center">{"Donnez à votre salon les outils qu'il mérite"}</H2>
-        <Lede t={t} align="center">
-          {"Rejoignez les centaines de salons qui ont choisi FlowIA. 14 jours d'essai, sans carte, sans engagement."}
-        </Lede>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-          <a href={COMMERCANT_URL + '/register'} style={primaryBtn(t)}>
-            {"Commencer gratuitement"}
-          </a>
-          <Link to="/contact" style={secondaryBtn(t)}>
-            {"Parler à un conseiller"}
-          </Link>
+    <Section bg={S.bgMuted} paddingY={88} borderTop>
+      <div style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
+        <H2 align="center">{"Prêt à digitaliser votre salon ?"}</H2>
+        <Lede align="center">{"14 jours d'essai. Sans carte. Sans engagement."}</Lede>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+          <PrimaryCta href={COMMERCANT_URL + '/register'}>{"Essayer gratuitement"}</PrimaryCta>
+          <SecondaryCta to="/contact">{"Parler à un conseiller"}</SecondaryCta>
         </div>
       </div>
     </Section>
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-function primaryBtn(t) {
-  return {
-    fontSize: 15, fontWeight: 500, color: t.bg,
-    background: t.text, border: 'none',
-    padding: '13px 22px', borderRadius: 10,
-    textDecoration: 'none', cursor: 'pointer',
-    display: 'inline-block', fontFamily: 'inherit',
-  };
+// ── CTAs (utilisent les styles partagés shadcn.js) ───────────────────────────
+function PrimaryCta({ children, href, to }) {
+  if (to) return <Link to={to} style={primaryBtnStyle()} {...primaryHover}>{children}</Link>;
+  return <a href={href} style={primaryBtnStyle()} {...primaryHover}>{children}</a>;
 }
 
-function secondaryBtn(t) {
-  return {
-    fontSize: 15, fontWeight: 500, color: t.text,
-    background: 'transparent', border: `0.5px solid ${t.borderStrong}`,
-    padding: '13px 22px', borderRadius: 10,
-    textDecoration: 'none', cursor: 'pointer',
-    display: 'inline-block', fontFamily: 'inherit',
-  };
+function SecondaryCta({ children, href, to }) {
+  if (to) return <Link to={to} style={ghostBtnStyle()} {...ghostHover}>{children}</Link>;
+  return <a href={href} style={ghostBtnStyle()} {...ghostHover}>{children}</a>;
 }

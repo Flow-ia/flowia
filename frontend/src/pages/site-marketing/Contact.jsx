@@ -1,12 +1,25 @@
 import { useState } from 'react';
-import { useTheme } from '../../hooks/useTheme';
-import { I } from '../../utils/icons';
 import { PageHero } from './components/Shared';
+import { S, primaryBtnStyle, primaryHover, CheckPill } from './components/shadcn';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
+const TOPICS = [
+  { value: 'demo',    label: 'Demander une démo' },
+  { value: 'devis',   label: 'Demander un devis (plan Équipe)' },
+  { value: 'support', label: 'Support technique' },
+  { value: 'partner', label: 'Partenariat' },
+  { value: 'other',   label: 'Autre' },
+];
+
+const CONTACTS = [
+  { label: 'Email',     value: 'contact@flowiapro.com', href: 'mailto:contact@flowiapro.com' },
+  { label: 'Téléphone', value: 'Lun-Dim · 8h-22h',      href: null },
+  { label: 'Chat live', value: 'Réponse en < 5 min',    href: null },
+  { label: 'Adresse',   value: 'France',                href: null },
+];
+
 export default function Contact() {
-  const { theme: t } = useTheme();
   const [name,    setName]    = useState('');
   const [email,   setEmail]   = useState('');
   const [phone,   setPhone]   = useState('');
@@ -16,6 +29,7 @@ export default function Contact() {
   const [sent,    setSent]    = useState(false);
   const [busy,    setBusy]    = useState(false);
   const [err,     setErr]     = useState('');
+  const [focused, setFocused] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,15 +59,18 @@ export default function Contact() {
     }
   };
 
-  const inp = {
-    width: '100%', padding: '11px 14px',
-    borderRadius: 8, fontSize: 14, fontFamily: 'inherit',
-    background: t.inputBg, border: `0.5px solid ${t.borderInput}`,
-    color: t.text, outline: 'none', boxSizing: 'border-box',
-    transition: 'border-color 0.15s ease',
-  };
+  const inp = (id) => ({
+    width: '100%', padding: '10px 14px',
+    borderRadius: S.r, fontSize: 14, fontFamily: 'inherit',
+    background: S.bg,
+    border: `1px solid ${focused === id ? S.ring : S.border}`,
+    boxShadow: focused === id ? `0 0 0 3px ${S.ring}1a` : 'none',
+    color: S.fg, outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+    height: 40,
+  });
   const label = {
-    fontSize: 13, fontWeight: 500, color: t.textSub,
+    fontSize: 13, fontWeight: 500, color: S.fg,
     display: 'block', marginBottom: 6,
   };
 
@@ -65,36 +82,28 @@ export default function Contact() {
         subtitle="Une question, une démo, un devis ? Notre équipe vous répond sous 24h ouvrées (souvent en moins d'une heure)."
       />
 
-      <section style={{ padding: '40px 16px 56px' }}>
+      <section style={{ padding: '56px 16px 80px' }}>
         <div style={{
           maxWidth: 1000, margin: '0 auto',
           display: 'grid', gap: 32,
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
         }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 500, color: t.text, margin: 0, marginBottom: 18 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 18, letterSpacing: '-0.01em' }}>
               Plusieurs façons de nous joindre
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {[
-                { Ic: I.Mail,  label: 'Email',     value: 'contact@flowiapro.com', href: 'mailto:contact@flowiapro.com' },
-                { Ic: I.Phone, label: 'Téléphone', value: 'Lun-Dim · 8h-22h',      href: null },
-                { Ic: I.Send,  label: 'Chat live', value: 'Réponse en < 5 min',    href: null },
-                { Ic: I.MapPin,label: 'Adresse',   value: 'France',                href: null },
-              ].map(c => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {CONTACTS.map(c => (
                 <div key={c.label} style={{
-                  padding: 16, borderRadius: 12,
-                  background: t.cardAlt, border: `0.5px solid ${t.border}`,
+                  padding: 16, borderRadius: S.rLg,
+                  background: S.bg, border: `1px solid ${S.border}`,
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <c.Ic style={{ width: 14, height: 14, color: t.muted }} />
-                    <p style={{ fontSize: 12, fontWeight: 500, color: t.muted, margin: 0, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                      {c.label}
-                    </p>
-                  </div>
+                  <p style={{ fontSize: 11, fontWeight: 500, color: S.fgSubtle, margin: 0, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {c.label}
+                  </p>
                   {c.href
-                    ? <a href={c.href} style={{ fontSize: 14, color: t.text, textDecoration: 'none' }}>{c.value}</a>
-                    : <p style={{ fontSize: 14, color: t.text, margin: 0 }}>{c.value}</p>
+                    ? <a href={c.href} style={{ fontSize: 14, color: S.fg, textDecoration: 'none', fontWeight: 500 }}>{c.value}</a>
+                    : <p style={{ fontSize: 14, color: S.fg, margin: 0, fontWeight: 500 }}>{c.value}</p>
                   }
                 </div>
               ))}
@@ -102,26 +111,29 @@ export default function Contact() {
           </div>
 
           <div style={{
-            padding: 'clamp(18px, 4vw, 28px)', borderRadius: 14,
-            background: t.canvas, border: `0.5px solid ${t.border}`,
+            padding: 'clamp(20px, 4vw, 32px)', borderRadius: S.rLg,
+            background: S.bg, border: `1px solid ${S.border}`,
+            boxShadow: S.shadowSm,
             minWidth: 0,
           }}>
             {sent ? (
               <div style={{ textAlign: 'center', padding: '32px 16px' }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: 99,
-                  background: '#ecfdf5',
+                  background: S.ax.emeraldBg,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  marginBottom: 16,
+                  marginBottom: 16, border: `1px solid ${S.ax.emerald}33`,
                 }}>
-                  <I.Check style={{ width: 24, height: 24, color: '#10b981' }} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 12L10 17L20 7" stroke={S.ax.emerald} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </div>
-                <h3 style={{ fontSize: 18, fontWeight: 500, color: t.text, margin: 0, marginBottom: 8 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 8, letterSpacing: '-0.01em' }}>
                   Message envoyé !
                 </h3>
-                <p style={{ fontSize: 14, color: t.textSub, margin: 0, lineHeight: 1.6 }}>
+                <p style={{ fontSize: 14, color: S.fgMuted, margin: 0, lineHeight: 1.6 }}>
                   {"Notre équipe vous répond sous 24h ouvrées (souvent plus vite). Si urgent, vous pouvez aussi écrire à "}
-                  <a href="mailto:contact@flowiapro.com" style={{ color: t.text }}>contact@flowiapro.com</a>.
+                  <a href="mailto:contact@flowiapro.com" style={{ color: S.fg, fontWeight: 500 }}>contact@flowiapro.com</a>.
                 </p>
               </div>
             ) : (
@@ -134,51 +146,61 @@ export default function Contact() {
                 <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                   <div>
                     <label style={label}>Nom complet *</label>
-                    <input type="text" required value={name} onChange={e => setName(e.target.value)} disabled={busy} style={inp} />
+                    <input type="text" required value={name} onChange={e => setName(e.target.value)} disabled={busy}
+                      onFocus={() => setFocused('name')} onBlur={() => setFocused('')}
+                      style={inp('name')} />
                   </div>
                   <div>
                     <label style={label}>Email *</label>
-                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={busy} style={inp} />
+                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={busy}
+                      onFocus={() => setFocused('email')} onBlur={() => setFocused('')}
+                      style={inp('email')} />
                   </div>
                 </div>
                 <div>
                   <label style={label}>Téléphone</label>
-                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy} style={inp} placeholder="06 12 34 56 78" />
+                  <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy}
+                    onFocus={() => setFocused('phone')} onBlur={() => setFocused('')}
+                    style={inp('phone')} placeholder="06 12 34 56 78" />
                 </div>
                 <div>
                   <label style={label}>Votre demande *</label>
-                  <select value={topic} onChange={e => setTopic(e.target.value)} disabled={busy} style={inp}>
+                  <select value={topic} onChange={e => setTopic(e.target.value)} disabled={busy}
+                    onFocus={() => setFocused('topic')} onBlur={() => setFocused('')}
+                    style={inp('topic')}>
                     {TOPICS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={label}>Message *</label>
                   <textarea required value={message} onChange={e => setMessage(e.target.value)} disabled={busy} rows={5}
+                    onFocus={() => setFocused('msg')} onBlur={() => setFocused('')}
                     placeholder="Parlez-nous de votre salon, vos besoins…"
-                    style={{ ...inp, resize: 'vertical', minHeight: 100 }} />
+                    style={{ ...inp('msg'), resize: 'vertical', minHeight: 110, height: 'auto' }} />
                 </div>
 
                 {err && (
                   <div style={{
-                    padding: '10px 14px', borderRadius: 8,
-                    background: '#fef2f2', border: '0.5px solid #fecaca',
-                    color: '#991b1b', fontSize: 13, lineHeight: 1.5,
+                    padding: '10px 14px', borderRadius: S.r,
+                    background: S.ax.roseBg, border: `1px solid ${S.ax.rose}33`,
+                    color: S.ax.rose, fontSize: 13, lineHeight: 1.5,
                   }}>
                     {err}
                   </div>
                 )}
 
                 <button type="submit" disabled={busy} style={{
-                  fontSize: 15, fontWeight: 500,
-                  color: t.bg, background: t.text, border: 'none',
-                  padding: '13px 22px', borderRadius: 10,
+                  ...primaryBtnStyle(),
+                  width: '100%', textAlign: 'center', display: 'block',
                   cursor: busy ? 'wait' : 'pointer',
                   opacity: busy ? 0.6 : 1,
-                  fontFamily: 'inherit', marginTop: 4,
-                }}>
+                  marginTop: 4,
+                }}
+                  onMouseEnter={busy ? undefined : primaryHover.onMouseEnter}
+                  onMouseLeave={busy ? undefined : primaryHover.onMouseLeave}>
                   {busy ? 'Envoi en cours…' : 'Envoyer le message'}
                 </button>
-                <p style={{ fontSize: 12, color: t.muted, margin: 0, lineHeight: 1.5 }}>
+                <p style={{ fontSize: 12, color: S.fgSubtle, margin: 0, lineHeight: 1.5 }}>
                   {"En soumettant ce formulaire, vous acceptez que vos données soient utilisées pour répondre à votre demande. Aucune donnée n'est transmise à des tiers."}
                 </p>
               </form>
@@ -189,11 +211,3 @@ export default function Contact() {
     </>
   );
 }
-
-const TOPICS = [
-  { value: 'demo',    label: 'Demander une démo' },
-  { value: 'devis',   label: 'Demander un devis (plan Équipe)' },
-  { value: 'support', label: 'Support technique' },
-  { value: 'partner', label: 'Partenariat' },
-  { value: 'other',   label: 'Autre' },
-];

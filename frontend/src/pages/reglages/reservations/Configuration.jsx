@@ -1,4 +1,4 @@
-// Réglages > Réservations > Configuration (slug, advance_days, min_notice, etc.).
+// Réglages > Réservations > Configuration (Lien, advance_days, min_notice, etc.).
 // Mode flat : ConfigTab affiche directement, sans wrapper accordeon parent.
 // Les sections internes (Description, Regles, Horaires, Pauses) restent
 // chacune dans leur propre accordeon (ferme par defaut).

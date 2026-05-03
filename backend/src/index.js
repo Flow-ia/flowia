@@ -247,6 +247,15 @@ function startServer() {
   app.use('/api/pub/:slug/client/quick-register', quickRegisterLimiter);
   // RGPD commit 19 : finalisation OAuth Google (création différée).
   app.use('/api/pub/:slug/oauth-google/finalize', oauthFinalizeLimiter);
+  // Formulaire de contact public (site marketing) — cap strict anti-spam.
+  // 5 demandes / 15 min / IP : largement suffisant pour un humain, bloque
+  // un bot qui spam.
+  const contactLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 5,
+    message: { error: 'Trop de demandes envoyees. Reessayez dans quelques minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
+  app.use('/api/pub/contact', contactLimiter);
   app.use('/api/pub',            pubLimiter,  require('./routes/public-booking'));
   app.use('/api/categories',     apiLimiter,  require('./routes/categories'));
   app.use('/api/employees',      apiLimiter,  require('./routes/employees'));

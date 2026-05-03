@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { LightThemeProvider, useTheme } from '../../hooks/useTheme';
+import { LightThemeProvider } from '../../hooks/useTheme';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import { S } from './components/shadcn';
 
 // Wrapper pour FORCER le light mode sur tout le site marketing, quel que
 // soit le toggle dark/light que l'utilisateur a active dans l'app commercant.
@@ -15,7 +16,6 @@ export default function MarketingLayout() {
 }
 
 function MarketingShell() {
-  const { theme: t } = useTheme();
   const loc = useLocation();
 
   useEffect(() => {
@@ -30,9 +30,9 @@ function MarketingShell() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: t.canvas,
-      color: t.text,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      background: S.bg,
+      color: S.fg,
+      fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
       display: 'flex', flexDirection: 'column',
     }}>
       <Header />

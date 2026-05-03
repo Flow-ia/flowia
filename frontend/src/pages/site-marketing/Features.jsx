@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useTheme } from '../../hooks/useTheme';
+import { Link } from 'react-router-dom';
 import { I } from '../../utils/icons';
-import { PageHero, Container, PrimaryBtn, SecondaryBtn } from './components/Shared';
+import { PageHero, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { FEATURE_GROUPS } from './components/Header';
+import { S, CheckPill } from './components/shadcn';
 
 const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
@@ -253,7 +254,6 @@ const DETAILS = {
 };
 
 export default function Features() {
-  const { theme: t } = useTheme();
   const [activeGroup, setActiveGroup] = useState('');
 
   // Met à jour le groupe actif dans la nav rapide en regardant quelle section
@@ -284,38 +284,39 @@ export default function Features() {
       />
 
       {/* Nav rapide sticky par groupe (4 pills) */}
-      <CategoryNav t={t} activeGroup={activeGroup} />
+      <CategoryNav activeGroup={activeGroup} />
 
       {FEATURE_GROUPS.map((group, gi) => (
         <section key={group.slug}
           id={`group-${group.slug}`}
           style={{
-            padding: '48px 24px 16px',
-            scrollMarginTop: 110,
-            borderTop: gi === 0 ? `0.5px solid ${t.border}` : 'none',
+            padding: '56px 24px 16px',
+            scrollMarginTop: 120,
+            borderTop: gi === 0 ? `1px solid ${S.border}` : 'none',
           }}>
           <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: 8,
-                background: group.color + '15',
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+              <span style={{
+                width: 28, height: 28, borderRadius: S.rSm,
+                background: group.color + '14',
+                border: `1px solid ${group.color}22`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <group.Ic style={{ width: 14, height: 14, color: group.color }} />
-              </div>
+              </span>
               <p style={{
-                fontSize: 11, fontWeight: 500, color: t.muted,
-                textTransform: 'uppercase', letterSpacing: 0.7,
+                fontSize: 11, fontWeight: 500, color: S.fgSubtle,
+                textTransform: 'uppercase', letterSpacing: 1,
                 margin: 0,
               }}>
                 {group.label}
               </p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {group.items.map((it, idx) => {
                 const d = DETAILS[it.id];
                 return d ? (
-                  <FeatureCard key={it.id} t={t} item={it} detail={d} flipped={idx % 2 === 1} />
+                  <FeatureCard key={it.id} item={it} detail={d} flipped={idx % 2 === 1} />
                 ) : null;
               })}
             </div>
@@ -323,16 +324,16 @@ export default function Features() {
         </section>
       ))}
 
-      <section style={{ padding: '48px 24px 56px', borderTop: `0.5px solid ${t.border}`, marginTop: 24, background: t.cardAlt }}>
+      <section style={{ padding: '64px 24px 80px', borderTop: `1px solid ${S.border}`, marginTop: 32, background: S.bgMuted }}>
         <div style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{
-            fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 500,
-            color: t.text, letterSpacing: -0.4, lineHeight: 1.2,
+            fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 500,
+            color: S.fg, letterSpacing: '-0.025em', lineHeight: 1.2,
             margin: 0, marginBottom: 12,
           }}>
             Prêt à tout réunir dans une seule application ?
           </h2>
-          <p style={{ fontSize: 15, color: t.textSub, margin: 0, marginBottom: 20, lineHeight: 1.55 }}>
+          <p style={{ fontSize: 15, color: S.fgMuted, margin: 0, marginBottom: 24, lineHeight: 1.6 }}>
             {"14 jours d'essai gratuit. Sans carte bancaire."}
           </p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -348,16 +349,17 @@ export default function Features() {
 // ────────────────────────────────────────────────────────────────────────────
 // Nav rapide groupée — 4 pills (un par groupe FEATURE_GROUPS) au lieu de 17.
 // Click sur une pill -> scroll smooth vers la section du groupe.
-function CategoryNav({ t, activeGroup }) {
+function CategoryNav({ activeGroup }) {
   return (
     <div style={{
       position: 'sticky', top: 64, zIndex: 30,
-      background: t.navBg,
-      borderBottom: `0.5px solid ${t.border}`,
-      backdropFilter: 'saturate(140%) blur(8px)',
+      background: 'rgba(255,255,255,0.85)',
+      borderBottom: `1px solid ${S.border}`,
+      backdropFilter: 'saturate(160%) blur(10px)',
+      WebkitBackdropFilter: 'saturate(160%) blur(10px)',
     }}>
       <div style={{
-        maxWidth: 1100, margin: '0 auto', padding: '10px 24px',
+        maxWidth: 1100, margin: '0 auto', padding: '12px 24px',
         display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap',
       }}>
         {FEATURE_GROUPS.map(g => {
@@ -366,14 +368,15 @@ function CategoryNav({ t, activeGroup }) {
             <a key={g.slug} href={`#group-${g.slug}`} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               fontSize: 13, fontWeight: 500,
-              color: active ? t.text : t.muted,
+              color: active ? S.fg : S.fgMuted,
               padding: '7px 14px', borderRadius: 99,
-              background: active ? t.cardAlt : 'transparent',
-              border: `0.5px solid ${active ? t.borderStrong : t.border}`,
+              background: active ? S.bg : 'transparent',
+              border: `1px solid ${active ? S.borderHv : S.border}`,
+              boxShadow: active ? S.shadowSm : 'none',
               textDecoration: 'none',
               transition: 'all 0.15s ease',
             }}>
-              <g.Ic style={{ width: 13, height: 13, color: active ? g.color : t.muted }} />
+              <g.Ic style={{ width: 13, height: 13, color: active ? g.color : S.fgSubtle }} />
               {g.short}
             </a>
           );
@@ -384,75 +387,79 @@ function CategoryNav({ t, activeGroup }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-function FeatureCard({ t, item, detail, flipped }) {
+function FeatureCard({ item, detail, flipped }) {
   return (
     <div id={item.id} style={{
-      scrollMarginTop: 120,
-      borderRadius: 16,
-      background: t.canvas,
-      border: `0.5px solid ${t.border}`,
+      scrollMarginTop: 130,
+      borderRadius: S.rXl,
+      background: S.bg,
+      border: `1px solid ${S.border}`,
       overflow: 'hidden',
       display: 'grid', gap: 0,
       gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
       alignItems: 'stretch',
+      boxShadow: S.shadowSm,
     }}>
-      <div style={{ order: flipped ? 1 : 0, padding: 28, display: 'flex', flexDirection: 'column' }}>
-        <FeatureLabel t={t} color={item.color} Ic={item.Ic} text={detail.label} />
+      <div style={{ order: flipped ? 1 : 0, padding: 32, display: 'flex', flexDirection: 'column' }}>
+        <FeatureLabel color={item.color} Ic={item.Ic} text={detail.label} />
         <h3 style={{
           fontSize: 'clamp(20px, 2.6vw, 26px)', fontWeight: 500,
-          color: t.text, lineHeight: 1.25, letterSpacing: -0.3,
-          margin: 0, marginBottom: 10,
+          color: S.fg, lineHeight: 1.25, letterSpacing: '-0.025em',
+          margin: 0, marginBottom: 12,
         }}>
           {detail.title}
         </h3>
-        <p style={{ fontSize: 15, color: t.textSub, lineHeight: 1.6, margin: 0, marginBottom: 16 }}>
+        <p style={{ fontSize: 15, color: S.fgMuted, lineHeight: 1.65, margin: 0, marginBottom: 18 }}>
           {detail.desc}
         </p>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginBottom: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginBottom: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {detail.bullets.map(b => (
-            <li key={b} style={{ display: 'flex', gap: 8, fontSize: 14, color: t.textSub }}>
-              <I.Check style={{ width: 14, height: 14, color: '#10b981', flexShrink: 0, marginTop: 3 }} />
+            <li key={b} style={{ display: 'flex', gap: 10, fontSize: 14, color: S.fg2, alignItems: 'flex-start', lineHeight: 1.55 }}>
+              <span style={{ marginTop: 3 }}><CheckPill /></span>
               {b}
             </li>
           ))}
         </ul>
         {detail.cta && (
           <div style={{ marginTop: 'auto' }}>
-            <a href={COMMERCANT_URL + '/register'} style={{
+            <Link to="/tarifs" style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               fontSize: 14, fontWeight: 500,
-              color: item.color,
+              color: S.fg,
               textDecoration: 'none',
-              padding: '10px 16px', borderRadius: 10,
-              background: 'transparent',
-              border: `0.5px solid ${item.color}55`,
-              transition: 'background 0.15s ease',
+              padding: '10px 16px', borderRadius: S.r,
+              background: S.bg,
+              border: `1px solid ${S.border}`,
+              transition: 'background 0.15s ease, border-color 0.15s ease',
               fontFamily: 'inherit',
             }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = item.color + '0f'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
-              {detail.cta} <I.ChevR style={{ width: 14, height: 14 }} />
-            </a>
+              onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.borderColor = S.borderHv; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = S.bg; e.currentTarget.style.borderColor = S.border; }}>
+              {detail.cta}
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </Link>
           </div>
         )}
       </div>
-      <FeatureVisual t={t} color={item.color} Ic={item.Ic} img={detail.img} alt={detail.title} />
+      <FeatureVisual color={item.color} Ic={item.Ic} img={detail.img} alt={detail.title} />
     </div>
   );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Pill 'eyebrow' au-dessus du titre — outline, uppercase, FDS-2026.
-function FeatureLabel({ t, color, Ic, text }) {
+// Pill 'eyebrow' au-dessus du titre — outline, uppercase.
+function FeatureLabel({ color, Ic, text }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
       width: 'fit-content',
       fontSize: 10, fontWeight: 500,
-      padding: '3px 9px', borderRadius: 99,
-      background: 'transparent',
-      color, letterSpacing: 0.7,
-      border: `0.5px solid ${color}55`,
+      padding: '4px 10px', borderRadius: 99,
+      background: color + '0d',
+      color, letterSpacing: 0.8,
+      border: `1px solid ${color}33`,
       textTransform: 'uppercase',
       marginBottom: 14,
     }}>
@@ -463,28 +470,30 @@ function FeatureLabel({ t, color, Ic, text }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Image illustrative avec fallback gradient + icone si erreur de chargement.
-function FeatureVisual({ t, color, Ic, img, alt }) {
+// Image illustrative avec fallback neutre si erreur de chargement.
+function FeatureVisual({ color, Ic, img, alt }) {
   const [errored, setErrored] = useState(false);
   if (!img || errored) {
     return (
       <div style={{
-        background: `linear-gradient(135deg, ${color}22, ${color}55)`,
+        background: S.bgMuted,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        minHeight: 240,
+        minHeight: 260,
+        borderLeft: `1px solid ${S.border}`,
       }}>
         <div style={{
-          width: 88, height: 88, borderRadius: 22,
-          background: '#ffffff', boxShadow: t.shadowSm,
+          width: 80, height: 80, borderRadius: S.rLg,
+          background: S.bg, boxShadow: S.shadowSm,
+          border: `1px solid ${S.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Ic style={{ width: 36, height: 36, color }} />
+          <Ic style={{ width: 32, height: 32, color }} />
         </div>
       </div>
     );
   }
   return (
-    <div style={{ minHeight: 240, overflow: 'hidden' }}>
+    <div style={{ minHeight: 260, overflow: 'hidden', borderLeft: `1px solid ${S.border}` }}>
       <img src={img} alt={alt} loading="lazy" onError={() => setErrored(true)}
         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
     </div>

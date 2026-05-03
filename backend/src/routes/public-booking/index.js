@@ -7,6 +7,11 @@ const router  = express.Router();
 //   marketing doit toujours fonctionner).
 require('./marketing')(router);
 
+// ─ Formulaire de contact public (site marketing flowiapro.com/contact).
+//   Doit etre monte AVANT le gate /:slug : 'contact' n'est pas un slug
+//   commercant.
+require('./contact')(router);
+
 // ─ Gate "merchant gelé par admin" (commit #3 admin) — toute route /:slug est
 //   bloquée si le commerçant est gelé. La désinscription marketing reste OK
 //   car elle est montée juste au-dessus.
