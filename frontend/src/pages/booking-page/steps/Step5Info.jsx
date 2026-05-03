@@ -21,7 +21,7 @@ export function Step5Info({
         Vos informations
       </h2>
       {/* Récap */}
-      <div style={{background:th.cardAlt,borderRadius:12,border: `0.5px solid ${th.border}`,
+      <div style={{background:th.cardAlt,borderRadius:12,border: `1px solid ${th.border}`,
         padding:'14px 16px',marginBottom:24}}>
         <p style={{fontSize:11,fontWeight: 500,
           color:th.dim,margin:'0 0 8px'}}>Récapitulatif</p>
@@ -32,7 +32,7 @@ export function Step5Info({
           selSvc?.price&&Number(selSvc.price)>0?['Prix',`${Number(selSvc.price).toFixed(2)} €`]:null
         ].filter(Boolean).map(([l,v])=>(
           <div key={l} style={{display:'flex',justifyContent:'space-between',
-            padding:'5px 0',borderTop: `0.5px solid ${th.border}`}}>
+            padding:'5px 0',borderTop: `1px solid ${th.border}`}}>
             <span style={{fontSize:12,color:th.muted}}>{l}</span>
             <span style={{fontSize:12,fontWeight: 500,color:th.text}}>{v}</span>
           </div>
@@ -42,7 +42,7 @@ export function Step5Info({
       {clientUser ? (
         <div>
           <div style={{display:'flex',alignItems:'center',gap:12,
-            background:th.card,border: `0.5px solid ${th.border}`,
+            background:th.card,border: `1px solid ${th.border}`,
             borderRadius:12,padding:'14px 16px',marginBottom:16}}>
             <div style={{width:44,height:44,borderRadius:99,flexShrink:0,
               background:th.accent,display:'flex',alignItems:'center',
@@ -57,14 +57,14 @@ export function Step5Info({
             </div>
             <button onClick={()=>{navigate(`/book/${slug}/client/profil`,{replace:false}); setMyApptsInitTab('profile');setView('myAppts');}}
               style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight: 500,
-                color:th.text,background:th.cardAlt,border: `0.5px solid ${th.border}`,cursor:'pointer'}}>
+                color:th.text,background:th.cardAlt,border: `1px solid ${th.border}`,cursor:'pointer'}}>
               Profil
             </button>
           </div>
           {/* Champ téléphone obligatoire si manquant (ex: après Google OAuth).
               RGPD commit 20 : PhoneInput avec validation libphonenumber-js. */}
           {!clientPhone.trim() && (
-            <div style={{background:'rgba(245,158,11,0.06)',border: '0.5px solid rgba(245,158,11,0.25)',
+            <div style={{background:'rgba(245,158,11,0.06)',border: '1px solid rgba(245,158,11,0.25)',
               borderRadius:10,padding:'12px 14px',marginBottom:14}}>
               <p style={{fontSize:12,fontWeight: 500,color:'#d97706',margin:'0 0 8px'}}>
                 Complétez votre profil pour continuer
@@ -82,7 +82,7 @@ export function Step5Info({
             maxLength={500}
             placeholder="Demandes particulières…"
             style={{width:'100%',padding:'12px 14px',borderRadius:10,outline:'none',
-              background:th.inputBg,border: `0.5px solid ${th.inputBorder}`,
+              background:th.inputBg,border: `1px solid ${th.inputBorder}`,
               color:th.text,fontSize:13,resize:'none',lineHeight:1.5}}/>
           {(() => {
             const phoneOk = isValidPhoneNumber(clientPhone || '');

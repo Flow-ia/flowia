@@ -54,7 +54,7 @@ export default function AnnouncementBanner({ slug }) {
       width: '100%',
       background: cfg.bg,
       color: cfg.text,
-      border: `0.5px solid ${cfg.border}`,
+      border: `1px solid ${cfg.border}`,
       borderRadius: 12,
       marginBottom: 16,
       overflow: 'hidden',

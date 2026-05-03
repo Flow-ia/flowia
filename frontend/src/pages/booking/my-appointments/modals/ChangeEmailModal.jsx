@@ -24,7 +24,7 @@ export function ChangeEmailModal({
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
       alignItems:'center', justifyContent:'center', padding:16,
       background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-      <div className="bk-modal-inner" style={{ background:th.card, border: `0.5px solid ${th.border}`,
+      <div className="bk-modal-inner" style={{ background:th.card, border: `1px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
         <div style={{ width:52, height:52, borderRadius:14, background:'rgba(99,102,241,0.1)',
@@ -62,7 +62,7 @@ export function ChangeEmailModal({
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={onClose} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  background:th.cardAlt, border: `1px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Annuler
               </button>
@@ -100,7 +100,7 @@ export function ChangeEmailModal({
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={() => setEmailStep(1)} disabled={emailLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  background:th.cardAlt, border: `1px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Retour
               </button>

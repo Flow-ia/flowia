@@ -61,7 +61,7 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
     }}>
       <div style={{
         background: th.card, borderRadius: 16, padding: 24,
-        maxWidth: 420, width: '100%', border: `0.5px solid ${th.border}`,
+        maxWidth: 420, width: '100%', border: `1px solid ${th.border}`,
       }}>
         <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>🎂</div>
         <p style={{ margin: '0 0 6px', fontWeight: 500, fontSize: 17, color: th.text, textAlign: 'center' }}>
@@ -81,7 +81,7 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
             </label>
             <select value={month} onChange={e => { setMonth(e.target.value); setErr(''); }}
               style={{ width: '100%', padding: '11px 12px', borderRadius: 10,
-                background: th.inputBg, border: `0.5px solid ${th.inputBorder}`,
+                background: th.inputBg, border: `1px solid ${th.inputBorder}`,
                 color: th.text, fontSize: 13, outline: 'none' }}>
               <option value="">—</option>
               {MONTHS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -96,7 +96,7 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
               value={year} maxLength={4}
               onChange={e => { setYear(e.target.value.replace(/\D/g, '').slice(0, 4)); setErr(''); }}
               style={{ width: '100%', padding: '11px 12px', borderRadius: 10,
-                background: th.inputBg, border: `0.5px solid ${th.inputBorder}`,
+                background: th.inputBg, border: `1px solid ${th.inputBorder}`,
                 color: th.text, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}/>
           </div>
         </div>
@@ -116,7 +116,7 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button onClick={onClose}
             style={{ flex: 1, padding: 12, borderRadius: 10, background: 'transparent',
-              border: `0.5px solid ${th.border}`, color: th.text,
+              border: `1px solid ${th.border}`, color: th.text,
               fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
             Plus tard
           </button>

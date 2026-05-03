@@ -54,7 +54,7 @@ export function VisitsTab({
             {(visitsQuery || visitsDate) && (
               <button onClick={() => { setVisitsQuery(''); setVisitsDate(''); }}
                 style={{ padding:'0 14px', borderRadius:12, cursor:'pointer',
-                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  background:th.cardAlt, border: `1px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:12 }}>
                 Réinitialiser
               </button>
@@ -107,7 +107,7 @@ export function VisitsTab({
                   return (
                     <button key={v.id} onClick={() => onOpenVisit(v)}
                       style={{ width:'100%', textAlign:'left', cursor:'pointer',
-                        background:th.card, border: `0.5px solid ${th.border}`,
+                        background:th.card, border: `1px solid ${th.border}`,
                         borderRadius:14, padding:'14px 16px',
                         display:'flex', alignItems:'center', justifyContent:'space-between',
                         gap:12, transition:'transform .08s, border-color .12s' }}
@@ -154,7 +154,7 @@ export function VisitsTab({
                         disabled={pageSafe <= 1}
                         style={{ padding:'8px 12px', borderRadius:10,
                           cursor: pageSafe<=1 ? 'not-allowed' : 'pointer',
-                          background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                          background:th.cardAlt, border: `1px solid ${th.border}`,
                           color:th.text, fontWeight: 500, fontSize:12,
                           opacity: pageSafe<=1 ? 0.4 : 1 }}>
                         ← Précédent
@@ -166,7 +166,7 @@ export function VisitsTab({
                         disabled={pageSafe >= totalPages}
                         style={{ padding:'8px 12px', borderRadius:10,
                           cursor: pageSafe>=totalPages ? 'not-allowed' : 'pointer',
-                          background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                          background:th.cardAlt, border: `1px solid ${th.border}`,
                           color:th.text, fontWeight: 500, fontSize:12,
                           opacity: pageSafe>=totalPages ? 0.4 : 1 }}>
                         Suivant →

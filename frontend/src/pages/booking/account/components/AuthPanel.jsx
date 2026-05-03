@@ -47,7 +47,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   const emailTimer = useRef(null);
 
   const inp  = "w-full px-4 py-3.5 rounded-2xl text-sm focus:outline-none";
-  const inpSt = { background:th.inputBg, border: `0.5px solid ${th.inputBorder}`, color:th.text };
+  const inpSt = { background:th.inputBg, border: `1px solid ${th.inputBorder}`, color:th.text };
 
   // Vérifier l'email dès la saisie (debounce 500ms)
   const handleEmailChange = (val) => {
@@ -276,14 +276,14 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
   // Badge informatif selon type de compte détecté
   const EmailBadge = () => {
     if (emailChecking) return (
-      <div style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 12px', borderRadius:10, background:'rgba(99,102,241,0.06)', border: `0.5px solid rgba(99,102,241,0.15)`, marginTop:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 12px', borderRadius:10, background:'rgba(99,102,241,0.06)', border: `1px solid rgba(99,102,241,0.15)`, marginTop:4 }}>
         <div style={{ width:12, height:12, borderRadius:'50%', border:'2px solid rgba(99,102,241,0.2)', borderTopColor:'#6366f1', animation:'spin .7s linear infinite', flexShrink:0 }} />
         <span style={{ fontSize:12, color:'#6366f1' }}>Vérification…</span>
       </div>
     );
     if (!emailType || emailType === 'free') return null;
     if (emailType === 'global' || emailType === 'both') return (
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(16,185,129,0.07)', border: '0.5px solid rgba(16,185,129,0.2)', marginTop:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', marginTop:4 }}>
         <span style={{ width:6, height:6, borderRadius:99, background:'#10b981', flexShrink:0 }}/>
         <div>
           <p style={{ margin:0, fontSize:12, fontWeight: 500, color:'#10b981' }}>Compte plateforme reconnu</p>
@@ -292,7 +292,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       </div>
     );
     if (emailType === 'local') return (
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(245,158,11,0.07)', border: '0.5px solid rgba(245,158,11,0.2)', marginTop:4 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background:'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)', marginTop:4 }}>
         <span style={{ fontSize:14 }}>💡</span>
         <div>
           <p style={{ margin:0, fontSize:12, fontWeight: 500, color:'#d97706' }}>Compte existant</p>
@@ -305,15 +305,15 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
 
   // Styles inline cohérents avec le design noir/blanc
   const S = {
-    card:   { background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, overflow:'hidden' },
+    card:   { background:th.card, border: `1px solid ${th.border}`, borderRadius:16, overflow:'hidden' },
     inp:    { width:'100%', padding:'11px 14px', borderRadius:10, outline:'none',
-              background:th.inputBg, border: `0.5px solid ${th.inputBorder}`,
+              background:th.inputBg, border: `1px solid ${th.inputBorder}`,
               color:th.text, fontSize:13, fontFamily:'inherit', boxSizing:'border-box' },
     btnPrimary: { width:'100%', padding:'13px', borderRadius:11, border:'none',
                   background:th.accent, color:th.accentText, fontWeight: 500,
                   fontSize:14, cursor:'pointer', letterSpacing:'-0.01em' },
     btnSecondary: { width:'100%', padding:'13px', borderRadius:11,
-                    background:'transparent', border: `0.5px solid ${th.border}`,
+                    background:'transparent', border: `1px solid ${th.border}`,
                     color:th.text, fontWeight: 500, fontSize:14, cursor:'pointer' },
     label:  { display:'block', fontSize:11, fontWeight: 500, color:th.muted,
               marginBottom:5 },
@@ -333,7 +333,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
         {requireAccount && mode !== 'forgot' && mode !== 'forgot_code' && mode !== 'quick' && (
           <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px',
             borderRadius:10, background:'rgba(245,158,11,0.08)',
-            border: '0.5px solid rgba(245,158,11,0.2)', marginBottom:16 }}>
+            border: '1px solid rgba(245,158,11,0.2)', marginBottom:16 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"
               style={{width:15,height:15,flexShrink:0}}>
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -382,7 +382,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             {err && (
               <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
                 borderRadius:9, background:'rgba(239,68,68,0.06)',
-                border: '0.5px solid rgba(239,68,68,0.2)' }}>
+                border: '1px solid rgba(239,68,68,0.2)' }}>
                 <span style={{fontSize:13,flexShrink:0}}>⚠️</span>
                 <p style={{margin:0,fontSize:12,color:'#dc2626',fontWeight: 500}}>{err}</p>
               </div>
@@ -498,7 +498,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             <button onClick={loginWithGoogle}
               style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:10,
                 padding:'14px',borderRadius:11,background:'#ffffff',
-                border:'0.5px solid #e5e7eb',cursor:'pointer',
+                border:'1px solid #e5e7eb',cursor:'pointer',
                 fontWeight:500,fontSize:14,color:'#111827'}}>
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -578,7 +578,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
             {err && (
               <div style={{ display:'flex', alignItems:'flex-start', gap:8, padding:'10px 12px',
                 borderRadius:9, background:'rgba(239,68,68,0.06)',
-                border: '0.5px solid rgba(239,68,68,0.2)' }}>
+                border: '1px solid rgba(239,68,68,0.2)' }}>
                 <span style={{fontSize:13,flexShrink:0}}>⚠️</span>
                 <p style={{margin:0,fontSize:12,color:'#dc2626',fontWeight: 500}}>{err}</p>
               </div>

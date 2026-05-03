@@ -120,7 +120,7 @@ export function ServiceCard({ s, th, onClick, catColor }) {
   return (
     <button onClick={onClick}
       style={{ width:'100%', borderRadius:18, padding:0, textAlign:'left',
-        background:th.card, border: `0.5px solid ${th.border}`,
+        background:th.card, border: `1px solid ${th.border}`,
         cursor:'pointer', overflow:'hidden',
         boxShadow: th.mode==='light' ? '0 2px 10px rgba(0,0,0,0.06)' : 'none',
         transition:'transform .1s,box-shadow .1s' }}

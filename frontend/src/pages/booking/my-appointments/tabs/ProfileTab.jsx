@@ -33,14 +33,14 @@ export function ProfileTab({
     <div style={{ display:'flex', flexDirection:'column', gap:14, animation:'fadeIn .2s ease' }}>
 
       {/* Card infos */}
-      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
-        <div style={{ padding:'16px 20px', borderBottom: `0.5px solid ${th.border}`,
+      <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom: `1px solid ${th.border}`,
           display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <p style={{ fontWeight: 500, fontSize:15, color:th.text, margin:0 }}>Mes informations</p>
           {!editing && (
             <button onClick={onStartEdit}
               style={{ padding:'7px 14px', borderRadius:9,
-                background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                background:th.cardAlt, border: `1px solid ${th.border}`,
                 color:th.text, fontWeight: 500, fontSize:12, cursor:'pointer',
                 display:'flex', alignItems:'center', gap:6 }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -114,7 +114,7 @@ export function ProfileTab({
             {/* Audit Z : toggle opt-in marketing */}
             <label style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'12px 14px',
               borderRadius:10, background:'rgba(16,185,129,0.05)',
-              border: '0.5px solid rgba(16,185,129,0.2)', cursor:'pointer', marginTop:4 }}>
+              border: '1px solid rgba(16,185,129,0.2)', cursor:'pointer', marginTop:4 }}>
               <input type="checkbox" checked={editOptIn}
                 onChange={e=>setEditOptIn(e.target.checked)}
                 style={{ marginTop:2, flexShrink:0, accentColor:'#10b981', cursor:'pointer' }}/>
@@ -131,7 +131,7 @@ export function ProfileTab({
             <div style={{ display:'flex', gap:10, marginTop:4 }}>
               <button onClick={onCancelEdit}
                 style={{ flex:1, padding:'12px', borderRadius:10, cursor:'pointer',
-                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  background:th.cardAlt, border: `1px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Annuler
               </button>
@@ -149,7 +149,7 @@ export function ProfileTab({
           <div>
             {profOk && (
               <div style={{ margin:'12px 20px 0', padding:'10px 14px', borderRadius:9,
-                background:'rgba(34,197,94,0.08)', border: '0.5px solid rgba(34,197,94,0.2)',
+                background:'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
                 color:'#16a34a', fontSize:13, fontWeight: 500 }}>
                 ✓ {profOk}
               </div>
@@ -177,7 +177,7 @@ export function ProfileTab({
               <div key={lbl} style={{ display:'flex', justifyContent:'space-between',
                 alignItems:'center', padding:'13px 20px',
                 borderTop: i===0 ? `1px solid ${th.border}` : 'none',
-                borderBottom: `0.5px solid ${th.border}` }}>
+                borderBottom: `1px solid ${th.border}` }}>
                 <span style={{ fontSize:12, color:th.muted, fontWeight: 500,
                   letterSpacing:'0.04em' }}>{lbl}</span>
                 <span style={{ fontSize:13, fontWeight: 500, color:th.text }}>{val}</span>
@@ -188,15 +188,15 @@ export function ProfileTab({
       </div>
 
       {/* Sécurité : email + mot de passe (vérification par code OTP) */}
-      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
-        <div style={{ padding:'16px 20px', borderBottom: `0.5px solid ${th.border}` }}>
+      <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', borderBottom: `1px solid ${th.border}` }}>
           <p style={{ fontWeight: 500, fontSize:15, color:th.text, margin:0 }}>Sécurité</p>
           <p style={{ fontSize:12, color:th.muted, margin:'4px 0 0' }}>
             Un code à 6 chiffres vous sera envoyé par email pour confirmer chaque changement.
           </p>
         </div>
         <button onClick={onOpenEmailModal} style={{ width:'100%', padding:'14px 20px',
-          background:'none', border:'none', borderBottom: `0.5px solid ${th.border}`,
+          background:'none', border:'none', borderBottom: `1px solid ${th.border}`,
           display:'flex', alignItems:'center', justifyContent:'space-between',
           cursor:'pointer', color:th.text, fontWeight: 500, fontSize:13 }}>
           <span style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -240,7 +240,7 @@ export function ProfileTab({
           onBack();
         }
       }} style={{ width:'100%', padding:'13px', borderRadius:12, cursor:'pointer',
-        background:'rgba(248,113,113,0.06)', border: '0.5px solid rgba(248,113,113,0.2)',
+        background:'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)',
         color:'#ef4444', fontWeight: 500, fontSize:13 }}>
         Se déconnecter
       </button>
@@ -248,7 +248,7 @@ export function ProfileTab({
       {/* Supprimer mon compte (RGPD) */}
       <button onClick={onOpenDeleteModal}
         style={{ width:'100%', padding:'13px', borderRadius:12, cursor:'pointer',
-          background:'transparent', border: `0.5px solid ${th.border}`,
+          background:'transparent', border: `1px solid ${th.border}`,
           color:th.muted, fontWeight: 500, fontSize:13,
           display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

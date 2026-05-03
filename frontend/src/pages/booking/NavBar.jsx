@@ -48,8 +48,10 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
 
   return (
     <nav style={{ position:'sticky', top:0, zIndex:50, background:th.navBg,
-      borderBottom: `0.5px solid ${th.navBorder}`, boxShadow:'0 1px 3px rgba(0,0,0,0.06)',
-      fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+      borderBottom: `1px solid ${th.navBorder}`,
+      backdropFilter: 'saturate(160%) blur(10px)',
+      WebkitBackdropFilter: 'saturate(160%) blur(10px)',
+      fontFamily:'ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       {/* Styles autoporteurs — inclus à chaque montage de NavBar pour que les
           règles responsive s'appliquent sur toutes les vues (booking, myAppts,
           parrain, success), pas uniquement sur la vue avec la style-sheet
@@ -107,13 +109,14 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
         <button onClick={()=>{ if(onNavigateHome) onNavigateHome(null); }}
           style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0,
             background:'none', border:'none', cursor:'pointer', padding:0, minWidth:0 }}>
-          <div style={{ width:36, height:36, borderRadius:8, overflow:'hidden', flexShrink:0,
-            background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:36, height:36, borderRadius:6, overflow:'hidden', flexShrink:0,
+            background:th.cardAlt, border: `1px solid ${th.border}`,
+            display:'flex', alignItems:'center', justifyContent:'center' }}>
             {business?.profile_url
               ? <img src={mediaUrl(business.profile_url)} alt={business.business_name}
                   style={{ width:'100%', height:'100%', objectFit:'cover' }}
                   onError={e=>e.target.style.display='none'}/>
-              : <span style={{ fontSize:15, fontWeight: 500, color:'#374151' }}>
+              : <span style={{ fontSize:15, fontWeight: 500, color: th.muted }}>
                   {(business?.business_name||'B').charAt(0).toUpperCase()}
                 </span>}
           </div>
@@ -169,9 +172,12 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
             </a>
           )}
           <button onClick={onToggleTheme}
-            style={{ width:36, height:36, borderRadius:99, display:'flex',
+            style={{ width:36, height:36, borderRadius:8, display:'flex',
               alignItems:'center', justifyContent:'center',
-              background:th.cardAlt, border: `0.5px solid ${th.border}`, cursor:'pointer' }}>
+              background:th.bg, border: `1px solid ${th.border}`, cursor:'pointer',
+              transition: 'background 0.15s ease, border-color 0.15s ease' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = th.bgHover; e.currentTarget.style.borderColor = th.borderHv; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = th.bg; e.currentTarget.style.borderColor = th.border; }}>
             {th.mode === 'dark'
               ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                   style={{width:16,height:16,color:th.text}}>
@@ -190,10 +196,13 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
           {clientUser ? (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <button onClick={onMyAppts}
-                style={{ display:'flex', alignItems:'center', gap:7, padding:'6px 12px 6px 8px',
-                  borderRadius:20, background:th.cardAlt, border: `0.5px solid ${th.border}`,
-                  cursor:'pointer' }}>
-                <div style={{ width:24, height:24, borderRadius:99, background:th.accent,
+                style={{ display:'flex', alignItems:'center', gap:7, padding:'6px 12px 6px 6px',
+                  borderRadius:20, background:th.bg, border: `1px solid ${th.border}`,
+                  cursor:'pointer', fontFamily:'inherit',
+                  transition: 'background 0.15s ease, border-color 0.15s ease' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = th.bgHover; e.currentTarget.style.borderColor = th.borderHv; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = th.bg; e.currentTarget.style.borderColor = th.border; }}>
+                <div style={{ width:26, height:26, borderRadius:99, background:th.accent,
                   display:'flex', alignItems:'center', justifyContent:'center',
                   color:th.accentText, fontWeight: 500, fontSize:11, flexShrink:0 }}>
                   {(clientUser.first_name||'?').charAt(0).toUpperCase()}
@@ -204,16 +213,20 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
                 </span>
               </button>
               <button onClick={onLogout}
-                style={{ padding:'6px 10px', borderRadius:9, fontSize:12, fontWeight: 500,
-                  color:'#ef4444', background:'rgba(239,68,68,0.06)',
-                  border: '0.5px solid rgba(239,68,68,0.15)', cursor:'pointer' }}>
+                style={{ padding:'7px 12px', borderRadius:8, fontSize:12, fontWeight: 500,
+                  color: th.ax.rose, background: th.ax.roseBg,
+                  border: `1px solid ${th.ax.rose}33`, cursor:'pointer', fontFamily:'inherit' }}>
                 Déco.
               </button>
             </div>
           ) : (
             <button onClick={onShowAuth}
-              style={{ padding:'8px 16px', borderRadius:9, fontSize:13, fontWeight: 500,
-                background:th.accent, color:th.accentText, border:'none', cursor:'pointer' }}>
+              style={{ padding:'9px 18px', borderRadius:8, fontSize:13, fontWeight: 500,
+                background:th.accent, color:th.accentText, border: `1px solid ${th.accent}`,
+                cursor:'pointer', fontFamily:'inherit', height: 38, lineHeight: 1.2,
+                transition: 'opacity 0.15s ease' }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}>
               Connexion
             </button>
           )}
@@ -222,8 +235,8 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
         {/* Bouton hamburger — mobile uniquement */}
         <button className="bk-mo-hamb" aria-label="Ouvrir le menu"
           onClick={() => setMenuOpen(true)}
-          style={{ width:40, height:40, borderRadius:10, alignItems:'center',
-            justifyContent:'center', background:th.cardAlt, border: `0.5px solid ${th.border}`,
+          style={{ width:40, height:40, borderRadius:8, alignItems:'center',
+            justifyContent:'center', background:th.bg, border: `1px solid ${th.border}`,
             cursor:'pointer', flexShrink:0, padding:0 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke={th.text} strokeWidth="2"
             strokeLinecap="round" style={{ width:20, height:20 }}>
@@ -238,11 +251,11 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
       <div className={`bk-drawer ${menuOpen ? 'open' : ''}`} aria-hidden={!menuOpen}>
         <div className="bk-drawer-backdrop" onClick={close} />
         <aside className="bk-drawer-panel" style={{ background:th.navBg,
-          borderLeft: `0.5px solid ${th.navBorder}`, color:th.text }}>
+          borderLeft: `1px solid ${th.navBorder}`, color:th.text }}>
 
           {/* Header drawer : logo + close */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-            padding:'14px 16px', borderBottom: `0.5px solid ${th.border}` }}>
+            padding:'14px 16px', borderBottom: `1px solid ${th.border}` }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
               <div style={{ width:32, height:32, borderRadius:8, overflow:'hidden', flexShrink:0,
                 background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -262,7 +275,7 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
             <button onClick={close} aria-label="Fermer"
               style={{ width:36, height:36, borderRadius:10, display:'flex',
                 alignItems:'center', justifyContent:'center', background:th.cardAlt,
-                border: `0.5px solid ${th.border}`, cursor:'pointer', flexShrink:0, padding:0 }}>
+                border: `1px solid ${th.border}`, cursor:'pointer', flexShrink:0, padding:0 }}>
               <svg viewBox="0 0 24 24" fill="none" stroke={th.text} strokeWidth="2"
                 strokeLinecap="round" style={{ width:18, height:18 }}>
                 <line x1="6" y1="6"  x2="18" y2="18"/>
@@ -272,13 +285,13 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
           </div>
 
           {/* Bloc user / auth */}
-          <div style={{ padding:'12px 16px', borderBottom: `0.5px solid ${th.border}` }}>
+          <div style={{ padding:'12px 16px', borderBottom: `1px solid ${th.border}` }}>
             {clientUser ? (
               <>
                 <button onClick={() => { close(); onMyAppts && onMyAppts(); }}
                   style={{ display:'flex', alignItems:'center', gap:10, width:'100%',
                     padding:'10px 12px', borderRadius:10, background:th.cardAlt,
-                    border: `0.5px solid ${th.border}`, cursor:'pointer', marginBottom:8 }}>
+                    border: `1px solid ${th.border}`, cursor:'pointer', marginBottom:8 }}>
                   <div style={{ width:32, height:32, borderRadius:99, background:th.accent,
                     display:'flex', alignItems:'center', justifyContent:'center',
                     color:th.accentText, fontWeight: 500, fontSize:13, flexShrink:0 }}>
@@ -298,8 +311,8 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
                 </button>
                 <button onClick={() => { close(); onLogout && onLogout(); }}
                   style={{ width:'100%', padding:'10px 12px', borderRadius:10, fontSize:13,
-                    fontWeight: 500, color:'#ef4444', background:'rgba(239,68,68,0.06)',
-                    border: '0.5px solid rgba(239,68,68,0.2)', cursor:'pointer' }}>
+                    fontWeight: 500, color: th.ax.rose, background: th.ax.roseBg,
+                    border: `1px solid ${th.ax.rose}33`, cursor:'pointer', fontFamily:'inherit' }}>
                   Se déconnecter
                 </button>
               </>
@@ -331,12 +344,12 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
           </nav>
 
           {/* Footer drawer : tel + thème */}
-          <div style={{ marginTop:'auto', padding:'12px 16px', borderTop: `0.5px solid ${th.border}`,
+          <div style={{ marginTop:'auto', padding:'12px 16px', borderTop: `1px solid ${th.border}`,
             display:'flex', flexDirection:'column', gap:8 }}>
             {business?.phone && (
               <a href={`tel:${business.phone}`} onClick={close}
                 style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px',
-                  borderRadius:10, background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  borderRadius:10, background:th.cardAlt, border: `1px solid ${th.border}`,
                   fontSize:13, fontWeight: 500, color:th.text, textDecoration:'none' }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                   style={{ width:16, height:16 }}>
@@ -349,7 +362,7 @@ export function NavBar({ th, slug, business, clientUser, refProgram, onToggleThe
             )}
             <button onClick={onToggleTheme}
               style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px',
-                borderRadius:10, background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                borderRadius:10, background:th.cardAlt, border: `1px solid ${th.border}`,
                 fontSize:13, fontWeight: 500, color:th.text, cursor:'pointer' }}>
               {th.mode === 'dark'
                 ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

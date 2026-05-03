@@ -13,7 +13,7 @@ export function ReferralTab({
     <div style={{ display:'flex', flexDirection:'column', gap:14, animation:'fadeIn .2s ease' }}>
 
       {/* Code perso + partage */}
-      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+      <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
         <p style={{ fontSize:11, fontWeight: 500, color:th.muted, margin:'0 0 8px' }}>Mon code de parrainage</p>
         {/* Cadre voucher : tirets fins théme-aware (clair vs sombre) au lieu
             d'un purple hardcodé qui jurait en dark mode et ne respectait pas
@@ -66,7 +66,7 @@ export function ReferralTab({
           return (
             <div key={r.id} style={{
               padding:'12px 14px', borderRadius:11,
-              border: `0.5px solid ${isUsed ? th.border : accent + '40'}`,
+              border: `1px solid ${isUsed ? th.border : accent + '40'}`,
               background:isUsed ? th.cardAlt : accent + '0f',
               opacity:isUsed ? 0.65 : 1,
             }}>
@@ -95,7 +95,7 @@ export function ReferralTab({
         return (
           <>
             {available.length > 0 && (
-              <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+              <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
                 <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 12px' }}>
                   Mes réductions disponibles
                 </p>
@@ -105,7 +105,7 @@ export function ReferralTab({
               </div>
             )}
             {used.length > 0 && (
-              <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+              <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
                 <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 4px' }}>
                   Historique des récompenses utilisées
                 </p>
@@ -122,7 +122,7 @@ export function ReferralTab({
       })()}
 
       {/* Historique filleuls */}
-      <div style={{ background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16, padding:20 }}>
+      <div style={{ background:th.card, border: `1px solid ${th.border}`, borderRadius:16, padding:20 }}>
         <p style={{ fontSize:13, fontWeight: 500, color:th.text, margin:'0 0 12px' }}>
           Mes filleuls
         </p>
@@ -140,12 +140,12 @@ export function ReferralTab({
                                 : h.status === 'cancelled' ? 'Annulé' : 'En attente';
               return (
                 <div key={h.id} style={{ padding:'10px 12px', borderRadius:10,
-                  background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
+                  background:th.cardAlt, border: `1px solid ${th.border}` }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                     {/* Avatar filleul : couleurs theme-aware au lieu du
                         purple hardcodé (illisible en dark mode). */}
                     <div style={{ width:32, height:32, borderRadius:10,
-                      background:th.cardAlt, border:`0.5px solid ${th.border}`,
+                      background:th.cardAlt, border:`1px solid ${th.border}`,
                       display:'flex', alignItems:'center', justifyContent:'center',
                       fontSize:13, fontWeight: 500, color:th.text, flexShrink:0 }}>
                       {(name.charAt(0) || '?').toUpperCase()}

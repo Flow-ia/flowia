@@ -56,7 +56,7 @@ export function Step6Confirm({
       <h2 style={{fontSize:20,fontWeight: 500,color:th.text,margin:'0 0 20px',letterSpacing:'-0.02em'}}>
         Confirmer
       </h2>
-      <div style={{background:th.card,border: `0.5px solid ${th.border}`,
+      <div style={{background:th.card,border: `1px solid ${th.border}`,
         borderRadius:12,padding:'16px 20px',marginBottom:20}}>
         {[['Service',selSvc?.name],
           ['Avec',selEmp?._anyEmployee?'Premier disponible':selEmp?.name],
@@ -69,7 +69,7 @@ export function Step6Confirm({
           clientPhone?['Tel.',clientPhone]:null,
         ].filter(Boolean).map(([l,v])=>(
           <div key={l} style={{display:'flex',justifyContent:'space-between',
-            padding:'8px 0',borderBottom: `0.5px solid ${th.border}`}}>
+            padding:'8px 0',borderBottom: `1px solid ${th.border}`}}>
             <span style={{fontSize:13,color:th.muted}}>{l}</span>
             <span style={{fontSize:13,fontWeight: 500,color:th.text}}>{v}</span>
           </div>
@@ -109,7 +109,7 @@ export function Step6Confirm({
                         style={{ padding: 10, borderRadius: 9,
                                  background: accentBg,
                                  borderLeft: '2px solid ' + accentBar,
-                                 border: `0.5px solid ${isSelected ? accentText : accentBg}`,
+                                 border: `1px solid ${isSelected ? accentText : accentBg}`,
                                  borderLeftWidth: 2, borderLeftColor: accentBar,
                                  borderLeftStyle: 'solid',
                                  cursor: 'pointer', fontFamily: 'inherit',
@@ -188,10 +188,10 @@ export function Step6Confirm({
               onKeyDown={e=>e.key==='Enter'&&checkPromo()}
               placeholder="PROMO10 ou code parrainage"
               style={{flex:1,padding:'11px 14px',borderRadius:9,outline:'none',
-                background:th.inputBg,border: `0.5px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
+                background:th.inputBg,border: `1px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
                 color:th.text,fontSize:13,fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}/>
             <button onClick={checkPromo} disabled={promoLoading||!promoCode.trim()}
-              style={{padding:'11px 18px',borderRadius:9,border: `0.5px solid ${th.border}`,
+              style={{padding:'11px 18px',borderRadius:9,border: `1px solid ${th.border}`,
                 background:th.cardAlt,color:th.text,fontSize:13,fontWeight: 500,
                 cursor:'pointer',opacity:!promoCode.trim()?0.4:1}}>
               {promoLoading?'...':'Valider'}

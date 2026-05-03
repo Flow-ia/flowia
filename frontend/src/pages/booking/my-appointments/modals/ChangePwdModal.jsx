@@ -31,7 +31,7 @@ export function ChangePwdModal({
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
       alignItems:'center', justifyContent:'center', padding:16,
       background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-      <div className="bk-modal-inner" style={{ background:th.card, border: `0.5px solid ${th.border}`,
+      <div className="bk-modal-inner" style={{ background:th.card, border: `1px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
         <div style={{ width:52, height:52, borderRadius:14, background:'rgba(99,102,241,0.1)',
@@ -74,7 +74,7 @@ export function ChangePwdModal({
               )}
               {pwdMode === 'forgot' && (
                 <div style={{ padding:'10px 12px', borderRadius:10,
-                  background:'rgba(99,102,241,0.08)', border: `0.5px solid rgba(99,102,241,0.25)` }}>
+                  background:'rgba(99,102,241,0.08)', border: `1px solid rgba(99,102,241,0.25)` }}>
                   <p style={{ fontSize:12, color:th.text, margin:0, fontWeight: 500 }}>
                     🔐 Mode mot de passe oublié
                   </p>
@@ -118,7 +118,7 @@ export function ChangePwdModal({
             <div style={{ display:'flex', gap:10, marginTop:14 }}>
               <button onClick={onClose} disabled={pwdLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  background:th.cardAlt, border: `1px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Annuler
               </button>
@@ -156,7 +156,7 @@ export function ChangePwdModal({
             <div style={{ display:'flex', gap:10, marginTop:6 }}>
               <button onClick={() => setPwdStep(1)} disabled={pwdLoading}
                 style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-                  background:th.cardAlt, border: `0.5px solid ${th.border}`,
+                  background:th.cardAlt, border: `1px solid ${th.border}`,
                   color:th.muted, fontWeight: 500, fontSize:13 }}>
                 Retour
               </button>

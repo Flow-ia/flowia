@@ -42,7 +42,7 @@ export function SuccessView({
         </p>
 
         {/* Numéro de réservation */}
-        <div style={{ width:'100%', background:th.cardAlt, border: `0.5px solid ${th.border}`,
+        <div style={{ width:'100%', background:th.cardAlt, border: `1px solid ${th.border}`,
           borderRadius:14, padding:'16px 20px', textAlign:'center', marginBottom:16 }}>
           <p style={{ fontSize:11, fontWeight: 500,
             letterSpacing:'0.08em', color:th.muted, margin:'0 0 6px' }}>
@@ -55,7 +55,7 @@ export function SuccessView({
         </div>
 
         {/* Récap */}
-        <div style={{ width:'100%', background:th.card, border: `0.5px solid ${th.border}`,
+        <div style={{ width:'100%', background:th.card, border: `1px solid ${th.border}`,
           borderRadius:14, overflow:'hidden', marginBottom:24 }}>
           {[
             ['Service',  selSvc?.name],
@@ -102,7 +102,7 @@ export function SuccessView({
           )}
           <button onClick={resetBooking}
             style={{ width:'100%', padding:'14px', borderRadius:12, cursor:'pointer',
-              background:th.card, border: `0.5px solid ${th.border}`,
+              background:th.card, border: `1px solid ${th.border}`,
               color:th.text, fontWeight: 500, fontSize:14 }}>
             Prendre un autre RDV
           </button>

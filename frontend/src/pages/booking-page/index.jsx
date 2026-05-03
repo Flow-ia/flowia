@@ -976,7 +976,7 @@ export default function BookingPage({ slug }) {
         <div className="bk-mo" style={{
           position:'fixed', bottom:0, left:0, right:0, zIndex:40,
           padding:'12px 16px', background:th.navBg,
-          borderTop: `0.5px solid ${th.border}`,
+          borderTop: `1px solid ${th.border}`,
           boxShadow: '0 -1px 3px rgba(0,0,0,0.05)',
         }}>
           <button

@@ -16,7 +16,7 @@ export function Step2ServiceOrEmployee({
         <div>
           {/* Badge employé pré-sélectionné */}
           <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px',
-            background:th.card, border: `0.5px solid ${th.border}`,
+            background:th.card, border: `1px solid ${th.border}`,
             borderRadius:12, marginBottom:20 }}>
             <div style={{ width:40, height:40, borderRadius:99, flexShrink:0,
               background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
@@ -34,7 +34,7 @@ export function Step2ServiceOrEmployee({
             <button onClick={()=>{ setSelEmp(null); }}
               style={{ fontSize:12, color:th.muted,
                 cursor:'pointer', padding:'4px 8px', borderRadius:7,
-                background:th.cardAlt, border: `0.5px solid ${th.border}` }}>
+                background:th.cardAlt, border: `1px solid ${th.border}` }}>
               Changer
             </button>
           </div>
@@ -43,7 +43,7 @@ export function Step2ServiceOrEmployee({
             margin:'0 0 16px', letterSpacing:'-0.02em' }}>Choisir une prestation</h2>
 
           {/* Liste des services style accordéon */}
-          <div style={{ border: `0.5px solid ${th.border}`, borderRadius:12,
+          <div style={{ border: `1px solid ${th.border}`, borderRadius:12,
             overflow:'hidden', background:th.card }}>
             {[
               ...svcGroups.map(g => ({ label:g.label, svcs:g.svcs })),
@@ -73,7 +73,7 @@ export function Step2ServiceOrEmployee({
           <button
             onClick={()=>{ const emp={id:null,name:'Premier disponible',_anyEmployee:true,avatar_color:'#6366f1'}; setSelEmp(emp); setSelDate(null); setSelSlot(null); setMonthKey(''); goToStep(3, null, emp); }}
             style={{ width:'100%', display:'flex', alignItems:'center', gap:16, padding:'18px 20px',
-              background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16,
+              background:th.card, border: `1px solid ${th.border}`, borderRadius:16,
               cursor:'pointer', marginBottom:12, textAlign:'left',
               transition:'box-shadow 0.15s, transform 0.1s' }}
             onMouseEnter={ev=>{ev.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';ev.currentTarget.style.transform='translateY(-1px)';}}
@@ -92,7 +92,7 @@ export function Step2ServiceOrEmployee({
             <button key={e.id}
               onClick={()=>{ setSelEmp(e); setSelDate(null); setSelSlot(null); setMonthKey(''); goToStep(3, null, e); }}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:16, padding:'18px 20px',
-                background:th.card, border: `0.5px solid ${th.border}`, borderRadius:16,
+                background:th.card, border: `1px solid ${th.border}`, borderRadius:16,
                 cursor:'pointer', marginBottom:12, textAlign:'left',
                 transition:'box-shadow 0.15s, transform 0.1s' }}
               onMouseEnter={ev=>{ev.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.1)';ev.currentTarget.style.transform='translateY(-1px)';}}

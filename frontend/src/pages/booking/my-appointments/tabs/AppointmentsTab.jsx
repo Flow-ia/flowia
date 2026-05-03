@@ -90,7 +90,7 @@ export function AppointmentsTab({
             return (
               <div key={a.id} style={{
                 background: th.card,
-                border: `0.5px solid ${th.border}`,
+                border: `1px solid ${th.border}`,
                 borderLeft: `2px solid ${st.color}`,
                 borderRadius: 12, padding: 16,
                 opacity: st.group !== 'futurs' ? 0.92 : 1,
@@ -129,7 +129,7 @@ export function AppointmentsTab({
                     <span style={{
                       fontSize:11, fontWeight:500, padding:'3px 9px', borderRadius:99,
                       background: st.bg, color: st.color,
-                      border: `0.5px solid ${st.color}33`,
+                      border: `1px solid ${st.color}33`,
                       whiteSpace:'nowrap',
                     }}>
                       {st.label}
@@ -148,7 +148,7 @@ export function AppointmentsTab({
                         display:'flex', alignItems:'center', gap:6,
                         padding:'7px 11px', borderRadius:8,
                         background:th.card, color:th.text,
-                        border:`0.5px solid ${th.border}`,
+                        border:`1px solid ${th.border}`,
                         cursor:'pointer', fontFamily:'inherit',
                         fontSize:12, fontWeight:500, letterSpacing:'-0.01em',
                         transition:'background .15s, border-color .15s',
@@ -168,7 +168,7 @@ export function AppointmentsTab({
                 {a.employee_name && (
                   <div style={{
                     marginTop:14, paddingTop:12,
-                    borderTop:`0.5px solid ${th.border}`,
+                    borderTop:`1px solid ${th.border}`,
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                   }}>
                     <I.User style={{ width:15, height:15, color:th.muted }} />

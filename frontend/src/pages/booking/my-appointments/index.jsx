@@ -484,11 +484,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       {/* ── Sub-header (non-sticky) : bouton retour + identité client ──
           La NavBar principale (avec logo + hamburger) est rendue par
           BookingPage et reste le seul header sticky de la page. */}
-      <div style={{ background:th.navBg, borderBottom: `0.5px solid ${th.navBorder}` }}>
+      <div style={{ background:th.navBg, borderBottom: `1px solid ${th.navBorder}` }}>
         <div style={{ maxWidth:720, margin:'0 auto', padding:'12px 24px',
           display:'flex', alignItems:'center', gap:16 }}>
           <button onClick={onBack} aria-label="Retour"
-            style={{ width:34, height:34, borderRadius:8, border: `0.5px solid ${th.border}`,
+            style={{ width:34, height:34, borderRadius:8, border: `1px solid ${th.border}`,
               background:th.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
               cursor:'pointer', flexShrink:0 }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -514,7 +514,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ background:th.navBg, borderBottom: `0.5px solid ${th.border}` }}>
+      <div style={{ background:th.navBg, borderBottom: `1px solid ${th.border}` }}>
         <div className="bk-tabs bk-nav-pad" style={{ maxWidth:720, margin:'0 auto', padding:'0 24px',
           display:'flex', gap:0 }}>
           {[

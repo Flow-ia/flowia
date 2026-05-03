@@ -23,7 +23,7 @@ export function DeleteAccountModal({
     <div style={{ position:'fixed', inset:0, zIndex:200, display:'flex',
       alignItems:'center', justifyContent:'center', padding:16,
       background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)' }}>
-      <div className="bk-modal-inner" style={{ background:th.card, border: `0.5px solid ${th.border}`,
+      <div className="bk-modal-inner" style={{ background:th.card, border: `1px solid ${th.border}`,
         borderRadius:20, padding:28, width:'100%', maxWidth:440, maxHeight:'90vh', overflowY:'auto',
         boxShadow:'0 24px 64px rgba(0,0,0,0.18)' }}>
         <div style={{ width:52, height:52, borderRadius:14, background:'rgba(239,68,68,0.1)',
@@ -50,7 +50,7 @@ export function DeleteAccountModal({
         {credits.length > 0 && (
           <div style={{ marginBottom:14, padding:'12px 14px', borderRadius:12,
                         background:'rgba(245,158,11,0.08)',
-                        border:'0.5px solid rgba(245,158,11,0.2)' }}>
+                        border:'1px solid rgba(245,158,11,0.2)' }}>
             <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#92400e' }}>
               Crédits que vous allez abandonner :
             </p>
@@ -72,7 +72,7 @@ export function DeleteAccountModal({
         {debts.length > 0 && (
           <div style={{ marginBottom:14, padding:'12px 14px', borderRadius:12,
                         background:'rgba(239,68,68,0.08)',
-                        border:'0.5px solid rgba(239,68,68,0.25)' }}>
+                        border:'1px solid rgba(239,68,68,0.25)' }}>
             <p style={{ margin:'0 0 8px', fontWeight:500, fontSize:13, color:'#991b1b' }}>
               Dettes en cours auprès de :
             </p>
@@ -113,7 +113,7 @@ export function DeleteAccountModal({
         <div style={{ display:'flex', gap:10, marginTop:6 }}>
           <button onClick={onClose} disabled={deleteLoading}
             style={{ flex:1, padding:'12px', borderRadius:11, cursor:'pointer',
-              background:th.cardAlt, border: `0.5px solid ${th.border}`,
+              background:th.cardAlt, border: `1px solid ${th.border}`,
               color:th.muted, fontWeight: 500, fontSize:13 }}>
             Annuler
           </button>
