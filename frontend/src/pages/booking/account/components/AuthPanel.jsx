@@ -305,18 +305,24 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
 
   // Styles inline cohérents avec le design noir/blanc
   const S = {
-    card:   { background:th.card, border: `1px solid ${th.border}`, borderRadius:16, overflow:'hidden' },
-    inp:    { width:'100%', padding:'11px 14px', borderRadius:10, outline:'none',
+    card:   { background:th.card, border: `1px solid ${th.border}`, borderRadius:14,
+              overflow:'hidden', boxShadow: th.shadowSm },
+    inp:    { width:'100%', padding:'10px 14px', borderRadius:8, outline:'none',
               background:th.inputBg, border: `1px solid ${th.inputBorder}`,
-              color:th.text, fontSize:13, fontFamily:'inherit', boxSizing:'border-box' },
-    btnPrimary: { width:'100%', padding:'13px', borderRadius:11, border:'none',
+              color:th.text, fontSize:14, fontFamily:'inherit', boxSizing:'border-box',
+              height:40, transition:'border-color 0.15s ease, box-shadow 0.15s ease' },
+    btnPrimary: { width:'100%', padding:'12px', borderRadius:10,
+                  border:`1px solid ${th.accent}`,
                   background:th.accent, color:th.accentText, fontWeight: 500,
-                  fontSize:14, cursor:'pointer', letterSpacing:'-0.01em' },
-    btnSecondary: { width:'100%', padding:'13px', borderRadius:11,
-                    background:'transparent', border: `1px solid ${th.border}`,
-                    color:th.text, fontWeight: 500, fontSize:14, cursor:'pointer' },
-    label:  { display:'block', fontSize:11, fontWeight: 500, color:th.muted,
-              marginBottom:5 },
+                  fontSize:14, cursor:'pointer', letterSpacing:'-0.01em',
+                  fontFamily:'inherit', transition:'opacity 0.15s ease' },
+    btnSecondary: { width:'100%', padding:'12px', borderRadius:10,
+                    background:th.bg, border: `1px solid ${th.border}`,
+                    color:th.text, fontWeight: 500, fontSize:14, cursor:'pointer',
+                    fontFamily:'inherit',
+                    transition:'background 0.15s ease, border-color 0.15s ease' },
+    label:  { display:'block', fontSize:13, fontWeight: 500, color:th.text,
+              marginBottom:6 },
   };
 
   return (
@@ -403,14 +409,18 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
 
         {/* ── TABS LOGIN / REGISTER ── */}
         {mode !== 'quick' && mode !== 'forgot' && mode !== 'forgot_code' && (
-          <div style={{ display:'flex', gap:4, padding:4, background:th.inputBg,
-            borderRadius:12, marginBottom:18 }}>
-            {[['login','Se connecter'],['register','Creer un compte']].map(([m,l]) => (
+          <div style={{ display:'flex', gap:4, padding:4, background:th.cardAlt,
+            border: `1px solid ${th.border}`,
+            borderRadius:10, marginBottom:18 }}>
+            {[['login','Se connecter'],['register','Créer un compte']].map(([m,l]) => (
               <button key={m} onClick={()=>{setMode(m);setErr('');setOk('');}}
-                style={{ flex:1, padding:'9px 0', borderRadius:9, fontSize:13, fontWeight: 500,
-                  background: mode===m ? th.accent : 'transparent',
-                  color: mode===m ? th.accentText : th.muted,
-                  border:'none', cursor:'pointer', transition:'all .15s' }}>
+                style={{ flex:1, padding:'8px 0', borderRadius:8, fontSize:13, fontWeight: 500,
+                  background: mode===m ? th.card : 'transparent',
+                  color: mode===m ? th.text : th.muted,
+                  border:'none', cursor:'pointer',
+                  boxShadow: mode===m ? th.shadowSm : 'none',
+                  fontFamily:'inherit',
+                  transition:'all .15s ease' }}>
                 {l}
               </button>
             ))}
@@ -497,9 +507,12 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
                 obligatoire pour réserver, donc on encourage le 1-clic Google. */}
             <button onClick={loginWithGoogle}
               style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:10,
-                padding:'14px',borderRadius:11,background:'#ffffff',
-                border:'1px solid #e5e7eb',cursor:'pointer',
-                fontWeight:500,fontSize:14,color:'#111827'}}>
+                padding:'12px',borderRadius:10,background:th.card,
+                border:`1px solid ${th.border}`,cursor:'pointer',
+                fontWeight:500,fontSize:14,color:th.text,fontFamily:'inherit',
+                transition:'background 0.15s ease, border-color 0.15s ease'}}
+              onMouseEnter={e=>{ e.currentTarget.style.background = th.bgHover; e.currentTarget.style.borderColor = th.borderHv; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background = th.card; e.currentTarget.style.borderColor = th.border; }}>
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>

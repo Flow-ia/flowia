@@ -60,11 +60,13 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
       padding: 16, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
     }}>
       <div style={{
-        background: th.card, borderRadius: 16, padding: 24,
+        background: th.card, borderRadius: 16, padding: 28,
         maxWidth: 420, width: '100%', border: `1px solid ${th.border}`,
+        boxShadow: th.shadowLg,
       }}>
         <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>🎂</div>
-        <p style={{ margin: '0 0 6px', fontWeight: 500, fontSize: 17, color: th.text, textAlign: 'center' }}>
+        <p style={{ margin: '0 0 6px', fontWeight: 500, fontSize: 18, color: th.text,
+          textAlign: 'center', letterSpacing:'-0.02em' }}>
           Un cadeau pour votre anniversaire ?
         </p>
         <p style={{ margin: '0 0 18px', fontSize: 13, color: th.muted, lineHeight: 1.5, textAlign: 'center' }}>
@@ -113,18 +115,24 @@ export function PostRegisterPopup({ slug, th, client, onClose, onSaved }) {
 
         {err && <p style={{ margin: '6px 0 10px', fontSize: 12, color: th.ax.rose, fontWeight: 500 }}>{err}</p>}
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
           <button onClick={onClose}
-            style={{ flex: 1, padding: 12, borderRadius: 10, background: 'transparent',
+            style={{ flex: 1, padding: '12px', borderRadius: 10, background: th.bg,
               border: `1px solid ${th.border}`, color: th.text,
-              fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
+              fontWeight: 500, fontSize: 14, cursor: 'pointer', fontFamily:'inherit',
+              transition:'background 0.15s ease, border-color 0.15s ease' }}
+            onMouseEnter={e=>{ e.currentTarget.style.background = th.bgHover; e.currentTarget.style.borderColor = th.borderHv; }}
+            onMouseLeave={e=>{ e.currentTarget.style.background = th.bg; e.currentTarget.style.borderColor = th.border; }}>
             Plus tard
           </button>
           <button onClick={save} disabled={loading}
-            style={{ flex: 1, padding: 12, borderRadius: 10, background: th.accent,
-              border: 'none', color: th.accentText,
-              fontWeight: 500, fontSize: 13, cursor: loading ? 'wait' : 'pointer',
-              opacity: loading ? 0.6 : 1 }}>
+            style={{ flex: 1, padding: '12px', borderRadius: 10, background: th.accent,
+              border: `1px solid ${th.accent}`, color: th.accentText,
+              fontWeight: 500, fontSize: 14, cursor: loading ? 'wait' : 'pointer',
+              opacity: loading ? 0.6 : 1, fontFamily:'inherit',
+              transition:'opacity 0.15s ease' }}
+            onMouseEnter={e=>{ if(!loading) e.currentTarget.style.opacity = '0.9'; }}
+            onMouseLeave={e=>{ if(!loading) e.currentTarget.style.opacity = '1'; }}>
             {loading ? '…' : 'Enregistrer'}
           </button>
         </div>
