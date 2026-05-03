@@ -470,6 +470,12 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
     <div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} *{box-sizing:border-box}
+        /* Focus ring shadcn (appliqué globalement aux forms my-appointments) */
+        input:focus-visible, textarea:focus-visible, select:focus-visible {
+          outline: none !important;
+          border-color: ${th.ring} !important;
+          box-shadow: 0 0 0 3px ${th.ring}1a !important;
+        }
         /* Polish responsive — grilles 2 colonnes (prénom/nom, postal/ville)
            collapsent en colonne unique sous 480px pour rester confortables
            sur petits écrans Android. */
