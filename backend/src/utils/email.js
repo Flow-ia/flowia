@@ -95,7 +95,7 @@ async function sendVerificationEmail(to, code, subject = 'Votre code de vérific
 }
 
 // ── Email confirmation RDV (design carte rendez-vous) ─────────────────────
-async function sendAppointmentConfirmation({ to, clientName, businessName, serviceName, employeeName, date, startTime, endTime, durationMinutes, price, finalPrice, discountAmount, promoCode, notes, appointmentId, bookingUrl, items }) {
+async function sendAppointmentConfirmation({ to, clientName, businessName, serviceName, employeeName, date, startTime, endTime, durationMinutes, price, finalPrice, discountAmount, promoCode, notes, appointmentId, bookingUrl, items, paidAmountCents }) {
   const refId = appointmentId.substring(0, 8).toUpperCase();
   const subject = `Confirmation de rendez-vous #${refId} — ${businessName}`;
   // Parser la date YYYY-MM-DD sans ambiguïté de timezone
@@ -154,6 +154,12 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
       });
   }
 
+  // Phase 5/5 — confirmation paiement en ligne (si applicable)
+  const paidHtml = paidAmountCents > 0
+    ? renderNotice({ tone: 'success',
+        text: `<strong style="font-weight:500;">Paiement encaissé :</strong> ${(paidAmountCents/100).toFixed(2).replace('.',',')} € via Stripe.` })
+    : '';
+
   // Notes client (utilisateur peut avoir saisi du texte libre, escapeHtml strict).
   const notesHtml = notes
     ? renderNotice({ tone: 'info', text: `<strong style="font-weight:500;">Note :</strong> ${escapeHtml(notes)}` })
@@ -164,7 +170,7 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
     ? renderCta({ href: `${bookingUrl}/client/appointments`, label: 'Gérer mes rendez-vous' })
     : '';
 
-  const sections = renderInfoTable(infoRows) + servicesHtml + promoHtml + notesHtml + ctaHtml;
+  const sections = renderInfoTable(infoRows) + servicesHtml + promoHtml + paidHtml + notesHtml + ctaHtml;
 
   const intro = `<p style="margin:0;">Bonjour ${safeClient}, votre rendez-vous chez ${safeBusiness} est enregistré.</p>`;
 

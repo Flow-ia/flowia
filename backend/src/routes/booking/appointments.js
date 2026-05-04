@@ -20,6 +20,7 @@ module.exports = function attachAppointmentsRoutes(router) {
         a.paid, a.paid_method, a.transaction_id,
         a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
         a.source, a.created_by_employee_id,
+        a.stripe_payment_intent_id, a.payment_status, a.paid_amount_cents, a.paid_at,
         a.created_at, a.updated_at,
         bs.name as service_name, bs.color as service_color, bs.price as service_price, bs.duration_minutes as svc_duration,
         e.name as employee_name, e.avatar_color as employee_color, e.can_cancel, e.can_modify, e.can_encash,

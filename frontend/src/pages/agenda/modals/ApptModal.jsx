@@ -562,10 +562,46 @@ export default function ApptModal({
                 />
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 500, color: '#065f46', margin: 0 }}>
-                    Encaissé
+                    {appt.payment_status === 'paid' && appt.stripe_payment_intent_id
+                      ? "Paye en ligne"
+                      : "Encaissé"}
                   </p>
                   <p style={{ fontSize: 11, color: t.muted, margin: '2px 0 0' }}>
-                    {PAY_OPTS.find((p) => p.id === appt.paid_method)?.label || appt.paid_method}
+                    {appt.payment_status === 'paid' && appt.stripe_payment_intent_id
+                      ? `Stripe · ${(Number(appt.paid_amount_cents || 0) / 100).toFixed(2)} €`
+                      : (PAY_OPTS.find((p) => p.id === appt.paid_method)?.label || appt.paid_method)}
+                  </p>
+                </div>
+              </div>
+            )}
+            {/* Phase 5/5 — paiement Stripe Connect : statuts intermediaires */}
+            {!appt.paid && appt.payment_status === 'refunded' && (
+              <div style={{
+                borderRadius: 12, padding: 12,
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: '#fef3c7', borderLeft: '2px solid #d97706',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d97706', flexShrink: 0 }}/>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: '#92400e', margin: 0 }}>
+                    {"Paiement remboursé"}
+                  </p>
+                  <p style={{ fontSize: 11, color: t.muted, margin: '2px 0 0' }}>
+                    {`Stripe · ${(Number(appt.paid_amount_cents || 0) / 100).toFixed(2)} €`}
+                  </p>
+                </div>
+              </div>
+            )}
+            {!appt.paid && appt.payment_status === 'failed' && (
+              <div style={{
+                borderRadius: 12, padding: 12,
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: '#fef2f2', borderLeft: '2px solid #dc2626',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }}/>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: '#991b1b', margin: 0 }}>
+                    {"Paiement en ligne échoué"}
                   </p>
                 </div>
               </div>

@@ -607,6 +607,8 @@ module.exports = function attachBookRoute(router) {
           promoCode: promoCodeStr,
           notes: notes||null,
           appointmentId: appt.id, bookingUrl,
+          // Phase 5/5 : montant encaisse en ligne (Stripe Connect)
+          paidAmountCents: paidAmountCents || null,
         });
       }
 

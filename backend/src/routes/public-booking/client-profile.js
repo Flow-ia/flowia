@@ -54,6 +54,7 @@ module.exports = function attachClientProfileRoutes(router) {
                 TO_CHAR(a.start_time,  'HH24:MI')    AS start_time,
                 TO_CHAR(a.end_time,    'HH24:MI')    AS end_time,
                 a.duration_minutes, a.created_at, a.updated_at,
+                a.payment_status, a.paid_amount_cents, a.paid_at,
                 bs.name  AS service_name,
                 bs.color AS service_color,
                 bs.price AS service_price,
