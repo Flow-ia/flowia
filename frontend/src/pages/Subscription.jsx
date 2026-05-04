@@ -1,9 +1,10 @@
 // Subscription.jsx — Page /abonnement : choix du plan + gestion de l'abonnement
 //
 // 3 plans : Découverte (gratuit) / Essentiel (24€mois|240€an) / Équipe (49€mois|490€an).
-// - Si pas d'abo actif : 3 cartes, bouton "S'abonner" sur Essentiel/Équipe.
-// - Si abo actif : badge "Plan actuel", bouton "Gérer mon abonnement" → Stripe Portal.
-// - 14 jours d'essai gratuit sur Essentiel uniquement.
+// - Free user : 3 cartes plein format pour comparer + bouton 'S'abonner'.
+// - Subscribed user : 4 sections flat empilees (Plan / Cartes / Coordonnees /
+//   Factures) — TOUT inline, AUCUNE redirection vers le portail Stripe.
+// - 14 jours d'essai gratuit sur Essentiel uniquement (sans CB requise).
 // - "2 mois offerts" en annuel (= 16,67% de réduction).
 import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -148,7 +149,6 @@ export default function Subscription() {
   const [sub, setSub]               = useState(null);
   const [loading, setLoading]       = useState(true);
   const [busyPlan, setBusyPlan]     = useState(null);
-  const [busyPortal, setBusyPortal] = useState(false);
   const [busyAction, setBusyAction] = useState(null); // 'cancel' | 'reactivate' | 'change'
   const [confirmCfg, setConfirmCfg] = useState(null);  // { title, message, danger, onConfirm }
 
@@ -238,18 +238,6 @@ export default function Subscription() {
       const msg = e?.data?.error || 'Erreur lors de la création de la session.';
       showToast(msg, 'error');
       setBusyPlan(null);
-    }
-  };
-
-  const handlePortal = async () => {
-    setBusyPortal(true);
-    try {
-      const { url } = await api.createSubscriptionPortal();
-      if (url) window.location.href = url;
-    } catch (e) {
-      const msg = e?.data?.error || 'Erreur ouverture portail.';
-      showToast(msg, 'error');
-      setBusyPortal(false);
     }
   };
 
@@ -373,7 +361,7 @@ export default function Subscription() {
             background: '#fffbeb', border: '1px solid #fde68a',
             color: '#92400e', fontSize: 13,
           }}>
-            {"Votre dernier paiement a échoué. Mettez à jour votre carte depuis le portail pour conserver l'accès."}
+            {"Votre dernier paiement a échoué. Mettez à jour votre carte ci-dessous pour conserver l'accès."}
           </div>
         )}
 
@@ -391,11 +379,14 @@ export default function Subscription() {
             <span>
               {"Votre essai gratuit se termine dans "}{daysUntil(sub.trial_ends_at)}
               {daysUntil(sub.trial_ends_at) > 1 ? ' jours' : ' jour'}
-              {". Ajoutez une carte bancaire pour continuer sans interruption."}
+              {". Ajoutez une carte ci-dessous pour continuer sans interruption."}
             </span>
-            <button onClick={handlePortal} disabled={busyPortal}
-                    style={{ ...btnPrimary(t, busyPortal), width: 'auto', padding: '8px 14px' }}>
-              {busyPortal ? 'Ouverture…' : 'Ajouter une carte'}
+            <button onClick={() => {
+                      document.getElementById('payment-methods-section')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    style={{ ...btnPrimary(t, false), width: 'auto', padding: '8px 14px' }}>
+              Ajouter une carte ↓
             </button>
           </div>
         )}
@@ -517,13 +508,11 @@ export default function Subscription() {
         {!loading && sub?.is_active && (
           <CompactSubscriptionCard
             sub={sub} t={t} busyAction={busyAction}
-            busyPortal={busyPortal}
             showToast={showToast}
             onChangePeriod={(newPeriod) => handleChangePlan(sub.plan, newPeriod)}
             onChangePlan={handleChangePlan}
             onCancel={handleCancel}
             onReactivate={handleReactivate}
-            onPortal={handlePortal}
           />
         )}
 
@@ -994,9 +983,9 @@ function AddCardForm({ onSuccess, onCancel, theme: t, showToast }) {
 // 4 sections flat empilées (Plan + Modes de paiement + Coordonnées de
 // facturation + Historique de facturation). Tout inline, aucune redirection
 // vers un portail externe. Une seule modale pour comparer plans (gains/pertes).
-function CompactSubscriptionCard({ sub, t, busyAction, busyPortal, showToast,
+function CompactSubscriptionCard({ sub, t, busyAction, showToast,
                                    onChangePeriod, onChangePlan, onCancel,
-                                   onReactivate, onPortal }) {
+                                   onReactivate }) {
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const planDef       = PLAN_DEFS[sub.plan];
   if (!planDef) return null;
@@ -1096,7 +1085,9 @@ function CompactSubscriptionCard({ sub, t, busyAction, busyPortal, showToast,
       </FlatSection>
 
       {/* ── Section 2 : Modes de paiement ────────────────────────────── */}
-      <PaymentMethodsSection theme={t} showToast={showToast}/>
+      <div id="payment-methods-section">
+        <PaymentMethodsSection theme={t} showToast={showToast}/>
+      </div>
 
       {/* ── Section 3 : Coordonnées de facturation ───────────────────── */}
       <BillingDetailsSection theme={t} showToast={showToast}/>
