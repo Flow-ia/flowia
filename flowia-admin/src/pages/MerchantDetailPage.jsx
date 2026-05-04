@@ -5,6 +5,7 @@ import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMe
 import AppShell from '../components/AppShell.jsx';
 import MerchantPromoCodesSection from './MerchantPromoCodesSection.jsx';
 import MerchantResetSection from './MerchantResetSection.jsx';
+import MerchantSubscriptionSection from './MerchantSubscriptionSection.jsx';
 
 // Liste des features blocables avec libelle FR. Doit rester aligne avec la
 // constante FEATURES de backend/src/middleware/requireFeature.js.
@@ -475,6 +476,9 @@ export default function MerchantDetailPage() {
           </form>
         )}
       </section>
+
+      {/* Abonnement plateforme : voir Stripe + octroi gratuit superadmin */}
+      <MerchantSubscriptionSection merchantId={id} merchant={merchant} />
 
       {/* Codes promo générés pour ce commerçant — fidélité/anniv/parrainage/SMS/manuel */}
       <MerchantPromoCodesSection merchantId={id} />

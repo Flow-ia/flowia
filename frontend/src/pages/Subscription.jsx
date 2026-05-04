@@ -1190,6 +1190,7 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
   const planDef       = PLAN_DEFS[sub.plan];
   if (!planDef) return null;
 
+  const isAdminGranted = !!sub.is_admin_granted;
   const isYearly      = sub.period === 'yearly';
   const isCanceling   = !!sub.cancel_at_period_end;
   const annualSavings = (planDef.monthly * 12) - planDef.annual;
@@ -1207,7 +1208,7 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
       {/* ── Section 1 : Plan actuel ──────────────────────────────────── */}
       <FlatSection title="Plan actuel" t={t}
                    right={
-                     !isCanceling && (upgradeId || downgradeId) ? (
+                     !isAdminGranted && !isCanceling && (upgradeId || downgradeId) ? (
                        <button onClick={() => setPlanModalOpen(true)}
                                style={linkBtn(t)}>
                          Changer de plan
@@ -1222,19 +1223,24 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
           <span style={{ fontSize: 13, color: t.muted }}>
             · {isYearly ? 'Annuel' : 'Mensuel'}
           </span>
-          {sub.status === 'trialing' && (
+          {isAdminGranted && (
+            <span style={badgeStyle('blue')}>Plan offert</span>
+          )}
+          {!isAdminGranted && sub.status === 'trialing' && (
             <span style={badgeStyle('green')}>Essai gratuit</span>
           )}
-          {isCanceling && (
+          {!isAdminGranted && isCanceling && (
             <span style={badgeStyle('red')}>Annulation programmée</span>
           )}
-          {sub.is_past_due && (
+          {!isAdminGranted && sub.is_past_due && (
             <span style={badgeStyle('orange')}>Paiement en échec</span>
           )}
         </div>
         <p style={{ fontSize: 13, color: t.text, margin: '0 0 2px' }}>
-          {isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`}
-          {isYearly && (
+          {isAdminGranted
+            ? <span style={{ color: '#10b981', fontWeight: 500 }}>Gratuit · offert par FlowIA</span>
+            : (isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`)}
+          {!isAdminGranted && isYearly && (
             <span style={{ color: t.muted, marginLeft: 6 }}>
               {`(soit ${formatPrice(planDef.yearly)} €/mois)`}
             </span>
@@ -1243,10 +1249,13 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
 
         {/* Bloc infos contextuel : adapte le message a la situation
             (essai, prochaine facturation, annulation programmee, paiement
-            en echec) avec dates explicites + nombre de jours restants. */}
+            en echec, plan offert) avec dates explicites. */}
         <StatusInfoBox sub={sub} planDef={planDef} t={t}/>
 
-        {/* Actions */}
+        {/* Actions — masquees pour les utilisateurs en plan offert
+            (ils ne paient pas, ne peuvent pas annuler eux-memes ; tout passe
+            par le superadmin via /admin). */}
+        {!isAdminGranted && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           {isCanceling ? (
             <button onClick={onReactivate} disabled={busyAction === 'reactivate'}
@@ -1280,6 +1289,7 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
             </>
           )}
         </div>
+        )}
       </FlatSection>
 
       {/* ── Section 2 : Modes de paiement (collapsible) ──────────────── */}
@@ -1328,6 +1338,7 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
 // - Actif + annulation programmee -> date de bascule sur Decouverte
 // - Paiement en echec (past_due) -> instructions pour eviter l'interruption
 function StatusInfoBox({ sub, planDef, t }) {
+  const isAdminGranted = !!sub.is_admin_granted;
   const isCanceling   = !!sub.cancel_at_period_end;
   const isTrial       = sub.status === 'trialing';
   const isPastDue     = !!sub.is_past_due;
@@ -1349,7 +1360,21 @@ function StatusInfoBox({ sub, planDef, t }) {
 
   // ── Détermine titre + lignes selon le contexte ─────────────────────────
   let color, title, lines;
-  if (isPastDue) {
+  if (isAdminGranted) {
+    color = 'blue';
+    title = 'Plan offert par FlowIA';
+    const grant = sub.admin_grant || {};
+    const expiresLine = grant.expires_at
+      ? `Valable jusqu'au ${formatLong(parseDate(grant.expires_at))}.`
+      : 'Sans date d\'expiration — accès offert tant que l\'équipe FlowIA le souhaite.';
+    lines = [
+      `Le plan ${planDef.name} ${isYearly ? 'annuel' : 'mensuel'} est actif gracieusement.`,
+      'Aucun prélèvement — vous bénéficiez de toutes les fonctionnalités sans payer.',
+      expiresLine,
+      grant.reason ? `Motif : ${grant.reason}` : null,
+      'Pour toute question, contactez le support FlowIA.',
+    ].filter(Boolean);
+  } else if (isPastDue) {
     color = 'orange';
     title = 'Paiement en échec';
     lines = [
@@ -1399,6 +1424,7 @@ function StatusInfoBox({ sub, planDef, t }) {
     green:  { bg: '#ecfdf5',     border: '#a7f3d0', stripe: '#10b981', title: '#065f46', text: '#047857' },
     orange: { bg: '#fffbeb',     border: '#fde68a', stripe: '#f59e0b', title: '#92400e', text: '#78350f' },
     red:    { bg: '#fef2f2',     border: '#fecaca', stripe: '#dc2626', title: '#991b1b', text: '#7f1d1d' },
+    blue:   { bg: '#eff6ff',     border: '#bfdbfe', stripe: '#1e40af', title: '#1e3a8a', text: '#1e40af' },
     gray:   { bg: t.cardAlt,     border: t.border,  stripe: t.fg2 || t.text, title: t.text, text: t.textSub },
   };
   const c = palettes[color] || palettes.gray;

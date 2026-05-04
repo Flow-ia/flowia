@@ -17,16 +17,28 @@ const PLANS = ['decouverte', 'essentiel', 'equipe'];
 const PLAN_RANK = { decouverte: 0, essentiel: 1, equipe: 2 };
 
 // Helper : récupère le plan effectif d'un user.
-// - subscription_status active|trialing → renvoie le plan payé (essentiel|equipe)
-// - sinon → 'decouverte' (gratuit, par défaut)
+// Ordre de priorité :
+//  1. Octroi superadmin (subscription_admin_grant non expiré) → renvoie son plan
+//  2. Sub Stripe active|trialing avec un plan → renvoie ce plan
+//  3. Fallback → 'decouverte' (gratuit)
 async function getEffectivePlan(userId) {
   const { rows } = await pool.query(
-    `SELECT subscription_status, subscription_plan
+    `SELECT subscription_status, subscription_plan, subscription_admin_grant
      FROM users WHERE id=$1`,
     [userId]
   );
   if (!rows.length) return null;
-  const { subscription_status, subscription_plan } = rows[0];
+  const { subscription_status, subscription_plan, subscription_admin_grant } = rows[0];
+
+  // Octroi superadmin prioritaire (gratuit pour le marchand).
+  if (subscription_admin_grant) {
+    const expiresAt = subscription_admin_grant.expires_at;
+    const stillValid = !expiresAt || new Date(expiresAt) > new Date();
+    if (stillValid && subscription_admin_grant.plan) {
+      return subscription_admin_grant.plan;
+    }
+  }
+
   if (['active', 'trialing'].includes(subscription_status) && subscription_plan) {
     return subscription_plan;
   }

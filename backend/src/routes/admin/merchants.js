@@ -800,4 +800,178 @@ router.post('/:id/reset', async (req, res) => {
   }
 });
 
+// ─── ABONNEMENT — Vue + octroi gratuit + revocation (superadmin) ───────────
+// Permet a un superadmin de :
+// - Voir l'etat complet de l'abonnement d'un marchand (Stripe + grant DB)
+// - Octroyer un plan gratuit (pour partenariats, beta-testers, support)
+// - Revoquer l'octroi (le marchand devra souscrire normalement)
+// - Optionnellement annuler l'abonnement Stripe actif lors de l'octroi
+//   (pour eviter qu'il continue a payer en parallele du plan gratuit)
+
+function getStripeAdmin() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
+  return require('stripe')(key);
+}
+
+// GET /api/admin/merchants/:id/subscription
+// Retourne tout : DB (status, plan, period, grant) + best-effort Stripe live.
+router.get('/:id/subscription', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, business_name,
+              subscription_status, subscription_plan, subscription_period,
+              subscription_current_period_end, subscription_trial_ends_at,
+              subscription_cancel_at_period_end, stripe_subscription_id,
+              stripe_customer_id, subscription_admin_grant
+       FROM users WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Marchand introuvable' });
+    const u = rows[0];
+
+    // Determine effective plan : grant prend le pas sur Stripe.
+    const grant = u.subscription_admin_grant;
+    const grantActive = grant && (!grant.expires_at || new Date(grant.expires_at) > new Date());
+
+    res.json({
+      merchant: {
+        id: u.id, email: u.email, business_name: u.business_name,
+      },
+      stripe: {
+        customer_id:        u.stripe_customer_id,
+        subscription_id:    u.stripe_subscription_id,
+        status:             u.subscription_status,
+        plan:               u.subscription_plan,
+        period:             u.subscription_period,
+        current_period_end: u.subscription_current_period_end,
+        trial_ends_at:      u.subscription_trial_ends_at,
+        cancel_at_period_end: !!u.subscription_cancel_at_period_end,
+      },
+      admin_grant: grant || null,
+      effective: {
+        plan:   grantActive ? grant.plan
+              : (['active','trialing'].includes(u.subscription_status)
+                  ? u.subscription_plan
+                  : 'decouverte'),
+        source: grantActive ? 'admin_grant'
+              : (['active','trialing'].includes(u.subscription_status)
+                  ? 'stripe' : 'free'),
+      },
+    });
+  } catch (e) {
+    console.error('[admin/merchants subscription get]', e.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/admin/merchants/:id/subscription/grant
+// Body : { plan: 'essentiel'|'equipe', period: 'monthly'|'yearly',
+//          expires_at: null|ISO, reason: string, cancel_stripe: boolean }
+// Si cancel_stripe=true et l'utilisateur a une sub Stripe active, on
+// l'annule cote Stripe pour eviter un double-billing.
+router.post('/:id/subscription/grant', async (req, res) => {
+  try {
+    const { plan, period, expires_at, reason, cancel_stripe } = req.body || {};
+    if (!['essentiel', 'equipe'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan invalide' });
+    }
+    if (!['monthly', 'yearly'].includes(period)) {
+      return res.status(400).json({ error: 'Période invalide' });
+    }
+    if (expires_at && isNaN(new Date(expires_at).getTime())) {
+      return res.status(400).json({ error: 'expires_at invalide (ISO date attendue)' });
+    }
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 3) {
+      return res.status(400).json({ error: 'Motif requis (min. 3 caractères)' });
+    }
+
+    const { rows: before } = await pool.query(
+      `SELECT id, business_name, subscription_admin_grant, stripe_subscription_id,
+              subscription_status
+       FROM users WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Marchand introuvable' });
+
+    const grant = {
+      plan, period,
+      granted_at:       new Date().toISOString(),
+      granted_by_id:    req.admin.id,
+      granted_by_email: req.admin.email,
+      expires_at:       expires_at || null,
+      reason:           reason.trim().slice(0, 500),
+    };
+
+    // Optionnel : annuler la sub Stripe active immediatement pour eviter
+    // un double-billing (l'utilisateur paie Stripe + bénéficie du grant).
+    let stripeCanceled = false;
+    if (cancel_stripe && before[0].stripe_subscription_id
+        && ['active','trialing','past_due'].includes(before[0].subscription_status)) {
+      try {
+        const stripe = getStripeAdmin();
+        await stripe.subscriptions.cancel(before[0].stripe_subscription_id, { prorate: true });
+        stripeCanceled = true;
+      } catch (e) {
+        console.warn('[admin grant] cancel stripe sub fail (non bloquant):', e.message);
+      }
+    }
+
+    await pool.query(
+      `UPDATE users SET subscription_admin_grant = $2 WHERE id = $1`,
+      [req.params.id, grant]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: 'merchant.subscription.grant',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { admin_grant: before[0].subscription_admin_grant },
+      payloadAfter:  { admin_grant: grant, stripe_canceled: stripeCanceled },
+      req,
+    });
+
+    res.json({ ok: true, admin_grant: grant, stripe_canceled: stripeCanceled });
+  } catch (e) {
+    console.error('[admin/merchants subscription grant]', e.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/admin/merchants/:id/subscription/grant
+// Revoque l'octroi gratuit. Le marchand devra souscrire via Stripe pour
+// reprendre l'acces premium. Stripe sub reste intact (s'il en avait une
+// que cancel_stripe=false avait laisse).
+router.delete('/:id/subscription/grant', async (req, res) => {
+  try {
+    const { rows: before } = await pool.query(
+      `SELECT id, subscription_admin_grant FROM users WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Marchand introuvable' });
+    if (!before[0].subscription_admin_grant) {
+      return res.status(400).json({ error: 'Aucun octroi à révoquer' });
+    }
+
+    await pool.query(
+      `UPDATE users SET subscription_admin_grant = NULL WHERE id = $1`,
+      [req.params.id]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: 'merchant.subscription.revoke',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { admin_grant: before[0].subscription_admin_grant },
+      payloadAfter:  { admin_grant: null },
+      req,
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[admin/merchants subscription revoke]', e.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 module.exports = router;

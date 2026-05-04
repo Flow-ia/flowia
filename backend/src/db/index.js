@@ -1544,6 +1544,17 @@ async function initDB() {
   `);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_processed_stripe_events_age
     ON processed_stripe_events(processed_at DESC)`);
+
+  // Octroi superadmin : permet de donner un plan gratuit a un commercant
+  // sans passer par Stripe. Si non null, prend le pas sur Stripe pour
+  // l'effective plan + statut. JSONB pour flexibilite future.
+  // Format :
+  //   { plan: 'essentiel'|'equipe', period: 'monthly'|'yearly',
+  //     granted_at, granted_by_id, granted_by_email,
+  //     expires_at: null|ISO, reason }
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_admin_grant JSONB`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_users_admin_grant
+    ON users((subscription_admin_grant IS NOT NULL)) WHERE subscription_admin_grant IS NOT NULL`);
   await runMigration(`
     DO $$
     BEGIN

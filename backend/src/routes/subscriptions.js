@@ -228,6 +228,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         subscription_current_period_end   AS current_period_end,
         subscription_trial_ends_at        AS trial_ends_at,
         subscription_cancel_at_period_end AS cancel_at_period_end,
+        subscription_admin_grant          AS admin_grant,
         stripe_subscription_id
       FROM users
       WHERE id=$1
@@ -236,6 +237,36 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
 
     const sub = rows[0];
+
+    // ── Octroi superadmin actif : court-circuit Stripe ────────────────────
+    // Le marchand a un plan gratuit offert. On expose les infos du grant
+    // au frontend qui affichera un bandeau special 'Plan offert par FlowIA'
+    // et masquera les actions de paiement/changement de plan.
+    if (sub.admin_grant) {
+      const grant = sub.admin_grant;
+      const stillValid = !grant.expires_at || new Date(grant.expires_at) > new Date();
+      if (stillValid && grant.plan) {
+        return res.json({
+          status:               'active',  // synthetique
+          plan:                 grant.plan,
+          period:               grant.period || 'monthly',
+          current_period_end:   grant.expires_at || null,
+          trial_ends_at:        null,
+          cancel_at_period_end: false,
+          is_active:            true,
+          is_past_due:          false,
+          is_admin_granted:     true,
+          admin_grant: {
+            plan:       grant.plan,
+            period:     grant.period || 'monthly',
+            granted_at: grant.granted_at,
+            expires_at: grant.expires_at || null,
+            reason:     grant.reason || '',
+          },
+          has_subscription:     !!sub.stripe_subscription_id,
+        });
+      }
+    }
 
     // BACKFILL : si stripe_subscription_id existe mais current_period_end
     // est null (cas API Stripe 2024-09+ ou webhook decale), on fetch live
@@ -278,6 +309,8 @@ router.get('/me', authMiddleware, async (req, res) => {
       cancel_at_period_end: !!cancelEnd,
       is_active:            ['active', 'trialing'].includes(liveStatus),
       is_past_due:          liveStatus === 'past_due',
+      is_admin_granted:     false,
+      admin_grant:          null,
       has_subscription:     !!sub.stripe_subscription_id,
     });
   } catch (e) {

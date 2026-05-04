@@ -48,6 +48,24 @@ export async function getMerchantFeatures(id) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/features`);
 }
 
+// ── Abonnement merchant (octroi superadmin gratuit / revocation) ──────────
+export async function getMerchantSubscription(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/subscription`);
+}
+
+export async function grantMerchantSubscription(id, body) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/subscription/grant`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function revokeMerchantSubscriptionGrant(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/subscription/grant`, {
+    method: 'DELETE',
+  });
+}
+
 export async function setMerchantFeature(id, { feature, enabled, reason }) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/features`, {
     method: 'PATCH',
