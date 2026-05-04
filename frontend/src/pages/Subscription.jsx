@@ -255,8 +255,18 @@ export default function Subscription() {
     }
   };
 
-  const handleCancel = () => {
-    const periodEndDate = sub?.current_period_end ? new Date(sub.current_period_end) : null;
+  const handleCancel = async () => {
+    // Defensive : si current_period_end manque (backfill backend pas encore
+    // arrive ou rate condition), on tente un refresh frais avant d'ouvrir
+    // la modale. Le backend /me fait un backfill auto depuis Stripe live.
+    let liveSub = sub;
+    if (!liveSub?.current_period_end && liveSub?.has_subscription) {
+      try {
+        liveSub = await api.getSubscription();
+        setSub(liveSub);
+      } catch {}
+    }
+    const periodEndDate = liveSub?.current_period_end ? new Date(liveSub.current_period_end) : null;
     const periodEndLong = periodEndDate
       ? periodEndDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
       : '';
@@ -335,6 +345,14 @@ export default function Subscription() {
   const handleChangePlan = async (newPlan, newPeriod) => {
     const isUpgrade = (sub?.plan === 'essentiel' && newPlan === 'equipe')
                    || (sub?.period === 'monthly' && newPeriod === 'yearly');
+
+    // Defensive : refresh frais si pas de date locale (backfill backend kicks in).
+    if (!sub?.current_period_end && sub?.has_subscription) {
+      try {
+        const liveSub = await api.getSubscription();
+        setSub(liveSub);
+      } catch {}
+    }
 
     // Fetch preview Stripe pour afficher des chiffres concrets dans la modale.
     let preview = null;

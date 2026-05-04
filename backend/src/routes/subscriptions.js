@@ -14,6 +14,21 @@ function getStripe() {
   return require('stripe')(key);
 }
 
+// Extrait les dates clés d'un objet subscription Stripe (compat tous API
+// versions). Stripe API 2024-09+ a déplacé current_period_start/end de
+// Subscription vers SubscriptionItem. On lit les deux endroits, fallback
+// silencieux.
+function extractSubDates(stripeSub) {
+  const item = stripeSub?.items?.data?.[0];
+  const periodEndUnix = stripeSub?.current_period_end || item?.current_period_end || null;
+  const trialEndUnix  = stripeSub?.trial_end || item?.trial_end || null;
+  return {
+    periodEnd:         periodEndUnix ? new Date(periodEndUnix * 1000) : null,
+    trialEnd:          trialEndUnix  ? new Date(trialEndUnix  * 1000) : null,
+    cancelAtPeriodEnd: !!stripeSub?.cancel_at_period_end,
+  };
+}
+
 function getFrontendUrl() {
   return (process.env.FRONTEND_URL || 'http://localhost:3000')
     .split(',')[0].replace(/\/$/, '');
@@ -159,16 +174,48 @@ router.get('/me', authMiddleware, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
 
     const sub = rows[0];
+
+    // BACKFILL : si stripe_subscription_id existe mais current_period_end
+    // est null (cas API Stripe 2024-09+ ou webhook decale), on fetch live
+    // depuis Stripe et on persist en DB pour les prochains appels.
+    let periodEnd  = sub.current_period_end;
+    let trialEnd   = sub.trial_ends_at;
+    let cancelEnd  = sub.cancel_at_period_end;
+    let liveStatus = sub.status;
+    if (sub.stripe_subscription_id && !periodEnd) {
+      try {
+        const stripe    = getStripe();
+        const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+        const dates     = extractSubDates(stripeSub);
+        if (dates.periodEnd) {
+          periodEnd  = dates.periodEnd;
+          trialEnd   = dates.trialEnd || trialEnd;
+          cancelEnd  = dates.cancelAtPeriodEnd;
+          liveStatus = stripeSub.status || liveStatus;
+          await pool.query(`
+            UPDATE users SET
+              subscription_current_period_end   = $1,
+              subscription_trial_ends_at        = $2,
+              subscription_cancel_at_period_end = $3,
+              subscription_status               = $4
+            WHERE id = $5
+          `, [periodEnd, trialEnd, cancelEnd, liveStatus, req.user.userId]);
+          console.log('[SUB ME backfill] dates synced from Stripe for user', req.user.userId);
+        }
+      } catch (e) {
+        console.warn('[SUB ME backfill] fail (non bloquant):', e.message);
+      }
+    }
+
     res.json({
-      status:               sub.status,
+      status:               liveStatus,
       plan:                 sub.plan,
       period:               sub.period,
-      current_period_end:   sub.current_period_end,
-      trial_ends_at:        sub.trial_ends_at,
-      cancel_at_period_end: !!sub.cancel_at_period_end,
-      // Helpers calculés côté backend pour simplifier le front.
-      is_active:            ['active', 'trialing'].includes(sub.status),
-      is_past_due:          sub.status === 'past_due',
+      current_period_end:   periodEnd,
+      trial_ends_at:        trialEnd,
+      cancel_at_period_end: !!cancelEnd,
+      is_active:            ['active', 'trialing'].includes(liveStatus),
+      is_past_due:          liveStatus === 'past_due',
       has_subscription:     !!sub.stripe_subscription_id,
     });
   } catch (e) {
@@ -200,18 +247,22 @@ router.post('/cancel', authMiddleware, async (req, res) => {
     const updated = await stripe.subscriptions.update(subId, {
       cancel_at_period_end: true,
     });
+    const dates = extractSubDates(updated);
 
-    // Update DB direct pour réponse immédiate (webhook confirmera).
+    // Update DB direct pour réponse immédiate (webhook confirmera + backfill
+    // de current_period_end si jamais il manque).
     await pool.query(
-      `UPDATE users SET subscription_cancel_at_period_end = TRUE WHERE id = $1`,
-      [userId]
+      `UPDATE users SET
+         subscription_cancel_at_period_end = TRUE,
+         subscription_current_period_end   = COALESCE($2, subscription_current_period_end)
+       WHERE id = $1`,
+      [userId, dates.periodEnd]
     );
 
     res.json({
       ok: true,
       cancel_at_period_end: true,
-      cancels_on: updated.current_period_end
-        ? new Date(updated.current_period_end * 1000).toISOString() : null,
+      cancels_on: dates.periodEnd ? dates.periodEnd.toISOString() : null,
     });
   } catch (e) {
     console.error('[SUB CANCEL ERR]', e.message);
@@ -477,13 +528,14 @@ router.post('/webhook', async (req, res) => {
       const customerId   = sub.customer;
       const priceId      = sub.items?.data?.[0]?.price?.id;
       const { plan, period } = planPeriodFromPriceId(priceId);
-      const periodEnd    = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
-      const trialEnd     = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
+      // extractSubDates compatible Stripe API 2024-09+ (current_period_end
+      // sur subscription_item, plus sur subscription).
+      const dates        = extractSubDates(sub);
+      const periodEnd    = dates.periodEnd;
+      const trialEnd     = dates.trialEnd;
       const status       = event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status;
-      // cancel_at_period_end : flag Stripe natif. À reset quand la sub est
-      // 'deleted' (déjà annulée définitivement, plus de pending cancel).
       const cancelAtEnd  = event.type === 'customer.subscription.deleted'
-                            ? false : !!sub.cancel_at_period_end;
+                            ? false : dates.cancelAtPeriodEnd;
 
       // Update par stripe_customer_id (toujours présent et stable).
       // Si plan/period non identifiables (price_id inconnu = config env manquante),
