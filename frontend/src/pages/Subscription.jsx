@@ -77,6 +77,37 @@ export default function Subscription() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-déclenchement du Checkout si arrivée via ?autostart=1&plan=...&period=...
+  // (suite à un CTA marketing → register → /abonnement). Une seule fois par mount.
+  // Appel direct à l'API (sans handleSubscribe) pour passer la période lue de
+  // l'URL et éviter une closure sur le state yearly initial.
+  useEffect(() => {
+    const params    = new URLSearchParams(location.search);
+    const autostart = params.get('autostart');
+    const plan      = params.get('plan');
+    const period    = params.get('period');
+    if (autostart !== '1' || !plan || !period
+        || !['essentiel', 'equipe'].includes(plan)
+        || !['monthly', 'yearly'].includes(period)) return;
+
+    setYearly(period === 'yearly');
+    setBusyPlan(plan);
+    // Délai court : laisse l'UI s'afficher avant la redirection Stripe.
+    // Nettoie l'URL pour éviter qu'un retour arrière relance le checkout.
+    const timer = setTimeout(async () => {
+      navigate('/abonnement', { replace: true });
+      try {
+        const { url } = await api.createSubscriptionCheckout({ plan, period });
+        if (url) window.location.href = url;
+      } catch (e) {
+        showToast(e?.data?.error || 'Erreur lors de la création de la session.', 'error');
+        setBusyPlan(null);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Charge l'état d'abonnement courant (avec retry doux pendant ~15s post-checkout
   // pour laisser le webhook arriver depuis Stripe).
   useEffect(() => {

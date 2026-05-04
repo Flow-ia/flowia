@@ -103,7 +103,7 @@ function Hero() {
         </p>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-          <PrimaryCta href={COMMERCANT_URL + '/register'}>{"Essayer 14 jours"}</PrimaryCta>
+          <PrimaryCta href={COMMERCANT_URL + '/register?plan=essentiel&period=monthly'}>{"Essayer 14 jours"}</PrimaryCta>
           <SecondaryCta to="/fonctionnalites">{"Voir la démo"}</SecondaryCta>
         </div>
         <p style={{ fontSize: 13, color: S.fgSubtle, margin: '0 0 56px' }}>
@@ -752,7 +752,7 @@ function FinalCTA() {
         <H2 align="center">{"Prêt à digitaliser votre salon ?"}</H2>
         <Lede align="center">{"14 jours d'essai. Sans carte. Sans engagement."}</Lede>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-          <PrimaryCta href={COMMERCANT_URL + '/register'}>{"Essayer gratuitement"}</PrimaryCta>
+          <PrimaryCta href={COMMERCANT_URL + '/register?plan=essentiel&period=monthly'}>{"Essayer gratuitement"}</PrimaryCta>
           <SecondaryCta to="/contact">{"Parler à un conseiller"}</SecondaryCta>
         </div>
       </div>

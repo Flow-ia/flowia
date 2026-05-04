@@ -2501,9 +2501,31 @@ export default function App() {
       <Route path="/reglages"     element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
       {/* Abonnement plateforme FlowIA — choix plan + Stripe Customer Portal. */}
       <Route path="/abonnement"   element={<RequireAdminMode><Subscription/></RequireAdminMode>}/>
-      {/* Racine : en mode admin → /dashboard, sinon /agenda. Catch-all idem. */}
-      <Route path="/"             element={<Navigate to={isAdminMode ? '/dashboard' : '/agenda'} replace/>}/>
-      <Route path="*"             element={<Navigate to={isAdminMode ? '/dashboard' : '/agenda'} replace/>}/>
+      {/* Racine : en mode admin → /dashboard, sinon /agenda. Catch-all idem.
+          Exception : si l'utilisateur arrive d'un CTA marketing avec
+          ?plan=...&period=... encodé dans /register, AuthFlow a déposé un
+          flag sessionStorage 'ff_subscribe_intent'. On redirige alors vers
+          /abonnement?autostart=1 pour déclencher le Checkout Stripe direct. */}
+      <Route path="/"             element={<Navigate to={getPostAuthTarget(isAdminMode)} replace/>}/>
+      <Route path="*"             element={<Navigate to={getPostAuthTarget(isAdminMode)} replace/>}/>
     </Routes>
   );
+}
+
+// Détermine la cible post-login. Lit (et CONSOMME) ff_subscribe_intent du
+// sessionStorage si présent. Appelée uniquement quand le catch-all ou la
+// racine sont matchés (donc juste après login depuis /register par ex.).
+function getPostAuthTarget(isAdminMode) {
+  try {
+    const intent = sessionStorage.getItem('ff_subscribe_intent');
+    if (intent) {
+      const { plan, period } = JSON.parse(intent);
+      sessionStorage.removeItem('ff_subscribe_intent');
+      if (['essentiel', 'equipe'].includes(plan)
+          && ['monthly', 'yearly'].includes(period)) {
+        return `/abonnement?plan=${plan}&period=${period}&autostart=1`;
+      }
+    }
+  } catch {}
+  return isAdminMode ? '/dashboard' : '/agenda';
 }

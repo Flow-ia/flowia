@@ -533,6 +533,21 @@ export default function AuthFlow({ initialScreen = 'login' }) {
   const { openGoogle, status: oauthStatus, errorMsg: oauthError, reset: resetOauth } =
     useGoogleMerchantAuth((token, user) => { login(token, user); });
 
+  // Capture intent d'abonnement depuis l'URL (?plan=essentiel&period=monthly).
+  // Stocké en sessionStorage et consommé après login par App.jsx pour rediriger
+  // vers /abonnement avec autostart=1 → Stripe Checkout déclenché auto.
+  useEffect(() => {
+    try {
+      const url    = new URL(window.location.href);
+      const plan   = url.searchParams.get('plan');
+      const period = url.searchParams.get('period') || 'monthly';
+      if (plan && ['essentiel', 'equipe'].includes(plan)
+          && ['monthly', 'yearly'].includes(period)) {
+        sessionStorage.setItem('ff_subscribe_intent', JSON.stringify({ plan, period }));
+      }
+    } catch {}
+  }, []);
+
   // Lire ?auth_error=... de l'URL (fallback non-popup ou erreur Google).
   useEffect(() => {
     try {

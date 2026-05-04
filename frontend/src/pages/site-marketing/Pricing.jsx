@@ -139,7 +139,7 @@ export default function Pricing() {
                     </li>
                   ))}
                 </ul>
-                <a href={p.name === 'Équipe' ? '/contact' : COMMERCANT_URL + '/register'}
+                <a href={ctaHref(p, yearly)}
                   style={{
                     ...(p.highlight ? primaryBtnStyle() : ghostBtnStyle()),
                     display: 'block', textAlign: 'center', width: '100%', boxSizing: 'border-box',
@@ -204,6 +204,22 @@ export default function Pricing() {
       </section>
     </>
   );
+}
+
+// CTA href dynamique :
+// - Découverte → /register (compte gratuit, pas d'abo Stripe)
+// - Essentiel  → /register?plan=essentiel&period=monthly|yearly
+//                AuthFlow capture l'intent en sessionStorage. Après confirmation
+//                email, App.jsx redirige vers /abonnement?autostart=1 → Stripe
+//                Checkout déclenché auto avec trial 14j sans CB.
+// - Équipe     → /contact (devis personnalisé, pas de checkout direct)
+function ctaHref(plan, yearly) {
+  if (plan.name === 'Équipe') return '/contact';
+  if (plan.name === 'Essentiel') {
+    const period = yearly ? 'yearly' : 'monthly';
+    return `${COMMERCANT_URL}/register?plan=essentiel&period=${period}`;
+  }
+  return `${COMMERCANT_URL}/register`;
 }
 
 function thStyle() {
