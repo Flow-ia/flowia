@@ -101,13 +101,22 @@ function PayForm({ th, amountCents, onPaid, onError, busy, setBusy }) {
 
 // ── Composant exporte ─────────────────────────────────────────────────────
 export function StripePaymentSection({
-  th, slug, booking, onPaid,
+  th, slug, booking, onPaid, bookingError,
 }) {
   // booking : { service_id, date, start_time, promo_code_id, referral_code }
+  // bookingError : si le parent (handleBook) echoue apres paiement, le passer
+  // en prop pour reset busy = permettre a l'utilisateur de retenter.
   const [intent, setIntent]   = useState(null); // { client_secret, payment_intent_id, connected_account_id, amount_cents, ... }
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(false);
+
+  // Si une erreur de /book remonte du parent apres paiement reussi, on
+  // sort du busy pour que le bouton "Payer" redevienne cliquable. Stripe
+  // renverra le meme PI deja succeeded (idempotent) → handleBook re-tente.
+  useEffect(() => {
+    if (bookingError && busy) setBusy(false);
+  }, [bookingError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cle stable pour relancer l'effect si le booking change vraiment
   const bookingKey = `${booking?.service_id}|${booking?.date}|${booking?.start_time}|${booking?.promo_code_id || ''}|${booking?.referral_code || ''}`;

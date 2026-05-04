@@ -478,10 +478,32 @@ module.exports = function attachBookRoute(router) {
         throw e;
       }
       if (!rows.length) {
-        // Race perdue : un autre client a pris ce créneau entre la vérif et l'INSERT
-        // Phase 5/5 : si le client a paye, on auto-refund le PI (sinon le
-        // client paie sans avoir de RDV). Le webhook charge.refunded mettra
-        // payment_status='refunded' (mais pas de RDV ici, donc no-op DB).
+        // Race perdue OU retry idempotent : on regarde d'abord si CE meme PI
+        // a deja servi a creer un RDV pour ce user (cas double-clic post-paiement).
+        // Si oui → retourner ce RDV (idempotent), surtout PAS de refund.
+        if (payment_intent_id) {
+          const { rows: own } = await pool.query(
+            `SELECT id, user_id, service_id, employee_id, client_id,
+               client_name, client_email, client_phone,
+               TO_CHAR(date, 'YYYY-MM-DD') as date,
+               TO_CHAR(start_time, 'HH24:MI') as start_time,
+               TO_CHAR(end_time,   'HH24:MI') as end_time,
+               duration_minutes, status, notes, created_at, source,
+               total_amount, original_amount, promo_code_id, promo_code, discount_amount,
+               stripe_payment_intent_id, payment_status, paid_amount_cents, paid_at
+             FROM appointments
+             WHERE stripe_payment_intent_id=$1 AND user_id=$2
+             LIMIT 1`,
+            [payment_intent_id, userId]
+          );
+          if (own.length) {
+            return res.status(200).json({ ...own[0], _idempotent_retry: true });
+          }
+        }
+
+        // Vraie race : un AUTRE client a pris ce creneau. Si le client a paye,
+        // auto-refund pour eviter qu'il paie sans avoir de RDV. Le webhook
+        // charge.refunded mettra payment_status='refunded' (no-op DB ici).
         let refunded = false;
         if (payment_intent_id && stripeAccountId) {
           try {

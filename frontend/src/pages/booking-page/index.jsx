@@ -661,6 +661,17 @@ export default function BookingPage({ slug }) {
       else if (e.data?.code === 'PAYMENT_REQUIRED') {
         setBookErr('Paiement requis pour reserver. Merci de saisir votre carte ci-dessous.');
       }
+      // Phase 5/5 — slot pris : si l'utilisateur avait deja paye, le backend
+      // a auto-refund. On affiche le message backend (qui differencie
+      // "rembourse automatiquement" vs "contacter le commercant") puis on
+      // renvoie a l'etape de selection de creneau pour qu'il puisse retenter.
+      else if (e.data?.code === 'SLOT_TAKEN') {
+        setBookErr(e.message);
+        // Force un refresh des slots + retour etape 4
+        setSelSlot(null);
+        setMonthKey('');
+        setTimeout(() => { setStep(4); }, 1500);
+      }
       else setBookErr(e.message);
     }
     finally { setBooking(false); }

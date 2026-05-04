@@ -291,6 +291,7 @@ export function Step6Confirm({
                 promo_code_id: promoData?.source === 'promo' ? (promoData.promo_id || null) : null,
                 referral_code: promoData?.source === 'referral' ? (referralCode || null) : null,
               }}
+              bookingError={bookErr}
               onPaid={(piId) => { handleBook(piId); }}
             />
           )}
