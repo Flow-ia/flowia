@@ -10,6 +10,64 @@ const { FEATURES } = require('../../middleware/requireFeature');
 const router = express.Router();
 router.use(adminAuth);
 
+// ── GET /subscription-list — liste filtree par etat d'abonnement ─────────
+// Sert au dashboard admin pour 'drill-down' sur une carte (ex: cliquer
+// 'Actifs payants' -> voir la liste des marchands concernes).
+// Filtres acceptes :
+//   active_paying / trialing / canceling / past_due / canceled / admin_granted
+//   essentiel_monthly / essentiel_yearly / equipe_monthly / equipe_yearly
+router.get('/subscription-list', async (req, res) => {
+  const filter = String(req.query.filter || '').trim();
+  const limit  = Math.min(parseInt(req.query.limit) || 100, 500);
+
+  // Mapping filter -> condition SQL (parametree).
+  const conditions = {
+    active_paying: `subscription_status IN ('active','trialing')
+                    AND subscription_admin_grant IS NULL`,
+    trialing:      `subscription_status = 'trialing'
+                    AND subscription_admin_grant IS NULL`,
+    canceling:     `subscription_status IN ('active','trialing')
+                    AND subscription_admin_grant IS NULL
+                    AND subscription_cancel_at_period_end = TRUE`,
+    past_due:      `subscription_status = 'past_due'`,
+    canceled:      `subscription_status = 'canceled'`,
+    admin_granted: `subscription_admin_grant IS NOT NULL`,
+    essentiel_monthly: `subscription_plan='essentiel' AND subscription_period='monthly'
+                        AND subscription_status IN ('active','trialing')
+                        AND subscription_admin_grant IS NULL`,
+    essentiel_yearly:  `subscription_plan='essentiel' AND subscription_period='yearly'
+                        AND subscription_status IN ('active','trialing')
+                        AND subscription_admin_grant IS NULL`,
+    equipe_monthly:    `subscription_plan='equipe' AND subscription_period='monthly'
+                        AND subscription_status IN ('active','trialing')
+                        AND subscription_admin_grant IS NULL`,
+    equipe_yearly:     `subscription_plan='equipe' AND subscription_period='yearly'
+                        AND subscription_status IN ('active','trialing')
+                        AND subscription_admin_grant IS NULL`,
+  };
+  const where = conditions[filter];
+  if (!where) {
+    return res.status(400).json({ error: 'Filtre invalide.', valid: Object.keys(conditions) });
+  }
+
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, email, business_name, is_frozen, created_at,
+             subscription_status, subscription_plan, subscription_period,
+             subscription_current_period_end, subscription_trial_ends_at,
+             subscription_cancel_at_period_end, subscription_admin_grant
+        FROM users
+       WHERE ${where}
+       ORDER BY COALESCE(subscription_current_period_end, created_at) ASC
+       LIMIT $1
+    `, [limit]);
+    return res.json({ filter, count: rows.length, rows });
+  } catch (e) {
+    console.error('[admin/merchants subscription-list]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ── GET / — liste paginée + filtres ──────────────────────────────────────────
 router.get('/', async (req, res) => {
   const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);

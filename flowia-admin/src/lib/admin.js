@@ -48,6 +48,11 @@ export async function getMerchantFeatures(id) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/features`);
 }
 
+// ── Liste de marchands filtree par etat d'abonnement (drill-down dashboard)
+export async function getMerchantsBySubscriptionFilter(filter) {
+  return await apiJson(`/api/admin/merchants/subscription-list?filter=${encodeURIComponent(filter)}`);
+}
+
 // ── Abonnement merchant (octroi superadmin gratuit / revocation) ──────────
 export async function getMerchantSubscription(id) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/subscription`);

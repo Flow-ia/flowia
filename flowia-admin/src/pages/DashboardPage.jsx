@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
-import { getGlobalStats } from '../lib/admin.js';
+import { getGlobalStats, getMerchantsBySubscriptionFilter } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
 
 function fmt(n)      { return Number(n || 0).toLocaleString('fr-FR'); }
@@ -13,6 +13,10 @@ export default function DashboardPage() {
   const [me, setMe]       = useState(null);
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
+  // Modale de drill-down (clic sur une card abonnement -> liste de marchands).
+  const [drillModal, setDrillModal] = useState(null); // { filter, title } | null
+
+  const openDrill = (filter, title) => setDrillModal({ filter, title });
 
   useEffect(() => {
     let cancelled = false;
@@ -84,30 +88,25 @@ export default function DashboardPage() {
           {/* ── Abonnements plateforme FlowIA ──────────────────────────── */}
           <h2 className="section-title" style={sectionTitle}>{"Abonnements plateforme"}</h2>
           <div className="stat-grid">
-            <div className="stat-card">
-              <div className="stat-label">{"Actifs payants"}</div>
-              <div className="stat-value">{fmt(stats.subscriptions?.active_paying)}</div>
-              <div className="stat-meta">
-                {stats.subscriptions?.canceling > 0
-                  ? `${fmt(stats.subscriptions.canceling)} en annulation programmée`
-                  : 'aucune annulation en attente'}
-              </div>
-            </div>
+            <ClickableStatCard label="Actifs payants"
+                               value={fmt(stats.subscriptions?.active_paying)}
+                               meta={stats.subscriptions?.canceling > 0
+                                 ? `${fmt(stats.subscriptions.canceling)} en annulation programmée`
+                                 : 'aucune annulation en attente'}
+                               onClick={() => openDrill('active_paying', 'Abonnés payants actifs')}/>
             <div className="stat-card">
               <div className="stat-label">{"MRR (récurrent mensuel)"}</div>
               <div className="stat-value">{fmtMoney(stats.subscriptions?.mrr)}</div>
               <div className="stat-meta">{fmtMoney0(stats.subscriptions?.arr)} {"de ARR"}</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-label">{"Essais gratuits en cours"}</div>
-              <div className="stat-value">{fmt(stats.subscriptions?.trialing)}</div>
-              <div className="stat-meta">{"Essai 14 jours · sans CB"}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">{"Plans offerts (admin)"}</div>
-              <div className="stat-value">{fmt(stats.subscriptions?.admin_granted)}</div>
-              <div className="stat-meta">{"Gratuits superadmin"}</div>
-            </div>
+            <ClickableStatCard label="Essais gratuits en cours"
+                               value={fmt(stats.subscriptions?.trialing)}
+                               meta="Essai 14 jours · sans CB"
+                               onClick={() => openDrill('trialing', 'Essais gratuits en cours')}/>
+            <ClickableStatCard label="Plans offerts (admin)"
+                               value={fmt(stats.subscriptions?.admin_granted)}
+                               meta="Gratuits superadmin"
+                               onClick={() => openDrill('admin_granted', 'Plans offerts par superadmin')}/>
           </div>
 
           {/* Breakdown par plan + statuts */}
@@ -116,22 +115,38 @@ export default function DashboardPage() {
             <div style={planBreakdownGrid}>
               <BreakdownRow label="Essentiel · mensuel"
                             count={stats.subscriptions?.essentiel_monthly}
-                            mrr={(stats.subscriptions?.essentiel_monthly || 0) * 24}/>
+                            mrr={(stats.subscriptions?.essentiel_monthly || 0) * 24}
+                            onClick={() => openDrill('essentiel_monthly', 'Essentiel mensuel')}/>
               <BreakdownRow label="Essentiel · annuel"
                             count={stats.subscriptions?.essentiel_yearly}
-                            mrr={(stats.subscriptions?.essentiel_yearly || 0) * 20}/>
+                            mrr={(stats.subscriptions?.essentiel_yearly || 0) * 20}
+                            onClick={() => openDrill('essentiel_yearly', 'Essentiel annuel')}/>
               <BreakdownRow label="Équipe · mensuel"
                             count={stats.subscriptions?.equipe_monthly}
-                            mrr={(stats.subscriptions?.equipe_monthly || 0) * 49}/>
+                            mrr={(stats.subscriptions?.equipe_monthly || 0) * 49}
+                            onClick={() => openDrill('equipe_monthly', 'Équipe mensuel')}/>
               <BreakdownRow label="Équipe · annuel"
                             count={stats.subscriptions?.equipe_yearly}
-                            mrr={Math.round((stats.subscriptions?.equipe_yearly || 0) * 40.83)}/>
+                            mrr={Math.round((stats.subscriptions?.equipe_yearly || 0) * 40.83)}
+                            onClick={() => openDrill('equipe_yearly', 'Équipe annuel')}/>
             </div>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb',
                           display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#6b7280' }}>
-              <span><strong style={{ color: '#991b1b' }}>{fmt(stats.subscriptions?.canceled_total)}</strong>{" annulés définitifs"}</span>
-              <span><strong style={{ color: '#92400e' }}>{fmt(stats.subscriptions?.past_due)}</strong>{" en échec de paiement"}</span>
-              <span><strong style={{ color: '#1e40af' }}>{fmt(stats.subscriptions?.acquired_60d)}</strong>{" acquis sur 60j"}</span>
+              <button onClick={() => openDrill('canceled', 'Abonnements annulés définitifs')}
+                      style={inlineLink}>
+                <strong style={{ color: '#991b1b' }}>{fmt(stats.subscriptions?.canceled_total)}</strong>
+                {" annulés définitifs"}
+              </button>
+              <button onClick={() => openDrill('past_due', 'Paiements en échec')}
+                      style={inlineLink}>
+                <strong style={{ color: '#92400e' }}>{fmt(stats.subscriptions?.past_due)}</strong>
+                {" en échec de paiement"}
+              </button>
+              <button onClick={() => openDrill('canceling', 'Annulations programmées')}
+                      style={inlineLink}>
+                <strong style={{ color: '#dc2626' }}>{fmt(stats.subscriptions?.canceling)}</strong>
+                {" en annulation programmée"}
+              </button>
             </div>
           </section>
 
@@ -223,22 +238,191 @@ export default function DashboardPage() {
           </p>
         </>
       )}
+
+      {/* Modale drill-down : liste des marchands sur le filtre clique. */}
+      {drillModal && (
+        <SubscriptionDrillModal
+          filter={drillModal.filter}
+          title={drillModal.title}
+          onClose={() => setDrillModal(null)}
+          onMerchantClick={(id) => {
+            setDrillModal(null);
+            navigate(`/merchants/${id}`);
+          }}
+        />
+      )}
     </AppShell>
   );
 }
 
-function BreakdownRow({ label, count, mrr }) {
+// Card cliquable qui ouvre une modale de drill-down. Style identique a
+// stat-card mais avec hover state et cursor pointer.
+function ClickableStatCard({ label, value, meta, onClick }) {
   return (
-    <div style={breakdownRow}>
-      <span style={{ fontSize: 13, color: '#374151' }}>{label}</span>
-      <span style={{ fontSize: 13, color: '#111827', fontWeight: 500 }}>
+    <button onClick={onClick} className="stat-card stat-card-clickable"
+            style={{ textAlign: 'left', cursor: 'pointer',
+                     border: '1px solid var(--border)',
+                     background: 'var(--surface)',
+                     fontFamily: 'inherit', width: '100%', padding: 16 }}>
+      <div className="stat-label" style={{ display: 'flex', alignItems: 'center',
+                                           justifyContent: 'space-between', gap: 6 }}>
+        <span>{label}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+             style={{ flexShrink: 0, opacity: 0.5 }}>
+          <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-meta">{meta}</div>
+    </button>
+  );
+}
+
+function BreakdownRow({ label, count, mrr, onClick }) {
+  const isClickable = typeof onClick === 'function' && (count || 0) > 0;
+  const Component = isClickable ? 'button' : 'div';
+  return (
+    <Component
+      onClick={isClickable ? onClick : undefined}
+      style={{
+        ...breakdownRow,
+        cursor: isClickable ? 'pointer' : 'default',
+        textAlign: 'left', fontFamily: 'inherit',
+        opacity: count > 0 ? 1 : 0.5,
+      }}>
+      <span style={{ fontSize: 13, color: 'var(--fg)' }}>{label}</span>
+      <span style={{ fontSize: 13, color: 'var(--fg)', fontWeight: 500 }}>
         {fmt(count)} {"abo"}
-        <span style={{ color: '#6b7280', fontWeight: 400, marginLeft: 8 }}>
+        <span style={{ color: 'var(--fg-muted)', fontWeight: 400, marginLeft: 8 }}>
           {fmtMoney0(mrr)}{"/mois"}
         </span>
+        {isClickable && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+               style={{ marginLeft: 8, opacity: 0.5, verticalAlign: 'middle' }}>
+            <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2"
+                  strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
       </span>
+    </Component>
+  );
+}
+
+// ─── Modale drill-down : liste des marchands sur un filtre ───────────────
+function SubscriptionDrillModal({ filter, title, onClose, onMerchantClick }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true); setErr(null);
+    getMerchantsBySubscriptionFilter(filter)
+      .then(d => { if (!cancelled) setRows(d?.rows || []); })
+      .catch(e => { if (!cancelled) setErr(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [filter]);
+
+  // Click hors modale ou ESC : ferme.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return (
+    <div style={modalOverlay} onClick={onClose}>
+      <div style={modalContent} onClick={e => e.stopPropagation()}>
+        <div style={modalHeader}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--fg)' }}>
+              {title}
+            </h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--fg-muted)' }}>
+              {loading ? 'Chargement…' : `${rows.length} commerçant${rows.length > 1 ? 's' : ''}`}
+            </p>
+          </div>
+          <button onClick={onClose} style={closeBtn} aria-label="Fermer">×</button>
+        </div>
+
+        <div style={modalBody}>
+          {err && <p style={{ color: 'var(--error)', fontSize: 13 }}>{err}</p>}
+          {loading ? (
+            <p style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Chargement de la liste…</p>
+          ) : rows.length === 0 ? (
+            <p style={{ color: 'var(--fg-muted)', fontSize: 13 }}>
+              {"Aucun commerçant ne correspond à ce filtre."}
+            </p>
+          ) : (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0,
+                         display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {rows.map(m => (
+                <li key={m.id}>
+                  <button onClick={() => onMerchantClick(m.id)}
+                          style={merchantRowBtn}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--fg)',
+                                    overflow: 'hidden', textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap' }}>
+                        {m.business_name || '—'}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--fg-muted)',
+                                    fontFamily: 'monospace',
+                                    overflow: 'hidden', textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap' }}>
+                        {m.email}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, color: 'var(--fg)', fontWeight: 500 }}>
+                        {planLabel(m.subscription_plan, m.subscription_admin_grant)}
+                      </span>
+                      {(m.subscription_period || m.subscription_admin_grant?.period) && (
+                        <span style={{ fontSize: 11, color: 'var(--fg-muted)',
+                                       marginLeft: 6 }}>
+                          {(m.subscription_period || m.subscription_admin_grant?.period) === 'yearly'
+                            ? 'annuel' : 'mensuel'}
+                        </span>
+                      )}
+                      <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
+                        {nextDateLabel(m)}
+                      </div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
+}
+
+function planLabel(plan, grant) {
+  const p = grant?.plan || plan;
+  if (p === 'essentiel') return 'Essentiel';
+  if (p === 'equipe')    return 'Équipe';
+  return '—';
+}
+function nextDateLabel(m) {
+  if (m.subscription_admin_grant) {
+    const exp = m.subscription_admin_grant.expires_at;
+    return exp
+      ? `Bascule le ${new Date(exp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`
+      : 'Sans expiration';
+  }
+  if (m.subscription_current_period_end) {
+    const action = m.subscription_cancel_at_period_end ? 'Annulation' : 'Renouvellement';
+    return `${action} ${new Date(m.subscription_current_period_end).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+  }
+  return '—';
 }
 
 const sectionTitle = {
@@ -251,6 +435,43 @@ const planBreakdownGrid = {
 };
 const breakdownRow = {
   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-  padding: '8px 12px', borderRadius: 6,
-  background: '#f9f9fb', border: '1px solid #e5e7eb',
+  padding: '10px 12px', borderRadius: 6,
+  background: 'var(--surface-2)', border: '1px solid var(--border)',
+};
+const inlineLink = {
+  background: 'transparent', border: 'none', padding: 0,
+  fontFamily: 'inherit', fontSize: 13, color: 'var(--fg-muted)',
+  cursor: 'pointer', textAlign: 'left',
+};
+const modalOverlay = {
+  position: 'fixed', inset: 0, zIndex: 60,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 16, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+};
+const modalContent = {
+  width: '100%', maxWidth: 600, maxHeight: '85vh',
+  display: 'flex', flexDirection: 'column',
+  background: 'var(--surface)', border: '1px solid var(--border)',
+  borderRadius: 12, overflow: 'hidden',
+  boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+};
+const modalHeader = {
+  display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+  padding: '16px 20px', borderBottom: '1px solid var(--border)', gap: 12,
+};
+const modalBody = {
+  flex: 1, overflowY: 'auto', padding: '14px 20px 20px',
+};
+const closeBtn = {
+  width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer',
+  background: 'var(--surface-2)', color: 'var(--fg-muted)',
+  fontSize: 18, lineHeight: 1, fontFamily: 'inherit',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+const merchantRowBtn = {
+  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  gap: 12, padding: '12px 14px', borderRadius: 8,
+  background: 'var(--surface-2)', border: '1px solid var(--border)',
+  cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+  transition: 'border-color 0.15s, background 0.15s',
 };
