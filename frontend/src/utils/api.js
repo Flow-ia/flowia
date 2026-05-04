@@ -339,6 +339,7 @@ export const api = {
   createSubscriptionPmSetupIntent:   ()    => request('/subscriptions/payment-methods/setup-intent', { method: 'POST' }),
   setSubscriptionDefaultPaymentMethod: (id) => request('/subscriptions/payment-methods/' + id + '/default', { method: 'POST' }),
   deleteSubscriptionPaymentMethod:   (id)  => request('/subscriptions/payment-methods/' + id, { method: 'DELETE' }),
+  listSubscriptionInvoices:          ()    => request('/subscriptions/invoices'),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
 // Annonce/bandeau de la page de reservation publique

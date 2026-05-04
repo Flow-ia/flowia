@@ -516,6 +516,43 @@ router.post('/portal', authMiddleware, async (req, res) => {
   }
 });
 
+// ── GET /api/subscriptions/invoices ─────────────────────────────────────────
+// Liste les 12 dernières factures du customer. Inclut un PDF téléchargeable
+// et l'URL de la page Stripe hébergée pour consultation.
+router.get('/invoices', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      'SELECT stripe_customer_id FROM users WHERE id=$1', [userId]
+    );
+    if (!rows.length || !rows[0].stripe_customer_id) {
+      return res.json({ invoices: [] });
+    }
+    const stripe = getStripe();
+    const list = await stripe.invoices.list({
+      customer: rows[0].stripe_customer_id,
+      limit: 12,
+    });
+    res.json({
+      invoices: list.data.map(inv => ({
+        id:          inv.id,
+        number:      inv.number,
+        status:      inv.status,             // paid, open, void, draft, uncollectible
+        amount:      (inv.amount_paid || inv.amount_due || 0) / 100,
+        currency:    inv.currency,
+        created:     inv.created ? new Date(inv.created * 1000).toISOString() : null,
+        pdf:         inv.invoice_pdf,        // URL du PDF (auth via signed URL Stripe)
+        hosted_url:  inv.hosted_invoice_url, // page Stripe consultation
+        period_start: inv.period_start ? new Date(inv.period_start * 1000).toISOString() : null,
+        period_end:   inv.period_end ? new Date(inv.period_end * 1000).toISOString() : null,
+      })),
+    });
+  } catch (e) {
+    console.error('[SUB INVOICES ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors du chargement des factures' });
+  }
+});
+
 // ─── GESTION DES MOYENS DE PAIEMENT ─────────────────────────────────────────
 // Endpoints dédiés au namespace abonnement. Particularité vs /payments/sms/* :
 // le set-default met aussi à jour customer.invoice_settings.default_payment_method

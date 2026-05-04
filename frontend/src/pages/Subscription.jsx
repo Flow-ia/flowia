@@ -65,6 +65,80 @@ const PLANS = [
   },
 ];
 
+// Données structurées pour le rendu "subscribed user view" : prix numériques
+// + rank pour up/downgrade + listes de gains/pertes par transition.
+const PLAN_DEFS = {
+  decouverte: {
+    id: 'decouverte', name: 'Découverte',
+    monthly: 0, yearly: 0, annual: 0, rank: 0,
+  },
+  essentiel: {
+    id: 'essentiel', name: 'Essentiel',
+    monthly: 24, yearly: 20, annual: 240, rank: 1,
+  },
+  equipe: {
+    id: 'equipe', name: 'Équipe',
+    monthly: 49, yearly: 40.83, annual: 490, rank: 2,
+  },
+};
+
+// Listes de fonctionnalités gagnées par upgrade. Pour les pertes (downgrade),
+// on inverse les clés (essentiel→decouverte = lossesForDowngrade(essentiel)).
+const UPGRADE_GAINS = {
+  'decouverte→essentiel': [
+    'RDV illimités',
+    "Jusqu'à 5 employés (au lieu de 1)",
+    'SMS rappels et marketing',
+    'Programme fidélité',
+    'Programme parrainage',
+    'IA marketing',
+    'Caisse complète',
+    'Support prioritaire',
+  ],
+  'essentiel→equipe': [
+    'Employés illimités (au lieu de 5)',
+    'Multi-sites',
+    'Cadeau anniversaire automatique',
+    'IA avancée (vs standard)',
+    'API et exports avancés',
+    'Statistiques par employé et par site',
+    'Support dédié + SLA 99,9 %',
+  ],
+  'decouverte→equipe': [
+    'RDV illimités',
+    'Employés illimités',
+    'Multi-sites',
+    'SMS rappels et marketing',
+    'Programme fidélité',
+    'Programme parrainage',
+    'Cadeau anniversaire',
+    'IA avancée',
+    'Caisse complète',
+    'API et exports avancés',
+    'Statistiques par employé/site',
+    'Support dédié + SLA 99,9 %',
+  ],
+};
+
+function gainsForUpgrade(fromId, toId) {
+  return UPGRADE_GAINS[`${fromId}→${toId}`] || [];
+}
+function lossesForDowngrade(fromId, toId) {
+  // Symétrique : ce qu'on perd en X→Y = ce qu'on gagne en Y→X.
+  return UPGRADE_GAINS[`${toId}→${fromId}`] || [];
+}
+function nextPlanId(currentId) {
+  if (currentId === 'essentiel') return 'equipe';
+  return null; // equipe = pas d'upgrade dispo
+}
+function prevPaidPlanId(currentId) {
+  if (currentId === 'equipe') return 'essentiel';
+  return null; // essentiel = pas de plan payant inférieur
+}
+function formatPrice(n) {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+}
+
 export default function Subscription() {
   const { theme: t } = useTheme();
   const [toast, showToast] = useToast();
@@ -381,24 +455,28 @@ export default function Subscription() {
           </div>
         )}
 
-        {/* Toggle mensuel / annuel */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
-          <div style={{
-            display: 'inline-flex', padding: 4, borderRadius: 99,
-            background: t.cardAlt, border: `1px solid ${t.border}`,
-          }}>
-            <button onClick={() => setYearly(false)} style={toggleBtn(t, !yearly)}>Mensuel</button>
-            <button onClick={() => setYearly(true)}  style={toggleBtn(t, yearly)}>
-              Annuel
-              <span style={{
-                marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 99,
-                background: '#ecfdf5', color: '#10b981', fontWeight: 500,
-              }}>2 mois offerts</span>
-            </button>
+        {/* Toggle mensuel / annuel — uniquement pour free users (pour
+            comparer les plans). Les subscribed ont leur propre period card. */}
+        {!loading && !sub?.is_active && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+            <div style={{
+              display: 'inline-flex', padding: 4, borderRadius: 99,
+              background: t.cardAlt, border: `1px solid ${t.border}`,
+            }}>
+              <button onClick={() => setYearly(false)} style={toggleBtn(t, !yearly)}>Mensuel</button>
+              <button onClick={() => setYearly(true)}  style={toggleBtn(t, yearly)}>
+                Annuel
+                <span style={{
+                  marginLeft: 6, fontSize: 10, padding: '2px 6px', borderRadius: 99,
+                  background: '#ecfdf5', color: '#10b981', fontWeight: 500,
+                }}>2 mois offerts</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Cartes plans */}
+        {/* ─── VUE FREE USER ─── Grille des 3 plans complets pour comparer. */}
+        {!loading && !sub?.is_active && (
         <div style={{
           display: 'grid', gap: 16,
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -479,10 +557,26 @@ export default function Subscription() {
             );
           })}
         </div>
+        )}
 
-        <p style={{ fontSize: 11, color: t.muted, textAlign: 'center', marginTop: 4 }}>
-          {"Tarifs hors taxes. Paiement sécurisé par Stripe. Annulation à tout moment."}
-        </p>
+        {/* Note tarifs hors taxes (free users seulement). */}
+        {!loading && !sub?.is_active && (
+          <p style={{ fontSize: 11, color: t.muted, textAlign: 'center', marginTop: 4 }}>
+            {"Tarifs hors taxes. Paiement sécurisé par Stripe. Annulation à tout moment."}
+          </p>
+        )}
+
+        {/* ─── VUE SUBSCRIBED USER ─── Compact : plan actuel + upgrade /
+            downgrade ciblés avec gains/pertes explicites. */}
+        {!loading && sub?.is_active && (
+          <SubscribedPlanView
+            sub={sub} t={t} busyAction={busyAction}
+            onChangePeriod={(newPeriod) => handleChangePlan(sub.plan, newPeriod)}
+            onChangePlan={handleChangePlan}
+            onCancel={handleCancel}
+            onReactivate={handleReactivate}
+          />
+        )}
 
         {/* Section Moyens de paiement — visible uniquement si l'utilisateur
             a déjà un customer Stripe (i.e. au moins un essai/abo passé ou
@@ -491,16 +585,21 @@ export default function Subscription() {
           <PaymentMethodsSection theme={t} showToast={showToast}/>
         )}
 
-        {/* Lien discret vers le Customer Portal Stripe (factures, infos
-            de facturation, gestion des moyens de paiement avancés). */}
+        {/* Section Factures inline (Stripe API). */}
         {!loading && sub?.has_subscription && (
-          <p style={{ fontSize: 12, color: t.muted, textAlign: 'center', marginTop: 12 }}>
+          <InvoicesSection theme={t}/>
+        )}
+
+        {/* Lien discret de fallback vers le portail Stripe pour les rares
+            besoins non couverts inline (mise à jour adresse de facturation). */}
+        {!loading && sub?.has_subscription && (
+          <p style={{ fontSize: 11, color: t.muted, textAlign: 'center', marginTop: 4 }}>
             <button onClick={handlePortal} disabled={busyPortal}
                     style={{ background: 'none', border: 'none', padding: 0,
                              color: t.muted, textDecoration: 'underline',
                              cursor: busyPortal ? 'wait' : 'pointer',
-                             fontFamily: 'inherit', fontSize: 12 }}>
-              {busyPortal ? 'Ouverture…' : 'Voir mes factures et plus de réglages dans le portail Stripe →'}
+                             fontFamily: 'inherit', fontSize: 11 }}>
+              {busyPortal ? 'Ouverture…' : "Mettre à jour mon adresse de facturation"}
             </button>
           </p>
         )}
@@ -950,4 +1049,379 @@ function AddCardForm({ onSuccess, onCancel, theme: t, showToast }) {
       </div>
     </form>
   );
+}
+
+// ─── Vue compacte pour utilisateur abonné ──────────────────────────────────
+// Évite la grille 3 cartes. Affiche : plan actuel + carte upgrade ciblée +
+// carte downgrade payant (si applicable) + carte annulation vers gratuit.
+function SubscribedPlanView({ sub, t, busyAction, onChangePeriod, onChangePlan, onCancel, onReactivate }) {
+  const planDef    = PLAN_DEFS[sub.plan];
+  if (!planDef) return null;
+
+  const isYearly       = sub.period === 'yearly';
+  const otherPeriod    = isYearly ? 'monthly' : 'yearly';
+  const annualSavings  = (planDef.monthly * 12) - planDef.annual; // ex: 288-240=48
+  const upgradeId      = nextPlanId(sub.plan);
+  const downgradeId    = prevPaidPlanId(sub.plan);
+  const isCanceling    = !!sub.cancel_at_period_end;
+  const periodEndStr   = sub.current_period_end
+    ? new Date(sub.current_period_end).toLocaleDateString('fr-FR', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      })
+    : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* ── Plan actuel ────────────────────────────────────────────────── */}
+      <section style={{
+        padding: 22, borderRadius: 12,
+        background: t.card, border: `1px solid ${t.border}`,
+        boxShadow: t.shadowMd,
+      }}>
+        <p style={{ fontSize: 11, color: t.muted, margin: 0, marginBottom: 4,
+                    textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+          Plan actuel
+        </p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+          <h2 style={{ fontSize: 22, fontWeight: 500, color: t.text, margin: 0,
+                       letterSpacing: '-0.01em' }}>
+            {planDef.name}
+          </h2>
+          <span style={{ fontSize: 13, color: t.muted }}>
+            · {isYearly ? 'Annuel' : 'Mensuel'}
+          </span>
+          {sub.status === 'trialing' && (
+            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99,
+                           background: '#ecfdf5', color: '#10b981', fontWeight: 500 }}>
+              Essai gratuit
+            </span>
+          )}
+        </div>
+        <p style={{ fontSize: 14, color: t.text, margin: 0, marginBottom: 4 }}>
+          <strong style={{ fontWeight: 500 }}>
+            {isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`}
+          </strong>
+          {isYearly && (
+            <span style={{ fontSize: 13, color: t.muted, marginLeft: 8 }}>
+              {`(soit ${formatPrice(planDef.yearly)} €/mois)`}
+            </span>
+          )}
+        </p>
+        {periodEndStr && (
+          <p style={{ fontSize: 12, color: t.muted, margin: '4px 0 0' }}>
+            {isCanceling
+              ? `Accès maintenu jusqu'au ${periodEndStr}, puis bascule sur Découverte (gratuit).`
+              : `Prochain renouvellement le ${periodEndStr}.`}
+          </p>
+        )}
+
+        {/* Actions inline sur le plan actuel */}
+        {!isCanceling && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+            {!isYearly && annualSavings > 0 && (
+              <button onClick={() => onChangePeriod('yearly')}
+                      disabled={busyAction === 'change'}
+                      style={btnPrimary(t, busyAction === 'change')}>
+                {busyAction === 'change'
+                  ? 'Changement…'
+                  : `Passer en annuel · économisez ${annualSavings} €`}
+              </button>
+            )}
+            {isYearly && (
+              <button onClick={() => onChangePeriod('monthly')}
+                      disabled={busyAction === 'change'}
+                      style={btnGhost(t, busyAction === 'change')}>
+                {busyAction === 'change' ? 'Changement…' : 'Repasser en mensuel'}
+              </button>
+            )}
+          </div>
+        )}
+        {isCanceling && (
+          <button onClick={onReactivate} disabled={busyAction === 'reactivate'}
+                  style={{ ...btnPrimary(t, busyAction === 'reactivate'), marginTop: 16, width: 'auto' }}>
+            {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver mon abonnement'}
+          </button>
+        )}
+      </section>
+
+      {/* ── Carte Upgrade (essentiel → équipe) ─────────────────────────── */}
+      {upgradeId && !isCanceling && (
+        <UpgradeCard fromId={sub.plan} toId={upgradeId} period={sub.period}
+                     t={t} busyAction={busyAction}
+                     onConfirm={() => onChangePlan(upgradeId, sub.period)}/>
+      )}
+
+      {/* ── Carte Downgrade plan payant (équipe → essentiel) ──────────── */}
+      {downgradeId && !isCanceling && (
+        <DowngradeCard fromId={sub.plan} toId={downgradeId} period={sub.period}
+                       t={t} busyAction={busyAction}
+                       onConfirm={() => onChangePlan(downgradeId, sub.period)}/>
+      )}
+
+      {/* ── Carte Annulation totale vers gratuit ───────────────────────── */}
+      {!isCanceling && (
+        <CancelToFreeCard fromId={sub.plan} t={t} busyAction={busyAction} onCancel={onCancel}/>
+      )}
+    </div>
+  );
+}
+
+function UpgradeCard({ fromId, toId, period, t, busyAction, onConfirm }) {
+  const fromDef = PLAN_DEFS[fromId];
+  const toDef   = PLAN_DEFS[toId];
+  const fromPrice = period === 'yearly' ? fromDef.yearly : fromDef.monthly;
+  const toPrice   = period === 'yearly' ? toDef.yearly   : toDef.monthly;
+  const diff      = Math.round((toPrice - fromPrice) * 100) / 100;
+  const gains     = gainsForUpgrade(fromId, toId);
+  const busy      = busyAction === 'change';
+
+  return (
+    <section style={{
+      padding: 22, borderRadius: 12,
+      background: t.card, border: `1px solid ${t.text}`,
+      boxShadow: t.shadowMd, position: 'relative',
+    }}>
+      <span style={{
+        position: 'absolute', top: -10, left: 20,
+        fontSize: 10, fontWeight: 500, padding: '3px 9px', borderRadius: 99,
+        background: t.text, color: t.canvas, letterSpacing: 0.5,
+        textTransform: 'uppercase',
+      }}>Upgrade recommandé</span>
+      <h3 style={{ fontSize: 17, fontWeight: 500, color: t.text, margin: '4px 0 4px',
+                   letterSpacing: '-0.01em' }}>
+        {`Passer à ${toDef.name}`}
+      </h3>
+      <p style={{ fontSize: 13, color: t.muted, margin: '0 0 14px' }}>
+        {`+${formatPrice(diff)} €/mois · soit ${formatPrice(toPrice)} €/mois`}
+        {period === 'yearly' && ` (${toDef.annual} €/an)`}
+      </p>
+      <p style={{ fontSize: 13, color: t.text, margin: '0 0 8px', fontWeight: 500 }}>
+        Vous gagnerez :
+      </p>
+      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 18px',
+                   display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {gains.map(f => (
+          <li key={f} style={{ fontSize: 13, color: t.textSub,
+                               paddingLeft: 22, position: 'relative', lineHeight: 1.5 }}>
+            <span style={{ position: 'absolute', left: 0, top: 2,
+                           width: 14, height: 14, borderRadius: 7,
+                           background: '#ecfdf5', color: '#10b981',
+                           display: 'inline-flex', alignItems: 'center',
+                           justifyContent: 'center', fontSize: 10, fontWeight: 600 }}>
+              {"+"}
+            </span>
+            {f}
+          </li>
+        ))}
+      </ul>
+      <button onClick={onConfirm} disabled={busy} style={btnPrimary(t, busy)}>
+        {busy ? 'Changement…' : `Passer à ${toDef.name}`}
+      </button>
+      <p style={{ fontSize: 11, color: t.muted, margin: '10px 0 0', textAlign: 'center' }}>
+        {"Différence facturée immédiatement au prorata. Effet immédiat."}
+      </p>
+    </section>
+  );
+}
+
+function DowngradeCard({ fromId, toId, period, t, busyAction, onConfirm }) {
+  const fromDef = PLAN_DEFS[fromId];
+  const toDef   = PLAN_DEFS[toId];
+  const fromPrice = period === 'yearly' ? fromDef.yearly : fromDef.monthly;
+  const toPrice   = period === 'yearly' ? toDef.yearly   : toDef.monthly;
+  const savings   = Math.round((fromPrice - toPrice) * 100) / 100;
+  const losses    = lossesForDowngrade(fromId, toId);
+  const busy      = busyAction === 'change';
+
+  return (
+    <section style={{
+      padding: 22, borderRadius: 12,
+      background: t.card, border: `1px solid ${t.border}`,
+      boxShadow: t.shadowSm,
+    }}>
+      <h3 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: '0 0 4px' }}>
+        {`Repasser à ${toDef.name}`}
+      </h3>
+      <p style={{ fontSize: 12, color: t.muted, margin: '0 0 14px' }}>
+        {`Économisez ${formatPrice(savings)} €/mois — ${formatPrice(toPrice)} €/mois`}
+      </p>
+      <div style={{
+        padding: '10px 12px', borderRadius: 8,
+        background: '#fffbeb', border: '1px solid #fde68a',
+        marginBottom: 14,
+      }}>
+        <p style={{ fontSize: 12, color: '#92400e', fontWeight: 500, margin: '0 0 6px' }}>
+          {"Vous perdrez :"}
+        </p>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0,
+                     display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {losses.map(f => (
+            <li key={f} style={{ fontSize: 12, color: '#78350f', lineHeight: 1.5 }}>
+              {"− "}{f}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <button onClick={onConfirm} disabled={busy} style={btnGhost(t, busy)}>
+        {busy ? 'Changement…' : `Repasser à ${toDef.name}`}
+      </button>
+      <p style={{ fontSize: 11, color: t.muted, margin: '10px 0 0', textAlign: 'center' }}>
+        {"Crédit appliqué sur votre prochaine facture. Effet immédiat."}
+      </p>
+    </section>
+  );
+}
+
+function CancelToFreeCard({ fromId, t, busyAction, onCancel }) {
+  const losses = lossesForDowngrade(fromId, 'decouverte');
+  const busy   = busyAction === 'cancel';
+
+  return (
+    <section style={{
+      padding: 22, borderRadius: 12,
+      background: t.card, border: `1px solid ${t.border}`,
+      boxShadow: t.shadowSm,
+    }}>
+      <h3 style={{ fontSize: 14, fontWeight: 500, color: t.muted, margin: '0 0 4px' }}>
+        {"Annuler mon abonnement"}
+      </h3>
+      <p style={{ fontSize: 12, color: t.muted, margin: '0 0 12px', lineHeight: 1.5 }}>
+        {"Vous repasserez sur le plan Découverte (gratuit, fonctionnalités limitées) à la fin de la période en cours. Aucun remboursement n'est dû — vous gardez l'accès payant jusqu'à cette date."}
+      </p>
+      <details style={{ marginBottom: 12 }}>
+        <summary style={{ fontSize: 12, color: t.textSub, cursor: 'pointer', userSelect: 'none' }}>
+          {"Voir tout ce que je vais perdre"}
+        </summary>
+        <ul style={{ listStyle: 'none', padding: '8px 0 0', margin: 0,
+                     display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {losses.map(f => (
+            <li key={f} style={{ fontSize: 12, color: t.textSub, lineHeight: 1.5 }}>
+              {"− "}{f}
+            </li>
+          ))}
+        </ul>
+      </details>
+      <button onClick={onCancel} disabled={busy}
+              style={{ padding: '8px 14px', fontSize: 12, fontWeight: 500,
+                       background: 'transparent', color: '#991b1b',
+                       border: '1px solid #fecaca', borderRadius: 8,
+                       cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+        {busy ? 'Annulation…' : "Annuler mon abonnement"}
+      </button>
+    </section>
+  );
+}
+
+// ─── Section Factures inline ────────────────────────────────────────────────
+// Liste les 12 dernières factures du customer Stripe.
+function InvoicesSection({ theme: t }) {
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listSubscriptionInvoices()
+      .then(data => { if (!cancelled) setInvoices(data?.invoices || []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <section style={{
+      padding: 22, borderRadius: 12,
+      background: t.card, border: `1px solid ${t.border}`,
+      boxShadow: t.shadowSm,
+    }}>
+      <h2 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: '0 0 4px' }}>
+        Historique des factures
+      </h2>
+      <p style={{ fontSize: 12, color: t.muted, margin: '0 0 14px' }}>
+        {"Téléchargez vos factures officielles pour votre comptabilité."}
+      </p>
+
+      {loading ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Chargement…</p>
+      ) : invoices.length === 0 ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0, lineHeight: 1.5 }}>
+          {"Aucune facture pour le moment. La première sera émise au prochain renouvellement."}
+        </p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0,
+                     display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {invoices.map(inv => (
+            <li key={inv.id} style={{
+              padding: '10px 12px', borderRadius: 8,
+              border: `1px solid ${t.border}`,
+              background: t.canvas,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: t.muted, fontFamily: 'monospace',
+                               minWidth: 80 }}>
+                  {inv.number || inv.id.slice(-8)}
+                </span>
+                <span style={{ fontSize: 13, color: t.text }}>
+                  {inv.created
+                    ? new Date(inv.created).toLocaleDateString('fr-FR', {
+                        day: 'numeric', month: 'short', year: 'numeric'
+                      })
+                    : '—'}
+                </span>
+                <span style={{ fontSize: 13, color: t.text, fontWeight: 500 }}>
+                  {invoiceAmount(inv)}
+                </span>
+                <span style={invoiceStatusStyle(inv.status)}>
+                  {invoiceStatusLabel(inv.status)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {inv.pdf && (
+                  <a href={inv.pdf} target="_blank" rel="noopener noreferrer"
+                     style={{ fontSize: 12, color: t.text, textDecoration: 'none',
+                              padding: '5px 10px', borderRadius: 6,
+                              border: `1px solid ${t.border}`, fontFamily: 'inherit' }}>
+                    PDF
+                  </a>
+                )}
+                {inv.hosted_url && (
+                  <a href={inv.hosted_url} target="_blank" rel="noopener noreferrer"
+                     style={{ fontSize: 12, color: t.muted, textDecoration: 'none',
+                              padding: '5px 10px', borderRadius: 6,
+                              border: `1px solid ${t.border}`, fontFamily: 'inherit' }}>
+                    Voir
+                  </a>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function invoiceAmount(inv) {
+  if (typeof inv.amount !== 'number') return '—';
+  const cur = (inv.currency || 'eur').toUpperCase();
+  if (cur === 'EUR') return `${formatPrice(inv.amount)} €`;
+  return `${formatPrice(inv.amount)} ${cur}`;
+}
+function invoiceStatusLabel(s) {
+  if (s === 'paid')           return 'Payée';
+  if (s === 'open')           return 'En attente';
+  if (s === 'void')           return 'Annulée';
+  if (s === 'draft')          return 'Brouillon';
+  if (s === 'uncollectible')  return 'Irrecouvrable';
+  return s || '—';
+}
+function invoiceStatusStyle(s) {
+  const base = { fontSize: 11, padding: '2px 8px', borderRadius: 99, fontWeight: 500 };
+  if (s === 'paid')          return { ...base, background: '#ecfdf5', color: '#10b981' };
+  if (s === 'open')          return { ...base, background: '#fffbeb', color: '#92400e' };
+  if (s === 'uncollectible' || s === 'void')
+                              return { ...base, background: '#fef2f2', color: '#991b1b' };
+  return { ...base, background: 'rgba(0,0,0,0.06)', color: '#6B7280' };
 }
