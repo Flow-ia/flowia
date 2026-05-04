@@ -340,7 +340,8 @@ export const api = {
   createSubscriptionPmSetupIntent:   ()    => request('/subscriptions/payment-methods/setup-intent', { method: 'POST' }),
   setSubscriptionDefaultPaymentMethod: (id) => request('/subscriptions/payment-methods/' + id + '/default', { method: 'POST' }),
   deleteSubscriptionPaymentMethod:   (id)  => request('/subscriptions/payment-methods/' + id, { method: 'DELETE' }),
-  listSubscriptionInvoices:          ()    => request('/subscriptions/invoices'),
+  listSubscriptionInvoices:          (startingAfter) => request('/subscriptions/invoices'
+                                       + (startingAfter ? '?starting_after=' + encodeURIComponent(startingAfter) : '')),
   getSubscriptionBillingInfo:        ()    => request('/subscriptions/billing-info'),
   updateSubscriptionBillingInfo:     (b)   => request('/subscriptions/billing-info', { method: 'PUT', body: JSON.stringify(b) }),
 };

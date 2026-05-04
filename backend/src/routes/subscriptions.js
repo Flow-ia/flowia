@@ -29,6 +29,68 @@ function extractSubDates(stripeSub) {
   };
 }
 
+// ── Anti-fraude / anti-spam sur les changements d'abonnement ───────────────
+// 2 garde-fous complementaires :
+// - COOLDOWN 60s : empeche le clic rafale (UX + protege webhooks Stripe).
+// - CAP QUOTIDIEN 5 : empeche l'exploit cycliste upgrade/downgrade pour
+//   abuser des proration ou stresser le systeme.
+// La fenetre de 24h glisse a partir de subscription_changes_window_start.
+const CHANGE_COOLDOWN_MS  = 60_000;          // 60 secondes
+const CHANGE_DAILY_CAP    = 5;               // max 5 actions par 24h
+const CHANGE_WINDOW_MS    = 24 * 3600_000;   // fenetre de 24h
+
+async function assertChangeRateLimit(userId) {
+  const { rows } = await pool.query(
+    `SELECT subscription_last_change_at, subscription_changes_count_24h,
+            subscription_changes_window_start
+     FROM users WHERE id=$1`, [userId]
+  );
+  if (!rows.length) throw new Error('User introuvable');
+  const r = rows[0];
+  const now = Date.now();
+
+  // 1) Cooldown 60 secondes entre 2 actions consecutives.
+  if (r.subscription_last_change_at) {
+    const elapsed = now - new Date(r.subscription_last_change_at).getTime();
+    if (elapsed < CHANGE_COOLDOWN_MS) {
+      const wait = Math.ceil((CHANGE_COOLDOWN_MS - elapsed) / 1000);
+      const err = new Error(`Veuillez patienter ${wait} seconde${wait > 1 ? 's' : ''} avant un nouveau changement.`);
+      err.statusCode = 429;
+      err.retryAfter = wait;
+      throw err;
+    }
+  }
+
+  // 2) Cap quotidien glissant (5 actions / 24h).
+  let windowStart = r.subscription_changes_window_start
+                    ? new Date(r.subscription_changes_window_start).getTime() : 0;
+  let count       = r.subscription_changes_count_24h || 0;
+  // Si la fenetre est expiree, on la reset.
+  if (!windowStart || (now - windowStart) > CHANGE_WINDOW_MS) {
+    windowStart = now;
+    count = 0;
+  }
+  if (count >= CHANGE_DAILY_CAP) {
+    const err = new Error(`Limite atteinte : maximum ${CHANGE_DAILY_CAP} changements d'abonnement par 24 heures. Réessayez demain.`);
+    err.statusCode = 429;
+    throw err;
+  }
+
+  // OK -> on retourne les valeurs a persister apres succes de l'action.
+  return { newWindowStart: new Date(windowStart), newCount: count + 1 };
+}
+
+async function recordChangeCommit(userId, { newWindowStart, newCount }) {
+  await pool.query(
+    `UPDATE users SET
+       subscription_last_change_at       = NOW(),
+       subscription_changes_window_start = $2,
+       subscription_changes_count_24h    = $3
+     WHERE id = $1`,
+    [userId, newWindowStart, newCount]
+  );
+}
+
 function getFrontendUrl() {
   return (process.env.FRONTEND_URL || 'http://localhost:3000')
     .split(',')[0].replace(/\/$/, '');
@@ -231,6 +293,16 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.post('/cancel', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
+    // Anti-fraude : cooldown + cap quotidien.
+    let rate;
+    try { rate = await assertChangeRateLimit(userId); }
+    catch (e) {
+      if (e.statusCode === 429) {
+        return res.status(429).json({ error: e.message, retry_after_seconds: e.retryAfter });
+      }
+      throw e;
+    }
+
     const { rows } = await pool.query(
       `SELECT stripe_subscription_id, subscription_status
        FROM users WHERE id=$1`, [userId]
@@ -259,6 +331,8 @@ router.post('/cancel', authMiddleware, async (req, res) => {
       [userId, dates.periodEnd]
     );
 
+    await recordChangeCommit(userId, rate);
+
     res.json({
       ok: true,
       cancel_at_period_end: true,
@@ -276,6 +350,15 @@ router.post('/cancel', authMiddleware, async (req, res) => {
 router.post('/reactivate', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
+    let rate;
+    try { rate = await assertChangeRateLimit(userId); }
+    catch (e) {
+      if (e.statusCode === 429) {
+        return res.status(429).json({ error: e.message, retry_after_seconds: e.retryAfter });
+      }
+      throw e;
+    }
+
     const { rows } = await pool.query(
       `SELECT stripe_subscription_id, subscription_status,
               subscription_cancel_at_period_end
@@ -297,6 +380,7 @@ router.post('/reactivate', authMiddleware, async (req, res) => {
       `UPDATE users SET subscription_cancel_at_period_end = FALSE WHERE id = $1`,
       [userId]
     );
+    await recordChangeCommit(userId, rate);
 
     res.json({ ok: true, cancel_at_period_end: false });
   } catch (e) {
@@ -393,6 +477,15 @@ router.post('/change-plan', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Période invalide' });
     }
 
+    let rate;
+    try { rate = await assertChangeRateLimit(userId); }
+    catch (e) {
+      if (e.statusCode === 429) {
+        return res.status(429).json({ error: e.message, retry_after_seconds: e.retryAfter });
+      }
+      throw e;
+    }
+
     const newPriceId = getPriceId(plan, period);
     if (!newPriceId) {
       return res.status(500).json({ error: 'Configuration Stripe incomplète' });
@@ -428,6 +521,7 @@ router.post('/change-plan', authMiddleware, async (req, res) => {
       items: [{ id: itemId, price: newPriceId }],
       proration_behavior: 'create_prorations',
     });
+    await recordChangeCommit(userId, rate);
 
     res.json({ ok: true, plan, period });
   } catch (e) {
@@ -780,24 +874,30 @@ router.get('/invoices', authMiddleware, async (req, res) => {
     if (!rows.length || !rows[0].stripe_customer_id) {
       return res.json({ invoices: [] });
     }
+    // Pagination cursor-based (Stripe natif). Limite max 5 par page pour
+    // ne pas surcharger ni le frontend ni les appels Stripe API.
     const stripe = getStripe();
-    const list = await stripe.invoices.list({
+    const params = {
       customer: rows[0].stripe_customer_id,
-      limit: 12,
-    });
+      limit:    Math.min(parseInt(req.query.limit, 10) || 5, 10),
+    };
+    if (req.query.starting_after) params.starting_after = req.query.starting_after;
+    const list = await stripe.invoices.list(params);
     res.json({
       invoices: list.data.map(inv => ({
         id:          inv.id,
         number:      inv.number,
-        status:      inv.status,             // paid, open, void, draft, uncollectible
+        status:      inv.status,
         amount:      (inv.amount_paid || inv.amount_due || 0) / 100,
         currency:    inv.currency,
         created:     inv.created ? new Date(inv.created * 1000).toISOString() : null,
-        pdf:         inv.invoice_pdf,        // URL du PDF (auth via signed URL Stripe)
-        hosted_url:  inv.hosted_invoice_url, // page Stripe consultation
+        pdf:         inv.invoice_pdf,
+        hosted_url:  inv.hosted_invoice_url,
         period_start: inv.period_start ? new Date(inv.period_start * 1000).toISOString() : null,
         period_end:   inv.period_end ? new Date(inv.period_end * 1000).toISOString() : null,
       })),
+      has_more: !!list.has_more,
+      last_id:  list.data.length ? list.data[list.data.length - 1].id : null,
     });
   } catch (e) {
     console.error('[SUB INVOICES ERR]', e.message);

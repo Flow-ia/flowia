@@ -1523,6 +1523,11 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_trial_ends_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE`);
+  // Anti-fraude / anti-spam : tracker la derniere modification d'abonnement
+  // pour appliquer un cooldown 60s + un cap quotidien (max 5/jour).
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_last_change_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_changes_count_24h INT NOT NULL DEFAULT 0`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_changes_window_start TIMESTAMPTZ`);
   await runMigration(`
     DO $$
     BEGIN

@@ -189,7 +189,7 @@ export default function Subscription() {
         const { url } = await api.createSubscriptionCheckout({ plan, period });
         if (url) window.location.href = url;
       } catch (e) {
-        showToast(e?.data?.error || 'Erreur lors de la création de la session.', 'error');
+        showToast(e?.message || 'Erreur lors de la création de la session.', 'error');
         setBusyPlan(null);
       }
     }, 400);
@@ -235,7 +235,7 @@ export default function Subscription() {
       const { url } = await api.createSubscriptionCheckout({ plan: planId, period });
       if (url) window.location.href = url;
     } catch (e) {
-      const msg = e?.data?.error || 'Erreur lors de la création de la session.';
+      const msg = e?.message || 'Erreur lors de la création de la session.';
       showToast(msg, 'error');
       setBusyPlan(null);
     }
@@ -314,7 +314,7 @@ export default function Subscription() {
             : 'Abonnement annulé.', 'ok');
           await refreshSub();
         } catch (e) {
-          showToast(e?.data?.error || "Erreur lors de l'annulation.", 'error');
+          showToast(e?.message || "Erreur lors de l'annulation.", 'error');
         } finally {
           setBusyAction(null);
         }
@@ -336,7 +336,7 @@ export default function Subscription() {
         : 'Abonnement réactivé.', 'ok');
       await refreshSub();
     } catch (e) {
-      showToast(e?.data?.error || 'Erreur lors de la réactivation.', 'error');
+      showToast(e?.message || 'Erreur lors de la réactivation.', 'error');
     } finally {
       setBusyAction(null);
     }
@@ -439,7 +439,7 @@ export default function Subscription() {
           showToast('Plan mis à jour.', 'ok');
           await refreshSub();
         } catch (e) {
-          showToast(e?.data?.error || 'Erreur changement de plan.', 'error');
+          showToast(e?.message || 'Erreur changement de plan.', 'error');
         } finally {
           setBusyAction(null);
         }
@@ -462,6 +462,10 @@ export default function Subscription() {
           title="Abonnement"
           subtitle="Choisissez le plan qui correspond à votre activité."
         />
+
+        {/* Squelette de chargement (avant le 1er /me). Disparait des que les
+            donnees sont la, le contenu reel prend le relais. */}
+        {loading && <PageSkeleton t={t}/>}
 
         {/* Bandeau past_due */}
         {!loading && sub?.is_past_due && (
@@ -779,6 +783,93 @@ function toggleBtn(t, active) {
   };
 }
 
+// ─── Skeleton placeholder pour chargement initial ──────────────────────────
+// Statique (pas d'animation CSS pour eviter d'injecter du @keyframes global).
+// Les chargements sont generalement courts (<1s), un placeholder gris suffit.
+function Skeleton({ width = '100%', height = 16, t, style = {} }) {
+  return (
+    <div style={{
+      width, height, borderRadius: 4,
+      background: t.cardAlt,
+      ...style,
+    }}/>
+  );
+}
+
+// Squelette de la page complete (avant le 1er fetch /me).
+function PageSkeleton({ t }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Plan actuel */}
+      <section style={{
+        padding: 22, borderRadius: 12,
+        background: t.card, border: `1px solid ${t.border}`,
+        boxShadow: t.shadowSm,
+      }}>
+        <Skeleton width={120} height={12} t={t} style={{ marginBottom: 10 }}/>
+        <Skeleton width={180} height={22} t={t} style={{ marginBottom: 10 }}/>
+        <Skeleton width={140} height={14} t={t} style={{ marginBottom: 16 }}/>
+        <Skeleton width="100%" height={64} t={t} style={{ borderRadius: 8 }}/>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          <Skeleton width={140} height={36} t={t} style={{ borderRadius: 8 }}/>
+          <Skeleton width={120} height={36} t={t} style={{ borderRadius: 8 }}/>
+        </div>
+      </section>
+      {/* 3 sections collapsibles */}
+      {[1, 2, 3].map(i => (
+        <section key={i} style={{
+          padding: '14px 18px', borderRadius: 12,
+          background: t.card, border: `1px solid ${t.border}`,
+          boxShadow: t.shadowSm,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <Skeleton width={180} height={14} t={t}/>
+          <Skeleton width={14} height={14} t={t}/>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+// Section accordion repliable (utilise <details> natif HTML pour
+// l'accessibilite + zero JS de toggle). Peut etre ouvert par defaut.
+function CollapsibleSection({ title, t, defaultOpen = false, children, badge }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section style={{
+      borderRadius: 12,
+      background: t.card, border: `1px solid ${t.border}`,
+      boxShadow: t.shadowSm, overflow: 'hidden',
+    }}>
+      <button onClick={() => setOpen(!open)}
+              style={{
+                width: '100%', background: 'transparent', border: 'none',
+                padding: '14px 18px', cursor: 'pointer', textAlign: 'left',
+                fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 12,
+              }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 500, color: t.text }}>{title}</span>
+          {badge}
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             style={{ transition: 'transform 0.2s', flexShrink: 0,
+                      transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+          <path d="M9 18l6-6-6-6" stroke={t.muted} strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{ padding: '0 18px 18px', borderTop: `1px solid ${t.separator}`,
+                      paddingTop: 16 }}>
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Section Moyens de paiement ──────────────────────────────────────────────
 // Liste les cartes du customer + actions (ajouter, définir par défaut, supprimer).
 // Prop `embedded` : true = pas de card englobante (utilisé dans un Modal).
@@ -808,7 +899,7 @@ function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
       showToast('Carte par défaut mise à jour.', 'ok');
       await reload();
     } catch (e) {
-      showToast(e?.data?.error || 'Erreur', 'error');
+      showToast(e?.message || 'Erreur', 'error');
     } finally {
       setBusy(null);
     }
@@ -822,7 +913,7 @@ function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
       showToast('Carte supprimée.', 'ok');
       await reload();
     } catch (e) {
-      showToast(e?.data?.error || 'Erreur lors de la suppression.', 'error');
+      showToast(e?.message || 'Erreur lors de la suppression.', 'error');
     } finally {
       setBusy(null);
     }
@@ -1191,16 +1282,22 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
         </div>
       </FlatSection>
 
-      {/* ── Section 2 : Modes de paiement ────────────────────────────── */}
+      {/* ── Section 2 : Modes de paiement (collapsible) ──────────────── */}
       <div id="payment-methods-section">
-        <PaymentMethodsSection theme={t} showToast={showToast}/>
+        <CollapsibleSection title="Modes de paiement" t={t} defaultOpen={false}>
+          <PaymentMethodsSection theme={t} showToast={showToast} embedded/>
+        </CollapsibleSection>
       </div>
 
-      {/* ── Section 3 : Coordonnées de facturation ───────────────────── */}
-      <BillingDetailsSection theme={t} showToast={showToast}/>
+      {/* ── Section 3 : Coordonnées de facturation (collapsible) ──────── */}
+      <CollapsibleSection title="Coordonnées de facturation" t={t} defaultOpen={false}>
+        <BillingDetailsSection theme={t} showToast={showToast} embedded/>
+      </CollapsibleSection>
 
-      {/* ── Section 4 : Historique de facturation ────────────────────── */}
-      <InvoicesSection theme={t}/>
+      {/* ── Section 4 : Historique de facturation (collapsible) ──────── */}
+      <CollapsibleSection title="Historique de facturation" t={t} defaultOpen={false}>
+        <InvoicesSection theme={t} embedded/>
+      </CollapsibleSection>
 
       {/* ── Modal Changer de plan ──────────────────────────────────────── */}
       <Modal open={planModalOpen} onClose={() => setPlanModalOpen(false)}
@@ -1639,7 +1736,7 @@ function CancelToFreeCard({ fromId, t, busyAction, onCancel }) {
 // ─── Section Coordonnées de facturation (édition inline) ───────────────────
 // Lit/écrit Stripe customer (name, email, phone, address). Aucune redirection
 // vers le portail Stripe pour cette gestion.
-function BillingDetailsSection({ theme: t, showToast }) {
+function BillingDetailsSection({ theme: t, showToast, embedded = false }) {
   const [billing, setBilling]         = useState(null);
   const [fromProfile, setFromProfile] = useState(false);
   const [loading, setLoading]         = useState(true);
@@ -1710,15 +1807,19 @@ function BillingDetailsSection({ theme: t, showToast }) {
     marginBottom: 4, fontWeight: 500,
   };
 
-  return (
-    <FlatSection title="Coordonnées de facturation" t={t}
-                 right={
-                   !editing && !loading && billing ? (
-                     <button onClick={startEdit} style={linkBtn(t)}>Modifier</button>
-                   ) : null
-                 }>
+  // Bouton Modifier en haut a droite si embedded (sans wrapper FlatSection).
+  const editButton = (!editing && !loading && billing) ? (
+    <button onClick={startEdit} style={linkBtn(t)}>Modifier</button>
+  ) : null;
+
+  const innerContent = (
+    <>
       {loading ? (
-        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Chargement…</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Skeleton width="60%" height={14} t={t}/>
+          <Skeleton width="80%" height={14} t={t}/>
+          <Skeleton width="50%" height={14} t={t}/>
+        </div>
       ) : !billing ? (
         <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>
           {"Aucune information de facturation. Souscrivez d'abord à un plan."}
@@ -1816,6 +1917,25 @@ function BillingDetailsSection({ theme: t, showToast }) {
           </div>
         </form>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div>
+        {editButton && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            {editButton}
+          </div>
+        )}
+        {innerContent}
+      </div>
+    );
+  }
+
+  return (
+    <FlatSection title="Coordonnées de facturation" t={t} right={editButton}>
+      {innerContent}
     </FlatSection>
   );
 }
@@ -1826,15 +1946,38 @@ function BillingDetailsSection({ theme: t, showToast }) {
 function InvoicesSection({ theme: t, embedded = false }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [hasMore, setHasMore]   = useState(false);
+  const [lastId, setLastId]     = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     api.listSubscriptionInvoices()
-      .then(data => { if (!cancelled) setInvoices(data?.invoices || []); })
+      .then(data => {
+        if (cancelled) return;
+        setInvoices(data?.invoices || []);
+        setHasMore(!!data?.has_more);
+        setLastId(data?.last_id || null);
+      })
       .catch(() => {})
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const loadMore = async () => {
+    if (!lastId || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await api.listSubscriptionInvoices(lastId);
+      setInvoices(prev => [...prev, ...(data?.invoices || [])]);
+      setHasMore(!!data?.has_more);
+      setLastId(data?.last_id || null);
+    } catch (e) {
+      console.error('[Invoices] loadMore', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const Wrapper      = embedded ? 'div' : 'section';
   const wrapperStyle = embedded
@@ -1857,7 +2000,11 @@ function InvoicesSection({ theme: t, embedded = false }) {
       </p>
 
       {loading ? (
-        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Chargement…</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} height={42} t={t}/>
+          ))}
+        </div>
       ) : invoices.length === 0 ? (
         <p style={{ fontSize: 13, color: t.muted, margin: 0, lineHeight: 1.5 }}>
           {"Aucune facture pour le moment. La première sera émise au prochain renouvellement."}
@@ -1913,6 +2060,18 @@ function InvoicesSection({ theme: t, embedded = false }) {
             </li>
           ))}
         </ul>
+      )}
+      {hasMore && !loading && (
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+          <button onClick={loadMore} disabled={loadingMore}
+                  style={{ padding: '8px 16px', fontSize: 12, fontWeight: 500,
+                           background: 'transparent', color: t.text,
+                           border: `1px solid ${t.border}`, borderRadius: 8,
+                           cursor: loadingMore ? 'wait' : 'pointer',
+                           fontFamily: 'inherit' }}>
+            {loadingMore ? 'Chargement…' : 'Voir les 5 suivantes'}
+          </button>
+        </div>
       )}
     </Wrapper>
   );
