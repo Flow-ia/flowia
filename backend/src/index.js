@@ -301,6 +301,12 @@ function startServer() {
   app.use(/^\/api\/employee-pins\/[^/]+\/verify$/, employeePinVerifyLimiter);
   app.use('/api/payments',      apiLimiter,  require('./routes/payments'));
 
+  // Abonnement plateforme FlowIA (Stripe Billing) — checkout/portail/me.
+  // Webhook /api/subscriptions/webhook ajouté en commit 3 (raw body).
+  app.use('/api/subscriptions/checkout', paymentsIntentLimiter);
+  app.use('/api/subscriptions/portal',   paymentsIntentLimiter);
+  app.use('/api/subscriptions', apiLimiter, require('./routes/subscriptions'));
+
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
     require('./routes/notifications');
   app.use('/api/notifications',  notifLimiter, notifRouter);
