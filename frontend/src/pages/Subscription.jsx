@@ -1131,16 +1131,14 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
             </span>
           )}
         </p>
-        {periodEndStr && (
-          <p style={{ fontSize: 12, color: t.muted, margin: '0 0 14px' }}>
-            {isCanceling
-              ? `Accès maintenu jusqu'au ${periodEndStr}.`
-              : `Prochain prélèvement le ${periodEndStr}.`}
-          </p>
-        )}
+
+        {/* Bloc infos contextuel : adapte le message a la situation
+            (essai, prochaine facturation, annulation programmee, paiement
+            en echec) avec dates explicites + nombre de jours restants. */}
+        <StatusInfoBox sub={sub} planDef={planDef} t={t}/>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
           {isCanceling ? (
             <button onClick={onReactivate} disabled={busyAction === 'reactivate'}
                     style={{ ...btnPrimary(t, busyAction === 'reactivate'), width: 'auto', padding: '8px 14px' }}>
@@ -1202,6 +1200,116 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
           )}
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ─── Bloc d'infos contextuel sur l'état de l'abonnement ────────────────────
+// Affiche un message structure adapte a la situation courante avec dates
+// explicites + nombre de jours restants. Couvre tous les cas :
+// - Essai gratuit en cours -> J-X jusqu'a la 1ere facturation
+// - Essai en cours + annulation programmee -> aucune facturation
+// - Actif normal -> prochain prelevement avec montant et date
+// - Actif + annulation programmee -> date de bascule sur Decouverte
+// - Paiement en echec (past_due) -> instructions pour eviter l'interruption
+function StatusInfoBox({ sub, planDef, t }) {
+  const isCanceling   = !!sub.cancel_at_period_end;
+  const isTrial       = sub.status === 'trialing';
+  const isPastDue     = !!sub.is_past_due;
+  const isYearly      = sub.period === 'yearly';
+  const recurringPrice = isYearly ? planDef.annual : planDef.monthly;
+  const periodLabel   = isYearly ? 'an' : 'mois';
+
+  const parseDate = (iso) => { try { return iso ? new Date(iso) : null; } catch { return null; } };
+  const periodEndDate = parseDate(sub.current_period_end);
+  const trialEndDate  = parseDate(sub.trial_ends_at);
+
+  const formatLong = (d) => d ? d.toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  }) : '—';
+  const daysUntil = (d) => d
+    ? Math.max(0, Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
+  const daysSuffix = (n) => n == null ? '' : ` (dans ${n} ${n > 1 ? 'jours' : 'jour'})`;
+
+  // ── Détermine titre + lignes selon le contexte ─────────────────────────
+  let color, title, lines;
+  if (isPastDue) {
+    color = 'orange';
+    title = 'Paiement en échec';
+    lines = [
+      "Votre dernier prélèvement n'a pas pu être effectué.",
+      'Stripe va réessayer automatiquement dans les prochains jours.',
+      'Mettez à jour votre carte dans la section "Modes de paiement" ci-dessous pour éviter une interruption d\'accès.',
+    ];
+  } else if (isTrial && isCanceling) {
+    const endDate = trialEndDate || periodEndDate;
+    color = 'orange';
+    title = "Annulation programmée pendant l'essai";
+    lines = [
+      `Votre plan sera annulé le ${formatLong(endDate)}${daysSuffix(daysUntil(endDate))}.`,
+      'Aucune facturation ne sera effectuée — vous ne payerez rien.',
+      'Vous pouvez réactiver à tout moment avant cette date.',
+    ];
+  } else if (isTrial) {
+    const endDate = trialEndDate || periodEndDate;
+    color = 'green';
+    title = "Période d'essai en cours";
+    lines = [
+      `Essai gratuit jusqu'au ${formatLong(endDate)}${daysSuffix(daysUntil(endDate))}.`,
+      `Première facturation à cette date : ${recurringPrice} €.`,
+      "Aucun prélèvement aujourd'hui — annulez à tout moment sans frais.",
+    ];
+  } else if (isCanceling) {
+    color = 'red';
+    title = 'Annulation programmée';
+    lines = [
+      `Votre plan ${planDef.name} sera annulé le ${formatLong(periodEndDate)}${daysSuffix(daysUntil(periodEndDate))}.`,
+      "Vous gardez l'accès complet à toutes les fonctionnalités payantes jusqu'à cette date.",
+      'Aucun nouveau prélèvement ne sera effectué après.',
+      'Bascule automatique sur le plan Découverte (gratuit, fonctionnalités limitées).',
+    ];
+  } else {
+    // Actif normal
+    color = 'gray';
+    title = 'Prochaine facturation';
+    lines = [
+      `${recurringPrice} € prélevés le ${formatLong(periodEndDate)}${daysSuffix(daysUntil(periodEndDate))}.`,
+      `Renouvellement automatique tous les ${isYearly ? 'ans' : 'mois'}. Annulable à tout moment.`,
+    ];
+  }
+
+  // ── Palette couleurs selon état (sans emoji, conforme FDS-2026) ────────
+  const palettes = {
+    green:  { bg: '#ecfdf5',     border: '#a7f3d0', stripe: '#10b981', title: '#065f46', text: '#047857' },
+    orange: { bg: '#fffbeb',     border: '#fde68a', stripe: '#f59e0b', title: '#92400e', text: '#78350f' },
+    red:    { bg: '#fef2f2',     border: '#fecaca', stripe: '#dc2626', title: '#991b1b', text: '#7f1d1d' },
+    gray:   { bg: t.cardAlt,     border: t.border,  stripe: t.fg2 || t.text, title: t.text, text: t.textSub },
+  };
+  const c = palettes[color] || palettes.gray;
+
+  return (
+    <div style={{
+      padding: '12px 14px',
+      borderRadius: 10,
+      background: c.bg,
+      border: `1px solid ${c.border}`,
+      borderLeft: `3px solid ${c.stripe}`,
+      marginTop: 12,
+    }}>
+      <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 500,
+                  color: c.title, letterSpacing: 0.2,
+                  textTransform: 'uppercase' }}>
+        {title}
+      </p>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0,
+                   display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {lines.map((line, i) => (
+          <li key={i} style={{ fontSize: 13, color: c.text, lineHeight: 1.55 }}>
+            {line}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
