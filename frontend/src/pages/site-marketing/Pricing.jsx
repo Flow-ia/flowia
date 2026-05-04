@@ -9,7 +9,7 @@ export default function Pricing() {
 
   const plans = [
     {
-      name: 'Découverte', monthly: 0, yearly: 0,
+      name: 'Découverte', monthly: '0', yearly: '0', annual: '0',
       desc: "Pour démarrer et tester FlowIA sans risque.",
       features: [
         "Jusqu'à 50 RDV/mois", '1 employé', 'Page de réservation publique',
@@ -18,39 +18,41 @@ export default function Pricing() {
       cta: 'Commencer gratuitement', highlight: false,
     },
     {
-      name: 'Pro', monthly: 29, yearly: 24,
-      desc: "La formule complète pour faire grandir votre salon.",
+      name: 'Essentiel', monthly: '24', yearly: '20', annual: '240',
+      desc: "Tous les outils marketing pour fidéliser vos clients.",
       features: [
         'RDV illimités', "Jusqu'à 5 employés", 'SMS rappels et marketing',
-        'Fidélité et parrainage', 'Marketing IA', 'Caisse complète',
-        'Export PDF avancé', 'Support prioritaire 7j/7',
+        'Programme fidélité', 'Programme parrainage', 'IA marketing',
+        'Caisse complète', 'Support prioritaire',
       ],
       cta: "Démarrer l'essai 14 jours", highlight: true,
     },
     {
-      name: 'Équipe', monthly: 49, yearly: 39,
-      desc: "Pour les salons multi-employés et multi-sites.",
+      name: 'Équipe', monthly: '49', yearly: '40,83', annual: '490',
+      desc: "Multi-sites, IA avancée et support dédié pour les salons exigeants.",
       features: [
-        'Tout du plan Pro', 'Employés illimités', 'Multi-sites',
+        'Tout du plan Essentiel', 'Employés illimités', 'Multi-sites',
+        'Cadeau anniversaire', 'IA avancée',
         'API et exports avancés', 'Statistiques par employé/site',
-        'Account manager dédié', 'SLA 99,9 %',
+        'Support dédié + SLA 99,9 %',
       ],
       cta: 'Nous contacter', highlight: false,
     },
   ];
 
   const compare = [
-    { feature: 'Rendez-vous mensuels',         decouverte: '50',  pro: 'Illimités',  equipe: 'Illimités' },
-    { feature: 'Employés',                     decouverte: '1',   pro: '5',          equipe: 'Illimités' },
-    { feature: 'Page de réservation publique', decouverte: true,  pro: true,         equipe: true },
-    { feature: 'Caisse complète',              decouverte: false, pro: true,         equipe: true },
-    { feature: 'SMS rappels',                  decouverte: false, pro: true,         equipe: true },
-    { feature: 'Marketing IA',                 decouverte: false, pro: true,         equipe: true },
-    { feature: 'Fidélité et parrainage',       decouverte: false, pro: true,         equipe: true },
-    { feature: 'Multi-sites',                  decouverte: false, pro: false,        equipe: true },
-    { feature: 'API & webhooks',               decouverte: false, pro: false,        equipe: true },
-    { feature: 'Account manager',              decouverte: false, pro: false,        equipe: true },
-    { feature: 'Support',                      decouverte: 'Email', pro: 'Prioritaire 7j/7', equipe: 'Dédié SLA' },
+    { feature: 'Rendez-vous mensuels',         decouverte: '50',    essentiel: 'Illimités',   equipe: 'Illimités' },
+    { feature: 'Employés',                     decouverte: '1',     essentiel: '5',           equipe: 'Illimités' },
+    { feature: 'Page de réservation publique', decouverte: true,    essentiel: true,          equipe: true },
+    { feature: 'Caisse complète',              decouverte: false,   essentiel: true,          equipe: true },
+    { feature: 'SMS clients',                  decouverte: false,   essentiel: true,          equipe: true },
+    { feature: 'Programme fidélité',           decouverte: false,   essentiel: true,          equipe: true },
+    { feature: 'Programme parrainage',         decouverte: false,   essentiel: true,          equipe: true },
+    { feature: 'Cadeau anniversaire',          decouverte: false,   essentiel: false,         equipe: true },
+    { feature: 'Marketing IA',                 decouverte: false,   essentiel: 'Standard',    equipe: 'Avancée' },
+    { feature: 'Multi-sites',                  decouverte: false,   essentiel: false,         equipe: true },
+    { feature: 'API & exports avancés',        decouverte: false,   essentiel: false,         equipe: true },
+    { feature: 'Support',                      decouverte: 'Email', essentiel: 'Prioritaire', equipe: 'Dédié SLA' },
   ];
 
   return (
@@ -58,7 +60,7 @@ export default function Pricing() {
       <PageHero
         label="Tarifs"
         title="Une tarification simple, sans surprise"
-        subtitle="Sans engagement. Annulez à tout moment. 14 jours d'essai gratuit sur le plan Pro."
+        subtitle="Sans engagement. Annulez à tout moment. 14 jours d'essai gratuit sur le plan Essentiel."
       />
 
       <Container paddingY={56}>
@@ -90,7 +92,7 @@ export default function Pricing() {
                 fontSize: 10, padding: '2px 7px', borderRadius: 99,
                 background: S.ax.emeraldBg, color: S.ax.emerald, fontWeight: 500,
                 border: `1px solid ${S.ax.emerald}33`,
-              }}>−15 %</span>
+              }}>2 mois offerts</span>
             </button>
           </div>
         </div>
@@ -125,7 +127,9 @@ export default function Pricing() {
                   <span style={{ fontSize: 13, color: S.fgSubtle }}>/mois</span>
                 </div>
                 <p style={{ fontSize: 12, color: S.fgSubtle, margin: 0, marginBottom: 22 }}>
-                  {yearly ? "Facturé annuellement" : "Facturé mensuellement"}
+                  {yearly
+                    ? (p.annual === '0' ? 'Gratuit' : `Facturé ${p.annual} €/an — 2 mois offerts`)
+                    : (p.monthly === '0' ? 'Gratuit' : 'Facturé mensuellement')}
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {p.features.map(f => (
@@ -171,7 +175,7 @@ export default function Pricing() {
                 <tr style={{ background: S.bgMuted }}>
                   <th style={thStyle()}>Fonctionnalité</th>
                   <th style={thStyle()}>Découverte</th>
-                  <th style={{ ...thStyle(), color: S.fg }}>Pro</th>
+                  <th style={{ ...thStyle(), color: S.fg }}>Essentiel</th>
                   <th style={thStyle()}>Équipe</th>
                 </tr>
               </thead>
@@ -179,7 +183,7 @@ export default function Pricing() {
                 {compare.map(row => (
                   <tr key={row.feature} style={{ borderTop: `1px solid ${S.border}` }}>
                     <td style={tdStyle(true)}>{row.feature}</td>
-                    {['decouverte', 'pro', 'equipe'].map(k => (
+                    {['decouverte', 'essentiel', 'equipe'].map(k => (
                       <td key={k} style={tdStyle()}>
                         {typeof row[k] === 'boolean'
                           ? (row[k]
@@ -194,7 +198,7 @@ export default function Pricing() {
             </table>
           </div>
           <p style={{ fontSize: 13, color: S.fgSubtle, textAlign: 'center', marginTop: 18 }}>
-            {"Tarifs hors taxes. Les SMS sont facturés au coût réel sans marge (à partir de 0,045 € l'unité)."}
+            {"Tarifs hors taxes. Les SMS sont facturés à l'usage (à partir de 0,06 € l'unité), réservés aux plans Essentiel et Équipe."}
           </p>
         </div>
       </section>

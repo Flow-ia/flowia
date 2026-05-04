@@ -106,7 +106,7 @@ const DETAILS = {
       "Campagnes SMS ciblées par segments",
       "Rappels automatiques 24h avant le RDV",
       "Désinscription en 1 clic conforme RGPD",
-      "Coût réel sans marge (à partir de 0,045 €/SMS)",
+      "Tarif transparent à l'usage (à partir de 0,06 €/SMS)",
       "Quotas et budget contrôlés",
     ],
     cta: "Lancer mes campagnes SMS",

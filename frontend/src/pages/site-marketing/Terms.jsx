@@ -34,7 +34,7 @@ export default function Terms() {
 
           <ProseH2>5. Tarification</ProseH2>
           <p>
-            {"Le plan Découverte est gratuit dans les limites fixées. Les plans Pro et Équipe sont facturés mensuellement ou annuellement, sans engagement. Les SMS sont facturés au coût réel sans marge. Toute modification de tarif fait l'objet d'un préavis de 30 jours."}
+            {"Le plan Découverte est gratuit dans les limites fixées. Les plans Essentiel et Équipe sont facturés mensuellement ou annuellement, sans engagement. Les SMS sont facturés à l'usage selon les tarifs en vigueur. Toute modification de tarif fait l'objet d'un préavis de 30 jours."}
           </p>
 
           <ProseH2>6. Obligations de l'Utilisateur</ProseH2>

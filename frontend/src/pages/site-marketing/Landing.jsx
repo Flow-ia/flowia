@@ -623,15 +623,15 @@ function Pricing() {
       cta: 'Commencer', highlight: false,
     },
     {
-      name: 'Pro', price: '29',
+      name: 'Essentiel', price: '24',
       desc: "Pour faire grandir.",
-      features: ['RDV illimités', "Jusqu'à 5 employés", 'SMS rappels & marketing', 'Fidélité & parrainage', 'Marketing IA', 'Support prioritaire 7j/7'],
+      features: ['RDV illimités', "Jusqu'à 5 employés", 'SMS rappels & marketing', 'Fidélité & parrainage', 'IA marketing', 'Support prioritaire'],
       cta: 'Essayer 14 jours', highlight: true,
     },
     {
       name: 'Équipe', price: '49',
       desc: "Multi-sites.",
-      features: ['Tout le plan Pro', 'Employés illimités', 'Multi-sites', 'API & exports', 'Account manager dédié'],
+      features: ['Tout le plan Essentiel', 'Employés illimités', 'Multi-sites', 'Cadeau anniversaire', 'IA avancée', 'Support dédié + SLA'],
       cta: 'Nous contacter', highlight: false,
     },
   ];
@@ -701,13 +701,13 @@ function Pricing() {
 function Faq() {
   const items = [
     { q: "Puis-je essayer FlowIA gratuitement ?",
-      a: "Oui. Plan Découverte gratuit à vie. Plan Pro offert 14 jours sans carte bancaire." },
+      a: "Oui. Plan Découverte gratuit à vie. Plan Essentiel offert 14 jours sans carte bancaire." },
     { q: "Mes données sont-elles en sécurité ?",
       a: "Hébergement Europe, chiffrement, conforme RGPD. Export et suppression à tout moment." },
     { q: "Migration depuis mon ancien outil ?",
       a: "On importe vos clients, prestations et RDV gratuitement (24 à 48h selon volume)." },
     { q: "Engagement ou frais cachés ?",
-      a: "Aucun. Au mois, sans engagement. SMS facturés au coût réel sans marge." },
+      a: "Aucun. Au mois, sans engagement. SMS facturés à l'usage (plans Essentiel et Équipe)." },
     { q: "Compatible mobile et tablette ?",
       a: "Oui. App web responsive, mode tablette partagée avec PIN par employé." },
   ];
