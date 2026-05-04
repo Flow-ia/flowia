@@ -624,15 +624,27 @@ router.get('/me', authMiddleware, async (req, res) => {
               onboarding_completed, google_id, avatar_url,
               subscription_status, subscription_plan, subscription_period,
               subscription_current_period_end, subscription_trial_ends_at,
-              subscription_cancel_at_period_end
+              subscription_cancel_at_period_end, subscription_admin_grant
        FROM users WHERE id=$1`,
       [req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];
-    // Plan effectif : decouverte par defaut (pas d'abo actif), sinon le plan paye.
-    const isActive = ['active', 'trialing'].includes(u.subscription_status);
-    const effectivePlan = isActive ? u.subscription_plan : 'decouverte';
+
+    // Plan effectif : ordre de priorite octroi superadmin > Stripe > Decouverte.
+    // (alignement avec middleware/subscription.js getEffectivePlan() et
+    // /api/subscriptions/me — sans cette logique, le frontend pensait que
+    // les comptes en plan offert etaient sur Decouverte et affichait des
+    // bannieres 'Plan Essentiel requis' a tort.)
+    const grant = u.subscription_admin_grant;
+    const grantActive = grant && (!grant.expires_at || new Date(grant.expires_at) > new Date());
+    const stripeActive = ['active', 'trialing'].includes(u.subscription_status);
+
+    const effectivePlan = grantActive && grant.plan
+      ? grant.plan
+      : (stripeActive && u.subscription_plan ? u.subscription_plan : 'decouverte');
+    const isActive = grantActive || stripeActive;
+
     res.json({ user: {
       ...req.user,
       email:              u.email,
@@ -647,7 +659,27 @@ router.get('/me', authMiddleware, async (req, res) => {
       onboardingCompleted: u.onboarding_completed,
       hasGoogle:          !!u.google_id,
       avatarUrl:          u.avatar_url,
-      subscription: {
+      subscription: grantActive ? {
+        // Source d'autorite : octroi admin. On expose l'etat synthetique
+        // pour que le frontend traite ces comptes comme actifs payes.
+        status:             'active',
+        plan:               grant.plan,
+        period:             grant.period || 'monthly',
+        currentPeriodEnd:   grant.expires_at || null,
+        trialEndsAt:        null,
+        cancelAtPeriodEnd:  false,
+        isActive:           true,
+        isPastDue:          false,
+        isAdminGranted:     true,
+        adminGrant: {
+          plan:       grant.plan,
+          period:     grant.period || 'monthly',
+          grantedAt:  grant.granted_at,
+          expiresAt:  grant.expires_at || null,
+          reason:     grant.reason || '',
+        },
+        effectivePlan,
+      } : {
         status:             u.subscription_status,
         plan:               u.subscription_plan,
         period:             u.subscription_period,
@@ -656,6 +688,8 @@ router.get('/me', authMiddleware, async (req, res) => {
         cancelAtPeriodEnd:  !!u.subscription_cancel_at_period_end,
         isActive,
         isPastDue:          u.subscription_status === 'past_due',
+        isAdminGranted:     false,
+        adminGrant:         null,
         effectivePlan,
       },
     }});
