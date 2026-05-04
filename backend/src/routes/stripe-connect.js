@@ -206,18 +206,33 @@ router.post('/disconnect', authMiddleware, async (req, res) => {
 // les paiements de RDV plus tard). Verifie la signature avec
 // STRIPE_CONNECT_WEBHOOK_SECRET (different du webhook plateforme).
 router.post('/webhook', async (req, res) => {
-  const sig    = req.headers['stripe-signature'];
-  const secret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
-  if (!secret || !sig) {
-    console.error('[CONNECT WEBHOOK] secret ou signature manquant');
+  const sig = req.headers['stripe-signature'];
+  if (!sig) {
+    console.error('[CONNECT WEBHOOK] signature manquante');
     return res.status(400).json({ error: 'webhook signature required' });
   }
-  let event;
-  try {
-    const stripe = getStripe();
-    event = stripe.webhooks.constructEvent(req.body, sig, secret);
-  } catch (e) {
-    console.error('[CONNECT WEBHOOK] signature invalide:', e.message);
+  // Dual-mode : on accepte 3 secrets possibles dans cet ordre, on teste
+  // chacun jusqu'a en trouver un qui valide. Permet de gerer Test + Live
+  // simultanement sur le meme endpoint Render sans avoir a switcher.
+  const secrets = [
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET_TEST,
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET_LIVE,
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET,  // legacy single-secret
+  ].filter(Boolean);
+  if (!secrets.length) {
+    console.error('[CONNECT WEBHOOK] aucun STRIPE_CONNECT_WEBHOOK_SECRET_* configuré');
+    return res.status(500).json({ error: 'webhook not configured' });
+  }
+  let event = null, lastErr = null;
+  const stripe = getStripe();
+  for (const secret of secrets) {
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, secret);
+      break;
+    } catch (e) { lastErr = e; }
+  }
+  if (!event) {
+    console.error('[CONNECT WEBHOOK] signature invalide:', lastErr?.message);
     return res.status(400).json({ error: 'invalid signature' });
   }
 

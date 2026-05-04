@@ -357,6 +357,8 @@ export const api = {
   deleteSubscriptionPaymentMethod:   (id)  => request('/subscriptions/payment-methods/' + id, { method: 'DELETE' }),
   listSubscriptionInvoices:          (startingAfter) => request('/subscriptions/invoices'
                                        + (startingAfter ? '?starting_after=' + encodeURIComponent(startingAfter) : '')),
+  // ── Stripe Connect (compte marchand pour encaisser les RDV) ──────────────
+  // (Voir aussi connectApi exporte plus bas pour ergonomie.)
   getSubscriptionBillingInfo:        ()    => request('/subscriptions/billing-info'),
   updateSubscriptionBillingInfo:     (b)   => request('/subscriptions/billing-info', { method: 'PUT', body: JSON.stringify(b) }),
 };
@@ -768,6 +770,14 @@ export const paymentsApi = {
                        { method: 'DELETE' }),
   setDefaultPaymentMethod: (id) => request('/payments/sms/set-default',
                        { method: 'POST', body: JSON.stringify({ payment_method_id: id }) }),
+};
+
+// ── Stripe Connect (onboarding marchand pour encaisser les RDV) ────────────
+export const connectApi = {
+  getAccount:      ()  => request('/stripe-connect/account'),
+  onboard:         ()  => request('/stripe-connect/onboard',        { method: 'POST' }),
+  dashboardLink:   ()  => request('/stripe-connect/dashboard-link', { method: 'POST' }),
+  disconnect:      ()  => request('/stripe-connect/disconnect',     { method: 'POST' }),
 };
 
 // ── Marketing IA (plan relance barbershop/salon) ─────────────────────────────

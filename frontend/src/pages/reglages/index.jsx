@@ -12,6 +12,7 @@ import MonCommerce from './mon-commerce';
 import Reservations from './reservations';
 import Equipe from './equipe';
 import CaisseConfig from './caisse-config';
+import Paiements from './paiements';
 
 const DOMAINS = [
   {
@@ -45,6 +46,14 @@ const DOMAINS = [
     color: '#8b5cf6',
     icon: 'cash',
     items: ['Prestations sur place (catégories hiérarchiques)', 'QR code /j/:slug'],
+  },
+  {
+    id: 'paiements',
+    label: 'Paiements en ligne',
+    subtitle: 'Connectez votre Stripe · paiements RDV',
+    color: '#0891b2',
+    icon: 'wallet',
+    items: ['Connexion Stripe (Direct charges)', 'Réception des paiements RDV', 'Configuration acompte (à venir)'],
   },
 ];
 
@@ -142,6 +151,7 @@ export default function Reglages(props) {
   else if (domain === 'reservations')  content = <Reservations {...childProps}/>;
   else if (domain === 'equipe')        content = <Equipe       {...childProps}/>;
   else if (domain === 'caisse-config') content = <CaisseConfig {...childProps}/>;
+  else if (domain === 'paiements')     content = <Paiements    {...childProps}/>;
   else                                 content = <Home onLock={props.onLock}/>;
 
   return (
