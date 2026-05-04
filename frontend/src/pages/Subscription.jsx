@@ -410,28 +410,6 @@ export default function Subscription() {
           </div>
         )}
 
-        {/* Bandeau annulation programmée */}
-        {!loading && sub?.is_active && sub?.cancel_at_period_end && (
-          <div style={{
-            padding: '12px 16px', borderRadius: 10,
-            background: '#fef2f2', border: '1px solid #fecaca',
-            color: '#991b1b', fontSize: 13,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            gap: 12, flexWrap: 'wrap',
-          }}>
-            <span>
-              {"Annulation programmée. Vous gardez l'accès jusqu'au "}
-              <strong>{sub.current_period_end
-                ? new Date(sub.current_period_end).toLocaleDateString('fr-FR')
-                : '—'}</strong>
-              {", puis votre compte basculera sur le plan Découverte."}
-            </span>
-            <button onClick={handleReactivate} disabled={busyAction === 'reactivate'}
-                    style={{ ...btnPrimary(t, busyAction === 'reactivate'), width: 'auto', padding: '8px 14px' }}>
-              {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver'}
-            </button>
-          </div>
-        )}
 
         {/* Bandeau trial bientôt fini (J-3) */}
         {!loading && sub?.status === 'trialing' && sub?.trial_ends_at &&
@@ -566,43 +544,22 @@ export default function Subscription() {
           </p>
         )}
 
-        {/* ─── VUE SUBSCRIBED USER ─── Compact : plan actuel + upgrade /
-            downgrade ciblés avec gains/pertes explicites. */}
+        {/* ─── VUE SUBSCRIBED USER ─── Carte unique compacte avec actions
+            principales. Les détails (changer plan, cartes, factures) ouvrent
+            des modaux pour minimiser le scroll. */}
         {!loading && sub?.is_active && (
-          <SubscribedPlanView
+          <CompactSubscriptionCard
             sub={sub} t={t} busyAction={busyAction}
+            busyPortal={busyPortal}
+            showToast={showToast}
             onChangePeriod={(newPeriod) => handleChangePlan(sub.plan, newPeriod)}
             onChangePlan={handleChangePlan}
             onCancel={handleCancel}
             onReactivate={handleReactivate}
+            onPortal={handlePortal}
           />
         )}
 
-        {/* Section Moyens de paiement — visible uniquement si l'utilisateur
-            a déjà un customer Stripe (i.e. au moins un essai/abo passé ou
-            une recharge SMS). Sinon pas pertinent. */}
-        {!loading && sub?.has_subscription && (
-          <PaymentMethodsSection theme={t} showToast={showToast}/>
-        )}
-
-        {/* Section Factures inline (Stripe API). */}
-        {!loading && sub?.has_subscription && (
-          <InvoicesSection theme={t}/>
-        )}
-
-        {/* Lien discret de fallback vers le portail Stripe pour les rares
-            besoins non couverts inline (mise à jour adresse de facturation). */}
-        {!loading && sub?.has_subscription && (
-          <p style={{ fontSize: 11, color: t.muted, textAlign: 'center', marginTop: 4 }}>
-            <button onClick={handlePortal} disabled={busyPortal}
-                    style={{ background: 'none', border: 'none', padding: 0,
-                             color: t.muted, textDecoration: 'underline',
-                             cursor: busyPortal ? 'wait' : 'pointer',
-                             fontFamily: 'inherit', fontSize: 11 }}>
-              {busyPortal ? 'Ouverture…' : "Mettre à jour mon adresse de facturation"}
-            </button>
-          </p>
-        )}
       </div>
 
       {/* Modal de confirmation pour cancel / change-plan */}
@@ -759,7 +716,8 @@ function toggleBtn(t, active) {
 
 // ── Section Moyens de paiement ──────────────────────────────────────────────
 // Liste les cartes du customer + actions (ajouter, définir par défaut, supprimer).
-function PaymentMethodsSection({ theme: t, showToast }) {
+// Prop `embedded` : true = pas de card englobante (utilisé dans un Modal).
+function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
   const [pms, setPms]         = useState({ methods: [], default: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null); // pmId en cours d'action
@@ -805,19 +763,33 @@ function PaymentMethodsSection({ theme: t, showToast }) {
     }
   };
 
+  const Wrapper    = embedded ? 'div' : 'section';
+  const wrapperStyle = embedded
+    ? { display: 'flex', flexDirection: 'column' }
+    : {
+        padding: 22, borderRadius: 12,
+        background: t.card, border: `1px solid ${t.border}`,
+        boxShadow: t.shadowSm,
+      };
+
   return (
-    <section style={{
-      padding: 22, borderRadius: 12,
-      background: t.card, border: `1px solid ${t.border}`,
-      boxShadow: t.shadowSm,
-    }}>
+    <Wrapper style={wrapperStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between',
                     alignItems: 'baseline', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: 0 }}>Moyens de paiement</h2>
-          <p style={{ fontSize: 12, color: t.muted, margin: '4px 0 0' }}>
-            {"Cartes utilisées pour vos prélèvements automatiques."}
-          </p>
+          {!embedded && (
+            <>
+              <h2 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: 0 }}>Moyens de paiement</h2>
+              <p style={{ fontSize: 12, color: t.muted, margin: '4px 0 0' }}>
+                {"Cartes utilisées pour vos prélèvements automatiques."}
+              </p>
+            </>
+          )}
+          {embedded && (
+            <p style={{ fontSize: 12, color: t.muted, margin: 0 }}>
+              {"Cartes utilisées pour vos prélèvements automatiques."}
+            </p>
+          )}
         </div>
         <button onClick={() => setAddOpen(true)}
                 style={{
@@ -895,7 +867,7 @@ function PaymentMethodsSection({ theme: t, showToast }) {
                                 await reload();
                               }}
                               showToast={showToast}/>
-    </section>
+    </Wrapper>
   );
 }
 
@@ -1051,9 +1023,201 @@ function AddCardForm({ onSuccess, onCancel, theme: t, showToast }) {
   );
 }
 
-// ─── Vue compacte pour utilisateur abonné ──────────────────────────────────
-// Évite la grille 3 cartes. Affiche : plan actuel + carte upgrade ciblée +
-// carte downgrade payant (si applicable) + carte annulation vers gratuit.
+// ─── Carte unique compacte pour utilisateur abonné ─────────────────────────
+// Une SEULE card avec toutes les infos + actions principales en boutons.
+// Les sous-vues (changer de plan, cartes, factures) ouvrent des modaux pour
+// éviter le scroll long de la page.
+function CompactSubscriptionCard({ sub, t, busyAction, busyPortal, showToast,
+                                   onChangePeriod, onChangePlan, onCancel,
+                                   onReactivate, onPortal }) {
+  const [modal, setModal] = useState(null); // 'plan' | 'cards' | 'invoices'
+  const planDef       = PLAN_DEFS[sub.plan];
+  if (!planDef) return null;
+
+  const isYearly      = sub.period === 'yearly';
+  const isCanceling   = !!sub.cancel_at_period_end;
+  const annualSavings = (planDef.monthly * 12) - planDef.annual;
+  const upgradeId     = nextPlanId(sub.plan);
+  const downgradeId   = prevPaidPlanId(sub.plan);
+  const periodEndStr  = sub.current_period_end
+    ? new Date(sub.current_period_end).toLocaleDateString('fr-FR', {
+        day: 'numeric', month: 'long', year: 'numeric'
+      })
+    : null;
+
+  const canChangeOfPlan = !isCanceling && (upgradeId || downgradeId);
+
+  return (
+    <>
+      <section style={{
+        padding: 22, borderRadius: 12,
+        background: t.card, border: `1px solid ${t.border}`,
+        boxShadow: t.shadowMd,
+      }}>
+        {/* En-tête : nom plan + badges */}
+        <div style={{ display: 'flex', justifyContent: 'space-between',
+                      alignItems: 'flex-start', flexWrap: 'wrap', gap: 8,
+                      marginBottom: 4 }}>
+          <div>
+            <p style={{ fontSize: 11, color: t.muted, margin: 0, marginBottom: 4,
+                        textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+              Mon abonnement
+            </p>
+            <h2 style={{ fontSize: 22, fontWeight: 500, color: t.text, margin: 0,
+                         letterSpacing: '-0.01em' }}>
+              {planDef.name}
+              <span style={{ fontSize: 14, color: t.muted, fontWeight: 400, marginLeft: 8 }}>
+                {isYearly ? 'Annuel' : 'Mensuel'}
+              </span>
+            </h2>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {sub.status === 'trialing' && (
+              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
+                             background: '#ecfdf5', color: '#10b981', fontWeight: 500 }}>
+                Essai gratuit
+              </span>
+            )}
+            {isCanceling && (
+              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
+                             background: '#fef2f2', color: '#991b1b', fontWeight: 500 }}>
+                Annulation programmée
+              </span>
+            )}
+            {sub.is_past_due && (
+              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
+                             background: '#fffbeb', color: '#92400e', fontWeight: 500 }}>
+                Paiement en échec
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Prix + dates */}
+        <p style={{ fontSize: 14, color: t.text, margin: '8px 0 4px' }}>
+          <strong style={{ fontWeight: 500 }}>
+            {isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`}
+          </strong>
+          {isYearly && (
+            <span style={{ fontSize: 13, color: t.muted, marginLeft: 8 }}>
+              {`(soit ${formatPrice(planDef.yearly)} €/mois)`}
+            </span>
+          )}
+        </p>
+        {periodEndStr && (
+          <p style={{ fontSize: 12, color: t.muted, margin: '0 0 18px' }}>
+            {isCanceling
+              ? `Accès maintenu jusqu'au ${periodEndStr}, puis bascule sur Découverte.`
+              : `Prochain renouvellement le ${periodEndStr}.`}
+          </p>
+        )}
+
+        {/* Actions principales en grille responsive */}
+        <div style={{
+          display: 'grid', gap: 8,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          marginTop: 10,
+        }}>
+          {/* Action principale : reactiver si annulation, sinon upgrade/period */}
+          {isCanceling ? (
+            <button onClick={onReactivate} disabled={busyAction === 'reactivate'}
+                    style={btnPrimary(t, busyAction === 'reactivate')}>
+              {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver mon abonnement'}
+            </button>
+          ) : (
+            <>
+              {upgradeId && (
+                <button onClick={() => setModal('plan')}
+                        style={btnPrimary(t, false)}>
+                  {`Passer à ${PLAN_DEFS[upgradeId].name}`}
+                </button>
+              )}
+              {!isYearly && annualSavings > 0 && (
+                <button onClick={() => onChangePeriod('yearly')}
+                        disabled={busyAction === 'change'}
+                        style={btnGhost(t, busyAction === 'change')}>
+                  {busyAction === 'change' ? '…' : `Annuel · économisez ${annualSavings} €`}
+                </button>
+              )}
+              {isYearly && (
+                <button onClick={() => onChangePeriod('monthly')}
+                        disabled={busyAction === 'change'}
+                        style={btnGhost(t, busyAction === 'change')}>
+                  {busyAction === 'change' ? '…' : 'Repasser en mensuel'}
+                </button>
+              )}
+              {/* Si plan haut (Équipe), afficher Changer de plan pour aller voir downgrade */}
+              {!upgradeId && downgradeId && (
+                <button onClick={() => setModal('plan')} style={btnGhost(t, false)}>
+                  Changer de plan
+                </button>
+              )}
+            </>
+          )}
+          <button onClick={() => setModal('cards')} style={btnGhost(t, false)}>
+            Mes cartes bancaires
+          </button>
+          <button onClick={() => setModal('invoices')} style={btnGhost(t, false)}>
+            Mes factures
+          </button>
+        </div>
+
+        {/* Actions secondaires en bas, plus discrètes */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap',
+                      paddingTop: 14, borderTop: `1px solid ${t.separator}` }}>
+          {!isCanceling && (
+            <button onClick={onCancel} disabled={busyAction === 'cancel'}
+                    style={{ background: 'none', border: 'none', padding: 0,
+                             color: '#991b1b', textDecoration: 'underline',
+                             cursor: busyAction === 'cancel' ? 'wait' : 'pointer',
+                             fontFamily: 'inherit', fontSize: 12 }}>
+              {busyAction === 'cancel' ? 'Annulation…' : 'Annuler mon abonnement'}
+            </button>
+          )}
+          <button onClick={onPortal} disabled={busyPortal}
+                  style={{ background: 'none', border: 'none', padding: 0,
+                           color: t.muted, textDecoration: 'underline',
+                           cursor: busyPortal ? 'wait' : 'pointer',
+                           fontFamily: 'inherit', fontSize: 12,
+                           marginLeft: 'auto' }}>
+            {busyPortal ? 'Ouverture…' : "Adresse de facturation →"}
+          </button>
+        </div>
+      </section>
+
+      {/* ── Modal Changer de plan ──────────────────────────────────────── */}
+      <Modal open={modal === 'plan'} onClose={() => setModal(null)}
+             title="Changer de plan" theme={t} maxW={520}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {upgradeId && (
+            <UpgradeCard fromId={sub.plan} toId={upgradeId} period={sub.period}
+                          t={t} busyAction={busyAction}
+                          onConfirm={() => { setModal(null); onChangePlan(upgradeId, sub.period); }}/>
+          )}
+          {downgradeId && (
+            <DowngradeCard fromId={sub.plan} toId={downgradeId} period={sub.period}
+                            t={t} busyAction={busyAction}
+                            onConfirm={() => { setModal(null); onChangePlan(downgradeId, sub.period); }}/>
+          )}
+        </div>
+      </Modal>
+
+      {/* ── Modal Mes cartes ───────────────────────────────────────────── */}
+      <Modal open={modal === 'cards'} onClose={() => setModal(null)}
+             title="Mes cartes bancaires" theme={t} maxW={520}>
+        <PaymentMethodsSection theme={t} showToast={showToast} embedded/>
+      </Modal>
+
+      {/* ── Modal Mes factures ─────────────────────────────────────────── */}
+      <Modal open={modal === 'invoices'} onClose={() => setModal(null)}
+             title="Mes factures" theme={t} maxW={620}>
+        <InvoicesSection theme={t} embedded/>
+      </Modal>
+    </>
+  );
+}
+
+// Conservé pour compat legacy (free user view inchangée).
 function SubscribedPlanView({ sub, t, busyAction, onChangePeriod, onChangePlan, onCancel, onReactivate }) {
   const planDef    = PLAN_DEFS[sub.plan];
   if (!planDef) return null;
@@ -1315,7 +1479,8 @@ function CancelToFreeCard({ fromId, t, busyAction, onCancel }) {
 
 // ─── Section Factures inline ────────────────────────────────────────────────
 // Liste les 12 dernières factures du customer Stripe.
-function InvoicesSection({ theme: t }) {
+// Prop `embedded` : true = pas de card englobante (utilisé dans un Modal).
+function InvoicesSection({ theme: t, embedded = false }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading]   = useState(true);
 
@@ -1328,15 +1493,22 @@ function InvoicesSection({ theme: t }) {
     return () => { cancelled = true; };
   }, []);
 
+  const Wrapper      = embedded ? 'div' : 'section';
+  const wrapperStyle = embedded
+    ? { display: 'flex', flexDirection: 'column' }
+    : {
+        padding: 22, borderRadius: 12,
+        background: t.card, border: `1px solid ${t.border}`,
+        boxShadow: t.shadowSm,
+      };
+
   return (
-    <section style={{
-      padding: 22, borderRadius: 12,
-      background: t.card, border: `1px solid ${t.border}`,
-      boxShadow: t.shadowSm,
-    }}>
-      <h2 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: '0 0 4px' }}>
-        Historique des factures
-      </h2>
+    <Wrapper style={wrapperStyle}>
+      {!embedded && (
+        <h2 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: '0 0 4px' }}>
+          Historique des factures
+        </h2>
+      )}
       <p style={{ fontSize: 12, color: t.muted, margin: '0 0 14px' }}>
         {"Téléchargez vos factures officielles pour votre comptabilité."}
       </p>
@@ -1399,7 +1571,7 @@ function InvoicesSection({ theme: t }) {
           ))}
         </ul>
       )}
-    </section>
+    </Wrapper>
   );
 }
 
