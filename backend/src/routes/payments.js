@@ -348,7 +348,8 @@ router.post('/sms/checkout', authMiddleware, requirePlan('essentiel', 'equipe'),
 });
 
 // POST /api/payments/sms/webhook — Stripe envoie l'evenement ici
-// SÉCURITÉ : signature OBLIGATOIRE. Sans STRIPE_WEBHOOK_SECRET ou sans header
+// SÉCURITÉ : signature OBLIGATOIRE. Sans STRIPE_WEBHOOK_SMS_SECRET (ou
+// l'ancien STRIPE_WEBHOOK_SECRET, fallback compat) ou sans header
 // 'stripe-signature' valide, l'endpoint rejette 400. Évite qu'un attaquant
 // forge un event payment_intent.succeeded et crédite n'importe quel compte.
 // On répond APRÈS la vérification signature pour que Stripe retry en cas
@@ -357,7 +358,10 @@ router.post('/sms/webhook',
   express.raw({ type: 'application/json' }),
   async (req, res) => {
     const sig = req.headers['stripe-signature'];
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    // STRIPE_WEBHOOK_SMS_SECRET = nouveau nom (clarifie qu'il s'agit du SMS).
+    // STRIPE_WEBHOOK_SECRET = ancien nom, conserve en fallback pour rollback safe.
+    const secret = process.env.STRIPE_WEBHOOK_SMS_SECRET
+                 || process.env.STRIPE_WEBHOOK_SECRET;
     if (!secret || !sig) {
       console.error('[STRIPE WEBHOOK] Rejete : secret ou signature manquant');
       return res.status(400).json({ error: 'webhook signature required' });
