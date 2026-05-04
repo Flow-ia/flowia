@@ -621,12 +621,17 @@ router.get('/me', authMiddleware, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, email, business_name, phone, address, city, postal_code,
               google_business_url, created_at, first_name, last_name,
-              onboarding_completed, google_id, avatar_url
+              onboarding_completed, google_id, avatar_url,
+              subscription_status, subscription_plan, subscription_period,
+              subscription_current_period_end, subscription_trial_ends_at
        FROM users WHERE id=$1`,
       [req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];
+    // Plan effectif : decouverte par defaut (pas d'abo actif), sinon le plan paye.
+    const isActive = ['active', 'trialing'].includes(u.subscription_status);
+    const effectivePlan = isActive ? u.subscription_plan : 'decouverte';
     res.json({ user: {
       ...req.user,
       email:              u.email,
@@ -641,6 +646,16 @@ router.get('/me', authMiddleware, async (req, res) => {
       onboardingCompleted: u.onboarding_completed,
       hasGoogle:          !!u.google_id,
       avatarUrl:          u.avatar_url,
+      subscription: {
+        status:           u.subscription_status,
+        plan:             u.subscription_plan,
+        period:           u.subscription_period,
+        currentPeriodEnd: u.subscription_current_period_end,
+        trialEndsAt:      u.subscription_trial_ends_at,
+        isActive,
+        isPastDue:        u.subscription_status === 'past_due',
+        effectivePlan,
+      },
     }});
   } catch(e) { console.error('[AUTH ME]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
