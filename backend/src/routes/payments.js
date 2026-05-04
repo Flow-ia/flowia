@@ -2,6 +2,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requirePlan } = require('../middleware/subscription');
 const router = express.Router();
 
 const SMS_COST   = parseFloat(process.env.SMS_COST_UNIT)      || 0.045;
@@ -90,7 +91,12 @@ async function ensureStripeCustomer(userId) {
 //   C) aucun pm_id          → pré-création pour PaymentElement côté client
 //                             → automatic_payment_methods, pas de confirm
 // IMPORTANT: Stripe interdit off_session=true + setup_future_usage simultanément.
-router.post('/sms/intent', authMiddleware, async (req, res) => {
+// PHASE 1a — Gating SMS : la recharge necessite le plan Essentiel ou Equipe.
+// Decouverte (gratuit) ne peut pas envoyer de SMS donc bloque la recharge.
+// Le webhook /sms/webhook (Stripe -> nous) reste sans gating (idempotence
+// strict via creditSmsOnce + UNIQUE checkout_id, modifier ce webhook =
+// CLAUDE.md JAMAIS).
+router.post('/sms/intent', authMiddleware, requirePlan('essentiel', 'equipe'), async (req, res) => {
   try {
     const userId = req.user.userId;
     const amount = parseFloat(req.body.amount);
@@ -285,7 +291,7 @@ router.post('/sms/verify-intent', authMiddleware, async (req, res) => {
 });
 
 // POST /api/payments/sms/checkout
-router.post('/sms/checkout', authMiddleware, async (req, res) => {
+router.post('/sms/checkout', authMiddleware, requirePlan('essentiel', 'equipe'), async (req, res) => {
   try {
     const userId = req.user.userId;
     const amount = parseFloat(req.body.amount);

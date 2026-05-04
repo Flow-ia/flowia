@@ -15,6 +15,11 @@ export function AuthProvider({ children }) {
   // CANNOT_BOOK). Pas de purge tokens : le user reste loggue, seule la
   // fonctionnalite ciblee n'est pas accessible. Overlay fermable.
   const [featureBlockedMsg, setFeatureBlockedMsg] = useState(null);
+  // Phase 1 — gating plan : api.js dispatch ff-plan-upgrade-required
+  // sur 402. Le payload contient { error, currentPlan, requiredPlan, upgradeUrl }.
+  // Affiche une overlay 'Cette fonctionnalité nécessite l'abonnement X'
+  // avec un bouton 'Voir les plans' qui redirige sur /abonnement.
+  const [planUpgradeData, setPlanUpgradeData] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('ff_token');
@@ -102,6 +107,12 @@ export function AuthProvider({ children }) {
     };
     window.addEventListener('ff-feature-blocked', onFeatureBlocked);
 
+    // Phase 1 — plan d'abonnement insuffisant (402).
+    const onPlanUpgrade = (ev) => {
+      setPlanUpgradeData(ev?.detail || { error: 'Plan supérieur requis pour cette fonctionnalité.' });
+    };
+    window.addEventListener('ff-plan-upgrade-required', onPlanUpgrade);
+
     // Fallback storage event : fire-and-forget dans la popup → déclenche
     // un `storage` event dans l'opener (same-origin). Le payload contient
     // { token, user } sérialisés pour survivre au cas BroadcastChannel KO.
@@ -121,6 +132,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener('ff-auth-expired', onAuthExpired);
       window.removeEventListener('ff-account-blocked', onAccountBlocked);
       window.removeEventListener('ff-feature-blocked', onFeatureBlocked);
+      window.removeEventListener('ff-plan-upgrade-required', onPlanUpgrade);
     };
   }, []);
 
@@ -129,6 +141,7 @@ export function AuthProvider({ children }) {
     setBlockedMsg(null);
   }
   function dismissFeatureBlocked() { setFeatureBlockedMsg(null); }
+  function dismissPlanUpgrade()    { setPlanUpgradeData(null); }
 
   function login(token, userData) {
     // Au login d'un nouveau compte, supprimer l'ancienne session PIN
@@ -155,7 +168,74 @@ export function AuthProvider({ children }) {
       {children}
       {blockedMsg && <AccountBlockedOverlay message={blockedMsg} onClose={dismissBlocked} />}
       {featureBlockedMsg && <FeatureBlockedOverlay message={featureBlockedMsg} onClose={dismissFeatureBlocked} />}
+      {planUpgradeData && <PlanUpgradeOverlay data={planUpgradeData} onClose={dismissPlanUpgrade} />}
     </AuthContext.Provider>
+  );
+}
+
+// Overlay quand un endpoint backend renvoie 402 (plan d'abonnement
+// insuffisant). Affiche le motif + 2 actions : 'Voir les plans' (redirige
+// vers /abonnement avec context) et 'Plus tard' (ferme).
+function PlanUpgradeOverlay({ data, onClose }) {
+  const required = data?.requiredPlan || 'essentiel';
+  const planLabels = { essentiel: 'Essentiel', equipe: 'Équipe' };
+  const requiredLabel = planLabels[required] || 'supérieur';
+  const goToUpgrade = () => {
+    onClose();
+    try {
+      const url = `/abonnement?plan=${required}&period=monthly`;
+      // Cas SPA : navigate via location.assign (l'app remontera la route).
+      window.location.assign(url);
+    } catch {}
+  };
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 99998,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        maxWidth: 460, width: '100%',
+        background: '#fff', color: '#111',
+        border: '0.5px solid rgba(0,0,0,0.15)',
+        borderRadius: 12, padding: 28,
+        boxShadow: '0 12px 48px rgba(0,0,0,0.25)',
+        textAlign: 'left',
+      }}>
+        <div style={{
+          display: 'inline-block', fontSize: 10, fontWeight: 600,
+          padding: '3px 9px', borderRadius: 99,
+          background: '#eff6ff', color: '#1e40af',
+          letterSpacing: 0.4, textTransform: 'uppercase',
+          marginBottom: 12,
+        }}>
+          {`Abonnement ${requiredLabel} requis`}
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 8 }}>
+          {"Cette fonctionnalité n'est pas incluse dans votre plan actuel"}
+        </div>
+        <div style={{ fontSize: 14, lineHeight: 1.5, color: '#333', marginBottom: 22 }}>
+          {data?.error || `Pour utiliser cette fonctionnalité, passez au plan ${requiredLabel}. Vous gardez l'accès aux RDV, à la caisse et aux fonctions de base de votre plan actuel.`}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose}
+                  style={{ flex: 1, padding: '10px 14px',
+                           background: 'transparent', color: '#111',
+                           border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8,
+                           fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
+            {"Plus tard"}
+          </button>
+          <button onClick={goToUpgrade}
+                  style={{ flex: 1, padding: '10px 14px',
+                           background: '#111', color: '#fff',
+                           border: 'none', borderRadius: 8,
+                           fontSize: 14, fontWeight: 500, cursor: 'pointer' }}>
+            {`Passer à ${requiredLabel}`}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

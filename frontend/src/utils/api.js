@@ -228,7 +228,22 @@ async function request(path, options = {}) {
   handleMerchant401(res, path);
   const data = await res.json();
   if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
-  if (!res.ok) throw Object.assign(new Error(data.error || 'Erreur serveur'), { code: data.code });
+  // 402 Payment Required : feature gated par plan d'abonnement. Le backend
+  // (middleware/subscription.js requirePlan) renvoie { error, currentPlan,
+  // requiredPlan, upgradeUrl }. On dispatche un event que le frontend ecoute
+  // pour afficher une bannière d'upgrade contextuelle au lieu d'un toast brut.
+  if (res.status === 402) {
+    try {
+      window.dispatchEvent(new CustomEvent('ff-plan-upgrade-required', { detail: data }));
+    } catch {}
+  }
+  if (!res.ok) {
+    const err = Object.assign(new Error(data.error || 'Erreur serveur'), { code: data.code });
+    // Joindre le payload pour les 402 / 429 etc. (rate limit, plan upgrade).
+    if (res.status === 402 || res.status === 429) err.data = data;
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
