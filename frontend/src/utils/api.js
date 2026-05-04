@@ -557,6 +557,15 @@ export const pubApi = {
   },
   // Note Google Business réelle (Places API) — silent fail si non configuré
   getGoogleRating: (slug) => pubRequest(`/${slug}/google-rating`),
+  // Phase 5/5 — Stripe Connect : paiement RDV en ligne.
+  // getPaymentConfig : { enabled, policy?, percentage? }. Si enabled=false,
+  // le booking page reste 100% normal (pas de paiement).
+  getPaymentConfig:    (slug)    => pubRequest(`/${slug}/payment-config`),
+  // createPaymentIntent : retourne { client_secret, payment_intent_id,
+  // connected_account_id, amount_cents, fee_cents, ... }. Le frontend
+  // utilise client_secret avec Stripe Elements pour confirmer le paiement.
+  createPaymentIntent: (slug, b) =>
+    pubRequest(`/${slug}/booking/payment-intent`, { method: 'POST', body: JSON.stringify(b) }),
 };
 
 // ── Notifications (Feature 3 & 7) ────────────────────────────────────────────

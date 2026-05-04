@@ -38,6 +38,9 @@ require('./merchant-info')(router);
 // ─ Réservation (POST /:slug/book)
 require('./book')(router);
 
+// ─ Paiement Stripe Connect (Phase 5/5) — POST /:slug/booking/payment-intent
+require('./payment')(router);
+
 // ─ Auth client (check-email, register, quick-register, login, Google OAuth redirect)
 require('./client-auth')(router);
 

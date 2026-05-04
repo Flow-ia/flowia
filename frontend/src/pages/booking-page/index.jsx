@@ -309,6 +309,8 @@ export default function BookingPage({ slug }) {
   // directement vers la création de compte.
   const [authInitMode,  setAuthInitMode]   = useState('login');
   const [requireAccount, setRequire]  = useState(false);
+  // Phase 5/5 — config paiement RDV en ligne (Stripe Connect)
+  const [paymentConfig, setPaymentConfig] = useState({ enabled: false });
   const [pendingBook,   setPendingBook]   = useState(false);
   const [myApptsInitTab, setMyApptsInitTab] = useState('appts');
   // Si l'URL cible un passage précis (/client/passages/:id), on propage
@@ -448,8 +450,11 @@ export default function BookingPage({ slug }) {
       pubApi.getServices(slug),
       pubApi.getEmployees(slug),
       pubApi.getClosedDays ? pubApi.getClosedDays(slug) : Promise.resolve({ closedDays: [] }),
+      // Phase 5/5 : config paiement RDV en ligne. Silent fail si endpoint
+      // pas dispo (vieux backend) → reste { enabled:false }, booking flow normal.
+      pubApi.getPaymentConfig ? pubApi.getPaymentConfig(slug).catch(() => ({ enabled: false })) : Promise.resolve({ enabled: false }),
     ])
-      .then(([biz, svcs, emps, cd]) => {
+      .then(([biz, svcs, emps, cd, payCfg]) => {
         setBiz(biz.business);
         setSvcs(svcs);
         setEmps(emps);
@@ -457,6 +462,7 @@ export default function BookingPage({ slug }) {
         // La colonne require_account est ignorée — comportement non-configurable.
         setRequire(true);
         setClosed(cd?.closedDays || []);
+        setPaymentConfig(payCfg || { enabled: false });
         // Récupère la note Google réelle si un lien Google Business est configuré
         if (biz.business?.google_business_url) {
           pubApi.getGoogleRating(slug)
@@ -561,7 +567,7 @@ export default function BookingPage({ slug }) {
     }
   };
 
-  const handleBook = async () => {
+  const handleBook = async (paymentIntentId) => {
     // Si compte requis et pas encore connecté → ouvrir auth + mémoriser qu'on voulait réserver
     // Détection session : ff_client_info (marker non sensible) ou ancien
     // ff_client_token (transition). Le JWT lui-même est en cookie HttpOnly.
@@ -619,6 +625,10 @@ export default function BookingPage({ slug }) {
         discount_amount: finalDiscount,
         promo_code:      finalPromoCode,
         referral_code:   referralCode || undefined,
+        // Phase 5/5 — Stripe Connect : payment_intent_id passe par le client
+        // apres confirmPayment cote front. Backend revalide PI.status='succeeded'
+        // + matching metadata avant de creer le RDV.
+        payment_intent_id: paymentIntentId || undefined,
         // RGPD commit 17 : opt-in marketing transmis seulement en mode "sans
         // compte" (le back ignore le champ si client_token + clientId valide).
         marketing_opt_in: clientUser ? undefined : noAcctConsent.marketingAccepted,
@@ -646,6 +656,11 @@ export default function BookingPage({ slug }) {
     } catch (e) {
       if (requireAccount && e.message?.includes('compte')) { setShowAuthPanel(true); setPendingBook(true); }
       else if (e.message?.includes('n\'accepte plus') || e.message?.includes('bloque')) { setIsBlocked(true); }
+      // Phase 5/5 — paiement obligatoire : Step6 affichera le bloc Stripe.
+      // On signale via setBookErr pour que l'utilisateur voie qu'il doit payer.
+      else if (e.data?.code === 'PAYMENT_REQUIRED') {
+        setBookErr('Paiement requis pour reserver. Merci de saisir votre carte ci-dessous.');
+      }
       else setBookErr(e.message);
     }
     finally { setBooking(false); }
@@ -958,6 +973,8 @@ export default function BookingPage({ slug }) {
                   promoErr={promoErr} setPromoErr={setPromoErr}
                   promoLoading={promoLoading} checkPromo={checkPromo}
                   bookErr={bookErr} booking={booking} handleBook={handleBook}
+                  paymentConfig={paymentConfig}
+                  referralCode={referralCode}
                 />
               )}
             </div>

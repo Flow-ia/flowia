@@ -311,4 +311,43 @@ module.exports = function attachMerchantInfoRoutes(router) {
       res.json(response);
     } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }
   });
+
+  // ── GET /:slug/payment-config ──────────────────────────────────────────────
+  // Phase 5/5 : expose la config paiement RDV du marchand (lecture seule
+  // publique). Le booking page utilise cette info pour afficher (ou non) le
+  // bloc Stripe Elements en etape 6, et determiner si le paiement est
+  // obligatoire ou optionnel.
+  // Si le marchand n'a pas Connect actif (charges_enabled=false) ou
+  // online_payments_enabled=false, on retourne enabled=false sans details
+  // (le booking flow continue normalement, sans paiement en ligne).
+  router.get('/:slug/payment-config', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT u.online_payments_enabled, u.stripe_charges_enabled,
+                u.booking_payment_policy, u.booking_payment_percentage,
+                u.stripe_account_id
+         FROM booking_settings bs
+         JOIN users u ON u.id = bs.user_id
+         WHERE bs.slug=$1 AND bs.is_enabled=TRUE`,
+        [req.params.slug]
+      );
+      if (!rows.length) {
+        return res.status(404).json({ error: 'Commerce introuvable.' });
+      }
+      const u = rows[0];
+      const active = !!(u.online_payments_enabled
+        && u.stripe_charges_enabled && u.stripe_account_id);
+      if (!active) {
+        return res.json({ enabled: false });
+      }
+      res.json({
+        enabled:    true,
+        policy:     u.booking_payment_policy || 'optional',
+        percentage: parseInt(u.booking_payment_percentage, 10) || 100,
+      });
+    } catch (e) {
+      console.error('[PUB PAYMENT-CONFIG ERR]', e.message);
+      res.status(500).json({ error: 'Erreur serveur.' });
+    }
+  });
 };

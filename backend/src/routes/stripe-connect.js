@@ -360,8 +360,68 @@ router.post('/webhook', async (req, res) => {
       console.log('[CONNECT WEBHOOK] account.updated:', acc.id,
         acc.charges_enabled ? 'charges_OK' : 'charges_pending');
     }
-    // Les events payment_intent.* / charge.refunded sur comptes connectes
-    // seront traites en Phase 5 (booking payment flow).
+
+    // Phase 5/5 : events sur comptes connectes (booking payment flow).
+    // ⚠ Ces events arrivent avec event.account = id du compte connecte.
+    // L'objet pi.metadata contient les infos du booking pour reconcilier.
+    else if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      // Si un RDV est deja lie (cree par /book apres confirmPayment cote
+      // front), on s'assure juste que payment_status='paid'. Sinon (rare,
+      // ex: confirmation server-side sans /book), on log mais ne cree pas
+      // le RDV — le flow normal passe par /book.
+      const upd = await pool.query(
+        `UPDATE appointments
+            SET payment_status = 'paid',
+                paid           = TRUE,
+                paid_at        = COALESCE(paid_at, NOW()),
+                paid_amount_cents = COALESCE(paid_amount_cents, $2)
+          WHERE stripe_payment_intent_id = $1
+          RETURNING id, user_id`,
+        [pi.id, pi.amount_received || pi.amount]
+      );
+      if (upd.rowCount > 0) {
+        console.log('[CONNECT WEBHOOK] payment_intent.succeeded:',
+          pi.id, '→ appt', upd.rows[0].id);
+      } else {
+        console.log('[CONNECT WEBHOOK] payment_intent.succeeded sans RDV (ok si confirme cote front):', pi.id);
+      }
+    }
+
+    else if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object;
+      // On marque le RDV (s'il existe) comme failed. Le client peut alors
+      // retenter via le frontend. Si pas de RDV cree (echec avant /book),
+      // pas d'action — le client retentera ou abandonnera.
+      await pool.query(
+        `UPDATE appointments
+            SET payment_status = 'failed'
+          WHERE stripe_payment_intent_id = $1
+            AND payment_status NOT IN ('paid','refunded')`,
+        [pi.id]
+      );
+      console.log('[CONNECT WEBHOOK] payment_intent.payment_failed:', pi.id,
+        pi.last_payment_error?.message || '');
+    }
+
+    else if (event.type === 'charge.refunded') {
+      const ch = event.data.object;
+      // On retrouve le RDV via le PaymentIntent du charge (payment_intent
+      // est sur charge object). Marque payment_status='refunded'.
+      const piId = ch.payment_intent;
+      if (piId) {
+        const upd = await pool.query(
+          `UPDATE appointments
+              SET payment_status = 'refunded'
+            WHERE stripe_payment_intent_id = $1
+              AND payment_status <> 'refunded'
+            RETURNING id`,
+          [piId]
+        );
+        console.log('[CONNECT WEBHOOK] charge.refunded:', piId,
+          upd.rowCount > 0 ? '→ appt ' + upd.rows[0].id : 'sans RDV');
+      }
+    }
   } catch (e) {
     console.error('[CONNECT WEBHOOK ERR]', event.type, e.message);
   }

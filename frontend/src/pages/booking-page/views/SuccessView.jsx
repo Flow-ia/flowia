@@ -41,6 +41,24 @@ export function SuccessView({
           {clientEmail ? 'Un email de confirmation a été envoye.' : 'Votre RDV est enregistre.'}
         </p>
 
+        {/* Phase 5/5 — badge paiement si RDV paye en ligne */}
+        {bookedAppt?.payment_status === 'paid' && bookedAppt?.paid_amount_cents > 0 && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '6px 12px', borderRadius: 99, marginBottom: 20,
+            background: 'rgba(34,197,94,0.10)',
+            border: '1px solid rgba(34,197,94,0.25)',
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 500, color: '#15803d' }}>
+              {`Paiement encaisse · ${(bookedAppt.paid_amount_cents / 100).toFixed(2)} €`}
+            </span>
+          </div>
+        )}
+
         {/* Numéro de réservation */}
         <div style={{ width:'100%', background:th.cardAlt, border: `0.5px solid ${th.border}`,
           borderRadius:14, padding:'16px 20px', textAlign:'center', marginBottom:16 }}>

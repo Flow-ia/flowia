@@ -15,7 +15,9 @@ module.exports = function attachBookRoute(router) {
       const { rows: biz } = await pool.query(
         `SELECT bs.user_id, bs.min_notice_hours, bs.advance_booking_days,
                 COALESCE(bs.timezone, 'Europe/Paris') AS timezone,
-                u.business_name
+                u.business_name,
+                u.online_payments_enabled, u.stripe_charges_enabled,
+                u.stripe_account_id, u.booking_payment_policy
          FROM booking_settings bs
          JOIN users u ON u.id = bs.user_id
          WHERE bs.slug=$1 AND bs.is_enabled=TRUE`,
@@ -24,10 +26,26 @@ module.exports = function attachBookRoute(router) {
       if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });
       const { user_id: userId, min_notice_hours, advance_booking_days,
               timezone: bizTz, business_name } = biz[0];
+      // Phase 5/5 : config paiement (utilisee plus bas pour valider PI obligatoire)
+      const paymentEnabled = !!(biz[0].online_payments_enabled
+        && biz[0].stripe_charges_enabled && biz[0].stripe_account_id);
+      const paymentPolicy = biz[0].booking_payment_policy || 'optional';
+      const stripeAccountId = biz[0].stripe_account_id;
 
-      const { service_id, employee_id, date, start_time, notes, client_token } = req.body;
+      const { service_id, employee_id, date, start_time, notes, client_token,
+              payment_intent_id } = req.body;
       if (!service_id || !date || !start_time)
         return res.status(400).json({ error: 'Données manquantes.' });
+
+      // ── Phase 5/5 : Politique paiement obligatoire ───────────────────────
+      // Si le merchant a active mandatory et n'a PAS recu de payment_intent_id,
+      // on refuse le booking. Sinon (optional ou pas active), on continue.
+      if (paymentEnabled && paymentPolicy === 'mandatory' && !payment_intent_id) {
+        return res.status(400).json({
+          error: 'Paiement requis pour reserver.',
+          code:  'PAYMENT_REQUIRED',
+        });
+      }
 
       // ── Commit 22 : compte client OBLIGATOIRE pour toute réservation ─────
       // Le toggle admin "require_account" est ignoré : comportement non-configurable.
@@ -351,17 +369,70 @@ module.exports = function attachBookRoute(router) {
         referralSkipReason = 'promo_used';
       }
 
+      // ── Phase 5/5 : Verification PaymentIntent si fourni ────────────────
+      // Si le client a paye en ligne (Stripe Elements cote front), on verifie
+      // le PI cote Stripe AVANT de creer le RDV. Si KO → 400.
+      let paidAmountCents = null;
+      if (payment_intent_id) {
+        if (!paymentEnabled || !stripeAccountId) {
+          return res.status(400).json({ error: 'Paiement non disponible chez ce commerce.' });
+        }
+        try {
+          const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+          const pi = await stripe.paymentIntents.retrieve(
+            payment_intent_id,
+            { stripeAccount: stripeAccountId }
+          );
+          if (pi.status !== 'succeeded') {
+            return res.status(400).json({
+              error: 'Le paiement n\'est pas confirme.',
+              code:  'PAYMENT_NOT_SUCCEEDED',
+              pi_status: pi.status,
+            });
+          }
+          // Verifie que le PI a ete cree pour CETTE reservation (anti-rejeu
+          // d'un PI valide d'un autre booking).
+          const md = pi.metadata || {};
+          if (md.user_id !== userId
+              || md.service_id !== String(service_id)
+              || md.date !== date
+              || md.start_time !== start_time) {
+            return res.status(400).json({
+              error: 'Le paiement ne correspond pas a cette reservation.',
+              code:  'PAYMENT_MISMATCH',
+            });
+          }
+          paidAmountCents = pi.amount_received || pi.amount;
+        } catch (e) {
+          console.error('[BOOK PI VERIFY ERR]', e.message);
+          return res.status(400).json({
+            error: 'Impossible de verifier le paiement. Merci de reessayer.',
+            code:  'PAYMENT_VERIFY_FAILED',
+          });
+        }
+      }
+
       // AUDIT booking #1 #2 : INSERT conditionnel anti-race-double-booking.
       // WHERE NOT EXISTS (overlap avec RDV actif) → si race entre 2 POST
       // simultanés sur le même créneau, un seul gagne (INSERT atomique PG),
       // l'autre reçoit 0 rows → 409 explicite.
-      const { rows } = await pool.query(
+      const paidStatus = payment_intent_id ? 'paid' : 'none';
+      // Phase 5/5 : retry idempotent. Si le client a deja reussi a creer
+      // un RDV avec ce meme payment_intent_id (UNIQUE index), on retourne
+      // l'existant au lieu de 23505 (cas : double-clic apres confirmation).
+      let rows;
+      try {
+        const ins = await pool.query(
         `INSERT INTO appointments
            (user_id, service_id, employee_id, client_id, client_name, client_email,
             client_phone, date, start_time, end_time, duration_minutes, notes, status,
             total_amount, original_amount, promo_code_id, promo_code, discount_amount,
-            source, created_by_employee_id)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL
+            source, created_by_employee_id,
+            stripe_payment_intent_id, payment_status, paid_amount_cents, paid_at, paid)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL,
+                $18,$19,$20,
+                CASE WHEN $19='paid' THEN NOW() ELSE NULL END,
+                $19='paid'
           WHERE NOT EXISTS (
             SELECT 1 FROM appointments
              WHERE user_id=$1 AND employee_id=$3 AND date=$8
@@ -374,16 +445,69 @@ module.exports = function attachBookRoute(router) {
            TO_CHAR(start_time, 'HH24:MI') as start_time,
            TO_CHAR(end_time,   'HH24:MI') as end_time,
            duration_minutes, status, notes, created_at, source,
-           total_amount, original_amount, promo_code_id, promo_code, discount_amount`,
+           total_amount, original_amount, promo_code_id, promo_code, discount_amount,
+           stripe_payment_intent_id, payment_status, paid_amount_cents, paid_at`,
         [userId, service_id, finalEmpId, clientId, client_name, client_email||null,
          clientPhoneE164, date, start_time, end_time, duration, notes||null,
-         finalPrice, originalAmt, promoCodeId, promoCodeStr, discountAmt]
-      );
+         finalPrice, originalAmt, promoCodeId, promoCodeStr, discountAmt,
+         payment_intent_id || null, paidStatus, paidAmountCents]
+        );
+        rows = ins.rows;
+      } catch (e) {
+        if (e.code === '23505' && payment_intent_id
+            && /stripe_payment_intent_id/i.test(e.detail || e.message || '')) {
+          // PI deja utilise pour un autre RDV → recuperer ce RDV et le
+          // retourner. Idempotent pour les retries client.
+          const { rows: existing } = await pool.query(
+            `SELECT id, user_id, service_id, employee_id, client_id,
+               client_name, client_email, client_phone,
+               TO_CHAR(date, 'YYYY-MM-DD') as date,
+               TO_CHAR(start_time, 'HH24:MI') as start_time,
+               TO_CHAR(end_time,   'HH24:MI') as end_time,
+               duration_minutes, status, notes, created_at, source,
+               total_amount, original_amount, promo_code_id, promo_code, discount_amount,
+               stripe_payment_intent_id, payment_status, paid_amount_cents, paid_at
+             FROM appointments
+             WHERE stripe_payment_intent_id=$1 AND user_id=$2`,
+            [payment_intent_id, userId]
+          );
+          if (existing.length) {
+            return res.status(200).json({ ...existing[0], _idempotent_retry: true });
+          }
+        }
+        throw e;
+      }
       if (!rows.length) {
         // Race perdue : un autre client a pris ce créneau entre la vérif et l'INSERT
+        // Phase 5/5 : si le client a paye, on auto-refund le PI (sinon le
+        // client paie sans avoir de RDV). Le webhook charge.refunded mettra
+        // payment_status='refunded' (mais pas de RDV ici, donc no-op DB).
+        let refunded = false;
+        if (payment_intent_id && stripeAccountId) {
+          try {
+            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+            await stripe.refunds.create(
+              {
+                payment_intent: payment_intent_id,
+                reason: 'requested_by_customer',
+                metadata: { reason: 'slot_taken_race', user_id: userId, slug: req.params.slug },
+              },
+              { stripeAccount: stripeAccountId }
+            );
+            refunded = true;
+          } catch (refErr) {
+            console.error('[BOOK SLOT_TAKEN auto-refund ERR]', refErr.message);
+          }
+        }
         return res.status(409).json({
-          error: "Ce créneau vient d'être réservé par un autre client. Merci de choisir un autre horaire.",
+          error: refunded
+            ? "Ce créneau vient d'être réservé par un autre client. Votre paiement a été remboursé automatiquement."
+            : (payment_intent_id
+              ? "Ce créneau vient d'être réservé. Votre paiement n'a pas pu être remboursé automatiquement, contactez le commerçant."
+              : "Ce créneau vient d'être réservé par un autre client. Merci de choisir un autre horaire."),
           code: 'SLOT_TAKEN',
+          payment_intent_id: payment_intent_id || null,
+          refunded,
         });
       }
       const appt = rows[0];

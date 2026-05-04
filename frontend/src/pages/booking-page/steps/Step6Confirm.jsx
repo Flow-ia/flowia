@@ -3,6 +3,7 @@
 // promo manuel + bouton "Réserver" qui déclenche handleBook().
 import { useEffect, useState } from 'react';
 import { pubApi } from '../../../utils/api';
+import { StripePaymentSection } from '../components/StripePaymentSection';
 
 export function Step6Confirm({
   th, slug, selSvc, selEmp, selDate, selSlot,
@@ -10,6 +11,7 @@ export function Step6Confirm({
   promoCode, setPromoCode, promoData, setPromoData, promoErr, setPromoErr,
   promoLoading, checkPromo,
   bookErr, booking, handleBook,
+  paymentConfig, referralCode,
 }) {
   // Commit 24c — réductions disponibles pour le client connecté chez ce
   // commerce. Cards cliquables, pré-remplit le promoCode + déclenche le
@@ -19,6 +21,17 @@ export function Step6Confirm({
   const [availCredit, setAvailCredit] = useState(null);
   const [availLoad, setAvailLoad] = useState(false);
   const [selectedDiscountId, setSelectedDiscountId] = useState(null);
+
+  // Phase 5/5 — Stripe Connect : paiement RDV en ligne (option ou requis).
+  // - mandatory : payNow force a true, pas de toggle (visible seulement)
+  // - optional  : toggle visible, defaut false ("Payer en boutique")
+  const isMandatory = !!(paymentConfig?.enabled && paymentConfig.policy === 'mandatory');
+  const canOpt      = !!(paymentConfig?.enabled && paymentConfig.policy === 'optional');
+  const [payNow, setPayNow] = useState(isMandatory);
+  // Verrou pour ne pas changer de mode pendant que Stripe tourne
+  useEffect(() => {
+    if (isMandatory && !payNow) setPayNow(true);
+  }, [isMandatory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!clientUser?.id || !slug) {
@@ -223,27 +236,92 @@ export function Step6Confirm({
 
       {bookErr && <p style={{fontSize:12,color:'#ef4444',marginBottom:12,fontWeight: 500}}>{bookErr}</p>}
 
-      <button onClick={handleBook} disabled={booking}
-        style={{width:'100%',padding:'16px',borderRadius:99,
-          background:th.accent,border:'none',fontWeight: 500,fontSize:15,
-          color:th.accentText,cursor:booking?'wait':'pointer',
-          opacity:booking?0.7:1,letterSpacing:'-0.01em',
-          display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
-        {booking ? (
-          <>
-            <div style={{width:18,height:18,borderRadius:99,
-              border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'white',
-              animation:'spin .7s linear infinite'}}/>
-            Réservation en cours…
-          </>
-        ) : (
-          promoData
-            ? `Reserver - ${((selSvc?.price||0)-promoData.discount).toFixed(2)} €`
-            : selSvc?.price&&Number(selSvc.price)>0
-              ? `Reserver - ${Number(selSvc.price).toFixed(2)} €`
-              : 'Reserver'
-        )}
-      </button>
+      {/* ── Phase 5/5 : paiement RDV en ligne ──────────────────────────── */}
+      {paymentConfig?.enabled && Number(selSvc?.price) > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {isMandatory ? (
+            <p style={{ fontSize: 12, fontWeight: 500, color: th.text, margin: '0 0 8px' }}>
+              {paymentConfig.percentage && paymentConfig.percentage < 100
+                ? `Acompte de ${paymentConfig.percentage}% requis pour reserver`
+                : "Paiement requis pour reserver"}
+            </p>
+          ) : canOpt ? (
+            <>
+              <p style={{ fontSize: 12, fontWeight: 500, color: th.text, margin: '0 0 8px' }}>
+                {"Mode de paiement"}
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button"
+                  onClick={() => setPayNow(false)}
+                  disabled={booking}
+                  style={{
+                    flex: 1, padding: '12px 14px', borderRadius: 9,
+                    background: !payNow ? th.accent : th.cardAlt,
+                    color: !payNow ? th.accentText : th.text,
+                    border: `0.5px solid ${!payNow ? th.accent : th.border}`,
+                    fontSize: 13, fontWeight: 500, cursor: booking ? 'not-allowed' : 'pointer',
+                  }}>
+                  {"Payer en boutique"}
+                </button>
+                <button type="button"
+                  onClick={() => setPayNow(true)}
+                  disabled={booking}
+                  style={{
+                    flex: 1, padding: '12px 14px', borderRadius: 9,
+                    background: payNow ? th.accent : th.cardAlt,
+                    color: payNow ? th.accentText : th.text,
+                    border: `0.5px solid ${payNow ? th.accent : th.border}`,
+                    fontSize: 13, fontWeight: 500, cursor: booking ? 'not-allowed' : 'pointer',
+                  }}>
+                  {paymentConfig.percentage && paymentConfig.percentage < 100
+                    ? `Payer un acompte (${paymentConfig.percentage}%)`
+                    : "Payer en ligne"}
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          {payNow && (
+            <StripePaymentSection
+              th={th} slug={slug}
+              booking={{
+                service_id:    selSvc?.id,
+                date:          selDate?.toLocaleDateString('sv-SE'),
+                start_time:    selSlot,
+                promo_code_id: promoData?.source === 'promo' ? (promoData.promo_id || null) : null,
+                referral_code: promoData?.source === 'referral' ? (referralCode || null) : null,
+              }}
+              onPaid={(piId) => { handleBook(piId); }}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Bouton "Reserver" — masque quand on est en mode payNow (Stripe a son
+          propre bouton "Payer X € et reserver"). */}
+      {!payNow && (
+        <button onClick={() => handleBook()} disabled={booking}
+          style={{width:'100%',padding:'16px',borderRadius:99,
+            background:th.accent,border:'none',fontWeight: 500,fontSize:15,
+            color:th.accentText,cursor:booking?'wait':'pointer',
+            opacity:booking?0.7:1,letterSpacing:'-0.01em',
+            display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+          {booking ? (
+            <>
+              <div style={{width:18,height:18,borderRadius:99,
+                border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'white',
+                animation:'spin .7s linear infinite'}}/>
+              Réservation en cours…
+            </>
+          ) : (
+            promoData
+              ? `Reserver - ${((selSvc?.price||0)-promoData.discount).toFixed(2)} €`
+              : selSvc?.price&&Number(selSvc.price)>0
+                ? `Reserver - ${Number(selSvc.price).toFixed(2)} €`
+                : 'Reserver'
+          )}
+        </button>
+      )}
     </div>
   );
 }
