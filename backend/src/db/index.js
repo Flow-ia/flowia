@@ -1459,6 +1459,35 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_payouts_enabled BOOLEAN DEFAULT FALSE`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_connected_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS online_payments_enabled BOOLEAN DEFAULT FALSE`);
+  // Phase 3 — politique de paiement booking : qui paie quoi.
+  // booking_payment_policy : 'optional' (client choisit) | 'mandatory' (paie obligatoire pour reserver)
+  // booking_payment_percentage : % du prix prele en acompte (1-100). 100 = paie integralement, 20/50 = acompte.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_payment_policy VARCHAR(15) NOT NULL DEFAULT 'optional'`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS booking_payment_percentage INT NOT NULL DEFAULT 100`);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_booking_payment_policy_check'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_booking_payment_policy_check
+          CHECK (booking_payment_policy IN ('optional','mandatory'));
+      END IF;
+    END$$;
+  `);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_booking_payment_percentage_check'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_booking_payment_percentage_check
+          CHECK (booking_payment_percentage >= 1 AND booking_payment_percentage <= 100);
+      END IF;
+    END$$;
+  `);
   // commission_rate : % FlowIA prélevé via application_fee_amount sur chaque
   // PaymentIntent. 0.00 = aucune commission (le commerçant ne voit rien sur
   // ses transactions Stripe). Configurable de 0.00 à 100.00 (en pratique 0-5).

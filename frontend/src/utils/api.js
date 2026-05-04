@@ -774,10 +774,14 @@ export const paymentsApi = {
 
 // ── Stripe Connect (onboarding marchand pour encaisser les RDV) ────────────
 export const connectApi = {
-  getAccount:      ()  => request('/stripe-connect/account'),
-  onboard:         ()  => request('/stripe-connect/onboard',        { method: 'POST' }),
-  dashboardLink:   ()  => request('/stripe-connect/dashboard-link', { method: 'POST' }),
-  disconnect:      ()  => request('/stripe-connect/disconnect',     { method: 'POST' }),
+  getAccount:        ()  => request('/stripe-connect/account'),
+  onboard:           ()  => request('/stripe-connect/onboard',        { method: 'POST' }),
+  dashboardLink:     ()  => request('/stripe-connect/dashboard-link', { method: 'POST' }),
+  disconnect:        ()  => request('/stripe-connect/disconnect',     { method: 'POST' }),
+  getPaymentConfig:  ()  => request('/stripe-connect/payment-config'),
+  updatePaymentConfig: (b) => request('/stripe-connect/payment-config', {
+    method: 'PUT', body: JSON.stringify(b),
+  }),
 };
 
 // ── Marketing IA (plan relance barbershop/salon) ─────────────────────────────

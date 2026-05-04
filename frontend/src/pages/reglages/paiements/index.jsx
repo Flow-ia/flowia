@@ -234,22 +234,225 @@ export default function Paiements() {
             )}
           </section>
 
-          {/* Note Phase 4 — config paiements RDV (à venir) */}
+          {/* Configuration des paiements RDV (Phase 4) */}
           {status === 'connected' && (
-            <section style={{
-              ...cardStyle(t),
-              background: t.cardAlt, borderStyle: 'dashed',
-            }}>
-              <p style={panelLabel(t)}>{"Bientôt disponible"}</p>
-              <p style={{ ...paragraph(t), marginTop: 6 }}>
-                {"La configuration fine des paiements (acompte 20 / 50 / 100 %, paiement obligatoire ou optionnel par prestation) sera ajoutée prochainement dans cette section. Pour l'instant, votre compte Stripe est prêt à recevoir des paiements dès qu'on activera cette fonctionnalité."}
-              </p>
-            </section>
+            <PaymentConfigSection t={t} showToast={showToast}/>
           )}
         </>
       )}
     </div>
   );
+}
+
+// ─── Configuration des paiements RDV (Phase 4) ──────────────────────────────
+// Affichee uniquement si le compte Connect est connected + charges_enabled.
+// Permet d'activer/desactiver, choisir politique (optionnel/obligatoire) et
+// pourcentage d'acompte (20/50/100/custom).
+function PaymentConfigSection({ t, showToast }) {
+  const [cfg, setCfg]         = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy]       = useState(false);
+
+  // State edition
+  const [enabled, setEnabled]       = useState(false);
+  const [policy, setPolicy]         = useState('optional');
+  const [percentage, setPercentage] = useState(100);
+  const [dirty, setDirty]           = useState(false);
+
+  const load = async () => {
+    try {
+      const d = await connectApi.getPaymentConfig();
+      setCfg(d);
+      setEnabled(!!d.enabled);
+      setPolicy(d.policy || 'optional');
+      setPercentage(d.percentage || 100);
+      setDirty(false);
+    } catch (e) {
+      console.error('[PaymentConfig] load', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  const onToggleEnabled = (val) => { setEnabled(val); setDirty(true); };
+  const onPolicyChange  = (val) => { setPolicy(val);  setDirty(true); };
+  const onPctChange     = (val) => {
+    const n = parseInt(val, 10);
+    if (Number.isFinite(n) && n >= 1 && n <= 100) setPercentage(n);
+    else if (val === '') setPercentage('');
+    setDirty(true);
+  };
+
+  const handleSave = async () => {
+    const pct = parseInt(percentage, 10);
+    if (!Number.isInteger(pct) || pct < 1 || pct > 100) {
+      showToast('Le pourcentage doit être un entier entre 1 et 100.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      await connectApi.updatePaymentConfig({ enabled, policy, percentage: pct });
+      showToast('Configuration des paiements mise à jour.', 'ok');
+      await load();
+    } catch (e) {
+      showToast(e?.message || 'Erreur lors de la mise à jour.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <section style={cardStyle(t)}>
+        <div style={{ height: 12, width: 200, background: t.cardAlt,
+                      borderRadius: 6, marginBottom: 12 }}/>
+        <div style={{ height: 38, width: '100%', background: t.cardAlt,
+                      borderRadius: 8 }}/>
+      </section>
+    );
+  }
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={panelHeader}>
+        <span style={dot(enabled ? '#10b981' : '#9ca3af')}/>
+        <span style={panelLabel(t)}>{"Paiements en ligne sur les réservations"}</span>
+        {enabled && (
+          <span style={pill('#10b981', '#ecfdf5')}>actif</span>
+        )}
+      </div>
+
+      {/* Toggle activer/desactiver */}
+      <label style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        padding: '12px 14px', borderRadius: 10,
+        background: t.cardAlt, border: `1px solid ${t.border}`,
+        cursor: 'pointer', marginBottom: 14,
+      }}>
+        <input type="checkbox" checked={enabled}
+               onChange={e => onToggleEnabled(e.target.checked)}
+               style={{ marginTop: 2, width: 16, height: 16 }}/>
+        <span>
+          <span style={{ fontSize: 14, fontWeight: 500, color: t.text }}>
+            {"Demander aux clients de payer en ligne"}
+          </span>
+          <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 4, lineHeight: 1.5 }}>
+            {"Quand actif, vos clients pourront (ou devront, selon votre politique) régler leur réservation directement sur votre page de réservation. L'argent arrive sur votre compte Stripe."}
+          </span>
+        </span>
+      </label>
+
+      {/* Options visibles uniquement si enabled */}
+      {enabled && (
+        <>
+          {/* Politique de paiement */}
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ ...panelLabel(t), marginBottom: 8 }}>{"Politique de paiement"}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={radioCard(t, policy === 'optional')}>
+                <input type="radio" name="policy" value="optional"
+                       checked={policy === 'optional'}
+                       onChange={() => onPolicyChange('optional')}
+                       style={{ marginTop: 2 }}/>
+                <span>
+                  <strong style={{ color: t.text }}>{"Optionnel"}</strong>
+                  <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 2 }}>
+                    {"Le client choisit : payer en ligne maintenant ou payer sur place lors du RDV."}
+                  </span>
+                </span>
+              </label>
+              <label style={radioCard(t, policy === 'mandatory')}>
+                <input type="radio" name="policy" value="mandatory"
+                       checked={policy === 'mandatory'}
+                       onChange={() => onPolicyChange('mandatory')}
+                       style={{ marginTop: 2 }}/>
+                <span>
+                  <strong style={{ color: t.text }}>{"Obligatoire"}</strong>
+                  <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 2 }}>
+                    {"Le RDV ne peut être réservé qu'après paiement en ligne. Réduit fortement les no-shows."}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Pourcentage acompte */}
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ ...panelLabel(t), marginBottom: 8 }}>{"Montant à payer en ligne"}</p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {[20, 50, 100].map(n => (
+                <button key={n} type="button"
+                        onClick={() => onPctChange(n)}
+                        style={presetBtn(t, percentage === n)}>
+                  {n} %
+                </button>
+              ))}
+              <span style={{ fontSize: 12, color: t.muted, margin: '0 6px' }}>ou</span>
+              <input type="number" min={1} max={100}
+                     value={percentage}
+                     onChange={e => onPctChange(e.target.value)}
+                     style={pctInput(t)}/>
+              <span style={{ fontSize: 13, color: t.text }}>{"% du prix"}</span>
+            </div>
+            <p style={{ fontSize: 12, color: t.muted, marginTop: 8, lineHeight: 1.5 }}>
+              {percentage === 100
+                ? "Le client paie 100 % du prix de la prestation au moment de la réservation."
+                : percentage === 50
+                  ? "Le client paie 50 % en acompte. Les 50 % restants sont à régler sur place lors du RDV."
+                  : percentage === 20
+                    ? "Le client paie 20 % en acompte (frais de réservation). Le solde se règle sur place."
+                    : `Le client paie ${percentage} % en acompte. Le solde se règle sur place lors du RDV.`}
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Action save */}
+      {dirty && (
+        <div style={{ display: 'flex', gap: 8, paddingTop: 14,
+                      borderTop: `1px solid ${t.separator}` }}>
+          <button onClick={() => { load(); }} disabled={busy}
+                  style={btnGhost(t, busy)}>
+            Annuler les modifications
+          </button>
+          <button onClick={handleSave} disabled={busy}
+                  style={{ ...btnPrimary(t, busy), marginLeft: 'auto' }}>
+            {busy ? 'Enregistrement…' : 'Enregistrer les changements'}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function radioCard(t, active) {
+  return {
+    display: 'flex', alignItems: 'flex-start', gap: 10,
+    padding: '12px 14px', borderRadius: 10,
+    border: active ? `1px solid ${t.text}` : `1px solid ${t.border}`,
+    background: active ? t.cardAlt : 'transparent',
+    cursor: 'pointer', fontSize: 13, color: t.text, lineHeight: 1.4,
+    transition: 'border-color 0.15s, background 0.15s',
+  };
+}
+function presetBtn(t, active) {
+  return {
+    padding: '8px 14px', fontSize: 13, fontWeight: 500,
+    background: active ? t.text : 'transparent',
+    color:      active ? t.canvas : t.text,
+    border: active ? `1px solid ${t.text}` : `1px solid ${t.border}`,
+    borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit',
+    transition: 'background 0.15s, color 0.15s',
+  };
+}
+function pctInput(t) {
+  return {
+    width: 80, padding: '7px 10px', fontSize: 13,
+    border: `1px solid ${t.borderInput || t.border}`,
+    borderRadius: 7, background: t.inputBg || t.canvas,
+    color: t.text, fontFamily: 'inherit',
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

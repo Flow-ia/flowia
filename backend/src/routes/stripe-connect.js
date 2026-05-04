@@ -177,6 +177,93 @@ router.post('/dashboard-link', authMiddleware, async (req, res) => {
   }
 });
 
+// ── GET /api/stripe-connect/payment-config ─────────────────────────────────
+// Retourne la config paiement RDV du marchand : active/inactif, politique
+// (optionnel/obligatoire), pourcentage d'acompte.
+router.get('/payment-config', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      `SELECT online_payments_enabled, booking_payment_policy,
+              booking_payment_percentage, stripe_charges_enabled
+       FROM users WHERE id=$1`, [userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    const u = rows[0];
+    res.json({
+      enabled:    !!u.online_payments_enabled,
+      policy:     u.booking_payment_policy || 'optional',
+      percentage: parseInt(u.booking_payment_percentage, 10) || 100,
+      // Indique si le marchand peut activer (Connect doit etre charges_enabled).
+      can_enable: !!u.stripe_charges_enabled,
+    });
+  } catch (e) {
+    console.error('[CONNECT PAYMENT-CONFIG GET ERR]', e.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── PUT /api/stripe-connect/payment-config ─────────────────────────────────
+// Met a jour la config. Validation stricte :
+// - enabled requiert stripe_charges_enabled=TRUE (sinon le client ne pourrait
+//   pas payer, ca casserait le booking).
+// - policy whitelist 'optional'/'mandatory'.
+// - percentage entier 1-100.
+router.put('/payment-config', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { enabled, policy, percentage } = req.body || {};
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled doit etre boolean' });
+    }
+    if (policy && !['optional', 'mandatory'].includes(policy)) {
+      return res.status(400).json({ error: 'policy invalide (optional|mandatory)' });
+    }
+    const pct = parseInt(percentage, 10);
+    if (percentage !== undefined && (!Number.isInteger(pct) || pct < 1 || pct > 100)) {
+      return res.status(400).json({ error: 'percentage doit etre entier 1-100' });
+    }
+
+    // Si on active, verifier que Connect est charges_enabled (sinon les
+    // PaymentIntents echoueraient cote Stripe).
+    if (enabled) {
+      const { rows: chk } = await pool.query(
+        'SELECT stripe_charges_enabled FROM users WHERE id=$1', [userId]
+      );
+      if (!chk[0]?.stripe_charges_enabled) {
+        return res.status(400).json({
+          error: 'Connectez et finalisez votre compte Stripe avant d\'activer les paiements en ligne.',
+        });
+      }
+    }
+
+    await pool.query(
+      `UPDATE users SET
+         online_payments_enabled    = $2,
+         booking_payment_policy     = COALESCE($3, booking_payment_policy),
+         booking_payment_percentage = COALESCE($4, booking_payment_percentage)
+       WHERE id=$1`,
+      [userId, enabled, policy || null, percentage !== undefined ? pct : null]
+    );
+
+    const { rows } = await pool.query(
+      `SELECT online_payments_enabled, booking_payment_policy, booking_payment_percentage
+       FROM users WHERE id=$1`, [userId]
+    );
+    const u = rows[0];
+    res.json({
+      ok: true,
+      enabled:    !!u.online_payments_enabled,
+      policy:     u.booking_payment_policy,
+      percentage: parseInt(u.booking_payment_percentage, 10),
+    });
+  } catch (e) {
+    console.error('[CONNECT PAYMENT-CONFIG PUT ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors de la mise a jour' });
+  }
+});
+
 // ── POST /api/stripe-connect/disconnect ────────────────────────────────────
 // Deconnecte le compte Connect du marchand (n'efface pas le compte Stripe
 // cote Stripe, juste l'association avec FlowIA). Le marchand pourra se
