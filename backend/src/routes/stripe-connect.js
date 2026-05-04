@@ -298,12 +298,15 @@ router.post('/webhook', async (req, res) => {
     console.error('[CONNECT WEBHOOK] signature manquante');
     return res.status(400).json({ error: 'webhook signature required' });
   }
-  // Dual-mode : on accepte 3 secrets possibles dans cet ordre, on teste
-  // chacun jusqu'a en trouver un qui valide. Permet de gerer Test + Live
-  // simultanement sur le meme endpoint Render sans avoir a switcher.
+  // Multi-mode : on accepte 5 secrets possibles dans cet ordre, on teste
+  // chacun jusqu'a en trouver un qui valide. Couvre les 2 webhooks Stripe
+  // Connect necessaires : un sur 'Votre compte' (account.updated), un sur
+  // 'Comptes connectes' (payment_intent.*, charge.refunded), x2 (Test+Live).
   const secrets = [
     process.env.STRIPE_CONNECT_WEBHOOK_SECRET_TEST,
     process.env.STRIPE_CONNECT_WEBHOOK_SECRET_LIVE,
+    process.env.STRIPE_CONNECT_CONNECTED_WEBHOOK_SECRET_TEST,
+    process.env.STRIPE_CONNECT_CONNECTED_WEBHOOK_SECRET_LIVE,
     process.env.STRIPE_CONNECT_WEBHOOK_SECRET,  // legacy single-secret
   ].filter(Boolean);
   if (!secrets.length) {
