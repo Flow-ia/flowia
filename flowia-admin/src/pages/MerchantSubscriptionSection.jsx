@@ -98,7 +98,11 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
   if (loading) return (
     <section className="card">
       <div className="card-head"><h2 className="card-title">Abonnement</h2></div>
-      <div className="card-body"><p style={{ color: '#888' }}>Chargement…</p></div>
+      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={skel(140, 12)}/>
+        <div style={skel(220, 18)}/>
+        <div style={skel(180, 12)}/>
+      </div>
     </section>
   );
 
@@ -111,133 +115,168 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
     (new Date(grant.expires_at).getTime() - new Date(grant.granted_at).getTime())
       <= 90 * 24 * 3600 * 1000;
 
+  // Status colors via theme vars (dark/light safe).
+  const stripeStatusColor =
+      stripe.status === 'active'    ? 'var(--success)'
+    : stripe.status === 'trialing'  ? 'var(--info)'
+    : stripe.status === 'past_due'  ? 'var(--warning)'
+    : stripe.status === 'canceled'  ? 'var(--error)'
+    : 'var(--fg-muted)';
+  const planSourceColor =
+      data?.effective?.source === 'admin_grant' ? 'var(--info)'
+    : data?.effective?.source === 'stripe'      ? stripeStatusColor
+    : 'var(--fg-muted)';
+
   return (
     <section className="card">
-      <div className="card-head"><h2 className="card-title">Abonnement</h2></div>
-      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="card-head">
+        <h2 className="card-title">Abonnement</h2>
+        {data?.effective?.plan && (
+          <span style={metaText}>
+            {sourceLabel(data.effective.source)}
+          </span>
+        )}
+      </div>
+      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {err && <p style={errStyle}>{err}</p>}
+        {err && (
+          <div style={alertStyle('error')}>{err}</div>
+        )}
 
-        {/* État unifié — plan + source + Stripe details fusionnés */}
-        <div style={infoBlock}>
-          <p style={lbl}>Plan actif du marchand</p>
+        {/* ── PANEL 1 : Plan actif du marchand ─────────────────────────── */}
+        <div style={panelStyle}>
+          <div style={panelHeader}>
+            <span style={dot(planSourceColor)}/>
+            <span style={panelLabel}>{"Plan actif"}</span>
+          </div>
           {data?.effective?.plan ? (
             <>
-              {/* Ligne 1 : plan + periode (si dispo) + statut/source en badge */}
-              <p style={val}>
-                <strong>{labelPlan(data.effective.plan)}</strong>
+              <div style={planTitleRow}>
+                <span style={planNameStyle}>{labelPlan(data.effective.plan)}</span>
                 {(data.effective.source === 'stripe' && stripe.period) && (
-                  <span style={{ color: '#374151', fontWeight: 400, marginLeft: 6 }}>
-                    · {stripe.period === 'yearly' ? 'Annuel' : 'Mensuel'}
+                  <span style={planSubtle}>
+                    {stripe.period === 'yearly' ? 'Annuel' : 'Mensuel'}
                   </span>
                 )}
                 {(data.effective.source === 'admin_grant' && data?.admin_grant?.period) && (
-                  <span style={{ color: '#374151', fontWeight: 400, marginLeft: 6 }}>
-                    · {data.admin_grant.period === 'yearly' ? 'Annuel' : 'Mensuel'}
+                  <span style={planSubtle}>
+                    {data.admin_grant.period === 'yearly' ? 'Annuel' : 'Mensuel'}
                   </span>
                 )}
                 {data.effective.source === 'stripe' && stripe.status && (
-                  <span style={statusBadge(stripe.status)}>{stripe.status}</span>
+                  <span style={pill(stripeStatusColor)}>{stripe.status}</span>
                 )}
                 {data.effective.source === 'admin_grant' && (
-                  <span style={{
-                    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
-                    background: '#1e3a8a', color: '#fff', fontWeight: 500,
-                  }}>
+                  <span style={pill('var(--info)', 'solid')}>
                     {isTrialGrant ? 'essai admin' : 'gratuit admin'}
                   </span>
                 )}
-              </p>
-              {/* Ligne 2 : source en clair */}
-              <p style={smallMute}>
-                Source : {sourceLabel(data.effective.source)}
-              </p>
-              {/* Ligne 3 : prochaine echeance ou expiration octroi */}
-              {data.effective.source === 'stripe' && stripe.current_period_end && (
-                <p style={smallMute}>
-                  {stripe.cancel_at_period_end
-                    ? `Annulation programmée le ${formatDate(stripe.current_period_end)}.`
-                    : `Prochain prélèvement le ${formatDate(stripe.current_period_end)}.`}
-                </p>
-              )}
-              {data.effective.source === 'admin_grant' && (
-                <p style={smallMute}>
-                  {data.admin_grant?.expires_at
-                    ? `Bascule auto sur Découverte le ${formatDate(data.admin_grant.expires_at)}.`
-                    : 'Aucune expiration — gratuit illimité jusqu\'à révocation.'}
-                </p>
-              )}
-              {/* Ligne 4 : ID Stripe (debug / support) */}
-              {stripe.subscription_id && (
-                <p style={{ ...smallMute, fontFamily: 'monospace', fontSize: 11 }}>
-                  ID Stripe : {stripe.subscription_id}
-                </p>
-              )}
-              {/* Ligne 5 : si octroi admin actif AVEC sub Stripe en parallele -> alerte double-billing potentiel */}
+              </div>
+
+              <div style={panelDetails}>
+                {data.effective.source === 'stripe' && stripe.current_period_end && (
+                  <div style={detailRow}>
+                    <span style={detailKey}>
+                      {stripe.cancel_at_period_end ? "Annulation prévue" : "Prochain prélèvement"}
+                    </span>
+                    <span style={detailVal}>{formatDate(stripe.current_period_end)}</span>
+                  </div>
+                )}
+                {data.effective.source === 'admin_grant' && (
+                  <div style={detailRow}>
+                    <span style={detailKey}>
+                      {data.admin_grant?.expires_at ? "Bascule sur Découverte" : "Expiration"}
+                    </span>
+                    <span style={detailVal}>
+                      {data.admin_grant?.expires_at
+                        ? formatDate(data.admin_grant.expires_at)
+                        : "Aucune (gratuit illimité)"}
+                    </span>
+                  </div>
+                )}
+                {stripe.subscription_id && (
+                  <div style={detailRow}>
+                    <span style={detailKey}>{"ID Stripe"}</span>
+                    <span style={{ ...detailVal, fontFamily: 'monospace', fontSize: 11 }}>
+                      {stripe.subscription_id}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Alerte double-billing */}
               {data.effective.source === 'admin_grant' && stripe.subscription_id
                 && ['active','trialing','past_due'].includes(stripe.status) && (
-                <p style={{
-                  marginTop: 8, padding: '6px 10px', borderRadius: 6,
-                  background: '#fffbeb', border: '1px solid #fde68a',
-                  fontSize: 12, color: '#92400e',
-                }}>
-                  ⚠ Sub Stripe encore active en parallèle de l'octroi : risque de
-                  double-billing. Annulez la sub Stripe manuellement si nécessaire.
-                </p>
+                <div style={alertStyle('warning')}>
+                  {"Sub Stripe encore active en parallèle de l'octroi : risque de double-billing. Annulez la sub Stripe manuellement si nécessaire."}
+                </div>
               )}
             </>
           ) : (
-            <p style={smallMute}>Plan Découverte (gratuit, fonctions limitées).</p>
+            <p style={emptyText}>{"Plan Découverte (gratuit, fonctionnalités limitées)."}</p>
           )}
         </div>
 
-        {/* Octroi superadmin */}
-        <div style={{
-          ...infoBlock,
-          background: grantActive ? '#ecfdf5' : '#f9f9fb',
-          borderColor: grantActive ? '#a7f3d0' : '#e5e7eb',
-        }}>
-          <p style={lbl}>
-            {isTrialGrant ? 'Essai gratuit en cours' : 'Octroi superadmin (plan gratuit)'}
-          </p>
+        {/* ── PANEL 2 : Octroi superadmin ──────────────────────────────── */}
+        <div style={grantActive ? panelStyleHighlight : panelStyle}>
+          <div style={panelHeader}>
+            <span style={dot(grantActive ? 'var(--success)' : 'var(--fg-muted)')}/>
+            <span style={panelLabel}>
+              {grantActive
+                ? (isTrialGrant ? "Essai gratuit en cours" : "Plan offert actif")
+                : "Octroi superadmin"}
+            </span>
+            {grantActive && !grant.expires_at && (
+              <span style={pill('var(--info)', 'solid')}>À vie</span>
+            )}
+            {grantActive && isTrialGrant && (
+              <span style={pill('var(--info)', 'solid')}>Essai</span>
+            )}
+          </div>
+
           {grantActive ? (
             <>
-              <p style={val}>
-                <strong style={{ color: '#10b981' }}>
-                  {labelPlan(grant.plan)} · {grant.period === 'yearly' ? 'Annuel' : 'Mensuel'} (gratuit)
-                </strong>
-                {!grant.expires_at && (
-                  <span style={{
-                    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
-                    background: '#1e3a8a', color: '#fff', fontWeight: 600,
-                    letterSpacing: 0.4, textTransform: 'uppercase',
-                  }}>À vie</span>
+              <div style={planTitleRow}>
+                <span style={{ ...planNameStyle, color: 'var(--success)' }}>
+                  {labelPlan(grant.plan)}
+                </span>
+                <span style={planSubtle}>
+                  {grant.period === 'yearly' ? 'Annuel' : 'Mensuel'}
+                </span>
+                <span style={planSubtle}>· gratuit</span>
+              </div>
+
+              <div style={panelDetails}>
+                <div style={detailRow}>
+                  <span style={detailKey}>{"Octroyé le"}</span>
+                  <span style={detailVal}>{formatDate(grant.granted_at)}</span>
+                </div>
+                <div style={detailRow}>
+                  <span style={detailKey}>{"Par"}</span>
+                  <span style={detailVal}>{grant.granted_by_email || '—'}</span>
+                </div>
+                <div style={detailRow}>
+                  <span style={detailKey}>{"Expiration"}</span>
+                  <span style={detailVal}>
+                    {grant.expires_at
+                      ? formatDate(grant.expires_at)
+                      : "Aucune — révocation manuelle"}
+                  </span>
+                </div>
+                {grant.reason && (
+                  <div style={detailRow}>
+                    <span style={detailKey}>{"Motif"}</span>
+                    <span style={{ ...detailVal, fontStyle: 'italic' }}>{grant.reason}</span>
+                  </div>
                 )}
-                {isTrialGrant && (
-                  <span style={{
-                    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
-                    background: '#1e40af', color: '#fff', fontWeight: 600,
-                    letterSpacing: 0.4, textTransform: 'uppercase',
-                  }}>Essai</span>
-                )}
-              </p>
-              <p style={smallMute}>
-                Octroyé le {formatDate(grant.granted_at)} par {grant.granted_by_email || '—'}
-              </p>
-              <p style={smallMute}>
-                {grant.expires_at
-                  ? `Expire le ${formatDate(grant.expires_at)} (durée limitée).`
-                  : 'Aucune expiration — accès gratuit illimité jusqu\'à révocation manuelle.'}
-              </p>
-              {grant.reason && (
-                <p style={smallMute}><em>« {grant.reason} »</em></p>
-              )}
+              </div>
+
               <button onClick={handleRevoke} disabled={busy}
-                      style={{ ...btnDanger, marginTop: 10 }}>
-                {busy ? '…'
+                      style={{ ...btnDanger, marginTop: 14 }}>
+                {busy ? "…"
                       : (isTrialGrant
-                          ? 'Retirer l\'essai gratuit (basculer sur Découverte)'
-                          : 'Révoquer l\'octroi (réactiver paiement Stripe)')}
+                          ? "Retirer l'essai (bascule sur Découverte)"
+                          : "Révoquer l'octroi (réactiver paiement Stripe)")}
               </button>
             </>
           ) : (
@@ -415,83 +454,165 @@ function formatDate(iso) {
     });
   } catch { return '—'; }
 }
-function statusBadge(s) {
-  const colors = {
-    active:    { bg: '#ecfdf5', fg: '#10b981' },
-    trialing:  { bg: '#eff6ff', fg: '#1e40af' },
-    past_due:  { bg: '#fffbeb', fg: '#92400e' },
-    canceled:  { bg: '#fef2f2', fg: '#991b1b' },
-  };
-  const c = colors[s] || { bg: '#eee', fg: '#666' };
+// ─── Helpers UI (theme-aware via CSS vars du panel admin) ─────────────────
+
+const metaText = {
+  fontSize: 12, color: 'var(--fg-muted)',
+};
+const panelStyle = {
+  padding: 16, borderRadius: 10,
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border)',
+  display: 'flex', flexDirection: 'column', gap: 12,
+};
+const panelStyleHighlight = {
+  ...panelStyle,
+  // Halo subtil vert pour octroi actif (color-mix safe sur navigateurs récents).
+  borderColor: 'color-mix(in srgb, var(--success) 35%, var(--border))',
+  background: 'color-mix(in srgb, var(--success) 4%, var(--surface-2))',
+};
+const panelHeader = {
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+};
+const panelLabel = {
+  fontSize: 11, fontWeight: 600, color: 'var(--fg-muted)',
+  textTransform: 'uppercase', letterSpacing: 0.6,
+};
+const planTitleRow = {
+  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+};
+const planNameStyle = {
+  fontSize: 18, fontWeight: 600, color: 'var(--fg)',
+  letterSpacing: '-0.01em',
+};
+const planSubtle = {
+  fontSize: 13, color: 'var(--fg-muted)',
+};
+const panelDetails = {
+  display: 'grid', gap: 6,
+  gridTemplateColumns: 'minmax(140px, max-content) 1fr',
+  alignItems: 'baseline',
+  marginTop: 4,
+};
+const detailRow = {
+  display: 'contents',
+};
+const detailKey = {
+  fontSize: 12, color: 'var(--fg-muted)',
+};
+const detailVal = {
+  fontSize: 13, color: 'var(--fg)', fontWeight: 500,
+};
+const emptyText = {
+  fontSize: 13, color: 'var(--fg-muted)', margin: 0,
+};
+
+// Petit point colore (status indicator).
+function dot(color) {
   return {
-    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
-    background: c.bg, color: c.fg, fontWeight: 500,
+    width: 8, height: 8, borderRadius: 99,
+    background: color, flexShrink: 0,
   };
 }
 
-const infoBlock = {
-  padding: '12px 14px', borderRadius: 8,
-  background: '#f9f9fb', border: '1px solid #e5e7eb',
-};
-const lbl = {
-  margin: '0 0 4px', fontSize: 11, fontWeight: 600, color: '#6b7280',
-  textTransform: 'uppercase', letterSpacing: 0.5,
-};
-const val = { margin: '0 0 4px', fontSize: 14, color: '#111827' };
-const smallMute = { margin: '2px 0 0', fontSize: 12, color: '#6b7280' };
-const errStyle = {
-  margin: 0, padding: '10px 12px', borderRadius: 8,
-  background: '#fef2f2', border: '1px solid #fecaca',
-  color: '#991b1b', fontSize: 13,
-};
+// Pill : variant 'tint' (defaut, fond translucide) ou 'solid' (fond plein, texte clair).
+function pill(color, variant = 'tint') {
+  if (variant === 'solid') {
+    return {
+      fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
+      background: color, color: '#fff',
+      letterSpacing: 0.4, textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+    };
+  }
+  return {
+    fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 99,
+    color, background: `color-mix(in srgb, ${color} 15%, transparent)`,
+    border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+    whiteSpace: 'nowrap',
+  };
+}
+
+// Alerte info (warning / error).
+function alertStyle(kind) {
+  const color = kind === 'error' ? 'var(--error)'
+              : kind === 'warning' ? 'var(--warning)'
+              : 'var(--info)';
+  return {
+    padding: '10px 12px', borderRadius: 8,
+    background: `color-mix(in srgb, ${color} 10%, transparent)`,
+    border:     `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
+    color,
+    fontSize: 13, lineHeight: 1.5, margin: 0,
+  };
+}
+
+// Skeleton statique (chargement).
+function skel(width, height) {
+  return {
+    width, height, borderRadius: 6,
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border)',
+  };
+}
+
+// Form helpers.
 const formGrid = {
   display: 'grid', gap: 10,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
 };
 const lblForm = {
-  display: 'flex', flexDirection: 'column', gap: 4,
-  fontSize: 12, fontWeight: 500, color: '#374151',
+  display: 'flex', flexDirection: 'column', gap: 6,
+  fontSize: 12, fontWeight: 500, color: 'var(--fg)',
 };
 const input = {
-  padding: '8px 10px', fontSize: 13, borderRadius: 6,
-  border: '1px solid #d1d5db', background: '#fff', color: '#111827',
-  fontFamily: 'inherit',
+  padding: '9px 11px', fontSize: 13, borderRadius: 7,
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--fg)',
+  fontFamily: 'inherit', outline: 'none',
 };
 const btnPrimary = {
-  padding: '8px 14px', fontSize: 13, fontWeight: 500,
-  background: '#111827', color: '#fff',
+  padding: '9px 16px', fontSize: 13, fontWeight: 600,
+  background: 'var(--fg)', color: 'var(--bg)',
   border: 'none', borderRadius: 7, cursor: 'pointer',
   fontFamily: 'inherit',
 };
 const btnGhost = {
-  padding: '8px 14px', fontSize: 13, fontWeight: 500,
-  background: 'transparent', color: '#374151',
-  border: '1px solid #d1d5db', borderRadius: 7, cursor: 'pointer',
+  padding: '9px 16px', fontSize: 13, fontWeight: 500,
+  background: 'transparent', color: 'var(--fg)',
+  border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer',
   fontFamily: 'inherit',
 };
 const btnDanger = {
-  padding: '8px 14px', fontSize: 13, fontWeight: 500,
-  background: 'transparent', color: '#991b1b',
-  border: '1px solid #fecaca', borderRadius: 7, cursor: 'pointer',
-  fontFamily: 'inherit',
+  padding: '9px 16px', fontSize: 13, fontWeight: 500,
+  background: 'transparent', color: 'var(--error)',
+  border: '1px solid color-mix(in srgb, var(--error) 35%, transparent)',
+  borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit',
 };
 function radioCard(active) {
   return {
-    flex: '1 1 200px',
-    display: 'flex', alignItems: 'flex-start',
-    padding: '10px 12px', borderRadius: 8,
-    border: `1px solid ${active ? '#1e40af' : '#d1d5db'}`,
-    background:  active ? '#eff6ff' : '#fff',
-    cursor: 'pointer', fontSize: 13, color: '#111827',
+    flex: '1 1 220px',
+    display: 'flex', alignItems: 'flex-start', gap: 8,
+    padding: '12px 14px', borderRadius: 8,
+    border: active
+      ? '1px solid color-mix(in srgb, var(--info) 50%, var(--border))'
+      : '1px solid var(--border)',
+    background: active
+      ? 'color-mix(in srgb, var(--info) 8%, var(--surface))'
+      : 'var(--surface)',
+    cursor: 'pointer', fontSize: 13, color: 'var(--fg)',
+    transition: 'border-color 0.15s, background 0.15s',
   };
 }
 function presetBtn(active) {
   return {
-    padding: '6px 12px', fontSize: 12, fontWeight: 500,
-    background: active ? '#111827' : '#fff',
-    color:      active ? '#fff'    : '#374151',
-    border:     `1px solid ${active ? '#111827' : '#d1d5db'}`,
+    padding: '7px 13px', fontSize: 12, fontWeight: 500,
+    background: active ? 'var(--fg)' : 'var(--surface)',
+    color:      active ? 'var(--bg)' : 'var(--fg)',
+    border:     active ? '1px solid var(--fg)' : '1px solid var(--border)',
     borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+    transition: 'background 0.15s, border-color 0.15s',
   };
 }
 function formatDateTrial(days) {
