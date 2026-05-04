@@ -15,9 +15,11 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
   const [showForm, setForm] = useState(false);
 
   // Form fields
+  const [grantType, setGrantType]         = useState('trial'); // 'trial' | 'gift'
   const [plan, setPlan]                   = useState('essentiel');
   const [period, setPeriod]               = useState('monthly');
-  const [duration, setDuration]           = useState('lifetime'); // 'lifetime' | 'limited'
+  const [trialDays, setTrialDays]         = useState(14);     // pour grantType='trial'
+  const [duration, setDuration]           = useState('lifetime'); // 'lifetime' | 'limited' (gift)
   const [expires, setExpires]             = useState(''); // YYYY-MM-DD si duration='limited'
   const [reason, setReason]               = useState('');
   const [cancelStripe, setCancelStripe]   = useState(true);
@@ -39,19 +41,32 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
       setErr('Motif requis (min. 3 caractères).');
       return;
     }
-    if (duration === 'limited' && !expires) {
-      setErr('Sélectionnez une date d\'expiration ou choisissez « À vie ».');
-      return;
-    }
+    // Calcul de expires_at selon le type d'octroi.
+    let expiresAtIso = null;
+    if (grantType === 'trial') {
+      const days = parseInt(trialDays, 10);
+      if (!days || days < 1 || days > 365) {
+        setErr('Durée d\'essai invalide (1 à 365 jours).');
+        return;
+      }
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      d.setUTCHours(23, 59, 59, 999);
+      expiresAtIso = d.toISOString();
+    } else if (duration === 'limited') {
+      if (!expires) {
+        setErr('Sélectionnez une date d\'expiration ou choisissez « À vie ».');
+        return;
+      }
+      expiresAtIso = new Date(expires + 'T23:59:59Z').toISOString();
+    } // sinon grantType='gift' + duration='lifetime' -> null = à vie
+
     setBusy(true);
     setErr(null);
     try {
       await grantMerchantSubscription(merchantId, {
         plan, period,
-        // duration='lifetime' -> expires_at=null = a vie. Sinon date du form.
-        expires_at:    duration === 'lifetime'
-          ? null
-          : new Date(expires + 'T23:59:59Z').toISOString(),
+        expires_at:    expiresAtIso,
         reason:        reason.trim(),
         cancel_stripe: cancelStripe,
       });
@@ -59,6 +74,8 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
       setReason('');
       setExpires('');
       setDuration('lifetime');
+      setTrialDays(14);
+      setGrantType('trial');
       await load();
     } catch (e) { setErr(e.message); }
     finally     { setBusy(false); }
@@ -88,6 +105,11 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
   const grant = data?.admin_grant;
   const grantActive = grant && (!grant.expires_at || new Date(grant.expires_at) > new Date());
   const stripe = data?.stripe || {};
+  // Heuristique : un grant avec expires_at <= 90 jours apres granted_at est
+  // un essai gratuit. Sinon (lifetime ou date longue) : plan offert.
+  const isTrialGrant = grant && grant.expires_at && grant.granted_at &&
+    (new Date(grant.expires_at).getTime() - new Date(grant.granted_at).getTime())
+      <= 90 * 24 * 3600 * 1000;
 
   return (
     <section className="card">
@@ -136,7 +158,9 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
           background: grantActive ? '#ecfdf5' : '#f9f9fb',
           borderColor: grantActive ? '#a7f3d0' : '#e5e7eb',
         }}>
-          <p style={lbl}>Octroi superadmin (plan gratuit)</p>
+          <p style={lbl}>
+            {isTrialGrant ? 'Essai gratuit en cours' : 'Octroi superadmin (plan gratuit)'}
+          </p>
           {grantActive ? (
             <>
               <p style={val}>
@@ -149,6 +173,13 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
                     background: '#1e3a8a', color: '#fff', fontWeight: 600,
                     letterSpacing: 0.4, textTransform: 'uppercase',
                   }}>À vie</span>
+                )}
+                {isTrialGrant && (
+                  <span style={{
+                    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
+                    background: '#1e40af', color: '#fff', fontWeight: 600,
+                    letterSpacing: 0.4, textTransform: 'uppercase',
+                  }}>Essai</span>
                 )}
               </p>
               <p style={smallMute}>
@@ -164,22 +195,60 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
               )}
               <button onClick={handleRevoke} disabled={busy}
                       style={{ ...btnDanger, marginTop: 10 }}>
-                {busy ? '…' : 'Révoquer l\'octroi (réactiver paiement Stripe)'}
+                {busy ? '…'
+                      : (isTrialGrant
+                          ? 'Retirer l\'essai gratuit (basculer sur Découverte)'
+                          : 'Révoquer l\'octroi (réactiver paiement Stripe)')}
               </button>
             </>
           ) : (
             <>
               <p style={smallMute}>Aucun octroi en cours.</p>
               {!showForm && (
-                <button onClick={() => setForm(true)} style={{ ...btnPrimary, marginTop: 8 }}>
-                  Offrir un plan gratuit
-                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <button onClick={() => { setGrantType('trial'); setForm(true); }}
+                          style={btnPrimary}>
+                    Donner un essai gratuit
+                  </button>
+                  <button onClick={() => { setGrantType('gift'); setForm(true); }}
+                          style={btnGhost}>
+                    Offrir un plan gratuit (long / à vie)
+                  </button>
+                </div>
               )}
               {showForm && (
                 <form onSubmit={handleGrant} style={{ marginTop: 12 }}>
+                  {/* Toggle type d'octroi */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                    <label style={radioCard(grantType === 'trial')}>
+                      <input type="radio" name="grantType" value="trial"
+                             checked={grantType === 'trial'}
+                             onChange={() => setGrantType('trial')}
+                             style={{ marginRight: 8 }}/>
+                      <span>
+                        <strong>Essai gratuit</strong>
+                        <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
+                          Durée courte (jours), bascule auto sur Découverte ensuite
+                        </span>
+                      </span>
+                    </label>
+                    <label style={radioCard(grantType === 'gift')}>
+                      <input type="radio" name="grantType" value="gift"
+                             checked={grantType === 'gift'}
+                             onChange={() => setGrantType('gift')}
+                             style={{ marginRight: 8 }}/>
+                      <span>
+                        <strong>Plan offert</strong>
+                        <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
+                          Long terme : à vie ou jusqu'à une date personnalisée
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
                   <div style={formGrid}>
                     <label style={lblForm}>
-                      Plan offert
+                      Plan
                       <select value={plan} onChange={e => setPlan(e.target.value)} style={input}>
                         <option value="essentiel">Essentiel (24 €/mois)</option>
                         <option value="equipe">Équipe (49 €/mois) — toutes les fonctions</option>
@@ -194,49 +263,75 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
                     </label>
                   </div>
 
-                  {/* Choix explicite : a vie OU date limite */}
-                  <div style={{ marginTop: 12 }}>
-                    <p style={{ ...lblForm, marginBottom: 6 }}>Durée de la gratuité</p>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <label style={radioCard(duration === 'lifetime')}>
-                        <input type="radio" name="duration" value="lifetime"
-                               checked={duration === 'lifetime'}
-                               onChange={() => setDuration('lifetime')}
-                               style={{ marginRight: 8 }}/>
-                        <span>
-                          <strong>À vie</strong>
-                          <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
-                            Aucune expiration — gratuit illimité jusqu'à révocation manuelle
-                          </span>
-                        </span>
-                      </label>
-                      <label style={radioCard(duration === 'limited')}>
-                        <input type="radio" name="duration" value="limited"
-                               checked={duration === 'limited'}
-                               onChange={() => setDuration('limited')}
-                               style={{ marginRight: 8 }}/>
-                        <span>
-                          <strong>Jusqu'à une date</strong>
-                          <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
-                            Bascule auto sur Stripe / Découverte après cette date
-                          </span>
-                        </span>
-                      </label>
+                  {/* Durée — diffère selon type d'octroi */}
+                  {grantType === 'trial' ? (
+                    <div style={{ marginTop: 12 }}>
+                      <p style={{ ...lblForm, marginBottom: 6 }}>Durée de l'essai</p>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {[7, 14, 30, 60, 90].map(n => (
+                          <button key={n} type="button"
+                                  onClick={() => setTrialDays(n)}
+                                  style={presetBtn(trialDays === n)}>
+                            {n} jours
+                          </button>
+                        ))}
+                        <span style={{ fontSize: 12, color: '#888', margin: '0 6px' }}>ou</span>
+                        <input type="number" min={1} max={365}
+                               value={trialDays}
+                               onChange={e => setTrialDays(e.target.value)}
+                               style={{ ...input, width: 80, padding: '6px 8px' }}/>
+                        <span style={{ fontSize: 12, color: '#444' }}>jours</span>
+                      </div>
+                      <p style={{ fontSize: 11, color: '#888', marginTop: 6 }}>
+                        {`Expiration prévue : ${formatDateTrial(trialDays)}.`}
+                      </p>
                     </div>
-                    {duration === 'limited' && (
-                      <input type="date" value={expires}
-                             onChange={e => setExpires(e.target.value)}
-                             style={{ ...input, marginTop: 8, maxWidth: 200 }}
-                             min={new Date().toISOString().slice(0, 10)}
-                             required/>
-                    )}
-                  </div>
+                  ) : (
+                    <div style={{ marginTop: 12 }}>
+                      <p style={{ ...lblForm, marginBottom: 6 }}>Durée de la gratuité</p>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <label style={radioCard(duration === 'lifetime')}>
+                          <input type="radio" name="duration" value="lifetime"
+                                 checked={duration === 'lifetime'}
+                                 onChange={() => setDuration('lifetime')}
+                                 style={{ marginRight: 8 }}/>
+                          <span>
+                            <strong>À vie</strong>
+                            <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
+                              Aucune expiration — gratuit illimité jusqu'à révocation manuelle
+                            </span>
+                          </span>
+                        </label>
+                        <label style={radioCard(duration === 'limited')}>
+                          <input type="radio" name="duration" value="limited"
+                                 checked={duration === 'limited'}
+                                 onChange={() => setDuration('limited')}
+                                 style={{ marginRight: 8 }}/>
+                          <span>
+                            <strong>Jusqu'à une date</strong>
+                            <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
+                              Bascule auto sur Stripe / Découverte après cette date
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                      {duration === 'limited' && (
+                        <input type="date" value={expires}
+                               onChange={e => setExpires(e.target.value)}
+                               style={{ ...input, marginTop: 8, maxWidth: 200 }}
+                               min={new Date().toISOString().slice(0, 10)}
+                               required/>
+                      )}
+                    </div>
+                  )}
 
                   <label style={{ ...lblForm, display: 'block', marginTop: 12 }}>
                     Motif (visible dans l'audit log)
                     <textarea value={reason} onChange={e => setReason(e.target.value)}
                               rows={2} maxLength={500} style={input}
-                              placeholder="Ex: Partenariat Q3 2026, beta-testeur, gestion litige…"/>
+                              placeholder={grantType === 'trial'
+                                ? 'Ex: Essai prolongé pour démo commerciale, conversion difficile…'
+                                : 'Ex: Partenariat Q3 2026, beta-testeur, gestion litige…'}/>
                   </label>
                   <label style={{ display: 'flex', gap: 8, marginTop: 8, fontSize: 13, color: '#444' }}>
                     <input type="checkbox" checked={cancelStripe}
@@ -247,7 +342,10 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
                     <button type="button" onClick={() => setForm(false)} disabled={busy}
                             style={btnGhost}>Annuler</button>
                     <button type="submit" disabled={busy} style={btnPrimary}>
-                      {busy ? 'Octroi en cours…' : 'Confirmer l\'octroi gratuit'}
+                      {busy ? 'Octroi en cours…'
+                            : (grantType === 'trial'
+                                ? `Donner ${trialDays} jours d'essai`
+                                : 'Confirmer l\'octroi gratuit')}
                     </button>
                   </div>
                 </form>
@@ -347,4 +445,22 @@ function radioCard(active) {
     background:  active ? '#eff6ff' : '#fff',
     cursor: 'pointer', fontSize: 13, color: '#111827',
   };
+}
+function presetBtn(active) {
+  return {
+    padding: '6px 12px', fontSize: 12, fontWeight: 500,
+    background: active ? '#111827' : '#fff',
+    color:      active ? '#fff'    : '#374151',
+    border:     `1px solid ${active ? '#111827' : '#d1d5db'}`,
+    borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+  };
+}
+function formatDateTrial(days) {
+  const n = parseInt(days, 10) || 0;
+  if (n < 1) return '—';
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
 }

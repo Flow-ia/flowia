@@ -1223,11 +1223,16 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
           <span style={{ fontSize: 13, color: t.muted }}>
             · {isYearly ? 'Annuel' : 'Mensuel'}
           </span>
-          {isAdminGranted && (
-            <span style={badgeStyle('blue')}>
-              {sub.admin_grant?.expires_at ? 'Plan offert' : 'Plan offert à vie'}
-            </span>
-          )}
+          {isAdminGranted && (() => {
+            const g = sub.admin_grant || {};
+            if (!g.expires_at) return <span style={badgeStyle('blue')}>Plan offert à vie</span>;
+            const trialLike = g.granted_at &&
+              (new Date(g.expires_at).getTime() - new Date(g.granted_at).getTime())
+                <= 90 * 24 * 3600 * 1000;
+            return <span style={badgeStyle('blue')}>
+              {trialLike ? 'Essai gratuit' : 'Plan offert'}
+            </span>;
+          })()}
           {!isAdminGranted && sub.status === 'trialing' && (
             <span style={badgeStyle('green')}>Essai gratuit</span>
           )}
@@ -1365,11 +1370,26 @@ function StatusInfoBox({ sub, planDef, t }) {
   if (isAdminGranted) {
     color = 'blue';
     const grant = sub.admin_grant || {};
-    const isLifetime = !grant.expires_at;
-    title = isLifetime ? 'Plan offert à vie par FlowIA' : 'Plan offert par FlowIA';
+    const isLifetime  = !grant.expires_at;
+    // Heuristique : essai si expires_at <= 90 jours apres granted_at.
+    const isTrialLike = !isLifetime && grant.granted_at &&
+      (parseDate(grant.expires_at).getTime() - parseDate(grant.granted_at).getTime())
+        <= 90 * 24 * 3600 * 1000;
+    if (isLifetime) {
+      title = 'Plan offert à vie par FlowIA';
+    } else if (isTrialLike) {
+      const days = daysUntil(parseDate(grant.expires_at));
+      title = days != null
+        ? `Essai gratuit offert · ${days} ${days > 1 ? 'jours' : 'jour'} restant${days > 1 ? 's' : ''}`
+        : 'Essai gratuit offert par FlowIA';
+    } else {
+      title = 'Plan offert par FlowIA';
+    }
     const expiresLine = isLifetime
       ? 'Accès gratuit illimité — sans date d\'expiration.'
-      : `Valable jusqu'au ${formatLong(parseDate(grant.expires_at))}.`;
+      : (isTrialLike
+          ? `Essai valable jusqu'au ${formatLong(parseDate(grant.expires_at))}, puis bascule automatique sur le plan Découverte (gratuit, fonctionnalités limitées).`
+          : `Valable jusqu'au ${formatLong(parseDate(grant.expires_at))}.`);
     lines = [
       `Le plan ${planDef.name} ${isYearly ? 'annuel' : 'mensuel'} est actif gracieusement.`,
       'Aucun prélèvement — vous bénéficiez de toutes les fonctionnalités sans payer.',
