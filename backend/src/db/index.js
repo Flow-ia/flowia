@@ -1528,6 +1528,22 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_last_change_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_changes_count_24h INT NOT NULL DEFAULT 0`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_changes_window_start TIMESTAMPTZ`);
+
+  // Anti-replay webhooks Stripe : on claim chaque event_id en DB pour
+  // empêcher qu'un attaquant capture une requête webhook signée et la
+  // rejoue. Stripe a déjà un timestamp dans la signature (5min), c'est
+  // une defense-in-depth. INSERT échoue avec 23505 si event déjà traité
+  // -> on skip le re-processing.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS processed_stripe_events (
+      event_id      VARCHAR(255) PRIMARY KEY,
+      event_type    VARCHAR(100),
+      source        VARCHAR(30),
+      processed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_processed_stripe_events_age
+    ON processed_stripe_events(processed_at DESC)`);
   await runMigration(`
     DO $$
     BEGIN

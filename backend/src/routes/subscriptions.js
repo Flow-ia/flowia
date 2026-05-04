@@ -585,8 +585,32 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'invalid signature' });
   }
 
-  // Acquitter Stripe avant le traitement DB pour éviter retry inutile.
+  // ANTI-REPLAY : on claim l'event_id en DB. Si conflict UNIQUE (23505),
+  // c'est un retry/replay et on skip le traitement. La signature Stripe
+  // a deja un timestamp 5min mais ce check est defense-in-depth contre
+  // un attaquant qui capturerait/rejouerait une requete signée.
+  let alreadyProcessed = false;
+  try {
+    await pool.query(
+      `INSERT INTO processed_stripe_events (event_id, event_type, source)
+       VALUES ($1, $2, 'subscription')`,
+      [event.id, event.type]
+    );
+  } catch (e) {
+    if (e.code === '23505') {
+      alreadyProcessed = true;
+      console.log('[SUB WEBHOOK] event already processed (replay):', event.id);
+    } else {
+      // Autre erreur DB (connexion, etc.) : on log mais on continue —
+      // mieux vaut traiter 2x un event idempotent que perdre un event.
+      console.error('[SUB WEBHOOK] anti-replay INSERT error:', e.message);
+    }
+  }
+
+  // Acquitter Stripe TOUJOURS (200 OK) — meme si replay, sinon Stripe retry.
   res.json({ received: true });
+
+  if (alreadyProcessed) return;
 
   try {
     // ── checkout.session.completed : souscription initiale finalisée ─────
