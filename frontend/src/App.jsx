@@ -13,6 +13,7 @@ import Historique from './pages/Historique';
 import HistoriqueAdmin from './pages/historique';
 import Transactions from './pages/Transactions';
 import Settings from './pages/Settings';
+import Subscription from './pages/Subscription';
 import Reglages from './pages/reglages';
 import Marketing from './pages/marketing';
 import Statistiques from './pages/statistiques';
@@ -2497,6 +2498,8 @@ export default function App() {
           la destination canonique. /settings reste accessible avec bannière. */}
       <Route path="/reglages/*"   element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
       <Route path="/reglages"     element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
+      {/* Abonnement plateforme FlowIA — choix plan + Stripe Customer Portal. */}
+      <Route path="/abonnement"   element={<RequireAdminMode><Subscription/></RequireAdminMode>}/>
       {/* Racine : en mode admin → /dashboard, sinon /agenda. Catch-all idem. */}
       <Route path="/"             element={<Navigate to={isAdminMode ? '/dashboard' : '/agenda'} replace/>}/>
       <Route path="*"             element={<Navigate to={isAdminMode ? '/dashboard' : '/agenda'} replace/>}/>

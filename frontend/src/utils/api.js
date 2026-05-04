@@ -327,6 +327,11 @@ export const api = {
   createTransaction:  (b, actingEmployeeId) => request('/transactions',        { method: 'POST',   body: JSON.stringify(b), actingEmployeeId }),
   updateTransaction:  (id, b)  => adminRequest(`/transactions/${id}`,  { method: 'PUT',    body: JSON.stringify(b) }),
   deleteTransaction:  (id)     => adminRequest(`/transactions/${id}`,  { method: 'DELETE' }),
+
+  // ── Abonnement plateforme FlowIA ─────────────────────────────────────────
+  getSubscription:        ()    => request('/subscriptions/me'),
+  createSubscriptionCheckout: (b) => request('/subscriptions/checkout', { method: 'POST', body: JSON.stringify(b) }),
+  createSubscriptionPortal:   () => request('/subscriptions/portal',    { method: 'POST' }),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
 // Annonce/bandeau de la page de reservation publique
