@@ -118,37 +118,76 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
 
         {err && <p style={errStyle}>{err}</p>}
 
-        {/* État effectif */}
+        {/* État unifié — plan + source + Stripe details fusionnés */}
         <div style={infoBlock}>
-          <p style={lbl}>Plan effectif</p>
-          <p style={val}>
-            <strong>{labelPlan(data?.effective?.plan)}</strong>
-            <span style={{ color: '#888', marginLeft: 8, fontSize: 13 }}>
-              · source : {sourceLabel(data?.effective?.source)}
-            </span>
-          </p>
-        </div>
-
-        {/* État Stripe */}
-        <div style={infoBlock}>
-          <p style={lbl}>Stripe (compte payeur)</p>
-          {stripe.subscription_id ? (
+          <p style={lbl}>Plan actif du marchand</p>
+          {data?.effective?.plan ? (
             <>
+              {/* Ligne 1 : plan + periode (si dispo) + statut/source en badge */}
               <p style={val}>
-                {labelPlan(stripe.plan)} · {stripe.period === 'yearly' ? 'Annuel' : 'Mensuel'}
-                <span style={statusBadge(stripe.status)}>{stripe.status || '—'}</span>
+                <strong>{labelPlan(data.effective.plan)}</strong>
+                {(data.effective.source === 'stripe' && stripe.period) && (
+                  <span style={{ color: '#374151', fontWeight: 400, marginLeft: 6 }}>
+                    · {stripe.period === 'yearly' ? 'Annuel' : 'Mensuel'}
+                  </span>
+                )}
+                {(data.effective.source === 'admin_grant' && data?.admin_grant?.period) && (
+                  <span style={{ color: '#374151', fontWeight: 400, marginLeft: 6 }}>
+                    · {data.admin_grant.period === 'yearly' ? 'Annuel' : 'Mensuel'}
+                  </span>
+                )}
+                {data.effective.source === 'stripe' && stripe.status && (
+                  <span style={statusBadge(stripe.status)}>{stripe.status}</span>
+                )}
+                {data.effective.source === 'admin_grant' && (
+                  <span style={{
+                    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
+                    background: '#1e3a8a', color: '#fff', fontWeight: 500,
+                  }}>
+                    {isTrialGrant ? 'essai admin' : 'gratuit admin'}
+                  </span>
+                )}
               </p>
-              {stripe.current_period_end && (
+              {/* Ligne 2 : source en clair */}
+              <p style={smallMute}>
+                Source : {sourceLabel(data.effective.source)}
+              </p>
+              {/* Ligne 3 : prochaine echeance ou expiration octroi */}
+              {data.effective.source === 'stripe' && stripe.current_period_end && (
                 <p style={smallMute}>
                   {stripe.cancel_at_period_end
                     ? `Annulation programmée le ${formatDate(stripe.current_period_end)}.`
                     : `Prochain prélèvement le ${formatDate(stripe.current_period_end)}.`}
                 </p>
               )}
-              <p style={{ ...smallMute, fontFamily: 'monospace' }}>{stripe.subscription_id}</p>
+              {data.effective.source === 'admin_grant' && (
+                <p style={smallMute}>
+                  {data.admin_grant?.expires_at
+                    ? `Bascule auto sur Découverte le ${formatDate(data.admin_grant.expires_at)}.`
+                    : 'Aucune expiration — gratuit illimité jusqu\'à révocation.'}
+                </p>
+              )}
+              {/* Ligne 4 : ID Stripe (debug / support) */}
+              {stripe.subscription_id && (
+                <p style={{ ...smallMute, fontFamily: 'monospace', fontSize: 11 }}>
+                  ID Stripe : {stripe.subscription_id}
+                </p>
+              )}
+              {/* Ligne 5 : si octroi admin actif AVEC sub Stripe en parallele -> alerte double-billing potentiel */}
+              {data.effective.source === 'admin_grant' && stripe.subscription_id
+                && ['active','trialing','past_due'].includes(stripe.status) && (
+                <p style={{
+                  marginTop: 8, padding: '6px 10px', borderRadius: 6,
+                  background: '#fffbeb', border: '1px solid #fde68a',
+                  fontSize: 12, color: '#92400e',
+                }}>
+                  ⚠ Sub Stripe encore active en parallèle de l'octroi : risque de
+                  double-billing. Annulez la sub Stripe manuellement si nécessaire.
+                </p>
+              )}
             </>
           ) : (
-            <p style={smallMute}>Aucun abonnement Stripe actif.</p>
+            <p style={smallMute}>Plan Découverte (gratuit, fonctions limitées).</p>
           )}
         </div>
 
