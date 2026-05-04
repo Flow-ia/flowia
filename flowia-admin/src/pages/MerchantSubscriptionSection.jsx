@@ -281,7 +281,7 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
             </>
           ) : (
             <>
-              <p style={smallMute}>Aucun octroi en cours.</p>
+              <p style={emptyText}>{"Aucun octroi en cours pour ce marchand."}</p>
               {!showForm && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                   <button onClick={() => { setGrantType('trial'); setForm(true); }}
