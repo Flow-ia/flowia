@@ -858,6 +858,46 @@ router.post('/:id/reset', async (req, res) => {
   }
 });
 
+// ─── COMMISSION FLOWIA — taux preleve sur les paiements de RDV ──────────────
+// Modifiable par le superadmin a tout moment. Le taux est applique en
+// application_fee_amount sur chaque PaymentIntent cree pour ce marchand.
+// Range : 0 a 30% (cap a 30 pour eviter abus / erreurs de saisie).
+router.patch('/:id/commission', async (req, res) => {
+  try {
+    const rate = parseFloat(req.body?.rate);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 30) {
+      return res.status(400).json({ error: 'Taux invalide (0 à 30%).' });
+    }
+    const { rows: before } = await pool.query(
+      'SELECT id, business_name, commission_rate FROM users WHERE id=$1',
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Marchand introuvable' });
+    if (parseFloat(before[0].commission_rate) === rate) {
+      return res.json({ ok: true, commission_rate: rate, unchanged: true });
+    }
+
+    await pool.query(
+      'UPDATE users SET commission_rate=$1 WHERE id=$2',
+      [rate, req.params.id]
+    );
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: 'merchant.commission.update',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { commission_rate: before[0].commission_rate },
+      payloadAfter:  { commission_rate: rate },
+      req,
+    });
+
+    res.json({ ok: true, commission_rate: rate });
+  } catch (e) {
+    console.error('[admin/merchants commission]', e.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // ─── ABONNEMENT — Vue + octroi gratuit + revocation (superadmin) ───────────
 // Permet a un superadmin de :
 // - Voir l'etat complet de l'abonnement d'un marchand (Stripe + grant DB)
@@ -881,7 +921,8 @@ router.get('/:id/subscription', async (req, res) => {
               subscription_status, subscription_plan, subscription_period,
               subscription_current_period_end, subscription_trial_ends_at,
               subscription_cancel_at_period_end, stripe_subscription_id,
-              stripe_customer_id, subscription_admin_grant
+              stripe_customer_id, subscription_admin_grant,
+              commission_rate, stripe_account_id, stripe_charges_enabled
        FROM users WHERE id = $1`,
       [req.params.id]
     );
@@ -915,6 +956,11 @@ router.get('/:id/subscription', async (req, res) => {
         source: grantActive ? 'admin_grant'
               : (['active','trialing'].includes(u.subscription_status)
                   ? 'stripe' : 'free'),
+      },
+      connect: {
+        account_id:      u.stripe_account_id,
+        charges_enabled: !!u.stripe_charges_enabled,
+        commission_rate: parseFloat(u.commission_rate) || 0,
       },
     });
   } catch (e) {

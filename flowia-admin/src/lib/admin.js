@@ -48,6 +48,14 @@ export async function getMerchantFeatures(id) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/features`);
 }
 
+// ── Commission FlowIA sur paiements RDV Stripe Connect (superadmin) ──────
+export async function updateMerchantCommission(id, rate) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/commission`, {
+    method: 'PATCH',
+    body: JSON.stringify({ rate }),
+  });
+}
+
 // ── Liste de marchands filtree par etat d'abonnement (drill-down dashboard)
 export async function getMerchantsBySubscriptionFilter(filter) {
   return await apiJson(`/api/admin/merchants/subscription-list?filter=${encodeURIComponent(filter)}`);

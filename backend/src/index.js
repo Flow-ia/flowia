@@ -145,6 +145,7 @@ function startServer() {
   // Webhook Stripe doit recevoir le raw body AVANT express.json()
   app.use('/api/payments/sms/webhook', express.raw({ type: 'application/json' }));
   app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
+  app.use('/api/stripe-connect/webhook', express.raw({ type: 'application/json' }));
 
   app.use(express.json({ limit: '2mb' }));
 
@@ -307,6 +308,12 @@ function startServer() {
   app.use('/api/subscriptions/checkout', paymentsIntentLimiter);
   app.use('/api/subscriptions/portal',   paymentsIntentLimiter);
   app.use('/api/subscriptions', apiLimiter, require('./routes/subscriptions'));
+
+  // Stripe Connect (onboarding marchand pour encaisser les RDV). Direct
+  // charges via Controller API + commission FlowIA via application_fee_amount.
+  app.use('/api/stripe-connect/onboard',        paymentsIntentLimiter);
+  app.use('/api/stripe-connect/dashboard-link', paymentsIntentLimiter);
+  app.use('/api/stripe-connect',  apiLimiter, require('./routes/stripe-connect'));
 
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
     require('./routes/notifications');

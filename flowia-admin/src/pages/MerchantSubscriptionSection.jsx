@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import {
   getMerchantSubscription, grantMerchantSubscription,
-  revokeMerchantSubscriptionGrant,
+  revokeMerchantSubscriptionGrant, updateMerchantCommission,
 } from '../lib/admin.js';
 
 export default function MerchantSubscriptionSection({ merchantId, merchant }) {
@@ -30,6 +30,26 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
   const [tWhen, setTWhen]                   = useState('today');     // today|scheduled
   const [tDate, setTDate]                   = useState('');
   const [tReason, setTReason]               = useState('');
+
+  // Commission FlowIA — editable par superadmin.
+  const [commissionEdit, setCommissionEdit] = useState(false);
+  const [commissionRate, setCommissionRate] = useState('');
+  const [busyCommission, setBusyCommission] = useState(false);
+
+  const handleCommissionSave = async () => {
+    const rate = parseFloat(commissionRate);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 30) {
+      setErr('Taux invalide (0 à 30%).');
+      return;
+    }
+    setBusyCommission(true); setErr(null);
+    try {
+      await updateMerchantCommission(merchantId, rate);
+      setCommissionEdit(false);
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally     { setBusyCommission(false); }
+  };
 
   const load = async () => {
     try {
@@ -479,6 +499,85 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
           )}
         </div>
 
+      </div>
+
+      {/* ── PANEL Stripe Connect + Commission FlowIA ────────────────── */}
+      <div className="card-body" style={{ marginTop: 14 }}>
+        <div style={panelStyle}>
+          <div style={panelHeader}>
+            <span style={dot(data?.connect?.charges_enabled ? 'var(--success)' : 'var(--fg-muted)')}/>
+            <span style={panelLabel}>{"Stripe Connect (paiements RDV)"}</span>
+            {data?.connect?.charges_enabled && (
+              <span style={pill('var(--success)')}>connecté · charges OK</span>
+            )}
+            {data?.connect?.account_id && !data?.connect?.charges_enabled && (
+              <span style={pill('var(--warning)')}>onboarding incomplet</span>
+            )}
+            {!data?.connect?.account_id && (
+              <span style={pill('var(--fg-muted)')}>non connecté</span>
+            )}
+          </div>
+
+          <div style={panelDetails}>
+            <div style={detailRow}>
+              <span style={detailKey}>{"Compte Stripe Connect"}</span>
+              <span style={{ ...detailVal, fontFamily: 'monospace', fontSize: 11 }}>
+                {data?.connect?.account_id || '—'}
+              </span>
+            </div>
+            <div style={detailRow}>
+              <span style={detailKey}>{"Commission FlowIA"}</span>
+              <span style={detailVal}>
+                {commissionEdit ? (
+                  <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    <input type="number" step="0.5" min="0" max="30"
+                           value={commissionRate}
+                           onChange={e => setCommissionRate(e.target.value)}
+                           style={{ ...input, width: 80, padding: '4px 8px',
+                                    fontSize: 13 }}
+                           autoFocus/>
+                    <span style={{ color: 'var(--fg-muted)' }}>%</span>
+                    <button onClick={handleCommissionSave} disabled={busyCommission}
+                            style={{ ...btnPrimary, padding: '5px 10px', fontSize: 11 }}>
+                      {busyCommission ? '…' : 'OK'}
+                    </button>
+                    <button onClick={() => { setCommissionEdit(false); setErr(null); }}
+                            disabled={busyCommission}
+                            style={{ ...btnGhost, padding: '5px 10px', fontSize: 11 }}>
+                      Annuler
+                    </button>
+                  </span>
+                ) : (
+                  <span>
+                    <strong>{(parseFloat(data?.connect?.commission_rate) || 0).toFixed(1)} %</strong>
+                    <button onClick={() => {
+                              setCommissionRate(String(data?.connect?.commission_rate ?? 0));
+                              setCommissionEdit(true);
+                            }}
+                            style={{ ...btnGhost, padding: '4px 10px', marginLeft: 8,
+                                     fontSize: 11 }}>
+                      Modifier
+                    </button>
+                  </span>
+                )}
+              </span>
+            </div>
+            {commissionEdit && (
+              <div style={{ ...detailRow, gridColumn: '1 / -1' }}>
+                <span/>
+                <span style={{ fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                  {"Pourcentage prélevé par FlowIA sur chaque paiement de RDV (entre 0 et 30 %). Effet immédiat sur les nouveaux paiements."}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {!data?.connect?.account_id && (
+            <p style={{ fontSize: 12, color: 'var(--fg-muted)', margin: '8px 0 0', lineHeight: 1.5 }}>
+              {"Le marchand n'a pas encore connecté son compte Stripe. Tant qu'il n'aura pas finalisé son onboarding (depuis ses Réglages → Paiements), aucun paiement ne pourra être encaissé sur ses RDV."}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Modal de transition : retirer/modifier l'octroi en choisissant le
