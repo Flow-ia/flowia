@@ -254,6 +254,76 @@ router.post('/reactivate', authMiddleware, async (req, res) => {
   }
 });
 
+// ── POST /api/subscriptions/preview-change ──────────────────────────────────
+// Preview ce qu'un changement de plan va concrètement coûter (proration
+// debit/credit immediat + nouvelle facturation recurrente).
+// Permet d'afficher des chiffres precis dans la modale de confirmation.
+// Body : { plan: 'essentiel'|'equipe', period: 'monthly'|'yearly' }
+router.post('/preview-change', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { plan, period } = req.body || {};
+    if (!['essentiel', 'equipe'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan invalide' });
+    }
+    if (!['monthly', 'yearly'].includes(period)) {
+      return res.status(400).json({ error: 'Période invalide' });
+    }
+    const newPriceId = getPriceId(plan, period);
+    if (!newPriceId) return res.status(500).json({ error: 'Configuration Stripe incomplète' });
+
+    const { rows } = await pool.query(
+      'SELECT stripe_subscription_id FROM users WHERE id=$1', [userId]
+    );
+    if (!rows.length || !rows[0].stripe_subscription_id) {
+      return res.status(400).json({ error: 'Aucun abonnement actif' });
+    }
+
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(rows[0].stripe_subscription_id);
+    const itemId = sub.items?.data?.[0]?.id;
+    if (!itemId) return res.status(500).json({ error: 'Item subscription introuvable' });
+
+    let preview;
+    try {
+      preview = await stripe.invoices.upcoming({
+        customer: sub.customer,
+        subscription: sub.id,
+        subscription_items: [{ id: itemId, price: newPriceId }],
+        subscription_proration_behavior: 'create_prorations',
+      });
+    } catch (e) {
+      // Cas premier mois trial sans facture upcoming : on indique que la
+      // preview n'est pas calculable. Le frontend retombe sur le message generique.
+      console.warn('[SUB PREVIEW] upcoming indisponible:', e.message);
+      return res.json({ available: false });
+    }
+
+    // Sépare les lignes de proration immédiate (positif=débit, négatif=crédit)
+    // de la facturation récurrente standard.
+    let prorationCents = 0;
+    let recurringCents = 0;
+    for (const line of preview.lines?.data || []) {
+      if (line.proration) prorationCents += line.amount || 0;
+      else                recurringCents += line.amount || 0;
+    }
+
+    res.json({
+      available: true,
+      proration_immediate: prorationCents / 100,   // peut être négatif (crédit)
+      next_recurring:      recurringCents / 100,
+      total_due_now:       (preview.amount_due  || 0) / 100,
+      next_invoice_date:   preview.period_end
+        ? new Date(preview.period_end * 1000).toISOString()
+        : null,
+      currency: preview.currency || 'eur',
+    });
+  } catch (e) {
+    console.error('[SUB PREVIEW ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors du calcul' });
+  }
+});
+
 // ── POST /api/subscriptions/change-plan ──────────────────────────────────────
 // Body : { plan: 'essentiel'|'equipe', period: 'monthly'|'yearly' }
 // Change le plan/période avec proration immédiate :

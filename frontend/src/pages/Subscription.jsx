@@ -256,19 +256,39 @@ export default function Subscription() {
   };
 
   const handleCancel = () => {
-    const periodEnd = sub?.current_period_end
-      ? new Date(sub.current_period_end).toLocaleDateString('fr-FR') : '';
+    const periodEndDate = sub?.current_period_end ? new Date(sub.current_period_end) : null;
+    const periodEndLong = periodEndDate
+      ? periodEndDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const daysLeft = periodEndDate
+      ? Math.max(0, Math.ceil((periodEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      : null;
+
     setConfirmCfg({
       title: "Annuler l'abonnement",
       message: (
         <>
-          <p style={{ margin: 0, fontSize: 14, color: t.text, lineHeight: 1.5 }}>
-            {"Vous gardez l'accès complet jusqu'au "}
-            <strong>{periodEnd}</strong>
-            {", puis votre compte basculera sur le plan Découverte (gratuit, fonctionnalités limitées)."}
+          <div style={{ padding: '12px 14px', borderRadius: 10,
+                        background: t.cardAlt, border: `1px solid ${t.border}`,
+                        marginBottom: 12 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, color: t.muted,
+                        textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+              Date d'annulation effective
+            </p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text }}>
+              {periodEndLong || '—'}
+            </p>
+            {daysLeft !== null && (
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: t.muted }}>
+                {`Soit dans ${daysLeft} ${daysLeft > 1 ? 'jours' : 'jour'}.`}
+              </p>
+            )}
+          </div>
+          <p style={{ margin: 0, fontSize: 13, color: t.text, lineHeight: 1.55 }}>
+            {"Vous gardez l'accès complet à toutes les fonctionnalités payantes jusqu'à cette date. Aucun nouveau prélèvement ne sera effectué après. Votre compte basculera ensuite automatiquement sur le plan Découverte (gratuit)."}
           </p>
-          <p style={{ margin: '10px 0 0', fontSize: 13, color: t.muted, lineHeight: 1.5 }}>
-            {"Aucun remboursement n'est dû pour la période en cours. Vous pourrez réactiver votre abonnement à tout moment avant cette date."}
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: t.muted, lineHeight: 1.55 }}>
+            {"Aucun remboursement n'est dû pour la période en cours. Vous pouvez réactiver à tout moment avant l'annulation effective."}
           </p>
         </>
       ),
@@ -279,7 +299,9 @@ export default function Subscription() {
         setConfirmCfg(null);
         try {
           await api.cancelSubscription();
-          showToast('Abonnement annulé. Accès maintenu jusqu\'à la fin de période.', 'ok');
+          showToast(periodEndLong
+            ? `Annulation programmée pour le ${periodEndLong}.`
+            : 'Abonnement annulé.', 'ok');
           await refreshSub();
         } catch (e) {
           showToast(e?.data?.error || "Erreur lors de l'annulation.", 'error');
@@ -294,7 +316,14 @@ export default function Subscription() {
     setBusyAction('reactivate');
     try {
       await api.reactivateSubscription();
-      showToast('Abonnement réactivé.', 'ok');
+      const nextBilling = sub?.current_period_end
+        ? new Date(sub.current_period_end).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+          })
+        : null;
+      showToast(nextBilling
+        ? `Abonnement réactivé. Prochain prélèvement le ${nextBilling}.`
+        : 'Abonnement réactivé.', 'ok');
       await refreshSub();
     } catch (e) {
       showToast(e?.data?.error || 'Erreur lors de la réactivation.', 'error');
@@ -303,20 +332,82 @@ export default function Subscription() {
     }
   };
 
-  const handleChangePlan = (newPlan, newPeriod) => {
+  const handleChangePlan = async (newPlan, newPeriod) => {
     const isUpgrade = (sub?.plan === 'essentiel' && newPlan === 'equipe')
                    || (sub?.period === 'monthly' && newPeriod === 'yearly');
+
+    // Fetch preview Stripe pour afficher des chiffres concrets dans la modale.
+    let preview = null;
+    try {
+      preview = await api.previewSubscriptionChange({ plan: newPlan, period: newPeriod });
+    } catch (e) {
+      console.warn('[Subscription] previewSubscriptionChange', e?.message);
+    }
+
+    const fmt = (n) => {
+      const v = Math.abs(n).toFixed(2).replace('.', ',');
+      return `${v} €`;
+    };
+    const formatLongDate = (iso) => {
+      try {
+        return new Date(iso).toLocaleDateString('fr-FR', {
+          day: 'numeric', month: 'long', year: 'numeric'
+        });
+      } catch { return null; }
+    };
+
     setConfirmCfg({
       title: `Passer à ${planLabel(newPlan)} ${newPeriod === 'yearly' ? 'annuel' : 'mensuel'}`,
       message: (
         <>
-          <p style={{ margin: 0, fontSize: 14, color: t.text, lineHeight: 1.5 }}>
-            {isUpgrade
-              ? "Le changement prend effet immédiatement. La différence proratisée pour la période en cours sera facturée tout de suite."
-              : "Le changement prend effet immédiatement. Un crédit proratisé sera appliqué automatiquement sur votre prochaine facture."}
-          </p>
-          <p style={{ margin: '10px 0 0', fontSize: 13, color: t.muted, lineHeight: 1.5 }}>
-            {"Le détail du calcul apparaîtra dans votre prochaine facture Stripe (consultable depuis le portail de gestion)."}
+          {/* Bloc résumé : effet + chiffres concrets si preview dispo */}
+          <div style={{ padding: '12px 14px', borderRadius: 10,
+                        background: t.cardAlt, border: `1px solid ${t.border}`,
+                        marginBottom: 12 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, color: t.muted,
+                        textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+              Date d'effet
+            </p>
+            <p style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 500, color: t.text }}>
+              Aujourd'hui — accès immédiat aux nouvelles fonctionnalités
+            </p>
+
+            {preview?.available ? (
+              <>
+                <p style={{ margin: '0 0 4px', fontSize: 11, color: t.muted,
+                            textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+                  {preview.proration_immediate >= 0 ? 'Débit immédiat' : 'Crédit immédiat'}
+                </p>
+                <p style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 500,
+                            color: preview.proration_immediate >= 0 ? t.text : '#10b981' }}>
+                  {preview.proration_immediate >= 0
+                    ? `${fmt(preview.proration_immediate)} (différence proratisée)`
+                    : `${fmt(preview.proration_immediate)} appliqué sur votre prochaine facture`}
+                </p>
+                <p style={{ margin: '0 0 4px', fontSize: 11, color: t.muted,
+                            textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+                  Prochain prélèvement récurrent
+                </p>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: t.text }}>
+                  {fmt(preview.next_recurring)}
+                  {preview.next_invoice_date && (
+                    <span style={{ fontSize: 13, color: t.muted, fontWeight: 400 }}>
+                      {` · le ${formatLongDate(preview.next_invoice_date)}`}
+                    </span>
+                  )}
+                </p>
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: 12, color: t.muted, lineHeight: 1.5 }}>
+                {isUpgrade
+                  ? "La différence proratisée sera facturée immédiatement. Le détail apparaîtra dans votre historique de factures."
+                  : "Un crédit proratisé sera appliqué sur votre prochaine facture."}
+              </p>
+            )}
+          </div>
+
+          <p style={{ margin: 0, fontSize: 12, color: t.muted, lineHeight: 1.55 }}>
+            {"Vous pouvez changer de plan à nouveau à tout moment depuis cette page."}
           </p>
         </>
       ),
