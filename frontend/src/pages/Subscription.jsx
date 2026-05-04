@@ -1224,7 +1224,9 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
             · {isYearly ? 'Annuel' : 'Mensuel'}
           </span>
           {isAdminGranted && (
-            <span style={badgeStyle('blue')}>Plan offert</span>
+            <span style={badgeStyle('blue')}>
+              {sub.admin_grant?.expires_at ? 'Plan offert' : 'Plan offert à vie'}
+            </span>
           )}
           {!isAdminGranted && sub.status === 'trialing' && (
             <span style={badgeStyle('green')}>Essai gratuit</span>
@@ -1362,11 +1364,12 @@ function StatusInfoBox({ sub, planDef, t }) {
   let color, title, lines;
   if (isAdminGranted) {
     color = 'blue';
-    title = 'Plan offert par FlowIA';
     const grant = sub.admin_grant || {};
-    const expiresLine = grant.expires_at
-      ? `Valable jusqu'au ${formatLong(parseDate(grant.expires_at))}.`
-      : 'Sans date d\'expiration — accès offert tant que l\'équipe FlowIA le souhaite.';
+    const isLifetime = !grant.expires_at;
+    title = isLifetime ? 'Plan offert à vie par FlowIA' : 'Plan offert par FlowIA';
+    const expiresLine = isLifetime
+      ? 'Accès gratuit illimité — sans date d\'expiration.'
+      : `Valable jusqu'au ${formatLong(parseDate(grant.expires_at))}.`;
     lines = [
       `Le plan ${planDef.name} ${isYearly ? 'annuel' : 'mensuel'} est actif gracieusement.`,
       'Aucun prélèvement — vous bénéficiez de toutes les fonctionnalités sans payer.',
