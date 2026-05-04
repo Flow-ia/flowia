@@ -5,7 +5,17 @@
 
 import { getToken, setToken, clearToken } from './tokenStore.js';
 
-const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+// BASE doit être le HOST seul (sans /api final). Tous les paths admin
+// (admin.js, ce fichier) sont prefixés par /api/admin/... donc si VITE_API_URL
+// vaut 'https://api.flowiapro.com/api' (Vercel admin), on aurait /api/api/admin
+// → double prefix → 404. On strip défensivement le '/api' final si présent
+// pour que les deux formats d'env var fonctionnent indifféremment :
+//   - 'https://api.flowiapro.com'      → BASE='https://api.flowiapro.com'
+//   - 'https://api.flowiapro.com/api'  → BASE='https://api.flowiapro.com'
+//   - 'https://api.flowiapro.com/api/' → BASE='https://api.flowiapro.com'
+const BASE = (import.meta.env.VITE_API_URL || '')
+  .replace(/\/+$/, '')      // trailing slashes
+  .replace(/\/api$/, '');   // trailing /api
 
 // Évite les retries en cascade : login et refresh ne doivent jamais déclencher
 // un refresh automatique — le 401 y est légitime (mauvais creds / cookie KO).
