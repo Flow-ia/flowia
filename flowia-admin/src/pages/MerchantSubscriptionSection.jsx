@@ -24,6 +24,13 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
   const [reason, setReason]               = useState('');
   const [cancelStripe, setCancelStripe]   = useState(true);
 
+  // Modal de transition (retirer/modifier l'octroi).
+  const [transitionOpen, setTransitionOpen] = useState(false);
+  const [tTarget, setTTarget]               = useState('decouverte'); // decouverte|essentiel_monthly|...
+  const [tWhen, setTWhen]                   = useState('today');     // today|scheduled
+  const [tDate, setTDate]                   = useState('');
+  const [tReason, setTReason]               = useState('');
+
   const load = async () => {
     try {
       setErr(null);
@@ -81,15 +88,55 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
     finally     { setBusy(false); }
   };
 
-  const handleRevoke = async () => {
-    const businessName = merchant?.business_name || 'ce marchand';
-    if (!window.confirm(`Révoquer l'octroi gratuit pour « ${businessName} » ? Le marchand devra souscrire normalement via Stripe pour conserver l'accès premium.`)) {
-      return;
-    }
+  // Ouvre le modal de transition au lieu d'un confirm brutal. L'admin choisit
+  // sur quel plan basculer le marchand et quand (immediat ou programme).
+  const handleRevoke = () => {
+    setTTarget('decouverte');
+    setTWhen('today');
+    setTDate('');
+    setTReason('');
+    setTransitionOpen(true);
+  };
+
+  // Applique la transition selon les choix admin.
+  const submitTransition = async () => {
     setBusy(true);
     setErr(null);
     try {
-      await revokeMerchantSubscriptionGrant(merchantId);
+      if (tTarget === 'decouverte') {
+        if (tWhen === 'today') {
+          // Cas simple : retrait immediat -> DELETE le grant.
+          await revokeMerchantSubscriptionGrant(merchantId);
+        } else {
+          // Programmer le retrait : on garde le grant courant (meme plan/period)
+          // mais on met expires_at sur la date choisie. A cette date, le grant
+          // expire automatiquement et le marchand bascule sur Decouverte.
+          if (!tDate) { setErr("Choisissez une date programmée."); setBusy(false); return; }
+          if (!grant?.plan)   { setErr("Aucun octroi à programmer."); setBusy(false); return; }
+          await grantMerchantSubscription(merchantId, {
+            plan:          grant.plan,
+            period:        grant.period || 'monthly',
+            expires_at:    new Date(tDate + 'T23:59:59Z').toISOString(),
+            reason:        tReason.trim() || `Retrait programmé le ${tDate}`,
+            cancel_stripe: false,  // pas besoin, sub Stripe deja annulee/inexistante
+          });
+        }
+      } else {
+        // Remplacement par un autre plan offert (Essentiel ou Equipe).
+        if (tWhen !== 'today') {
+          setErr("La programmation n'est disponible que pour la bascule sur Découverte.");
+          setBusy(false); return;
+        }
+        const [newPlan, newPeriod] = tTarget.split('_');
+        await grantMerchantSubscription(merchantId, {
+          plan:          newPlan,
+          period:        newPeriod,
+          expires_at:    null,  // par defaut a vie pour ce remplacement (admin peut ensuite editer)
+          reason:        tReason.trim() || `Bascule admin vers ${newPlan} ${newPeriod}`,
+          cancel_stripe: false,
+        });
+      }
+      setTransitionOpen(false);
       await load();
     } catch (e) { setErr(e.message); }
     finally     { setBusy(false); }
@@ -433,8 +480,143 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
         </div>
 
       </div>
+
+      {/* Modal de transition : retirer/modifier l'octroi en choisissant le
+          plan cible et la date d'effet (immediat ou programme). */}
+      {transitionOpen && (
+        <div onClick={() => !busy && setTransitionOpen(false)}
+             style={{ position: 'fixed', inset: 0, zIndex: 60,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: 16, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+          <div onClick={e => e.stopPropagation()}
+               style={{ width: '100%', maxWidth: 520, maxHeight: '90vh',
+                        overflowY: 'auto',
+                        background: 'var(--surface)', border: '1px solid var(--border)',
+                        borderRadius: 12, padding: 24,
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600, color: 'var(--fg)' }}>
+              {"Retirer ou modifier l'octroi"}
+            </h3>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-muted)' }}>
+              {"Choisissez sur quel plan placer le marchand et quand l'effet prend place."}
+            </p>
+
+            {err && <div style={alertStyle('error')}>{err}</div>}
+
+            {/* Plan cible */}
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ ...lblForm, marginBottom: 8 }}>{"Plan cible après transition"}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[
+                  { v: 'decouverte',         label: 'Découverte',          sub: 'gratuit, fonctionnalités limitées' },
+                  { v: 'essentiel_monthly',  label: 'Essentiel mensuel',   sub: 'offert (24 €/mois) — à vie par défaut' },
+                  { v: 'essentiel_yearly',   label: 'Essentiel annuel',    sub: 'offert (240 €/an) — à vie par défaut' },
+                  { v: 'equipe_monthly',     label: 'Équipe mensuel',      sub: 'offert (49 €/mois) — toutes fonctions' },
+                  { v: 'equipe_yearly',      label: 'Équipe annuel',       sub: 'offert (490 €/an) — toutes fonctions' },
+                ].map(opt => (
+                  <label key={opt.v} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                    padding: '10px 12px', borderRadius: 8,
+                    border: tTarget === opt.v
+                      ? '1px solid color-mix(in srgb, var(--info) 50%, var(--border))'
+                      : '1px solid var(--border)',
+                    background: tTarget === opt.v
+                      ? 'color-mix(in srgb, var(--info) 8%, var(--surface))'
+                      : 'var(--surface)',
+                    cursor: 'pointer',
+                  }}>
+                    <input type="radio" name="tTarget" value={opt.v}
+                           checked={tTarget === opt.v}
+                           onChange={() => setTTarget(opt.v)}/>
+                    <span>
+                      <strong style={{ fontSize: 13, color: 'var(--fg)' }}>{opt.label}</strong>
+                      <span style={{ display: 'block', fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
+                        {opt.sub}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Date d'effet */}
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ ...lblForm, marginBottom: 8 }}>{"Date d'effet"}</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <label style={{ ...radioCard(tWhen === 'today') }}>
+                  <input type="radio" name="tWhen" value="today"
+                         checked={tWhen === 'today'}
+                         onChange={() => setTWhen('today')}
+                         style={{ marginRight: 8 }}/>
+                  <span>
+                    <strong>Aujourd'hui</strong>
+                    <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
+                      Effet immédiat
+                    </span>
+                  </span>
+                </label>
+                <label style={{
+                  ...radioCard(tWhen === 'scheduled'),
+                  opacity: tTarget !== 'decouverte' ? 0.5 : 1,
+                  cursor: tTarget !== 'decouverte' ? 'not-allowed' : 'pointer',
+                }}>
+                  <input type="radio" name="tWhen" value="scheduled"
+                         checked={tWhen === 'scheduled'}
+                         onChange={() => setTWhen('scheduled')}
+                         disabled={tTarget !== 'decouverte'}
+                         style={{ marginRight: 8 }}/>
+                  <span>
+                    <strong>Programmer une date</strong>
+                    <span style={{ display: 'block', fontSize: 11, color: '#888', marginTop: 2 }}>
+                      {tTarget === 'decouverte'
+                        ? 'Garder accès jusqu\'à cette date, puis bascule auto'
+                        : 'Disponible uniquement vers Découverte'}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {tWhen === 'scheduled' && tTarget === 'decouverte' && (
+                <input type="date" value={tDate} onChange={e => setTDate(e.target.value)}
+                       min={new Date().toISOString().slice(0, 10)}
+                       style={{ ...input, marginTop: 8, maxWidth: 200 }}/>
+              )}
+            </div>
+
+            {/* Motif */}
+            <label style={{ ...lblForm, display: 'block', marginBottom: 14 }}>
+              {"Motif (optionnel — apparaît dans l'audit log)"}
+              <textarea value={tReason} onChange={e => setTReason(e.target.value)}
+                        rows={2} maxLength={300} style={input}
+                        placeholder="Ex: Période d'essai terminée, démo conclue, paiement attendu…"/>
+            </label>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setTransitionOpen(false)} disabled={busy}
+                      style={{ ...btnGhost, flex: 1 }}>
+                Annuler
+              </button>
+              <button onClick={submitTransition} disabled={busy}
+                      style={{ ...btnPrimary, flex: 1 }}>
+                {busy ? 'En cours…' : confirmLabel(tTarget, tWhen)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+// Calcule le libelle du bouton de confirmation selon les choix admin.
+function confirmLabel(target, when) {
+  if (target === 'decouverte') {
+    return when === 'today'
+      ? 'Retirer maintenant'
+      : 'Programmer le retrait';
+  }
+  const [plan] = target.split('_');
+  return `Basculer vers ${plan === 'essentiel' ? 'Essentiel' : 'Équipe'}`;
 }
 
 function labelPlan(id) {

@@ -5,7 +5,15 @@
 // cinématique existante sans duplication de logique (whitelist clients,
 // quota Brevo 300/j).
 import TabPromo from '../../settings/marketing/promotions/TabPromo';
+import PlanGateBanner from '../../../components/PlanGateBanner';
 
 export default function SendEmail({ theme, showToast }) {
-  return <TabPromo theme={theme} showToast={showToast}/>;
+  return (
+    <>
+      <PlanGateBanner requiredPlan="essentiel"
+                      feature="L'envoi de campagnes email/SMS"
+                      extraBenefits="fidélité, parrainage et IA marketing"/>
+      <TabPromo theme={theme} showToast={showToast}/>
+    </>
+  );
 }

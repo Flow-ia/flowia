@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import SMSRechargeModal from '../../../../components/SMSRechargeModal';
+import PlanGateBanner from '../../../../components/PlanGateBanner';
 import { paymentsApi, campaignsApi } from '../../../../utils/api';
 import { Button } from '../../../../components/primitives';
 import { useAuth } from '../../../../hooks/useAuth';
@@ -8,7 +8,6 @@ import { useAuth } from '../../../../hooks/useAuth';
 export default function TabSMS({ showToast, theme }) {
   const t = theme;
   const { user } = useAuth();
-  const navigate = useNavigate();
   const effectivePlan = user?.subscription?.effectivePlan || 'decouverte';
   const isDecouverte = effectivePlan === 'decouverte';
   const [balance, setBalance]           = useState(null);
@@ -70,34 +69,10 @@ export default function TabSMS({ showToast, theme }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       {/* Bandeau gating Decouverte : SMS necessite Essentiel ou Equipe.
-          Soft-gating : on affiche un bandeau explicite, le bouton de recharge
-          est masque (le backend renvoie 402 de toute facon = overlay
-          PlanUpgradeOverlay si l'utilisateur tente). */}
-      {isDecouverte && (
-        <div style={{
-          background: '#eff6ff', border: '1px solid #bfdbfe',
-          borderRadius: 12, padding: '14px 18px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 12, flexWrap: 'wrap',
-        }}>
-          <div>
-            <p style={{ fontSize: 11, color: '#1e40af', fontWeight: 600, margin: 0,
-                        textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              {"Plan Essentiel requis"}
-            </p>
-            <p style={{ fontSize: 13, color: '#1e3a8a', margin: '4px 0 0', lineHeight: 1.5 }}>
-              {"Les SMS clients (rappels, marketing, anniversaire) sont inclus à partir du plan Essentiel (24 €/mois). Vous bénéficierez aussi de la fidélité, du parrainage et de l'IA marketing."}
-            </p>
-          </div>
-          <button onClick={() => navigate('/abonnement?plan=essentiel&period=monthly')}
-                  style={{ padding: '8px 14px', fontSize: 13, fontWeight: 500,
-                           background: '#1e40af', color: '#fff',
-                           border: 'none', borderRadius: 8, cursor: 'pointer',
-                           fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-            {"Passer à Essentiel"}
-          </button>
-        </div>
-      )}
+          Composant reutilise sur toutes les pages gated. */}
+      <PlanGateBanner requiredPlan="essentiel"
+                      feature="Les SMS clients (rappels, marketing)"
+                      extraBenefits="fidélité, parrainage et IA marketing"/>
 
       {/* Solde SMS */}
       <div style={{ background:t.card, borderRadius:12,
