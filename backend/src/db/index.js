@@ -1510,6 +1510,61 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_payment_status
     ON appointments(user_id, payment_status, date) WHERE payment_status <> 'none'`);
 
+  // ── Abonnement plateforme FlowIA (Stripe Billing) ────────────────────────
+  // Les commerçants paient un abonnement mensuel/annuel pour accéder à FlowIA.
+  // 3 plans : Decouverte (0€, gratuit limité) / Essentiel (24€mois|240€an) /
+  // Equipe (49€mois|490€an). Géré côté plateforme via stripe.subscriptions —
+  // SÉPARÉ de Stripe Connect qui gère les paiements clients->commerçants.
+  // stripe_customer_id : déjà présent (ligne 969), partagé avec recharge SMS.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(20)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_period VARCHAR(10)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_trial_ends_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)`);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_subscription_status_check'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_subscription_status_check
+          CHECK (subscription_status IS NULL OR subscription_status IN
+            ('trialing','active','past_due','canceled','unpaid','incomplete','incomplete_expired'));
+      END IF;
+    END$$;
+  `);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_subscription_plan_check'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_subscription_plan_check
+          CHECK (subscription_plan IS NULL OR subscription_plan IN ('decouverte','essentiel','equipe'));
+      END IF;
+    END$$;
+  `);
+  await runMigration(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name='users' AND constraint_name='users_subscription_period_check'
+      ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_subscription_period_check
+          CHECK (subscription_period IS NULL OR subscription_period IN ('monthly','yearly'));
+      END IF;
+    END$$;
+  `);
+  // Idempotence webhook : un stripe_subscription_id = un seul user max.
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_stripe_subscription_id
+    ON users(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_users_subscription_status
+    ON users(subscription_status) WHERE subscription_status IS NOT NULL`);
+
   await applyAdminSchema(pool);
 
 console.log('[DB] Tables initialisées');

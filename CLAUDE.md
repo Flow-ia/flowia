@@ -21,7 +21,7 @@ FlowIA est un SaaS complet de gestion salon/barbershop (RDV, caisse, CRM, market
 
 ## Branche
 
-Toujours `refonte-archi-v3`. Jamais `main` pendant la refonte.
+Push direct sur `main` (validé utilisateur 2026-05-04). La refonte `refonte-archi-v3` reste pour les chantiers visuels en cours.
 
 ## Règles critiques
 
@@ -29,7 +29,7 @@ Toujours `refonte-archi-v3`. Jamais `main` pendant la refonte.
 2. **Un commit par étape** du plan
 3. **Migrations SQL idempotentes** (IF NOT EXISTS, jamais DROP)
 4. **Filtre user_id partout** (multi-tenant)
-5. **Ne jamais toucher** : OAuth Google, Stripe, PIN, JWT scopes, webhooks, idempotency
+5. **Ne jamais toucher** : OAuth Google, PIN, JWT scopes, idempotency, code Stripe SMS existant (`payments.js` + webhook `/api/payments/sms/webhook`). Nouveaux webhooks séparés (Connect, abonnement) AUTORISÉS.
 6. **FDS-2026** : pas d'emoji UI, pas de Tailwind, fw≤500, bordures 0.5px, pas de gradients
 7. **Apostrophes JSX** : double-quote obligatoire (`{"l'offre"}`)
 8. **Si tu doutes, tu demandes**
@@ -64,9 +64,8 @@ Toujours `refonte-archi-v3`. Jamais `main` pendant la refonte.
 - Supprimer du code mort
 - Ajouter une lib npm sans demander
 - Toucher OAuth Google commit `c73c4cf`
-- Modifier le webhook Stripe
+- Modifier le webhook Stripe SMS existant (`/api/payments/sms/webhook`)
 - Envoyer de vrai SMS/email en test (utiliser mode test)
-- Merger sur main
 
 ## Commerçant actuel
 
