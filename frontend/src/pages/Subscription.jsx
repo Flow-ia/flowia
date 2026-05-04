@@ -5,12 +5,25 @@
 // - Si abo actif : badge "Plan actuel", bouton "Gérer mon abonnement" → Stripe Portal.
 // - 14 jours d'essai gratuit sur Essentiel uniquement.
 // - "2 mois offerts" en annuel (= 16,67% de réduction).
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { loadStripe } from '@stripe/stripe-js';
+import {
+  Elements, CardNumberElement, CardExpiryElement, CardCvcElement,
+  useStripe, useElements,
+} from '@stripe/react-stripe-js';
 import { useTheme } from '../hooks/useTheme';
 import { Toast, useToast, Modal } from '../components/UI';
 import { PageHeader } from './reglages/shared';
 import { api } from '../utils/api';
+
+// Singleton Stripe pour ne pas recharger la lib à chaque mount.
+const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
+let stripePromise = null;
+function getStripeSingleton() {
+  if (!stripePromise && STRIPE_PK) stripePromise = loadStripe(STRIPE_PK);
+  return stripePromise;
+}
 
 const PLANS = [
   {
@@ -471,6 +484,13 @@ export default function Subscription() {
           {"Tarifs hors taxes. Paiement sécurisé par Stripe. Annulation à tout moment."}
         </p>
 
+        {/* Section Moyens de paiement — visible uniquement si l'utilisateur
+            a déjà un customer Stripe (i.e. au moins un essai/abo passé ou
+            une recharge SMS). Sinon pas pertinent. */}
+        {!loading && sub?.has_subscription && (
+          <PaymentMethodsSection theme={t} showToast={showToast}/>
+        )}
+
         {/* Lien discret vers le Customer Portal Stripe (factures, infos
             de facturation, gestion des moyens de paiement avancés). */}
         {!loading && sub?.has_subscription && (
@@ -636,4 +656,298 @@ function toggleBtn(t, active) {
     fontFamily: 'inherit',
     display: 'inline-flex', alignItems: 'center',
   };
+}
+
+// ── Section Moyens de paiement ──────────────────────────────────────────────
+// Liste les cartes du customer + actions (ajouter, définir par défaut, supprimer).
+function PaymentMethodsSection({ theme: t, showToast }) {
+  const [pms, setPms]         = useState({ methods: [], default: null });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy]       = useState(null); // pmId en cours d'action
+  const [addOpen, setAddOpen] = useState(false);
+
+  const reload = async () => {
+    try {
+      const data = await api.listSubscriptionPaymentMethods();
+      setPms(data || { methods: [], default: null });
+    } catch (e) {
+      console.error('[PaymentMethods] list', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { reload(); }, []);
+
+  const handleSetDefault = async (id) => {
+    setBusy(id);
+    try {
+      await api.setSubscriptionDefaultPaymentMethod(id);
+      showToast('Carte par défaut mise à jour.', 'ok');
+      await reload();
+    } catch (e) {
+      showToast(e?.data?.error || 'Erreur', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer cette carte ?')) return;
+    setBusy(id);
+    try {
+      await api.deleteSubscriptionPaymentMethod(id);
+      showToast('Carte supprimée.', 'ok');
+      await reload();
+    } catch (e) {
+      showToast(e?.data?.error || 'Erreur lors de la suppression.', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section style={{
+      padding: 22, borderRadius: 12,
+      background: t.card, border: `1px solid ${t.border}`,
+      boxShadow: t.shadowSm,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'baseline', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: 15, fontWeight: 500, color: t.text, margin: 0 }}>Moyens de paiement</h2>
+          <p style={{ fontSize: 12, color: t.muted, margin: '4px 0 0' }}>
+            {"Cartes utilisées pour vos prélèvements automatiques."}
+          </p>
+        </div>
+        <button onClick={() => setAddOpen(true)}
+                style={{
+                  padding: '8px 14px', fontSize: 13, fontWeight: 500,
+                  background: 'transparent', color: t.text,
+                  border: `1px solid ${t.border}`, borderRadius: 8,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+          + Ajouter une carte
+        </button>
+      </div>
+
+      {loading ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Chargement…</p>
+      ) : pms.methods.length === 0 ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0, lineHeight: 1.5 }}>
+          {"Aucune carte enregistrée. Ajoutez-en une pour activer les prélèvements automatiques."}
+        </p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0,
+                     display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {pms.methods.map(pm => (
+            <li key={pm.id} style={{
+              padding: '12px 14px', borderRadius: 10,
+              border: `1px solid ${t.border}`,
+              background: pm.isDefault ? t.cardAlt : t.canvas,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 12, flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 36, height: 24, borderRadius: 4,
+                  background: t.cardAlt, color: t.text,
+                  fontSize: 9, fontWeight: 600, letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                }}>{pm.brand || 'Card'}</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, color: t.text, fontFamily: 'monospace' }}>
+                    •••• •••• •••• {pm.last4}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: t.muted }}>
+                    {"Expire "}{String(pm.exp_month).padStart(2, '0')}{"/"}{String(pm.exp_year).slice(-2)}
+                  </p>
+                </div>
+                {pm.isDefault && (
+                  <span style={{
+                    fontSize: 10, padding: '2px 8px', borderRadius: 99,
+                    background: '#ecfdf5', color: '#10b981', fontWeight: 500,
+                  }}>Par défaut</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {!pm.isDefault && (
+                  <button onClick={() => handleSetDefault(pm.id)} disabled={busy === pm.id}
+                          style={pmActionBtn(t, busy === pm.id)}>
+                    {busy === pm.id ? '…' : 'Définir par défaut'}
+                  </button>
+                )}
+                <button onClick={() => handleDelete(pm.id)} disabled={busy === pm.id}
+                        style={pmActionBtnDanger(t, busy === pm.id)}>
+                  {busy === pm.id ? '…' : 'Supprimer'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <AddPaymentMethodModal open={addOpen} theme={t}
+                              onClose={() => setAddOpen(false)}
+                              onSuccess={async () => {
+                                setAddOpen(false);
+                                showToast('Carte ajoutée.', 'ok');
+                                await reload();
+                              }}
+                              showToast={showToast}/>
+    </section>
+  );
+}
+
+function pmActionBtn(t, busy) {
+  return {
+    padding: '6px 11px', fontSize: 11, fontWeight: 500,
+    background: 'transparent', color: t.textSub,
+    border: `1px solid ${t.border}`, borderRadius: 7,
+    cursor: busy ? 'wait' : 'pointer',
+    fontFamily: 'inherit',
+  };
+}
+function pmActionBtnDanger(t, busy) {
+  return {
+    padding: '6px 11px', fontSize: 11, fontWeight: 500,
+    background: 'transparent', color: '#991b1b',
+    border: '1px solid #fecaca', borderRadius: 7,
+    cursor: busy ? 'wait' : 'pointer',
+    fontFamily: 'inherit',
+  };
+}
+
+// ── Modal ajout carte avec Stripe Elements ──────────────────────────────────
+function AddPaymentMethodModal({ open, onClose, onSuccess, theme: t, showToast }) {
+  const stripe = getStripeSingleton();
+  const elementsOptions = useMemo(() => ({
+    appearance: {
+      theme: t.mode === 'dark' ? 'night' : 'stripe',
+      variables: {
+        colorPrimary:  t.text || '#111827',
+        colorBackground: t.canvas || '#ffffff',
+        colorText:     t.text || '#111827',
+        borderRadius:  '8px',
+        fontSizeBase:  '14px',
+      },
+    },
+  }), [t.mode, t.text, t.canvas]);
+
+  if (!open) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Ajouter une carte" theme={t} maxW={420}>
+      {!stripe ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>
+          {"Configuration Stripe manquante (VITE_STRIPE_PUBLISHABLE_KEY). Contactez le support."}
+        </p>
+      ) : (
+        <Elements stripe={stripe} options={elementsOptions}>
+          <AddCardForm onSuccess={onSuccess} onCancel={onClose} theme={t} showToast={showToast}/>
+        </Elements>
+      )}
+    </Modal>
+  );
+}
+
+function AddCardForm({ onSuccess, onCancel, theme: t, showToast }) {
+  const stripe   = useStripe();
+  const elements = useElements();
+  const [busy, setBusy]   = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!stripe || !elements || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // 1) Récupère un SetupIntent (côté backend, sur le customer du marchand).
+      const { client_secret } = await api.createSubscriptionPmSetupIntent();
+      if (!client_secret) throw new Error('SetupIntent indisponible');
+      // 2) Confirme le Setup avec la carte saisie. Stripe attache la PM au
+      //    customer côté Stripe automatiquement (c'est natif au SetupIntent).
+      const { error: stripeErr } = await stripe.confirmCardSetup(client_secret, {
+        payment_method: { card: elements.getElement(CardNumberElement) },
+      });
+      if (stripeErr) throw stripeErr;
+      onSuccess?.();
+    } catch (err) {
+      const msg = err?.message || err?.data?.error || 'Erreur ajout carte.';
+      setError(msg);
+      showToast?.(msg, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const elementOptions = {
+    style: {
+      base: {
+        fontSize:       '14px',
+        color:          t.text,
+        fontFamily:     'inherit',
+        '::placeholder': { color: t.muted },
+      },
+      invalid: { color: '#991b1b' },
+    },
+  };
+  const wrapStyle = {
+    padding: '11px 12px',
+    border:  `1px solid ${t.borderInput}`,
+    borderRadius: 8,
+    background: t.inputBg,
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <label style={{ display: 'block', fontSize: 12, color: t.muted,
+                      marginBottom: 4, fontWeight: 500 }}>
+        Numéro de carte
+      </label>
+      <div style={{ ...wrapStyle, marginBottom: 10 }}>
+        <CardNumberElement options={elementOptions}/>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, color: t.muted,
+                          marginBottom: 4, fontWeight: 500 }}>Expiration</label>
+          <div style={wrapStyle}><CardExpiryElement options={elementOptions}/></div>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, color: t.muted,
+                          marginBottom: 4, fontWeight: 500 }}>CVC</label>
+          <div style={wrapStyle}><CardCvcElement options={elementOptions}/></div>
+        </div>
+      </div>
+
+      {error && (
+        <p style={{ fontSize: 12, color: '#991b1b', margin: '0 0 12px' }}>{error}</p>
+      )}
+
+      <p style={{ fontSize: 11, color: t.muted, margin: '0 0 14px', lineHeight: 1.5 }}>
+        {"Votre carte est tokenisée par Stripe. FlowIA n'a jamais accès au numéro complet."}
+      </p>
+
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button type="button" onClick={onCancel} disabled={busy}
+                style={{ flex: 1, padding: 10, borderRadius: 8,
+                         fontSize: 14, fontWeight: 500, cursor: busy ? 'wait' : 'pointer',
+                         background: 'transparent', color: t.text,
+                         border: `1px solid ${t.border}`, fontFamily: 'inherit' }}>
+          Annuler
+        </button>
+        <button type="submit" disabled={busy || !stripe}
+                style={{ flex: 1, padding: 10, borderRadius: 8,
+                         fontSize: 14, fontWeight: 500, cursor: busy ? 'wait' : 'pointer',
+                         background: t.text, color: t.canvas,
+                         border: 'none', fontFamily: 'inherit',
+                         opacity: (busy || !stripe) ? 0.7 : 1 }}>
+          {busy ? 'Ajout en cours…' : 'Ajouter la carte'}
+        </button>
+      </div>
+    </form>
+  );
 }

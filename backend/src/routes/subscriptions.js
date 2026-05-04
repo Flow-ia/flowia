@@ -516,4 +516,171 @@ router.post('/portal', authMiddleware, async (req, res) => {
   }
 });
 
+// ─── GESTION DES MOYENS DE PAIEMENT ─────────────────────────────────────────
+// Endpoints dédiés au namespace abonnement. Particularité vs /payments/sms/* :
+// le set-default met aussi à jour customer.invoice_settings.default_payment_method
+// + subscription.default_payment_method côté Stripe pour que la facturation
+// récurrente automatique utilise la bonne carte.
+
+// ── GET /api/subscriptions/payment-methods ─────────────────────────────────
+// Liste les cartes du customer + flag isDefault selon Stripe.
+router.get('/payment-methods', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      'SELECT stripe_customer_id FROM users WHERE id=$1', [userId]
+    );
+    if (!rows.length || !rows[0].stripe_customer_id) {
+      return res.json({ methods: [], default: null });
+    }
+
+    const stripe = getStripe();
+    const customerId = rows[0].stripe_customer_id;
+    // Fetch customer pour avoir invoice_settings.default_payment_method (Stripe).
+    const [customer, list] = await Promise.all([
+      stripe.customers.retrieve(customerId),
+      stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 10 }),
+    ]);
+    const defaultPmId = customer?.invoice_settings?.default_payment_method || null;
+
+    res.json({
+      default: defaultPmId,
+      methods: list.data.map(pm => ({
+        id:        pm.id,
+        brand:     pm.card?.brand,
+        last4:     pm.card?.last4,
+        exp_month: pm.card?.exp_month,
+        exp_year:  pm.card?.exp_year,
+        isDefault: pm.id === defaultPmId,
+      })),
+    });
+  } catch (e) {
+    console.error('[SUB PM LIST ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors du chargement des cartes' });
+  }
+});
+
+// ── POST /api/subscriptions/payment-methods/setup-intent ───────────────────
+// Crée un SetupIntent pour ajouter une nouvelle carte SANS la débiter.
+// Le client_secret est consommé par stripe.confirmCardSetup() côté frontend.
+// usage: 'off_session' = la carte servira plus tard pour des prélèvements
+// automatiques (renouvellement abonnement) sans présence du marchand.
+router.post('/payment-methods/setup-intent', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const customerId = await ensureStripeCustomer(userId);
+    const stripe = getStripe();
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session',
+    });
+    res.json({ client_secret: setupIntent.client_secret });
+  } catch (e) {
+    console.error('[SUB PM SI ERR]', e.message);
+    res.status(500).json({ error: 'Erreur création SetupIntent' });
+  }
+});
+
+// ── POST /api/subscriptions/payment-methods/:id/default ────────────────────
+// Définit la carte par défaut côté Stripe (customer.invoice_settings) ET
+// côté abonnement actif si présent. Met aussi à jour la colonne DB legacy
+// default_payment_method (utilisée par SMS off_session).
+router.post('/payment-methods/:id/default', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const pmId   = req.params.id;
+    const { rows } = await pool.query(
+      'SELECT stripe_customer_id, stripe_subscription_id FROM users WHERE id=$1',
+      [userId]
+    );
+    if (!rows.length || !rows[0].stripe_customer_id) {
+      return res.status(400).json({ error: 'Aucun customer Stripe' });
+    }
+    const customerId = rows[0].stripe_customer_id;
+    const subId      = rows[0].stripe_subscription_id;
+
+    const stripe = getStripe();
+    // Vérif ownership : la PM doit appartenir à ce customer.
+    const pm = await stripe.paymentMethods.retrieve(pmId);
+    if (pm.customer !== customerId) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    // 1) Met à jour la default PM du customer (utilisée pour les invoices futures).
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: pmId },
+    });
+    // 2) Si abonnement actif, force aussi sa default PM (sinon Stripe peut
+    //    encore tenter avec l'ancienne au prochain renouvellement).
+    if (subId) {
+      try {
+        await stripe.subscriptions.update(subId, { default_payment_method: pmId });
+      } catch (e) {
+        // L'abonnement peut être canceled/incomplete_expired — non bloquant.
+        console.warn('[SUB PM DEFAULT] sub update fail (non bloquant):', e.message);
+      }
+    }
+    // 3) DB legacy column (utilisée par SMS off_session aussi).
+    await pool.query(
+      'UPDATE users SET default_payment_method=$1 WHERE id=$2',
+      [pmId, userId]
+    );
+
+    res.json({ ok: true, defaultPaymentMethod: pmId });
+  } catch (e) {
+    console.error('[SUB PM DEFAULT ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
+});
+
+// ── DELETE /api/subscriptions/payment-methods/:id ──────────────────────────
+// Détache la carte du customer. SÉCURITÉ : refuse si c'est la dernière
+// carte ET qu'un abonnement est actif (sinon prochain renouvellement
+// échouera et le marchand basculera en past_due).
+router.delete('/payment-methods/:id', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const pmId   = req.params.id;
+    const { rows } = await pool.query(
+      `SELECT stripe_customer_id, default_payment_method, subscription_status
+       FROM users WHERE id=$1`, [userId]
+    );
+    if (!rows.length || !rows[0].stripe_customer_id) {
+      return res.status(404).json({ error: 'Aucune carte enregistrée' });
+    }
+    const customerId = rows[0].stripe_customer_id;
+
+    const stripe = getStripe();
+    const pm = await stripe.paymentMethods.retrieve(pmId);
+    if (pm.customer !== customerId) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    // Garde-fou : ne pas supprimer la dernière carte si abo actif.
+    const isActiveSub = ['active', 'trialing', 'past_due'].includes(rows[0].subscription_status);
+    if (isActiveSub) {
+      const list = await stripe.paymentMethods.list({
+        customer: customerId, type: 'card', limit: 5,
+      });
+      if (list.data.length <= 1) {
+        return res.status(400).json({
+          error: "Impossible de supprimer votre dernière carte tant qu'un abonnement est actif. Ajoutez une autre carte d'abord ou annulez votre abonnement."
+        });
+      }
+    }
+
+    await stripe.paymentMethods.detach(pmId);
+    if (rows[0].default_payment_method === pmId) {
+      await pool.query(
+        'UPDATE users SET default_payment_method=NULL WHERE id=$1', [userId]
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[SUB PM DELETE ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
 module.exports = router;

@@ -335,6 +335,10 @@ export const api = {
   cancelSubscription:         ()  => request('/subscriptions/cancel',      { method: 'POST' }),
   reactivateSubscription:     ()  => request('/subscriptions/reactivate',  { method: 'POST' }),
   changeSubscriptionPlan:     (b) => request('/subscriptions/change-plan', { method: 'POST', body: JSON.stringify(b) }),
+  listSubscriptionPaymentMethods:    ()    => request('/subscriptions/payment-methods'),
+  createSubscriptionPmSetupIntent:   ()    => request('/subscriptions/payment-methods/setup-intent', { method: 'POST' }),
+  setSubscriptionDefaultPaymentMethod: (id) => request('/subscriptions/payment-methods/' + id + '/default', { method: 'POST' }),
+  deleteSubscriptionPaymentMethod:   (id)  => request('/subscriptions/payment-methods/' + id, { method: 'DELETE' }),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
 // Annonce/bandeau de la page de reservation publique
