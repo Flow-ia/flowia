@@ -6,6 +6,7 @@ import AppShell from '../components/AppShell.jsx';
 
 function fmt(n)      { return Number(n || 0).toLocaleString('fr-FR'); }
 function fmtMoney(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+function fmtMoney0(n){ return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'; }
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -72,10 +73,108 @@ export default function DashboardPage() {
             </div>
 
             <div className="stat-card">
-              <div className="stat-label">{"CA total"}</div>
+              <div className="stat-label">{"CA RDV (transactions)"}</div>
               <div className="stat-value">{fmtMoney(stats.revenue.total)}</div>
               <div className="stat-meta">
                 {fmtMoney(stats.revenue.today)} {"auj."} · {fmtMoney(stats.revenue.this_month)} {"30j"}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Abonnements plateforme FlowIA ──────────────────────────── */}
+          <h2 className="section-title" style={sectionTitle}>{"Abonnements plateforme"}</h2>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="stat-label">{"Actifs payants"}</div>
+              <div className="stat-value">{fmt(stats.subscriptions?.active_paying)}</div>
+              <div className="stat-meta">
+                {stats.subscriptions?.canceling > 0
+                  ? `${fmt(stats.subscriptions.canceling)} en annulation programmée`
+                  : 'aucune annulation en attente'}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">{"MRR (récurrent mensuel)"}</div>
+              <div className="stat-value">{fmtMoney(stats.subscriptions?.mrr)}</div>
+              <div className="stat-meta">{fmtMoney0(stats.subscriptions?.arr)} {"de ARR"}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">{"Essais gratuits en cours"}</div>
+              <div className="stat-value">{fmt(stats.subscriptions?.trialing)}</div>
+              <div className="stat-meta">{"Essai 14 jours · sans CB"}</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">{"Plans offerts (admin)"}</div>
+              <div className="stat-value">{fmt(stats.subscriptions?.admin_granted)}</div>
+              <div className="stat-meta">{"Gratuits superadmin"}</div>
+            </div>
+          </div>
+
+          {/* Breakdown par plan + statuts */}
+          <section className="card" style={{ marginTop: 16 }}>
+            <h3 className="card-title" style={{ fontSize: 14 }}>{"Répartition des abonnements"}</h3>
+            <div style={planBreakdownGrid}>
+              <BreakdownRow label="Essentiel · mensuel"
+                            count={stats.subscriptions?.essentiel_monthly}
+                            mrr={(stats.subscriptions?.essentiel_monthly || 0) * 24}/>
+              <BreakdownRow label="Essentiel · annuel"
+                            count={stats.subscriptions?.essentiel_yearly}
+                            mrr={(stats.subscriptions?.essentiel_yearly || 0) * 20}/>
+              <BreakdownRow label="Équipe · mensuel"
+                            count={stats.subscriptions?.equipe_monthly}
+                            mrr={(stats.subscriptions?.equipe_monthly || 0) * 49}/>
+              <BreakdownRow label="Équipe · annuel"
+                            count={stats.subscriptions?.equipe_yearly}
+                            mrr={Math.round((stats.subscriptions?.equipe_yearly || 0) * 40.83)}/>
+            </div>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb',
+                          display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#6b7280' }}>
+              <span><strong style={{ color: '#991b1b' }}>{fmt(stats.subscriptions?.canceled_total)}</strong>{" annulés définitifs"}</span>
+              <span><strong style={{ color: '#92400e' }}>{fmt(stats.subscriptions?.past_due)}</strong>{" en échec de paiement"}</span>
+              <span><strong style={{ color: '#1e40af' }}>{fmt(stats.subscriptions?.acquired_60d)}</strong>{" acquis sur 60j"}</span>
+            </div>
+          </section>
+
+          {/* ── SMS (recharges + consommation + marge) ─────────────────── */}
+          <h2 className="section-title" style={sectionTitle}>{"SMS marchands"}</h2>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="stat-label">{"CA brut SMS"}</div>
+              <div className="stat-value">{fmtMoney(stats.sms?.gross_total)}</div>
+              <div className="stat-meta">
+                {fmtMoney(stats.sms?.gross_30d)} {"sur 30j"}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">
+                {"Marge FlowIA"}
+                {stats.sms?.margin_ratio_pct != null && (
+                  <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 6 }}>
+                    {"(" + stats.sms.margin_ratio_pct + "%)"}
+                  </span>
+                )}
+              </div>
+              <div className="stat-value" style={{ color: '#10b981' }}>
+                {fmtMoney(stats.sms?.margin_total)}
+              </div>
+              <div className="stat-meta">
+                {fmtMoney(stats.sms?.margin_30d)} {"sur 30j"}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">{"SMS consommés"}</div>
+              <div className="stat-value">{fmtMoney(stats.sms?.consumed_total)}</div>
+              <div className="stat-meta">
+                {fmt(stats.sms?.sms_consumed)} {"SMS envoyés"}
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">{"Solde restant marchands"}</div>
+              <div className="stat-value" style={{ color: '#92400e' }}>
+                {fmtMoney(stats.sms?.unused_total)}
+              </div>
+              <div className="stat-meta">
+                {fmt(stats.sms?.sms_unused)} {"SMS encore disponibles"}
               </div>
             </div>
           </div>
@@ -127,3 +226,31 @@ export default function DashboardPage() {
     </AppShell>
   );
 }
+
+function BreakdownRow({ label, count, mrr }) {
+  return (
+    <div style={breakdownRow}>
+      <span style={{ fontSize: 13, color: '#374151' }}>{label}</span>
+      <span style={{ fontSize: 13, color: '#111827', fontWeight: 500 }}>
+        {fmt(count)} {"abo"}
+        <span style={{ color: '#6b7280', fontWeight: 400, marginLeft: 8 }}>
+          {fmtMoney0(mrr)}{"/mois"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+const sectionTitle = {
+  fontSize: 14, fontWeight: 600, color: '#111827',
+  margin: '28px 0 12px', textTransform: 'uppercase', letterSpacing: 0.5,
+};
+const planBreakdownGrid = {
+  display: 'grid', gap: 6, marginTop: 8,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+};
+const breakdownRow = {
+  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  padding: '8px 12px', borderRadius: 6,
+  background: '#f9f9fb', border: '1px solid #e5e7eb',
+};
