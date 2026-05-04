@@ -2,11 +2,17 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
+const { requirePlanWrites } = require('../middleware/subscription');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router = express.Router();
 
 router.use(authMiddleware);
 router.use(requireFeature('birthday'));
+// Phase 1d — gating : cadeau anniversaire reserve au plan Equipe uniquement
+// (pas Essentiel, voir matrice marketing). GET ouverts pour permettre la
+// preview de la feature. ECRITURES (activation, config, force_run) bloquees
+// pour Decouverte ET Essentiel.
+router.use(requirePlanWrites('equipe'));
 
 // ── GET /api/birthday-campaign — config du commerçant (1 ligne) ─────────────
 router.get('/', async (req, res) => {

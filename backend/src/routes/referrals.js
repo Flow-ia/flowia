@@ -2,8 +2,13 @@ const express = require('express');
 const crypto = require('crypto');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { requirePlanWrites } = require('../middleware/subscription');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const router = express.Router();
+router.use(authMiddleware);
+// Phase 1d — gating : programme parrainage reserve aux plans Essentiel/Equipe.
+// GET ouverts (lecture seule), ECRITURES bloquees pour Decouverte avec 402.
+router.use(requirePlanWrites('essentiel', 'equipe'));
 
 // Audit W : normalise un email pour comparaison anti-self-referral.
 // - trim + lowercase

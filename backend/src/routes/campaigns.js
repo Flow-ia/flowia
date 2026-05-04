@@ -3,6 +3,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
+const { requirePlan } = require('../middleware/subscription');
 const { sendSMS, sleep, chunk, SMS_COST, SMS_PRICE } = require('../utils/messenger');
 const { sendMarketingEmail } = require('../utils/emailSender');
 const { appendUnsubscribeSms } = require('../utils/unsubscribe');
@@ -583,7 +584,10 @@ const VALID_CHANNELS     = ['sms', 'email', 'both'];
 const VALID_TARGET_TYPES = ['top50', 'top100', 'top200', 'all', 'custom'];
 const MAX_SMS_LEN        = 480;  // 3 SMS concaténés max — au-delà c'est du spam
 const MAX_EMAIL_LEN      = 10000;
-router.post('/send', async (req, res) => {
+// Phase 1b — gating : envoi de campagne (SMS ou Email marketing)
+// reserve aux plans Essentiel et Equipe. GET /preview, /history, /quota
+// restent accessibles aux Decouverte (lecture seule).
+router.post('/send', requirePlan('essentiel', 'equipe'), async (req, res) => {
   try {
     const { promo_code_id, target_type, custom_count, channel, message_sms, message_email, promo_code } = req.body;
     const userId = req.user.userId;
@@ -866,7 +870,7 @@ router.get('/auto-plan', async (req, res) => {
 // pour le même commerçant (double-clic, retry, scripts) tenteraient de
 // générer 2 plans en parallèle → double débit + double envoi. On utilise
 // pg_try_advisory_xact_lock scope transaction : le 2e appel échoue vite.
-router.post('/auto-send', async (req, res) => {
+router.post('/auto-send', requirePlan('essentiel', 'equipe'), async (req, res) => {
   const dbClient = await pool.connect();
   let lockAcquired = false;
   try {

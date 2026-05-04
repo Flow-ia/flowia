@@ -88,9 +88,24 @@ function requireEquipePlan() {
   return requirePlan('equipe');
 }
 
+// Variante : ne gate que les ECRITURES (POST/PUT/PATCH/DELETE). Les lectures
+// (GET/HEAD) restent ouvertes pour que les pages de la feature puissent
+// s'afficher en read-only meme pour les plans inferieurs (UX soft-gating :
+// le user voit ce qu'il aurait avec, plutot qu'un 402 brutal a l'ouverture).
+function requirePlanWrites(...allowedPlans) {
+  const guard = requirePlan(...allowedPlans);
+  return (req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+      return next();
+    }
+    return guard(req, res, next);
+  };
+}
+
 module.exports = {
   getEffectivePlan,
   requirePlan,
+  requirePlanWrites,
   requirePaidPlan,
   requireEquipePlan,
   PLANS,

@@ -3,11 +3,16 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
+const { requirePlan } = require('../middleware/subscription');
 const { sendSMS, SMS_PRICE, chunk, sleep } = require('../utils/messenger');
 const { appendUnsubscribeSms } = require('../utils/unsubscribe');
 const router = express.Router();
 router.use(authMiddleware);
 router.use(requireFeature('marketing_ai'));
+// Phase 1c — gating : Marketing IA (suggestions de relance par segments)
+// reserve aux plans Essentiel et Equipe (IA standard). Decouverte voit
+// la 402 + redirige vers /abonnement via PlanUpgradeOverlay.
+router.use(requirePlan('essentiel', 'equipe'));
 
 // Taux de retour estimés (pessimiste/optimiste) par segment — réalistes pour salon
 const RETURN_RATE_MIN = 0.08; // 8%
