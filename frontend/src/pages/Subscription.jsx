@@ -366,39 +366,6 @@ export default function Subscription() {
           subtitle="Choisissez le plan qui correspond à votre activité."
         />
 
-        {/* Bandeau état actuel */}
-        {!loading && sub?.is_active && (
-          <div style={{
-            padding: '14px 18px', borderRadius: 10,
-            background: t.card, border: `1px solid ${t.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 12, flexWrap: 'wrap',
-          }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 12, color: t.muted, marginBottom: 2 }}>Plan actuel</p>
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 500, color: t.text }}>
-                {planLabel(sub.plan)}
-                {sub.period && <span style={{ color: t.muted, fontWeight: 400 }}> · {sub.period === 'yearly' ? 'annuel' : 'mensuel'}</span>}
-                {sub.status === 'trialing' && (
-                  <span style={{
-                    marginLeft: 8, fontSize: 11, padding: '2px 8px', borderRadius: 99,
-                    background: '#ecfdf5', color: '#10b981', fontWeight: 500,
-                  }}>Essai gratuit</span>
-                )}
-              </p>
-              {sub.current_period_end && (
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: t.muted }}>
-                  Prochaine échéance : {new Date(sub.current_period_end).toLocaleDateString('fr-FR')}
-                </p>
-              )}
-            </div>
-            <button onClick={handlePortal} disabled={busyPortal}
-                    style={btnPrimary(t, busyPortal)}>
-              {busyPortal ? 'Ouverture…' : 'Gérer mon abonnement'}
-            </button>
-          </div>
-        )}
-
         {/* Bandeau past_due */}
         {!loading && sub?.is_past_due && (
           <div style={{
@@ -1465,10 +1432,11 @@ function CancelToFreeCard({ fromId, t, busyAction, onCancel }) {
 // Lit/écrit Stripe customer (name, email, phone, address). Aucune redirection
 // vers le portail Stripe pour cette gestion.
 function BillingDetailsSection({ theme: t, showToast }) {
-  const [billing, setBilling] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [busy, setBusy]       = useState(false);
+  const [billing, setBilling]         = useState(null);
+  const [fromProfile, setFromProfile] = useState(false);
+  const [loading, setLoading]         = useState(true);
+  const [editing, setEditing]         = useState(false);
+  const [busy, setBusy]               = useState(false);
 
   // Form fields locaux (entrent en sync avec billing quand on entre en édition).
   const [name,    setName]    = useState('');
@@ -1484,6 +1452,7 @@ function BillingDetailsSection({ theme: t, showToast }) {
     try {
       const data = await api.getSubscriptionBillingInfo();
       setBilling(data?.billing || null);
+      setFromProfile(!!data?.from_profile);
     } catch (e) { console.error('[Billing] load', e); }
     finally { setLoading(false); }
   };
@@ -1547,24 +1516,33 @@ function BillingDetailsSection({ theme: t, showToast }) {
           {"Aucune information de facturation. Souscrivez d'abord à un plan."}
         </p>
       ) : !editing ? (
-        <div style={{ fontSize: 13, color: t.text, lineHeight: 1.6 }}>
-          {billing.name && <div>{billing.name}</div>}
-          {billing.email && <div style={{ color: t.muted }}>{billing.email}</div>}
-          {billing.phone && <div style={{ color: t.muted }}>{billing.phone}</div>}
-          {billing.address?.line1 && <div>{billing.address.line1}</div>}
-          {billing.address?.line2 && <div>{billing.address.line2}</div>}
-          {(billing.address?.postal_code || billing.address?.city) && (
-            <div>
-              {[billing.address.postal_code, billing.address.city]
-                .filter(Boolean).join(' ')}
-              {billing.address.country && `, ${billing.address.country}`}
-            </div>
-          )}
-          {!billing.name && !billing.email && !billing.address?.line1 && (
-            <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>
-              {"Aucune coordonnée renseignée. Cliquez sur Modifier pour les compléter."}
+        <div>
+          {fromProfile && (
+            <p style={{ fontSize: 11, color: t.muted, margin: '0 0 8px',
+                        padding: '6px 10px', borderRadius: 6,
+                        background: t.cardAlt, border: `1px solid ${t.border}` }}>
+              {"Pré-rempli depuis votre profil commerçant. Cliquez sur Modifier pour utiliser une adresse de facturation différente."}
             </p>
           )}
+          <div style={{ fontSize: 13, color: t.text, lineHeight: 1.6 }}>
+            {billing.name && <div>{billing.name}</div>}
+            {billing.email && <div style={{ color: t.muted }}>{billing.email}</div>}
+            {billing.phone && <div style={{ color: t.muted }}>{billing.phone}</div>}
+            {billing.address?.line1 && <div>{billing.address.line1}</div>}
+            {billing.address?.line2 && <div>{billing.address.line2}</div>}
+            {(billing.address?.postal_code || billing.address?.city) && (
+              <div>
+                {[billing.address.postal_code, billing.address.city]
+                  .filter(Boolean).join(' ')}
+                {billing.address.country && `, ${billing.address.country}`}
+              </div>
+            )}
+            {!billing.name && !billing.email && !billing.address?.line1 && (
+              <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>
+                {"Aucune coordonnée renseignée. Cliquez sur Modifier pour les compléter."}
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         <form onSubmit={handleSave}>

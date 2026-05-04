@@ -519,28 +519,84 @@ router.post('/portal', authMiddleware, async (req, res) => {
 // ── GET /api/subscriptions/billing-info ────────────────────────────────────
 // Renvoie les infos de facturation Stripe (nom, email, adresse, TVA).
 // Permet l'édition inline sans passer par le portail Stripe.
+//
+// FALLBACK : si Stripe customer n'a pas encore de coordonnées (premier load),
+// on remplit avec les infos du profil commerçant (table users) — business_name,
+// email, phone, address/city/postal_code. Le commerçant peut ensuite modifier
+// pour avoir une adresse de facturation distincte de son adresse principale.
 router.get('/billing-info', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     const { rows } = await pool.query(
-      'SELECT stripe_customer_id FROM users WHERE id=$1', [userId]
+      `SELECT stripe_customer_id, business_name, email, phone, address, city,
+              postal_code, country
+       FROM users WHERE id=$1`, [userId]
     );
-    if (!rows.length || !rows[0].stripe_customer_id) {
-      return res.json({ billing: null });
+    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    const u = rows[0];
+
+    // Si pas encore de customer Stripe → fallback profil pur.
+    if (!u.stripe_customer_id) {
+      return res.json({
+        billing: {
+          name:    u.business_name || '',
+          email:   u.email || '',
+          phone:   u.phone || '',
+          address: {
+            line1: u.address || '', line2: '',
+            city:  u.city || '', postal_code: u.postal_code || '',
+            state: '', country: u.country || 'FR',
+          },
+        },
+        from_profile: true, // hint UI : valeurs pré-remplies, pas encore enregistrées sur Stripe
+      });
     }
+
     const stripe = getStripe();
-    const customer = await stripe.customers.retrieve(rows[0].stripe_customer_id);
-    if (customer.deleted) return res.json({ billing: null });
+    const customer = await stripe.customers.retrieve(u.stripe_customer_id);
+    if (customer.deleted) {
+      // Customer supprimé chez Stripe → fallback profil aussi.
+      return res.json({
+        billing: {
+          name:    u.business_name || '',
+          email:   u.email || '',
+          phone:   u.phone || '',
+          address: {
+            line1: u.address || '', line2: '',
+            city:  u.city || '', postal_code: u.postal_code || '',
+            state: '', country: u.country || 'FR',
+          },
+        },
+        from_profile: true,
+      });
+    }
+
+    // Stripe a-t-il une adresse complète ? Si oui on la prend, sinon on
+    // fallback champ par champ vers le profil pour que l'UI montre l'utilisateur
+    // ce qui sera prélevé par défaut.
+    const stripeAddr   = customer.address || {};
+    const hasStripeAddr = !!(stripeAddr.line1 || stripeAddr.city || stripeAddr.postal_code);
+    const fallbackAddr = {
+      line1: u.address || '', line2: '',
+      city:  u.city || '', postal_code: u.postal_code || '',
+      state: '', country: u.country || 'FR',
+    };
 
     res.json({
       billing: {
-        name:    customer.name || '',
-        email:   customer.email || '',
-        phone:   customer.phone || '',
-        address: customer.address || {
-          line1: '', line2: '', city: '', postal_code: '', state: '', country: 'FR',
-        },
+        name:    customer.name  || u.business_name || '',
+        email:   customer.email || u.email || '',
+        phone:   customer.phone || u.phone || '',
+        address: hasStripeAddr ? {
+          line1:       stripeAddr.line1 || '',
+          line2:       stripeAddr.line2 || '',
+          city:        stripeAddr.city  || '',
+          postal_code: stripeAddr.postal_code || '',
+          state:       stripeAddr.state || '',
+          country:     stripeAddr.country || 'FR',
+        } : fallbackAddr,
       },
+      from_profile: !hasStripeAddr && !customer.address,
     });
   } catch (e) {
     console.error('[SUB BILLING GET ERR]', e.message);
