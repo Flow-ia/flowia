@@ -340,6 +340,8 @@ export const api = {
   setSubscriptionDefaultPaymentMethod: (id) => request('/subscriptions/payment-methods/' + id + '/default', { method: 'POST' }),
   deleteSubscriptionPaymentMethod:   (id)  => request('/subscriptions/payment-methods/' + id, { method: 'DELETE' }),
   listSubscriptionInvoices:          ()    => request('/subscriptions/invoices'),
+  getSubscriptionBillingInfo:        ()    => request('/subscriptions/billing-info'),
+  updateSubscriptionBillingInfo:     (b)   => request('/subscriptions/billing-info', { method: 'PUT', body: JSON.stringify(b) }),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
 // Annonce/bandeau de la page de reservation publique

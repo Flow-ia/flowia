@@ -1023,14 +1023,14 @@ function AddCardForm({ onSuccess, onCancel, theme: t, showToast }) {
   );
 }
 
-// ─── Carte unique compacte pour utilisateur abonné ─────────────────────────
-// Une SEULE card avec toutes les infos + actions principales en boutons.
-// Les sous-vues (changer de plan, cartes, factures) ouvrent des modaux pour
-// éviter le scroll long de la page.
+// ─── Vue subscribed user façon Stripe Dashboard / Claude.ai ─────────────────
+// 4 sections flat empilées (Plan + Modes de paiement + Coordonnées de
+// facturation + Historique de facturation). Tout inline, aucune redirection
+// vers un portail externe. Une seule modale pour comparer plans (gains/pertes).
 function CompactSubscriptionCard({ sub, t, busyAction, busyPortal, showToast,
                                    onChangePeriod, onChangePlan, onCancel,
                                    onReactivate, onPortal }) {
-  const [modal, setModal] = useState(null); // 'plan' | 'cards' | 'invoices'
+  const [planModalOpen, setPlanModalOpen] = useState(false);
   const planDef       = PLAN_DEFS[sub.plan];
   if (!planDef) return null;
 
@@ -1045,176 +1045,160 @@ function CompactSubscriptionCard({ sub, t, busyAction, busyPortal, showToast,
       })
     : null;
 
-  const canChangeOfPlan = !isCanceling && (upgradeId || downgradeId);
-
   return (
-    <>
-      <section style={{
-        padding: 22, borderRadius: 12,
-        background: t.card, border: `1px solid ${t.border}`,
-        boxShadow: t.shadowMd,
-      }}>
-        {/* En-tête : nom plan + badges */}
-        <div style={{ display: 'flex', justifyContent: 'space-between',
-                      alignItems: 'flex-start', flexWrap: 'wrap', gap: 8,
-                      marginBottom: 4 }}>
-          <div>
-            <p style={{ fontSize: 11, color: t.muted, margin: 0, marginBottom: 4,
-                        textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
-              Mon abonnement
-            </p>
-            <h2 style={{ fontSize: 22, fontWeight: 500, color: t.text, margin: 0,
-                         letterSpacing: '-0.01em' }}>
-              {planDef.name}
-              <span style={{ fontSize: 14, color: t.muted, fontWeight: 400, marginLeft: 8 }}>
-                {isYearly ? 'Annuel' : 'Mensuel'}
-              </span>
-            </h2>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {sub.status === 'trialing' && (
-              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
-                             background: '#ecfdf5', color: '#10b981', fontWeight: 500 }}>
-                Essai gratuit
-              </span>
-            )}
-            {isCanceling && (
-              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
-                             background: '#fef2f2', color: '#991b1b', fontWeight: 500 }}>
-                Annulation programmée
-              </span>
-            )}
-            {sub.is_past_due && (
-              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
-                             background: '#fffbeb', color: '#92400e', fontWeight: 500 }}>
-                Paiement en échec
-              </span>
-            )}
-          </div>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* Prix + dates */}
-        <p style={{ fontSize: 14, color: t.text, margin: '8px 0 4px' }}>
-          <strong style={{ fontWeight: 500 }}>
-            {isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`}
-          </strong>
+      {/* ── Section 1 : Plan actuel ──────────────────────────────────── */}
+      <FlatSection title="Plan actuel" t={t}
+                   right={
+                     !isCanceling && (upgradeId || downgradeId) ? (
+                       <button onClick={() => setPlanModalOpen(true)}
+                               style={linkBtn(t)}>
+                         Changer de plan
+                       </button>
+                     ) : null
+                   }>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8,
+                      flexWrap: 'wrap', marginBottom: 4 }}>
+          <span style={{ fontSize: 18, fontWeight: 500, color: t.text }}>
+            {planDef.name}
+          </span>
+          <span style={{ fontSize: 13, color: t.muted }}>
+            · {isYearly ? 'Annuel' : 'Mensuel'}
+          </span>
+          {sub.status === 'trialing' && (
+            <span style={badgeStyle('green')}>Essai gratuit</span>
+          )}
+          {isCanceling && (
+            <span style={badgeStyle('red')}>Annulation programmée</span>
+          )}
+          {sub.is_past_due && (
+            <span style={badgeStyle('orange')}>Paiement en échec</span>
+          )}
+        </div>
+        <p style={{ fontSize: 13, color: t.text, margin: '0 0 2px' }}>
+          {isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`}
           {isYearly && (
-            <span style={{ fontSize: 13, color: t.muted, marginLeft: 8 }}>
+            <span style={{ color: t.muted, marginLeft: 6 }}>
               {`(soit ${formatPrice(planDef.yearly)} €/mois)`}
             </span>
           )}
         </p>
         {periodEndStr && (
-          <p style={{ fontSize: 12, color: t.muted, margin: '0 0 18px' }}>
+          <p style={{ fontSize: 12, color: t.muted, margin: '0 0 14px' }}>
             {isCanceling
-              ? `Accès maintenu jusqu'au ${periodEndStr}, puis bascule sur Découverte.`
-              : `Prochain renouvellement le ${periodEndStr}.`}
+              ? `Accès maintenu jusqu'au ${periodEndStr}.`
+              : `Prochain prélèvement le ${periodEndStr}.`}
           </p>
         )}
 
-        {/* Actions principales en grille responsive */}
-        <div style={{
-          display: 'grid', gap: 8,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          marginTop: 10,
-        }}>
-          {/* Action principale : reactiver si annulation, sinon upgrade/period */}
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
           {isCanceling ? (
             <button onClick={onReactivate} disabled={busyAction === 'reactivate'}
-                    style={btnPrimary(t, busyAction === 'reactivate')}>
-              {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver mon abonnement'}
+                    style={{ ...btnPrimary(t, busyAction === 'reactivate'), width: 'auto', padding: '8px 14px' }}>
+              {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver le plan'}
             </button>
           ) : (
             <>
-              {upgradeId && (
-                <button onClick={() => setModal('plan')}
-                        style={btnPrimary(t, false)}>
-                  {`Passer à ${PLAN_DEFS[upgradeId].name}`}
-                </button>
-              )}
               {!isYearly && annualSavings > 0 && (
                 <button onClick={() => onChangePeriod('yearly')}
                         disabled={busyAction === 'change'}
-                        style={btnGhost(t, busyAction === 'change')}>
-                  {busyAction === 'change' ? '…' : `Annuel · économisez ${annualSavings} €`}
+                        style={{ ...btnGhost(t, busyAction === 'change'), width: 'auto', padding: '8px 14px' }}>
+                  {busyAction === 'change' ? '…' : `Passer en annuel · −${annualSavings} €`}
                 </button>
               )}
               {isYearly && (
                 <button onClick={() => onChangePeriod('monthly')}
                         disabled={busyAction === 'change'}
-                        style={btnGhost(t, busyAction === 'change')}>
+                        style={{ ...btnGhost(t, busyAction === 'change'), width: 'auto', padding: '8px 14px' }}>
                   {busyAction === 'change' ? '…' : 'Repasser en mensuel'}
                 </button>
               )}
-              {/* Si plan haut (Équipe), afficher Changer de plan pour aller voir downgrade */}
-              {!upgradeId && downgradeId && (
-                <button onClick={() => setModal('plan')} style={btnGhost(t, false)}>
-                  Changer de plan
-                </button>
-              )}
+              <button onClick={onCancel} disabled={busyAction === 'cancel'}
+                      style={{ padding: '8px 14px', fontSize: 13, fontWeight: 500,
+                               background: 'transparent', color: '#991b1b',
+                               border: '1px solid #fecaca', borderRadius: 8,
+                               cursor: busyAction === 'cancel' ? 'wait' : 'pointer',
+                               fontFamily: 'inherit' }}>
+                {busyAction === 'cancel' ? 'Annulation…' : 'Annuler le plan'}
+              </button>
             </>
           )}
-          <button onClick={() => setModal('cards')} style={btnGhost(t, false)}>
-            Mes cartes bancaires
-          </button>
-          <button onClick={() => setModal('invoices')} style={btnGhost(t, false)}>
-            Mes factures
-          </button>
         </div>
+      </FlatSection>
 
-        {/* Actions secondaires en bas, plus discrètes */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap',
-                      paddingTop: 14, borderTop: `1px solid ${t.separator}` }}>
-          {!isCanceling && (
-            <button onClick={onCancel} disabled={busyAction === 'cancel'}
-                    style={{ background: 'none', border: 'none', padding: 0,
-                             color: '#991b1b', textDecoration: 'underline',
-                             cursor: busyAction === 'cancel' ? 'wait' : 'pointer',
-                             fontFamily: 'inherit', fontSize: 12 }}>
-              {busyAction === 'cancel' ? 'Annulation…' : 'Annuler mon abonnement'}
-            </button>
-          )}
-          <button onClick={onPortal} disabled={busyPortal}
-                  style={{ background: 'none', border: 'none', padding: 0,
-                           color: t.muted, textDecoration: 'underline',
-                           cursor: busyPortal ? 'wait' : 'pointer',
-                           fontFamily: 'inherit', fontSize: 12,
-                           marginLeft: 'auto' }}>
-            {busyPortal ? 'Ouverture…' : "Adresse de facturation →"}
-          </button>
-        </div>
-      </section>
+      {/* ── Section 2 : Modes de paiement ────────────────────────────── */}
+      <PaymentMethodsSection theme={t} showToast={showToast}/>
+
+      {/* ── Section 3 : Coordonnées de facturation ───────────────────── */}
+      <BillingDetailsSection theme={t} showToast={showToast}/>
+
+      {/* ── Section 4 : Historique de facturation ────────────────────── */}
+      <InvoicesSection theme={t}/>
 
       {/* ── Modal Changer de plan ──────────────────────────────────────── */}
-      <Modal open={modal === 'plan'} onClose={() => setModal(null)}
+      <Modal open={planModalOpen} onClose={() => setPlanModalOpen(false)}
              title="Changer de plan" theme={t} maxW={520}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {upgradeId && (
             <UpgradeCard fromId={sub.plan} toId={upgradeId} period={sub.period}
                           t={t} busyAction={busyAction}
-                          onConfirm={() => { setModal(null); onChangePlan(upgradeId, sub.period); }}/>
+                          onConfirm={() => { setPlanModalOpen(false); onChangePlan(upgradeId, sub.period); }}/>
           )}
           {downgradeId && (
             <DowngradeCard fromId={sub.plan} toId={downgradeId} period={sub.period}
                             t={t} busyAction={busyAction}
-                            onConfirm={() => { setModal(null); onChangePlan(downgradeId, sub.period); }}/>
+                            onConfirm={() => { setPlanModalOpen(false); onChangePlan(downgradeId, sub.period); }}/>
           )}
         </div>
       </Modal>
-
-      {/* ── Modal Mes cartes ───────────────────────────────────────────── */}
-      <Modal open={modal === 'cards'} onClose={() => setModal(null)}
-             title="Mes cartes bancaires" theme={t} maxW={520}>
-        <PaymentMethodsSection theme={t} showToast={showToast} embedded/>
-      </Modal>
-
-      {/* ── Modal Mes factures ─────────────────────────────────────────── */}
-      <Modal open={modal === 'invoices'} onClose={() => setModal(null)}
-             title="Mes factures" theme={t} maxW={620}>
-        <InvoicesSection theme={t} embedded/>
-      </Modal>
-    </>
+    </div>
   );
+}
+
+// ─── Wrapper section "flat" homogène pour la vue subscribed ────────────────
+function FlatSection({ title, right, t, children }) {
+  return (
+    <section style={{
+      padding: '18px 20px', borderRadius: 12,
+      background: t.card, border: `1px solid ${t.border}`,
+      boxShadow: t.shadowSm,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'baseline', marginBottom: 12, gap: 12,
+                    paddingBottom: 12, borderBottom: `1px solid ${t.separator}` }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, color: t.text, margin: 0,
+                     letterSpacing: '-0.01em' }}>
+          {title}
+        </h3>
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function badgeStyle(color) {
+  const palette = {
+    green:  { bg: '#ecfdf5', fg: '#10b981' },
+    red:    { bg: '#fef2f2', fg: '#991b1b' },
+    orange: { bg: '#fffbeb', fg: '#92400e' },
+    gray:   { bg: 'rgba(0,0,0,0.06)', fg: '#6B7280' },
+  };
+  const p = palette[color] || palette.gray;
+  return {
+    fontSize: 11, padding: '2px 8px', borderRadius: 99,
+    background: p.bg, color: p.fg, fontWeight: 500,
+  };
+}
+
+function linkBtn(t) {
+  return {
+    background: 'none', border: 'none', padding: 0, color: t.text,
+    fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+    textDecoration: 'underline',
+  };
 }
 
 // Conservé pour compat legacy (free user view inchangée).
@@ -1474,6 +1458,179 @@ function CancelToFreeCard({ fromId, t, busyAction, onCancel }) {
         {busy ? 'Annulation…' : "Annuler mon abonnement"}
       </button>
     </section>
+  );
+}
+
+// ─── Section Coordonnées de facturation (édition inline) ───────────────────
+// Lit/écrit Stripe customer (name, email, phone, address). Aucune redirection
+// vers le portail Stripe pour cette gestion.
+function BillingDetailsSection({ theme: t, showToast }) {
+  const [billing, setBilling] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy]       = useState(false);
+
+  // Form fields locaux (entrent en sync avec billing quand on entre en édition).
+  const [name,    setName]    = useState('');
+  const [email,   setEmail]   = useState('');
+  const [phone,   setPhone]   = useState('');
+  const [line1,   setLine1]   = useState('');
+  const [line2,   setLine2]   = useState('');
+  const [city,    setCity]    = useState('');
+  const [postal,  setPostal]  = useState('');
+  const [country, setCountry] = useState('FR');
+
+  const load = async () => {
+    try {
+      const data = await api.getSubscriptionBillingInfo();
+      setBilling(data?.billing || null);
+    } catch (e) { console.error('[Billing] load', e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const startEdit = () => {
+    const b = billing || {};
+    const a = b.address || {};
+    setName(b.name || '');
+    setEmail(b.email || '');
+    setPhone(b.phone || '');
+    setLine1(a.line1 || '');
+    setLine2(a.line2 || '');
+    setCity(a.city || '');
+    setPostal(a.postal_code || '');
+    setCountry(a.country || 'FR');
+    setEditing(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.updateSubscriptionBillingInfo({
+        name, email, phone,
+        address: { line1, line2, city, postal_code: postal, country },
+      });
+      showToast('Coordonnées mises à jour.', 'ok');
+      setEditing(false);
+      await load();
+    } catch (err) {
+      showToast(err?.data?.error || 'Erreur lors de la mise à jour.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputStyle = {
+    width: '100%', padding: '9px 11px', fontSize: 13,
+    border: `1px solid ${t.borderInput}`, borderRadius: 8,
+    background: t.inputBg, color: t.text,
+    fontFamily: 'inherit', boxSizing: 'border-box',
+  };
+  const labelStyle = {
+    display: 'block', fontSize: 12, color: t.muted,
+    marginBottom: 4, fontWeight: 500,
+  };
+
+  return (
+    <FlatSection title="Coordonnées de facturation" t={t}
+                 right={
+                   !editing && !loading && billing ? (
+                     <button onClick={startEdit} style={linkBtn(t)}>Modifier</button>
+                   ) : null
+                 }>
+      {loading ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>Chargement…</p>
+      ) : !billing ? (
+        <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>
+          {"Aucune information de facturation. Souscrivez d'abord à un plan."}
+        </p>
+      ) : !editing ? (
+        <div style={{ fontSize: 13, color: t.text, lineHeight: 1.6 }}>
+          {billing.name && <div>{billing.name}</div>}
+          {billing.email && <div style={{ color: t.muted }}>{billing.email}</div>}
+          {billing.phone && <div style={{ color: t.muted }}>{billing.phone}</div>}
+          {billing.address?.line1 && <div>{billing.address.line1}</div>}
+          {billing.address?.line2 && <div>{billing.address.line2}</div>}
+          {(billing.address?.postal_code || billing.address?.city) && (
+            <div>
+              {[billing.address.postal_code, billing.address.city]
+                .filter(Boolean).join(' ')}
+              {billing.address.country && `, ${billing.address.country}`}
+            </div>
+          )}
+          {!billing.name && !billing.email && !billing.address?.line1 && (
+            <p style={{ fontSize: 13, color: t.muted, margin: 0 }}>
+              {"Aucune coordonnée renseignée. Cliquez sur Modifier pour les compléter."}
+            </p>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleSave}>
+          <div style={{ display: 'grid', gap: 10,
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <div>
+              <label style={labelStyle}>Nom / Raison sociale</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
+                     maxLength={200} style={inputStyle}/>
+            </div>
+            <div>
+              <label style={labelStyle}>Email de facturation</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                     style={inputStyle}/>
+            </div>
+            <div>
+              <label style={labelStyle}>Téléphone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                     style={inputStyle}/>
+            </div>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={labelStyle}>Adresse</label>
+            <input type="text" value={line1} onChange={e => setLine1(e.target.value)}
+                   placeholder="Numéro et rue" style={{ ...inputStyle, marginBottom: 6 }}/>
+            <input type="text" value={line2} onChange={e => setLine2(e.target.value)}
+                   placeholder="Complément (bât., étage, etc.)" style={inputStyle}/>
+          </div>
+          <div style={{ display: 'grid', gap: 10, marginTop: 10,
+                        gridTemplateColumns: '1fr 2fr 1fr' }}>
+            <div>
+              <label style={labelStyle}>Code postal</label>
+              <input type="text" value={postal} onChange={e => setPostal(e.target.value)}
+                     style={inputStyle}/>
+            </div>
+            <div>
+              <label style={labelStyle}>Ville</label>
+              <input type="text" value={city} onChange={e => setCity(e.target.value)}
+                     style={inputStyle}/>
+            </div>
+            <div>
+              <label style={labelStyle}>Pays</label>
+              <input type="text" value={country} onChange={e => setCountry(e.target.value.toUpperCase().slice(0, 2))}
+                     placeholder="FR" maxLength={2} style={inputStyle}/>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+            <button type="button" onClick={() => setEditing(false)} disabled={busy}
+                    style={{ padding: '9px 16px', fontSize: 13, fontWeight: 500,
+                             background: 'transparent', color: t.text,
+                             border: `1px solid ${t.border}`, borderRadius: 8,
+                             cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }}>
+              Annuler
+            </button>
+            <button type="submit" disabled={busy}
+                    style={{ padding: '9px 16px', fontSize: 13, fontWeight: 500,
+                             background: t.text, color: t.canvas,
+                             border: 'none', borderRadius: 8,
+                             cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
+                             opacity: busy ? 0.7 : 1 }}>
+              {busy ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
+      )}
+    </FlatSection>
   );
 }
 

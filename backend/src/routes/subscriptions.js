@@ -516,6 +516,80 @@ router.post('/portal', authMiddleware, async (req, res) => {
   }
 });
 
+// ── GET /api/subscriptions/billing-info ────────────────────────────────────
+// Renvoie les infos de facturation Stripe (nom, email, adresse, TVA).
+// Permet l'édition inline sans passer par le portail Stripe.
+router.get('/billing-info', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      'SELECT stripe_customer_id FROM users WHERE id=$1', [userId]
+    );
+    if (!rows.length || !rows[0].stripe_customer_id) {
+      return res.json({ billing: null });
+    }
+    const stripe = getStripe();
+    const customer = await stripe.customers.retrieve(rows[0].stripe_customer_id);
+    if (customer.deleted) return res.json({ billing: null });
+
+    res.json({
+      billing: {
+        name:    customer.name || '',
+        email:   customer.email || '',
+        phone:   customer.phone || '',
+        address: customer.address || {
+          line1: '', line2: '', city: '', postal_code: '', state: '', country: 'FR',
+        },
+      },
+    });
+  } catch (e) {
+    console.error('[SUB BILLING GET ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors du chargement des informations' });
+  }
+});
+
+// ── PUT /api/subscriptions/billing-info ────────────────────────────────────
+// Met à jour les infos de facturation côté Stripe (customer.update).
+// Body : { name, email, phone, address: { line1, line2, city, postal_code,
+//                                          state, country } }
+router.put('/billing-info', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, email, phone, address } = req.body || {};
+
+    // Validations légères. Stripe renverra ses propres erreurs sur format.
+    if (email && typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email invalide' });
+    }
+    if (name && name.length > 200) {
+      return res.status(400).json({ error: 'Nom trop long' });
+    }
+
+    const customerId = await ensureStripeCustomer(userId);
+    const stripe     = getStripe();
+    const update     = {};
+    if (typeof name  === 'string') update.name  = name.trim();
+    if (typeof email === 'string') update.email = email.trim();
+    if (typeof phone === 'string') update.phone = phone.trim();
+    if (address && typeof address === 'object') {
+      update.address = {
+        line1:       address.line1 || null,
+        line2:       address.line2 || null,
+        city:        address.city  || null,
+        postal_code: address.postal_code || null,
+        state:       address.state || null,
+        country:     address.country || 'FR',
+      };
+    }
+
+    await stripe.customers.update(customerId, update);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[SUB BILLING PUT ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour' });
+  }
+});
+
 // ── GET /api/subscriptions/invoices ─────────────────────────────────────────
 // Liste les 12 dernières factures du customer. Inclut un PDF téléchargeable
 // et l'URL de la page Stripe hébergée pour consultation.
