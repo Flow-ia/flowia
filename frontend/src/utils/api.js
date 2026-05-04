@@ -329,9 +329,12 @@ export const api = {
   deleteTransaction:  (id)     => adminRequest(`/transactions/${id}`,  { method: 'DELETE' }),
 
   // ── Abonnement plateforme FlowIA ─────────────────────────────────────────
-  getSubscription:        ()    => request('/subscriptions/me'),
-  createSubscriptionCheckout: (b) => request('/subscriptions/checkout', { method: 'POST', body: JSON.stringify(b) }),
-  createSubscriptionPortal:   () => request('/subscriptions/portal',    { method: 'POST' }),
+  getSubscription:            ()  => request('/subscriptions/me'),
+  createSubscriptionCheckout: (b) => request('/subscriptions/checkout',    { method: 'POST', body: JSON.stringify(b) }),
+  createSubscriptionPortal:   ()  => request('/subscriptions/portal',      { method: 'POST' }),
+  cancelSubscription:         ()  => request('/subscriptions/cancel',      { method: 'POST' }),
+  reactivateSubscription:     ()  => request('/subscriptions/reactivate',  { method: 'POST' }),
+  changeSubscriptionPlan:     (b) => request('/subscriptions/change-plan', { method: 'POST', body: JSON.stringify(b) }),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
 // Annonce/bandeau de la page de reservation publique

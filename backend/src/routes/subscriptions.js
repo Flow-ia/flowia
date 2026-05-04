@@ -145,11 +145,12 @@ router.get('/me', authMiddleware, async (req, res) => {
     const userId = req.user.userId;
     const { rows } = await pool.query(`
       SELECT
-        subscription_status            AS status,
-        subscription_plan              AS plan,
-        subscription_period            AS period,
-        subscription_current_period_end AS current_period_end,
-        subscription_trial_ends_at     AS trial_ends_at,
+        subscription_status               AS status,
+        subscription_plan                 AS plan,
+        subscription_period               AS period,
+        subscription_current_period_end   AS current_period_end,
+        subscription_trial_ends_at        AS trial_ends_at,
+        subscription_cancel_at_period_end AS cancel_at_period_end,
         stripe_subscription_id
       FROM users
       WHERE id=$1
@@ -159,19 +160,158 @@ router.get('/me', authMiddleware, async (req, res) => {
 
     const sub = rows[0];
     res.json({
-      status:             sub.status,
-      plan:               sub.plan,
-      period:             sub.period,
-      current_period_end: sub.current_period_end,
-      trial_ends_at:      sub.trial_ends_at,
+      status:               sub.status,
+      plan:                 sub.plan,
+      period:               sub.period,
+      current_period_end:   sub.current_period_end,
+      trial_ends_at:        sub.trial_ends_at,
+      cancel_at_period_end: !!sub.cancel_at_period_end,
       // Helpers calculés côté backend pour simplifier le front.
-      is_active:          ['active', 'trialing'].includes(sub.status),
-      is_past_due:        sub.status === 'past_due',
-      has_subscription:   !!sub.stripe_subscription_id,
+      is_active:            ['active', 'trialing'].includes(sub.status),
+      is_past_due:          sub.status === 'past_due',
+      has_subscription:     !!sub.stripe_subscription_id,
     });
   } catch (e) {
     console.error('[SUB ME ERR]', e.message);
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ── POST /api/subscriptions/cancel ───────────────────────────────────────────
+// Annule l'abonnement EN FIN DE PÉRIODE. L'utilisateur garde l'accès jusqu'à
+// current_period_end, puis status passe à 'canceled' via webhook automatique.
+// Aucun remboursement (pratique standard SaaS — Notion, Slack, Linear).
+router.post('/cancel', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      `SELECT stripe_subscription_id, subscription_status
+       FROM users WHERE id=$1`, [userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    const subId  = rows[0].stripe_subscription_id;
+    const status = rows[0].subscription_status;
+    if (!subId) return res.status(400).json({ error: 'Aucun abonnement actif' });
+    if (!['active', 'trialing', 'past_due'].includes(status)) {
+      return res.status(400).json({ error: 'Abonnement non actif' });
+    }
+
+    const stripe = getStripe();
+    const updated = await stripe.subscriptions.update(subId, {
+      cancel_at_period_end: true,
+    });
+
+    // Update DB direct pour réponse immédiate (webhook confirmera).
+    await pool.query(
+      `UPDATE users SET subscription_cancel_at_period_end = TRUE WHERE id = $1`,
+      [userId]
+    );
+
+    res.json({
+      ok: true,
+      cancel_at_period_end: true,
+      cancels_on: updated.current_period_end
+        ? new Date(updated.current_period_end * 1000).toISOString() : null,
+    });
+  } catch (e) {
+    console.error('[SUB CANCEL ERR]', e.message);
+    res.status(500).json({ error: "Erreur lors de l'annulation" });
+  }
+});
+
+// ── POST /api/subscriptions/reactivate ───────────────────────────────────────
+// Annule l'annulation programmée. Possible uniquement si l'abonnement est
+// encore en cours (current_period_end pas atteint).
+router.post('/reactivate', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      `SELECT stripe_subscription_id, subscription_status,
+              subscription_cancel_at_period_end
+       FROM users WHERE id=$1`, [userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    const subId = rows[0].stripe_subscription_id;
+    if (!subId) return res.status(400).json({ error: 'Aucun abonnement' });
+    if (!rows[0].subscription_cancel_at_period_end) {
+      return res.status(400).json({ error: 'Abonnement non annulé' });
+    }
+    if (!['active', 'trialing', 'past_due'].includes(rows[0].subscription_status)) {
+      return res.status(400).json({ error: 'Abonnement non actif' });
+    }
+
+    const stripe = getStripe();
+    await stripe.subscriptions.update(subId, { cancel_at_period_end: false });
+    await pool.query(
+      `UPDATE users SET subscription_cancel_at_period_end = FALSE WHERE id = $1`,
+      [userId]
+    );
+
+    res.json({ ok: true, cancel_at_period_end: false });
+  } catch (e) {
+    console.error('[SUB REACTIVATE ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors de la réactivation' });
+  }
+});
+
+// ── POST /api/subscriptions/change-plan ──────────────────────────────────────
+// Body : { plan: 'essentiel'|'equipe', period: 'monthly'|'yearly' }
+// Change le plan/période avec proration immédiate :
+// - Upgrade   → différence facturée maintenant
+// - Downgrade → crédit appliqué sur la prochaine facture
+// Le webhook customer.subscription.updated met à jour la DB.
+router.post('/change-plan', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { plan, period } = req.body || {};
+
+    if (!['essentiel', 'equipe'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan invalide' });
+    }
+    if (!['monthly', 'yearly'].includes(period)) {
+      return res.status(400).json({ error: 'Période invalide' });
+    }
+
+    const newPriceId = getPriceId(plan, period);
+    if (!newPriceId) {
+      return res.status(500).json({ error: 'Configuration Stripe incomplète' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT stripe_subscription_id, subscription_status,
+              subscription_plan, subscription_period
+       FROM users WHERE id=$1`, [userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    const sub = rows[0];
+    if (!sub.stripe_subscription_id) {
+      return res.status(400).json({ error: 'Aucun abonnement actif' });
+    }
+    if (sub.subscription_plan === plan && sub.subscription_period === period) {
+      return res.status(400).json({ error: 'Vous êtes déjà sur ce plan' });
+    }
+    if (!['active', 'trialing', 'past_due'].includes(sub.subscription_status)) {
+      return res.status(400).json({ error: 'Abonnement non actif' });
+    }
+
+    const stripe = getStripe();
+    // Fetch sub courante pour avoir l'item ID à modifier.
+    const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+    const itemId = stripeSub.items?.data?.[0]?.id;
+    if (!itemId) {
+      console.error('[SUB CHANGE-PLAN] item ID introuvable sur', sub.stripe_subscription_id);
+      return res.status(500).json({ error: 'Item subscription introuvable' });
+    }
+
+    await stripe.subscriptions.update(sub.stripe_subscription_id, {
+      items: [{ id: itemId, price: newPriceId }],
+      proration_behavior: 'create_prorations',
+    });
+
+    res.json({ ok: true, plan, period });
+  } catch (e) {
+    console.error('[SUB CHANGE-PLAN ERR]', e.message);
+    res.status(500).json({ error: 'Erreur lors du changement de plan' });
   }
 });
 
@@ -258,38 +398,49 @@ router.post('/webhook', async (req, res) => {
 
     // ── customer.subscription.created/updated/deleted ─────────────────────
     // L'event subscription.* contient le statut autoritatif (active, trialing,
-    // past_due, canceled, etc.) et la période courante. Source de vérité.
+    // past_due, canceled, etc.), la période courante, et cancel_at_period_end.
+    // Source de vérité.
     if (event.type === 'customer.subscription.created'
      || event.type === 'customer.subscription.updated'
      || event.type === 'customer.subscription.deleted') {
       const sub = event.data.object;
-      const customerId = sub.customer;
-      const priceId    = sub.items?.data?.[0]?.price?.id;
+      const customerId   = sub.customer;
+      const priceId      = sub.items?.data?.[0]?.price?.id;
       const { plan, period } = planPeriodFromPriceId(priceId);
-      const periodEnd  = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
-      const trialEnd   = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
-      const status     = event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status;
+      const periodEnd    = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+      const trialEnd     = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
+      const status       = event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status;
+      // cancel_at_period_end : flag Stripe natif. À reset quand la sub est
+      // 'deleted' (déjà annulée définitivement, plus de pending cancel).
+      const cancelAtEnd  = event.type === 'customer.subscription.deleted'
+                            ? false : !!sub.cancel_at_period_end;
 
       // Update par stripe_customer_id (toujours présent et stable).
       // Si plan/period non identifiables (price_id inconnu = config env manquante),
       // on les laisse intacts pour éviter NULL accidentel.
-      const params = [status, periodEnd, trialEnd, sub.id, customerId];
-      let extraSet = '';
+      // Construction dynamique des SET selon disponibilité plan/period.
+      const setParts = [
+        'subscription_status = $1',
+        'subscription_current_period_end = $2',
+        'subscription_trial_ends_at = $3',
+        'stripe_subscription_id = $4',
+        'subscription_cancel_at_period_end = $5',
+      ];
+      const params = [status, periodEnd, trialEnd, sub.id, cancelAtEnd];
       if (plan && period) {
-        extraSet = `, subscription_plan = $6, subscription_period = $7`;
-        params.splice(4, 0, plan, period); // insérer avant customerId
+        setParts.push('subscription_plan = $6');
+        setParts.push('subscription_period = $7');
+        params.push(plan, period);
       }
+      params.push(customerId);
       const customerIdIndex = params.length;
-      await pool.query(`
-        UPDATE users
-        SET subscription_status = $1,
-            subscription_current_period_end = $2,
-            subscription_trial_ends_at = $3,
-            stripe_subscription_id = $4
-            ${extraSet}
-        WHERE stripe_customer_id = $${customerIdIndex}
-      `, params);
-      console.log('[SUB WEBHOOK]', event.type, customerId, status, plan || '?');
+      await pool.query(
+        `UPDATE users SET ${setParts.join(', ')}
+         WHERE stripe_customer_id = $${customerIdIndex}`,
+        params
+      );
+      console.log('[SUB WEBHOOK]', event.type, customerId, status,
+        plan || '?', cancelAtEnd ? '(cancel_at_end)' : '');
     }
 
     // ── invoice.paid : renouvellement réussi (mensuel/annuel) ─────────────

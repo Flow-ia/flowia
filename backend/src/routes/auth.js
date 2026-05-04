@@ -623,7 +623,8 @@ router.get('/me', authMiddleware, async (req, res) => {
               google_business_url, created_at, first_name, last_name,
               onboarding_completed, google_id, avatar_url,
               subscription_status, subscription_plan, subscription_period,
-              subscription_current_period_end, subscription_trial_ends_at
+              subscription_current_period_end, subscription_trial_ends_at,
+              subscription_cancel_at_period_end
        FROM users WHERE id=$1`,
       [req.user.userId]
     );
@@ -647,13 +648,14 @@ router.get('/me', authMiddleware, async (req, res) => {
       hasGoogle:          !!u.google_id,
       avatarUrl:          u.avatar_url,
       subscription: {
-        status:           u.subscription_status,
-        plan:             u.subscription_plan,
-        period:           u.subscription_period,
-        currentPeriodEnd: u.subscription_current_period_end,
-        trialEndsAt:      u.subscription_trial_ends_at,
+        status:             u.subscription_status,
+        plan:               u.subscription_plan,
+        period:             u.subscription_period,
+        currentPeriodEnd:   u.subscription_current_period_end,
+        trialEndsAt:        u.subscription_trial_ends_at,
+        cancelAtPeriodEnd:  !!u.subscription_cancel_at_period_end,
         isActive,
-        isPastDue:        u.subscription_status === 'past_due',
+        isPastDue:          u.subscription_status === 'past_due',
         effectivePlan,
       },
     }});

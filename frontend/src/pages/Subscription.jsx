@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
-import { Toast, useToast } from '../components/UI';
+import { Toast, useToast, Modal } from '../components/UI';
 import { PageHeader } from './reglages/shared';
 import { api } from '../utils/api';
 
@@ -57,11 +57,13 @@ export default function Subscription() {
   const [toast, showToast] = useToast();
   const location = useLocation();
   const navigate = useNavigate();
-  const [yearly, setYearly]       = useState(false);
-  const [sub, setSub]             = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [busyPlan, setBusyPlan]   = useState(null);
+  const [yearly, setYearly]         = useState(false);
+  const [sub, setSub]               = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [busyPlan, setBusyPlan]     = useState(null);
   const [busyPortal, setBusyPortal] = useState(false);
+  const [busyAction, setBusyAction] = useState(null); // 'cancel' | 'reactivate' | 'change'
+  const [confirmCfg, setConfirmCfg] = useState(null);  // { title, message, danger, onConfirm }
 
   // Lecture du status de retour Stripe Checkout (?status=success|cancel).
   useEffect(() => {
@@ -164,6 +166,103 @@ export default function Subscription() {
     }
   };
 
+  // Recharge l'état d'abonnement depuis le serveur (après une action).
+  // Utile car le webhook Stripe peut prendre 1-2s à arriver — on fait un
+  // poll court pour voir le nouveau status sans laisser l'UI sur l'ancien.
+  const refreshSub = async (attempts = 5) => {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const data = await api.getSubscription();
+        setSub(data);
+        if (i > 0) return; // on avait deja la donnee fraiche
+      } catch {}
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 1500));
+    }
+  };
+
+  const handleCancel = () => {
+    const periodEnd = sub?.current_period_end
+      ? new Date(sub.current_period_end).toLocaleDateString('fr-FR') : '';
+    setConfirmCfg({
+      title: "Annuler l'abonnement",
+      message: (
+        <>
+          <p style={{ margin: 0, fontSize: 14, color: t.text, lineHeight: 1.5 }}>
+            {"Vous gardez l'accès complet jusqu'au "}
+            <strong>{periodEnd}</strong>
+            {", puis votre compte basculera sur le plan Découverte (gratuit, fonctionnalités limitées)."}
+          </p>
+          <p style={{ margin: '10px 0 0', fontSize: 13, color: t.muted, lineHeight: 1.5 }}>
+            {"Aucun remboursement n'est dû pour la période en cours. Vous pourrez réactiver votre abonnement à tout moment avant cette date."}
+          </p>
+        </>
+      ),
+      danger: true,
+      confirmLabel: "Confirmer l'annulation",
+      onConfirm: async () => {
+        setBusyAction('cancel');
+        setConfirmCfg(null);
+        try {
+          await api.cancelSubscription();
+          showToast('Abonnement annulé. Accès maintenu jusqu\'à la fin de période.', 'ok');
+          await refreshSub();
+        } catch (e) {
+          showToast(e?.data?.error || "Erreur lors de l'annulation.", 'error');
+        } finally {
+          setBusyAction(null);
+        }
+      },
+    });
+  };
+
+  const handleReactivate = async () => {
+    setBusyAction('reactivate');
+    try {
+      await api.reactivateSubscription();
+      showToast('Abonnement réactivé.', 'ok');
+      await refreshSub();
+    } catch (e) {
+      showToast(e?.data?.error || 'Erreur lors de la réactivation.', 'error');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleChangePlan = (newPlan, newPeriod) => {
+    const isUpgrade = (sub?.plan === 'essentiel' && newPlan === 'equipe')
+                   || (sub?.period === 'monthly' && newPeriod === 'yearly');
+    setConfirmCfg({
+      title: `Passer à ${planLabel(newPlan)} ${newPeriod === 'yearly' ? 'annuel' : 'mensuel'}`,
+      message: (
+        <>
+          <p style={{ margin: 0, fontSize: 14, color: t.text, lineHeight: 1.5 }}>
+            {isUpgrade
+              ? "Le changement prend effet immédiatement. La différence proratisée pour la période en cours sera facturée tout de suite."
+              : "Le changement prend effet immédiatement. Un crédit proratisé sera appliqué automatiquement sur votre prochaine facture."}
+          </p>
+          <p style={{ margin: '10px 0 0', fontSize: 13, color: t.muted, lineHeight: 1.5 }}>
+            {"Le détail du calcul apparaîtra dans votre prochaine facture Stripe (consultable depuis le portail de gestion)."}
+          </p>
+        </>
+      ),
+      danger: false,
+      confirmLabel: 'Confirmer le changement',
+      onConfirm: async () => {
+        setBusyAction('change');
+        setConfirmCfg(null);
+        try {
+          await api.changeSubscriptionPlan({ plan: newPlan, period: newPeriod });
+          showToast('Plan mis à jour.', 'ok');
+          await refreshSub();
+        } catch (e) {
+          showToast(e?.data?.error || 'Erreur changement de plan.', 'error');
+        } finally {
+          setBusyAction(null);
+        }
+      },
+    });
+  };
+
   const currentPlan = sub?.is_active ? sub.plan : 'decouverte';
   const currentPeriod = sub?.period;
 
@@ -221,6 +320,29 @@ export default function Subscription() {
             color: '#92400e', fontSize: 13,
           }}>
             {"Votre dernier paiement a échoué. Mettez à jour votre carte depuis le portail pour conserver l'accès."}
+          </div>
+        )}
+
+        {/* Bandeau annulation programmée */}
+        {!loading && sub?.is_active && sub?.cancel_at_period_end && (
+          <div style={{
+            padding: '12px 16px', borderRadius: 10,
+            background: '#fef2f2', border: '1px solid #fecaca',
+            color: '#991b1b', fontSize: 13,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            gap: 12, flexWrap: 'wrap',
+          }}>
+            <span>
+              {"Annulation programmée. Vous gardez l'accès jusqu'au "}
+              <strong>{sub.current_period_end
+                ? new Date(sub.current_period_end).toLocaleDateString('fr-FR')
+                : '—'}</strong>
+              {", puis votre compte basculera sur le plan Découverte."}
+            </span>
+            <button onClick={handleReactivate} disabled={busyAction === 'reactivate'}
+                    style={{ ...btnPrimary(t, busyAction === 'reactivate'), width: 'auto', padding: '8px 14px' }}>
+              {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver'}
+            </button>
           </div>
         )}
 
@@ -331,23 +453,14 @@ export default function Subscription() {
                   ))}
                 </ul>
                 <div style={{ marginTop: 'auto' }}>
-                  {!p.canSubscribe ? (
-                    <button disabled style={btnGhost(t, true)}>
-                      {isCurrent ? 'Plan actuel' : 'Plan gratuit'}
-                    </button>
-                  ) : isCurrent ? (
-                    <button disabled style={btnGhost(t, true)}>Plan actuel</button>
-                  ) : sub?.is_active ? (
-                    <button onClick={handlePortal} disabled={busyPortal}
-                            style={p.highlight ? btnPrimary(t, busyPortal) : btnGhost(t, busyPortal)}>
-                      {busyPortal ? 'Ouverture…' : 'Changer pour ce plan'}
-                    </button>
-                  ) : (
-                    <button onClick={() => handleSubscribe(p.id)} disabled={busyPlan === p.id}
-                            style={p.highlight ? btnPrimary(t, busyPlan === p.id) : btnGhost(t, busyPlan === p.id)}>
-                      {busyPlan === p.id ? 'Redirection…' : 'S\'abonner'}
-                    </button>
-                  )}
+                  {renderPlanButton({
+                    plan: p, sub, yearly, t,
+                    busyPlan, busyAction,
+                    onSubscribe:    () => handleSubscribe(p.id),
+                    onChangePlan:   (newPeriod) => handleChangePlan(p.id, newPeriod),
+                    onCancel:       handleCancel,
+                    onReactivate:   handleReactivate,
+                  })}
                 </div>
               </div>
             );
@@ -357,8 +470,124 @@ export default function Subscription() {
         <p style={{ fontSize: 11, color: t.muted, textAlign: 'center', marginTop: 4 }}>
           {"Tarifs hors taxes. Paiement sécurisé par Stripe. Annulation à tout moment."}
         </p>
+
+        {/* Lien discret vers le Customer Portal Stripe (factures, infos
+            de facturation, gestion des moyens de paiement avancés). */}
+        {!loading && sub?.has_subscription && (
+          <p style={{ fontSize: 12, color: t.muted, textAlign: 'center', marginTop: 12 }}>
+            <button onClick={handlePortal} disabled={busyPortal}
+                    style={{ background: 'none', border: 'none', padding: 0,
+                             color: t.muted, textDecoration: 'underline',
+                             cursor: busyPortal ? 'wait' : 'pointer',
+                             fontFamily: 'inherit', fontSize: 12 }}>
+              {busyPortal ? 'Ouverture…' : 'Voir mes factures et plus de réglages dans le portail Stripe →'}
+            </button>
+          </p>
+        )}
       </div>
+
+      {/* Modal de confirmation pour cancel / change-plan */}
+      <Modal open={!!confirmCfg}
+             onClose={() => setConfirmCfg(null)}
+             title={confirmCfg?.title || ''}
+             theme={t}
+             maxW={460}>
+        <div style={{ marginBottom: 18 }}>
+          {confirmCfg?.message}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setConfirmCfg(null)}
+                  style={{ flex: 1, padding: '10px', borderRadius: 8,
+                           fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                           background: 'transparent', color: t.text,
+                           border: `1px solid ${t.border}`, fontFamily: 'inherit' }}>
+            Annuler
+          </button>
+          <button onClick={() => confirmCfg?.onConfirm?.()}
+                  style={{ flex: 1, padding: '10px', borderRadius: 8,
+                           fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                           background: confirmCfg?.danger ? '#991b1b' : t.text,
+                           color: confirmCfg?.danger ? '#ffffff' : t.canvas,
+                           border: 'none', fontFamily: 'inherit' }}>
+            {confirmCfg?.confirmLabel || 'Confirmer'}
+          </button>
+        </div>
+      </Modal>
     </div>
+  );
+}
+
+// Détermine le bouton à afficher sur chaque carte plan selon le contexte
+// (pas d'abo, abo actif sur ce plan/ailleurs, annulation programmée, etc.).
+function renderPlanButton({ plan, sub, yearly, t, busyPlan, busyAction,
+                            onSubscribe, onChangePlan, onCancel, onReactivate }) {
+  const period         = yearly ? 'yearly' : 'monthly';
+  const isActive       = !!sub?.is_active;
+  const canceling      = isActive && sub?.cancel_at_period_end;
+  const currentPlan    = isActive ? sub.plan : 'decouverte';
+  const currentPeriod  = sub?.period;
+  const isThisPlan     = currentPlan === plan.id;
+  const isThisExact    = isThisPlan && (plan.id === 'decouverte' || currentPeriod === period);
+  const busyChange     = busyAction === 'change';
+
+  // Pas d'abonnement actif : bouton "S'abonner" sur les plans payants.
+  if (!isActive) {
+    if (!plan.canSubscribe) {
+      return <button disabled style={btnGhost(t, true)}>
+        {isThisExact ? 'Plan actuel' : 'Plan gratuit'}
+      </button>;
+    }
+    return (
+      <button onClick={onSubscribe} disabled={busyPlan === plan.id}
+              style={plan.highlight ? btnPrimary(t, busyPlan === plan.id) : btnGhost(t, busyPlan === plan.id)}>
+        {busyPlan === plan.id ? 'Redirection…' : "S'abonner"}
+      </button>
+    );
+  }
+
+  // Abonnement actif : carte du plan courant à la période courante.
+  if (isThisExact) {
+    if (canceling) {
+      return (
+        <button onClick={onReactivate} disabled={busyAction === 'reactivate'}
+                style={btnPrimary(t, busyAction === 'reactivate')}>
+          {busyAction === 'reactivate' ? 'Réactivation…' : 'Réactiver mon abonnement'}
+        </button>
+      );
+    }
+    return <button disabled style={btnGhost(t, true)}>Plan actuel</button>;
+  }
+
+  // Carte du plan courant mais autre période : changer la période.
+  if (isThisPlan) {
+    return (
+      <button onClick={() => onChangePlan(period)} disabled={busyChange || canceling}
+              style={btnGhost(t, busyChange)}>
+        {busyChange ? 'Changement…'
+                    : `Passer en ${period === 'yearly' ? 'annuel' : 'mensuel'}`}
+      </button>
+    );
+  }
+
+  // Carte plan Découverte (gratuit) alors qu'on a un abo payant : annuler.
+  if (plan.id === 'decouverte') {
+    if (canceling) {
+      return <button disabled style={btnGhost(t, true)}>Annulation programmée</button>;
+    }
+    return (
+      <button onClick={onCancel} disabled={busyAction === 'cancel'}
+              style={btnGhost(t, busyAction === 'cancel')}>
+        {busyAction === 'cancel' ? 'Annulation…' : 'Annuler mon abonnement'}
+      </button>
+    );
+  }
+
+  // Autre plan payant : changer pour ce plan.
+  return (
+    <button onClick={() => onChangePlan(period)} disabled={busyChange || canceling}
+            style={plan.highlight ? btnPrimary(t, busyChange) : btnGhost(t, busyChange)}>
+      {busyChange ? 'Changement…' : `Changer pour ${plan.name}`}
+    </button>
   );
 }
 
