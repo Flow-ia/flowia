@@ -144,6 +144,7 @@ function startServer() {
   });
   // Webhook Stripe doit recevoir le raw body AVANT express.json()
   app.use('/api/payments/sms/webhook', express.raw({ type: 'application/json' }));
+  app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
 
   app.use(express.json({ limit: '2mb' }));
 

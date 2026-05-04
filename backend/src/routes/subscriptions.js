@@ -148,6 +148,154 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// ── Helper : reverse mapping price_id → plan/period ─────────────────────────
+// Permet d'extraire plan/period depuis un objet subscription Stripe sans devoir
+// stocker le mapping en DB.
+function planPeriodFromPriceId(priceId) {
+  if (!priceId) return { plan: null, period: null };
+  if (priceId === process.env.STRIPE_PRICE_ESSENTIEL_MONTHLY) return { plan: 'essentiel', period: 'monthly' };
+  if (priceId === process.env.STRIPE_PRICE_ESSENTIEL_YEARLY)  return { plan: 'essentiel', period: 'yearly'  };
+  if (priceId === process.env.STRIPE_PRICE_EQUIPE_MONTHLY)    return { plan: 'equipe',    period: 'monthly' };
+  if (priceId === process.env.STRIPE_PRICE_EQUIPE_YEARLY)     return { plan: 'equipe',    period: 'yearly'  };
+  return { plan: null, period: null };
+}
+
+// ── Helper : vérification signature webhook (dual-mode Test + Live) ─────────
+// L'endpoint reçoit des events des 2 modes (Test pendant dev, Live en prod).
+// On essaie chaque secret ; le bon vérifie, l'autre échoue silencieusement.
+function verifyWebhookEvent(rawBody, signature) {
+  const secrets = [
+    process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET_TEST,
+    process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET_LIVE,
+  ].filter(Boolean);
+  if (!secrets.length) {
+    throw new Error('Aucun STRIPE_SUBSCRIPTION_WEBHOOK_SECRET_* configuré');
+  }
+  const stripe = getStripe();
+  let lastErr;
+  for (const secret of secrets) {
+    try {
+      return stripe.webhooks.constructEvent(rawBody, signature, secret);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+// ── POST /api/subscriptions/webhook ─────────────────────────────────────────
+// Endpoint séparé du webhook SMS existant (/api/payments/sms/webhook).
+// Reçoit les events checkout.session.completed, customer.subscription.*,
+// invoice.paid, invoice.payment_failed (configurés côté Stripe Dashboard).
+// SÉCURITÉ : signature obligatoire, dual-mode Test+Live.
+//
+// Idempotence : les UPDATE sont par stripe_subscription_id ou
+// stripe_customer_id (uniques). Stripe peut retry — c'est safe.
+router.post('/webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  if (!sig) {
+    console.error('[SUB WEBHOOK] Pas de signature');
+    return res.status(400).json({ error: 'no signature' });
+  }
+  let event;
+  try {
+    event = verifyWebhookEvent(req.body, sig);
+  } catch (e) {
+    console.error('[SUB WEBHOOK] Signature invalide:', e.message);
+    return res.status(400).json({ error: 'invalid signature' });
+  }
+
+  // Acquitter Stripe avant le traitement DB pour éviter retry inutile.
+  res.json({ received: true });
+
+  try {
+    // ── checkout.session.completed : souscription initiale finalisée ─────
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      if (session.mode !== 'subscription') return;
+      const userId = session.metadata?.user_id;
+      const plan   = session.metadata?.plan;
+      const period = session.metadata?.period;
+      const subId  = session.subscription;
+      if (!userId || !subId) {
+        console.warn('[SUB WEBHOOK] checkout.session.completed sans user_id/sub_id');
+        return;
+      }
+      await pool.query(`
+        UPDATE users
+        SET stripe_subscription_id = $1,
+            subscription_plan      = $2,
+            subscription_period    = $3
+        WHERE id = $4
+      `, [subId, plan, period, userId]);
+      console.log('[SUB WEBHOOK] checkout completed:', userId, plan, period);
+    }
+
+    // ── customer.subscription.created/updated/deleted ─────────────────────
+    // L'event subscription.* contient le statut autoritatif (active, trialing,
+    // past_due, canceled, etc.) et la période courante. Source de vérité.
+    if (event.type === 'customer.subscription.created'
+     || event.type === 'customer.subscription.updated'
+     || event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object;
+      const customerId = sub.customer;
+      const priceId    = sub.items?.data?.[0]?.price?.id;
+      const { plan, period } = planPeriodFromPriceId(priceId);
+      const periodEnd  = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+      const trialEnd   = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
+      const status     = event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status;
+
+      // Update par stripe_customer_id (toujours présent et stable).
+      // Si plan/period non identifiables (price_id inconnu = config env manquante),
+      // on les laisse intacts pour éviter NULL accidentel.
+      const params = [status, periodEnd, trialEnd, sub.id, customerId];
+      let extraSet = '';
+      if (plan && period) {
+        extraSet = `, subscription_plan = $6, subscription_period = $7`;
+        params.splice(4, 0, plan, period); // insérer avant customerId
+      }
+      const customerIdIndex = params.length;
+      await pool.query(`
+        UPDATE users
+        SET subscription_status = $1,
+            subscription_current_period_end = $2,
+            subscription_trial_ends_at = $3,
+            stripe_subscription_id = $4
+            ${extraSet}
+        WHERE stripe_customer_id = $${customerIdIndex}
+      `, params);
+      console.log('[SUB WEBHOOK]', event.type, customerId, status, plan || '?');
+    }
+
+    // ── invoice.paid : renouvellement réussi (mensuel/annuel) ─────────────
+    // subscription.updated arrivera derrière avec current_period_end actualisé.
+    // Ce hook est défensif : remet status=active si on était past_due.
+    if (event.type === 'invoice.paid') {
+      const invoice = event.data.object;
+      const customerId = invoice.customer;
+      if (!invoice.subscription) return; // ignore invoices one-shot
+      await pool.query(`
+        UPDATE users
+        SET subscription_status = 'active'
+        WHERE stripe_customer_id = $1
+          AND subscription_status IN ('past_due', 'unpaid', 'incomplete')
+      `, [customerId]);
+      console.log('[SUB WEBHOOK] invoice.paid:', customerId);
+    }
+
+    // ── invoice.payment_failed : carte refusée au renouvellement ──────────
+    // Stripe va retry plusieurs fois ; subscription.updated changera status
+    // en past_due puis canceled si tous échecs. Ici juste log + future point
+    // d'extension pour notifier le marchand par email.
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object;
+      console.log('[SUB WEBHOOK] invoice.payment_failed:', invoice.customer,
+        'attempt', invoice.attempt_count);
+    }
+  } catch (e) {
+    // Stripe est déjà acquitté ; pas de 500. Log pour investigation.
+    console.error('[SUB WEBHOOK ERR]', event.type, e.message);
+  }
+});
+
 // ── POST /api/subscriptions/portal ───────────────────────────────────────────
 // Crée une session Stripe Customer Portal — page hébergée Stripe où le
 // marchand peut changer de plan, mettre à jour sa CB, voir ses factures, résilier.
