@@ -1178,7 +1178,8 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
     {
       label: 'Paramétrage',
       items: [
-        { id:'reglages',  label:'Réglages',     icon:'settings', to:'/reglages',    match:['/reglages','/settings'] },
+        { id:'reglages',   label:'Réglages',   icon:'settings', to:'/reglages',    match:['/reglages','/settings'] },
+        { id:'abonnement', label:'Abonnement', icon:'wallet',   to:'/abonnement',  match:['/abonnement'] },
       ],
     },
   ];

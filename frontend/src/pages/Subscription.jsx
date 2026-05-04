@@ -36,7 +36,7 @@ const PLANS = [
     ],
     canSubscribe: true,
     highlight: true,
-    trial: '14 jours d\'essai gratuit',
+    trial: '14 jours d\'essai · sans carte bancaire',
   },
   {
     id: 'equipe',
@@ -189,7 +189,29 @@ export default function Subscription() {
             background: '#fffbeb', border: '1px solid #fde68a',
             color: '#92400e', fontSize: 13,
           }}>
-            Votre dernier paiement a échoué. Mettez à jour votre carte depuis le portail pour conserver l'accès.
+            {"Votre dernier paiement a échoué. Mettez à jour votre carte depuis le portail pour conserver l'accès."}
+          </div>
+        )}
+
+        {/* Bandeau trial bientôt fini (J-3) */}
+        {!loading && sub?.status === 'trialing' && sub?.trial_ends_at &&
+         daysUntil(sub.trial_ends_at) <= 3 && daysUntil(sub.trial_ends_at) >= 0 && (
+          <div style={{
+            padding: '12px 16px', borderRadius: 10,
+            background: '#eff6ff', border: '1px solid #bfdbfe',
+            color: '#1e40af', fontSize: 13,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            gap: 12, flexWrap: 'wrap',
+          }}>
+            <span>
+              {"Votre essai gratuit se termine dans "}{daysUntil(sub.trial_ends_at)}
+              {daysUntil(sub.trial_ends_at) > 1 ? ' jours' : ' jour'}
+              {". Ajoutez une carte bancaire pour continuer sans interruption."}
+            </span>
+            <button onClick={handlePortal} disabled={busyPortal}
+                    style={{ ...btnPrimary(t, busyPortal), width: 'auto', padding: '8px 14px' }}>
+              {busyPortal ? 'Ouverture…' : 'Ajouter une carte'}
+            </button>
           </div>
         )}
 
@@ -313,6 +335,13 @@ function planLabel(id) {
   if (id === 'essentiel') return 'Essentiel';
   if (id === 'equipe')    return 'Équipe';
   return 'Découverte';
+}
+
+function daysUntil(isoDate) {
+  if (!isoDate) return null;
+  const target = new Date(isoDate).getTime();
+  const now    = Date.now();
+  return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
 }
 
 function btnPrimary(t, busy) {

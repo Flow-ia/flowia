@@ -32,15 +32,36 @@ function getPriceId(plan, period) {
 }
 
 // Garantit qu'un Customer Stripe existe (réutilise si déjà créé pour SMS).
+// SÉCURITÉ : verify que le customer existe DANS LE MODE STRIPE COURANT.
+// Cas réel : un user créé en mode Test (SMS recharge) puis on bascule
+// STRIPE_SECRET_KEY en Live → l'ID stocké en DB n'existe pas en Live → 500.
+// Solution : retrieve, et si 'No such customer' on recrée un Customer
+// dans le mode courant et on UPDATE l'ID en DB.
 async function ensureStripeCustomer(userId) {
   const { rows } = await pool.query(
     'SELECT stripe_customer_id, email, business_name FROM users WHERE id=$1',
     [userId]
   );
   if (!rows.length) throw new Error('User introuvable');
-  if (rows[0].stripe_customer_id) return rows[0].stripe_customer_id;
-
   const stripe = getStripe();
+  const existingId = rows[0].stripe_customer_id;
+
+  if (existingId) {
+    try {
+      const cust = await stripe.customers.retrieve(existingId);
+      if (cust && !cust.deleted) return existingId;
+      // Customer 'deleted' Stripe (rare) → on recréée comme s'il n'existait pas.
+    } catch (e) {
+      // 'No such customer' = mode Stripe différent OU customer purgé.
+      // Tout autre code Stripe = on remonte (network, auth, etc.).
+      const isNoSuch = e.code === 'resource_missing'
+                    || (e.message && e.message.includes('No such customer'));
+      if (!isNoSuch) throw e;
+      console.warn('[SUB ensureCustomer] customer', existingId,
+        'introuvable dans le mode courant, recréation');
+    }
+  }
+
   const customer = await stripe.customers.create({
     email: rows[0].email,
     name:  rows[0].business_name || undefined,
@@ -94,8 +115,14 @@ router.post('/checkout', authMiddleware, async (req, res) => {
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       // Essai gratuit 14 jours sur Essentiel uniquement (pas Équipe).
+      // payment_method_collection: 'if_required' → CB NON demandée pendant
+      // le trial (rien à payer immédiatement). Aligne avec le claim site
+      // marketing 'sans carte bancaire'. Stripe demandera la CB avant fin
+      // d'essai via email 'trial_will_end' (J-3) puis l'email automatique
+      // 'invoice.payment_failed' si le client n'a pas ajouté de CB.
       ...(plan === 'essentiel' && {
         subscription_data: { trial_period_days: 14 },
+        payment_method_collection: 'if_required',
       }),
       success_url: `${frontUrl}/abonnement?status=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${frontUrl}/abonnement?status=cancel`,
@@ -289,6 +316,17 @@ router.post('/webhook', async (req, res) => {
       const invoice = event.data.object;
       console.log('[SUB WEBHOOK] invoice.payment_failed:', invoice.customer,
         'attempt', invoice.attempt_count);
+    }
+
+    // ── customer.subscription.trial_will_end : J-3 fin d'essai ─────────────
+    // Event envoyé par Stripe 3 jours avant la fin du trial Essentiel.
+    // Idéal pour relance email "ajoutez votre CB" si user n'a pas de PM.
+    // Stripe envoie aussi son email automatique de relance par défaut.
+    if (event.type === 'customer.subscription.trial_will_end') {
+      const sub = event.data.object;
+      console.log('[SUB WEBHOOK] trial_will_end:', sub.customer,
+        'trial_end:', sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null);
+      // Future hook : envoyer email Brevo "votre essai termine bientôt".
     }
   } catch (e) {
     // Stripe est déjà acquitté ; pas de 500. Log pour investigation.
