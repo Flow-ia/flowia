@@ -391,15 +391,29 @@ module.exports = function attachBookRoute(router) {
             });
           }
           // Verifie que le PI a ete cree pour CETTE reservation (anti-rejeu
-          // d'un PI valide d'un autre booking).
+          // d'un PI valide d'un autre booking). On valide :
+          // - user_id/service_id/date/start_time : protege contre rejeu cross-RDV
+          // - slug : protege contre rejeu cross-merchant (defense en profondeur,
+          //   meme si le retrieve avec stripeAccount empecherait deja le replay)
           const md = pi.metadata || {};
           if (md.user_id !== userId
               || md.service_id !== String(service_id)
               || md.date !== date
-              || md.start_time !== start_time) {
+              || md.start_time !== start_time
+              || (md.slug && md.slug !== req.params.slug)) {
             return res.status(400).json({
               error: 'Le paiement ne correspond pas a cette reservation.',
               code:  'PAYMENT_MISMATCH',
+            });
+          }
+          // Verifie aussi que le PI a un marker source FlowIA (defense
+          // contre un attaquant qui creerait un PI hors-flow et essaierait
+          // de l'injecter, meme si stripeAccount filtering rendrait cela
+          // tres difficile).
+          if (md.source !== 'flowia_booking') {
+            return res.status(400).json({
+              error: 'Paiement non reconnu.',
+              code:  'PAYMENT_INVALID_SOURCE',
             });
           }
           paidAmountCents = pi.amount_received || pi.amount;
@@ -511,6 +525,7 @@ module.exports = function attachBookRoute(router) {
         // auto-refund pour eviter qu'il paie sans avoir de RDV. Le webhook
         // charge.refunded mettra payment_status='refunded' (no-op DB ici).
         let refunded = false;
+        let refundFailedReason = null;
         if (payment_intent_id && stripeAccountId) {
           try {
             const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -525,13 +540,29 @@ module.exports = function attachBookRoute(router) {
             refunded = true;
           } catch (refErr) {
             console.error('[BOOK SLOT_TAKEN auto-refund ERR]', refErr.message);
+            refundFailedReason = refErr.message;
+            // AUDIT : persiste l'echec pour qu'un admin puisse retry + notifier
+            // le client. Sans cette table, les fonds restent bloques sans trace.
+            try {
+              await pool.query(
+                `INSERT INTO failed_refunds
+                   (user_id, stripe_account_id, payment_intent_id, amount_cents,
+                    slug, reason, stripe_error_message)
+                 VALUES ($1,$2,$3,$4,$5,'slot_taken_race',$6)
+                 ON CONFLICT (payment_intent_id) WHERE resolved_at IS NULL DO NOTHING`,
+                [userId, stripeAccountId, payment_intent_id,
+                 paidAmountCents || null, req.params.slug, refErr.message]
+              );
+            } catch (logErr) {
+              console.error('[BOOK SLOT_TAKEN failed_refunds log ERR]', logErr.message);
+            }
           }
         }
         return res.status(409).json({
           error: refunded
             ? "Ce créneau vient d'être réservé par un autre client. Votre paiement a été remboursé automatiquement."
             : (payment_intent_id
-              ? "Ce créneau vient d'être réservé. Votre paiement n'a pas pu être remboursé automatiquement, contactez le commerçant."
+              ? "Ce créneau vient d'être réservé. Votre paiement sera remboursé par le commerçant — il a été notifié."
               : "Ce créneau vient d'être réservé par un autre client. Merci de choisir un autre horaire."),
           code: 'SLOT_TAKEN',
           payment_intent_id: payment_intent_id || null,

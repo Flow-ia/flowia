@@ -43,5 +43,6 @@ router.use('/merchants', require('./merchants'));
 router.use('/clients',   require('./clients'));
 router.use('/stats',     require('./stats'));
 router.use('/audit',     require('./audit'));
+router.use('/failed-refunds', require('./failed-refunds'));
 
 module.exports = router;

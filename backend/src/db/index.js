@@ -1539,6 +1539,41 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_payment_status
     ON appointments(user_id, payment_status, date) WHERE payment_status <> 'none'`);
 
+  // AUDIT Phase 5 : registre des refunds échoués (Connect Direct Charges).
+  // Si l'auto-refund SLOT_TAKEN echoue (Stripe API down, account locked,
+  // PI deja refunded externe), on persist l'echec ici pour qu'un admin
+  // puisse retry manuellement et notifier le client. Sans ce registre, les
+  // fonds seraient bloques sans trace cote app.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS failed_refunds (
+      id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id              UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      stripe_account_id    VARCHAR(255) NOT NULL,
+      payment_intent_id    VARCHAR(255) NOT NULL,
+      amount_cents         INT,
+      slug                 VARCHAR(100),
+      reason               VARCHAR(50) NOT NULL,
+      stripe_error_message TEXT,
+      retry_count          INT NOT NULL DEFAULT 0,
+      resolved_at          TIMESTAMPTZ,
+      resolved_by_admin_id UUID,
+      resolution_note      TEXT,
+      created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_failed_refunds_user_unresolved
+    ON failed_refunds(user_id, created_at DESC) WHERE resolved_at IS NULL`);
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_failed_refunds_pi
+    ON failed_refunds(payment_intent_id) WHERE resolved_at IS NULL`);
+
+  // AUDIT Phase 5 : archive de l'ancien stripe_account_id apres /disconnect.
+  // Permet de retrouver le compte Stripe historique pour un refund a
+  // posteriori (RDV passe paye en ligne dont le client demande remboursement
+  // apres deconnexion du merchant). Sans archive, refund impossible cote app.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_id_archived VARCHAR(255)`);
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_disconnected_at TIMESTAMPTZ`);
+
   // ── Abonnement plateforme FlowIA (Stripe Billing) ────────────────────────
   // Les commerçants paient un abonnement mensuel/annuel pour accéder à FlowIA.
   // 3 plans : Decouverte (0€, gratuit limité) / Essentiel (24€mois|240€an) /

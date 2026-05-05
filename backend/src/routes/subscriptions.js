@@ -39,56 +39,97 @@ const CHANGE_COOLDOWN_MS  = 60_000;          // 60 secondes
 const CHANGE_DAILY_CAP    = 5;               // max 5 actions par 24h
 const CHANGE_WINDOW_MS    = 24 * 3600_000;   // fenetre de 24h
 
+// AUDIT : cluster-safe via SELECT ... FOR UPDATE dans une transaction.
+// Sans ce verrou, deux workers (cluster Render) peuvent lire les memes
+// last_change_at/count, valider la regle, puis double-incrementer → cap
+// contournable. FOR UPDATE serialise les lectures concurrentes sur ce user.
+// On RESERVE le slot (UPDATE des compteurs immediatement) pour eviter qu'un
+// echec d'action Stripe laisse le compteur a jour mais l'action non realisee.
+// Si l'action Stripe echoue ensuite, on rollback le compteur via revertChangeReservation.
 async function assertChangeRateLimit(userId) {
-  const { rows } = await pool.query(
-    `SELECT subscription_last_change_at, subscription_changes_count_24h,
-            subscription_changes_window_start
-     FROM users WHERE id=$1`, [userId]
-  );
-  if (!rows.length) throw new Error('User introuvable');
-  const r = rows[0];
-  const now = Date.now();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `SELECT subscription_last_change_at, subscription_changes_count_24h,
+              subscription_changes_window_start
+       FROM users WHERE id=$1 FOR UPDATE`, [userId]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      throw new Error('User introuvable');
+    }
+    const r = rows[0];
+    const now = Date.now();
 
-  // 1) Cooldown 60 secondes entre 2 actions consecutives.
-  if (r.subscription_last_change_at) {
-    const elapsed = now - new Date(r.subscription_last_change_at).getTime();
-    if (elapsed < CHANGE_COOLDOWN_MS) {
-      const wait = Math.ceil((CHANGE_COOLDOWN_MS - elapsed) / 1000);
-      const err = new Error(`Veuillez patienter ${wait} seconde${wait > 1 ? 's' : ''} avant un nouveau changement.`);
+    if (r.subscription_last_change_at) {
+      const elapsed = now - new Date(r.subscription_last_change_at).getTime();
+      if (elapsed < CHANGE_COOLDOWN_MS) {
+        await client.query('ROLLBACK');
+        const wait = Math.ceil((CHANGE_COOLDOWN_MS - elapsed) / 1000);
+        const err = new Error(`Veuillez patienter ${wait} seconde${wait > 1 ? 's' : ''} avant un nouveau changement.`);
+        err.statusCode = 429;
+        err.retryAfter = wait;
+        throw err;
+      }
+    }
+
+    let windowStart = r.subscription_changes_window_start
+                      ? new Date(r.subscription_changes_window_start).getTime() : 0;
+    let count       = r.subscription_changes_count_24h || 0;
+    if (!windowStart || (now - windowStart) > CHANGE_WINDOW_MS) {
+      windowStart = now;
+      count = 0;
+    }
+    if (count >= CHANGE_DAILY_CAP) {
+      await client.query('ROLLBACK');
+      const err = new Error(`Limite atteinte : maximum ${CHANGE_DAILY_CAP} changements d'abonnement par 24 heures. Réessayez demain.`);
       err.statusCode = 429;
-      err.retryAfter = wait;
       throw err;
     }
-  }
 
-  // 2) Cap quotidien glissant (5 actions / 24h).
-  let windowStart = r.subscription_changes_window_start
-                    ? new Date(r.subscription_changes_window_start).getTime() : 0;
-  let count       = r.subscription_changes_count_24h || 0;
-  // Si la fenetre est expiree, on la reset.
-  if (!windowStart || (now - windowStart) > CHANGE_WINDOW_MS) {
-    windowStart = now;
-    count = 0;
+    // Reserve le slot maintenant (sous le lock FOR UPDATE) pour eviter un
+    // contournement entre verif et UPDATE par un autre worker.
+    const newWindowStart = new Date(windowStart);
+    const newCount = count + 1;
+    await client.query(
+      `UPDATE users SET
+         subscription_last_change_at       = NOW(),
+         subscription_changes_window_start = $2,
+         subscription_changes_count_24h    = $3
+       WHERE id=$1`,
+      [userId, newWindowStart, newCount]
+    );
+    await client.query('COMMIT');
+    return { newWindowStart, newCount, _previousCount: count, _previousWindowStart: r.subscription_changes_window_start };
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    throw e;
+  } finally {
+    client.release();
   }
-  if (count >= CHANGE_DAILY_CAP) {
-    const err = new Error(`Limite atteinte : maximum ${CHANGE_DAILY_CAP} changements d'abonnement par 24 heures. Réessayez demain.`);
-    err.statusCode = 429;
-    throw err;
-  }
-
-  // OK -> on retourne les valeurs a persister apres succes de l'action.
-  return { newWindowStart: new Date(windowStart), newCount: count + 1 };
 }
 
-async function recordChangeCommit(userId, { newWindowStart, newCount }) {
-  await pool.query(
-    `UPDATE users SET
-       subscription_last_change_at       = NOW(),
-       subscription_changes_window_start = $2,
-       subscription_changes_count_24h    = $3
-     WHERE id = $1`,
-    [userId, newWindowStart, newCount]
-  );
+// recordChangeCommit garde la signature pour compat, no-op (la reservation
+// a deja eu lieu dans assertChangeRateLimit). On laisse pour ne pas casser
+// les call-sites existants.
+async function recordChangeCommit(userId, _) { /* reserved in assert */ }
+
+// Si l'action Stripe echoue apres reservation, on annule l'incrementation
+// pour ne pas penaliser l'utilisateur (ex: Stripe API down, carte refusee).
+async function revertChangeReservation(userId, reservation) {
+  if (!reservation || !reservation._previousCount === undefined) return;
+  try {
+    await pool.query(
+      `UPDATE users SET
+         subscription_changes_count_24h    = $2,
+         subscription_changes_window_start = $3
+       WHERE id=$1`,
+      [userId, reservation._previousCount, reservation._previousWindowStart]
+    );
+  } catch (e) {
+    console.warn('[SUB revertChangeReservation]', e.message);
+  }
 }
 
 function getFrontendUrl() {
@@ -324,10 +365,10 @@ router.get('/me', authMiddleware, async (req, res) => {
 // current_period_end, puis status passe à 'canceled' via webhook automatique.
 // Aucun remboursement (pratique standard SaaS — Notion, Slack, Linear).
 router.post('/cancel', authMiddleware, async (req, res) => {
+  let userId, rate;
   try {
-    const userId = req.user.userId;
-    // Anti-fraude : cooldown + cap quotidien.
-    let rate;
+    userId = req.user.userId;
+    // Anti-fraude : cooldown + cap quotidien (cluster-safe via FOR UPDATE).
     try { rate = await assertChangeRateLimit(userId); }
     catch (e) {
       if (e.statusCode === 429) {
@@ -340,11 +381,20 @@ router.post('/cancel', authMiddleware, async (req, res) => {
       `SELECT stripe_subscription_id, subscription_status
        FROM users WHERE id=$1`, [userId]
     );
-    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    if (!rows.length) {
+      await revertChangeReservation(userId, rate);
+      return res.status(404).json({ error: 'User introuvable' });
+    }
     const subId  = rows[0].stripe_subscription_id;
     const status = rows[0].subscription_status;
-    if (!subId) return res.status(400).json({ error: 'Aucun abonnement actif' });
+    if (!subId) {
+      await revertChangeReservation(userId, rate);
+      return res.status(400).json({ error: 'Aucun abonnement actif' });
+    }
+    // Cancel autorise sur past_due aussi : permet au marchand d'arreter les
+    // retry Stripe en cours s'il ne souhaite pas regulariser le paiement.
     if (!['active', 'trialing', 'past_due'].includes(status)) {
+      await revertChangeReservation(userId, rate);
       return res.status(400).json({ error: 'Abonnement non actif' });
     }
 
@@ -354,8 +404,6 @@ router.post('/cancel', authMiddleware, async (req, res) => {
     });
     const dates = extractSubDates(updated);
 
-    // Update DB direct pour réponse immédiate (webhook confirmera + backfill
-    // de current_period_end si jamais il manque).
     await pool.query(
       `UPDATE users SET
          subscription_cancel_at_period_end = TRUE,
@@ -364,8 +412,6 @@ router.post('/cancel', authMiddleware, async (req, res) => {
       [userId, dates.periodEnd]
     );
 
-    await recordChangeCommit(userId, rate);
-
     res.json({
       ok: true,
       cancel_at_period_end: true,
@@ -373,6 +419,8 @@ router.post('/cancel', authMiddleware, async (req, res) => {
     });
   } catch (e) {
     console.error('[SUB CANCEL ERR]', e.message);
+    // Stripe a echoue ou autre erreur : on rend le slot rate limit consomme.
+    if (userId && rate) await revertChangeReservation(userId, rate);
     res.status(500).json({ error: "Erreur lors de l'annulation" });
   }
 });
@@ -381,9 +429,9 @@ router.post('/cancel', authMiddleware, async (req, res) => {
 // Annule l'annulation programmée. Possible uniquement si l'abonnement est
 // encore en cours (current_period_end pas atteint).
 router.post('/reactivate', authMiddleware, async (req, res) => {
+  let userId, rate;
   try {
-    const userId = req.user.userId;
-    let rate;
+    userId = req.user.userId;
     try { rate = await assertChangeRateLimit(userId); }
     catch (e) {
       if (e.statusCode === 429) {
@@ -397,14 +445,31 @@ router.post('/reactivate', authMiddleware, async (req, res) => {
               subscription_cancel_at_period_end
        FROM users WHERE id=$1`, [userId]
     );
-    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    if (!rows.length) {
+      await revertChangeReservation(userId, rate);
+      return res.status(404).json({ error: 'User introuvable' });
+    }
     const subId = rows[0].stripe_subscription_id;
-    if (!subId) return res.status(400).json({ error: 'Aucun abonnement' });
+    if (!subId) {
+      await revertChangeReservation(userId, rate);
+      return res.status(400).json({ error: 'Aucun abonnement' });
+    }
     if (!rows[0].subscription_cancel_at_period_end) {
+      await revertChangeReservation(userId, rate);
       return res.status(400).json({ error: 'Abonnement non annulé' });
     }
-    if (!['active', 'trialing', 'past_due'].includes(rows[0].subscription_status)) {
-      return res.status(400).json({ error: 'Abonnement non actif' });
+    // AUDIT : reactivate refuse sur past_due. Si l'utilisateur veut reactiver
+    // mais qu'un paiement a echoue, il doit d'abord regulariser via portal
+    // Stripe (mettre a jour la CB) — sinon Stripe re-tentera et echouera
+    // immediatement, replongeant le compte en past_due/canceled.
+    if (!['active', 'trialing'].includes(rows[0].subscription_status)) {
+      await revertChangeReservation(userId, rate);
+      return res.status(400).json({
+        error: rows[0].subscription_status === 'past_due'
+          ? 'Mettez a jour votre moyen de paiement avant de reactiver.'
+          : 'Abonnement non actif',
+        code: rows[0].subscription_status === 'past_due' ? 'PAST_DUE_FIX_PAYMENT_FIRST' : 'NOT_ACTIVE',
+      });
     }
 
     const stripe = getStripe();
@@ -413,11 +478,11 @@ router.post('/reactivate', authMiddleware, async (req, res) => {
       `UPDATE users SET subscription_cancel_at_period_end = FALSE WHERE id = $1`,
       [userId]
     );
-    await recordChangeCommit(userId, rate);
 
     res.json({ ok: true, cancel_at_period_end: false });
   } catch (e) {
     console.error('[SUB REACTIVATE ERR]', e.message);
+    if (userId && rate) await revertChangeReservation(userId, rate);
     res.status(500).json({ error: 'Erreur lors de la réactivation' });
   }
 });
@@ -499,8 +564,9 @@ router.post('/preview-change', authMiddleware, async (req, res) => {
 // - Downgrade → crédit appliqué sur la prochaine facture
 // Le webhook customer.subscription.updated met à jour la DB.
 router.post('/change-plan', authMiddleware, async (req, res) => {
+  let userId, rate;
   try {
-    const userId = req.user.userId;
+    userId = req.user.userId;
     const { plan, period } = req.body || {};
 
     if (!['essentiel', 'equipe'].includes(plan)) {
@@ -510,7 +576,6 @@ router.post('/change-plan', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Période invalide' });
     }
 
-    let rate;
     try { rate = await assertChangeRateLimit(userId); }
     catch (e) {
       if (e.statusCode === 429) {
@@ -521,6 +586,7 @@ router.post('/change-plan', authMiddleware, async (req, res) => {
 
     const newPriceId = getPriceId(plan, period);
     if (!newPriceId) {
+      await revertChangeReservation(userId, rate);
       return res.status(500).json({ error: 'Configuration Stripe incomplète' });
     }
 
@@ -529,23 +595,29 @@ router.post('/change-plan', authMiddleware, async (req, res) => {
               subscription_plan, subscription_period
        FROM users WHERE id=$1`, [userId]
     );
-    if (!rows.length) return res.status(404).json({ error: 'User introuvable' });
+    if (!rows.length) {
+      await revertChangeReservation(userId, rate);
+      return res.status(404).json({ error: 'User introuvable' });
+    }
     const sub = rows[0];
     if (!sub.stripe_subscription_id) {
+      await revertChangeReservation(userId, rate);
       return res.status(400).json({ error: 'Aucun abonnement actif' });
     }
     if (sub.subscription_plan === plan && sub.subscription_period === period) {
+      await revertChangeReservation(userId, rate);
       return res.status(400).json({ error: 'Vous êtes déjà sur ce plan' });
     }
     if (!['active', 'trialing', 'past_due'].includes(sub.subscription_status)) {
+      await revertChangeReservation(userId, rate);
       return res.status(400).json({ error: 'Abonnement non actif' });
     }
 
     const stripe = getStripe();
-    // Fetch sub courante pour avoir l'item ID à modifier.
     const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
     const itemId = stripeSub.items?.data?.[0]?.id;
     if (!itemId) {
+      await revertChangeReservation(userId, rate);
       console.error('[SUB CHANGE-PLAN] item ID introuvable sur', sub.stripe_subscription_id);
       return res.status(500).json({ error: 'Item subscription introuvable' });
     }
@@ -554,11 +626,11 @@ router.post('/change-plan', authMiddleware, async (req, res) => {
       items: [{ id: itemId, price: newPriceId }],
       proration_behavior: 'create_prorations',
     });
-    await recordChangeCommit(userId, rate);
 
     res.json({ ok: true, plan, period });
   } catch (e) {
     console.error('[SUB CHANGE-PLAN ERR]', e.message);
+    if (userId && rate) await revertChangeReservation(userId, rate);
     res.status(500).json({ error: 'Erreur lors du changement de plan' });
   }
 });

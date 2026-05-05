@@ -249,6 +249,11 @@ function startServer() {
   app.use('/api/pub/:slug/client/quick-register', quickRegisterLimiter);
   // RGPD commit 19 : finalisation OAuth Google (création différée).
   app.use('/api/pub/:slug/oauth-google/finalize', oauthFinalizeLimiter);
+  // AUDIT Phase 5 : rate limiter dedie sur creation PaymentIntent (Stripe Connect).
+  // Cap strict anti-spam : un client legitime n'a besoin que de 1-3 PI par
+  // session de booking. 10/15min/IP suffit pour retries normaux + bloque un
+  // bot qui spammerait pour creer des PI orphelins.
+  app.use('/api/pub/:slug/booking/payment-intent', paymentsIntentLimiter);
   // Formulaire de contact public (site marketing) — cap strict anti-spam.
   // 5 demandes / 15 min / IP : largement suffisant pour un humain, bloque
   // un bot qui spam.

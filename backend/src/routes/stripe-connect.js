@@ -265,19 +265,44 @@ router.put('/payment-config', authMiddleware, async (req, res) => {
 });
 
 // ── POST /api/stripe-connect/disconnect ────────────────────────────────────
-// Deconnecte le compte Connect du marchand (n'efface pas le compte Stripe
-// cote Stripe, juste l'association avec FlowIA). Le marchand pourra se
-// reconnecter via /onboard plus tard.
+// Deconnecte le compte Connect du marchand. AUDIT Phase 5 :
+// - Refuse si des RDV futurs ont un PaymentIntent paye (sinon impossible de
+//   refund par la suite). Le marchand doit annuler ces RDV d'abord.
+// - Archive l'ancien stripe_account_id dans stripe_account_id_archived pour
+//   permettre des refunds historiques (RDV passes payes en ligne).
 router.post('/disconnect', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
+
+    // Bloque la deconnexion si des RDV futurs sont payes en ligne (le client
+    // a deja paye, le merchant doit honorer ou annuler+refund cote Stripe).
+    const { rows: pending } = await pool.query(
+      `SELECT COUNT(*)::int AS n
+         FROM appointments
+        WHERE user_id=$1
+          AND payment_status='paid'
+          AND status NOT IN ('cancelled','completed','no_show')
+          AND date >= (NOW() AT TIME ZONE 'Europe/Paris')::date`,
+      [userId]
+    );
+    if (pending[0]?.n > 0) {
+      return res.status(409).json({
+        error: `Vous avez ${pending[0].n} rendez-vous futur(s) payé(s) en ligne. Honorez-les ou annulez-les (avec remboursement) avant de déconnecter Stripe.`,
+        code: 'PAID_APPOINTMENTS_PENDING',
+        pending_count: pending[0].n,
+      });
+    }
+
+    // Archive l'ancien account_id avant de NULL-ifier — permet refund retro.
     await pool.query(
-      `UPDATE users SET stripe_account_id           = NULL,
-                        stripe_account_email        = NULL,
-                        stripe_charges_enabled      = FALSE,
-                        stripe_payouts_enabled      = FALSE,
-                        stripe_account_connected_at = NULL,
-                        online_payments_enabled     = FALSE
+      `UPDATE users SET stripe_account_id_archived     = COALESCE(stripe_account_id, stripe_account_id_archived),
+                        stripe_account_disconnected_at = NOW(),
+                        stripe_account_id              = NULL,
+                        stripe_account_email           = NULL,
+                        stripe_charges_enabled         = FALSE,
+                        stripe_payouts_enabled         = FALSE,
+                        stripe_account_connected_at    = NULL,
+                        online_payments_enabled        = FALSE
        WHERE id=$1`, [userId]
     );
     res.json({ ok: true });
@@ -360,6 +385,11 @@ router.post('/webhook', async (req, res) => {
       console.log('[CONNECT WEBHOOK] account.updated:', acc.id,
         acc.charges_enabled ? 'charges_OK' : 'charges_pending');
     }
+
+    // AUDIT Phase 5 : pour les events payment_intent.* / charge.refunded sur
+    // comptes connectes, on UPDATE appointments via stripe_payment_intent_id
+    // (pas via stripe_account_id), donc l'archive du merchant n'est pas
+    // necessaire ici — le PI suffit a retrouver le RDV.
 
     // Phase 5/5 : events sur comptes connectes (booking payment flow).
     // ⚠ Ces events arrivent avec event.account = id du compte connecte.
