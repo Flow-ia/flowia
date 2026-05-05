@@ -9,6 +9,7 @@ export default function Landing() {
     <>
       <Hero />
       <Stats />
+      <Integrations />
       <Features />
       <AIShowcase />
       <Testimonials />
@@ -16,6 +17,109 @@ export default function Landing() {
       <Faq />
       <FinalCTA />
     </>
+  );
+}
+
+// ── Section "Intégrations" — Google Calendar + Stripe ───────────────────────
+// Affichee juste apres les stats pour rassurer les prospects sur la qualite
+// des outils tiers integres.
+function Integrations() {
+  return (
+    <Section paddingY={64} borderTop>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <Eyebrow>Intégrations natives</Eyebrow>
+        <h2 style={{
+          fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500,
+          color: S.fg, lineHeight: 1.25, letterSpacing: '-0.02em',
+          margin: 0, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto',
+        }}>
+          {"Connecté aux outils que vous utilisez déjà"}
+        </h2>
+        <p style={{
+          fontSize: 14, color: S.fgMuted, margin: '12px auto 0',
+          maxWidth: 560, lineHeight: 1.55,
+        }}>
+          {"Pas de migration, pas de friction. FlowIA s'intègre directement avec vos outils favoris."}
+        </p>
+      </div>
+
+      <div style={{
+        display: 'grid', gap: 16,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
+        maxWidth: 880, margin: '0 auto',
+      }}>
+        <IntegrationCard
+          logo={
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+              <rect width="200" height="200" rx="20" fill="#fff" stroke="#dadce0" strokeWidth="2"/>
+              <rect x="20" y="40" width="160" height="140" rx="10" fill="#fff"/>
+              <rect x="20" y="40" width="160" height="20" fill="#1a73e8"/>
+              <text x="100" y="135" textAnchor="middle" fontFamily="Roboto, Arial, sans-serif"
+                    fontSize="78" fontWeight="500" fill="#1a73e8">5</text>
+            </svg>
+          }
+          title="Google Calendar"
+          desc="Synchronisez vos rendez-vous FlowIA avec votre agenda Google en un clic. Toute modification ou annulation dans FlowIA met à jour votre Google Calendar instantanément."
+          tag="Sync sortant"
+          tagColor="#1a73e8"
+        />
+        <IntegrationCard
+          logo={
+            <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+              <rect width="60" height="60" rx="12" fill="#635bff"/>
+              <path d="M28.78 22.59c0-1.79 1.46-2.47 3.88-2.47 3.47 0 7.85 1.05 11.32 2.94v-10.74c-3.79-1.51-7.53-2.1-11.32-2.1-9.27 0-15.43 4.84-15.43 12.92 0 12.6 17.34 10.59 17.34 16.02 0 2.1-1.83 2.79-4.39 2.79-3.79 0-8.64-1.55-12.47-3.65v10.88c4.25 1.83 8.55 2.6 12.47 2.6 9.49 0 16.03-4.69 16.03-12.86-.05-13.6-17.43-11.18-17.43-16.33z"
+                    fill="#fff"/>
+            </svg>
+          }
+          title="Stripe"
+          desc="Encaissez les paiements de vos rendez-vous en ligne directement sur votre compte. Acomptes ou paiement intégral, anti no-show. L'argent arrive direct, FlowIA prend zéro intermédiaire."
+          tag="Direct charges"
+          tagColor="#635bff"
+        />
+      </div>
+
+      <p style={{
+        fontSize: 12, color: S.fgSubtle, textAlign: 'center',
+        margin: '28px auto 0', maxWidth: 600, lineHeight: 1.6,
+      }}>
+        {"Google Calendar™ et Stripe® sont des marques déposées de leurs propriétaires respectifs. FlowIA est un partenaire intégrateur indépendant."}
+      </p>
+    </Section>
+  );
+}
+
+function IntegrationCard({ logo, title, desc, tag, tagColor }) {
+  return (
+    <div style={{
+      padding: 24, borderRadius: S.rLg,
+      background: S.bg, border: `1px solid ${S.border}`,
+      display: 'flex', flexDirection: 'column', gap: 14,
+      transition: 'border-color 0.15s ease, transform 0.15s ease',
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = S.borderHv; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = S.border; e.currentTarget.style.transform = 'none'; }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flexShrink: 0 }}>{logo}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{
+            fontSize: 16, fontWeight: 500, color: S.fg,
+            margin: 0, letterSpacing: '-0.01em',
+          }}>{title}</p>
+          {tag && (
+            <span style={{
+              display: 'inline-block', marginTop: 4,
+              fontSize: 10, fontWeight: 500,
+              color: tagColor, background: tagColor + '14',
+              padding: '2px 8px', borderRadius: 99,
+              textTransform: 'uppercase', letterSpacing: 0.5,
+            }}>{tag}</span>
+          )}
+        </div>
+      </div>
+      <p style={{
+        fontSize: 13, color: S.fgMuted, lineHeight: 1.55, margin: 0,
+      }}>{desc}</p>
+    </div>
   );
 }
 
