@@ -109,9 +109,10 @@
       min-height: 100vh;
     }
 
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 0; height: 0; }
-    scrollbar-width: none;
+    /* ── Scrollbar ── (gardons-la VISIBLE par defaut sinon l'utilisateur
+       ne sait pas que la page peut scroller. .no-scrollbar reste pour
+       les conteneurs qui doivent specifiquement la masquer — mobile nav,
+       sidebars, slots horizontaux) */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { scrollbar-width: none; }
     .scroll-x { overflow-x: auto; scrollbar-width: none; }

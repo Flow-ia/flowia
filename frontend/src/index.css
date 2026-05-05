@@ -20,11 +20,10 @@ body {
   background: #f8f9fc;
   color: #111827;
   overscroll-behavior: none;
-  scrollbar-width: none;
+  /* SCROLL FIX : pas de scrollbar-width:none global — l'utilisateur a
+     besoin de voir la scrollbar pour comprendre que la page peut scroller.
+     La classe .no-scrollbar reste dispo pour les conteneurs specifiques. */
 }
-
-/* Scrollbar */
-::-webkit-scrollbar { display: none; }
 
 /* Animations */
 @keyframes spin    { to { transform: rotate(360deg); } }
