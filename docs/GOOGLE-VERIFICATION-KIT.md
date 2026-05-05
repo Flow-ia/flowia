@@ -61,7 +61,49 @@ Ajouter / vérifier :
 
 ## Justification — `calendar.events` (à coller dans le formulaire)
 
-**EN ANGLAIS (version recommandée pour Google review)**
+⚠️ **Le champ Google est limité à 1000 caractères.** Utiliser la version
+courte ci-dessous. Les versions longues sont conservées en référence pour
+le cas où Google demande des compléments par email.
+
+### VERSION COURTE EN (~970 caracteres) — RECOMMANDEE pour le formulaire
+
+```
+FlowIA is a SaaS booking platform for hair salons and small service businesses. Merchants connect their Google account to mirror FlowIA appointments into their primary Google Calendar.
+
+We use calendar.events strictly outbound (FlowIA → Google):
+- Create event when an appointment is booked (by merchant, employee, or customer via the public booking page)
+- PATCH event when appointment is rescheduled or modified
+- DELETE event when cancelled
+
+We never read existing events, never query free/busy, never touch events we did not create. calendar.events is the minimum scope for write-only sync — we do NOT use the broader "calendar" scope.
+
+OAuth tokens are encrypted at rest (AES-256-GCM). Merchants can disconnect anytime in FlowIA Settings or via myaccount.google.com/permissions. We do not sell, share, profile, or train AI models on this data, in compliance with the Limited Use policy.
+
+Privacy policy: https://flowiapro.com/confidentialite (section 10).
+```
+
+### VERSION COURTE FR (~990 caracteres) — au cas ou
+
+```
+FlowIA est une plateforme SaaS de prise de RDV pour salons de coiffure et petits commerces de service. Les commerçants connectent leur compte Google pour répliquer les RDV FlowIA dans leur agenda Google principal.
+
+Nous utilisons calendar.events strictement en sortie (FlowIA → Google) :
+- Création d'événement à chaque RDV créé (par le commerçant, un employé, ou un client via la page de réservation publique)
+- PATCH lors d'une modification (date, heure, employé)
+- DELETE à l'annulation
+
+Nous ne lisons jamais les événements existants, ne faisons pas de requêtes free/busy, ne modifions que les événements créés par nous. calendar.events est le scope minimal — nous n'utilisons PAS le scope "calendar" plus large.
+
+Les jetons OAuth sont chiffrés au repos (AES-256-GCM). Les commerçants peuvent déconnecter à tout moment depuis FlowIA ou myaccount.google.com/permissions. Pas de revente, profilage, entraînement IA — conforme Limited Use.
+
+Politique : https://flowiapro.com/confidentialite (section 10).
+```
+
+---
+
+### VERSIONS LONGUES (a garder pour les echanges email avec Google)
+
+**EN ANGLAIS (version detaillee si Google demande des complements)**
 
 ```
 FlowIA is a SaaS booking and management platform for hair salons,
