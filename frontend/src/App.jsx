@@ -12,7 +12,8 @@ import Dashboard from './pages/Dashboard';
 import Historique from './pages/Historique';
 import HistoriqueAdmin from './pages/historique';
 import Transactions from './pages/Transactions';
-import Settings from './pages/Settings';
+// Settings.jsx supprime — l'app est entierement migree vers /reglages.
+// Les anciennes URLs /settings* sont redirigees ci-dessous via SettingsRedirect.
 import Subscription from './pages/Subscription';
 import Reglages from './pages/reglages';
 import Marketing from './pages/marketing';
@@ -2103,7 +2104,7 @@ export default function App() {
   const handleQuitAdminMode = useCallback(() => {
     disableAdminMode();
     const adminPaths = ['/dashboard', '/historique', '/marketing',
-                        '/statistiques', '/reglages', '/settings'];
+                        '/statistiques', '/reglages'];
     const p = location.pathname;
     if (adminPaths.some(ap => p === ap || p.startsWith(ap + '/'))) {
       navigate('/agenda');
@@ -2244,7 +2245,9 @@ export default function App() {
 
   useEffect(() => {
     if (checking) return;
-    if (page !== 'settings') return;
+    // Le PIN onboarding/setup s'affiche sur /reglages. /settings reste matche
+    // pour retrocompat le temps que les anciens liens redirigent.
+    if (page !== 'reglages' && page !== 'settings') return;
     if (hasPin === false) { setAdminStep('onboarding'); }
     else if (hasPin === true && !unlocked) { setAdminStep(s => s === 'setup' ? s : 'entry'); }
     else if (hasPin === true && unlocked)  { setAdminStep('open'); }
@@ -2252,7 +2255,10 @@ export default function App() {
 
   useEffect(() => {
     if (!checking && hasPin === false && user) {
-      navigate('/settings', { replace: true });
+      // Refonte FDS-2026 : redirection vers /reglages (la page Settings
+      // monolithique a ete supprimee). PinOnboarding s'affiche dans
+      // reglagesContent() quand adminStep='onboarding'.
+      navigate('/reglages', { replace: true });
       setAdminStep('onboarding');
     }
   }, [hasPin, checking, user]);
@@ -2280,12 +2286,16 @@ export default function App() {
   const patchEmp = useCallback((id, changes) => setEmps(p => p.map(x => x.id === id ? { ...x, ...changes } : x)), []);
 
   const handleTab = useCallback((id) => {
-    if (id === 'settings') {
+    // Refonte FDS-2026 : la sidebar utilise id='reglages' pour le tab
+    // Reglages. On bascule l'adminStep en consequence pour afficher
+    // PinOnboarding/PinSetup quand applicable. 'settings' reste matche
+    // pour retrocompat des callers qui passent encore l'ancien id.
+    if (id === 'reglages' || id === 'settings') {
       if (hasPin === false) setAdminStep('onboarding');
       else if (!unlocked) setAdminStep('entry');
       else setAdminStep('open');
     } else {
-      if (page === 'settings' && unlocked) lock();
+      if ((page === 'reglages' || page === 'settings') && unlocked) lock();
     }
     navigate('/' + id);
   }, [hasPin, unlocked, page, lock, navigate]);
@@ -2293,7 +2303,7 @@ export default function App() {
   const handleLock = useCallback(() => {
     lock();
     setAdminStep('entry');
-    navigate('/settings');
+    navigate('/reglages');
   }, [lock, navigate]);
 
   const handleLogout = useCallback(() => {
@@ -2322,21 +2332,14 @@ export default function App() {
 
   // Refonte FDS-2026 commit 16 : plus de gate PIN au montage des pages admin.
   // La saisie du PIN admin se fait UNIQUEMENT via la sidebar (bouton « Convertir
-  // en mode admin »). Une fois en mode admin, toutes les pages /settings,
-  // /reglages, /marketing, /statistiques s'ouvrent directement. RequireAdminMode
-  // (cf. plus bas) garde l'accès en mode normal en redirigeant vers /agenda.
+  // en mode admin »). Une fois en mode admin, toutes les pages /reglages,
+  // /marketing, /statistiques s'ouvrent directement. RequireAdminMode (cf. plus
+  // bas) garde l'accès en mode normal en redirigeant vers /agenda.
   // Les actions sensibles utilisent toujours adminRequest qui injecte
   // x-pin-session ; sur 403 le retry réouvre la modale PIN automatiquement
   // (cf. utils/adminPinPrompt.js + api.js).
-  // L'onboarding/setup reste rendu si le compte n'a pas encore de PIN du tout.
-  const settingsContent = () => {
-    if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
-    if (adminStep === 'setup')      return <PinSetup title="Creer votre code PIN Admin" onDone={async pin => { await changePin(pin); setAdminStep('open'); }}/>;
-    return <Settings transactions={transactions} employees={employees} categories={categories}
-      onAddCat={addCat} onUpdCat={updCat} onDelCat={delCat} onReorderCat={reorderCat}
-      onAddEmp={addEmp} onUpdEmp={updEmp} onDelEmp={delEmp} onPatchEmp={patchEmp}
-      onUpdTx={updTx} onDelTx={delTx} onLock={handleLock}/>;
-  };
+  // L'onboarding/setup reste rendu via reglagesContent() si le compte n'a pas
+  // encore de PIN du tout.
 
   const reglagesContent = () => {
     if (adminStep === 'onboarding') return <PinOnboarding theme={theme} onSetupNow={() => setAdminStep('setup')}/>;
@@ -2482,8 +2485,11 @@ export default function App() {
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views"             element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
       <Route path="/agenda/views/:employeeId" element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
-      <Route path="/settings/*"   element={<RequireAdminMode>{settingsContent()}</RequireAdminMode>}/>
-      <Route path="/settings"     element={<RequireAdminMode>{settingsContent()}</RequireAdminMode>}/>
+      {/* Refonte FDS-2026 : /settings supprime, redirection 1:1 vers les
+          pages dediees (preserve les anciens bookmarks). SettingsRedirect
+          mappe chaque ancienne URL vers sa destination canonique. */}
+      <Route path="/settings/*"   element={<SettingsRedirect/>}/>
+      <Route path="/settings"     element={<SettingsRedirect/>}/>
       {/* Refonte FDS-2026 commit 7 : Caisse éclatée en /caisse/* (Encaisser
           / Historique / Crédit). EncaisserSheet reste monté globalement via
           `shell()` pour que l'onglet Encaisser puisse l'ouvrir. */}
@@ -2510,6 +2516,60 @@ export default function App() {
       <Route path="*"             element={<Navigate to={getPostAuthTarget(isAdminMode)} replace/>}/>
     </Routes>
   );
+}
+
+// Refonte FDS-2026 : redirige les anciennes URLs /settings/* vers leur
+// destination canonique dans la nouvelle architecture (Reglages, Marketing,
+// Statistiques, Caisse). Preserve les bookmarks utilisateurs.
+function SettingsRedirect() {
+  const location = useLocation();
+  const tail = location.pathname.replace(/^\/settings\/?/, '');
+  const segs = tail.split('/').filter(Boolean);
+  const seg0 = segs[0] || '';
+  const seg1 = segs[1] || '';
+
+  // Mapping segment → URL canonique. Les sous-segments (ex: /settings/categories/booking)
+  // sont preserves quand la nouvelle URL en a besoin.
+  let target = '/reglages';
+  switch (seg0) {
+    case '':
+    case 'stats':
+    case 'ventes':
+      target = '/dashboard'; break;
+    case 'historique':
+      target = '/historique'; break;
+    case 'agenda':
+      // /settings/agenda[/config] → /agenda (config gere par sub-segment)
+      target = '/agenda'; break;
+    case 'equipe':
+    case 'absences':
+    case 'commissions':
+    case 'horaires':
+      target = '/reglages/equipe' + (seg0 !== 'equipe' ? '/' + seg0 : ''); break;
+    case 'categories':
+      // /settings/categories/[booking|caisse|config] → /reglages/caisse-config
+      // ou /reglages/reservations/prestations selon le sous-segment.
+      if (seg1 === 'booking') target = '/reglages/reservations/prestations';
+      else target = '/reglages/caisse-config';
+      break;
+    case 'profil':
+      target = '/reglages/mon-commerce'; break;
+    case 'marketing':
+      target = '/marketing' + (seg1 ? '/' + seg1 : ''); break;
+    case 'clients':
+      target = '/clients'; break;
+    case 'export':
+    case 'previsions':
+    case 'heures':
+      target = '/statistiques'; break;
+    case 'notifications':
+      target = '/reglages/reservations/notifications'; break;
+    case 'compte':
+      target = '/reglages/mon-commerce'; break;
+    default:
+      target = '/reglages';
+  }
+  return <Navigate to={target + (location.search || '')} replace />;
 }
 
 // Détermine la cible post-login. Lit (et CONSOMME) ff_subscribe_intent du
