@@ -347,7 +347,7 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
                                   background: '#f0fdf4', color: '#065f46',
                                 }}>
                                   <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#10b981' }} />
-                                  Encaisse
+                                  {appt.payment_status === 'paid' && appt.stripe_payment_intent_id ? 'Paye en ligne' : 'Encaisse'}
                                 </span>
                               )}
                             </div>

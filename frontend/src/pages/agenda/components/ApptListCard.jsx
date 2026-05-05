@@ -43,7 +43,7 @@ export default function ApptListCard({ a, onOpen, isDark, t }) {
                     fontWeight: 500,
                   }}
                 >
-                  Payé
+                  {a.payment_status === 'paid' && a.stripe_payment_intent_id ? 'Payé en ligne' : 'Payé'}
                 </span>
               )}
               <span

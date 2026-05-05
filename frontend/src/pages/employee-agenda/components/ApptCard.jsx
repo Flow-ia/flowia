@@ -51,7 +51,9 @@ export default function ApptCard({ appt, onClick, theme: t }) {
                 borderRadius: 8,
                 background: '#f0fdf4',
                 color: '#065f46',
-              }}>Paye</span>
+              }}>
+                {appt.payment_status === 'paid' && appt.stripe_payment_intent_id ? 'Paye en ligne' : 'Paye'}
+              </span>
             )}
             <span style={{
               fontSize: 11,

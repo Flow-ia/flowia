@@ -680,7 +680,9 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
                               {height > 80 && appt.paid && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
                                   <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981' }} />
-                                  <span style={{ fontSize: 10, color: tx, fontWeight: 500 }}>Encaisse</span>
+                                  <span style={{ fontSize: 10, color: tx, fontWeight: 500 }}>
+                                    {appt.payment_status === 'paid' && appt.stripe_payment_intent_id ? 'Paye en ligne' : 'Encaisse'}
+                                  </span>
                                 </div>
                               )}
                             </div>

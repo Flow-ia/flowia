@@ -417,6 +417,12 @@ module.exports = function attachBookRoute(router) {
       // simultanés sur le même créneau, un seul gagne (INSERT atomique PG),
       // l'autre reçoit 0 rows → 409 explicite.
       const paidStatus = payment_intent_id ? 'paid' : 'none';
+      // Phase 5/5 — paid (boolean) = TRUE seulement si paiement INTEGRAL
+      // (acompte → paid=FALSE, le merchant doit encaisser le reste en boutique).
+      // Comparaison cents pour eviter erreurs d'arrondi flottant.
+      const finalPriceCents = Math.round(finalPrice * 100);
+      const isFullyPaid = !!(payment_intent_id && paidAmountCents
+        && paidAmountCents >= finalPriceCents);
       // Phase 5/5 : retry idempotent. Si le client a deja reussi a creer
       // un RDV avec ce meme payment_intent_id (UNIQUE index), on retourne
       // l'existant au lieu de 23505 (cas : double-clic apres confirmation).
@@ -432,7 +438,7 @@ module.exports = function attachBookRoute(router) {
          SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL,
                 $18,$19,$20,
                 CASE WHEN $19='paid' THEN NOW() ELSE NULL END,
-                $19='paid'
+                $21
           WHERE NOT EXISTS (
             SELECT 1 FROM appointments
              WHERE user_id=$1 AND employee_id=$3 AND date=$8
@@ -450,7 +456,7 @@ module.exports = function attachBookRoute(router) {
         [userId, service_id, finalEmpId, clientId, client_name, client_email||null,
          clientPhoneE164, date, start_time, end_time, duration, notes||null,
          finalPrice, originalAmt, promoCodeId, promoCodeStr, discountAmt,
-         payment_intent_id || null, paidStatus, paidAmountCents]
+         payment_intent_id || null, paidStatus, paidAmountCents, isFullyPaid]
         );
         rows = ins.rows;
       } catch (e) {

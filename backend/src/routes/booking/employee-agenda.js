@@ -24,6 +24,7 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
         a.duration_minutes, a.total_duration, a.total_amount, a.service_id, a.employee_id, a.paid, a.paid_method,
         a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
         a.source, a.created_by_employee_id,
+        a.stripe_payment_intent_id, a.payment_status, a.paid_amount_cents, a.paid_at,
         bs.name as service_name, bs.color as service_color, bs.price as service_price,
         ru.id as referral_use_id, ru.status as referral_status,
         rc.code as referral_code, rc.owner_client_email as referral_parrain_email,

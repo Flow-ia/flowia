@@ -367,22 +367,23 @@ router.post('/webhook', async (req, res) => {
     else if (event.type === 'payment_intent.succeeded') {
       const pi = event.data.object;
       // Si un RDV est deja lie (cree par /book apres confirmPayment cote
-      // front), on s'assure juste que payment_status='paid'. Sinon (rare,
-      // ex: confirmation server-side sans /book), on log mais ne cree pas
-      // le RDV — le flow normal passe par /book.
+      // front), on confirme payment_status='paid'. paid (boolean) = TRUE
+      // seulement si paiement integral (acompte → paid reste FALSE pour que
+      // le merchant puisse encaisser le reste en boutique).
+      const amt = pi.amount_received || pi.amount;
       const upd = await pool.query(
         `UPDATE appointments
             SET payment_status = 'paid',
-                paid           = TRUE,
+                paid           = (paid OR (ROUND(total_amount * 100) <= $2)),
                 paid_at        = COALESCE(paid_at, NOW()),
                 paid_amount_cents = COALESCE(paid_amount_cents, $2)
           WHERE stripe_payment_intent_id = $1
-          RETURNING id, user_id`,
-        [pi.id, pi.amount_received || pi.amount]
+          RETURNING id, user_id, paid`,
+        [pi.id, amt]
       );
       if (upd.rowCount > 0) {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded:',
-          pi.id, '→ appt', upd.rows[0].id);
+          pi.id, '→ appt', upd.rows[0].id, upd.rows[0].paid ? '(integral)' : '(acompte)');
       } else {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded sans RDV (ok si confirme cote front):', pi.id);
       }

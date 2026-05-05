@@ -469,9 +469,63 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
               borderLeft: '2px solid #10b981',
             }}>
               <div>
-                <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#065f46' }}>Encaisse</p>
+                <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#065f46' }}>
+                  {appt.payment_status === 'paid' && appt.stripe_payment_intent_id
+                    ? "Paye en ligne"
+                    : "Encaisse"}
+                </p>
                 <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
-                  {PAY_OPTIONS.find(p=>p.id===appt.paid_method)?.label || appt.paid_method} · Source : RDV
+                  {appt.payment_status === 'paid' && appt.stripe_payment_intent_id
+                    ? `Stripe · ${(Number(appt.paid_amount_cents || 0) / 100).toFixed(2)} €`
+                    : `${PAY_OPTIONS.find(p=>p.id===appt.paid_method)?.label || appt.paid_method} · Source : RDV`}
+                </p>
+              </div>
+            </div>
+          )}
+          {/* Phase 5/5 — acompte paye en ligne : merchant doit encaisser le reste */}
+          {!appt.paid && appt.payment_status === 'paid'
+            && appt.stripe_payment_intent_id && appt.paid_amount_cents > 0 && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 12,
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: '#eff6ff', borderLeft: '2px solid #2563eb',
+            }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#1e3a8a' }}>
+                  {`Acompte payé · ${(Number(appt.paid_amount_cents) / 100).toFixed(2)} €`}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+                  {`Reste à encaisser : ${Math.max(0, Number(appt.total_amount || 0) - Number(appt.paid_amount_cents)/100).toFixed(2)} € · Stripe`}
+                </p>
+              </div>
+            </div>
+          )}
+          {/* Phase 5/5 — paiement Stripe Connect : statuts intermediaires */}
+          {!appt.paid && appt.payment_status === 'refunded' && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 12,
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: '#fef3c7', borderLeft: '2px solid #d97706',
+            }}>
+              <div>
+                <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#92400e' }}>
+                  {"Paiement remboursé"}
+                </p>
+                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
+                  {`Stripe · ${(Number(appt.paid_amount_cents || 0) / 100).toFixed(2)} €`}
+                </p>
+              </div>
+            </div>
+          )}
+          {!appt.paid && appt.payment_status === 'failed' && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 12,
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: '#fef2f2', borderLeft: '2px solid #dc2626',
+            }}>
+              <div>
+                <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#991b1b' }}>
+                  {"Paiement en ligne échoué"}
                 </p>
               </div>
             </div>

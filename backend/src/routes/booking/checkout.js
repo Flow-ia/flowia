@@ -80,6 +80,14 @@ module.exports = function attachCheckoutRoutes(router) {
       // Montant : priorité aux split-payments (somme), puis au custom de l'employé,
       // sinon total_amount (déjà réduit si promo), sinon prix service.
       // Si le RDV avait un promo, total_amount contient déjà le prix réduit.
+      // Phase 5/5 : si un acompte a deja ete paye en ligne (paid_amount_cents>0),
+      // le defaut est le RESTE a encaisser (total - acompte). Le merchant peut
+      // toujours override via customAmount/payments.
+      const acompteAmount = appt.stripe_payment_intent_id && appt.paid_amount_cents > 0
+        ? Number(appt.paid_amount_cents) / 100
+        : 0;
+      const baseTotal = parseFloat(appt.total_amount) || parseFloat(appt.service_price) || 0;
+      const remainingAfterAcompte = Math.max(0, baseTotal - acompteAmount);
       const paymentsTotal = cleanPayments.reduce((s, p) => s + (p.amount || 0), 0);
       const amount = isMulti
         ? paymentsTotal
@@ -87,7 +95,7 @@ module.exports = function attachCheckoutRoutes(router) {
             ? cleanPayments[0].amount
             : (customAmount != null
                 ? parseFloat(customAmount)
-                : (parseFloat(appt.total_amount) || parseFloat(appt.service_price) || 0)));
+                : remainingAfterAcompte));
       // Discount : provient du RDV si promo était appliqué lors de la réservation
       const discountFromAppt = parseFloat(appt.discount_amount || 0);
       const now = new Date();

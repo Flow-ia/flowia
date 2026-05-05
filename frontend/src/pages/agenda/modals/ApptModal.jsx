@@ -574,6 +574,25 @@ export default function ApptModal({
                 </div>
               </div>
             )}
+            {/* Phase 5/5 — acompte paye en ligne : merchant doit encaisser le reste */}
+            {!appt.paid && appt.payment_status === 'paid'
+              && appt.stripe_payment_intent_id && appt.paid_amount_cents > 0 && (
+              <div style={{
+                borderRadius: 12, padding: 12,
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: '#eff6ff', borderLeft: '2px solid #2563eb',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb', flexShrink: 0 }}/>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: '#1e3a8a', margin: 0 }}>
+                    {`Acompte payé · ${(Number(appt.paid_amount_cents) / 100).toFixed(2)} €`}
+                  </p>
+                  <p style={{ fontSize: 11, color: t.muted, margin: '2px 0 0' }}>
+                    {`Reste à encaisser : ${Math.max(0, Number(appt.total_amount || 0) - Number(appt.paid_amount_cents)/100).toFixed(2)} € · Stripe`}
+                  </p>
+                </div>
+              </div>
+            )}
             {/* Phase 5/5 — paiement Stripe Connect : statuts intermediaires */}
             {!appt.paid && appt.payment_status === 'refunded' && (
               <div style={{
