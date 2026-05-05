@@ -204,6 +204,23 @@ module.exports = function attachAppointmentsRoutes(router) {
         } catch(me){ console.error('[MAIL CONF]', me.message); }
       }
       res.status(201).json(appt);
+
+      // Google Calendar sync (non-bloquant)
+      try {
+        const [sR, eR, uR, bsR] = await Promise.all([
+          pool.query('SELECT name FROM booking_services WHERE id=$1', [service_id]),
+          employee_id ? pool.query('SELECT name FROM employees WHERE id=$1', [employee_id]) : Promise.resolve({ rows: [] }),
+          pool.query('SELECT business_name FROM users WHERE id=$1', [req.user.userId]),
+          pool.query("SELECT COALESCE(timezone, 'Europe/Paris') as tz FROM booking_settings WHERE user_id=$1", [req.user.userId]),
+        ]);
+        const { pushAppointment } = require('../../utils/googleCalendar');
+        pushAppointment(req.user.userId, { ...appt, status: 'confirmed' }, {
+          businessName: uR.rows[0]?.business_name,
+          serviceName:  sR.rows[0]?.name,
+          employeeName: eR.rows[0]?.name || null,
+          timezone:     bsR.rows[0]?.tz || 'Europe/Paris',
+        }).catch(err => console.warn('[gcal push merchant]', err.message));
+      } catch (gcErr) { console.warn('[gcal lookup]', gcErr.message); }
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 
@@ -315,11 +332,55 @@ module.exports = function attachAppointmentsRoutes(router) {
         } catch(me){ console.error('[MAIL ANNUL]', me.message); }
       }
       res.json(updated);
+
+      // Google Calendar sync (non-bloquant)
+      // - status=cancelled → DELETE event Google
+      // - autres changements → PATCH event (date/heure/employé/service)
+      try {
+        const { rows: meta } = await pool.query(
+          `SELECT a.google_event_id, a.google_calendar_id,
+                  bs.name AS service_name, e.name AS employee_name,
+                  u.business_name,
+                  COALESCE(bset.timezone, 'Europe/Paris') AS tz
+             FROM appointments a
+             LEFT JOIN booking_services bs ON bs.id = a.service_id
+             LEFT JOIN employees e ON e.id = a.employee_id
+             LEFT JOIN users u ON u.id = a.user_id
+             LEFT JOIN booking_settings bset ON bset.user_id = a.user_id
+            WHERE a.id=$1`,
+          [updated.id]
+        );
+        const m = meta[0] || {};
+        const { updateAppointmentEvent, deleteAppointmentEvent } = require('../../utils/googleCalendar');
+        const apptForCal = {
+          ...updated,
+          google_event_id: m.google_event_id,
+          google_calendar_id: m.google_calendar_id,
+        };
+        if (status === 'cancelled') {
+          deleteAppointmentEvent(req.user.userId, apptForCal)
+            .catch(err => console.warn('[gcal delete]', err.message));
+        } else {
+          updateAppointmentEvent(req.user.userId, apptForCal, {
+            businessName: m.business_name,
+            serviceName:  m.service_name,
+            employeeName: m.employee_name,
+            timezone:     m.tz,
+          }).catch(err => console.warn('[gcal update]', err.message));
+        }
+      } catch (gcErr) { console.warn('[gcal lookup put]', gcErr.message); }
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 
   router.delete('/appointments/:id', async (req, res) => {
     try {
+      // Recupere google_event_id avant DELETE pour pouvoir nettoyer cote
+      // Google Calendar ensuite (le RDV ne sera plus en DB).
+      const { rows: gcalMeta } = await pool.query(
+        `SELECT google_event_id, google_calendar_id
+           FROM appointments WHERE id=$1 AND user_id=$2`,
+        [req.params.id, req.user.userId]
+      );
       // Cascade parrainage : révoquer les referral_uses liés AVANT le DELETE
       // (ON DELETE SET NULL sur appointment_id sinon on perd la trace).
       const { rows: refs } = await pool.query(
@@ -328,6 +389,15 @@ module.exports = function attachAppointmentsRoutes(router) {
         [req.params.id, req.user.userId]
       );
       await pool.query('DELETE FROM appointments WHERE id=$1 AND user_id=$2', [req.params.id, req.user.userId]);
+      // Google Calendar : delete event si lie (non-bloquant)
+      if (gcalMeta[0]?.google_event_id) {
+        const { deleteAppointmentEvent } = require('../../utils/googleCalendar');
+        deleteAppointmentEvent(req.user.userId, {
+          id: req.params.id,
+          google_event_id: gcalMeta[0].google_event_id,
+          google_calendar_id: gcalMeta[0].google_calendar_id,
+        }).catch(err => console.warn('[gcal delete on appt-delete]', err.message));
+      }
       for (const ref of refs) {
         try {
           await pool.query(

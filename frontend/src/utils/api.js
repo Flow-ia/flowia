@@ -361,6 +361,12 @@ export const api = {
   // (Voir aussi connectApi exporte plus bas pour ergonomie.)
   getSubscriptionBillingInfo:        ()    => request('/subscriptions/billing-info'),
   updateSubscriptionBillingInfo:     (b)   => request('/subscriptions/billing-info', { method: 'PUT', body: JSON.stringify(b) }),
+
+  // ── Sync Google Calendar (sortant FlowIA → Google) ──────────────────────
+  calendarSyncStatus:   ()       => request('/calendar-sync/status'),
+  calendarSyncConnect:  ()       => request('/calendar-sync/connect'),
+  calendarSyncDisconnect: ()     => request('/calendar-sync/disconnect',  { method: 'POST' }),
+  calendarSyncToggle:   (enabled) => request('/calendar-sync/toggle',     { method: 'POST', body: JSON.stringify({ enabled }) }),
 };
 // ── Réservations (commerçant) ─────────────────────────────────────────────────
 // Annonce/bandeau de la page de reservation publique

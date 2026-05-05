@@ -748,6 +748,24 @@ module.exports = function attachBookRoute(router) {
         { ...appt, service_name: svcName },
         { source: 'public', withEmail: true }
       ).catch(err => console.warn('[notify new appt]', err.message));
+
+      // Google Calendar sync (non-bloquant) : si le merchant a connecte son
+      // agenda, on push l'event. Si la sync echoue, le RDV existe quand
+      // meme dans FlowIA — pas de regression sur le booking.
+      let empNameForCal = null;
+      if (finalEmpId) {
+        try {
+          const { rows: emp } = await pool.query('SELECT name FROM employees WHERE id=$1', [finalEmpId]);
+          empNameForCal = emp[0]?.name || null;
+        } catch {}
+      }
+      const { pushAppointment } = require('../../utils/googleCalendar');
+      pushAppointment(userId, { ...appt, status: 'confirmed' }, {
+        businessName: business_name,
+        serviceName:  svcName,
+        employeeName: empNameForCal,
+        timezone:     bizTz,
+      }).catch(err => console.warn('[gcal push]', err.message));
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 };

@@ -9,11 +9,13 @@ import { SubTabs, PageHeader } from '../shared';
 import Configuration from './Configuration';
 import Prestations from './Prestations';
 import Notifications from './Notifications';
+import GoogleCalendarSync from './GoogleCalendarSync';
 
 const SECTIONS = [
   { id: 'configuration', label: 'Configuration',        icon: 'settings' },
   { id: 'prestations',   label: 'Prestations sur site', icon: 'scissors' },
   { id: 'notifications', label: 'Notifications',        icon: 'bell'     },
+  { id: 'agenda-google', label: 'Synchronisation',      icon: 'calendar' },
 ];
 
 export default function Reservations(props) {
@@ -43,6 +45,7 @@ export default function Reservations(props) {
       {section === 'configuration' && <Configuration {...props}/>}
       {section === 'prestations'   && <Prestations   {...props}/>}
       {section === 'notifications' && <Notifications {...props}/>}
+      {section === 'agenda-google' && <GoogleCalendarSync {...props}/>}
     </div>
   );
 }

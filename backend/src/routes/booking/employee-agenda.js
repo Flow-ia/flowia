@@ -239,6 +239,25 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
         } catch(me){ console.error('[MAIL CONF EMP]', me.message); }
       }
       res.status(201).json(appt);
+
+      // Google Calendar sync (non-bloquant)
+      try {
+        const [empR, usrR, bsR] = await Promise.all([
+          pool.query('SELECT name FROM employees WHERE id=$1', [employee_id]),
+          pool.query('SELECT business_name FROM users WHERE id=$1', [req.user.userId]),
+          pool.query("SELECT COALESCE(timezone, 'Europe/Paris') as tz FROM booking_settings WHERE user_id=$1", [req.user.userId]),
+        ]);
+        const svcSum = cartItems && cartItems.length > 0
+          ? cartItems.map(it => it.qty > 1 ? `${it.service_name} ×${it.qty}` : it.service_name).join(', ')
+          : 'Service';
+        const { pushAppointment } = require('../../utils/googleCalendar');
+        pushAppointment(req.user.userId, { ...appt, status: 'confirmed' }, {
+          businessName: usrR.rows[0]?.business_name,
+          serviceName:  svcSum,
+          employeeName: empR.rows[0]?.name || null,
+          timezone:     bsR.rows[0]?.tz || 'Europe/Paris',
+        }).catch(err => console.warn('[gcal push emp-agenda]', err.message));
+      } catch (gcErr) { console.warn('[gcal lookup emp-agenda]', gcErr.message); }
     } catch(e){ console.error('[CHECKOUT ERROR]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }
   });
 
@@ -279,6 +298,15 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
             ]);
             setImmediate(() => sendAppointmentCancellation({ to: appt.client_email, clientName: appt.client_name, businessName: uR.rows[0]?.business_name || '', serviceName: sR.rows[0]?.name || 'Service', date: upd.date, startTime: upd.start_time, reason: cancel_reason||null, appointmentId: req.params.id, }).catch(e => console.error('[EMAIL]', e.message)));
           } catch(me){ console.error('[MAIL ANNUL EMP]', me.message); }
+        }
+        // Google Calendar : delete event si lié (non-bloquant)
+        if (appt.google_event_id) {
+          const { deleteAppointmentEvent } = require('../../utils/googleCalendar');
+          deleteAppointmentEvent(req.user.userId, {
+            id: req.params.id,
+            google_event_id: appt.google_event_id,
+            google_calendar_id: appt.google_calendar_id,
+          }).catch(err => console.warn('[gcal delete emp-cancel]', err.message));
         }
         return res.json(upd);
       }

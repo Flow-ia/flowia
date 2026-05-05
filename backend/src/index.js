@@ -320,6 +320,9 @@ function startServer() {
   app.use('/api/stripe-connect/dashboard-link', paymentsIntentLimiter);
   app.use('/api/stripe-connect',  apiLimiter, require('./routes/stripe-connect'));
 
+  // Sync Google Calendar (sortant FlowIA → Google Agenda du merchant).
+  app.use('/api/calendar-sync',  apiLimiter, require('./routes/calendar-sync'));
+
   const { router: notifRouter, runDailyRecaps, runRdvReminders, runEmployeeReminders } =
     require('./routes/notifications');
   app.use('/api/notifications',  notifLimiter, notifRouter);

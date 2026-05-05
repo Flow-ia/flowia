@@ -160,9 +160,20 @@ module.exports = function attachClientProfileRoutes(router) {
            TO_CHAR(date, 'YYYY-MM-DD') as date,
            TO_CHAR(start_time, 'HH24:MI') as start_time,
            TO_CHAR(end_time,   'HH24:MI') as end_time,
-           status, cancel_reason, updated_at`,
+           status, cancel_reason, updated_at,
+           google_event_id, google_calendar_id`,
         [req.body.reason || 'Annulé par le client', req.params.id, biz.user_id, clientEmail]
       );
+      // Google Calendar : delete event si lie (non-bloquant). Le merchant
+      // verra l'annulation dans son agenda Google.
+      if (rows.length && rows[0].google_event_id) {
+        const { deleteAppointmentEvent } = require('../../utils/googleCalendar');
+        deleteAppointmentEvent(biz.user_id, {
+          id: rows[0].id,
+          google_event_id: rows[0].google_event_id,
+          google_calendar_id: rows[0].google_calendar_id,
+        }).catch(err => console.warn('[gcal delete client-cancel]', err.message));
+      }
       // Cascade parrainage : referral_use pending → cancelled
       if (rows.length) {
         await pool.query(

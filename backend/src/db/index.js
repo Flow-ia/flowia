@@ -1574,6 +1574,40 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_id_archived VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_disconnected_at TIMESTAMPTZ`);
 
+  // ── Sync Google Agenda (sortant FlowIA → Google) ────────────────────────
+  // Le merchant connecte son compte Google via OAuth (scope calendar.events)
+  // pour que les RDV crees dans FlowIA apparaissent automatiquement dans
+  // son agenda Google. Tokens chiffres avec AES-256-GCM (CALENDAR_TOKEN_KEY).
+  // V1 = unidirectionnel (FlowIA pousse vers Google) ; V2 future = aussi
+  // lire les events Google pour bloquer les slots cote FlowIA.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS merchant_calendar_integrations (
+      id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider           VARCHAR(20) NOT NULL DEFAULT 'google',
+      google_account_email VARCHAR(255),
+      access_token_enc   TEXT NOT NULL,
+      refresh_token_enc  TEXT,
+      token_expires_at   TIMESTAMPTZ,
+      calendar_id        VARCHAR(255) NOT NULL DEFAULT 'primary',
+      sync_enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+      last_sync_at       TIMESTAMPTZ,
+      last_sync_error    TEXT,
+      created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, provider)
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_calendar_integ_user
+    ON merchant_calendar_integrations(user_id) WHERE sync_enabled=TRUE`);
+  // Lien RDV ↔ event Google : permet update/delete idempotent + retry safe.
+  // Stocke aussi un hash du dernier payload pousse pour eviter UPDATE inutiles.
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS google_event_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS google_calendar_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS google_synced_at TIMESTAMPTZ`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_google_event
+    ON appointments(google_event_id) WHERE google_event_id IS NOT NULL`);
+
   // ── Abonnement plateforme FlowIA (Stripe Billing) ────────────────────────
   // Les commerçants paient un abonnement mensuel/annuel pour accéder à FlowIA.
   // 3 plans : Decouverte (0€, gratuit limité) / Essentiel (24€mois|240€an) /
