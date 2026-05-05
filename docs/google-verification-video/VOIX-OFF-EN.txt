@@ -1,0 +1,22 @@
+Voice-over script — English only — paste this into ElevenLabs / Murf / TTSMaker
+to generate AI voice. Total reading time: ~1 minute 50 seconds at normal pace.
+
+---
+
+FlowIA is a SaaS appointment booking platform for hair salons, barbershops and small service businesses based in Europe.
+
+Merchants asked for a way to see their FlowIA appointments inside their personal Google Calendar — for mobile notifications, sharing with employees, and keeping all their schedules in one place.
+
+A merchant logs into FlowIA. This is the merchant dashboard.
+
+In Settings, the merchant goes to Reservations, then Synchronization, where they can connect their Google Calendar.
+
+The merchant clicks Connect. Google shows the OAuth consent screen, requesting only the calendar.events scope — the minimum needed to create and manage events. We deliberately do not request the broader calendar scope.
+
+Once the merchant accepts, FlowIA stores the OAuth tokens encrypted with AES-256-GCM and shows the sync status.
+
+When the merchant creates a new appointment in FlowIA — for John Doe, tomorrow at 2 PM — FlowIA automatically pushes a corresponding event to their Google Calendar.
+
+The event appears immediately in Google Calendar with a clear "Synced from FlowIA" note in the description.
+
+The merchant can disconnect at any time. Disconnecting revokes the tokens server-side and removes our encrypted copies from the database. FlowIA strictly complies with the Google API Services User Data Policy and Limited Use requirements.

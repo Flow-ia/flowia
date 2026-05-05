@@ -1,0 +1,35 @@
+1
+00:00:00,000 --> 00:00:10,000
+FlowIA — Booking SaaS for hair salons & service businesses
+
+2
+00:00:10,000 --> 00:00:20,000
+Why: merchants want their bookings in Google Calendar too
+
+3
+00:00:20,000 --> 00:00:35,000
+Merchant logs into FlowIA
+
+4
+00:00:35,000 --> 00:00:50,000
+Settings → Reservations → Synchronization
+
+5
+00:00:50,000 --> 00:01:15,000
+OAuth consent — calendar.events scope only (least privilege)
+
+6
+00:01:15,000 --> 00:01:25,000
+Connected. Tokens stored encrypted (AES-256-GCM)
+
+7
+00:01:25,000 --> 00:01:40,000
+New appointment created in FlowIA
+
+8
+00:01:40,000 --> 00:01:50,000
+Appointment instantly mirrored to Google Calendar
+
+9
+00:01:50,000 --> 00:02:00,000
+Merchant can disconnect anytime — tokens revoked & deleted
