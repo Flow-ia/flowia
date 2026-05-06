@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, promoApi, campaignsApi } from '../../../../utils/api';
 import SendResultModal from '../components/SendResultModal';
 import { Button, Label, SegmentedControl } from '../../../../components/primitives';
 
 export default function PromoForm({ open, onClose, init, onSave, theme }) {
+  const navigate = useNavigate();
   const t = theme;
   const [code, setCode]             = useState('');
   const [type, setType]             = useState('percent');
@@ -324,7 +326,7 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
                               </p>
                             : <p style={{ margin:'3px 0', color:'#991b1b', fontWeight:500 }}>
                                 Il vous manque {parseFloat((preview.sms.cost || 0) - (preview.sms.balance || 0)).toFixed(2)} €
-                                <button onClick={() => window.location.href = '/settings/marketing?recharge=need'}
+                                <button onClick={() => { onClose && onClose(); navigate('/marketing/sms/recharger'); }}
                                         style={{ marginLeft:8, padding:'3px 10px', borderRadius:6,
                                                  fontSize:11, fontWeight:500,
                                                  background:'#eef2ff', color:'#4338ca',
