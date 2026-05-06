@@ -20,7 +20,7 @@ const DOMAINS = [
   { id:'mon-commerce',  label:'Mon commerce',        subtitle:'Identité, photos, RGPD, sécurité',  color:'#f97316', icon:'storefront' },
   { id:'reservations',  label:'Réservation en ligne', subtitle:'Lien public, prestations, agenda',  color:'#3b82f6', icon:'calendar'   },
   { id:'caisse-config', label:'Caisse',              subtitle:'Prestations en boutique, QR',       color:'#8b5cf6', icon:'cash'       },
-  { id:'equipe',        label:'Équipe',              subtitle:'Membres, horaires, commissions',    color:'#10b981', icon:'users'      },
+  { id:'equipe',        label:'Équipe / Employés',   subtitle:'Membres, horaires, commissions',    color:'#10b981', icon:'users'      },
   { id:'communication', label:'Communication',       subtitle:'Rappels, recap, sons, push',        color:'#ec4899', icon:'bell'       },
   { id:'paiements',     label:'Paiements en ligne',  subtitle:'Stripe, acomptes RDV',              color:'#0891b2', icon:'wallet'     },
 ];

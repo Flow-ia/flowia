@@ -44,7 +44,7 @@ export default function Equipe(props) {
     <div style={{ maxWidth:900, margin:'0 auto', padding:'18px 16px',
                   display:'flex', flexDirection:'column', gap:14 }}>
       <PageHeader backTo="/reglages" crumb="Réglages"
-                  title="Équipe"
+                  title="Équipe / Employés"
                   subtitle="Membres, permissions, horaires, absences, commissions"/>
       <SubTabs tabs={SECTIONS} active={section} onChange={setSection}/>
 
