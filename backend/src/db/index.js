@@ -935,6 +935,14 @@ async function initDB() {
     END $$
   `);
 
+  // ── Type de commerce (categorie marketplace) ────────────────────────────
+  // Obligatoire a l'inscription. Sert au filtre marketplace + a personnaliser
+  // les emails / textes UI ("votre barbier" vs "votre estheticienne").
+  // Cles courtes pour eviter migrations futures sur libelle.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_type VARCHAR(30)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_users_business_type
+    ON users(business_type) WHERE business_type IS NOT NULL`);
+
   // ── RGPD soft-delete : grace period 30 jours avant purge definitive ────
   // Quand un commercant clique "Supprimer mon compte", on set ce timestamp.
   // Les donnees Google (jetons OAuth, integration calendar) sont supprimees

@@ -12,8 +12,22 @@ import { I } from '../../utils/icons';
 import { S, primaryBtnStyle, primaryHover, ghostBtnStyle, ghostHover } from './components/shadcn';
 import { PageHero } from './components/Shared';
 import MerchantSearchCard from './components/MerchantSearchCard';
+import { BUSINESS_TYPES } from '../../utils/businessTypes';
 
 const PAGE_SIZE = 24;
+
+// Style commun des chips de filtre type de commerce.
+function chipStyle(active) {
+  return {
+    padding: '7px 12px', borderRadius: 999, cursor: 'pointer',
+    fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
+    background: active ? S.fg : S.bg,
+    color: active ? S.fgInv : S.fg,
+    border: `1px solid ${active ? S.fg : S.border}`,
+    transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+    whiteSpace: 'nowrap',
+  };
+}
 
 // Geoloc — utilisee uniquement sur clic explicite (pas de prompt automatique).
 function getBrowserGeolocation() {
@@ -29,12 +43,14 @@ function getBrowserGeolocation() {
 
 export default function ClientPortal() {
   const [query, setQuery]   = useState('');
+  const [bizType, setBizType] = useState(''); // '' = tous types
   const [geo,   setGeo]     = useState(null);   // { lat, lng } ou null
   const [geoErr,setGeoErr]  = useState('');
   const [geoLoad,setGeoLoad]= useState(false);
   const [items, setItems]   = useState([]);
   const [total, setTotal]   = useState(0);
   const [hasMore,setHasMore]= useState(false);
+  const [discoveryMode, setDiscoveryMode] = useState(false);
   const [loading,setLoading]= useState(false);
   const [error, setError]   = useState('');
   const [offset,setOffset]  = useState(0);
@@ -50,6 +66,7 @@ export default function ClientPortal() {
       try {
         const r = await pubApi.searchMarketplace({
           q: query.trim(),
+          type: bizType || undefined,
           limit: PAGE_SIZE,
           offset: 0,
           ...(geo ? { lat: geo.lat, lng: geo.lng, radius: 30 } : {}),
@@ -58,16 +75,17 @@ export default function ClientPortal() {
         setItems(r.items || []);
         setTotal(r.total || 0);
         setHasMore(!!r.hasMore);
-        setOffset(PAGE_SIZE);
+        setDiscoveryMode(!!r.discoveryMode);
+        setOffset((r.items || []).length);
       } catch (e) {
         if (reqId.current !== id) return;
         setError(e.message || 'Erreur lors de la recherche.');
       } finally {
         if (reqId.current === id) setLoading(false);
       }
-    }, query ? 350 : 0); // pas de debounce pour le premier load et le toggle geo
+    }, query ? 350 : 0); // pas de debounce pour le premier load et les toggles
     return () => clearTimeout(t);
-  }, [query, geo]);
+  }, [query, geo, bizType]);
 
   const loadMore = async () => {
     if (loading || !hasMore) return;
@@ -75,6 +93,7 @@ export default function ClientPortal() {
     try {
       const r = await pubApi.searchMarketplace({
         q: query.trim(),
+        type: bizType || undefined,
         limit: PAGE_SIZE,
         offset,
         ...(geo ? { lat: geo.lat, lng: geo.lng, radius: 30 } : {}),
@@ -160,6 +179,21 @@ export default function ClientPortal() {
               <span style={{ fontSize: 12, color: S.ax.rose }}>{geoErr}</span>
             )}
           </div>
+
+          {/* Filtre par type de commerce */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 4 }}>
+            <button type="button" onClick={() => setBizType('')}
+                    style={chipStyle(bizType === '')}>
+              Tous les types
+            </button>
+            {BUSINESS_TYPES.map(bt => (
+              <button key={bt.key} type="button"
+                      onClick={() => setBizType(bizType === bt.key ? '' : bt.key)}
+                      style={chipStyle(bizType === bt.key)}>
+                {bt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -173,12 +207,14 @@ export default function ClientPortal() {
             <p style={{ margin: 0, fontSize: 13, color: S.fgMuted }}>
               {loading && items.length === 0
                 ? 'Recherche...'
-                : total === 0
-                  ? 'Aucun salon trouve.'
-                  : total === 1
-                    ? '1 salon trouve'
-                    : `${total} salons trouves`}
-              {geo && total > 0 && ' · pres de vous'}
+                : discoveryMode
+                  ? `Une selection de ${items.length} salons sur ${total} disponibles`
+                  : total === 0
+                    ? 'Aucun salon trouve.'
+                    : total === 1
+                      ? '1 salon trouve'
+                      : `${total} salons trouves`}
+              {geo && total > 0 && !discoveryMode && ' · pres de vous'}
               {query && total > 0 && ` · "${query}"`}
             </p>
           </div>
@@ -217,14 +253,31 @@ export default function ClientPortal() {
             </div>
           )}
 
-          {/* Load more */}
-          {hasMore && (
+          {/* Load more — masque en mode decouverte */}
+          {hasMore && !discoveryMode && (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 30 }}>
               <button type="button" onClick={loadMore} disabled={loading}
                       style={{ ...ghostBtnStyle(), height: 40, padding: '0 22px' }}
                       {...ghostHover}>
                 {loading ? 'Chargement...' : 'Voir plus de salons'}
               </button>
+            </div>
+          )}
+
+          {/* CTA en mode decouverte : on incite a affiner pour voir plus */}
+          {discoveryMode && total > items.length && (
+            <div style={{
+              marginTop: 30, padding: '20px 24px', borderRadius: 14,
+              background: S.bgMuted, border: `1px solid ${S.border}`,
+              textAlign: 'center',
+            }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: S.fg }}>
+                {total - items.length} autres salons disponibles
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: S.fgMuted, lineHeight: 1.55 }}>
+                Activez &laquo; Pres de moi &raquo; ci-dessus, ou tapez le nom d&apos;un salon
+                ou d&apos;une ville pour decouvrir les salons qui vous correspondent.
+              </p>
             </div>
           )}
 

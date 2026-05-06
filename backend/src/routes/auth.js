@@ -11,6 +11,7 @@ const {
   findUniqueSlug,
   archiveOldSlug,
 } = require('../utils/buildSlug');
+const { isValidBusinessType } = require('../utils/businessTypes');
 const router = express.Router();
 
 const SEED_CATS = [
@@ -126,17 +127,20 @@ function maskEmail(email) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, businessName, phone, address, country, city, postalCode, lat, lng } = req.body;
+    const { email, password, businessName, businessType, phone, address, country, city, postalCode, lat, lng } = req.body;
     if (!email || !password || !businessName)
       return res.status(400).json({ error: 'Tous les champs sont requis.' });
     if (!isValidEmail(String(email).trim().toLowerCase()))
       return res.status(400).json({ error: 'Email invalide.' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Mot de passe trop court (6 min).' });
+    // Type de commerce obligatoire pour le filtre marketplace.
+    if (!isValidBusinessType(businessType))
+      return res.status(400).json({ error: 'Type de commerce invalide ou manquant.', code: 'BUSINESS_TYPE_REQUIRED' });
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
     if (rows.length) return res.status(409).json({ error: 'Email déjà existant, merci de changer de mail et réessayer !' });
     const code = genCode();
-    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, phone: phone||'', address: address||'', country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
+    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phone||'', address: address||'', country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
     // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
     res.json({ ok: true });
     setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register').catch(e => console.error('[EMAIL register]', e.message)));
@@ -150,13 +154,20 @@ router.post('/register/confirm', async (req, res) => {
     const rec = await getCode(`reg_${email.toLowerCase()}`);
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
-    const { email: em, password, businessName, phone, address, country, city, postalCode, lat, lng } = rec.data;
+    const { email: em, password, businessName, businessType, phone, address, country, city, postalCode, lat, lng } = rec.data;
     const hash = await bcrypt.hash(password, 12);
+    // Defense-in-depth : on revalide le businessType cote /confirm aussi.
+    // Theoriquement deja valide cote /register, mais le payload de saveCode
+    // pourrait etre altere par un acteur malveillant ayant l'access cache.
+    if (!isValidBusinessType(businessType)) {
+      await deleteCode(`reg_${email.toLowerCase()}`);
+      return res.status(400).json({ error: 'Type de commerce invalide.', code: 'BUSINESS_TYPE_REQUIRED' });
+    }
     let rows;
     try {
       ({ rows } = await pool.query(
-        `INSERT INTO users (email,password_hash,business_name,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,email,business_name,phone,address,country,city,postal_code`,
-        [em, hash, businessName, phone||null, address||null, country||'FR', city||null, postalCode||null, lat||null, lng||null]
+        `INSERT INTO users (email,password_hash,business_name,business_type,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,email,business_name,business_type,phone,address,country,city,postal_code`,
+        [em, hash, businessName, businessType, phone||null, address||null, country||'FR', city||null, postalCode||null, lat||null, lng||null]
       ));
     } catch (e) {
       if (e.code === '23505') {
@@ -1006,9 +1017,12 @@ router.get('/google/merchant/callback', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 router.post('/onboarding', authMiddleware, async (req, res) => {
   try {
-    const { firstName, lastName, businessName, phone, address, city, postalCode, country, lat, lng } = req.body;
+    const { firstName, lastName, businessName, businessType, phone, address, city, postalCode, country, lat, lng } = req.body;
     if (!firstName?.trim() || !lastName?.trim() || !businessName?.trim() || !phone?.trim() || !address?.trim() || !city?.trim() || !postalCode?.trim()) {
       return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
+    }
+    if (!isValidBusinessType(businessType)) {
+      return res.status(400).json({ error: 'Type de commerce invalide ou manquant.', code: 'BUSINESS_TYPE_REQUIRED' });
     }
 
     const { rows } = await pool.query(
@@ -1016,10 +1030,11 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
          first_name = $1, last_name = $2, business_name = $3,
          phone = $4, address = $5, city = $6, postal_code = $7,
          country = COALESCE($8, 'FR'), lat = $9, lng = $10,
+         business_type = $11,
          onboarding_completed = TRUE
-       WHERE id = $11
-       RETURNING id, email, business_name, first_name, last_name, phone, address, city, postal_code, onboarding_completed`,
-      [firstName.trim(), lastName.trim(), businessName.trim(), phone.trim(), address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, req.user.userId]
+       WHERE id = $12
+       RETURNING id, email, business_name, business_type, first_name, last_name, phone, address, city, postal_code, onboarding_completed`,
+      [firstName.trim(), lastName.trim(), businessName.trim(), phone.trim(), address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, businessType, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];

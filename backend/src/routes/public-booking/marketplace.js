@@ -10,6 +10,11 @@
 //   limit    : pagination (defaut 24, max 60)
 //   offset   : pagination (defaut 0)
 //
+// Mode "decouverte" : si AUCUN filtre n'est passe (q vide, pas de ville,
+// pas de lat/lng) ET offset=0, on limite a 12 commercants pour eviter de
+// dump l'integralite du catalogue. L'utilisateur active "Pres de moi" ou
+// tape une recherche pour voir plus. hasMore=true incite au filtre.
+//
 // Reponse :
 //   { items: [...], total: N, hasMore: bool }
 //
@@ -30,6 +35,7 @@
 
 const express = require('express');
 const { pool } = require('../../db');
+const { isValidBusinessType, BUSINESS_TYPES } = require('../../utils/businessTypes');
 
 // Cache memoire local (memCache global est partage avec autres routes — on
 // y stocke nos resultats avec un namespace pour eviter collisions).
@@ -54,8 +60,16 @@ module.exports = function attachMarketplaceRoutes(router) {
       const lng        = req.query.lng ? parseFloat(req.query.lng) : null;
       const hasGeo     = Number.isFinite(lat) && Number.isFinite(lng);
       const radiusKm   = hasGeo ? Math.min(200, Math.max(1, parseInt(req.query.radius, 10) || 30)) : null;
-      const limit      = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 24));
+      // Type de commerce : un seul accepte. Valeur invalide → ignoree (pas
+      // d'erreur 400 pour ne pas casser le frontend, juste filtre desactive).
+      const bizType    = isValidBusinessType(req.query.type) ? req.query.type : '';
+      let   limit      = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 24));
       const offset     = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+      // Mode decouverte : aucun filtre + premiere page → on cap a 12.
+      const isDiscoveryMode = !q && !cityNorm && !hasGeo && !bizType && offset === 0;
+      const discoveryLimit = 12;
+      if (isDiscoveryMode) limit = Math.min(limit, discoveryLimit);
 
       const cKey = cacheKey({ q, cityNorm, lat, lng, radiusKm, limit, offset });
       const hit  = global.memCache?.get(cKey);
@@ -85,6 +99,10 @@ module.exports = function attachMarketplaceRoutes(router) {
         where.push(`LOWER(TRANSLATE(u.city,
             'ÀÁÂÃÄÅàáâãäåÒÓÔÕÖØòóôõöøÈÉÊËèéêëÌÍÎÏìíîïÙÚÛÜùúûüçÇñÑ',
             'AAAAAAaaaaaaOOOOOOooooooEEEEeeeeIIIIiiiiUUUUuuuucCnN')) = $${i}`);
+      }
+      if (bizType) {
+        params.push(bizType);
+        where.push(`u.business_type = $${params.length}`);
       }
 
       let geoSelect    = '';
@@ -143,6 +161,7 @@ module.exports = function attachMarketplaceRoutes(router) {
           u.google_business_url,
           u.online_payments_enabled,
           u.stripe_charges_enabled,
+          u.business_type,
           bs.slug,
           bs.business_description,
           ${geoSelect ? geoSelect + ',' : ''}
@@ -194,6 +213,7 @@ module.exports = function attachMarketplaceRoutes(router) {
       const items = rowsRes.rows.map(r => ({
         slug:                 r.slug,
         businessName:         r.business_name,
+        businessType:         r.business_type || null,
         businessDescription:  r.business_description,
         city:                 r.city,
         postalCode:           r.postal_code,
@@ -217,8 +237,11 @@ module.exports = function attachMarketplaceRoutes(router) {
       }));
 
       const total   = countRes.rows[0]?.n || 0;
-      const hasMore = offset + items.length < total;
-      const resp    = { items, total, hasMore, limit, offset };
+      // En mode decouverte, on ne propose PAS de "voir plus" : on incite a
+      // affiner la recherche (ville / pres de moi / texte). Le frontend
+      // affiche un message a la place du bouton charger plus.
+      const hasMore = isDiscoveryMode ? false : (offset + items.length < total);
+      const resp    = { items, total, hasMore, limit, offset, discoveryMode: isDiscoveryMode };
 
       // Cache 60s : le portail change peu, mais reste reactif aux activations
       // de programmes / nouveaux comptes.

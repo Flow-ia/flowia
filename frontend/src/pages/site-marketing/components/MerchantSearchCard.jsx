@@ -12,6 +12,7 @@
 import { Link } from 'react-router-dom';
 import { S } from './shadcn';
 import { mediaApi } from '../../../utils/api';
+import { labelFor as bizTypeLabel } from '../../../utils/businessTypes';
 
 // Petit composant badge inline (icone + label). Couleurs depuis S.ax.
 function Badge({ icon, label, color, bg }) {
@@ -155,6 +156,12 @@ export default function MerchantSearchCard({ merchant }) {
           }}>
             {m.businessName}
           </h3>
+          {m.businessType && bizTypeLabel(m.businessType) && (
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: S.fgSubtle,
+                        textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              {bizTypeLabel(m.businessType)}
+            </p>
+          )}
           <p style={{
             margin: '3px 0 0', fontSize: 12, color: S.fgMuted,
             display: 'flex', alignItems: 'center', gap: 5,

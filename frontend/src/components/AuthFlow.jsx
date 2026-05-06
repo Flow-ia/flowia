@@ -7,6 +7,7 @@ import { api } from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { Button, Label } from './primitives';
+import { BUSINESS_TYPES } from '../utils/businessTypes';
 
 // ─── Indicatifs telephoniques (drapeau = data metier identifiant pays) ──────
 const COUNTRY_CODES = [
@@ -750,7 +751,8 @@ function LoginScreen({ show, onLogin, goReg, goForgot, openGoogle }) {
 function RegisterScreen({ show, onBack, onSent, openGoogle }) {
   const { theme: t } = useTheme();
   const [f, setF] = useState({
-    biz:'', email:'', pw:'', cpw:'',
+    biz:'', businessType:'',
+    email:'', pw:'', cpw:'',
     phone:'', country:'FR',
     address:'', city:'', postalCode:'',
     lat:null, lng:null,
@@ -762,6 +764,9 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
 
   const sub = async e => {
     e.preventDefault();
+    // Type de commerce obligatoire (defense en profondeur — backend rejette
+    // aussi avec code BUSINESS_TYPE_REQUIRED, mais on intercepte avant).
+    if (!f.businessType) return show('Choisissez votre type de commerce.', 'err');
     if (f.pw !== f.cpw) return show('Les mots de passe ne correspondent pas.', 'err');
     if (f.pw.length < 6) return show('Mot de passe trop court (6 min).', 'err');
     if (f.phone) {
@@ -773,7 +778,9 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
     setLd(true);
     try {
       await api.register({
-        email: f.email, password: f.pw, businessName: f.biz,
+        email: f.email, password: f.pw,
+        businessName: f.biz,
+        businessType: f.businessType,
         phone: fullPhone || undefined,
         address: f.address || undefined,
         city: f.city || undefined,
@@ -827,6 +834,38 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
                                color:'#065f46', fontSize:14 }}>&#10003;</span>
               )}
             </div>
+
+            {/* Selecteur type de commerce — obligatoire (bloc avant address) */}
+            <div style={{ marginBottom:12 }}>
+              <Label>Type de commerce *</Label>
+              <div style={{ display:'grid',
+                            gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))',
+                            gap:6, marginTop:6 }}>
+                {BUSINESS_TYPES.map(bt => {
+                  const sel = f.businessType === bt.key;
+                  return (
+                    <button key={bt.key} type="button"
+                            onClick={() => setF(prev => ({ ...prev, businessType: bt.key }))}
+                            style={{
+                              padding:'10px 12px', borderRadius:8, cursor:'pointer',
+                              fontSize:12, fontWeight:500, fontFamily:'inherit',
+                              textAlign:'left', lineHeight:1.3,
+                              background: sel ? t.text : t.cardAlt,
+                              color: sel ? (t.invText || '#fff') : t.text,
+                              border: `1px solid ${sel ? t.text : t.border}`,
+                              transition:'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+                            }}>
+                      {bt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize:11, color:t.muted, margin:'6px 0 0' }}>
+                Choisissez la categorie qui correspond le mieux a votre activite.
+                Vos clients pourront vous trouver via ce filtre dans la marketplace.
+              </p>
+            </div>
+
             <AddressField address={f.address}
                           onChange={upd => setF(prev => ({ ...prev, ...upd }))}/>
             {f.address && f.city && (
@@ -1138,6 +1177,7 @@ export function MerchantOnboarding({ user, onComplete }) {
     firstName: user?.firstName || '',
     lastName:  user?.lastName  || '',
     businessName: user?.businessName || '',
+    businessType: '',
     phone:'', country:'FR',
     address:'', city:'', postalCode:'',
     lat:null, lng:null,
@@ -1164,13 +1204,17 @@ export function MerchantOnboarding({ user, onComplete }) {
   };
 
   const canSubmit = f.firstName.trim() && f.lastName.trim() && f.businessName.trim()
+                 && f.businessType
                  && f.phone.trim() && f.address.trim() && f.city.trim() && f.postalCode.trim();
 
   const phoneVal = validatePhone(f.phone, f.country);
 
   const sub = async (e) => {
     e.preventDefault();
-    if (!canSubmit) return setErr('Tous les champs sont obligatoires.');
+    if (!canSubmit) {
+      if (!f.businessType) return setErr('Choisissez votre type de commerce.');
+      return setErr('Tous les champs sont obligatoires.');
+    }
     if (f.phone && !phoneVal.valid) return setErr(phoneVal.msg);
 
     const cc = COUNTRY_CODES.find(c => c.code === f.country);
@@ -1179,6 +1223,7 @@ export function MerchantOnboarding({ user, onComplete }) {
     try {
       const r = await api.completeOnboarding({
         firstName: f.firstName, lastName: f.lastName, businessName: f.businessName,
+        businessType: f.businessType,
         phone: fullPhone, address: f.address, city: f.city, postalCode: f.postalCode,
         country: f.country, lat: f.lat, lng: f.lng,
       });
@@ -1256,6 +1301,32 @@ export function MerchantOnboarding({ user, onComplete }) {
                      onChange={e => setF({ ...f, businessName:e.target.value })}
                      placeholder="Mon Salon, Barbershop..."
                      style={fieldStyle(t)} {...fieldFocus(t)}/>
+            </div>
+
+            <div>
+              <Label>Type de commerce *</Label>
+              <div style={{ display:'grid',
+                            gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))',
+                            gap:6, marginTop:6 }}>
+                {BUSINESS_TYPES.map(bt => {
+                  const sel = f.businessType === bt.key;
+                  return (
+                    <button key={bt.key} type="button"
+                            onClick={() => setF(prev => ({ ...prev, businessType: bt.key }))}
+                            style={{
+                              padding:'10px 12px', borderRadius:8, cursor:'pointer',
+                              fontSize:12, fontWeight:500, fontFamily:'inherit',
+                              textAlign:'left', lineHeight:1.3,
+                              background: sel ? t.text : t.cardAlt,
+                              color: sel ? (t.invText || '#fff') : t.text,
+                              border: `1px solid ${sel ? t.text : t.border}`,
+                              transition:'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+                            }}>
+                      {bt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <PhoneField country={f.country} phone={f.phone}
