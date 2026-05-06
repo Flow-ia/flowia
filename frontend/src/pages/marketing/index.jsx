@@ -1,7 +1,8 @@
-// Marketing — refonte FDS-2026 commit 5. Point d'entrée `/marketing/*`.
-// 6 sous-tabs de premier niveau (Fidélité / Anniv / Parrainage / Promos /
-// SMS / IA). Chaque tab monte un wrapper mince qui rend le Tab* existant
-// dans pages/settings/marketing/ — zéro refactor de la logique métier.
+// Marketing — point d'entrée `/marketing/*`. Refonte 2026-05-06 : 2 axes
+// métier (Récompenses / Campagnes), chacun avec 3 sous-onglets. Les URLs
+// existantes sont préservées pour ne casser ni bookmarks ni deep-links push.
+// Récompenses = mécaniques récurrentes côté client (gain automatique).
+// Campagnes   = actions ponctuelles (promo créée, SMS envoyé, IA suggérée).
 // Caps fidélité (100/100/500/100/3650/10000), parrainage (100/500/10000),
 // quota Brevo 300/j et 3 modes Stripe restent gérés dans les composants
 // source et leurs APIs (loyaltyApi, promoApi, referralsApi, birthdayApi,
@@ -22,31 +23,41 @@ import Historique from './sms/Historique';
 import Suggestions from './ia/Suggestions';
 import History from './ia/History';
 
-// Top-nav 6 items : chaque item mappe un (section, sub) pour l'URL.
+// Niveau 1 : 2 axes métier.
 const TOP_TABS = [
-  { id: 'fidelite',   label: 'Fidélité',   path: '/marketing/fidelite/loyalty',   match: { section:'fidelite', sub:'loyalty'   } },
-  { id: 'birthday',   label: 'Anniv.',     path: '/marketing/fidelite/birthday',  match: { section:'fidelite', sub:'birthday'  } },
-  { id: 'referral',   label: 'Parrainage', path: '/marketing/fidelite/referral',  match: { section:'fidelite', sub:'referral'  } },
-  { id: 'promotions', label: 'Promos',     path: '/marketing/promotions',         match: { section:'promotions' } },
-  { id: 'sms',        label: 'SMS',        path: '/marketing/sms',                match: { section:'sms'        } },
-  { id: 'ia',         label: 'IA',         path: '/marketing/ia',                 match: { section:'ia'         } },
+  { id: 'recompenses', label: 'Récompenses', icon: 'gift'      },
+  { id: 'campagnes',   label: 'Campagnes',   icon: 'megaphone' },
 ];
+
+// Niveau 2 : 3 sous-onglets par axe. URLs inchangées (compat preservée).
+const SUB_TABS = {
+  recompenses: [
+    { id: 'fidelite',  label: 'Fidélité',      path: '/marketing/fidelite/loyalty'  },
+    { id: 'birthday',  label: 'Anniversaires', path: '/marketing/fidelite/birthday' },
+    { id: 'referral',  label: 'Parrainage',    path: '/marketing/fidelite/referral' },
+  ],
+  campagnes: [
+    { id: 'promotions', label: 'Promotions', path: '/marketing/promotions' },
+    { id: 'sms',        label: 'SMS',        path: '/marketing/sms'        },
+    { id: 'ia',         label: 'IA',         path: '/marketing/ia'         },
+  ],
+};
 
 function parseRoute(pathname) {
   const parts = pathname.replace(/^\/marketing\/?/, '').split('/').filter(Boolean);
   return { section: parts[0] || '', sub: parts[1] || '' };
 }
 
-function resolveTopId({ section, sub }) {
+// Mappe l'URL courante vers (topId, subId).
+function resolvePosition({ section, sub }) {
   if (section === 'fidelite') {
-    if (sub === 'birthday') return 'birthday';
-    if (sub === 'referral') return 'referral';
-    return 'fidelite';
+    const subId = sub === 'birthday' ? 'birthday' : sub === 'referral' ? 'referral' : 'fidelite';
+    return { topId: 'recompenses', subId };
   }
-  if (section === 'promotions') return 'promotions';
-  if (section === 'sms')        return 'sms';
-  if (section === 'ia')         return 'ia';
-  return 'fidelite'; // racine /marketing → Fidélité par défaut
+  if (section === 'promotions') return { topId: 'campagnes', subId: 'promotions' };
+  if (section === 'sms')        return { topId: 'campagnes', subId: 'sms'        };
+  if (section === 'ia')         return { topId: 'campagnes', subId: 'ia'         };
+  return { topId: 'recompenses', subId: 'fidelite' };
 }
 
 export default function Marketing(props) {
@@ -55,7 +66,7 @@ export default function Marketing(props) {
   const loc = useLocation();
   const navigate = useNavigate();
   const route = parseRoute(loc.pathname);
-  const topId = resolveTopId(route);
+  const { topId, subId } = resolvePosition(route);
 
   const childProps = { ...props, theme, showToast: show };
 
@@ -76,9 +87,20 @@ export default function Marketing(props) {
     if (route.sub === 'history')  content = <History     {...childProps}/>;
     else                          content = <Suggestions {...childProps} onGoToSolde={() => navigate('/marketing/sms')}/>;
   } else {
-    // Racine /marketing → Loyalty par défaut.
+    // Racine /marketing → Récompenses > Fidélité par défaut.
     content = <Loyalty {...childProps}/>;
   }
+
+  // Click sur un top-tab : on saute directement au 1er sub-tab de cet axe
+  // (préserve l'URL exacte sinon l'utilisateur perdrait son fil).
+  const handleTopChange = (id) => {
+    const first = SUB_TABS[id]?.[0];
+    if (first) navigate(first.path);
+  };
+  const handleSubChange = (id) => {
+    const tab = SUB_TABS[topId]?.find(x => x.id === id);
+    if (tab) navigate(tab.path);
+  };
 
   return (
     <div style={{ minHeight:'100vh', background:theme.bg, paddingBottom:24 }}>
@@ -86,14 +108,11 @@ export default function Marketing(props) {
       <div style={{ maxWidth:960, margin:'0 auto', padding:'18px 16px',
                     display:'flex', flexDirection:'column', gap:14 }}>
         <PageHeader title="Marketing"
-                    subtitle="Fidélité, promotions, SMS, campagnes IA"/>
-        {/* OptInBanner RGPD retiré commit 17 : ton accusateur. L'info
-            opt-in/total est désormais consultable côté fiche client. */}
-        <SubTabs tabs={TOP_TABS} active={topId}
-                 onChange={id => {
-                   const tab = TOP_TABS.find(x => x.id === id);
-                   if (tab) navigate(tab.path);
-                 }}/>
+                    subtitle="Récompenses récurrentes et campagnes ponctuelles"/>
+        {/* Niveau 1 : axe métier. */}
+        <SubTabs tabs={TOP_TABS} active={topId} onChange={handleTopChange}/>
+        {/* Niveau 2 : sous-onglets de l'axe actif. */}
+        <SubTabs tabs={SUB_TABS[topId]} active={subId} onChange={handleSubChange}/>
         {content}
       </div>
     </div>
