@@ -53,7 +53,7 @@ export function registerSW() {
         });
         setInterval(checkForUpdate, 30 * 60 * 1000);
       })
-      .catch(e => console.warn('[SW] register échec:', e?.message));
+      .catch(() => {});
 
     // Reload au changement de controller (après skipWaiting()) — évite la
     // double-activation : on ne reload qu'une fois.

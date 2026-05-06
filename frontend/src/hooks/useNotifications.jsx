@@ -120,7 +120,6 @@ async function registerPush(publicKey) {
     }
     return { ok: true, subscription: sub };
   } catch (e) {
-    console.warn('[Push]', e.message);
     return { ok: false, reason: 'error', message: e.message };
   }
 }
@@ -218,7 +217,6 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
       writePref('on');
       return { ok: true };
     } catch (e) {
-      console.warn('[enablePush]', e);
       return { ok: false, reason: 'error', message: e?.message };
     }
   }, []);
@@ -234,9 +232,7 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
         // la suppression serveur même si le navigateur rejette l'unsubscribe
         // local (cas rare). Un sub fantôme côté navigateur crée aujourd'hui
         // une re-sub silencieuse au prochain enablePush via l'UPSERT.
-        try { await sub.unsubscribe(); } catch (uErr) {
-          console.warn('[disablePush] sub.unsubscribe local a échoué', uErr?.message);
-        }
+        try { await sub.unsubscribe(); } catch {}
         await notifApi.unsubscribePush({ endpoint: sub.endpoint }).catch(() => {});
       }
       setPushEnabled(false);
@@ -275,9 +271,7 @@ export function useNotifications({ enabled = true, soundSettings = {} } = {}) {
         await notifApi.subscribePush(sub.toJSON());
         setPushEnabled(true);
         if (readPref() == null) writePref('on');
-      } catch (e) {
-        console.warn('[auto-push]', e?.message);
-      }
+      } catch {}
     })();
   }, [enabled]);
 

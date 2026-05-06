@@ -69,8 +69,7 @@ export default function TabLoyalty({ theme }) {
   const loadLoyaltyStats = async () => {
     setLoyaltyStatsLoad(true);
     try { const s = await loyaltyApi.getStats(); setLoyaltyStats(s); setShowLoyaltyStats(true); }
-    catch (e) { console.error(e); }
-    finally { setLoyaltyStatsLoad(false); }
+    catch {} finally { setLoyaltyStatsLoad(false); }
   };
 
   // Debounce sur le terme de recherche (350ms si >=2 chars), sinon load immediat
@@ -94,8 +93,7 @@ export default function TabLoyalty({ theme }) {
   const loadHistory = async () => {
     setHistLoad(true);
     try { const h = await loyaltyApi.promoHistory(); setPromoHist(h); setShowHist(true); }
-    catch (e) { console.error(e); }
-    finally { setHistLoad(false); }
+    catch {} finally { setHistLoad(false); }
   };
 
   useEffect(() => {

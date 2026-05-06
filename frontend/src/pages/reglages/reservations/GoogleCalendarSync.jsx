@@ -25,7 +25,6 @@ export default function GoogleCalendarSync() {
       const d = await api.calendarSyncStatus();
       setData(d);
     } catch (e) {
-      console.error('[gcal status]', e);
       showToast(e?.message || 'Erreur chargement', 'error');
     } finally {
       setLoading(false);

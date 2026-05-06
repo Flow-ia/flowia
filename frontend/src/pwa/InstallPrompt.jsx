@@ -64,9 +64,7 @@ async function enablePushAfterInstall() {
       });
     }
     await notifApi.subscribePush(sub.toJSON());
-  } catch (e) {
-    console.warn('[PWA] auto-push après install:', e?.message);
-  }
+  } catch {}
 }
 
 // Routes publiques (réservation client, désinscription, OAuth callback) où
@@ -138,9 +136,7 @@ export default function InstallPrompt() {
         try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch {}
         setVisible(false);
       }
-    } catch (e) {
-      console.warn('[PWA] prompt install:', e?.message);
-    } finally {
+    } catch {} finally {
       setDeferred(null);
     }
   }, [deferred]);

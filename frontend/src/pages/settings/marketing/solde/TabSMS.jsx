@@ -26,8 +26,7 @@ export default function TabSMS({ showToast, theme }) {
         paymentsApi.getSMSTransactions(),
       ]);
       setBalance(b); setQuota(q); setHistory(h); setSmsTx(tx);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch {} finally { setLoading(false); }
   }, []);
 
   useEffect(() => {

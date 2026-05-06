@@ -29,8 +29,7 @@ export default function TabPromo({ theme, showToast }) {
   const loadStats = async () => {
     setStatsLoad(true);
     try { setStatsData(await promoApi.getStats()); setShowStats(true); }
-    catch (e) { console.error(e); }
-    finally { setStatsLoad(false); }
+    catch {} finally { setStatsLoad(false); }
   };
 
   const handleSave = async (d) => {

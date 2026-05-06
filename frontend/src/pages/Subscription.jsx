@@ -217,9 +217,8 @@ export default function Subscription() {
         } else {
           setLoading(false);
         }
-      } catch (e) {
+      } catch {
         if (cancelled) return;
-        console.error('[Subscription] getSubscription', e);
         setLoading(false);
       }
     };
@@ -358,9 +357,7 @@ export default function Subscription() {
     let preview = null;
     try {
       preview = await api.previewSubscriptionChange({ plan: newPlan, period: newPeriod });
-    } catch (e) {
-      console.warn('[Subscription] previewSubscriptionChange', e?.message);
-    }
+    } catch {}
 
     const fmt = (n) => {
       const v = Math.abs(n).toFixed(2).replace('.', ',');
@@ -883,9 +880,7 @@ function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
     try {
       const data = await api.listSubscriptionPaymentMethods();
       setPms(data || { methods: [], default: null });
-    } catch (e) {
-      console.error('[PaymentMethods] list', e);
-    } finally {
+    } catch {} finally {
       setLoading(false);
     }
   };
@@ -1807,8 +1802,7 @@ function BillingDetailsSection({ theme: t, showToast, embedded = false }) {
       const data = await api.getSubscriptionBillingInfo();
       setBilling(data?.billing || null);
       setFromProfile(!!data?.from_profile);
-    } catch (e) { console.error('[Billing] load', e); }
-    finally { setLoading(false); }
+    } catch {} finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
@@ -2021,9 +2015,7 @@ function InvoicesSection({ theme: t, embedded = false }) {
       setInvoices(prev => [...prev, ...(data?.invoices || [])]);
       setHasMore(!!data?.has_more);
       setLastId(data?.last_id || null);
-    } catch (e) {
-      console.error('[Invoices] loadMore', e);
-    } finally {
+    } catch {} finally {
       setLoadingMore(false);
     }
   };

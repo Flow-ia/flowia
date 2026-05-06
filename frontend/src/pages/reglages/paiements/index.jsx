@@ -23,7 +23,6 @@ export default function Paiements() {
       const d = await connectApi.getAccount();
       setData(d);
     } catch (e) {
-      console.error('[Paiements] getAccount', e);
       showToast(e?.message || 'Erreur de chargement.', 'error');
     } finally {
       setLoading(false);
@@ -267,9 +266,7 @@ function PaymentConfigSection({ t, showToast }) {
       setPolicy(d.policy || 'optional');
       setPercentage(d.percentage || 100);
       setDirty(false);
-    } catch (e) {
-      console.error('[PaymentConfig] load', e);
-    } finally {
+    } catch {} finally {
       setLoading(false);
     }
   };

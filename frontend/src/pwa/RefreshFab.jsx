@@ -62,9 +62,7 @@ export default function RefreshFab() {
         const keys = await caches.keys();
         await Promise.all(keys.map(k => caches.delete(k).catch(() => {})));
       }
-    } catch (e) {
-      console.warn('[RefreshFab] hard reload partiel:', e?.message);
-    } finally {
+    } catch {} finally {
       // Force reload sans cache HTTP
       window.location.reload();
     }

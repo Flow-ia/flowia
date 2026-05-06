@@ -397,7 +397,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
       setStep('ok');
       if (sc.caisse !== false) playSound('caisse', sc.repeat || 2);
       setTimeout(() => { onClose(); setBusy(false); }, 2000);
-    } catch (err) { console.error(err); setBusy(false); }
+    } catch { setBusy(false); }
   };
 
   const confirm = async () => {

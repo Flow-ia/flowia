@@ -103,10 +103,9 @@ export default function BookingPage({ slug }) {
         setClientUser(client);
         // Nettoyer l'URL
         window.history.replaceState({}, '', window.location.pathname);
-      } catch(e) { console.error('[GOOGLE CALLBACK]', e); }
+      } catch {}
     }
     if (authErr) {
-      console.warn('[GOOGLE AUTH ERROR]', decodeURIComponent(authErr));
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);

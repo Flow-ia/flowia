@@ -42,8 +42,7 @@ export default function ClientsTab({ employee, theme: t }) {
         clientNotesApi.getNotes(cl.email),
       ]);
       setHistory(hist); setNotes(nts);
-    } catch(e) { console.error(e); }
-    finally { setLoadingData(false); }
+    } catch {} finally { setLoadingData(false); }
   };
 
   const addNote = async () => {

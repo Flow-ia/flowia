@@ -252,11 +252,10 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       });
       localStorage.setItem('ff_client_info', JSON.stringify(r.client));
       onAuth(r.client, { justRegistered: true, quick: true });
-    } catch(e) {
+    } catch {
       // Message générique : backend audit K→Q renvoie du texte propre,
       // mais on se prémunit contre toute fuite (stack/SQL inattendu).
       setErr('Impossible de créer votre fiche. Réessayez.');
-      if (e?.message) console.warn('[quick-register]', e.message);
     }
     finally { setLoading(false); }
   };
