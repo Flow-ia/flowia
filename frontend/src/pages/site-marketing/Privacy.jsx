@@ -11,7 +11,7 @@ export default function Privacy() {
       <Container maxWidth={760}>
         <Prose>
           <p>
-            <em>{"Dernière mise à jour : 5 mai 2026."}</em>
+            <em>{"Dernière mise à jour : 6 mai 2026."}</em>
           </p>
 
           <ProseH2>1. Responsable du traitement</ProseH2>
@@ -79,45 +79,157 @@ export default function Privacy() {
             {"FlowIA utilise uniquement des cookies essentiels au fonctionnement (session, authentification). Aucun cookie publicitaire ni de pistage marketing tiers."}
           </p>
 
-          <ProseH2>10. Intégrations Google (Calendar, Login)</ProseH2>
+          <ProseH2>10. Données utilisateur Google (Google API Services)</ProseH2>
           <p>
-            <strong>{"Connexion via Google (login) :"}</strong>
-            {" Lorsqu'un commerçant ou un client final choisit de se connecter à FlowIA via son compte Google, nous récupérons uniquement son adresse email, son nom et sa photo de profil publique pour créer ou identifier son compte. Aucune autre donnée n'est lue."}
-          </p>
-          <p>
-            <strong>{"Synchronisation Google Agenda (commerçants) :"}</strong>
-            {" Si un commerçant choisit de connecter son compte Google Agenda dans les Réglages de FlowIA, nous demandons l'autorisation OAuth correspondant au scope "}
-            <code>https://www.googleapis.com/auth/calendar.events</code>
-            {". Ce scope nous permet uniquement de "}
-            <strong>{"créer, modifier ou supprimer des événements"}</strong>
-            {" dans l'agenda Google du commerçant. FlowIA "}
-            <strong>{"ne lit jamais"}</strong>
-            {" le contenu de l'agenda existant : nous ne voyons ni les événements personnels, ni les événements professionnels créés en dehors de FlowIA."}
-          </p>
-          <p>
-            <strong>{"Utilisation et limites :"}</strong>
-            {" Les événements créés par FlowIA dans l'agenda Google reflètent uniquement les rendez-vous enregistrés dans FlowIA (créés par le commerçant, par un employé, ou par un client via la page de réservation publique). Toute modification ou annulation d'un rendez-vous dans FlowIA est répercutée sur l'événement Google correspondant. La synchronisation est unidirectionnelle (FlowIA → Google) ; nous ne synchronisons jamais l'inverse."}
-          </p>
-          <p>
-            <strong>{"Stockage des jetons :"}</strong>
-            {" Les jetons OAuth Google (access_token, refresh_token) sont stockés chiffrés (AES-256-GCM) dans notre base de données. Ils ne sont accessibles que par le système FlowIA pour effectuer la synchronisation, jamais consultés par des humains, et jamais transmis à des tiers."}
-          </p>
-          <p>
-            <strong>{"Pas de revente, pas de profilage, pas de modèles d'IA :"}</strong>
-            {" Conformément à la "}
+            {"Cette section décrit en détail comment FlowIA accède, utilise, stocke et supprime les données obtenues via les API Google, conformément à la "}
             <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">
               {"Google API Services User Data Policy"}
             </a>
-            {", FlowIA n'utilise les données obtenues via les API Google que pour les fonctionnalités explicitement décrites ci-dessus. Nous ne vendons ces données à aucun tiers, nous ne les utilisons pas pour du profilage publicitaire ni pour entraîner des modèles d'IA, et nous ne les transférons pas en dehors de l'Espace économique européen sans votre consentement."}
+            {", y compris les exigences relatives aux scopes restreints (Limited Use)."}
           </p>
+
+          <p><strong>{"FlowIA utilise les fonctionnalités Google suivantes :"}</strong></p>
+          <ul>
+            <li>{"« Se connecter avec Google » côté commerçant (création / connexion de compte sur "}<code>commercant.flowiapro.com</code>{")"}</li>
+            <li>{"« Se connecter avec Google » côté client final (création / connexion de compte sur la page de réservation publique du salon)"}</li>
+            <li>{"Synchronisation des rendez-vous vers Google Agenda (option commerçant uniquement, désactivée par défaut)"}</li>
+          </ul>
+
+          <ProseH2>10.1 Données Google consultées (Data Accessed)</ProseH2>
           <p>
-            <strong>{"Révocation à tout moment :"}</strong>
-            {" Le commerçant peut déconnecter son compte Google à tout moment depuis "}
-            <em>{"Réglages → Réservations → Synchronisation"}</em>
-            {" dans FlowIA — l'opération révoque les jetons côté Google et supprime nos copies chiffrées. Vous pouvez aussi révoquer l'accès directement depuis votre compte Google : "}
-            <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">
-              {"myaccount.google.com/permissions"}
-            </a>.
+            {"FlowIA demande exactement les scopes suivants. Aucun autre scope Google n'est demandé ni utilisé."}
+          </p>
+          <ul>
+            <li>
+              <code>openid</code>
+              {" — identifiant de compte Google permettant la création / mise en correspondance d'un compte FlowIA."}
+            </li>
+            <li>
+              <code>https://www.googleapis.com/auth/userinfo.email</code>
+              {" (alias "}<code>email</code>
+              {") — adresse email principale du compte Google. Utilisée comme identifiant unique du compte FlowIA."}
+            </li>
+            <li>
+              <code>https://www.googleapis.com/auth/userinfo.profile</code>
+              {" (alias "}<code>profile</code>
+              {") — prénom, nom et photo de profil publique. Utilisés pour pré-remplir le profil FlowIA et afficher l'avatar."}
+            </li>
+            <li>
+              <code>https://www.googleapis.com/auth/calendar.events</code>
+              {" — uniquement pour les commerçants ayant explicitement activé la synchronisation Google Agenda dans "}
+              <em>{"Réglages → Réservations → Synchronisation"}</em>
+              {". Permet à FlowIA de "}<strong>{"créer, modifier et supprimer uniquement les événements créés par FlowIA"}</strong>
+              {" dans l'agenda du commerçant. FlowIA "}<strong>{"ne lit pas"}</strong>
+              {" le contenu de l'agenda existant : nous ne voyons ni les événements personnels du commerçant, ni les événements professionnels créés en dehors de FlowIA. La synchronisation est unidirectionnelle (FlowIA → Google)."}
+            </li>
+          </ul>
+
+          <ProseH2>10.2 Utilisation des données (Data Usage)</ProseH2>
+          <p>
+            {"Les données Google ci-dessus sont utilisées exclusivement pour les finalités suivantes, et "}
+            <strong>{"jamais pour d'autres usages"}</strong>
+            {" :"}
+          </p>
+          <ul>
+            <li>{"Authentification : création de compte FlowIA et connexion (vérification de l'identifiant Google et association à un compte FlowIA existant si l'email correspond)."}</li>
+            <li>{"Pré-remplissage du profil FlowIA : nom et photo affichés dans l'application uniquement."}</li>
+            <li>{"Synchronisation Google Agenda : reflet des rendez-vous FlowIA vers l'agenda Google du commerçant (création, modification, annulation)."}</li>
+          </ul>
+          <p>
+            <strong>{"Limited Use — engagements explicites :"}</strong>
+            {" FlowIA "}<strong>{"n'utilise PAS"}</strong>
+            {" les données Google pour : (a) afficher des publicités, (b) faire du profilage publicitaire, (c) entraîner ou améliorer des modèles d'intelligence artificielle généralistes, (d) revendre ou transférer les données à des tiers à des fins publicitaires ou commerciales, (e) tout traitement non explicitement décrit dans la présente politique."}
+          </p>
+
+          <ProseH2>10.3 Partage des données (Data Sharing)</ProseH2>
+          <p>
+            <strong>{"FlowIA ne partage aucune donnée Google avec des tiers"}</strong>
+            {", à l'exception stricte des cas suivants :"}
+          </p>
+          <ul>
+            <li>
+              <strong>{"Hébergeur de notre base de données : "}</strong>
+              {"les données chiffrées en transit et au repos sont stockées chez notre prestataire d'hébergement cloud, qui agit comme sous-traitant RGPD et n'a aucun droit d'usage sur les données."}
+            </li>
+            <li>
+              <strong>{"Aucun autre partenaire : "}</strong>
+              {"aucune donnée Google n'est partagée avec un service de marketing, d'analytics, de publicité ou un fournisseur d'IA."}
+            </li>
+            <li>
+              <strong>{"Réquisition légale : "}</strong>
+              {"FlowIA peut être contraint de divulguer certaines données sur réquisition d'une autorité judiciaire compétente, conformément à la loi française et au RGPD."}
+            </li>
+          </ul>
+          <p>
+            {"Les événements écrits par FlowIA dans l'agenda Google d'un commerçant sont, par nature, visibles dans l'agenda Google de ce commerçant — qui en est le propriétaire. Aucune donnée n'est exposée à un autre utilisateur."}
+          </p>
+
+          <ProseH2>10.4 Stockage et protection (Data Storage &amp; Protection)</ProseH2>
+          <ul>
+            <li>
+              <strong>{"Localisation : "}</strong>
+              {"les données sont stockées sur des serveurs situés dans l'Union européenne (Espace économique européen)."}
+            </li>
+            <li>
+              <strong>{"Chiffrement en transit : "}</strong>
+              {"toutes les communications entre FlowIA et les API Google, et entre les utilisateurs et FlowIA, utilisent TLS 1.2+."}
+            </li>
+            <li>
+              <strong>{"Chiffrement au repos : "}</strong>
+              {"les jetons OAuth Google ("}<code>access_token</code>
+              {", "}<code>refresh_token</code>
+              {") sont chiffrés au repos par AES-256-GCM avec une clé maître stockée hors base de données. Aucun token n'est jamais loggué ni consulté manuellement."}
+            </li>
+            <li>
+              <strong>{"Contrôle d'accès : "}</strong>
+              {"l'accès à l'infrastructure FlowIA est restreint aux opérateurs autorisés, protégé par authentification multifacteur, et journalisé."}
+            </li>
+            <li>
+              <strong>{"Données minimales : "}</strong>
+              {"FlowIA ne stocke que les éléments nécessaires au service — email, nom, photo (URL), jetons chiffrés, et identifiants Google des événements créés par FlowIA pour pouvoir les modifier ou les supprimer."}
+            </li>
+          </ul>
+
+          <ProseH2>10.5 Conservation et suppression (Data Retention &amp; Deletion)</ProseH2>
+          <ul>
+            <li>
+              <strong>{"Pendant que votre compte FlowIA est actif : "}</strong>
+              {"les données Google nécessaires (email, nom, photo, jetons chiffrés) sont conservées tant que vous utilisez la fonctionnalité concernée."}
+            </li>
+            <li>
+              <strong>{"Déconnexion de Google Agenda : "}</strong>
+              {"depuis "}
+              <em>{"Réglages → Réservations → Synchronisation → Déconnecter"}</em>
+              {", FlowIA révoque immédiatement les jetons auprès de Google ("}<code>oauth2.googleapis.com/revoke</code>
+              {") et supprime sa copie chiffrée. Les événements déjà créés dans l'agenda Google restent la propriété du commerçant et ne sont pas effacés."}
+            </li>
+            <li>
+              <strong>{"Suppression du compte FlowIA : "}</strong>
+              {"vous pouvez supprimer votre compte directement depuis l'application (Réglages → Compte). La suppression est effective sous 30 jours, période pendant laquelle l'opération peut être annulée. À l'issue de ces 30 jours, l'ensemble des données Google associées (email, nom, jetons) est effacé définitivement de notre base de production. Les sauvegardes chiffrées sont purgées au plus tard 90 jours après la suppression."}
+            </li>
+            <li>
+              <strong>{"Révocation directe côté Google : "}</strong>
+              {"vous pouvez retirer l'autorisation accordée à FlowIA à tout moment sur "}
+              <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">
+                {"myaccount.google.com/permissions"}
+              </a>
+              {". Cela invalide immédiatement nos jetons côté Google ; nous supprimons notre copie au prochain appel échoué (au plus tard 7 jours)."}
+            </li>
+            <li>
+              <strong>{"Demande explicite de suppression : "}</strong>
+              {"écrivez à "}
+              <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+              {" — nous traitons les demandes de suppression de données Google sous 30 jours conformément au RGPD."}
+            </li>
+          </ul>
+
+          <ProseH2>10.6 Conformité Limited Use (résumé)</ProseH2>
+          <p>
+            {"L'utilisation et le transfert vers toute autre application des informations reçues des API Google par FlowIA respectent la "}
+            <a href="https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes" target="_blank" rel="noopener noreferrer">
+              {"Google API Services User Data Policy"}
+            </a>
+            {", y compris les exigences Limited Use. Nous ne vendons pas ces données, ne les utilisons pas pour des publicités personnalisées, et ne les utilisons pas pour entraîner des modèles d'IA généralistes."}
           </p>
 
           <ProseH2>11. Réclamation</ProseH2>
