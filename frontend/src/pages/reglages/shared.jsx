@@ -59,3 +59,28 @@ export function PageHeader({ backTo, crumb, title, subtitle }) {
     </div>
   );
 }
+
+// Encart d'aiguillage FDS-2026 : pastel + borderLeft 2px accent. Utilisé pour
+// pointer le commerçant vers le catalogue voisin (Caisse <-> Réservation) et
+// éviter la confusion "où est ma prestation".
+export function CrossLinkBanner({ to, label, hint, color = '#3b82f6' }) {
+  const { theme: t } = useTheme();
+  const navigate = useNavigate();
+  return (
+    <button onClick={() => navigate(to)}
+            style={{ display:'flex', alignItems:'center', gap:10,
+                     padding:'10px 12px', borderRadius:8,
+                     border:`0.5px solid ${t.border}`,
+                     borderLeft:`2px solid ${color}`,
+                     background: t.cardAlt, color: t.text,
+                     cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                     width:'100%' }}>
+      <Icon name="info" size={14} color={color}/>
+      <div style={{ flex:1, minWidth:0 }}>
+        <p style={{ margin:0, fontSize:12, fontWeight:500, color:t.text }}>{label}</p>
+        {hint && <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>{hint}</p>}
+      </div>
+      <Icon name="chevronRight" size={13} color={t.muted}/>
+    </button>
+  );
+}

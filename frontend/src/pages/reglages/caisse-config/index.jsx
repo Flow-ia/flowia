@@ -1,5 +1,5 @@
-// Réglages > Caisse · Config — sous-tabs : categories / qr.
-// L'onglet 'categories' est etiquete "Prestations sur place" pour distinguer
+// Réglages > Caisse — sous-tabs : categories / qr.
+// L'onglet 'categories' est etiquete "Prestations en boutique" pour distinguer
 // clairement des prestations du site de reservation. La route reste 'categories'
 // pour ne pas casser les liens existants.
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -8,8 +8,8 @@ import Categories from './Categories';
 import QR from './QR';
 
 const SECTIONS = [
-  { id: 'categories', label: 'Prestations sur place', icon: 'tag' },
-  { id: 'qr',         label: 'QR code',               icon: 'qr'  },
+  { id: 'categories', label: 'Prestations en boutique', icon: 'tag' },
+  { id: 'qr',         label: 'QR code',                 icon: 'qr'  },
 ];
 
 export default function CaisseConfig(props) {
@@ -24,8 +24,8 @@ export default function CaisseConfig(props) {
     <div style={{ maxWidth:900, margin:'0 auto', padding:'18px 16px',
                   display:'flex', flexDirection:'column', gap:14 }}>
       <PageHeader backTo="/reglages" crumb="Réglages"
-                  title="Caisse · Configuration"
-                  subtitle="Prestations sur place et QR code inscription express"/>
+                  title="Caisse"
+                  subtitle="Prestations en boutique et QR code inscription express"/>
       <SubTabs tabs={SECTIONS} active={section} onChange={setSection}/>
 
       {section === 'categories' && <Categories {...props}/>}
