@@ -111,7 +111,7 @@ export default function ClientPortal() {
   return (
     <>
       <PageHero
-        label="Portail client"
+        label="Marketplace"
         title="Trouvez votre salon et reservez en ligne"
         subtitle="Decouvrez les salons FlowIA pres de chez vous, profitez des programmes parrainage, fidelite et codes promo, et reservez en quelques secondes."
       />

@@ -1,20 +1,17 @@
-// Card resultat de recherche /portail-client (marketplace).
+// Card resultat de recherche /marketplace.
 // Affiche photo, nom, ville/CP, distance (si geoloc), 5 badges programmes
 // (Parrainage, Fidelite, Code promo, Paiement en ligne, RDV immediat).
 // Click sur la carte → navigation vers /book/<slug>.
 //
 // FDS-2026 : pas d'emoji, fw <= 500, bordures 0.5/1px, pas de gradient.
+//
+// Note URLs media : on utilise mediaApi.absoluteUrl() qui mappe les paths
+// /api/... renvoyes par le backend vers VITE_API_URL (ex
+// https://flowia-backend.onrender.com/api). Indispensable en prod ou
+// frontend (Vercel) et backend (Render) sont sur des domaines distincts.
 import { Link } from 'react-router-dom';
 import { S } from './shadcn';
-
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
-
-// Construit l'URL d'une image media (proxy backend). `path` = "/api/media/..."
-function mediaUrl(path) {
-  if (!path) return null;
-  if (BACKEND_URL) return `${BACKEND_URL}${path}`;
-  return path;
-}
+import { mediaApi } from '../../../utils/api';
 
 // Petit composant badge inline (icone + label). Couleurs depuis S.ax.
 function Badge({ icon, label, color, bg }) {
@@ -81,8 +78,8 @@ const Ic = {
 
 export default function MerchantSearchCard({ merchant }) {
   const m = merchant;
-  const cover = mediaUrl(m.coverUrl);
-  const profile = mediaUrl(m.profileUrl);
+  const cover = mediaApi.absoluteUrl(m.coverUrl);
+  const profile = mediaApi.absoluteUrl(m.profileUrl);
 
   return (
     <Link to={`/book/${m.slug}`} style={{

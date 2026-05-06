@@ -150,7 +150,7 @@ export default function Header() {
 
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Link to="/portail-client" style={{
+            <Link to="/marketplace" style={{
               fontSize: 14, fontWeight: 500, color: S.fg,
               textDecoration: 'none', padding: '9px 16px', borderRadius: S.r,
               border: `1px solid ${S.border}`, background: S.bg,
@@ -158,7 +158,7 @@ export default function Header() {
             }}
               onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.borderColor = S.borderHv; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = S.bg; e.currentTarget.style.borderColor = S.border; }}>
-              Portail client
+              Trouver un salon
             </Link>
             <a href={COMMERCANT_URL} style={{
               fontSize: 14, fontWeight: 500, color: S.fgInv,
@@ -311,7 +311,7 @@ export default function Header() {
             </Link>
           ))}
           <div style={{ height: 1, background: S.border, margin: '8px 0' }} />
-          <Link to="/portail-client" style={{
+          <Link to="/marketplace" style={{
             fontSize: 15, fontWeight: 500, color: S.fg,
             textDecoration: 'none', padding: '12px 14px', borderRadius: S.r,
             border: `1px solid ${S.border}`, textAlign: 'center', background: S.bg,

@@ -42,7 +42,7 @@ export default function Footer() {
       links: [
         { to: '/contact',        label: 'Contact' },
         { to: '/a-propos',       label: 'À propos' },
-        { to: '/portail-client', label: 'Espace client' },
+        { to: '/marketplace',    label: 'Trouver mon salon' },
       ],
     },
     {

@@ -153,7 +153,11 @@ function RootSwitch() {
           <Route path="/pour-qui"          element={<Industries />} />
           <Route path="/a-propos"          element={<About />} />
           <Route path="/contact"           element={<Contact />} />
-          <Route path="/portail-client"    element={<ClientPortal />} />
+          <Route path="/marketplace"       element={<ClientPortal />} />
+          {/* Alias historique : /portail-client a ete remplace par /marketplace
+              pour aligner avec le path API /api/pub/marketplace. Redirect 301
+              cote frontend pour ne pas casser les anciens liens partages. */}
+          <Route path="/portail-client"    element={<Navigate to="/marketplace" replace />} />
           <Route path="/mentions-legales"  element={<LegalNotice />} />
           <Route path="/confidentialite"   element={<Privacy />} />
           <Route path="/cgu"               element={<Terms />} />
