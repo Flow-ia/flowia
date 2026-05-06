@@ -1,7 +1,6 @@
-// Réglages — refonte FDS-2026 commit 4. Point d'entrée `/reglages/*`.
-// Dispatche vers les 4 sous-domaines. Chaque sous-domaine réutilise les
-// composants Tab* existants (pages/settings/) pour préserver la logique
-// métier à l'identique (zéro refactor profond, cf. règle #1 INVENTAIRE).
+// Réglages — refonte FDS-2026. Point d'entrée `/reglages/*`.
+// 6 sous-domaines, chacun monte les composants Tab* existants de pages/settings/
+// via des wrappers minces (zéro refactor profond, cf. règle #1 INVENTAIRE).
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { useTheme } from '../../hooks/useTheme';
@@ -15,55 +14,15 @@ import CaisseConfig from './caisse-config';
 import Paiements from './paiements';
 import Communication from './communication';
 
+// Une seule source de vérité par carte : subtitle court (3-5 mots-clés).
+// Les détails complets vivent dans la sous-page elle-même (PageHeader subtitle).
 const DOMAINS = [
-  {
-    id: 'mon-commerce',
-    label: 'Mon commerce',
-    subtitle: 'Informations, photos, compte, sécurité',
-    color: '#f97316',
-    icon: 'storefront',
-    items: ['Informations salon', 'Logo, photos, couverture', 'Mon compte + RGPD', 'Sécurité (PIN, tablette, mode veille)'],
-  },
-  {
-    id: 'reservations',
-    label: 'Réservation en ligne',
-    subtitle: 'Lien public, prestations en ligne, agenda Google',
-    color: '#3b82f6',
-    icon: 'calendar',
-    items: ['Configuration (lien, délais)', 'Prestations en ligne (image 5Mo)', 'Synchronisation Google Calendar'],
-  },
-  {
-    id: 'caisse-config',
-    label: 'Caisse',
-    subtitle: 'Prestations en boutique, QR inscription',
-    color: '#8b5cf6',
-    icon: 'cash',
-    items: ['Prestations en boutique (catégories hiérarchiques)', 'QR code /j/:slug'],
-  },
-  {
-    id: 'equipe',
-    label: 'Équipe',
-    subtitle: 'Membres, horaires, absences, commissions',
-    color: '#10b981',
-    icon: 'users',
-    items: ['Membres (permissions)', 'Horaires par employé', 'Commissions', 'Absences (8 types)'],
-  },
-  {
-    id: 'communication',
-    label: 'Communication',
-    subtitle: 'Rappels SMS/email, recap, sons caisse, push',
-    color: '#ec4899',
-    icon: 'bell',
-    items: ['Rappels RDV (24h, 2h)', 'Recap quotidien', 'Sons caisse et nouveau RDV', 'Notifications push'],
-  },
-  {
-    id: 'paiements',
-    label: 'Paiements en ligne',
-    subtitle: 'Connectez votre Stripe · paiements RDV',
-    color: '#0891b2',
-    icon: 'wallet',
-    items: ['Connexion Stripe (Direct charges)', 'Réception des paiements RDV', 'Configuration acompte (à venir)'],
-  },
+  { id:'mon-commerce',  label:'Mon commerce',        subtitle:'Identité, photos, RGPD, sécurité',  color:'#f97316', icon:'storefront' },
+  { id:'reservations',  label:'Réservation en ligne', subtitle:'Lien public, prestations, agenda',  color:'#3b82f6', icon:'calendar'   },
+  { id:'caisse-config', label:'Caisse',              subtitle:'Prestations en boutique, QR',       color:'#8b5cf6', icon:'cash'       },
+  { id:'equipe',        label:'Équipe',              subtitle:'Membres, horaires, commissions',    color:'#10b981', icon:'users'      },
+  { id:'communication', label:'Communication',       subtitle:'Rappels, recap, sons, push',        color:'#ec4899', icon:'bell'       },
+  { id:'paiements',     label:'Paiements en ligne',  subtitle:'Stripe, acomptes RDV',              color:'#0891b2', icon:'wallet'     },
 ];
 
 function Home({ onLock }) {
@@ -72,72 +31,73 @@ function Home({ onLock }) {
   const navigate = useNavigate();
 
   return (
-    <div style={{ maxWidth:1100, margin:'0 auto', padding:'18px 16px' }}>
-      {/* Topbar */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
-                    marginBottom:18, gap:12, flexWrap:'wrap' }}>
-        <div>
-          <p style={{ margin:0, fontSize:11, color:t.muted, textTransform:'uppercase',
-                      letterSpacing:'0.05em' }}>Réglages</p>
-          <h1 style={{ margin:'2px 0 4px', fontSize:22, fontWeight:500, color:t.text,
-                       letterSpacing:'-0.01em' }}>{"Paramètres"}</h1>
-          <p style={{ margin:0, fontSize:12, color:t.muted }}>
-            {user?.businessName || ''} · <span style={{ color:'#16a34a', fontWeight:500 }}>{"PIN admin actif"}</span>
+    <div style={{ maxWidth:980, margin:'0 auto', padding:'24px 16px' }}>
+      {/* Header — titre + actions discrètes (thème, verrouillage). */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                    marginBottom:24, gap:12, flexWrap:'wrap' }}>
+        <div style={{ minWidth:0 }}>
+          <h1 style={{ margin:0, fontSize:24, fontWeight:500, color:t.text,
+                       letterSpacing:'-0.015em' }}>{"Réglages"}</h1>
+          <p style={{ margin:'4px 0 0', fontSize:13, color:t.muted }}>
+            {user?.businessName || 'Configurez votre salon'}
           </p>
         </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
           <ThemeToggle/>
           {onLock && (
             <button onClick={onLock}
+                    title="Verrouiller la session admin"
                     style={{ display:'inline-flex', alignItems:'center', gap:6,
                              padding:'8px 12px', borderRadius:8,
                              border:`0.5px solid ${t.border}`, background:t.cardAlt,
                              color:t.text, cursor:'pointer', fontSize:12,
-                             fontWeight:500, fontFamily:'inherit' }}>
+                             fontWeight:500, fontFamily:'inherit',
+                             transition:'background 0.15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = t.card; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = t.cardAlt; }}>
               <Icon name="lock" size={13} color={t.text}/> Verrouiller
             </button>
           )}
         </div>
       </div>
 
-      {/* 4 cartes */}
+      {/* 6 cartes domaine — grid responsive auto-fit, hauteur uniforme. */}
       <div style={{ display:'grid',
-                    gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))',
-                    gap:14 }}>
+                    gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))',
+                    gap:12 }}>
         {DOMAINS.map(d => (
           <button key={d.id} onClick={() => navigate('/reglages/' + d.id)}
-                  style={{ textAlign:'left', padding:20, borderRadius:12,
+                  style={{ textAlign:'left', padding:'16px 18px', borderRadius:12,
                            border:`0.5px solid ${t.border}`,
                            borderLeft:`2px solid ${d.color}`,
                            background:t.card, cursor:'pointer',
-                           transition:'transform 0.15s, box-shadow 0.15s',
-                           fontFamily:'inherit' }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
-            <div style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:12 }}>
-              <div style={{ width:42, height:42, borderRadius:10, flexShrink:0,
-                            background: d.color + '14', color: d.color,
-                            display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <Icon name={d.icon} size={20} color={d.color}/>
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <p style={{ margin:0, fontSize:15, fontWeight:500, color:t.text }}>{d.label}</p>
-                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>{d.subtitle}</p>
-              </div>
-              <Icon name="chevronRight" size={16} color={t.muted}/>
+                           transition:'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
+                           fontFamily:'inherit',
+                           display:'flex', alignItems:'center', gap:14 }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px -4px rgba(0,0,0,0.08)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}>
+            <div style={{ width:40, height:40, borderRadius:10, flexShrink:0,
+                          background: d.color + '14',
+                          display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <Icon name={d.icon} size={18} color={d.color}/>
             </div>
-            <div style={{ display:'grid',
-                          gridTemplateColumns:'repeat(2, minmax(0,1fr))',
-                          gap:6 }}>
-              {d.items.map((it, i) => (
-                <div key={i}
-                     style={{ padding:'6px 8px', borderRadius:6,
-                              background: t.cardAlt,
-                              color: t.muted, fontSize:11 }}>
-                  · {it}
-                </div>
-              ))}
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text,
+                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {d.label}
+              </p>
+              <p style={{ margin:'3px 0 0', fontSize:11, color:t.muted,
+                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {d.subtitle}
+              </p>
             </div>
+            <Icon name="chevronRight" size={15} color={t.muted}/>
           </button>
         ))}
       </div>
