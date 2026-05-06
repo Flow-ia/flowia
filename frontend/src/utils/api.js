@@ -500,6 +500,9 @@ export const mediaApi = {
   deleteServiceImage: (serviceId) => request(`/media/service/${serviceId}/image`, { method: 'DELETE' }),
   deleteEmployeeImage: (employeeId) => request(`/media/employee/${employeeId}/image`, { method: 'DELETE' }),
   deleteMedia: (id) => request(`/media/${id}`, { method: 'DELETE' }),
+  // Definir une cover comme photo principale (sort_order=0). Affiche en
+  // premier dans la marketplace /portail-client + sur la page de reservation.
+  setCoverMain: (id) => request(`/media/commercant/cover/${id}/main`, { method: 'PUT' }),
 };
 
 // ── Site public de réservation ────────────────────────────────────────────────

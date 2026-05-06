@@ -65,6 +65,21 @@ export default function TabImages({ theme, showToast }) {
     finally { setBusy(false); }
   };
 
+  // Definir une cover comme photo principale (sort_order=0). Cette photo
+  // sera celle affichee dans la marketplace /portail-client et en grand
+  // sur la page de reservation publique.
+  const setCoverMain = async (id) => {
+    if (!id) return;
+    setBusy(true);
+    try {
+      await mediaApi.setCoverMain(id);
+      await load();
+      showToast('Photo principale definie');
+    } catch (e) {
+      showToast(e.message || 'Erreur', 'error');
+    } finally { setBusy(false); }
+  };
+
   const iconBtn = (onClick, Icon, color, bg, disabled) => (
     <button type="button" onClick={onClick} disabled={disabled}
             style={{ width:30, height:30, borderRadius:8, border:'none',
@@ -190,39 +205,87 @@ export default function TabImages({ theme, showToast }) {
                     <span style={{ fontSize:13, fontWeight:500, color:t.muted }}>Ajouter une photo</span>
                   </button>
                 ) : (
-                  <div style={{ display:'grid',
-                                gridTemplateColumns:'repeat(auto-fill, minmax(90px, 1fr))', gap:8 }}>
-                    {coverList.map((cover) => (
-                      <div key={cover.id}
-                           style={{ position:'relative', borderRadius:8, overflow:'hidden',
-                                    aspectRatio:'1/1', background:t.cardAlt,
-                                    border:`0.5px solid ${t.border}` }}>
-                        <img src={withVersion(mediaApi.coverUrl(userId, cover.id), cover.version)}
-                             alt="Galerie"
-                             style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-                        <button onClick={() => deleteMedia(cover.id)} disabled={busy}
-                                style={{ position:'absolute', top:4, right:4,
-                                         width:22, height:22, borderRadius:'50%',
-                                         background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)',
-                                         border:'none',
-                                         display:'flex', alignItems:'center', justifyContent:'center',
-                                         cursor: busy ? 'default' : 'pointer',
-                                         fontFamily:'inherit' }}>
-                          <I.Trash style={{ width:10, height:10, color:'white' }}/>
-                        </button>
-                      </div>
-                    ))}
-                    {coverCount < 4 && (
-                      <button type="button" onClick={() => coverInputRef.current?.click()} disabled={busy}
-                              style={{ borderRadius:8, cursor:'pointer', aspectRatio:'1/1',
-                                       background:t.card,
-                                       border:`0.5px solid ${t.borderStrong}`,
-                                       display:'flex', alignItems:'center', justifyContent:'center',
-                                       fontFamily:'inherit' }}>
-                        <I.Camera style={{ width:18, height:18, color:t.muted }}/>
-                      </button>
+                  <>
+                    {coverCount > 1 && (
+                      <p style={{ margin:'0 0 8px', fontSize:11, color:t.muted, lineHeight:1.5 }}>
+                        Cliquez sur l&apos;etoile d&apos;une photo pour qu&apos;elle apparaisse en
+                        premier dans la marketplace et la page de reservation.
+                      </p>
                     )}
-                  </div>
+                    <div style={{ display:'grid',
+                                  gridTemplateColumns:'repeat(auto-fill, minmax(90px, 1fr))', gap:8 }}>
+                      {coverList.map((cover) => {
+                        const isMain = cover.sort_order === 0 || cover.sort_order === '0';
+                        return (
+                          <div key={cover.id}
+                               style={{ position:'relative', borderRadius:8, overflow:'hidden',
+                                        aspectRatio:'1/1', background:t.cardAlt,
+                                        border:`1px solid ${isMain ? '#f59e0b' : t.border}`,
+                                        boxShadow: isMain ? '0 0 0 2px rgba(245,158,11,0.18)' : 'none',
+                                        transition: 'border-color 0.15s ease, box-shadow 0.15s ease' }}>
+                            <img src={withVersion(mediaApi.coverUrl(userId, cover.id), cover.version)}
+                                 alt="Galerie"
+                                 style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+
+                            {/* Badge "Principale" en bas a gauche, visible si main */}
+                            {isMain && (
+                              <div style={{ position:'absolute', left:4, bottom:4,
+                                            padding:'3px 7px', borderRadius:999,
+                                            background:'#f59e0b', color:'white',
+                                            fontSize:10, fontWeight:500, lineHeight:1,
+                                            display:'inline-flex', alignItems:'center', gap:3 }}>
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/>
+                                </svg>
+                                Principale
+                              </div>
+                            )}
+
+                            {/* Bouton "Definir comme principale" — affiche seulement
+                                si coverCount > 1 ET pas deja la principale */}
+                            {!isMain && coverCount > 1 && (
+                              <button type="button" onClick={() => setCoverMain(cover.id)} disabled={busy}
+                                      title="Definir comme photo principale"
+                                      style={{ position:'absolute', left:4, top:4,
+                                               width:22, height:22, borderRadius:'50%',
+                                               background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)',
+                                               border:'none',
+                                               display:'flex', alignItems:'center', justifyContent:'center',
+                                               cursor: busy ? 'default' : 'pointer',
+                                               fontFamily:'inherit' }}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                                     stroke="white" strokeWidth="2" strokeLinejoin="round"
+                                     strokeLinecap="round">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                              </button>
+                            )}
+
+                            <button onClick={() => deleteMedia(cover.id)} disabled={busy}
+                                    style={{ position:'absolute', top:4, right:4,
+                                             width:22, height:22, borderRadius:'50%',
+                                             background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)',
+                                             border:'none',
+                                             display:'flex', alignItems:'center', justifyContent:'center',
+                                             cursor: busy ? 'default' : 'pointer',
+                                             fontFamily:'inherit' }}>
+                              <I.Trash style={{ width:10, height:10, color:'white' }}/>
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {coverCount < 4 && (
+                        <button type="button" onClick={() => coverInputRef.current?.click()} disabled={busy}
+                                style={{ borderRadius:8, cursor:'pointer', aspectRatio:'1/1',
+                                         background:t.card,
+                                         border:`0.5px solid ${t.borderStrong}`,
+                                         display:'flex', alignItems:'center', justifyContent:'center',
+                                         fontFamily:'inherit' }}>
+                          <I.Camera style={{ width:18, height:18, color:t.muted }}/>
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
                 {errors.cover && (
                   <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', fontWeight:500 }}>{errors.cover}</p>

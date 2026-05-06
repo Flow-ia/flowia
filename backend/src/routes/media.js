@@ -413,6 +413,63 @@ router.post('/commercant/cover', upload.single('image'), async (req, res) => {
   }
 });
 
+// PUT /api/media/commercant/cover/:id/main — Definir une cover comme photo
+// principale (celle affichee en premier dans la marketplace /portail-client
+// et dans la page de reservation publique). Implementation : sort_order=0
+// sur la cover choisie, les autres covers du commercant decalees a 1,2,3...
+// dans leur ordre actuel. Atomique via transaction. Idempotent.
+router.put('/commercant/cover/:id/main', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Verifier que la cover existe et appartient bien au merchant.
+    const { rows: target } = await client.query(
+      "SELECT id FROM media WHERE id=$1 AND user_id=$2 AND type='cover' LIMIT 1",
+      [req.params.id, req.user.userId]
+    );
+    if (!target.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Image introuvable.' });
+    }
+
+    // 2. Recuperer l'ordre actuel de toutes les covers (hors la cible).
+    const { rows: others } = await client.query(
+      `SELECT id FROM media
+        WHERE user_id=$1 AND type='cover' AND id <> $2
+        ORDER BY sort_order ASC, created_at ASC`,
+      [req.user.userId, req.params.id]
+    );
+
+    // 3. Mettre a jour : cible -> 0, autres -> 1, 2, 3...
+    await client.query('UPDATE media SET sort_order=0 WHERE id=$1', [req.params.id]);
+    for (let i = 0; i < others.length; i++) {
+      await client.query('UPDATE media SET sort_order=$1 WHERE id=$2', [i + 1, others[i].id]);
+    }
+
+    await client.query('COMMIT');
+
+    // 4. Invalider les caches publics qui exposent la cover (best-effort).
+    //    - merchant-info : cle biz:<slug>
+    //    - marketplace : impossible de wildcarder (cle JSON-stringifiee) →
+    //      le ttl 60s amene a la prochaine vue. Acceptable.
+    try {
+      const { rows: bs } = await pool.query(
+        'SELECT slug FROM booking_settings WHERE user_id=$1', [req.user.userId]
+      );
+      for (const r of bs) if (r.slug) global.memCache?.del(`biz:${r.slug}`);
+    } catch {}
+
+    return res.json({ ok: true, mainCoverId: req.params.id });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    console.error('[MEDIA cover/main]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/media/:id — Supprimer une image
 router.delete('/:id', async (req, res) => {
   try {
