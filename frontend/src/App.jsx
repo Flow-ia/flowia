@@ -22,7 +22,6 @@ import Caisse from './pages/caisse';
 import { api, loyaltyApi, promoApi, notifApi, referralsApi } from './utils/api';
 import EmployeeAgenda from './pages/EmployeeAgenda';
 import ClientsPage from './pages/ClientsPage';
-import Agenda from './pages/Agenda';
 import { I, ICON_MAP } from './utils/icons';
 import { todayStr, nowStr } from './utils/dates';
 import { useEmployeePinGate } from './components/EmployeePinModal';

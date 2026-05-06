@@ -917,55 +917,6 @@ function TileClients({ theme: t, onClick }) {
   );
 }
 
-function TileStats({ theme: t, onClick }) {
-  return (
-    <Tile theme={t} onClick={onClick}
-          iconBg="#ecfeff" iconColor="#0e7490"
-          icon={<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>}
-          title="Stats du jour"
-          sub="Acces PIN"/>
-  );
-}
-
-function TileHistorique({ theme: t, onClick }) {
-  return (
-    <Tile theme={t} onClick={onClick}
-          iconBg="#eeedfe" iconColor="#3c3489"
-          icon={<>
-            <polyline points="3 6 3 12 9 12"/>
-            <path d="M3 13a9 9 0 1 0 3-7.7L3 9"/>
-            <line x1="12" y1="7" x2="12" y2="12"/>
-            <line x1="12" y1="12" x2="15" y2="14"/>
-          </>}
-          title="Historique & Stats"
-          sub="CA du jour · filtre employé · PIN"/>
-  );
-}
-
-function TileAdmin({ theme: t, onClick }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <button onClick={onClick}
-            onMouseEnter={() => setHov(true)}
-            onMouseLeave={() => setHov(false)}
-            style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-                     padding:'14px 20px', borderRadius:12, cursor:'pointer', width:'100%',
-                     background: hov ? t.cardAlt : t.card,
-                     border:`0.5px solid ${t.border}`,
-                     transition:'background 0.15s ease',
-                     fontFamily:'inherit' }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width:18, height:18 }}>
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-      <span style={{ fontWeight:500, fontSize:14, color:t.text }}>Admin</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke={t.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width:13, height:13 }}>
-        <polyline points="9 18 15 12 9 6"/>
-      </svg>
-    </button>
-  );
-}
-
 // ── Dashboard ────────────────────────────────────────────────────────────────
 // Stats/Historique : les 2 anciennes popups ont été fusionnées dans la page
 // /historique (accès PIN au chargement, filtre employé qui recalcule tout le
