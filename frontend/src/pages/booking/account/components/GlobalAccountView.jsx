@@ -4,10 +4,12 @@
 // Extrait inchangé depuis booking/Account.jsx.
 import { useState, useEffect } from 'react';
 import { globalClientApi } from '../../../../utils/api';
+import { Toast, useToast } from '../../../../components/UI';
 import { STATUS_COLORS, STATUS_LABELS, fmtD } from '../helpers';
 
 // ── Composant : Espace client global (multi-commerces) ────────────────────────
 export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBack }) {
+  const [toast, showToast] = useToast();
   const [mode,    setMode]    = useState(gcUser ? 'dashboard' : 'login'); // login|register|dashboard|forgot_gc|forgot_gc_code
   const [email,   setEmail]   = useState('');
   const [pwd,     setPwd]     = useState('');
@@ -159,7 +161,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
       a.click();
       URL.revokeObjectURL(url);
     } catch(e) {
-      alert(e.message || 'Erreur lors de l\'export');
+      showToast(e.message || "Erreur lors de l'export", 'error');
     } finally { setExportLoad(false); }
   };;
 
@@ -214,6 +216,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
 
   return (
     <div className="min-h-screen" style={{ background:th.bg }}>
+      <Toast msg={toast?.msg} type={toast?.type}/>
       <div className="max-w-sm sm:max-w-md md:max-w-lg mx-auto px-4 pt-6 sm:pt-10 pb-12">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm mb-6" style={{ color:th.muted, background:'none', border:'none', cursor:'pointer' }}>
           ← Retour

@@ -1,7 +1,7 @@
 // src/pages/employee-agenda/modals/ApptActionModal.jsx
 import { useState } from 'react';
 import { bookingApi, referralsApi } from '../../../utils/api';
-import { Modal } from '../../../components/UI';
+import { Modal, Toast, useToast, Confirm } from '../../../components/UI';
 import { Button, Label } from '../../../components/primitives';
 import { useEmployeePinGate } from '../../../components/EmployeePinModal';
 import { STATUS_CFG, PAY_OPTIONS } from '../constants';
@@ -14,6 +14,9 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
   const [appt, setAppt]     = useState(initAppt);
   const [tab, setTab]       = useState('detail');
   const [saving, setSaving] = useState(false);
+  const [toast, showToast]  = useToast();
+  const [confirmCancel, setConfirmCancel]   = useState(false);
+  const [confirmRefuse, setConfirmRefuse]   = useState(false);
   const { requestPin, PinModalNode } = useEmployeePinGate();
 
   const [editForm, setEditForm] = useState({
@@ -91,7 +94,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
 
   const doEdit = async () => {
     if (editIsPast) {
-      alert("Impossible de déplacer un RDV dans le passé. Passez par la caisse pour enregistrer une prestation déjà rendue.");
+      showToast("Impossible de déplacer un RDV dans le passé. Passez par la caisse pour enregistrer une prestation déjà rendue.", 'error');
       return;
     }
     setSaving(true);
@@ -108,11 +111,11 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
         notes: editForm.notes||null,
       });
       const merged = {...appt,...upd}; setAppt(merged); onUpdated(merged); setTab('detail');
-    } catch(e) { alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
+    } catch(e) { showToast(e.message || 'Une erreur est survenue.', 'error'); } finally { setSaving(false); }
   };
 
-  const doCancel = async () => {
-    if (!window.confirm('Annuler ce rendez-vous ?')) return;
+  const doCancel = () => setConfirmCancel(true);
+  const performCancel = async () => {
     setSaving(true);
     try {
       const upd = await bookingApi.updateAppt(appt.id, {
@@ -122,7 +125,15 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       });
       const merged = {...appt,...upd, status:'cancelled', cancel_reason:cancelReason};
       setAppt(merged); onUpdated(merged); setTab('detail');
-    } catch(e) { alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
+    } catch(e) { showToast(e.message || 'Une erreur est survenue.', 'error'); } finally { setSaving(false); }
+  };
+
+  const performRefuseParrainage = async () => {
+    try {
+      await referralsApi.cancelUse(appt.referral_use_id);
+      const next = { ...appt, referral_status: 'cancelled' };
+      setAppt(next); onUpdated(next);
+    } catch(e) { showToast(e.message || 'Erreur', 'error'); }
   };
 
   const doCheckout = async () => {
@@ -153,13 +164,30 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
           setAppt(merged); onUpdated(merged);
           if (res.transaction) onTxCreated(res.transaction);
           setTab('detail');
-        } catch(e) { alert(e.message || 'Une erreur est survenue.'); } finally { setSaving(false); }
+        } catch(e) { showToast(e.message || 'Une erreur est survenue.', 'error'); } finally { setSaving(false); }
       }
     );
   };
 
   return (
     <>
+    <Toast msg={toast?.msg} type={toast?.type}/>
+    <Confirm
+      open={confirmCancel}
+      onClose={() => setConfirmCancel(false)}
+      onConfirm={performCancel}
+      title="Annuler ce rendez-vous ?"
+      message="Cette action est définitive."
+      danger
+      theme={t}/>
+    <Confirm
+      open={confirmRefuse}
+      onClose={() => setConfirmRefuse(false)}
+      onConfirm={performRefuseParrainage}
+      title="Refuser ce parrainage ?"
+      message="Le parrain ne sera pas récompensé."
+      danger
+      theme={t}/>
     <Modal open={true} onClose={onClose} title="" theme={t} maxW={520}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
@@ -375,14 +403,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             const stBg    = rst==='validated' ? '#f0fdf4' : rst==='cancelled' ? '#fef2f2' : '#fffbeb';
             const stColor = rst==='validated' ? '#065f46' : rst==='cancelled' ? '#991b1b' : '#92400e';
             const stAccent= rst==='validated' ? '#10b981' : rst==='cancelled' ? '#ef4444' : '#f59e0b';
-            const refuseParrainage = async () => {
-              if (!window.confirm('Refuser ce parrainage ? Le parrain ne sera pas recompense.')) return;
-              try {
-                await referralsApi.cancelUse(appt.referral_use_id);
-                const next = { ...appt, referral_status: 'cancelled' };
-                setAppt(next); onUpdated(next);
-              } catch(e) { alert(e.message || 'Erreur'); }
-            };
+            const refuseParrainage = () => setConfirmRefuse(true);
             return (
               <div style={{
                 padding: '12px 16px',

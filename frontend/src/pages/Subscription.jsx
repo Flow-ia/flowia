@@ -14,7 +14,7 @@ import {
   useStripe, useElements,
 } from '@stripe/react-stripe-js';
 import { useTheme } from '../hooks/useTheme';
-import { Toast, useToast, Modal } from '../components/UI';
+import { Toast, useToast, Modal, Confirm } from '../components/UI';
 import { PageHeader } from './reglages/shared';
 import { api } from '../utils/api';
 
@@ -875,6 +875,7 @@ function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null); // pmId en cours d'action
   const [addOpen, setAddOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null); // pmId en attente de confirm
 
   const reload = async () => {
     try {
@@ -900,8 +901,10 @@ function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer cette carte ?')) return;
+  const handleDelete = (id) => setPendingDelete(id);
+  const performDelete = async () => {
+    const id = pendingDelete;
+    if (!id) return;
     setBusy(id);
     try {
       await api.deleteSubscriptionPaymentMethod(id);
@@ -925,6 +928,14 @@ function PaymentMethodsSection({ theme: t, showToast, embedded = false }) {
 
   return (
     <Wrapper style={wrapperStyle}>
+      <Confirm
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={performDelete}
+        title="Supprimer cette carte ?"
+        message="Vous pourrez en ajouter une nouvelle à tout moment."
+        danger
+        theme={t}/>
       <div style={{ display: 'flex', justifyContent: 'space-between',
                     alignItems: 'baseline', marginBottom: 14, gap: 12, flexWrap: 'wrap' }}>
         <div>

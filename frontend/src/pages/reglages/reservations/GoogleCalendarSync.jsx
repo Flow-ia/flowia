@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../hooks/useTheme';
-import { Toast, useToast } from '../../../components/UI';
+import { Toast, useToast, Confirm } from '../../../components/UI';
 import { api } from '../../../utils/api';
 
 export default function GoogleCalendarSync() {
@@ -19,6 +19,7 @@ export default function GoogleCalendarSync() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null); // 'connect' | 'disconnect' | 'toggle'
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const load = async () => {
     try {
@@ -61,10 +62,8 @@ export default function GoogleCalendarSync() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm('Deconnecter votre Google Agenda ?\n\nLes nouveaux RDV ne seront plus synchronises automatiquement. Les events deja crees dans Google restent en place (suppression manuelle possible cote Google).')) {
-      return;
-    }
+  const handleDisconnect = () => setConfirmDisconnect(true);
+  const performDisconnect = async () => {
     setBusy('disconnect');
     try {
       await api.calendarSyncDisconnect();
@@ -103,6 +102,14 @@ export default function GoogleCalendarSync() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Toast msg={toast?.msg} type={toast?.type}/>
+      <Confirm
+        open={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={performDisconnect}
+        title="Déconnecter votre Google Agenda ?"
+        message="Les nouveaux RDV ne seront plus synchronisés automatiquement. Les events déjà créés restent en place (suppression manuelle possible côté Google)."
+        danger
+        theme={t}/>
 
       {loading ? (
         <div style={{ ...cardStyle(t), height: 180 }}/>

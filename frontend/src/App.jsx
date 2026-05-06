@@ -26,6 +26,7 @@ import { I, ICON_MAP } from './utils/icons';
 import { todayStr, nowStr } from './utils/dates';
 import { useEmployeePinGate } from './components/EmployeePinModal';
 import { Button } from './components/primitives';
+import { Toast, useToast, Confirm } from './components/UI';
 import { Icon } from './components/Icon';
 import { TabletModeProvider, useTabletMode } from './contexts/TabletModeProvider';
 import { useAdminMode } from './contexts/AdminModeContext';
@@ -193,6 +194,8 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
   const [clientRewards,  setClientRewards]  = useState([]);
   const [selectedRewardId, setSelectedRewardId] = useState(null);
   const [refValidating,    setRefValidating]    = useState(null);
+  const [toast, showToast] = useToast();
+  const [confirmCancelRef, setConfirmCancelRef] = useState(null);
   const { requestPin, PinModalNode } = useEmployeePinGate();
 
   useEffect(() => {
@@ -253,17 +256,19 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
     try {
       await referralsApi.validateUse(useId);
       await refreshClientContext(clientEmail);
-    } catch (e) { alert(e.message || 'Erreur validation parrainage'); }
+    } catch (e) { showToast(e.message || 'Erreur validation parrainage', 'error'); }
     finally { setRefValidating(null); }
   };
 
-  const cancelReferral = async (useId) => {
-    if (!window.confirm('Refuser ce parrainage ? Le parrain ne sera pas recompense. La reduction deja appliquee au RDV reste acquise au filleul.')) return;
+  const cancelReferral = (useId) => setConfirmCancelRef(useId);
+  const performCancelReferral = async () => {
+    const useId = confirmCancelRef;
+    if (!useId) return;
     setRefValidating(useId);
     try {
       await referralsApi.cancelUse(useId);
       await refreshClientContext(clientEmail);
-    } catch (e) { alert(e.message || 'Erreur refus parrainage'); }
+    } catch (e) { showToast(e.message || 'Erreur refus parrainage', 'error'); }
     finally { setRefValidating(null); }
   };
 
@@ -424,6 +429,15 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
     <div style={{ position:'fixed', inset:0, zIndex:200,
                   display:'flex', alignItems:'flex-end', justifyContent:'center' }}
          className="sm:items-center sm:p-4">
+      <Toast msg={toast?.msg} type={toast?.type}/>
+      <Confirm
+        open={!!confirmCancelRef}
+        onClose={() => setConfirmCancelRef(null)}
+        onConfirm={performCancelReferral}
+        title="Refuser ce parrainage ?"
+        message="Le parrain ne sera pas récompensé. La réduction déjà appliquée au RDV reste acquise au filleul."
+        danger
+        theme={t}/>
       <div onClick={onClose}
            style={{ position:'absolute', inset:0,
                     background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}/>
@@ -1823,6 +1837,7 @@ function NotifCard({ n, t, cfg, onOpen, onDelete, compact = false }) {
 function NotificationCenter({ theme: t, drawerSide = 'right' }) {
   const [open, setOpen] = useState(false);
   const [drawerPos, setDrawerPos] = useState({ top: 0, left: 0 });
+  const [toast, showToast] = useToast();
   const bellWrapRef     = useRef(null);
   const drawerContentRef = useRef(null);
   const navigate  = useNavigate();
@@ -1916,6 +1931,7 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
 
   return (
     <>
+      <Toast msg={toast?.msg} type={toast?.type}/>
       <style>{`
         @keyframes ffNotifPulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
@@ -2013,7 +2029,7 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
                               : r.reason === 'vapid_missing'
                               ? 'Service de notifications indisponible (contactez le support).'
                               : `Erreur : ${r.message || 'inconnue'}`;
-                            alert(msg);
+                            showToast(msg, 'error');
                           }
                         }}
                         style={{ fontSize: 11, padding: '3px 8px', borderRadius: 8,

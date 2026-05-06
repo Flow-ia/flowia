@@ -5,6 +5,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { pubApi, globalClientApi, publicReferralApi, isJwtLocallyExpired } from '../../utils/api';
+import { Toast, useToast } from '../../components/UI';
 import {
   LIGHT_THEME, DARK_THEME,
   Spinner,
@@ -253,6 +254,7 @@ export default function BookingPage({ slug }) {
   const [notes, setNotes]    = useState('');
   const [booking, setBooking] = useState(false);
   const [bookErr, setBookErr] = useState('');
+  const [toast, showToast] = useToast();
 
   // RGPD commit 17 : consentement pour résa "sans compte" (clientUser absent).
   // Si clientUser présent, l'opt-in est lu depuis le compte ; sinon transmis
@@ -648,7 +650,7 @@ export default function BookingPage({ slug }) {
           : reason === 'code_not_found'
           ? "Le code de parrainage saisi n'existe pas chez ce commerçant."
           : "Vous ne pouvez pas bénéficier de ce programme de parrainage car vous ne répondez pas aux conditions définies par le commerçant.";
-        setTimeout(() => window.alert(msg), 100);
+        setTimeout(() => showToast(msg, 'info'), 100);
       }
       setBooked(result);
       setView('success');
@@ -772,7 +774,8 @@ export default function BookingPage({ slug }) {
   // Employés = vrais employees chargés depuis pubApi
   // Adresse/tel = business.address / business.phone
   return (
-    <><div style={{ minHeight:'100vh', background:th.bg,
+    <><Toast msg={toast?.msg} type={toast?.type}/>
+    <div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
       <style>{`
         @keyframes spin  { to { transform:rotate(360deg); } }

@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../hooks/useTheme';
-import { Toast, useToast } from '../../../components/UI';
+import { Toast, useToast, Confirm } from '../../../components/UI';
 import { PageHeader } from '../shared';
 import { connectApi } from '../../../utils/api';
 
@@ -17,6 +17,7 @@ export default function Paiements() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null); // 'onboard' | 'dashboard' | 'disconnect'
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const load = async () => {
     try {
@@ -71,10 +72,8 @@ export default function Paiements() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm('Déconnecter votre compte Stripe ?\n\nLes paiements en ligne sur vos réservations seront immédiatement désactivés. Vous pourrez reconnecter votre compte à tout moment.')) {
-      return;
-    }
+  const handleDisconnect = () => setConfirmDisconnect(true);
+  const performDisconnect = async () => {
     setBusy('disconnect');
     try {
       await connectApi.disconnect();
@@ -96,6 +95,14 @@ export default function Paiements() {
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '18px 16px',
                   display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Toast msg={toast?.msg} type={toast?.type}/>
+      <Confirm
+        open={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={performDisconnect}
+        title="Déconnecter votre compte Stripe ?"
+        message="Les paiements en ligne sur vos réservations seront immédiatement désactivés. Vous pourrez reconnecter votre compte à tout moment."
+        danger
+        theme={t}/>
       <PageHeader backTo="/reglages" crumb="Réglages"
                   title="Paiements en ligne"
                   subtitle="Connectez votre compte Stripe pour recevoir l'argent de vos réservations"/>

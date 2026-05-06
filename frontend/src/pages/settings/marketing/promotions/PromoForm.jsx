@@ -23,6 +23,7 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
   const [customCount, setCustomCount] = useState('50');
   const [smsMessage,  setSmsMessage]  = useState('');
   const [preview, setPreview] = useState(null);
+  const [previewErr, setPreviewErr] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sendingCampaign, setSendingCampaign] = useState(false);
   const [smsUserEdited, setSmsUserEdited] = useState(false);
@@ -282,17 +283,26 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
                           onClick={async () => {
                             setPreviewLoading(true);
                             try {
+                              setPreviewErr('');
                               const p = await campaignsApi.getCampaignPreview({
                                 target_type: campaignTarget, custom_count: customCount, channel: campaignChannel,
                               });
                               setPreview(p);
-                            } catch (e) { alert(e.message); }
+                            } catch (e) { setPreviewErr(e.message || 'Erreur calcul cout'); setPreview(null); }
                             finally { setPreviewLoading(false); }
                           }}
                           disabled={previewLoading}
                           style={{ width:'100%' }}>
                     {previewLoading ? 'Calcul...' : 'Calculer le cout'}
                   </Button>
+                  {previewErr && (
+                    <p style={{ marginTop:8, padding:'8px 10px', borderRadius:6,
+                                background:'#fef2f2', color:'#991b1b',
+                                border:'0.5px solid #fecaca', borderLeft:'2px solid #991b1b',
+                                fontSize:12, fontWeight:500 }}>
+                      {previewErr}
+                    </p>
+                  )}
                   {preview && (
                     <div style={{ marginTop:10, padding:'10px 12px', borderRadius:8,
                                   background:t.card, border:`0.5px solid ${t.border}`, fontSize:12 }}>

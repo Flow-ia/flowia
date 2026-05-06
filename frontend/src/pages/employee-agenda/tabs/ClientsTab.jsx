@@ -3,10 +3,12 @@ import { useState, useEffect } from 'react';
 import { clientNotesApi } from '../../../utils/api';
 import { useEmployeePinGate } from '../../../components/EmployeePinModal';
 import { Button } from '../../../components/primitives';
+import { Toast, useToast } from '../../../components/UI';
 import { I } from '../../../utils/icons';
 import Spin from '../components/Spin';
 
 export default function ClientsTab({ employee, theme: t }) {
+  const [toast, showToast] = useToast();
   const { requestPin, PinModalNode: NotePinModal } = useEmployeePinGate();
   const [query,       setQuery]       = useState('');
   const [results,     setResults]     = useState([]);
@@ -62,7 +64,7 @@ export default function ClientsTab({ employee, theme: t }) {
           });
           setNotes(p => [created, ...p]);
           setNewNote('');
-        } catch(e) { alert('Erreur : ' + e.message); }
+        } catch(e) { showToast('Erreur : ' + e.message, 'error'); }
         finally { setSavingNote(false); }
       }
     );
@@ -74,14 +76,14 @@ export default function ClientsTab({ employee, theme: t }) {
       const upd = await clientNotesApi.updateNote(editNote.id, { note_text: editNote.text });
       setNotes(p => p.map(n => n.id === editNote.id ? upd : n));
       setEditNote(null);
-    } catch(e) { alert('Erreur : ' + e.message); }
+    } catch(e) { showToast('Erreur : ' + e.message, 'error'); }
   };
 
   const deleteNote = async id => {
     try {
       await clientNotesApi.deleteNote(id);
       setNotes(p => p.filter(n => n.id !== id));
-    } catch(e) { alert('Erreur : ' + e.message); }
+    } catch(e) { showToast('Erreur : ' + e.message, 'error'); }
     setDelNoteId(null);
   };
 
@@ -119,6 +121,7 @@ export default function ClientsTab({ employee, theme: t }) {
 
   return (
     <>
+    <Toast msg={toast?.msg} type={toast?.type}/>
     <div style={{
       padding: '12px 16px',
       display: 'flex',

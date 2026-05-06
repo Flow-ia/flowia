@@ -2,6 +2,7 @@
 // Écran "Mes RDV" + onglets Profil et Parrainage du compte client.
 import { useState, useEffect, useRef } from 'react';
 import { pubApi, globalClientApi } from '../../../utils/api';
+import { Toast, useToast } from '../../../components/UI';
 import { VISITS_PAGE_SIZE, TAB_URL, DELETE_PHRASE } from './constants';
 import { ymd, makeInpStyle } from './helpers';
 import { AppointmentsTab } from './tabs/AppointmentsTab';
@@ -15,6 +16,7 @@ import { ChangeEmailModal } from './modals/ChangeEmailModal';
 import { ChangePwdModal } from './modals/ChangePwdModal';
 
 export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initialTab = 'appts', initialVisitId = null, business = null }) {
+  const [toast, showToast] = useToast();
   const [appts, setAppts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTabRaw] = useState(initialTab); // 'appts' | 'visits' | 'profile' | 'parrain'
@@ -461,7 +463,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
           _businessCity:    business?.city    || null,
         });
       } else {
-        alert(e.message || 'Erreur lors de l\'annulation');
+        showToast(e.message || "Erreur lors de l'annulation", 'error');
       }
     } finally { setCancelLoading(false); }
   };
@@ -469,6 +471,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   return (
     <div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+      <Toast msg={toast?.msg} type={toast?.type}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}} *{box-sizing:border-box}
         /* Polish responsive — grilles 2 colonnes (prénom/nom, postal/ville)
            collapsent en colonne unique sous 480px pour rester confortables

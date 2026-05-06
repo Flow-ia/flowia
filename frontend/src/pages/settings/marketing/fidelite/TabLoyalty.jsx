@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { I } from '../../../../utils/icons';
 import { loyaltyApi } from '../../../../utils/api';
 import { Button, Label, SegmentedControl } from '../../../../components/primitives';
+import { Toast, useToast } from '../../../../components/UI';
 
 export default function TabLoyalty({ theme }) {
+  const [toast, showToast] = useToast();
   const t = theme;
   const LOYALTY_PAGE_SIZE = 5;
   const [program, setProgram]   = useState(null);
@@ -132,7 +134,7 @@ export default function TabLoyalty({ theme }) {
     try {
       const res = await loyaltyApi.addStamp({ client_email:stampEmail, client_name:stampName, stamps_to_add:1 });
       if (res.reward_triggered) {
-        alert(`${stampName || stampEmail} a atteint ${res.stamps_required} tampons ! Recompense debloquee : ${program.reward_label}`);
+        showToast(`${stampName || stampEmail} a atteint ${res.stamps_required} tampons. Recompense debloquee : ${program.reward_label}`, 'ok');
       }
       setStampModal(null); setStampEmail(''); setStampName('');
       load();
@@ -160,6 +162,7 @@ export default function TabLoyalty({ theme }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <Toast msg={toast?.msg} type={toast?.type}/>
       {/* Programme */}
       <div style={{ background:t.card, borderRadius:12,
                     border:`0.5px solid ${t.border}`, overflow:'hidden' }}>
