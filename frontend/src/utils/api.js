@@ -528,6 +528,19 @@ export const pubApi = {
   // Utilise au mount de la booking page pour rediriger transparente quand
   // un visiteur arrive avec un ancien slug (QR code, lien partage SMS).
   resolveSlug:    (slug)    => pubRequest(`/resolve/${slug}`),
+  // Marketplace : recherche publique de commercants pour /portail-client.
+  //   q       : texte libre (nom + ville)
+  //   city    : ville exacte (insensible casse/accents)
+  //   lat,lng : coords pour tri par distance (optionnel)
+  //   radius  : rayon en km (defaut 30 si geo)
+  //   limit, offset : pagination
+  searchMarketplace: (params = {}) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== '' && v !== null && v !== undefined) qs.set(k, v);
+    });
+    return pubRequest(`/marketplace?${qs.toString()}`);
+  },
   getBusiness:    (slug)    => pubRequest(`/${slug}`),
   getAnnouncement:(slug)    => pubRequest(`/${slug}/announcement`),
   getServices:    (slug)    => pubRequest(`/${slug}/services`),

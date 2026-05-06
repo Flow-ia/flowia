@@ -1,116 +1,239 @@
-import { useState } from 'react';
-import { useTheme } from '../../hooks/useTheme';
+// /portail-client — marketplace publique de commercants FlowIA.
+//
+// Style Planity : hero avec barre de recherche unifiee + bouton "Pres de moi"
+// (geoloc), grille de cards merchants avec badges programmes (parrainage,
+// fidelite, code promo, paiement en ligne, RDV immediat).
+//
+// FDS-2026 : pas d'emoji, fw <= 500, bordures 0.5/1px, pas de gradient.
+// Aucune auth requise. Cache backend 60s. Geoloc opt-in (clic explicite).
+import { useEffect, useRef, useState } from 'react';
+import { pubApi } from '../../utils/api';
 import { I } from '../../utils/icons';
+import { S, primaryBtnStyle, primaryHover, ghostBtnStyle, ghostHover } from './components/shadcn';
 import { PageHero } from './components/Shared';
+import MerchantSearchCard from './components/MerchantSearchCard';
+
+const PAGE_SIZE = 24;
+
+// Geoloc — utilisee uniquement sur clic explicite (pas de prompt automatique).
+function getBrowserGeolocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('Geolocalisation indisponible.'));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => reject(err),
+      { timeout: 8000, maximumAge: 60_000 },
+    );
+  });
+}
 
 export default function ClientPortal() {
-  const { theme: t } = useTheme();
-  const [query, setQuery] = useState('');
+  const [query, setQuery]   = useState('');
+  const [geo,   setGeo]     = useState(null);   // { lat, lng } ou null
+  const [geoErr,setGeoErr]  = useState('');
+  const [geoLoad,setGeoLoad]= useState(false);
+  const [items, setItems]   = useState([]);
+  const [total, setTotal]   = useState(0);
+  const [hasMore,setHasMore]= useState(false);
+  const [loading,setLoading]= useState(false);
+  const [error, setError]   = useState('');
+  const [offset,setOffset]  = useState(0);
+  const reqId = useRef(0);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    // V1 : pas de marketplace - on indique que la recherche arrive bientôt.
-    // À terme, brancher sur /api/pub/search-salons côté backend.
+  // Charge la premiere page au montage (sans geo, sans query) pour montrer
+  // un apercu des commercants disponibles (utile en SEO / decouvrabilite).
+  // Recharge sur changement de query (debounce 350 ms) ou geo.
+  useEffect(() => {
+    const id = ++reqId.current;
+    const t = setTimeout(async () => {
+      setLoading(true); setError('');
+      try {
+        const r = await pubApi.searchMarketplace({
+          q: query.trim(),
+          limit: PAGE_SIZE,
+          offset: 0,
+          ...(geo ? { lat: geo.lat, lng: geo.lng, radius: 30 } : {}),
+        });
+        if (reqId.current !== id) return; // une recherche plus recente a deja repondu
+        setItems(r.items || []);
+        setTotal(r.total || 0);
+        setHasMore(!!r.hasMore);
+        setOffset(PAGE_SIZE);
+      } catch (e) {
+        if (reqId.current !== id) return;
+        setError(e.message || 'Erreur lors de la recherche.');
+      } finally {
+        if (reqId.current === id) setLoading(false);
+      }
+    }, query ? 350 : 0); // pas de debounce pour le premier load et le toggle geo
+    return () => clearTimeout(t);
+  }, [query, geo]);
+
+  const loadMore = async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
+    try {
+      const r = await pubApi.searchMarketplace({
+        q: query.trim(),
+        limit: PAGE_SIZE,
+        offset,
+        ...(geo ? { lat: geo.lat, lng: geo.lng, radius: 30 } : {}),
+      });
+      setItems(prev => [...prev, ...(r.items || [])]);
+      setHasMore(!!r.hasMore);
+      setOffset(prev => prev + PAGE_SIZE);
+    } catch (e) {
+      setError(e.message || 'Erreur lors du chargement.');
+    } finally { setLoading(false); }
   };
 
-  const inp = {
-    width: '100%', padding: '14px 18px',
+  const onGeoClick = async () => {
+    if (geo) { setGeo(null); return; } // toggle off
+    setGeoErr(''); setGeoLoad(true);
+    try {
+      const pos = await getBrowserGeolocation();
+      setGeo(pos);
+    } catch (e) {
+      setGeoErr(e.message?.includes('denied') || e.code === 1
+        ? 'Vous avez refuse la geolocalisation. Activez-la dans les reglages du navigateur pour voir les salons proches.'
+        : 'Impossible de recuperer votre position.');
+    } finally { setGeoLoad(false); }
+  };
+
+  const inputStyle = {
+    width: '100%', padding: '14px 18px 14px 46px',
     borderRadius: 10, fontSize: 15, fontFamily: 'inherit',
-    background: t.inputBg, border: `0.5px solid ${t.borderInput}`,
-    color: t.text, outline: 'none', boxSizing: 'border-box',
+    background: S.bg, border: `1px solid ${S.border}`,
+    color: S.fg, outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
   };
 
   return (
     <>
       <PageHero
         label="Portail client"
-        title="Accédez à votre espace personnel"
-        subtitle="Retrouvez vos rendez-vous, votre historique et vos points de fidélité depuis le site de votre salon."
+        title="Trouvez votre salon et reservez en ligne"
+        subtitle="Decouvrez les salons FlowIA pres de chez vous, profitez des programmes parrainage, fidelite et codes promo, et reservez en quelques secondes."
       />
 
-      <section style={{ padding: '32px 24px 56px' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <section style={{ padding: '0 24px 16px', background: S.bg, borderBottom: `1px solid ${S.border}` }}>
+        <div style={{
+          maxWidth: 920, margin: '-32px auto 0',
+          padding: 18, borderRadius: 14,
+          background: S.bg, border: `1px solid ${S.border}`,
+          boxShadow: S.shadowMd,
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ position: 'relative' }}>
+            <I.Search style={{
+              position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+              width: 18, height: 18, color: S.fgMuted, pointerEvents: 'none',
+            }}/>
+            <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                   placeholder="Nom du salon, ville, code postal..."
+                   style={inputStyle}
+                   onFocus={(e) => { e.currentTarget.style.borderColor = S.fg; e.currentTarget.style.boxShadow = `0 0 0 3px ${S.bgHover}`; }}
+                   onBlur={(e)  => { e.currentTarget.style.borderColor = S.border; e.currentTarget.style.boxShadow = 'none'; }}/>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <button type="button" onClick={onGeoClick} disabled={geoLoad}
+                    style={{
+                      ...(geo ? primaryBtnStyle() : ghostBtnStyle()),
+                      height: 38, padding: '0 14px', fontSize: 13,
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}
+                    {...(geo ? primaryHover : ghostHover)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              {geoLoad ? 'Localisation...' : geo ? 'Pres de moi (actif)' : 'Pres de moi'}
+            </button>
+            {geo && (
+              <span style={{ fontSize: 12, color: S.fgMuted }}>
+                Triage par distance dans un rayon de 30 km
+              </span>
+            )}
+            {geoErr && (
+              <span style={{ fontSize: 12, color: S.ax.rose }}>{geoErr}</span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section style={{ padding: '40px 24px 80px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          {/* Bandeau resultats */}
           <div style={{
-            padding: 32, borderRadius: 14,
-            background: t.canvas, border: `0.5px solid ${t.border}`,
+            display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 8, marginBottom: 18,
           }}>
-            <h2 style={{ fontSize: 18, fontWeight: 500, color: t.text, margin: 0, marginBottom: 8 }}>
-              Trouver mon salon
-            </h2>
-            <p style={{ fontSize: 14, color: t.textSub, lineHeight: 1.6, margin: 0, marginBottom: 22 }}>
-              Saisissez le nom du salon où vous prenez rendez-vous. Vous serez redirigé·e vers sa page de réservation pour vous connecter à votre espace client.
-            </p>
-            <form onSubmit={handleSearch} style={{ position: 'relative', marginBottom: 8 }}>
-              <I.Search style={{
-                position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
-                width: 16, height: 16, color: t.muted, pointerEvents: 'none',
-              }} />
-              <input type="text" value={query} onChange={e => setQuery(e.target.value)}
-                placeholder="Nom du salon, ville…"
-                style={{ ...inp, paddingLeft: 44 }} />
-            </form>
-            <p style={{ fontSize: 12, color: t.muted, margin: 0, lineHeight: 1.5 }}>
-              {"La recherche globale arrive bientôt. En attendant, demandez le lien direct à votre salon ou cherchez son nom suivi de \"FlowIA\" sur Google."}
+            <p style={{ margin: 0, fontSize: 13, color: S.fgMuted }}>
+              {loading && items.length === 0
+                ? 'Recherche...'
+                : total === 0
+                  ? 'Aucun salon trouve.'
+                  : total === 1
+                    ? '1 salon trouve'
+                    : `${total} salons trouves`}
+              {geo && total > 0 && ' · pres de vous'}
+              {query && total > 0 && ` · "${query}"`}
             </p>
           </div>
 
-          <div style={{ marginTop: 40 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 500, color: t.text, margin: 0, marginBottom: 18 }}>
-              {"Comment ça marche ?"}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                {
-                  Ic: I.Search, title: 'Trouvez votre salon',
-                  desc: "Demandez à votre salon son lien de réservation FlowIA, ou scannez son QR code en vitrine.",
-                },
-                {
-                  Ic: I.User, title: 'Connectez-vous',
-                  desc: "Sur la page de votre salon, cliquez sur \"Connexion\". Vous pouvez utiliser votre Google ou créer un compte simple.",
-                },
-                {
-                  Ic: I.Calendar, title: 'Gérez vos RDV',
-                  desc: "Accédez à votre historique, prenez de nouveaux rendez-vous, suivez vos points de fidélité et consultez vos passages.",
-                },
-              ].map((s) => (
-                <div key={s.title} style={{
-                  padding: 18, borderRadius: 12,
-                  background: t.cardAlt, border: `0.5px solid ${t.border}`,
-                  display: 'flex', gap: 14,
-                }}>
-                  <div style={{
-                    width: 36, height: 36, borderRadius: 10,
-                    background: t.canvas, border: `0.5px solid ${t.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <s.Ic style={{ width: 16, height: 16, color: t.text }} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 500, color: t.text, margin: 0, marginBottom: 2 }}>
-                      {s.title}
-                    </p>
-                    <p style={{ fontSize: 13, color: t.textSub, margin: 0, lineHeight: 1.55 }}>
-                      {s.desc}
-                    </p>
-                  </div>
-                </div>
-              ))}
+          {error && (
+            <div style={{
+              padding: '12px 14px', borderRadius: 10, marginBottom: 18,
+              background: S.ax.roseBg, color: S.ax.rose, fontSize: 13,
+            }}>{error}</div>
+          )}
+
+          {/* Grille */}
+          {items.length > 0 && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 18,
+            }}>
+              {items.map(m => <MerchantSearchCard key={m.slug} merchant={m}/>)}
             </div>
-          </div>
+          )}
 
-          <div style={{
-            marginTop: 40, padding: 18, borderRadius: 10,
-            background: t.cardAlt, border: `0.5px solid ${t.border}`,
-            display: 'flex', gap: 12, alignItems: 'flex-start',
-          }}>
-            <I.Mail style={{ width: 16, height: 16, color: t.muted, flexShrink: 0, marginTop: 3 }} />
-            <p style={{ fontSize: 13, color: t.textSub, margin: 0, lineHeight: 1.6 }}>
-              {"Besoin d'aide pour retrouver votre compte ? Écrivez-nous à "}
-              <a href="mailto:contact@flowiapro.com" style={{ color: t.text }}>contact@flowiapro.com</a>
-              {" et nous vous orientons vers votre salon."}
+          {/* Empty state */}
+          {!loading && items.length === 0 && !error && (
+            <div style={{
+              padding: '40px 24px', borderRadius: 14,
+              background: S.bgMuted, border: `1px solid ${S.border}`,
+              textAlign: 'center',
+            }}>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: S.fg }}>
+                Aucun salon ne correspond a votre recherche
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: S.fgMuted, lineHeight: 1.55 }}>
+                Essayez avec un autre terme, ou activez &laquo; Pres de moi &raquo; pour decouvrir les salons proches de chez vous.
+              </p>
+            </div>
+          )}
+
+          {/* Load more */}
+          {hasMore && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 30 }}>
+              <button type="button" onClick={loadMore} disabled={loading}
+                      style={{ ...ghostBtnStyle(), height: 40, padding: '0 22px' }}
+                      {...ghostHover}>
+                {loading ? 'Chargement...' : 'Voir plus de salons'}
+              </button>
+            </div>
+          )}
+
+          {/* Loading skeleton bas de page */}
+          {loading && items.length > 0 && (
+            <p style={{ margin: '24px 0 0', textAlign: 'center', fontSize: 13, color: S.fgMuted }}>
+              Chargement...
             </p>
-          </div>
+          )}
         </div>
       </section>
     </>

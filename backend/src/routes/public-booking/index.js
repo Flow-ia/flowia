@@ -12,6 +12,10 @@ require('./marketing')(router);
 //   commercant.
 require('./contact')(router);
 
+// ─ Marketplace : recherche publique de commercants (page /recherche).
+//   Doit etre monte AVANT le gate /:slug : 'marketplace' n'est pas un slug.
+require('./marketplace')(router);
+
 // ─ Endpoint dedie : resolution slug -> { slug, redirected, oldSlug }.
 //   Utilise par le frontend pour mettre a jour l'URL (history.replaceState)
 //   quand un visiteur arrive avec un ancien slug archive.

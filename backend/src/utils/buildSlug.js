@@ -15,6 +15,8 @@ const RESERVED_WORDS = new Set([
   'null', 'undefined', 'test', 'demo', 'dev', 'contact', 'support',
   'help', 'about', 'pricing', 'terms', 'privacy', 'cgu', 'cgv',
   'mentions-legales', '__oauth', 'oauth', 'callback', 'reset-password',
+  // Routes marketplace : ne doivent pas etre prises comme slug.
+  'recherche', 'search', 'marketplace', 'resolve', 'unsubscribe',
 ]);
 
 // Normalise une chaine en token slug-safe : minuscules, sans accents,

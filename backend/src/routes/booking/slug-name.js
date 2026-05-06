@@ -17,6 +17,7 @@
 const { pool } = require('../../db');
 const {
   buildMerchantSlug,
+  buildLocationPart,
   validateNamePart,
   findUniqueSlug,
   archiveOldSlug,
@@ -38,8 +39,6 @@ module.exports = function attachSlugNameRoutes(router) {
       if (!rows.length) return res.json({ slug: null });
       const r = rows[0];
       const namePart = extractNamePart(r.slug, r.city, r.postal_code);
-      // La partie ville-CP courante (ce que l'edition formera comme suffixe).
-      const { buildLocationPart } = require('../../utils/buildSlug');
       res.json({
         slug:           r.slug,
         slugLocked:     r.slug_locked === true,
