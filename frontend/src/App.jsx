@@ -2566,7 +2566,7 @@ function SettingsRedirect() {
     case 'heures':
       target = '/statistiques'; break;
     case 'notifications':
-      target = '/reglages/reservations/notifications'; break;
+      target = '/reglages/communication'; break;
     case 'compte':
       target = '/reglages/mon-commerce'; break;
     default:

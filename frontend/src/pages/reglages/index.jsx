@@ -13,6 +13,7 @@ import Reservations from './reservations';
 import Equipe from './equipe';
 import CaisseConfig from './caisse-config';
 import Paiements from './paiements';
+import Communication from './communication';
 
 const DOMAINS = [
   {
@@ -25,11 +26,19 @@ const DOMAINS = [
   },
   {
     id: 'reservations',
-    label: 'Réservations',
-    subtitle: 'Config booking, prestations, notifications',
+    label: 'Réservation en ligne',
+    subtitle: 'Lien public, prestations en ligne, agenda Google',
     color: '#3b82f6',
     icon: 'calendar',
-    items: ['Configuration (Lien, délais)', 'Prestations sur site (image 5Mo)', 'Notifications SMS/Email'],
+    items: ['Configuration (lien, délais)', 'Prestations en ligne (image 5Mo)', 'Synchronisation Google Calendar'],
+  },
+  {
+    id: 'caisse-config',
+    label: 'Caisse',
+    subtitle: 'Prestations en boutique, QR inscription',
+    color: '#8b5cf6',
+    icon: 'cash',
+    items: ['Prestations en boutique (catégories hiérarchiques)', 'QR code /j/:slug'],
   },
   {
     id: 'equipe',
@@ -40,12 +49,12 @@ const DOMAINS = [
     items: ['Membres (permissions)', 'Horaires par employé', 'Commissions', 'Absences (8 types)'],
   },
   {
-    id: 'caisse-config',
-    label: 'Caisse · Config',
-    subtitle: 'Prestations sur place, QR code inscription',
-    color: '#8b5cf6',
-    icon: 'cash',
-    items: ['Prestations sur place (catégories hiérarchiques)', 'QR code /j/:slug'],
+    id: 'communication',
+    label: 'Communication',
+    subtitle: 'Rappels SMS/email, recap, sons caisse, push',
+    color: '#ec4899',
+    icon: 'bell',
+    items: ['Rappels RDV (24h, 2h)', 'Recap quotidien', 'Sons caisse et nouveau RDV', 'Notifications push'],
   },
   {
     id: 'paiements',
@@ -151,6 +160,7 @@ export default function Reglages(props) {
   else if (domain === 'reservations')  content = <Reservations {...childProps}/>;
   else if (domain === 'equipe')        content = <Equipe       {...childProps}/>;
   else if (domain === 'caisse-config') content = <CaisseConfig {...childProps}/>;
+  else if (domain === 'communication') content = <Communication {...childProps}/>;
   else if (domain === 'paiements')     content = <Paiements    {...childProps}/>;
   else                                 content = <Home onLock={props.onLock}/>;
 
