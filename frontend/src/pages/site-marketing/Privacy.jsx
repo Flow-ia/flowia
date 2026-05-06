@@ -49,7 +49,7 @@ export default function Privacy() {
           <p>
             {"Conformément au RGPD, vous disposez des droits d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Pour les exercer, écrivez-nous à "}
             <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
-            {". Vous pouvez aussi supprimer votre compte directement depuis l'application (suppression effective sous 30 jours)."}
+            {". Vous pouvez aussi supprimer votre compte directement depuis l'application (Réglages → Compte → Supprimer le compte) : la suppression est immédiate et anonymise les écritures comptables conservées au titre de nos obligations légales."}
           </p>
 
           <ProseH2>7. Sous-traitants</ProseH2>
@@ -200,12 +200,21 @@ export default function Privacy() {
               <strong>{"Déconnexion de Google Agenda : "}</strong>
               {"depuis "}
               <em>{"Réglages → Réservations → Synchronisation → Déconnecter"}</em>
-              {", FlowIA révoque immédiatement les jetons auprès de Google ("}<code>oauth2.googleapis.com/revoke</code>
-              {") et supprime sa copie chiffrée. Les événements déjà créés dans l'agenda Google restent la propriété du commerçant et ne sont pas effacés."}
+              {", FlowIA appelle l'endpoint de révocation Google ("}<code>oauth2.googleapis.com/revoke</code>
+              {") puis supprime immédiatement sa copie chiffrée des jetons "}
+              (<code>access_token</code>, <code>refresh_token</code>)
+              {" de la table "}<code>merchant_calendar_integrations</code>
+              {". Les événements déjà créés dans l'agenda Google restent la propriété du commerçant et ne sont pas effacés."}
             </li>
             <li>
               <strong>{"Suppression du compte FlowIA : "}</strong>
-              {"vous pouvez supprimer votre compte directement depuis l'application (Réglages → Compte). La suppression est effective sous 30 jours, période pendant laquelle l'opération peut être annulée. À l'issue de ces 30 jours, l'ensemble des données Google associées (email, nom, jetons) est effacé définitivement de notre base de production. Les sauvegardes chiffrées sont purgées au plus tard 90 jours après la suppression."}
+              {"vous pouvez supprimer votre compte directement depuis l'application (Réglages → Compte). La suppression est "}
+              <strong>{"immédiate"}</strong>
+              {" : l'ensemble des données Google associées (email, nom, photo, jetons OAuth chiffrés) est effacé de notre base de production en une seule transaction RGPD. Les RDV et transactions historiques sont anonymisés (l'identité Google associée est effacée, les écritures comptables sont conservées pour respecter nos obligations légales — 10 ans)."}
+            </li>
+            <li>
+              <strong>{"Sauvegardes : "}</strong>
+              {"les sauvegardes chiffrées de notre prestataire d'hébergement appliquent une politique de rétention conforme aux pratiques sectorielles et sont automatiquement purgées dans les délais standard de l'industrie. Ces sauvegardes ne sont jamais utilisées pour ré-exposer des données effacées en production."}
             </li>
             <li>
               <strong>{"Révocation directe côté Google : "}</strong>
@@ -213,7 +222,11 @@ export default function Privacy() {
               <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">
                 {"myaccount.google.com/permissions"}
               </a>
-              {". Cela invalide immédiatement nos jetons côté Google ; nous supprimons notre copie au prochain appel échoué (au plus tard 7 jours)."}
+              {". Cela invalide immédiatement nos jetons côté Google. Au prochain essai d'usage du jeton, FlowIA détecte automatiquement l'erreur "}
+              <code>invalid_grant</code>
+              {" / 401, désactive la synchronisation ("}<code>sync_enabled=FALSE</code>
+              {") et arrête tout appel ultérieur à Google. Pour purger définitivement la copie chiffrée résiduelle (sans valeur car déjà invalidée par Google), utilisez le bouton « Déconnecter » dans l'application ou écrivez-nous à "}
+              <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>.
             </li>
             <li>
               <strong>{"Demande explicite de suppression : "}</strong>
