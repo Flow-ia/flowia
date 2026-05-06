@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import App from './App';
 import BookingPage from './pages/BookingPage';
+import { pubApi } from './utils/api';
 import BookingPolitique from './pages/BookingPolitique';
 import OAuthCallback from './pages/OAuthCallback';
 import GoogleConfirm from './pages/booking-page/auth/GoogleConfirm';
@@ -61,9 +62,58 @@ function isMarketingHost() {
 }
 
 // Wrappers — useParams() doit être dans le contexte <Route>
+//
+// Resolution slug : si le visiteur arrive avec un slug archive (ancien
+// nom du salon, ancienne adresse, edition manuelle), on l'aiguille vers
+// le slug actuel via /api/pub/resolve. Cas typique : QR code physique
+// imprime avec l'ancien slug, lien partage par SMS marketing avant un
+// changement d'adresse, bookmark navigateur. La redirection se fait via
+// navigate(replace=true) pour ne pas polluer l'historique.
+//
+// On utilise sessionStorage pour eviter de re-resoudre le meme slug a
+// chaque navigation interne (auth, étapes, etc.) au sein de la session.
 function BookingPageWrapper() {
   const { slug } = useParams();
-  return <BookingPage slug={slug} />;
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [resolved, setResolved] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('ff_slug_resolved_' + slug);
+      return cached ? slug : null; // resolu en cache => slug actuel
+    } catch { return null; }
+  });
+
+  useEffect(() => {
+    if (resolved) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await pubApi.resolveSlug(slug);
+        if (cancelled) return;
+        if (r.redirected && r.slug && r.slug !== slug) {
+          // Reconstruit l'URL avec le nouveau slug en preservant le path
+          // sous /book/:slug et la query string.
+          const newPath = location.pathname.replace(
+            new RegExp('^/book/' + slug.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')),
+            '/book/' + r.slug
+          );
+          navigate(newPath + location.search + location.hash, { replace: true });
+          return;
+        }
+        try { sessionStorage.setItem('ff_slug_resolved_' + r.slug, '1'); } catch {}
+        setResolved(r.slug || slug);
+      } catch {
+        // Si resolve echoue (404 ou serveur), on tente quand meme de
+        // monter BookingPage avec le slug d'origine — son propre
+        // chargement affichera le message d'erreur approprie.
+        setResolved(slug);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [slug, resolved, navigate, location.pathname, location.search, location.hash]);
+
+  if (!resolved) return null; // bref : l'app a deja un fond, BookingPage gere son spinner
+  return <BookingPage slug={resolved} />;
 }
 
 function BookingPolitiqueWrapper() {

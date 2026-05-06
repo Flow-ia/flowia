@@ -935,6 +935,22 @@ async function initDB() {
     END $$
   `);
 
+  // ── Slug aliases : redirection 301 quand un commercant change de slug ────
+  // Format slug : nom-ville-CP. Quand le commercant change le nom de son
+  // salon, son adresse, ou edite la partie nom de son slug, l'ancien slug
+  // est archive ici pour preserver les QR codes imprimes, les liens partages
+  // par SMS, et l'OAuth Google (state=slug). La route publique resout les
+  // alias via un middleware avant de servir 404.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS booking_slug_aliases (
+      old_slug   VARCHAR(100) PRIMARY KEY,
+      user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_booking_slug_aliases_user
+    ON booking_slug_aliases(user_id)`);
+
   // ── Index performance critique ────────────────────────────────────────────
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_booking_settings_slug
     ON booking_settings(slug) WHERE slug IS NOT NULL`).catch(()=>{});
@@ -1697,6 +1713,67 @@ async function initDB() {
     ON users(subscription_status) WHERE subscription_status IS NOT NULL`);
 
   await applyAdminSchema(pool);
+
+  // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─
+  // Idempotent : on ignore les slugs deja au format, les slugs verrouilles
+  // par admin, et les commercants sans ville/CP (pas encore onboarded).
+  // L'ancien slug est archive en alias pour preserver les liens partages.
+  // Desactivable via DISABLE_SLUG_MIGRATION=1 si besoin de skipper en prod.
+  if (process.env.DISABLE_SLUG_MIGRATION !== '1') {
+    try {
+      const {
+        buildMerchantSlug,
+        buildLocationPart,
+        findUniqueSlug,
+        archiveOldSlug,
+      } = require('../utils/buildSlug');
+
+      const { rows: merchants } = await pool.query(
+        `SELECT bs.user_id, bs.slug, bs.slug_locked,
+                u.business_name, u.city, u.postal_code
+           FROM booking_settings bs
+           JOIN users u ON u.id = bs.user_id
+          WHERE bs.slug IS NOT NULL
+            AND COALESCE(bs.slug_locked, FALSE) = FALSE
+            AND u.city IS NOT NULL AND u.city <> ''
+            AND u.postal_code IS NOT NULL AND u.postal_code <> ''`
+      );
+
+      let migrated = 0;
+      for (const m of merchants) {
+        const targetLocation = buildLocationPart(m.city, m.postal_code);
+        if (!targetLocation) continue;
+        // Si le slug actuel se termine deja par -ville-cp, on saute (deja
+        // au bon format, meme si on aurait pu le recalculer differemment
+        // — on ne touche jamais a un slug deja conforme pour eviter de
+        // casser des liens existants pour rien).
+        if (m.slug && m.slug.endsWith(`-${targetLocation}`)) continue;
+
+        const newBase = buildMerchantSlug({
+          name: m.business_name,
+          city: m.city,
+          postalCode: m.postal_code,
+        });
+        if (!newBase || newBase === m.slug) continue;
+
+        const newSlug = await findUniqueSlug(pool, newBase, m.user_id);
+        if (newSlug === m.slug) continue;
+
+        if (m.slug) await archiveOldSlug(pool, m.slug, m.user_id);
+        await pool.query('UPDATE booking_settings SET slug=$1 WHERE user_id=$2',
+          [newSlug, m.user_id]);
+        migrated += 1;
+      }
+      if (migrated > 0) {
+        console.log(`[DB] slug migration: ${migrated} slug(s) reformates en nom-ville-CP`);
+      }
+    } catch (e) {
+      // Best-effort : ne jamais bloquer le boot du backend a cause de la
+      // migration de slugs (la prod ne doit pas etre indisponible si un
+      // edge case explose ici — on log et on continue).
+      console.warn('[DB slug migration]', e.message);
+    }
+  }
 
 console.log('[DB] Tables initialisées');
 }

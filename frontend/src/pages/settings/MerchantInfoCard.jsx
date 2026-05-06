@@ -4,8 +4,15 @@ import { useAuth } from '../../hooks/useAuth';
 import { I } from '../../utils/icons';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { Button, Label } from '../../components/primitives';
+import { getBookingUrl } from '../../utils/publicUrl';
 
-// Carte "Informations du commerce" (nom, telephone, adresse, code postal, ville, Google Business)
+// Carte "Informations du commerce" (nom, telephone, adresse, code postal, ville, Google Business).
+//
+// Cas slug : si le commercant change businessName / city / postalCode, le
+// backend recalcule automatiquement le slug nom-ville-CP, archive l'ancien
+// en alias (booking_slug_aliases) et retourne { slugChange: { oldSlug, newSlug } }.
+// On previent ici l'utilisateur via une modale de confirmation AVANT save,
+// puis on affiche un encart de succes avec le nouveau lien apres save.
 export default function MerchantInfoCard({ theme, showToast }) {
   const t = theme;
   const { user, updateUser } = useAuth();
@@ -15,6 +22,8 @@ export default function MerchantInfoCard({ theme, showToast }) {
   const [profLoad, setProfLoad] = useState(false);
   const [profErr,  setProfErr]  = useState('');
   const [profOk,   setProfOk]   = useState('');
+  const [slugInfo, setSlugInfo] = useState(null); // { oldSlug, newSlug }
+  const [confirm,  setConfirm]  = useState(false); // boolean : modale ouverte ou non
   const [form, setForm] = useState({
     businessName:      user?.businessName      || '',
     address:           user?.address           || '',
@@ -37,11 +46,31 @@ export default function MerchantInfoCard({ theme, showToast }) {
     }
   }, [user, editing]);
 
-  const saveProfile = async () => {
+  // Detecte si le save va declencher un recalcul du slug (nom/ville/CP).
+  const slugWillChange = () => {
+    const businessChanged = form.businessName.trim() !== (user?.businessName || '');
+    const cityChanged     = form.city.trim()         !== (user?.city || '');
+    const postalChanged   = form.postalCode.trim()   !== (user?.postalCode || '');
+    return businessChanged || cityChanged || postalChanged;
+  };
+
+  // Click "Enregistrer" : si nom/ville/CP changent et que le compte a deja
+  // une adresse complete (donc un slug nom-ville-CP), on demande d'abord
+  // confirmation a l'utilisateur. Sinon (premiere saisie d'adresse), on
+  // sauvegarde directement.
+  const onSaveClick = () => {
     if (!form.businessName.trim()) { setProfErr('Le nom du commerce est requis.'); return; }
-    setProfLoad(true); setProfErr(''); setProfOk('');
+    if (slugWillChange() && user?.city && user?.postalCode) {
+      setConfirm(true);
+    } else {
+      doSave();
+    }
+  };
+
+  const doSave = async () => {
+    setProfLoad(true); setProfErr(''); setProfOk(''); setSlugInfo(null);
     try {
-      await api.updateProfile({
+      const r = await api.updateProfile({
         businessName:      form.businessName.trim(),
         phone:             form.phone.trim()             || undefined,
         address:           form.address.trim()           || undefined,
@@ -58,9 +87,15 @@ export default function MerchantInfoCard({ theme, showToast }) {
         googleBusinessUrl: form.googleBusinessUrl.trim(),
       });
       setEditing(false);
-      setProfOk('Informations mises a jour');
-      setTimeout(() => setProfOk(''), 3500);
-      showToast('Informations mises a jour');
+      setConfirm(false);
+      if (r?.slugChange?.newSlug) {
+        setSlugInfo(r.slugChange);
+        showToast('Informations et lien de reservation mis a jour');
+      } else {
+        setProfOk('Informations mises a jour');
+        setTimeout(() => setProfOk(''), 3500);
+        showToast('Informations mises a jour');
+      }
     } catch (e) { setProfErr(e.message || 'Erreur lors de la sauvegarde'); }
     finally { setProfLoad(false); }
   };
@@ -182,7 +217,7 @@ export default function MerchantInfoCard({ theme, showToast }) {
                   Annuler
                 </Button>
                 <Button variant="primary" type="button"
-                        onClick={saveProfile} disabled={profLoad}
+                        onClick={onSaveClick} disabled={profLoad}
                         style={{ flex:2 }}>
                   {profLoad ? 'Enregistrement...' : 'Enregistrer'}
                 </Button>
@@ -195,6 +230,23 @@ export default function MerchantInfoCard({ theme, showToast }) {
                               background:'#f0fdf4',
                               color:'#065f46', fontSize:13, fontWeight:500 }}>
                   {profOk}
+                </div>
+              )}
+              {slugInfo && (
+                <div style={{ margin:'8px 18px 0', padding:'12px 14px', borderRadius:8,
+                              background:t.cardAlt, border:`0.5px solid ${t.border}` }}>
+                  <p style={{ margin:'0 0 6px', fontSize:12, fontWeight:500, color:t.text }}>
+                    Lien de reservation mis a jour
+                  </p>
+                  <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted }}>
+                    Ancien lien : <span style={{ textDecoration:'line-through' }}>{getBookingUrl(slugInfo.oldSlug)}</span>
+                  </p>
+                  <p style={{ margin:'0 0 6px', fontSize:11, color:t.text, wordBreak:'break-all' }}>
+                    Nouveau lien : <strong style={{ fontWeight:500 }}>{getBookingUrl(slugInfo.newSlug)}</strong>
+                  </p>
+                  <p style={{ margin:0, fontSize:11, color:t.muted, lineHeight:1.5 }}>
+                    Vos QR codes deja imprimes et liens partages avec l&apos;ancienne adresse continuent de fonctionner : ils redirigent automatiquement vers le nouveau lien.
+                  </p>
                 </div>
               )}
               {[
@@ -216,6 +268,50 @@ export default function MerchantInfoCard({ theme, showToast }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {confirm && (
+        <div role="dialog" aria-modal="true"
+             onClick={() => !profLoad && setConfirm(false)}
+             style={{ position:'fixed', inset:0, zIndex:1000,
+                      background:'rgba(0,0,0,0.45)',
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      padding:16 }}>
+          <div onClick={(e) => e.stopPropagation()}
+               style={{ width:'100%', maxWidth:440, background:t.card,
+                        borderRadius:12, border:`0.5px solid ${t.border}`,
+                        padding:'18px 20px',
+                        display:'flex', flexDirection:'column', gap:12 }}>
+            <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>
+              Modification du lien de reservation
+            </p>
+            <p style={{ margin:0, fontSize:12, color:t.muted, lineHeight:1.55 }}>
+              Vous etes sur le point de modifier le nom du salon, la ville ou
+              le code postal. Cela mettra a jour automatiquement votre lien
+              de reservation publique.
+            </p>
+            <p style={{ margin:0, fontSize:12, color:t.muted, lineHeight:1.55 }}>
+              Vos QR codes deja imprimes et liens partages avec l&apos;ancienne adresse
+              continuent de fonctionner : ils seront automatiquement rediriges
+              vers le nouveau lien.
+            </p>
+            <p style={{ margin:0, fontSize:11, color:t.dim }}>
+              Le nouveau lien sera affiche apres la sauvegarde.
+            </p>
+            <div style={{ display:'flex', gap:10, marginTop:4 }}>
+              <Button variant="secondary" type="button"
+                      onClick={() => setConfirm(false)}
+                      style={{ flex:1 }} disabled={profLoad}>
+                Annuler
+              </Button>
+              <Button variant="primary" type="button"
+                      onClick={doSave} disabled={profLoad}
+                      style={{ flex:2 }}>
+                {profLoad ? 'Enregistrement...' : 'Confirmer et enregistrer'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -6,6 +6,11 @@ const { pool } = require('../db');
 const { sendVerificationEmail } = require('../utils/email');
 const { authMiddleware } = require('../middleware/auth');
 const { setClientCookie } = require('../utils/clientCookies');
+const {
+  buildMerchantSlug,
+  findUniqueSlug,
+  archiveOldSlug,
+} = require('../utils/buildSlug');
 const router = express.Router();
 
 const SEED_CATS = [
@@ -166,26 +171,12 @@ router.post('/register/confirm', async (req, res) => {
         [user.id, cat.name, cat.type, cat.icon, cat.color]);
     }
 
-    // Créer automatiquement booking_settings avec un slug unique basé sur le nom du commerce
-    // Les réservations en ligne sont désactivées par défaut
-    const baseSlug = businessName
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // supprimer accents
-      .replace(/[^a-z0-9\s-]/g, '')                     // garder lettres, chiffres, espaces, tirets
-      .trim()
-      .replace(/\s+/g, '-')                              // espaces → tirets
-      .replace(/-+/g, '-')                               // tirets multiples → 1
-      .substring(0, 30)                                  // max 30 chars
-      || 'mon-commerce';
-    // S'assurer que le slug est unique en ajoutant un suffixe si nécessaire
-    let finalSlug = baseSlug;
-    let attempt = 0;
-    while (true) {
-      const { rows: existing } = await pool.query('SELECT id FROM booking_settings WHERE slug=$1', [finalSlug]);
-      if (!existing.length) break;
-      attempt++;
-      finalSlug = `${baseSlug}-${attempt}`;
-    }
+    // Creer automatiquement booking_settings avec un slug unique au format
+    // nom-ville-CP. Si city/postalCode manquent encore (cas rare a ce stade),
+    // le helper retombe sur le nom seul ; le slug sera reconstruit lors de
+    // l'onboarding (POST /onboarding) ou du premier PUT /profile.
+    const baseSlug = buildMerchantSlug({ name: businessName, city, postalCode });
+    const finalSlug = await findUniqueSlug(pool, baseSlug);
     await pool.query(
       `INSERT INTO booking_settings (user_id, is_enabled, slug, advance_booking_days, min_notice_hours)
        VALUES ($1, false, $2, 30, 1)
@@ -714,9 +705,27 @@ router.post('/change-password', authMiddleware, async (req, res) => {
 });
 
 // ── PUT /api/auth/profile — mise à jour infos commerçant ────────────────────
+// Si city ou postal_code (ou businessName, qui forme la partie nom du slug)
+// changent, on recalcule le slug au format nom-ville-CP, on archive l'ancien
+// slug dans booking_slug_aliases et on retourne les deux slugs dans la
+// reponse pour que le frontend puisse afficher l'alerte de redirection.
+// Respecte slug_locked : si admin a verrouille, le slug n'est jamais touche.
+// Note : on ne regenere PAS la partie nom si l'utilisateur a edite manuellement
+//        son slug (ex : "chez-paul-lille-59000" alors que businessName="Hair Coiff")
+//        — pour detecter ce cas, on conserve la partie nom actuelle si elle
+//        ne correspond pas au businessName slugifie.
 router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const { businessName, phone, address, city, postalCode, googleBusinessUrl } = req.body;
+
+    // Snapshot AVANT update pour detecter les changements pertinents.
+    const { rows: beforeRows } = await pool.query(
+      'SELECT business_name, city, postal_code FROM users WHERE id=$1',
+      [req.user.userId]
+    );
+    if (!beforeRows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    const before = beforeRows[0];
+
     const { rows } = await pool.query(
       `UPDATE users SET
          business_name       = COALESCE($1, business_name),
@@ -732,8 +741,59 @@ router.put('/profile', authMiddleware, async (req, res) => {
        req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
-    // Invalider le cache du site de réservation public pour que la modification
-    // soit immédiatement visible côté clients (source unique : table users).
+    const after = rows[0];
+
+    // ─ Slug : recalcul si business_name OU city OU postal_code ont change,
+    //   ET que slug_locked=FALSE.
+    let slugChange = null; // { oldSlug, newSlug } pour reponse frontend
+    const businessNameChanged = before.business_name !== after.business_name;
+    const cityChanged         = (before.city || '')        !== (after.city || '');
+    const postalChanged       = (before.postal_code || '') !== (after.postal_code || '');
+
+    if (businessNameChanged || cityChanged || postalChanged) {
+      try {
+        const { rows: bsCur } = await pool.query(
+          'SELECT slug, slug_locked FROM booking_settings WHERE user_id=$1',
+          [req.user.userId]
+        );
+        const oldSlug = bsCur[0]?.slug || null;
+        const isSlugLocked = bsCur[0]?.slug_locked === true;
+
+        if (!isSlugLocked && oldSlug) {
+          // Determiner la partie nom a conserver :
+          //  - si l'ancien slug se terminait bien par -<oldVille>-<oldCP>,
+          //    on extrait la partie nom actuelle (ce qui preserve une edition
+          //    manuelle precedente)
+          //  - sinon (slug ancien format mono-segment), on repart du business_name
+          const { extractNamePart } = require('../utils/buildSlug');
+          const currentNamePart = extractNamePart(oldSlug, before.city, before.postal_code);
+          const baseSlug = buildMerchantSlug({
+            // Si businessName a change, on prend le nouveau ; sinon on garde
+            // la partie nom (potentiellement editee manuellement par le user).
+            customNamePart: businessNameChanged ? null : currentNamePart,
+            name: after.business_name,
+            city: after.city,
+            postalCode: after.postal_code,
+          });
+          const newSlug = await findUniqueSlug(pool, baseSlug, req.user.userId);
+
+          if (newSlug !== oldSlug) {
+            await archiveOldSlug(pool, oldSlug, req.user.userId);
+            await pool.query('UPDATE booking_settings SET slug=$1 WHERE user_id=$2',
+              [newSlug, req.user.userId]);
+            slugChange = { oldSlug, newSlug };
+          }
+        }
+      } catch (slugErr) {
+        // Ne pas faire echouer la mise a jour de profil si le recalcul de
+        // slug echoue (best-effort). Le commercant peut retenter via le
+        // bouton dedie dans Reglages.
+        console.warn('[PROFILE slug recalc]', slugErr.message);
+      }
+    }
+
+    // Invalider le cache du site de reservation public pour que la modification
+    // soit immediatement visible cote clients (source unique : table users).
     try {
       const { rows: bs } = await pool.query(
         'SELECT slug FROM booking_settings WHERE user_id=$1',
@@ -742,8 +802,10 @@ router.put('/profile', authMiddleware, async (req, res) => {
       for (const r of bs) {
         if (r.slug) global.memCache?.del(`biz:${r.slug}`);
       }
+      if (slugChange?.oldSlug) global.memCache?.del(`biz:${slugChange.oldSlug}`);
     } catch { /* cache best-effort */ }
-    res.json({ ok: true, user: rows[0] });
+
+    res.json({ ok: true, user: after, slugChange });
   } catch (e) { console.error('[PROFILE PUT]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -831,18 +893,11 @@ router.get('/google/merchant/callback', async (req, res) => {
             [user.id, cat.name, cat.type, cat.icon, cat.color]);
         }
 
-        // Créer booking_settings avec slug unique
-        const baseSlug = (given_name || 'commerce')
-          .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 30) || 'mon-commerce';
-        let finalSlug = baseSlug;
-        let attempt = 0;
-        while (true) {
-          const { rows: existing } = await pool.query('SELECT id FROM booking_settings WHERE slug=$1', [finalSlug]);
-          if (!existing.length) break;
-          attempt++;
-          finalSlug = `${baseSlug}-${attempt}`;
-        }
+        // Creer booking_settings avec slug unique. A ce stade le compte n'a
+        // ni ville ni CP : le helper retombe sur le nom seul, le slug sera
+        // recalcule au format nom-ville-CP lors de l'onboarding obligatoire.
+        const baseSlug = buildMerchantSlug({ name: given_name || 'commerce' });
+        const finalSlug = await findUniqueSlug(pool, baseSlug);
         await pool.query(
           `INSERT INTO booking_settings (user_id, is_enabled, slug, advance_booking_days, min_notice_hours)
            VALUES ($1, false, $2, 30, 1) ON CONFLICT (user_id) DO NOTHING`,
@@ -922,19 +977,33 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];
 
-    // Mettre à jour le slug si le nom du commerce a changé
-    const baseSlug = businessName.trim()
-      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 30) || 'mon-commerce';
-    let finalSlug = baseSlug;
-    let attempt = 0;
-    while (true) {
-      const { rows: existing } = await pool.query('SELECT id FROM booking_settings WHERE slug=$1 AND user_id!=$2', [finalSlug, req.user.userId]);
-      if (!existing.length) break;
-      attempt++;
-      finalSlug = `${baseSlug}-${attempt}`;
+    // Recalculer le slug au format nom-ville-CP. C'est l'onboarding qui
+    // garantit pour la premiere fois la presence de city + postal_code,
+    // donc le slug initial complet est forme ici. Si admin a verrouille
+    // le slug (slug_locked=TRUE), on ne touche a rien. L'ancien slug est
+    // archive dans booking_slug_aliases pour preserver les liens deja
+    // partages.
+    const { rows: bsCur } = await pool.query(
+      'SELECT slug, slug_locked FROM booking_settings WHERE user_id=$1',
+      [req.user.userId]
+    );
+    const oldSlug = bsCur[0]?.slug || null;
+    const isSlugLocked = bsCur[0]?.slug_locked === true;
+    let finalSlug = oldSlug;
+    if (!isSlugLocked) {
+      const baseSlug = buildMerchantSlug({
+        name: businessName.trim(),
+        city: city.trim(),
+        postalCode: postalCode.trim(),
+      });
+      finalSlug = await findUniqueSlug(pool, baseSlug, req.user.userId);
+      if (oldSlug && oldSlug !== finalSlug) {
+        await archiveOldSlug(pool, oldSlug, req.user.userId);
+      }
+      await pool.query('UPDATE booking_settings SET slug=$1 WHERE user_id=$2', [finalSlug, req.user.userId]);
+      try { global.memCache?.del(`biz:${oldSlug}`); } catch {}
+      try { global.memCache?.del(`biz:${finalSlug}`); } catch {}
     }
-    await pool.query('UPDATE booking_settings SET slug=$1 WHERE user_id=$2', [finalSlug, req.user.userId]);
 
     // Nouveau token avec le bon businessName — durée configurable.
     const tokenExpiry = await getMerchantSessionDuration(u.id);

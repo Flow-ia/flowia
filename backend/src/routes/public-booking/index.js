@@ -12,6 +12,77 @@ require('./marketing')(router);
 //   commercant.
 require('./contact')(router);
 
+// ─ Endpoint dedie : resolution slug -> { slug, redirected, oldSlug }.
+//   Utilise par le frontend pour mettre a jour l'URL (history.replaceState)
+//   quand un visiteur arrive avec un ancien slug archive.
+//   Monte AVANT le gate frozen pour pouvoir resoudre meme un compte gele
+//   (le frontend affichera le statut une fois redirige).
+router.get('/resolve/:slug', async (req, res) => {
+  try {
+    const { rows: live } = await pool.query(
+      'SELECT slug FROM booking_settings WHERE slug=$1 LIMIT 1',
+      [req.params.slug]
+    );
+    if (live.length) {
+      return res.json({ slug: live[0].slug, redirected: false });
+    }
+    const { rows: alias } = await pool.query(
+      `SELECT bs.slug AS new_slug
+         FROM booking_slug_aliases a
+         JOIN booking_settings bs ON bs.user_id = a.user_id
+        WHERE a.old_slug = $1
+        LIMIT 1`,
+      [req.params.slug]
+    );
+    if (alias.length) {
+      return res.json({
+        slug: alias[0].new_slug,
+        redirected: true,
+        oldSlug: req.params.slug,
+      });
+    }
+    return res.status(404).json({ error: 'Commerce introuvable.' });
+  } catch (e) {
+    console.error('[PUB RESOLVE]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ─ Middleware de resolution d'alias : si /:slug n'existe pas dans
+//   booking_settings, on tente une resolution via booking_slug_aliases et
+//   on REECRIT req.params.slug -> nouveau slug. Toutes les routes en aval
+//   marchent ainsi de maniere transparente, sans avoir a etre modifiees.
+//   Necessaire pour ne pas casser :
+//     - QR codes imprimes pointant sur l'ancien slug
+//     - Liens partages par SMS marketing avant changement
+//     - state=oldSlug du callback OAuth Google client
+//     - bookmarks navigateur des clients
+router.use('/:slug', async (req, res, next) => {
+  try {
+    const candidate = req.params.slug;
+    const { rows } = await pool.query(
+      'SELECT 1 FROM booking_settings WHERE slug=$1 LIMIT 1', [candidate]
+    );
+    if (rows.length) return next();
+    const { rows: alias } = await pool.query(
+      `SELECT bs.slug AS new_slug
+         FROM booking_slug_aliases a
+         JOIN booking_settings bs ON bs.user_id = a.user_id
+        WHERE a.old_slug = $1
+        LIMIT 1`,
+      [candidate]
+    );
+    if (alias.length) {
+      // Reecriture transparente du parametre. Les handlers en aval voient
+      // directement le nouveau slug, donc lookup direct dans booking_settings.
+      req.params.slug = alias[0].new_slug;
+      // En-tete informative pour debug client / monitoring.
+      res.set('X-Slug-Redirected-From', candidate);
+    }
+  } catch { /* fail open : laisse le 404 normal s'appliquer en aval */ }
+  return next();
+});
+
 // ─ Gate "merchant gelé par admin" (commit #3 admin) — toute route /:slug est
 //   bloquée si le commerçant est gelé. La désinscription marketing reste OK
 //   car elle est montée juste au-dessus.

@@ -25,6 +25,8 @@ router.use(employeePinOptional);
 
 // ─ Paramètres réservation + horaires d'ouverture
 require('./settings')(router);
+// ─ Edition de la partie nom du slug (nom-ville-CP) + check disponibilite
+require('./slug-name')(router);
 // ─ Services CRUD
 require('./services')(router);
 // ─ Rendez-vous (vue commerçant)

@@ -389,6 +389,16 @@ export const bookingApi = {
   saveSettings:   (b)   => request('/booking/settings',         { method: 'POST', body: JSON.stringify(b) }),
   checkSlug:      (slug) => request(`/booking/check-slug?slug=${encodeURIComponent(slug)}`),
 
+  // ── Slug nom-ville-CP : edition de la partie nom (FDS-2026) ──────────────
+  // GET /api/booking/slug-info       -> { slug, slugLocked, namePart, locationPart, city, postalCode, businessName }
+  // POST /api/booking/slug-name/check { namePart } -> { available, message?, candidate }
+  // PATCH /api/booking/slug-name     { namePart }   -> { ok, slug, oldSlug, unchanged? }
+  getSlugInfo:    ()        => request('/booking/slug-info'),
+  checkSlugName:  (namePart) => request('/booking/slug-name/check',
+                                        { method: 'POST', body: JSON.stringify({ namePart }) }),
+  updateSlugName: (namePart) => request('/booking/slug-name',
+                                        { method: 'PATCH', body: JSON.stringify({ namePart }) }),
+
   // Horaires
   getHours:       ()    => request('/booking/hours'),
   saveHours:      (b)   => request('/booking/hours',            { method: 'POST', body: JSON.stringify(b) }),
@@ -514,6 +524,10 @@ async function pubRequest(path, options = {}) {
   return data;
 }
 export const pubApi = {
+  // Resolve : si slug archive, renvoie { slug, redirected:true, oldSlug }.
+  // Utilise au mount de la booking page pour rediriger transparente quand
+  // un visiteur arrive avec un ancien slug (QR code, lien partage SMS).
+  resolveSlug:    (slug)    => pubRequest(`/resolve/${slug}`),
   getBusiness:    (slug)    => pubRequest(`/${slug}`),
   getAnnouncement:(slug)    => pubRequest(`/${slug}/announcement`),
   getServices:    (slug)    => pubRequest(`/${slug}/services`),
