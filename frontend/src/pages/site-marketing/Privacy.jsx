@@ -49,7 +49,9 @@ export default function Privacy() {
           <p>
             {"Conformément au RGPD, vous disposez des droits d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Pour les exercer, écrivez-nous à "}
             <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
-            {". Vous pouvez aussi supprimer votre compte directement depuis l'application (Réglages → Compte → Supprimer le compte) : la suppression est immédiate et anonymise les écritures comptables conservées au titre de nos obligations légales."}
+            {". Vous pouvez aussi supprimer votre compte directement depuis l'application (Réglages → Compte → Supprimer le compte). Cette action déclenche immédiatement la suppression des données Google associées et bloque l'accès au compte. L'ensemble des données métier est ensuite purgé définitivement après une période de grâce de 30 jours, durant laquelle vous pouvez nous écrire à "}
+            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+            {" pour annuler la suppression."}
           </p>
 
           <ProseH2>7. Sous-traitants</ProseH2>
@@ -208,9 +210,26 @@ export default function Privacy() {
             </li>
             <li>
               <strong>{"Suppression du compte FlowIA : "}</strong>
-              {"vous pouvez supprimer votre compte directement depuis l'application (Réglages → Compte). La suppression est "}
-              <strong>{"immédiate"}</strong>
-              {" : l'ensemble des données Google associées (email, nom, photo, jetons OAuth chiffrés) est effacé de notre base de production en une seule transaction RGPD. Les RDV et transactions historiques sont anonymisés (l'identité Google associée est effacée, les écritures comptables sont conservées pour respecter nos obligations légales — 10 ans)."}
+              {"vous pouvez supprimer votre compte directement depuis l'application (Réglages → Compte → Supprimer le compte). Le traitement se fait en deux temps :"}
+              <ul>
+                <li>
+                  <strong>{"Immédiatement : "}</strong>
+                  {"révocation des jetons OAuth Google ("}<code>oauth2.googleapis.com/revoke</code>
+                  {"), suppression de la table "}<code>merchant_calendar_integrations</code>
+                  {", effacement de l'identifiant Google ("}<code>google_id</code>
+                  {") et de la photo de profil ("}<code>avatar_url</code>
+                  {") sur votre compte. Les RDV et transactions sont anonymisés (les écritures comptables restent conservées 10 ans au titre de nos obligations légales). Toutes les sessions actives sont immédiatement bloquées."}
+                </li>
+                <li>
+                  <strong>{"Après 30 jours : "}</strong>
+                  {"purge définitive de l'ensemble des données métier (employés, services, historiques, configuration de réservation, etc.) par un cron quotidien — la ligne utilisateur disparaît alors entièrement de notre base de production."}
+                </li>
+              </ul>
+              {"Pendant cette période de 30 jours, vous pouvez "}
+              <strong>{"annuler la suppression"}</strong>
+              {" en nous écrivant à "}
+              <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+              {". Au-delà, la suppression est irréversible."}
             </li>
             <li>
               <strong>{"Sauvegardes : "}</strong>
@@ -224,9 +243,10 @@ export default function Privacy() {
               </a>
               {". Cela invalide immédiatement nos jetons côté Google. Au prochain essai d'usage du jeton, FlowIA détecte automatiquement l'erreur "}
               <code>invalid_grant</code>
-              {" / 401, désactive la synchronisation ("}<code>sync_enabled=FALSE</code>
-              {") et arrête tout appel ultérieur à Google. Pour purger définitivement la copie chiffrée résiduelle (sans valeur car déjà invalidée par Google), utilisez le bouton « Déconnecter » dans l'application ou écrivez-nous à "}
-              <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>.
+              {" / 401 et "}
+              <strong>{"supprime la copie chiffrée résiduelle"}</strong>
+              {" en base ("}<code>DELETE FROM merchant_calendar_integrations</code>
+              {"). Aucun cron ni intervention manuelle n'est nécessaire."}
             </li>
             <li>
               <strong>{"Demande explicite de suppression : "}</strong>

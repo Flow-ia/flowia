@@ -775,6 +775,55 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
       if (n > 0) console.log(`[CRON debt-purge] ${n} créances expirées purgées`);
     });
 
+    // RGPD soft-delete : purge definitive des comptes commercants apres 30
+    // jours de grace. Les donnees Google ont deja ete supprimees au moment
+    // de la demande (DELETE /api/auth/account), il ne reste que les donnees
+    // metier (employees, services, RDV anonymises etc.) qu'on cascade ici.
+    scheduleLocked(24 * 60 * 60 * 1000, 'cron:account:hard-delete',    'acc-purge', async () => {
+      // Selectionne les comptes en grace > 30 jours (SAFETY : > car le
+      // soft-delete a deja anonymise l'identite Google immediatement).
+      const { rows: pending } = await dbPool.query(
+        `SELECT id FROM users
+          WHERE deletion_requested_at IS NOT NULL
+            AND deletion_requested_at < NOW() - INTERVAL '30 days'`
+      );
+      if (pending.length === 0) return;
+
+      // Memes tables que l'ancien DELETE /account immediat. La FK
+      // ON DELETE CASCADE de users couvre une grande partie, mais on
+      // explicite pour les tables sans FK directe (et pour ne pas
+      // dependre du schema en evolution).
+      const cascadeTables = [
+        'push_subscriptions', 'notification_settings', 'notification_log',
+        'app_notifications', 'employee_pins', 'user_pins',
+        'verification_codes', 'booking_settings', 'booking_slug_aliases',
+        'business_hours', 'business_breaks',
+        'booking_services', 'booking_service_categories',
+        'employee_time_slots', 'employee_hours', 'employee_availability',
+        'employee_absences', 'service_commissions', 'employee_commissions',
+        'promo_codes', 'loyalty_programs',
+        'client_accounts', 'client_notes', 'client_credits',
+        'credit_transactions', 'media',
+        'categories', 'employees',
+        'merchant_calendar_integrations',
+      ];
+      let purged = 0;
+      for (const u of pending) {
+        try {
+          for (const table of cascadeTables) {
+            await dbPool.query(`DELETE FROM ${table} WHERE user_id=$1`, [u.id])
+              .catch(() => {});
+          }
+          await dbPool.query('DELETE FROM users WHERE id=$1', [u.id]);
+          purged += 1;
+          console.log(`[CRON acc-purge] commerçant ${u.id} purgé définitivement (post-30j)`);
+        } catch (e) {
+          console.error(`[CRON acc-purge] erreur user ${u.id}:`, e.message);
+        }
+      }
+      if (purged > 0) console.log(`[CRON acc-purge] ${purged} compte(s) purgé(s)`);
+    });
+
     console.log('⏰ Cron démarré (worker', process.pid, ') — protégé par pg_advisory_lock');
   }
 

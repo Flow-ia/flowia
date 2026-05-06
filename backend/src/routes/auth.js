@@ -251,6 +251,11 @@ router.post('/login', async (req, res) => {
       error: 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.',
       code: 'ACCOUNT_FROZEN',
     });
+    if (user.deletion_requested_at) return res.status(403).json({
+      error: 'Votre compte est en cours de suppression. Pour annuler dans les 30 jours, contactez contact@flowiapro.com.',
+      code: 'ACCOUNT_DELETION_PENDING',
+      deletionRequestedAt: user.deletion_requested_at,
+    });
     const tokenExpiry = await getMerchantSessionDuration(user.id);
     const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },
@@ -554,13 +559,50 @@ router.post('/pin-lockout-notify', async (req, res) => {
 });
 
 // ═══════════════════ SUPPRESSION COMPTE COMMERÇANT ══════════════════════════
-// DELETE /api/auth/account — RGPD : suppression du compte commerçant
-// Règles : anonymiser les RDV/transactions, supprimer les données perso
+// DELETE /api/auth/account — RGPD : suppression soft du compte commerçant.
+//
+// Pourquoi soft-delete :
+//   - Annulation possible sous 30 jours via email contact@ (en cas de clic
+//     accidentel — sinon perte definitive d'historique)
+//   - Le commercant reste bloque immediatement (deletion_requested_at lu
+//     par authMiddleware)
+//
+// Donnees Google (Limited Use) : on les supprime IMMEDIATEMENT — jetons
+// OAuth revoques et integration calendar effacee, identite Google
+// (google_id, avatar_url) clear. Aucune donnee Google ne reste en DB.
+//
+// Le reste (employees, services, RDV anonymises, etc.) est conserve 30
+// jours puis purge par le cron quotidien (index.js → schedulePurgeAccounts).
 router.delete('/account', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    // 1. Anonymiser les RDV (garder l'historique pour les clients)
+    // 1. Donnees Google : revocation + suppression IMMEDIATE (Limited Use)
+    try {
+      const { rows: integ } = await pool.query(
+        `SELECT access_token_enc FROM merchant_calendar_integrations
+          WHERE user_id=$1 AND provider='google' LIMIT 1`,
+        [userId]
+      );
+      if (integ.length) {
+        try {
+          const { decrypt } = require('../utils/tokenCrypto');
+          const at = decrypt(integ[0].access_token_enc);
+          await fetch('https://oauth2.googleapis.com/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token: at }),
+          }).catch(() => {});
+        } catch { /* token deja invalide cote Google : on supprime quand meme */ }
+      }
+      await pool.query(
+        `DELETE FROM merchant_calendar_integrations WHERE user_id=$1`,
+        [userId]
+      );
+    } catch (e) { console.warn('[DELETE ACCOUNT google cleanup]', e.message); }
+
+    // 2. Anonymiser les RDV (garder l'historique pour les clients finaux,
+    //    qui peuvent vouloir consulter leurs anciens RDV).
     await pool.query(
       `UPDATE appointments SET
          client_name='[Commerçant supprimé]',
@@ -568,7 +610,7 @@ router.delete('/account', authMiddleware, async (req, res) => {
        WHERE user_id=$1`, [userId]
     );
 
-    // 2. Anonymiser les transactions (garder montants pour comptabilité)
+    // 3. Anonymiser les transactions (garder montants pour comptabilité).
     await pool.query(
       `UPDATE transactions SET
          description=COALESCE(description,'Transaction'),
@@ -576,30 +618,24 @@ router.delete('/account', authMiddleware, async (req, res) => {
        WHERE user_id=$1`, [userId]
     );
 
-    // 3. Supprimer les données liées (en cascade ou manuellement)
-    const cascadeTables = [
-      'push_subscriptions', 'notification_settings', 'notification_log',
-      'app_notifications', 'employee_pins', 'user_pins',
-      'verification_codes', 'booking_settings',
-      'business_hours', 'business_breaks',
-      'booking_services', 'booking_service_categories',
-      'employee_time_slots', 'employee_hours', 'employee_availability',
-      'employee_absences', 'service_commissions', 'employee_commissions',
-      'promo_codes', 'loyalty_programs',
-      'client_accounts', 'client_notes', 'client_credits',
-      'credit_transactions', 'media',
-      'categories', 'employees',
-    ];
-    for (const table of cascadeTables) {
-      await pool.query(`DELETE FROM ${table} WHERE user_id=$1`, [userId])
-        .catch(() => {}); // Ignorer si table n'a pas user_id
-    }
+    // 4. Marquer le compte comme en attente de purge + clear identite Google.
+    //    Le compte reste ferme (authMiddleware le rejette via
+    //    deletion_requested_at), les donnees liees seront purgees par le
+    //    cron quotidien apres 30 jours.
+    await pool.query(
+      `UPDATE users SET
+         deletion_requested_at = NOW(),
+         google_id   = NULL,
+         avatar_url  = NULL
+       WHERE id=$1`,
+      [userId]
+    );
 
-    // 4. Supprimer le compte utilisateur (déclenche ON DELETE CASCADE)
-    await pool.query('DELETE FROM users WHERE id=$1', [userId]);
-
-    console.log(`[RGPD] Suppression compte commerçant ${userId}`);
-    res.json({ ok: true, message: 'Votre compte a été supprimé définitivement.' });
+    console.log(`[RGPD] Soft-delete compte commercant ${userId} (purge dans 30j)`);
+    res.json({
+      ok: true,
+      message: 'Votre compte est supprime. Il sera definitivement purge dans 30 jours. Pour annuler la suppression dans ce delai, contactez-nous a contact@flowiapro.com.',
+    });
   } catch(e) {
     console.error('[DELETE MERCHANT ACCOUNT]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
@@ -874,6 +910,13 @@ router.get('/google/merchant/callback', async (req, res) => {
     } else {
       const { rows: byEmail } = await pool.query('SELECT * FROM users WHERE email=LOWER($1)', [emailLow]);
       if (byEmail.length) {
+        // Refus si le compte est en grace post-suppression. Sinon on
+        // re-lierait l'identite Google a un compte qu'on s'est engage a
+        // purger sous 30j (engagement Limited Use). Le merchant doit
+        // contacter le support pour annuler la suppression d'abord.
+        if (byEmail[0].deletion_requested_at) {
+          return res.redirect(`${TARGET_ORIGIN}/__oauth#error=ACCOUNT_DELETION_PENDING`);
+        }
         // Lier le compte Google à un compte email existant
         user = byEmail[0];
         await pool.query('UPDATE users SET google_id=$1, avatar_url=$2 WHERE id=$3',
@@ -915,6 +958,10 @@ router.get('/google/merchant/callback', async (req, res) => {
     // hash, signale l'opener via BroadcastChannel puis close() la popup.
     if (user.is_frozen) {
       return res.redirect(`${TARGET_ORIGIN}/__oauth#error=ACCOUNT_FROZEN`);
+    }
+    // Si compte en grace post-suppression, on refuse aussi le login Google.
+    if (user.deletion_requested_at) {
+      return res.redirect(`${TARGET_ORIGIN}/__oauth#error=ACCOUNT_DELETION_PENDING`);
     }
 
     // 5. Générer le JWT commerçant — durée configurable via user_settings.

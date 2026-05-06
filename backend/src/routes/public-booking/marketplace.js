@@ -67,6 +67,7 @@ module.exports = function attachMarketplaceRoutes(router) {
       const where  = [
         'bs.is_enabled = TRUE',
         'COALESCE(u.is_frozen, FALSE) = FALSE',
+        'u.deletion_requested_at IS NULL',
         "COALESCE(u.business_name, '') <> ''",
         'bs.slug IS NOT NULL',
       ];

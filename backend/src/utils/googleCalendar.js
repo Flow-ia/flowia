@@ -55,15 +55,22 @@ async function getValidAccessToken(integration) {
   });
   const data = await r.json();
   if (!r.ok || !data.access_token) {
-    // refresh_token revoque ou invalide → desactive la sync pour eviter
-    // de spam Google (qui peut bloquer le client_id en cas d'abus).
+    // refresh_token revoque (par l'utilisateur via myaccount.google.com OU
+    // notre propre revoke), expire ou invalide. Conformement a notre
+    // engagement Limited Use, on supprime IMMEDIATEMENT la copie chiffree
+    // du jeton (deja sans valeur cote Google) au lieu de la garder en DB
+    // avec un simple flag desactive. Pas de cron de cleanup necessaire :
+    // c'est detecte au prochain usage.
+    //
+    // invalid_grant → revocation explicite cote Google (compte deconnecte
+    //                  ou autorisation retiree par l'utilisateur)
+    // 400 / 401     → token expire/invalide depuis trop longtemps
     if (r.status === 400 || r.status === 401) {
       await pool.query(
-        `UPDATE merchant_calendar_integrations
-            SET sync_enabled=FALSE, last_sync_error=$2, updated_at=NOW()
-          WHERE id=$1`,
-        [integration.id, `refresh_failed: ${data.error || r.status}`]
+        `DELETE FROM merchant_calendar_integrations WHERE id=$1`,
+        [integration.id]
       );
+      console.log(`[CALSYNC] Token revoque/invalide → row supprimee (user ${integration.user_id}, raison: ${data.error || r.status})`);
     }
     throw new Error(`Google refresh failed: ${data.error || r.status}`);
   }

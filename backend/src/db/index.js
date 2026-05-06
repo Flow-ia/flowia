@@ -935,6 +935,16 @@ async function initDB() {
     END $$
   `);
 
+  // ── RGPD soft-delete : grace period 30 jours avant purge definitive ────
+  // Quand un commercant clique "Supprimer mon compte", on set ce timestamp.
+  // Les donnees Google (jetons OAuth, integration calendar) sont supprimees
+  // immediatement (engagement Limited Use). Le reste du compte reste en
+  // grace 30 jours pour permettre une annulation par email contact@.
+  // Le cron quotidien (index.js) purge les comptes au-dela de 30 jours.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_users_deletion_pending
+    ON users(deletion_requested_at) WHERE deletion_requested_at IS NOT NULL`);
+
   // ── Slug aliases : redirection 301 quand un commercant change de slug ────
   // Format slug : nom-ville-CP. Quand le commercant change le nom de son
   // salon, son adresse, ou edite la partie nom de son slug, l'ancien slug
