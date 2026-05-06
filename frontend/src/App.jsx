@@ -2318,11 +2318,21 @@ export default function App() {
     navigate('/' + id);
   }, [hasPin, unlocked, page, lock, navigate]);
 
+  // Verrouiller la session admin = équivalent fonctionnel de "Quitter le mode
+  // admin" + purge session PIN. L'utilisateur sort des routes protégées
+  // (redirigé vers /agenda) et devra ressaisir son PIN pour rebasculer en
+  // admin. Mêmes effets de bord que handleQuitAdminMode (purge UI + redirect).
   const handleLock = useCallback(() => {
     lock();
     setAdminStep('entry');
-    navigate('/reglages');
-  }, [lock, navigate]);
+    disableAdminMode();
+    const adminPaths = ['/dashboard', '/historique', '/marketing',
+                        '/statistiques', '/reglages'];
+    const p = location.pathname;
+    if (adminPaths.some(ap => p === ap || p.startsWith(ap + '/'))) {
+      navigate('/agenda');
+    }
+  }, [lock, disableAdminMode, location.pathname, navigate]);
 
   const handleLogout = useCallback(() => {
     logout();
