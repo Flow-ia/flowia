@@ -1,8 +1,18 @@
-// Marketing > SMS > Historique sms_transactions (recharge/refund/débit).
-// Déjà rendu dans TabSMS (sms_transactions + message_log). Préserve le
-// prix SMS ≈ 0,0585 € (SMS_COST × (1 + SMS_MARGIN/100)).
-import TabSMS from '../../settings/marketing/solde/TabSMS';
+// /marketing/sms/historique — ancienne route conservée pour compat. L'historique
+// (campagnes + transactions SMS) vit déjà dans TabSMS sur /marketing/sms ; on
+// redirige avec un anchor pour scroller automatiquement à la bonne section.
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function Historique({ theme, showToast }) {
-  return <TabSMS theme={theme} showToast={showToast}/>;
+export default function Historique() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/marketing/sms#sms-historique', { replace: true });
+    // Scroll après render — TabSMS pose l'id dès le mount.
+    setTimeout(() => {
+      const el = document.getElementById('sms-historique');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, [navigate]);
+  return null;
 }

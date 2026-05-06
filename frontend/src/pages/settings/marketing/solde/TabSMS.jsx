@@ -49,6 +49,9 @@ export default function TabSMS({ showToast, theme }) {
         loadData();
       }
     } else {
+      // ?recharge=open : ouvrir directement la modale (deep-link depuis
+      // PromoForm "Recharger", anciennes routes /marketing/sms/recharger).
+      if (recharge === 'open') setRechargeOpen(true);
       if (recharge) window.history.replaceState({}, '', window.location.pathname);
       loadData();
     }
@@ -196,8 +199,9 @@ export default function TabSMS({ showToast, theme }) {
         )}
       </div>
 
-      {/* Transactions SMS */}
-      <div style={{ background:t.card, borderRadius:12,
+      {/* Transactions SMS — id permet le deep-link /marketing/sms#sms-historique. */}
+      <div id="sms-historique"
+           style={{ background:t.card, borderRadius:12, scrollMarginTop:20,
                     border:`0.5px solid ${t.border}`, padding:20 }}>
         <p style={{ fontSize:12, color:t.muted, margin:'0 0 12px' }}>Transactions</p>
         {!smsTx.length ? (

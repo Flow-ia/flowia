@@ -1,9 +1,13 @@
-// Marketing > SMS > Recharge Stripe (3 modes dans SMSRechargeModal).
-// Pas d'écran standalone aujourd'hui : TabSMS contient le bouton
-// « Recharger » qui ouvre la modale. Idempotency via UNIQUE(sumup_checkout_id)
-// côté back (routes/payments.js). Refund auto sur échec.
-import TabSMS from '../../settings/marketing/solde/TabSMS';
+// /marketing/sms/recharger — ancienne route conservée pour compat (deep-link
+// PromoForm avant fix). Redirige vers /marketing/sms?recharge=open qui ouvre
+// directement la modale dans TabSMS. Plus aucun écran distinct ici.
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function Recharger({ theme, showToast }) {
-  return <TabSMS theme={theme} showToast={showToast}/>;
+export default function Recharger() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/marketing/sms?recharge=open', { replace: true });
+  }, [navigate]);
+  return null;
 }
