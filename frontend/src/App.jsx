@@ -1146,40 +1146,43 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
   const location = useLocation();
   const { isAdminMode } = useAdminMode();
 
+  // Refonte 2026-05-06 : `match[]` débarrassé des préfixes /settings/* legacy.
+  // SettingsRedirect (route /settings/*) continue de rediriger les anciens
+  // bookmarks, mais aucun item de menu ne pointe plus vers /settings/* — un seul
+  // domaine = un seul highlight, pas de double-actif.
   const NAV_SECTIONS = !isAdminMode ? [
     {
-      label: 'Navigation',
+      label: 'Quotidien',
       items: [
         { id:'agenda',    label:'Agenda',  icon:'calendar', to:'/agenda',  match:['/agenda'] },
-        { id:'caisse',    label:'Caisse',  icon:'cash',     to:'/caisse',  match:['/caisse','/transactions','/settings/historique'] },
+        { id:'caisse',    label:'Caisse',  icon:'cash',     to:'/caisse',  match:['/caisse','/transactions'] },
         { id:'clients',   label:'Clients', icon:'users',    to:'/clients', match:['/clients'] },
       ],
     },
   ] : [
     {
-      label: 'Principal',
+      label: 'Quotidien',
       items: [
         { id:'dashboard', label:'Dashboard',    icon:'home',     to:'/dashboard',   match:['/dashboard'] },
         { id:'agenda',    label:'Agenda',       icon:'calendar', to:'/agenda',      match:['/agenda'] },
-        { id:'caisse',    label:'Caisse',       icon:'cash',     to:'/caisse',      match:['/caisse','/transactions','/settings/historique'] },
-        // Refonte FDS-2026 commit 7h : Historique admin dédié — page distincte
-        // de /caisse/historique (qui reste lecture seule jour courant pour les
-        // employés). Visible uniquement en mode admin (pas tabletNeutral).
-        { id:'historique',label:'Historique',   icon:'history',  to:'/historique',  match:['/historique'] },
+        { id:'caisse',    label:'Caisse',       icon:'cash',     to:'/caisse',      match:['/caisse','/transactions'] },
         { id:'clients',   label:'Clients',      icon:'users',    to:'/clients',     match:['/clients'] },
       ],
     },
     {
-      label: 'Croissance',
+      label: 'Pilotage',
       items: [
-        { id:'marketing', label:'Marketing',    icon:'megaphone', to:'/marketing',   match:['/marketing','/settings/marketing'] },
-        { id:'stats',     label:'Statistiques', icon:'chart',     to:'/statistiques', match:['/statistiques','/settings/previsions','/settings/heures','/settings/export'] },
+        // Historique admin dédié — page distincte de /caisse/historique (lecture
+        // seule jour courant pour les employés). Visible uniquement en admin.
+        { id:'historique',label:'Historique',   icon:'history',   to:'/historique',  match:['/historique'] },
+        { id:'stats',     label:'Statistiques', icon:'chart',     to:'/statistiques', match:['/statistiques'] },
+        { id:'marketing', label:'Marketing',    icon:'megaphone', to:'/marketing',   match:['/marketing'] },
       ],
     },
     {
-      label: 'Paramétrage',
+      label: 'Configuration',
       items: [
-        { id:'reglages',   label:'Réglages',   icon:'settings', to:'/reglages',    match:['/reglages','/settings'] },
+        { id:'reglages',   label:'Réglages',   icon:'settings', to:'/reglages',    match:['/reglages'] },
         { id:'abonnement', label:'Abonnement', icon:'wallet',   to:'/abonnement',  match:['/abonnement'] },
       ],
     },
@@ -1359,11 +1362,11 @@ function BottomNav({ theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuit
   const ITEMS = isAdminMode ? [
     { id:'home',    label:'Home',    icon:'home',     to:'/dashboard', match:['/dashboard'] },
     { id:'agenda',  label:'Agenda',  icon:'calendar', to:'/agenda',    match:['/agenda'] },
-    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/transactions','/settings/historique'] },
+    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/transactions'] },
     { id:'clients', label:'Clients', icon:'users',    to:'/clients',   match:['/clients'] },
   ] : [
     { id:'agenda',  label:'Agenda',  icon:'calendar', to:'/agenda',    match:['/agenda'] },
-    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/transactions','/settings/historique'] },
+    { id:'caisse',  label:'Caisse',  icon:'cash',     to:'/caisse',    match:['/caisse','/transactions'] },
     { id:'clients', label:'Clients', icon:'users',    to:'/clients',   match:['/clients'] },
   ];
 
