@@ -6,7 +6,23 @@
 // - Validation stricte des champs (longueur, format email, whitelist topic)
 // - replyTo = email saisi par le visiteur (permet de repondre en 1 clic)
 // - Pas d'auth requise (formulaire public)
+//
+// Anti self-loopback :
+// - Le sender par defaut (env SENDER_EMAIL) est souvent contact@flowiapro.com
+//   ce qui produit un from=to. Beaucoup de serveurs MX considerent ca comme
+//   suspect (spam, anti-spoofing) et droppent ou classent en spam.
+// - On override le sender ici a notifications@flowiapro.com (env
+//   CONTACT_SENDER_EMAIL) si configure, sinon on garde le default.
+//
+// Fallback :
+// - Si CONTACT_FALLBACK_EMAIL est defini (ex Gmail perso de l'admin),
+//   on envoie une copie en parallele pour ne jamais perdre une demande.
+//
+// Retries :
+// - On utilise enqueueEmail (pg-boss) qui retry automatiquement en cas
+//   d'erreur Brevo transitoire (429, 5xx, network).
 const { sendEmail } = require('../../utils/email');
+const { enqueueEmail } = require('../../utils/emailQueue');
 
 const TOPICS = {
   demo:    'Demande de demo',
@@ -89,17 +105,62 @@ module.exports = (router) => {
         message,
       ].filter(Boolean).join('\n');
 
-      await sendEmail({
-        to:      'contact@flowiapro.com',
+      // Sender override pour eviter from=contact@ → to=contact@ (self-loopback
+      // marque comme suspect par les MX entrants). Si l'env n'est pas
+      // configure, on retombe sur le default — utile en dev.
+      const senderOverride = process.env.CONTACT_SENDER_EMAIL || null;
+      const primaryRecipient = process.env.CONTACT_RECIPIENT_EMAIL || 'contact@flowiapro.com';
+      const fallbackRecipient = process.env.CONTACT_FALLBACK_EMAIL || null;
+
+      const basePayload = {
         subject,
         html,
         text,
         replyTo: { email, name },
-      });
+      };
+      if (senderOverride) basePayload.from = senderOverride;
 
+      // 1. Envoi principal vers contact@flowiapro.com — via la queue avec
+      //    retries 3x. Si la queue n'est pas active, fallback sync via
+      //    enqueueEmail interne.
+      let primaryOk = false;
+      let primaryErr = null;
+      try {
+        await enqueueEmail({ ...basePayload, to: primaryRecipient }, { retryLimit: 3 });
+        primaryOk = true;
+      } catch (e) {
+        primaryErr = e?.message || String(e);
+        console.error('[CONTACT primary] echec :', primaryErr);
+      }
+
+      // 2. Fallback : si un email de secours est configure, on envoie aussi
+      //    une copie. On le fait peu importe le succes du primary, pour que
+      //    l'admin recoive a coup sur (gmail / autre, hors infra contact@).
+      let fallbackOk = false;
+      if (fallbackRecipient && fallbackRecipient !== primaryRecipient) {
+        try {
+          await enqueueEmail({
+            ...basePayload,
+            to: fallbackRecipient,
+            subject: `[BACKUP] ${subject}`,
+          }, { retryLimit: 3 });
+          fallbackOk = true;
+        } catch (e) {
+          console.error('[CONTACT fallback] echec :', e?.message || e);
+        }
+      }
+
+      // Si rien ne passe, on retourne 500. Sinon 200.
+      if (!primaryOk && !fallbackOk) {
+        return res.status(500).json({
+          error: "Impossible d'envoyer votre message. Reessayez plus tard.",
+        });
+      }
+
+      console.log(`[CONTACT OK] from=${email} topic=${topic} primary=${primaryOk} fallback=${fallbackOk}`);
       return res.json({ ok: true });
     } catch (e) {
-      console.error('[CONTACT] erreur envoi :', e?.message || e);
+      console.error('[CONTACT] erreur generale :', e?.message || e);
       return res.status(500).json({ error: "Impossible d'envoyer votre message. Reessayez plus tard." });
     }
   });

@@ -25,11 +25,18 @@ function enqueue(payload, opts) {
 }
 
 // ── Brevo (ex-Sendinblue) — API HTTPS, jamais bloqué par Render ───────────
-async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) {
+// Le parametre `from` est optionnel : utilisez-le pour overrider le sender
+// par defaut (utile pour /contact qui doit eviter le self-loopback
+// contact@→contact@ qui finit souvent en spam).
+async function sendEmail({ to, subject, html, text, headers, replyTo, toName, from }) {
+  const senderEmail = from
+    || process.env.SENDER_EMAIL
+    || process.env.BREVO_FROM
+    || 'contact@flowiapro.com';
   const body = {
     sender: {
       name: process.env.SENDER_NAME || 'FlowIA',
-      email: process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@flowiapro.com'
+      email: senderEmail,
     },
     to:       [{ email: to, ...(toName ? { name: toName } : {}) }],
     subject,
@@ -38,6 +45,10 @@ async function sendEmail({ to, subject, html, text, headers, replyTo, toName }) 
   if (text) body.textContent = text;
   if (replyTo) body.replyTo = typeof replyTo === 'string' ? { email: replyTo } : replyTo;
   if (headers) body.headers = headers;
+
+  if (!process.env.BREVO_API_KEY) {
+    throw new Error('BREVO_API_KEY env var manquante — email non envoye');
+  }
 
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
