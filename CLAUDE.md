@@ -32,7 +32,12 @@ Push direct sur `main` (validé utilisateur 2026-05-04). La refonte `refonte-arc
 5. **Ne jamais toucher** : OAuth Google, PIN, JWT scopes, idempotency, code Stripe SMS existant (`payments.js` + webhook `/api/payments/sms/webhook`). Nouveaux webhooks séparés (Connect, abonnement) AUTORISÉS.
 6. **FDS-2026** : pas d'emoji UI, pas de Tailwind, fw≤500, bordures 0.5px, pas de gradients
 7. **Apostrophes JSX** : double-quote obligatoire (`{"l'offre"}`)
-8. **Si tu doutes, tu demandes**
+8. **Pas de `console.*` côté frontend** — `console.log/info/debug/warn/error` interdits dans `frontend/src/**`. Catch silencieux (`catch {}`) si l'erreur n'est pas actionnable, sinon `showToast(msg, 'error')`. Pour le diagnostic, utiliser un breakpoint, pas un log laissé en place.
+9. **Pas de `alert()` / `window.confirm()` / `window.prompt()` natifs** — toujours passer par les composants `components/UI.jsx` :
+   - Erreurs/info ponctuelles → `showToast(msg, 'error'\|'ok'\|'info')` via `useToast()`
+   - Confirmations destructives → `<Confirm open onClose onConfirm title message danger />`
+   - Erreurs inline (formulaires) → état local + bloc rouge sous le champ concerné
+10. **Si tu doutes, tu demandes**
 
 ## Complexité à connaître
 
