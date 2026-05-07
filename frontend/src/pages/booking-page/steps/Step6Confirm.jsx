@@ -403,10 +403,10 @@ export function Step6Confirm({
               onKeyDown={e=>e.key==='Enter'&&checkPromo()}
               placeholder="PROMO10 ou code parrainage"
               style={{flex:1,padding:'11px 14px',borderRadius:9,outline:'none',
-                background:th.inputBg,border: `0.5px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
+                background:th.inputBg,border: `1px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
                 color:th.text,fontSize:13,fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}/>
             <button onClick={checkPromo} disabled={promoLoading||!promoCode.trim()}
-              style={{padding:'11px 18px',borderRadius:9,border: `0.5px solid ${th.border}`,
+              style={{padding:'11px 18px',borderRadius:9,border: `1px solid ${th.border}`,
                 background:th.cardAlt,color:th.text,fontSize:13,fontWeight: 500,
                 cursor:'pointer',opacity:!promoCode.trim()?0.4:1}}>
               {promoLoading?'...':'Valider'}
@@ -453,7 +453,7 @@ export function Step6Confirm({
           rows={2} maxLength={NOTES_MAX}
           placeholder="Demandes particulieres..."
           style={{width:'100%',padding:'10px 12px',borderRadius:10,outline:'none',
-            background:th.inputBg,border:`0.5px solid ${th.inputBorder}`,
+            background:th.inputBg,border:`1px solid ${th.inputBorder}`,
             color:th.text,fontSize:13,resize:'none',lineHeight:1.4,
             fontFamily:'inherit'}}/>
       </div>
