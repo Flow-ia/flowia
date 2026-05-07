@@ -15,7 +15,6 @@ const { resolveReferralForFilleul } = require('../referrals');
 const { extractClientToken } = require('../../utils/clientCookies');
 const {
   stripeFetch,
-  ensureConnectedCustomer,
   clonePaymentMethodToConnected,
 } = require('../global-clients/stripe-helpers');
 
@@ -170,13 +169,13 @@ module.exports = function attachPaymentRoutes(router) {
 
       // ── Reuse carte sauvegardee globale FlowIA ──────────────────────────
       // Le PM source est attache au customer PLATEFORME du global_client.
-      // Stripe exige un customer cible cote connected pour le clone (secu).
-      // Donc :
-      //   1. ensureConnectedCustomer : customer sur connected (cache DB +
-      //      verify post-create defensif).
-      //   2. clonePaymentMethodToConnected : clone vers ce customer.
-      //   3. PI confirm+off_session+customer pour SCA EU + 1-clic.
-      let connectedCustomerId = null;
+      // Approche simple : on clone le PM plateforme vers le connected account
+      // (via header Stripe-Account) en passant le customer PLATEFORME comme
+      // proof d'access au PM source. Le PM clone n'est rattache a aucun
+      // customer cote connected -- il est single-use pour ce PI uniquement.
+      // Stripe accepte un PI off_session sans customer cote connected si le
+      // PM est valide. Plus de creation de customer connected = plus de bug
+      // 'No such customer' possible.
       let clonedPmId = null;
 
       if (use_saved_pm_id) {
@@ -193,37 +192,17 @@ module.exports = function attachPaymentRoutes(router) {
           return res.status(404).json({ error: 'Carte introuvable.' });
         }
         const useSavedRow = pmRows[0];
-
-        try {
-          connectedCustomerId = await ensureConnectedCustomer(
-            globalClientId, m.stripe_account_id,
-            { email: clientEmail, name: clientName }
-          );
-        } catch (e) {
-          console.error('[PUB PAYMENT-INTENT/ensureConnectedCustomer]',
-            e.type || 'GenericError', e.code || '', e.message);
-          throw new Error(`Erreur preparation customer: ${e.message}`);
-        }
         try {
           clonedPmId = await clonePaymentMethodToConnected({
             platformPmId:        useSavedRow.stripe_platform_pm_id,
+            platformCustomerId:  useSavedRow.stripe_platform_customer_id,
             connectedAccountId:  m.stripe_account_id,
-            connectedCustomerId,
           });
         } catch (e) {
           console.error('[PUB PAYMENT-INTENT/clone]',
             e.type || 'GenericError', e.code || '', e.message,
-            'cust=' + connectedCustomerId, 'acct=' + m.stripe_account_id);
-          // Si "No such customer" alors qu'on vient de verifier juste avant,
-          // on cleanup la row DB stale et on remonte l'erreur (l'user retentera
-          // -- prochain coup, ensureConnectedCustomer recreera proprement).
-          if (/No such customer/i.test(e.message || '')) {
-            await pool.query(
-              `DELETE FROM client_connected_customers
-                WHERE global_client_id=$1 AND connected_account_id=$2`,
-              [globalClientId, m.stripe_account_id]
-            ).catch(() => {});
-          }
+            'platformCust=' + useSavedRow.stripe_platform_customer_id,
+            'acct=' + m.stripe_account_id);
           throw new Error(`Erreur clonage carte: ${e.message}`);
         }
       }
@@ -254,9 +233,9 @@ module.exports = function attachPaymentRoutes(router) {
       };
 
       if (clonedPmId) {
-        // Reuse carte sauvegardee : confirmation immediate cote serveur.
-        // off_session=true + customer connected pour SCA EU + 1-clic.
-        piParams.customer       = connectedCustomerId;
+        // Reuse carte sauvegardee : PM clone single-use, confirm + off_session.
+        // PAS de customer cote connected (Stripe accepte le PI sans customer
+        // si le PM est attache, et le PM clone est rattache temporairement).
         piParams.payment_method = clonedPmId;
         piParams.confirm        = true;
         piParams.off_session    = true;

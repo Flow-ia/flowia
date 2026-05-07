@@ -200,14 +200,19 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
 // so for security purposes you must provide the customer in the request."
 // Donc on passe un customer connected cible (cree via ensureConnectedCustomer).
 // Syntaxe per-call options pour fiabilite avec stripe-node v22.
+// Clone PM plateforme -> connected via Stripe-Account header. Le param
+// `customer` est le customer PLATEFORME source du PM (Stripe l'utilise pour
+// authentifier l'access au PM source ; le PM clone ira sur le connected
+// account via le header). Le clone resultant n'est attache a aucun customer
+// cote connected -- il sera utilise directement dans le PI (single-use).
 async function clonePaymentMethodToConnected({
-  platformPmId, connectedAccountId, connectedCustomerId,
+  platformPmId, platformCustomerId, connectedAccountId,
 }) {
-  if (!connectedAccountId)  throw new Error('connectedAccountId requis');
-  if (!connectedCustomerId) throw new Error('connectedCustomerId requis');
-  if (!platformPmId)        throw new Error('platformPmId requis');
+  if (!connectedAccountId) throw new Error('connectedAccountId requis');
+  if (!platformPmId)       throw new Error('platformPmId requis');
+  if (!platformCustomerId) throw new Error('platformCustomerId requis');
   const cloned = await stripeFetch('POST', '/payment_methods', {
-    customer:       connectedCustomerId,
+    customer:       platformCustomerId,
     payment_method: platformPmId,
   }, { stripeAccount: connectedAccountId });
   return cloned.id;
