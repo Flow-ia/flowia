@@ -378,9 +378,11 @@ module.exports = function attachBookRoute(router) {
           return res.status(400).json({ error: 'Paiement non disponible chez ce commerce.' });
         }
         try {
-          const { getStripeForAccount } = require('../global-clients/stripe-helpers');
-          const stripe = getStripeForAccount(stripeAccountId);
-          const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+          const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+          const pi = await stripe.paymentIntents.retrieve(
+            payment_intent_id,
+            { stripeAccount: stripeAccountId }
+          );
           if (pi.status !== 'succeeded') {
             return res.status(400).json({
               error: 'Le paiement n\'est pas confirme.',
@@ -526,13 +528,15 @@ module.exports = function attachBookRoute(router) {
         let refundFailedReason = null;
         if (payment_intent_id && stripeAccountId) {
           try {
-            const { getStripeForAccount } = require('../global-clients/stripe-helpers');
-            const stripe = getStripeForAccount(stripeAccountId);
-            await stripe.refunds.create({
-              payment_intent: payment_intent_id,
-              reason: 'requested_by_customer',
-              metadata: { reason: 'slot_taken_race', user_id: userId, slug: req.params.slug },
-            });
+            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+            await stripe.refunds.create(
+              {
+                payment_intent: payment_intent_id,
+                reason: 'requested_by_customer',
+                metadata: { reason: 'slot_taken_race', user_id: userId, slug: req.params.slug },
+              },
+              { stripeAccount: stripeAccountId }
+            );
             refunded = true;
           } catch (refErr) {
             console.error('[BOOK SLOT_TAKEN auto-refund ERR]', refErr.message);

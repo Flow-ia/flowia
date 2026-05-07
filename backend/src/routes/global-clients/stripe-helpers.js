@@ -19,9 +19,10 @@ function getStripe() {
   return require('stripe')(key);
 }
 
-// Cree une instance Stripe scoped sur un connected account. Plus fiable que
-// de passer { stripeAccount } en 2eme argument a chaque call -- elimine les
-// edge cases ou Stripe SDK pourrait mal interpreter la signature.
+// LEGACY (kept for compat): retourne aussi une instance scoped, mais on
+// n'utilise plus ce pattern dans les flow critiques. La syntaxe per-call
+// `(params, { stripeAccount })` est preferree car plus explicite et fiable
+// avec stripe-node v22.
 function getStripeForAccount(connectedAccountId) {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
@@ -68,10 +69,18 @@ async function ensurePlatformCustomer(globalClientId) {
 }
 
 // Garantit qu'un Customer Stripe existe sur le connected account du salon
-// pour ce global_client. Mapping stocke en DB (client_connected_customers)
-// pour eviter customers.search Stripe (cache stale -> 500 "No such customer")
-// et eviter de creer 1 customer par paiement.
+// pour ce global_client. Approche robuste :
+//   1. Lookup DB (table client_connected_customers, source de verite)
+//   2. Verify cote Stripe (retrieve avec stripeAccount per-call)
+//   3. Si invalide/disparu -> cleanup DB + recree
+//   4. Verify post-create explicite (eviter de retourner un customer qui
+//      n'est pas immediatement accessible -- defense contre consistance
+//      eventuelle Stripe ou mauvais routage du SDK).
 async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint = {}) {
+  if (!connectedAccountId) throw new Error('connectedAccountId requis');
+  const stripe = getStripe();
+  const opts = { stripeAccount: connectedAccountId };
+
   // 1. Lookup DB
   const { rows: existing } = await pool.query(
     `SELECT stripe_customer_id FROM client_connected_customers
@@ -79,22 +88,15 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     [globalClientId, connectedAccountId]
   );
   if (existing.length) {
-    // Verification souple : si le customer a ete supprime cote Stripe (rare),
-    // ou pointe vers un customer qui n'existe pas sur ce connected account
-    // (mismatch historique avant fix stripeAccount), on en cree un nouveau.
     let stillValid = false;
     try {
-      const stripeOnAccount = getStripeForAccount(connectedAccountId);
-      const cust = await stripeOnAccount.customers.retrieve(
-        existing[0].stripe_customer_id
-      );
+      const cust = await stripe.customers.retrieve(existing[0].stripe_customer_id, opts);
       stillValid = !!(cust && !cust.deleted);
     } catch (e) {
       if (!/No such customer/i.test(e.message || '')) throw e;
       stillValid = false;
     }
     if (stillValid) return existing[0].stripe_customer_id;
-    // Cleanup row stale (customer absent ou supprime cote Stripe).
     await pool.query(
       `DELETE FROM client_connected_customers
         WHERE global_client_id=$1 AND connected_account_id=$2`,
@@ -102,16 +104,31 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     );
   }
 
-  // 2. Creer cote Stripe puis INSERT DB. Race-safe via ON CONFLICT.
-  const stripeOnAccount = getStripeForAccount(connectedAccountId);
-  const customer = await stripeOnAccount.customers.create({
+  // 2. Creer cote Stripe sur connected (syntaxe per-call options).
+  const customer = await stripe.customers.create({
     email:    hint.email || undefined,
     name:     hint.name  || undefined,
     metadata: {
       global_client_id: globalClientId,
       source:           'flowia_connected_clone',
     },
-  });
+  }, opts);
+
+  // 3. Verify post-create defense -- si le SDK ne pose pas le header
+  // Stripe-Account correctement, customers.retrieve va echouer ici
+  // immediatement avec un message clair (au lieu d'attendre le clone).
+  try {
+    const verify = await stripe.customers.retrieve(customer.id, opts);
+    if (!verify || verify.deleted) {
+      throw new Error(`Customer ${customer.id} cree mais inaccessible immediatement`);
+    }
+  } catch (e) {
+    console.error('[ensureConnectedCustomer/verify] FAILED',
+      'cust=' + customer.id, 'acct=' + connectedAccountId, e.message);
+    throw new Error(`Customer ${customer.id} non disponible sur compte ${connectedAccountId}: ${e.message}`);
+  }
+
+  // 4. INSERT DB. Race-safe via ON CONFLICT.
   const ins = await pool.query(
     `INSERT INTO client_connected_customers
        (global_client_id, connected_account_id, stripe_customer_id)
@@ -121,7 +138,6 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     [globalClientId, connectedAccountId, customer.id]
   );
   if (ins.length) return customer.id;
-  // Race perdue : un autre process a deja insere -> on relit.
   const { rows: relu } = await pool.query(
     `SELECT stripe_customer_id FROM client_connected_customers
       WHERE global_client_id=$1 AND connected_account_id=$2`,
@@ -131,23 +147,22 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
 }
 
 // Clone un PaymentMethod du customer plateforme vers le connected account.
-// Approche SIMPLIFIEE pour robustesse (regle 10 CLAUDE.md) :
-//   - Pas de customer connected (eliminait une classe entiere de "No such
-//     customer" liees a la consistance eventuelle Stripe / SDK header).
-//   - PM clone sans customer attache : il sera utilise une fois pour ce
-//     paiement uniquement, puis Stripe le cleanup auto apres ~24h s'il
-//     n'est pas attache. Pas de pollution durable.
-// Retourne le pm_id sur le connected account, utilisable dans le PI sans
-// customer (confirm + off_session).
+// Stripe exige `customer` car le PM source est attache a un customer
+// plateforme : "The payment method you provided is attached to a customer
+// so for security purposes you must provide the customer in the request."
+// Donc on passe un customer connected cible (cree via ensureConnectedCustomer).
+// Syntaxe per-call options pour fiabilite avec stripe-node v22.
 async function clonePaymentMethodToConnected({
-  platformPmId, connectedAccountId,
+  platformPmId, connectedAccountId, connectedCustomerId,
 }) {
-  if (!connectedAccountId) throw new Error('connectedAccountId requis');
-  if (!platformPmId)       throw new Error('platformPmId requis');
-  const stripeOnAccount = getStripeForAccount(connectedAccountId);
-  const cloned = await stripeOnAccount.paymentMethods.create({
+  if (!connectedAccountId)  throw new Error('connectedAccountId requis');
+  if (!connectedCustomerId) throw new Error('connectedCustomerId requis');
+  if (!platformPmId)        throw new Error('platformPmId requis');
+  const stripe = getStripe();
+  const cloned = await stripe.paymentMethods.create({
+    customer:       connectedCustomerId,
     payment_method: platformPmId,
-  });
+  }, { stripeAccount: connectedAccountId });
   return cloned.id;
 }
 

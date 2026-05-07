@@ -14,7 +14,8 @@ const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { extractClientToken } = require('../../utils/clientCookies');
 const {
-  getStripeForAccount,
+  getStripe,
+  ensureConnectedCustomer,
   clonePaymentMethodToConnected,
 } = require('../global-clients/stripe-helpers');
 
@@ -165,19 +166,18 @@ module.exports = function attachPaymentRoutes(router) {
         ? Math.round(amountCents * (commission / 100))
         : 0;
 
-      // Stripe instance scoped sur le compte connecte du salon (Direct Charge).
-      const stripe = getStripeForAccount(m.stripe_account_id);
+      const stripe = getStripe();
+      const stripeOpts = { stripeAccount: m.stripe_account_id };
 
       // ── Reuse carte sauvegardee globale FlowIA ──────────────────────────
-      // Approche SIMPLIFIEE (robustesse) : on ne cree PAS de customer sur le
-      // connected account. On clone juste le PaymentMethod plateforme vers le
-      // connected (sans le rattacher a un customer), puis le PI utilise ce
-      // PM directement avec confirm=true + off_session=true. Stripe accepte
-      // ce pattern (PM clone single-use, cleanup auto ~24h).
-      // Avantage : elimine la consistance eventuelle des customers Stripe
-      // sur un connected qui vient d'etre cree, et la complexite de cache
-      // DB du customer (table client_connected_customers reste pour usage
-      // futur eventuel mais n'est plus utilisee par ce flow).
+      // Le PM source est attache au customer PLATEFORME du global_client.
+      // Stripe exige un customer cible cote connected pour le clone (secu).
+      // Donc :
+      //   1. ensureConnectedCustomer : customer sur connected (cache DB +
+      //      verify post-create defensif).
+      //   2. clonePaymentMethodToConnected : clone vers ce customer.
+      //   3. PI confirm+off_session+customer pour SCA EU + 1-clic.
+      let connectedCustomerId = null;
       let clonedPmId = null;
 
       if (use_saved_pm_id) {
@@ -194,14 +194,37 @@ module.exports = function attachPaymentRoutes(router) {
           return res.status(404).json({ error: 'Carte introuvable.' });
         }
         const useSavedRow = pmRows[0];
+
+        try {
+          connectedCustomerId = await ensureConnectedCustomer(
+            globalClientId, m.stripe_account_id,
+            { email: clientEmail, name: clientName }
+          );
+        } catch (e) {
+          console.error('[PUB PAYMENT-INTENT/ensureConnectedCustomer]',
+            e.type || 'GenericError', e.code || '', e.message);
+          throw new Error(`Erreur preparation customer: ${e.message}`);
+        }
         try {
           clonedPmId = await clonePaymentMethodToConnected({
-            platformPmId:       useSavedRow.stripe_platform_pm_id,
-            connectedAccountId: m.stripe_account_id,
+            platformPmId:        useSavedRow.stripe_platform_pm_id,
+            connectedAccountId:  m.stripe_account_id,
+            connectedCustomerId,
           });
         } catch (e) {
           console.error('[PUB PAYMENT-INTENT/clone]',
-            e.type || 'GenericError', e.code || '', e.message);
+            e.type || 'GenericError', e.code || '', e.message,
+            'cust=' + connectedCustomerId, 'acct=' + m.stripe_account_id);
+          // Si "No such customer" alors qu'on vient de verifier juste avant,
+          // on cleanup la row DB stale et on remonte l'erreur (l'user retentera
+          // -- prochain coup, ensureConnectedCustomer recreera proprement).
+          if (/No such customer/i.test(e.message || '')) {
+            await pool.query(
+              `DELETE FROM client_connected_customers
+                WHERE global_client_id=$1 AND connected_account_id=$2`,
+              [globalClientId, m.stripe_account_id]
+            ).catch(() => {});
+          }
           throw new Error(`Erreur clonage carte: ${e.message}`);
         }
       }
@@ -232,9 +255,9 @@ module.exports = function attachPaymentRoutes(router) {
       };
 
       if (clonedPmId) {
-        // Reuse carte sauvegardee : confirmation immediate avec le PM clone.
-        // PAS de customer cote connected (clone single-use, cleanup auto Stripe).
-        // off_session=true pour SCA EU. handleNextAction cote front si 3DS.
+        // Reuse carte sauvegardee : confirmation immediate cote serveur.
+        // off_session=true + customer connected pour SCA EU + 1-clic.
+        piParams.customer       = connectedCustomerId;
         piParams.payment_method = clonedPmId;
         piParams.confirm        = true;
         piParams.off_session    = true;
@@ -245,8 +268,8 @@ module.exports = function attachPaymentRoutes(router) {
         piParams.automatic_payment_methods = { enabled: true };
       }
 
-      // L'instance stripe est deja scoped sur le connected account du salon.
-      const pi = await stripe.paymentIntents.create(piParams);
+      // Syntaxe per-call options pour stripeAccount (cf. fix v22 SDK).
+      const pi = await stripe.paymentIntents.create(piParams, stripeOpts);
 
       // Mise a jour last_used_at sur la carte reutilisee (best-effort).
       if (use_saved_pm_id) {
