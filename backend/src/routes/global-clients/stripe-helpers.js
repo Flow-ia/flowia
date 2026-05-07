@@ -75,9 +75,19 @@ async function stripeFetch(method, path, body, opts = {}) {
     fetchOpts.body = new URLSearchParams(flat).toString();
   }
 
+  // Log diag (pas de secret) pour faciliter le debug des bugs Connect.
+  console.log(`[stripeFetch] ${method} ${path}`,
+    'acct=' + (opts.stripeAccount || 'platform'));
+
   const res = await fetch(url, fetchOpts);
   const data = await res.json();
   if (!res.ok) {
+    console.error(`[stripeFetch] ${method} ${path} FAILED`,
+      'status=' + res.status,
+      'acct=' + (opts.stripeAccount || 'platform'),
+      'error=' + (data.error?.message || 'unknown'),
+      'code=' + (data.error?.code || ''),
+      'type=' + (data.error?.type || ''));
     const err = new Error(data.error?.message || `Stripe API ${res.status}`);
     err.code         = data.error?.code         || null;
     err.type         = data.error?.type         || 'StripeAPIError';
@@ -150,8 +160,27 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     },
   }, opts);
 
-  // Best-effort INSERT pour traçabilité (audit + cleanup futur si besoin).
-  // Si la row existe deja, on update pour avoir le dernier customer en date.
+  // VERIFY POST-CREATE : si le header Stripe-Account n'est pas pose, le
+  // customer aura ete cree sur la PLATEFORME et un retrieve avec opts
+  // (Stripe-Account header) va echouer avec 'No such customer'. C'est le
+  // signal d'un bug fetch/header. On echoue explicitement ici plutot que
+  // d'attendre le clone qui plantera plus tard.
+  try {
+    const verify = await stripeFetch('GET', `/customers/${customer.id}`, null, opts);
+    if (!verify || verify.deleted) {
+      throw new Error(`Customer ${customer.id} cree mais verify=deleted`);
+    }
+    if (verify.metadata?.source !== 'flowia_connected_clone') {
+      throw new Error(`Customer ${customer.id} verify metadata mismatch (source=${verify.metadata?.source})`);
+    }
+  } catch (verifyErr) {
+    console.error('[ensureConnectedCustomer/verify] FAILED',
+      'cust=' + customer.id, 'acct=' + connectedAccountId,
+      'err=' + verifyErr.message);
+    throw new Error(`Customer ${customer.id} non disponible sur compte ${connectedAccountId}: ${verifyErr.message}`);
+  }
+
+  // Best-effort INSERT pour traçabilité.
   pool.query(
     `INSERT INTO client_connected_customers
        (global_client_id, connected_account_id, stripe_customer_id)
