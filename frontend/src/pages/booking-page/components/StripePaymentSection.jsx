@@ -29,6 +29,12 @@ function getStripeForAccount(accountId) {
   return stripePromiseCache[accountId];
 }
 
+// Watchdog : si stripe.confirmPayment ne resout pas en 90s (challenge
+// hCaptcha bloque par extension navigateur, iframe Stripe cross-origin
+// cassee, etc.), on debloque le bouton pour permettre une retry. Le PI
+// reste valide cote Stripe → confirmation idempotente, pas de double-charge.
+const PAY_TIMEOUT_MS = 90000;
+
 // ── Formulaire de saisie carte (enfant Elements) ─────────────────────────
 function PayForm({ th, amountCents, onPaid, onError, busy, setBusy }) {
   const stripe   = useStripe();
@@ -39,6 +45,37 @@ function PayForm({ th, amountCents, onPaid, onError, busy, setBusy }) {
     e.preventDefault();
     if (!stripe || !elements || busy) return;
     setBusy(true); setErrMsg('');
+
+    let settled = false;
+    let watchdog = null;
+    let onUnhandled = null;
+    const release = (msg) => {
+      if (settled) return;
+      settled = true;
+      if (watchdog) clearTimeout(watchdog);
+      if (onUnhandled) window.removeEventListener('unhandledrejection', onUnhandled);
+      if (msg) setErrMsg(msg);
+      setBusy(false);
+    };
+
+    // Si le challenge anti-fraude (hCaptcha invisible declenche par Stripe
+    // Radar) est casse par une extension du navigateur, le promise rejette
+    // en "uncaught" sans passer par notre await → on l'attrape globalement.
+    onUnhandled = (ev) => {
+      const reason = ev?.reason;
+      const txt = typeof reason === 'string'
+        ? reason
+        : (reason?.message || reason?.code || '');
+      if (/challenge-?closed|hcaptcha/i.test(String(txt))) {
+        release("Verification anti-fraude interrompue. Desactivez les extensions de blocage ou utilisez un autre navigateur.");
+      }
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+
+    watchdog = setTimeout(() => {
+      release("La verification du paiement n'a pas abouti. Reessayez ou utilisez un autre navigateur si une extension bloque la verification anti-fraude.");
+    }, PAY_TIMEOUT_MS);
+
     try {
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
@@ -46,22 +83,23 @@ function PayForm({ th, amountCents, onPaid, onError, busy, setBusy }) {
         // redirect uniquement pour 3DS / methodes redirect (Bancontact, etc.).
         redirect: 'if_required',
       });
+      if (settled) return;
       if (error) {
-        setErrMsg(error.message || 'Erreur de paiement.');
         if (onError) onError(error);
-        setBusy(false);
+        release(error.message || 'Erreur de paiement.');
         return;
       }
       if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // busy reste true : le parent enchaine sur /book.
+        if (watchdog) clearTimeout(watchdog);
+        if (onUnhandled) window.removeEventListener('unhandledrejection', onUnhandled);
+        settled = true;
         onPaid(paymentIntent.id);
-        // busy reste true : le parent enchaine sur /book
       } else {
-        setErrMsg(`Paiement non confirme (${paymentIntent?.status || 'inconnu'}).`);
-        setBusy(false);
+        release(`Paiement non confirme (${paymentIntent?.status || 'inconnu'}).`);
       }
     } catch (e) {
-      setErrMsg(e.message || 'Erreur reseau.');
-      setBusy(false);
+      release(e.message || 'Erreur reseau.');
     }
   };
 
