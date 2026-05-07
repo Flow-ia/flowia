@@ -1,19 +1,66 @@
 // src/pages/booking-page/steps/Step6Confirm.jsx
-// Étape 6 : confirmation finale — récap + réductions disponibles + code
-// promo manuel + bouton "Réserver" qui déclenche handleBook().
+// Étape "Vos infos + confirmation" -- page fusionnée (anciennement Step5+Step6).
+// Si pas connecté -> AuthPanel inline. Sinon : récap + profil ligne + tel +
+// réductions + code promo + notes + mode paiement + Stripe + bouton Réserver.
 import { useEffect, useState } from 'react';
 import { pubApi, globalClientApi } from '../../../utils/api';
 import { StripePaymentSection } from '../components/StripePaymentSection';
 import { Confirm } from '../../../components/UI';
+import { AuthPanel } from '../../booking/Account';
+import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
+
+const NOTES_MAX = 250;
 
 export function Step6Confirm({
   th, slug, selSvc, selEmp, selDate, selSlot,
-  clientUser, clientName, clientEmail, clientPhone,
+  clientUser, setClientUser, clientName, clientEmail, clientPhone, setCP,
+  notes, setNotes, phoneErr, setPhoneErr,
   promoCode, setPromoCode, promoData, setPromoData, promoErr, setPromoErr,
   promoLoading, checkPromo,
   bookErr, booking, handleBook,
   paymentConfig, referralCode,
+  navigate, setMyApptsInitTab, setView, handleAuth,
 }) {
+  // Si pas connecte, on affiche l'AuthPanel inline (anciennement Step5).
+  if (!clientUser) {
+    return (
+      <div>
+        <h2 style={{fontSize:18,fontWeight:500,color:th.text,margin:'0 0 12px',letterSpacing:'-0.02em'}}>
+          {"Connectez-vous pour reserver"}
+        </h2>
+        <div style={{background:th.cardAlt,borderRadius:10,border:`0.5px solid ${th.border}`,
+          padding:'10px 12px',marginBottom:12}}>
+          <p style={{fontSize:13,fontWeight:500,color:th.text,margin:'0 0 2px',letterSpacing:'-0.01em'}}>
+            {selSvc?.name}
+          </p>
+          <p style={{fontSize:11,color:th.muted,margin:0,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:8}}>
+            <span>
+              {[
+                selEmp?._anyEmployee ? 'Premier dispo' : selEmp?.name,
+                selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}),
+                selSlot,
+              ].filter(Boolean).join(' · ')}
+            </span>
+            {selSvc?.price && Number(selSvc.price) > 0 && (
+              <span style={{fontWeight:500,color:th.text,
+                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
+                {`${Number(selSvc.price).toFixed(2)} €`}
+              </span>
+            )}
+          </p>
+        </div>
+        <AuthPanel
+          slug={slug} th={th}
+          requireAccount={true}
+          initialMode="login"
+          referralCode={referralCode}
+          onAuth={handleAuth}
+          onClose={null}
+        />
+      </div>
+    );
+  }
+
   // Commit 24c — réductions disponibles pour le client connecté chez ce
   // commerce. Cards cliquables, pré-remplit le promoCode + déclenche le
   // checkPromo. No cumul : sélectionner une card écrase la précédente
@@ -136,6 +183,31 @@ export function Step6Confirm({
   };
   const cardableList = availList.filter(d => d.source === 'birthday' || d.source === 'loyalty');
   const referralPending = availList.filter(d => d.source === 'referral_pending');
+
+  // Validation telephone (anciennement Step5). Le bouton "Reserver" est
+  // desactive si le numero est invalide. Avant le handleBook, on persiste
+  // le phone dans le profil client si c'est la 1ere saisie.
+  const phoneOk = isValidPhoneNumber(clientPhone || '');
+  const commitBook = async (piId) => {
+    if (!phoneOk) {
+      if (setPhoneErr) setPhoneErr('Numero de telephone requis.');
+      return;
+    }
+    if (clientUser && !clientUser.phone && clientPhone) {
+      try {
+        await pubApi.updateClientProfile(slug, {
+          first_name: clientUser.first_name,
+          last_name:  clientUser.last_name,
+          email:      clientUser.email,
+          phone:      clientPhone,
+        });
+        const updated = { ...clientUser, phone: clientPhone };
+        if (setClientUser) setClientUser(updated);
+        try { localStorage.setItem('ff_client_info', JSON.stringify(updated)); } catch {}
+      } catch { /* non-bloquant : le book backend va revalider */ }
+    }
+    return handleBook(piId);
+  };
   // Recap compact "wallet style" : tout le RDV en 3 lignes denses au lieu
   // d'un long tableau. Les coordonnees client (email/tel) ont deja ete
   // saisies a l'etape 5 -- pas besoin de les ressortir ici.
@@ -189,6 +261,35 @@ export function Step6Confirm({
           )}
         </div>
       </div>
+
+      {/* Profil minimal -- 1 ligne discrete avec lien 'Profil' (anciennement
+          dans Step5, fusionne ici). */}
+      <div style={{display:'flex',alignItems:'center',gap:8,
+        padding:'2px 2px',marginBottom:14,fontSize:12,color:th.muted}}>
+        <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          {clientUser.first_name} {clientUser.last_name} · {clientUser.email}
+        </span>
+        <button type="button"
+          onClick={()=>{ if (navigate) navigate(`/book/${slug}/client/profil`,{replace:false}); if (setMyApptsInitTab) setMyApptsInitTab('profile'); if (setView) setView('myAppts'); }}
+          style={{padding:0,fontSize:12,fontWeight:500,
+            color:th.accent,background:'transparent',border:'none',cursor:'pointer'}}>
+          {"Profil"}
+        </button>
+      </div>
+
+      {/* Telephone obligatoire si manquant (ex: apres OAuth Google). */}
+      {!clientPhone?.trim() && (
+        <div style={{background:'rgba(245,158,11,0.06)',border:'0.5px solid rgba(245,158,11,0.25)',
+          borderRadius:10,padding:'10px 12px',marginBottom:14}}>
+          <p style={{fontSize:12,fontWeight:500,color:'#d97706',margin:'0 0 6px'}}>
+            {"Telephone requis pour finaliser la reservation"}
+          </p>
+          <PhoneInput value={clientPhone || ''} onChange={setCP}
+            label="Telephone *" required
+            theme={{ text: th.text, muted: th.muted, dim: th.dim,
+              border: th.border, inputBg: th.inputBg, inputBorder: th.inputBorder }}/>
+        </div>
+      )}
 
       {/* Réductions disponibles — commit 24c. Affiché uniquement pour client
           authentifié et si l'API renvoie au moins une réduction. Cards
@@ -334,6 +435,28 @@ export function Step6Confirm({
           {promoErr && <p style={{fontSize:12,color:'#ef4444',marginTop:6,fontWeight: 500}}>{promoErr}</p>}
         </div>
       )}
+
+      {/* Note (anciennement Step5, deplacee sous le code promo comme demande)
+          + compteur caracteres (limite 250). */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:4}}>
+          <label style={{fontSize:12,fontWeight:500,color:th.muted}}>
+            {"Note (optionnelle)"}
+          </label>
+          <span style={{fontSize:10,color:th.dim,
+            fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
+            {`${(notes||'').length}/${NOTES_MAX}`}
+          </span>
+        </div>
+        <textarea value={notes || ''}
+          onChange={e=>setNotes && setNotes(e.target.value.slice(0, NOTES_MAX))}
+          rows={2} maxLength={NOTES_MAX}
+          placeholder="Demandes particulieres..."
+          style={{width:'100%',padding:'10px 12px',borderRadius:10,outline:'none',
+            background:th.inputBg,border:`0.5px solid ${th.inputBorder}`,
+            color:th.text,fontSize:13,resize:'none',lineHeight:1.4,
+            fontFamily:'inherit'}}/>
+      </div>
 
       {bookErr && <p style={{fontSize:12,color:'#ef4444',marginBottom:12,fontWeight: 500}}>{bookErr}</p>}
 
@@ -491,7 +614,7 @@ export function Step6Confirm({
                   setSelectedPmId(newDbId);
                   setSaveCard(false);
                 }}
-                onPaid={(piId) => { handleBook(piId); }}
+                onPaid={(piId) => { commitBook(piId); }}
               />
             </>
           )}
@@ -499,13 +622,16 @@ export function Step6Confirm({
       )}
 
       {/* Bouton "Reserver" — masque quand on est en mode payNow (Stripe a son
-          propre bouton "Payer X € et reserver"). */}
+          propre bouton "Payer X € et reserver"). Desactive si tel invalide. */}
       {!payNow && (
-        <button onClick={() => handleBook()} disabled={booking}
+        <button onClick={() => commitBook()} disabled={booking || !phoneOk}
           style={{width:'100%',padding:'16px',borderRadius:99,
-            background:th.accent,border:'none',fontWeight: 500,fontSize:15,
-            color:th.accentText,cursor:booking?'wait':'pointer',
-            opacity:booking?0.7:1,letterSpacing:'-0.01em',
+            background: phoneOk ? th.accent : th.border, border:'none',
+            fontWeight: 500,fontSize:15,
+            color: phoneOk ? th.accentText : th.muted,
+            cursor: booking ? 'wait' : (phoneOk ? 'pointer' : 'not-allowed'),
+            opacity: booking ? 0.7 : (phoneOk ? 1 : 0.5),
+            letterSpacing:'-0.01em',
             display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
           {booking ? (
             <>
@@ -515,11 +641,12 @@ export function Step6Confirm({
               Réservation en cours…
             </>
           ) : (
-            promoData
-              ? `Reserver - ${((selSvc?.price||0)-promoData.discount).toFixed(2)} €`
-              : selSvc?.price&&Number(selSvc.price)>0
-                ? `Reserver - ${Number(selSvc.price).toFixed(2)} €`
-                : 'Reserver'
+            !phoneOk ? 'Telephone requis'
+              : promoData
+                ? `Reserver - ${((selSvc?.price||0)-promoData.discount).toFixed(2)} €`
+                : selSvc?.price&&Number(selSvc.price)>0
+                  ? `Reserver - ${Number(selSvc.price).toFixed(2)} €`
+                  : 'Reserver'
           )}
         </button>
       )}

@@ -25,7 +25,6 @@ import { Step1Home } from './steps/Step1Home';
 import { Step2ServiceOrEmployee } from './steps/Step2ServiceOrEmployee';
 import { Step3Date } from './steps/Step3Date';
 import { Step4Slot } from './steps/Step4Slot';
-import { Step5Info } from './steps/Step5Info';
 import { Step6Confirm } from './steps/Step6Confirm';
 
 // ── Composant principal ───────────────────────────────────────────────────────
@@ -565,10 +564,8 @@ export default function BookingPage({ slug }) {
         localStorage.setItem(key, '1');
       }
     }
-    // Si connecté à l'étape 5 → avancer à 6 seulement si le téléphone est renseigné
-    if (step === 5 && client.phone) {
-      setTimeout(() => setStep(6), 50);
-    }
+    // Step5+6 fusionnees : la connexion declenche directement le re-render
+    // de Step6 (qui affiche les infos + confirmation). Pas de setStep ici.
   };
 
   const handleBook = async (paymentIntentId) => {
@@ -581,7 +578,7 @@ export default function BookingPage({ slug }) {
     // Sans compte requis : permettre la réservation si les champs obligatoires sont remplis
     if (!requireAccount && !clientUser && !hasSession && (!clientName.trim() || !clientPhone.trim())) { setBookErr('Nom et téléphone obligatoires.'); return; }
     // Connecté mais téléphone manquant → renvoyer à l'étape 5
-    if ((clientUser || hasSession) && !clientPhone.trim()) { setBookErr('Téléphone obligatoire. Veuillez compléter votre profil.'); setStep(5); return; }
+    if ((clientUser || hasSession) && !clientPhone.trim()) { setBookErr('Téléphone obligatoire. Veuillez compléter votre profil.'); setStep(6); return; }
     setBooking(true); setBookErr('');
     try {
       // ── Re-vérification du code promo au moment de la confirmation ──────────
@@ -913,9 +910,10 @@ export default function BookingPage({ slug }) {
           {!showAuthPanel && step >= 2 && (
             <div className="bk-steps" style={{ maxWidth:600, width:'100%', animation:'fadeIn .15s ease' }}>
 
-              {/* Bouton retour */}
+              {/* Bouton retour -- Step5 supprimee (fusionnee dans Step6),
+                  donc Step6 -> Step4 directement. */}
               <button
-                onClick={()=> step===2?goToStep(1):step===3?goToStep(2):step===4?goToStep(3):step===5?goToStep(4):goToStep(5)}
+                onClick={()=> step===2?goToStep(1):step===3?goToStep(2):step===4?goToStep(3):goToStep(4)}
                 style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight: 500,
                   color:th.muted, background:'none', border:'none', cursor:'pointer',
                   padding:'0 0 20px', marginBottom:4 }}>
@@ -924,13 +922,13 @@ export default function BookingPage({ slug }) {
                 {step===2 ? (selEmp&&!selSvc ? selEmp.name : 'Nos prestations')
                   : step===3 ? (selSvc?.name || selEmp?.name)
                   : step===4 ? (selEmp?._anyEmployee ? 'Premier disponible' : selEmp?.name)
-                  : step===5 ? selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})
-                  : 'Informations'}
+                  : selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}
               </button>
 
-              {/* Barre de progression */}
+              {/* Barre de progression -- 5 segments visuels (Step5 fusionnee
+                  avec Step6, donc on saute le segment 5). */}
               <div style={{ display:'flex', gap:4, marginBottom:28 }}>
-                {[1,2,3,4,5,6].map(i=>(
+                {[1,2,3,4,6].map(i=>(
                   <div key={i} style={{ flex:i===step?2:1, height:3, borderRadius:99,
                     background: i<=step ? th.accent : th.border,
                     opacity: i<=step ? 1 : 0.3, transition:'all .3s' }}/>
@@ -967,28 +965,18 @@ export default function BookingPage({ slug }) {
                 />
               )}
 
-              {/* ── ÉTAPE 5 : Infos client (compte obligatoire commit 22) ── */}
-              {step === 5 && (
-                <Step5Info
-                  th={th} slug={slug}
-                  selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
-                  clientUser={clientUser} setClientUser={setClientUser}
-                  clientPhone={clientPhone} setCP={setCP}
-                  notes={notes} setNotes={setNotes} bookErr={bookErr}
-                  phoneErr={phoneErr} setPhoneErr={setPhoneErr}
-                  referralCode={referralCode} handleAuth={handleAuth}
-                  navigate={navigate} setMyApptsInitTab={setMyApptsInitTab}
-                  setView={setView} goToStep={goToStep}
-                />
-              )}
-
-              {/* ── ÉTAPE 6 : Confirmation ── */}
+              {/* ── ÉTAPE 5+6 fusionnees : Infos client + Confirmation ──
+                  AuthPanel inline si pas connecte, sinon recap + profil +
+                  tel + reductions + code promo + notes + paiement + bouton. */}
               {step === 6 && (
                 <Step6Confirm
                   th={th} slug={slug}
                   selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
-                  clientUser={clientUser} clientName={clientName}
-                  clientEmail={clientEmail} clientPhone={clientPhone}
+                  clientUser={clientUser} setClientUser={setClientUser}
+                  clientName={clientName} clientEmail={clientEmail}
+                  clientPhone={clientPhone} setCP={setCP}
+                  notes={notes} setNotes={setNotes}
+                  phoneErr={phoneErr} setPhoneErr={setPhoneErr}
                   promoCode={promoCode} setPromoCode={setPromoCode}
                   promoData={promoData} setPromoData={setPromoData}
                   promoErr={promoErr} setPromoErr={setPromoErr}
@@ -996,6 +984,8 @@ export default function BookingPage({ slug }) {
                   bookErr={bookErr} booking={booking} handleBook={handleBook}
                   paymentConfig={paymentConfig}
                   referralCode={referralCode}
+                  navigate={navigate} setMyApptsInitTab={setMyApptsInitTab}
+                  setView={setView} handleAuth={handleAuth}
                 />
               )}
             </div>

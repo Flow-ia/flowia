@@ -27,7 +27,7 @@ export function Step4Slot({
       ) : (
         <div className="bk-slots" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
           {visibleSlots.map(s=>(
-            <button key={s} onClick={()=>{setSelSlot(s);goToStep(5,null,null,null,s);}}
+            <button key={s} onClick={()=>{setSelSlot(s);goToStep(6,null,null,null,s);}}
               style={{ padding:'18px 8px', borderRadius:16, fontSize:16, fontWeight: 500,
                 minHeight:48,
                 border:selSlot===s?`2px solid ${th.accent}`:`1px solid ${th.border}`,
