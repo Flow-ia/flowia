@@ -80,24 +80,26 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
   );
   if (existing.length) {
     // Verification souple : si le customer a ete supprime cote Stripe (rare),
-    // on en cree un nouveau. Cas critique pour la robustesse contre les
-    // mismatches DB <-> Stripe.
+    // ou pointe vers un customer qui n'existe pas sur ce connected account
+    // (mismatch historique avant fix stripeAccount), on en cree un nouveau.
+    let stillValid = false;
     try {
       const stripeOnAccount = getStripeForAccount(connectedAccountId);
       const cust = await stripeOnAccount.customers.retrieve(
         existing[0].stripe_customer_id
       );
-      if (cust && !cust.deleted) return existing[0].stripe_customer_id;
+      stillValid = !!(cust && !cust.deleted);
     } catch (e) {
       if (!/No such customer/i.test(e.message || '')) throw e;
-      // sinon : le customer a disparu cote Stripe, on le supprime de DB et
-      // on en cree un nouveau ci-dessous.
-      await pool.query(
-        `DELETE FROM client_connected_customers
-          WHERE global_client_id=$1 AND connected_account_id=$2`,
-        [globalClientId, connectedAccountId]
-      );
+      stillValid = false;
     }
+    if (stillValid) return existing[0].stripe_customer_id;
+    // Cleanup row stale (customer absent ou supprime cote Stripe).
+    await pool.query(
+      `DELETE FROM client_connected_customers
+        WHERE global_client_id=$1 AND connected_account_id=$2`,
+      [globalClientId, connectedAccountId]
+    );
   }
 
   // 2. Creer cote Stripe puis INSERT DB. Race-safe via ON CONFLICT.

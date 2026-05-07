@@ -192,27 +192,47 @@ module.exports = function attachPaymentRoutes(router) {
           return res.status(404).json({ error: 'Carte introuvable.' });
         }
         const useSavedRow = pmRows[0];
-        try {
-          connectedCustomerId = await ensureConnectedCustomer(
-            globalClientId, m.stripe_account_id,
-            { email: clientEmail, name: clientName }
-          );
-        } catch (e) {
-          console.error('[PUB PAYMENT-INTENT/ensureConnectedCustomer]',
-            e.type || 'GenericError', e.code || '', e.message);
-          throw new Error(`Erreur preparation customer: ${e.message}`);
+
+        // Boucle defensive : si on tombe sur 'No such customer' (row DB stale
+        // pointant vers un customer Stripe inexistant sur ce connected, suite
+        // a un test ou a une migration), on cleanup et on recree -- max 2
+        // tentatives pour eviter une boucle infinie.
+        let attempts = 0;
+        let lastErr = null;
+        while (attempts < 2 && !clonedPmId) {
+          try {
+            connectedCustomerId = await ensureConnectedCustomer(
+              globalClientId, m.stripe_account_id,
+              { email: clientEmail, name: clientName }
+            );
+            clonedPmId = await clonePaymentMethodToConnected({
+              platformPmId:        useSavedRow.stripe_platform_pm_id,
+              platformCustomerId:  useSavedRow.stripe_platform_customer_id,
+              connectedAccountId:  m.stripe_account_id,
+              connectedCustomerId,
+            });
+          } catch (e) {
+            lastErr = e;
+            console.error('[PUB PAYMENT-INTENT/clone]',
+              `attempt ${attempts + 1}`,
+              e.type || 'GenericError', e.code || '', e.message);
+            if (attempts === 0 && /No such customer/i.test(e.message || '')) {
+              // Cleanup row stale + nouveau customer au prochain tour.
+              await pool.query(
+                `DELETE FROM client_connected_customers
+                  WHERE global_client_id=$1 AND connected_account_id=$2`,
+                [globalClientId, m.stripe_account_id]
+              );
+              attempts++;
+              continue;
+            }
+            // Autre erreur : on sort directement.
+            attempts = 99;
+            break;
+          }
         }
-        try {
-          clonedPmId = await clonePaymentMethodToConnected({
-            platformPmId:        useSavedRow.stripe_platform_pm_id,
-            platformCustomerId:  useSavedRow.stripe_platform_customer_id,
-            connectedAccountId:  m.stripe_account_id,
-            connectedCustomerId,
-          });
-        } catch (e) {
-          console.error('[PUB PAYMENT-INTENT/clonePM]',
-            e.type || 'GenericError', e.code || '', e.message);
-          throw new Error(`Erreur clonage carte: ${e.message}`);
+        if (!clonedPmId) {
+          throw new Error(`Erreur preparation paiement: ${lastErr?.message || 'inconnu'}`);
         }
       }
 
