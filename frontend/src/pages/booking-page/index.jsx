@@ -531,27 +531,40 @@ export default function BookingPage({ slug }) {
   // ── Restauration au refresh : parse l'URL pour reconstituer l'etape +
   // les selections (svc, employe, date, creneau). Permet a l'utilisateur
   // de rester ou il en etait apres un F5 ou un partage de lien.
-  // S'execute UNE SEULE FOIS apres chargement des services + employees.
+  // S'execute UNE SEULE FOIS apres chargement des services ET employees.
   const urlRestoredRef = useRef(false);
   useEffect(() => {
     if (urlRestoredRef.current) return;
-    if (!services.length && !employees.length) return;  // attente du fetch
-    const path = location.pathname;
-    if (path === `/book/${slug}` || path === `/book/${slug}/`) {
+    // Attente stricte : on a besoin des 2 listes pour valider svcId/empId.
+    if (!services.length || !employees.length) return;
+
+    const path = location.pathname.replace(/\/+$/, ''); // strip trailing slash
+    // Segments : ['book', slug, 'service', svcId, 'employe', empId, 'date', date, 'creneau', slot, 'infos'|'confirmation']
+    const seg = path.split('/').filter(Boolean);
+    if (seg[0] !== 'book' || !seg[1]) {
       urlRestoredRef.current = true;
       return;
     }
-    // Pattern : /book/:slug/service/:svcId/employe[/:empId/date[/:date/creneau[/:slot/(infos|confirmation)]]]
-    const m = path.match(/^\/book\/[^/]+(?:\/service\/([^/]+)(?:\/employe(?:\/([^/]+)(?:\/date(?:\/([^/]+)(?:\/creneau(?:\/([^/]+)(?:\/(infos|confirmation))?)?)?)?)?)?)?)?\/?$/);
-    if (!m) { urlRestoredRef.current = true; return; }
-    const [, svcId, empId, dateStr, slotStr, finalLeg] = m;
+    // Etape 1 si pas de /service
+    if (seg.length < 3 || seg[2] !== 'service') {
+      urlRestoredRef.current = true;
+      return;
+    }
+
+    const svcId    = seg[3] || null;
+    const hasEmp   = seg[4] === 'employe';
+    const empId    = hasEmp ? (seg[5] || null) : null;
+    const hasDate  = seg[6] === 'date';
+    const dateStr  = hasDate ? (seg[7] || null) : null;
+    const hasCren  = seg[8] === 'creneau';
+    const slotStr  = hasCren ? (seg[9] || null) : null;
+    const finalLeg = seg[10] || null; // 'infos' | 'confirmation'
 
     // Restore selSvc
-    if (svcId && services.length) {
+    if (svcId) {
       const svc = services.find(s => s.id === svcId);
       if (svc) setSelSvc(svc);
       else {
-        // Service supprime/desactive depuis -- on previent et on revient au start.
         showToast('Le service de votre lien n\'est plus disponible.', 'info');
         navigate(`/book/${slug}`, { replace: true });
         urlRestoredRef.current = true;
@@ -559,14 +572,14 @@ export default function BookingPage({ slug }) {
       }
     }
     // Restore selEmp
-    if (empId && employees.length) {
+    if (empId) {
       if (empId === 'any') {
         setSelEmp({ _anyEmployee: true, id: null, name: 'Premier disponible' });
       } else {
         const emp = employees.find(e => e.id === empId);
         if (emp) setSelEmp(emp);
         else {
-          showToast('L\'employe selectionne n\'est plus disponible.', 'info');
+          showToast('L\'employe de votre lien n\'est plus disponible.', 'info');
           navigate(`/book/${slug}`, { replace: true });
           urlRestoredRef.current = true;
           return;
@@ -581,22 +594,18 @@ export default function BookingPage({ slug }) {
     // Restore selSlot
     if (slotStr) setSelSlot(slotStr);
 
-    // Determiner l'etape cible. Step5 (legacy /infos) -> Step6 (fusion).
+    // Determiner l'etape cible.
     let targetStep = 1;
     if (finalLeg === 'confirmation' || finalLeg === 'infos') targetStep = 6;
-    else if (slotStr) targetStep = 4;       // creneau selectionne mais pas confirmation
-    else if (path.includes('/creneau')) targetStep = 4;
-    else if (dateStr) targetStep = 4;
-    else if (path.includes('/date')) targetStep = 3;
-    else if (empId) targetStep = 3;
-    else if (path.includes('/employe')) targetStep = 2;
+    else if (slotStr || hasCren) targetStep = 4;
+    else if (dateStr || hasDate) targetStep = 3;
+    else if (hasEmp) targetStep = 2;
     else if (svcId) targetStep = 2;
     setStep(targetStep);
 
-    // Si l'URL etait /infos (legacy), on remplace par /confirmation pour
-    // refleter la fusion sans redirection visible.
+    // Si l'URL etait /infos (legacy), on remplace par /confirmation
     if (finalLeg === 'infos') {
-      const newPath = path.replace(/\/infos\/?$/, '/confirmation');
+      const newPath = location.pathname.replace(/\/infos\/?$/, '/confirmation');
       navigate(newPath, { replace: true });
     }
 
