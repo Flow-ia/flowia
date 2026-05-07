@@ -902,6 +902,12 @@ export const globalClientApi = {
   // Parrainage (page client)
   myReferralCode:    (slug)     => gcRequest('/global-clients/me/referral-code/'    + encodeURIComponent(slug)),
   myReferralHistory: (slug)     => gcRequest('/global-clients/me/referral-history/' + encodeURIComponent(slug)),
+  // Cartes sauvegardees globales FlowIA (Stripe Connect Shared Customer)
+  paymentMethods:           ()       => gcRequest('/global-clients/me/payment-methods'),
+  createSetupIntent:        ()       => gcRequest('/global-clients/me/setup-intent', { method: 'POST', body: '{}' }),
+  savePaymentMethod:        (pmId)   => gcRequest('/global-clients/me/payment-methods/save', { method: 'POST', body: JSON.stringify({ payment_method_id: pmId }) }),
+  deletePaymentMethod:      (id)     => gcRequest('/global-clients/me/payment-methods/' + encodeURIComponent(id), { method: 'DELETE' }),
+  setDefaultPaymentMethod:  (id)     => gcRequest('/global-clients/me/payment-methods/' + encodeURIComponent(id) + '/default', { method: 'POST', body: '{}' }),
 };
 
 // Config publique du programme parrainage (page parrainage avant connexion)

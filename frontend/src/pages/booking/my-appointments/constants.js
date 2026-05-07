@@ -10,6 +10,7 @@ export const TAB_URL = {
   visits:  (slug) => `/book/${slug}/client/passages`,
   profile: (slug) => `/book/${slug}/client/profil`,
   parrain: (slug) => `/book/${slug}/client/rdv`, // parrainage partage l'URL RDV
+  cards:   (slug) => `/book/${slug}/client/cartes`,
 };
 
 export const DELETE_PHRASE = 'supprimer';

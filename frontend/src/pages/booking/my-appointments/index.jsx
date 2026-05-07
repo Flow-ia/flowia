@@ -9,6 +9,7 @@ import { AppointmentsTab } from './tabs/AppointmentsTab';
 import { VisitsTab } from './tabs/VisitsTab';
 import { ProfileTab } from './tabs/ProfileTab';
 import { ReferralTab } from './tabs/ReferralTab';
+import { PaymentMethodsTab } from './tabs/PaymentMethodsTab';
 import { CancelApptModal } from './modals/CancelApptModal';
 import { TooLateModal } from './modals/TooLateModal';
 import { DeleteAccountModal } from './modals/DeleteAccountModal';
@@ -546,6 +547,14 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
                   </svg>Mon profil
                 </span>
               ],
+              ['cards',
+                <span style={{display:'flex',alignItems:'center',gap:6}}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}>
+                    <rect x="2" y="6" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="2" y1="11" x2="22" y2="11"/>
+                  </svg>Cartes
+                </span>
+              ],
               ...(refAvail ? [['parrain',
                 <span style={{display:'flex',alignItems:'center',gap:6}}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}>
@@ -640,6 +649,11 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
             onBack={onBack}
             slug={slug}
           />
+        )}
+
+        {/* ── ONGLET CARTES SAUVEGARDEES (Stripe Shared Customer FlowIA) ── */}
+        {activeTab === 'cards' && (
+          <PaymentMethodsTab th={th} />
         )}
 
         {/* ── ONGLET PARRAINAGE ── */}
