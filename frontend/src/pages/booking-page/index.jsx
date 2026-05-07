@@ -676,7 +676,12 @@ export default function BookingPage({ slug }) {
         setMonthKey('');
         setTimeout(() => { setStep(4); }, 1500);
       }
-      else setBookErr(e.message);
+      else {
+        // Affichage enrichi : si le backend a fourni un code (PAYMENT_NOT_SUCCEEDED,
+        // PAYMENT_MISMATCH, etc), on l'inclut pour faciliter le diagnostic.
+        const code = e.data?.code;
+        setBookErr(code ? `${e.message} [${code}]` : e.message);
+      }
     }
     finally { setBooking(false); }
   };

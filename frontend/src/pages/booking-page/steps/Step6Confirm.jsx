@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { pubApi, globalClientApi } from '../../../utils/api';
 import { StripePaymentSection } from '../components/StripePaymentSection';
+import { Confirm } from '../../../components/UI';
 
 export function Step6Confirm({
   th, slug, selSvc, selEmp, selDate, selSlot,
@@ -45,6 +46,29 @@ export function Step6Confirm({
   const [methodsLoaded, setMethodsLoaded] = useState(false);
   const [selectedPmId, setSelectedPmId] = useState(null);
   const [saveCard, setSaveCard] = useState(false);
+  const [confirmDelPmId, setConfirmDelPmId] = useState(null);
+
+  const reloadSavedMethods = async () => {
+    try {
+      const r = await globalClientApi.paymentMethods();
+      const list = Array.isArray(r?.methods) ? r.methods : [];
+      setSavedMethods(list);
+      // Si la carte selectionnee a ete supprimee, on bascule sur "Nouvelle".
+      if (selectedPmId && !list.find(m => m.id === selectedPmId)) {
+        setSelectedPmId(null);
+      }
+    } catch { /* noop */ }
+  };
+
+  const handleDeleteSavedPm = async () => {
+    const id = confirmDelPmId;
+    setConfirmDelPmId(null);
+    if (!id) return;
+    try {
+      await globalClientApi.deletePaymentMethod(id);
+      await reloadSavedMethods();
+    } catch { /* noop, l'erreur sera visible si rechargement echoue */ }
+  };
   useEffect(() => {
     if (!clientUser?.id || !payNow) {
       setSavedMethods([]); setCanSaveCards(false);
@@ -323,71 +347,92 @@ export function Step6Confirm({
 
           {payNow && (
             <>
-              {/* Selection carte sauvegardee FlowIA si client connecte global */}
+              {/* Liste des moyens de paiement style "wallet" : cartes
+                  sauvegardees + bouton "Nouvelle carte". Suppression inline
+                  via icone poubelle (avec Confirm modal). */}
               {canSaveCards && methodsLoaded && savedMethods.length > 0 && (
-                <div style={{ marginTop: 12, marginBottom: 4 }}>
+                <div style={{ marginTop: 14, marginBottom: 4 }}>
                   <p style={{ fontSize: 12, fontWeight: 500, color: th.text, margin: '0 0 8px' }}>
                     {"Moyen de paiement"}
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {savedMethods.map(m => (
-                      <button key={m.id} type="button"
-                              onClick={() => { setSelectedPmId(m.id); setSaveCard(false); }}
-                              style={{
-                                padding: 10, borderRadius: 9, textAlign: 'left',
-                                background: selectedPmId === m.id ? th.cardAlt : 'transparent',
-                                border: `0.5px solid ${selectedPmId === m.id ? th.accent : th.border}`,
-                                boxShadow: selectedPmId === m.id ? `0 0 0 1px ${th.accent}33` : 'none',
-                                cursor: 'pointer', fontFamily: 'inherit',
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                              }}>
-                        <span style={{ fontSize: 12, color: th.text, fontWeight: 500 }}>
-                          {`${(m.brand || 'Carte').replace(/^./, c => c.toUpperCase())} ****${m.last4 || '????'}`}
-                          {m.is_default && (
-                            <span style={{ fontSize: 10, color: th.muted, fontWeight: 400, marginLeft: 6 }}>
-                              {"(par defaut)"}
+                    {savedMethods.map(m => {
+                      const isSel = selectedPmId === m.id;
+                      const brandLabel = (m.brand || 'Carte').replace(/^./, c => c.toUpperCase());
+                      return (
+                        <div key={m.id}
+                             style={{
+                               display: 'flex', alignItems: 'stretch', gap: 6,
+                             }}>
+                          <button type="button"
+                                  onClick={() => { setSelectedPmId(m.id); setSaveCard(false); }}
+                                  style={{
+                                    flex: 1, padding: 12, borderRadius: 12, textAlign: 'left',
+                                    background: isSel ? th.cardAlt : 'transparent',
+                                    border: `0.5px solid ${isSel ? th.accent : th.border}`,
+                                    boxShadow: isSel ? `0 0 0 1px ${th.accent}33` : 'none',
+                                    cursor: 'pointer', fontFamily: 'inherit',
+                                    display: 'flex', justifyContent: 'space-between',
+                                    alignItems: 'center', gap: 8,
+                                  }}>
+                            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: 13, color: th.text, fontWeight: 500 }}>
+                                {`${brandLabel} ···· ${m.last4 || '????'}`}
+                                {m.is_default && (
+                                  <span style={{ fontSize: 10, color: th.muted, fontWeight: 400, marginLeft: 6 }}>
+                                    {"(par defaut)"}
+                                  </span>
+                                )}
+                              </span>
+                              {m.exp_month && m.exp_year && (
+                                <span style={{ fontSize: 11, color: th.muted,
+                                               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                                  {`Exp ${String(m.exp_month).padStart(2,'0')}/${String(m.exp_year).slice(-2)}`}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                        <span style={{ fontSize: 11, color: th.muted,
-                                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                          {m.exp_month && m.exp_year
-                            ? `${String(m.exp_month).padStart(2,'0')}/${String(m.exp_year).slice(-2)}`
-                            : ''}
-                        </span>
-                      </button>
-                    ))}
+                          </button>
+                          <button type="button"
+                                  onClick={() => setConfirmDelPmId(m.id)}
+                                  title="Supprimer cette carte"
+                                  style={{
+                                    width: 38, padding: 0, borderRadius: 12,
+                                    background: 'transparent',
+                                    border: `0.5px solid ${th.border}`,
+                                    color: '#ef4444', cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                 strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              <path d="M10 11v6M14 11v6"/>
+                              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
                     <button type="button"
                             onClick={() => setSelectedPmId(null)}
                             style={{
-                              padding: 10, borderRadius: 9, textAlign: 'left',
+                              padding: 12, borderRadius: 12, textAlign: 'left',
                               background: selectedPmId === null ? th.cardAlt : 'transparent',
-                              border: `0.5px solid ${selectedPmId === null ? th.accent : th.border}`,
+                              border: `0.5px ${selectedPmId === null ? 'solid' : 'dashed'} ${selectedPmId === null ? th.accent : th.border}`,
                               boxShadow: selectedPmId === null ? `0 0 0 1px ${th.accent}33` : 'none',
                               cursor: 'pointer', fontFamily: 'inherit',
-                              fontSize: 12, color: th.text, fontWeight: 500,
+                              fontSize: 13, color: th.text, fontWeight: 500,
+                              display: 'flex', alignItems: 'center', gap: 8,
                             }}>
-                      {"Nouvelle carte"}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                           strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                      </svg>
+                      {"Ajouter une nouvelle carte"}
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Checkbox sauvegarder (uniquement si client connecte avec
-                  compte global FlowIA + nouvelle carte) */}
-              {canSaveCards && selectedPmId === null && methodsLoaded && (
-                <label style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 8,
-                  marginTop: 12, cursor: 'pointer', userSelect: 'none',
-                }}>
-                  <input type="checkbox" checked={saveCard}
-                         onChange={e => setSaveCard(e.target.checked)}
-                         style={{ marginTop: 2 }} />
-                  <span style={{ fontSize: 11, color: th.muted, lineHeight: 1.5 }}>
-                    {"Sauvegarder cette carte pour mes prochaines reservations FlowIA. "}
-                    {"Carte chiffree par Stripe, supprimable a tout moment depuis mon compte."}
-                  </span>
-                </label>
               )}
 
               <StripePaymentSection
@@ -402,11 +447,10 @@ export function Step6Confirm({
                 bookingError={bookErr}
                 selectedPmId={selectedPmId}
                 saveCard={saveCard}
+                onSaveCardChange={setSaveCard}
                 isLoggedGlobal={canSaveCards}
                 onSavedNewCard={(newDbId) => {
-                  // Apres save, on bascule en mode "carte sauvegardee" pour
-                  // que le PI suivant utilise la carte saved sans re-saisie.
-                  setSavedMethods(prev => [...prev]);
+                  reloadSavedMethods();
                   setSelectedPmId(newDbId);
                   setSaveCard(false);
                 }}
@@ -442,6 +486,16 @@ export function Step6Confirm({
           )}
         </button>
       )}
+
+      {/* Modal confirmation suppression carte sauvegardee */}
+      <Confirm
+        open={!!confirmDelPmId}
+        onClose={() => setConfirmDelPmId(null)}
+        onConfirm={handleDeleteSavedPm}
+        title="Supprimer cette carte ?"
+        message="Vous devrez la ressaisir pour vos prochaines reservations FlowIA."
+        danger
+      />
     </div>
   );
 }

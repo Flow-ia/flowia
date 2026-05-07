@@ -104,10 +104,40 @@ function errorBlock(msg) {
   );
 }
 
+// Checkbox "Sauvegarder ma carte" affichee sous le PaymentElement, juste
+// avant le bouton Payer. Uniquement quand le client est connecte global.
+// Au changement, le parent (Step6) recoit setSaveCard et change le mode
+// du composant -> SetupIntent dual flow recree.
+function SaveCardCheckbox({ th, checked, onChange, disabled }) {
+  return (
+    <label style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      marginTop: 14, padding: '10px 12px', borderRadius: 10,
+      background: th.cardAlt || 'rgba(0,0,0,0.03)',
+      border: `0.5px solid ${th.border}`,
+      cursor: disabled ? 'not-allowed' : 'pointer', userSelect: 'none',
+      opacity: disabled ? 0.6 : 1,
+    }}>
+      <input type="checkbox" checked={checked} disabled={disabled}
+             onChange={e => onChange?.(e.target.checked)}
+             style={{ marginTop: 2, accentColor: th.accent }} />
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: th.text }}>
+          {"Sauvegarder cette carte"}
+        </span>
+        <span style={{ fontSize: 11, color: th.muted, lineHeight: 1.45 }}>
+          {"Reutilisable en 1 clic sur tous les salons FlowIA. Carte chiffree par Stripe, supprimable a tout moment."}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Mode 1 : DirectPay -- carte saisie, paiement immediat sur connected
 // ─────────────────────────────────────────────────────────────────────────
-function DirectPayForm({ th, amountCents, onPaid, busy, setBusy }) {
+function DirectPayForm({ th, amountCents, onPaid, busy, setBusy,
+                         showSaveCheckbox, saveCard, onSaveCardChange }) {
   const stripe   = useStripe();
   const elements = useElements();
   const [errMsg, setErrMsg] = useState('');
@@ -144,6 +174,10 @@ function DirectPayForm({ th, amountCents, onPaid, busy, setBusy }) {
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
       <PaymentElement options={{ layout: 'tabs' }} />
+      {showSaveCheckbox && (
+        <SaveCardCheckbox th={th} checked={saveCard} disabled={busy}
+                          onChange={onSaveCardChange} />
+      )}
       {errMsg && errorBlock(errMsg)}
       <button type="submit" disabled={!stripe || busy} style={payButtonStyle(th, busy)}>
         {busy ? <>{spinner()}{"Paiement en cours…"}</> : `Payer ${amountStr} et reserver`}
@@ -157,6 +191,7 @@ function DirectPayForm({ th, amountCents, onPaid, busy, setBusy }) {
 // ─────────────────────────────────────────────────────────────────────────
 function SaveCardForm({
   th, amountCents, slug, booking, onPaid, busy, setBusy, onSavedNewCard,
+  showSaveCheckbox, saveCard, onSaveCardChange,
 }) {
   const platformStripe = useStripe(); // instance plateforme via Elements parent
   const elements       = useElements();
@@ -225,6 +260,10 @@ function SaveCardForm({
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
       <PaymentElement options={{ layout: 'tabs' }} />
+      {showSaveCheckbox && (
+        <SaveCardCheckbox th={th} checked={saveCard} disabled={busy}
+                          onChange={onSaveCardChange} />
+      )}
       {errMsg && errorBlock(errMsg)}
       <button type="submit" disabled={!platformStripe || busy} style={payButtonStyle(th, busy)}>
         {busy
@@ -306,7 +345,8 @@ function SavedCardPay({
 // ─────────────────────────────────────────────────────────────────────────
 export function StripePaymentSection({
   th, slug, booking, onPaid, bookingError,
-  selectedPmId, saveCard, isLoggedGlobal, onSavedNewCard,
+  selectedPmId, saveCard, onSaveCardChange,
+  isLoggedGlobal, onSavedNewCard,
 }) {
   // Effective mode :
   //   - 'saved' si le client a choisi une carte sauvegardee
@@ -332,6 +372,9 @@ export function StripePaymentSection({
       th={th} slug={slug} booking={booking} mode={mode}
       onPaid={onPaid} bookingError={bookingError}
       onSavedNewCard={onSavedNewCard}
+      showSaveCheckbox={isLoggedGlobal}
+      saveCard={saveCard}
+      onSaveCardChange={onSaveCardChange}
     />
   );
 }
@@ -376,6 +419,7 @@ function SavedCardPaySectionWrapper({ th, slug, booking, selectedPmId, onPaid })
 // SetupIntent plateforme) puis monte Elements avec la bonne instance Stripe.
 function PaymentIntentOrSetupWrapper({
   th, slug, booking, mode, onPaid, bookingError, onSavedNewCard,
+  showSaveCheckbox, saveCard, onSaveCardChange,
 }) {
   // intent : { client_secret, payment_intent_id?, setup_intent_id?, amount_cents,
   //           connected_account_id?, ... }
@@ -510,6 +554,9 @@ function PaymentIntentOrSetupWrapper({
             onPaid={(piId) => onPaid(piId)}
             onSavedNewCard={onSavedNewCard}
             busy={busy} setBusy={setBusy}
+            showSaveCheckbox={showSaveCheckbox}
+            saveCard={saveCard}
+            onSaveCardChange={onSaveCardChange}
           />
         ) : (
           <DirectPayForm
@@ -517,6 +564,9 @@ function PaymentIntentOrSetupWrapper({
             amountCents={intent.amount_cents || 0}
             onPaid={(piId) => onPaid(piId, intent.amount_cents)}
             busy={busy} setBusy={setBusy}
+            showSaveCheckbox={showSaveCheckbox}
+            saveCard={saveCard}
+            onSaveCardChange={onSaveCardChange}
           />
         )}
       </Elements>
@@ -526,7 +576,10 @@ function PaymentIntentOrSetupWrapper({
 
 // Bridge SaveCardForm : passage direct des props -- le connected_account_id
 // est recupere a la volee dans la reponse createPaymentIntent (handleSubmit).
-function SaveCardFormBridge({ th, slug, booking, onPaid, onSavedNewCard, busy, setBusy }) {
+function SaveCardFormBridge({
+  th, slug, booking, onPaid, onSavedNewCard, busy, setBusy,
+  showSaveCheckbox, saveCard, onSaveCardChange,
+}) {
   return (
     <SaveCardForm
       th={th} amountCents={0}
@@ -534,6 +587,9 @@ function SaveCardFormBridge({ th, slug, booking, onPaid, onSavedNewCard, busy, s
       onPaid={onPaid}
       onSavedNewCard={onSavedNewCard}
       busy={busy} setBusy={setBusy}
+      showSaveCheckbox={showSaveCheckbox}
+      saveCard={saveCard}
+      onSaveCardChange={onSaveCardChange}
     />
   );
 }
