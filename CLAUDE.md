@@ -37,7 +37,19 @@ Push direct sur `main` (validé utilisateur 2026-05-04). La refonte `refonte-arc
    - Erreurs/info ponctuelles → `showToast(msg, 'error'\|'ok'\|'info')` via `useToast()`
    - Confirmations destructives → `<Confirm open onClose onConfirm title message danger />`
    - Erreurs inline (formulaires) → état local + bloc rouge sous le champ concerné
-10. **Si tu doutes, tu demandes**
+10. **Robustesse non-négociable** — chaque modification doit tenir sous charge ET dans les états dégradés (réseau lent, API tierce instable, données stale, retry, race conditions). Pas de quick fix qui marche en happy path et casse en prod. Avant de fermer une issue :
+    - **Idempotence** sur tout endpoint qui mute (POST/PUT/DELETE) : retry safe, double-clic safe, webhook replay safe (`UNIQUE` index, `ON CONFLICT DO NOTHING/UPDATE`, anti-replay table `processed_stripe_events`).
+    - **Atomicité DB** : transactions `BEGIN/COMMIT/ROLLBACK` pour les opérations multi-tables ; INSERT conditionnels `WHERE NOT EXISTS` pour éviter les doublons en course.
+    - **Auto-réparation** des états incohérents : si une row DB pointe vers une ressource externe disparue (Stripe customer, Brevo contact, etc.), on cleanup + recrée transparent (cf. `client_connected_customers` retry).
+    - **Try/catch granulaire** par étape critique avec messages distincts (`[ETAPE_X]` log + erreur claire au client). Pas de catch global qui masque l'origine.
+    - **Validation aux limites** : tout input externe (body, query, params, JWT) revalidé côté serveur, jamais confiance au front. Filtre `user_id` et scope JWT obligatoire sur tout SELECT/UPDATE multi-tenant.
+    - **Consistance éventuelle** des APIs tierces (Stripe Search, Brevo, Cloudinary) : ne jamais lire après un write immédiat ; passer par DB locale comme source de vérité, ré-essayer 1× sur erreur transitoire (`No such X`, `rate_limited`, timeout).
+    - **Anti-race-condition** sur les ressources partagées : créneaux RDV (INSERT conditionnel), customers Stripe (UNIQUE + ON CONFLICT), tokens unsubscribe (UNIQUE).
+    - **Fail-safe gracieux** : si un side-effect non-critique échoue (notification push, email confirmation), log + continue, ne casse pas le flow principal. Les opérations financières (Stripe payments, fidélité) ne sont JAMAIS fail-safe — elles doivent réussir ou rollback.
+    - **Rate-limit** sur les endpoints publics et auth (déjà 10 limiters express) — toute nouvelle route exposée doit en avoir un.
+    - **Pas de `Promise.all` sans `allSettled`** quand une partie peut échouer sans casser le tout.
+    - **Sleep absolument interdit** comme workaround de timing. Utiliser des locks DB, des INSERT atomiques, ou des polling avec timeout explicite.
+11. **Si tu doutes, tu demandes**
 
 ## Complexité à connaître
 
