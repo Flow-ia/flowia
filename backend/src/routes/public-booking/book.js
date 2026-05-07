@@ -452,8 +452,8 @@ module.exports = function attachBookRoute(router) {
             source, created_by_employee_id,
             stripe_payment_intent_id, payment_status, paid_amount_cents, paid_at, paid)
          SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL,
-                $18,$19,$20,
-                CASE WHEN $19='paid' THEN NOW() ELSE NULL END,
+                $18,$19::varchar,$20,
+                CASE WHEN $19::varchar='paid' THEN NOW() ELSE NULL END,
                 $21
           WHERE NOT EXISTS (
             SELECT 1 FROM appointments
