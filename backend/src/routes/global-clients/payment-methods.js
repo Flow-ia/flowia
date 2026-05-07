@@ -4,12 +4,16 @@
 //   DELETE /me/payment-methods/:id           -> suppression (detach + cascade DB)
 //   POST   /me/payment-methods/:id/default   -> definir par defaut
 //
-// Toutes les routes exigent globalClientAuth. La source de verite est le
-// customer plateforme Stripe FlowIA -- les cartes y sont attachees, et
-// clonees vers les connected accounts a la volee lors d'un paiement.
+// Toutes les routes acceptent scope='client' ou scope='global_client'
+// (clientOrGlobalClientAuth) -- via login chez un commercant ou via login
+// FlowIA global. Le client doit AVOIR un global_client_id pour utiliser
+// ces fonctionnalites (sinon 401 "Token invalide", front cache l'option).
+// La source de verite est le customer plateforme Stripe FlowIA -- les cartes
+// y sont attachees, et clonees vers les connected accounts a la volee lors
+// d'un paiement.
 
 const { pool } = require('../../db');
-const { globalClientAuth } = require('./helpers');
+const { clientOrGlobalClientAuth } = require('./helpers');
 const { getStripe, ensurePlatformCustomer } = require('./stripe-helpers');
 
 module.exports = function attachPaymentMethods(router) {
@@ -19,7 +23,7 @@ module.exports = function attachPaymentMethods(router) {
   // du paiement -- une fois la carte sauvegardee (webhook setup_intent.
   // succeeded), elle peut etre clonee vers n'importe quel salon connecte
   // pour payer.
-  router.post('/me/setup-intent', globalClientAuth, async (req, res) => {
+  router.post('/me/setup-intent', clientOrGlobalClientAuth, async (req, res) => {
     try {
       const customerId = await ensurePlatformCustomer(req.globalClient.globalClientId);
       const stripe = getStripe();
@@ -48,7 +52,7 @@ module.exports = function attachPaymentMethods(router) {
   // SetupIntent cote front. Sert de fallback si le webhook setup_intent.
   // succeeded est latent. Re-verifie le PM sur Stripe pour eviter un client
   // malicieux qui declarerait un pm_id qui ne lui appartient pas.
-  router.post('/me/payment-methods/save', globalClientAuth, async (req, res) => {
+  router.post('/me/payment-methods/save', clientOrGlobalClientAuth, async (req, res) => {
     try {
       const { payment_method_id } = req.body || {};
       if (!payment_method_id) return res.status(400).json({ error: 'payment_method_id requis.' });
@@ -92,7 +96,7 @@ module.exports = function attachPaymentMethods(router) {
   });
 
   // ── GET /me/payment-methods ───────────────────────────────────────────
-  router.get('/me/payment-methods', globalClientAuth, async (req, res) => {
+  router.get('/me/payment-methods', clientOrGlobalClientAuth, async (req, res) => {
     try {
       const { rows } = await pool.query(
         `SELECT id, stripe_platform_pm_id, brand, last4, exp_month, exp_year,
@@ -110,7 +114,7 @@ module.exports = function attachPaymentMethods(router) {
   });
 
   // ── DELETE /me/payment-methods/:id ────────────────────────────────────
-  router.delete('/me/payment-methods/:id', globalClientAuth, async (req, res) => {
+  router.delete('/me/payment-methods/:id', clientOrGlobalClientAuth, async (req, res) => {
     try {
       const { rows } = await pool.query(
         `SELECT stripe_platform_pm_id, is_default
@@ -163,7 +167,7 @@ module.exports = function attachPaymentMethods(router) {
   });
 
   // ── POST /me/payment-methods/:id/default ──────────────────────────────
-  router.post('/me/payment-methods/:id/default', globalClientAuth, async (req, res) => {
+  router.post('/me/payment-methods/:id/default', clientOrGlobalClientAuth, async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');

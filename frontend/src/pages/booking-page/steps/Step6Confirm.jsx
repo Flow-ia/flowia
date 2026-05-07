@@ -33,16 +33,22 @@ export function Step6Confirm({
     if (isMandatory && !payNow) setPayNow(true);
   }, [isMandatory]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cartes sauvegardees globales FlowIA (clientUser=global_client connecte).
+  // Cartes sauvegardees globales FlowIA (Stripe Shared Customer dual flow).
+  // canSaveCards : booleen indiquant si le client a un compte global FlowIA
+  //   lie (= scope='client' avec globalClientId, ou scope='global_client').
+  //   Si non (compte interne au salon sans liaison FlowIA globale), l'API
+  //   /me/payment-methods retourne 401 -> on cache la checkbox + radio.
   // selectedPmId : null = nouvelle carte, sinon ID DB d'une carte sauvegardee.
-  // saveCard : checkbox active uniquement quand selectedPmId est null.
+  // saveCard : checkbox active uniquement quand canSaveCards=true et nouvelle.
   const [savedMethods, setSavedMethods] = useState([]);
+  const [canSaveCards, setCanSaveCards] = useState(false);
   const [methodsLoaded, setMethodsLoaded] = useState(false);
   const [selectedPmId, setSelectedPmId] = useState(null);
   const [saveCard, setSaveCard] = useState(false);
   useEffect(() => {
     if (!clientUser?.id || !payNow) {
-      setSavedMethods([]); setMethodsLoaded(false); setSelectedPmId(null);
+      setSavedMethods([]); setCanSaveCards(false);
+      setMethodsLoaded(false); setSelectedPmId(null); setSaveCard(false);
       return;
     }
     let cancelled = false;
@@ -51,11 +57,19 @@ export function Step6Confirm({
         if (cancelled) return;
         const list = Array.isArray(r?.methods) ? r.methods : [];
         setSavedMethods(list);
+        setCanSaveCards(true);
         setMethodsLoaded(true);
         const def = list.find(m => m.is_default) || list[0] || null;
         setSelectedPmId(def?.id || null);
       })
-      .catch(() => { if (!cancelled) { setMethodsLoaded(true); setSavedMethods([]); } });
+      .catch(() => {
+        if (cancelled) return;
+        // 401 ou autre : pas de compte global lie -> pas de cartes sauvegardees,
+        // pas d'option "Sauvegarder" affichee. Le client paie en flow direct.
+        setMethodsLoaded(true);
+        setSavedMethods([]);
+        setCanSaveCards(false);
+      });
     return () => { cancelled = true; };
   }, [clientUser?.id, payNow]);
 
@@ -310,7 +324,7 @@ export function Step6Confirm({
           {payNow && (
             <>
               {/* Selection carte sauvegardee FlowIA si client connecte global */}
-              {clientUser?.id && methodsLoaded && savedMethods.length > 0 && (
+              {canSaveCards && methodsLoaded && savedMethods.length > 0 && (
                 <div style={{ marginTop: 12, marginBottom: 4 }}>
                   <p style={{ fontSize: 12, fontWeight: 500, color: th.text, margin: '0 0 8px' }}>
                     {"Moyen de paiement"}
@@ -359,8 +373,9 @@ export function Step6Confirm({
                 </div>
               )}
 
-              {/* Checkbox sauvegarder (uniquement si client connecte + nouvelle carte) */}
-              {clientUser?.id && selectedPmId === null && methodsLoaded && (
+              {/* Checkbox sauvegarder (uniquement si client connecte avec
+                  compte global FlowIA + nouvelle carte) */}
+              {canSaveCards && selectedPmId === null && methodsLoaded && (
                 <label style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   marginTop: 12, cursor: 'pointer', userSelect: 'none',
@@ -387,7 +402,7 @@ export function Step6Confirm({
                 bookingError={bookErr}
                 selectedPmId={selectedPmId}
                 saveCard={saveCard}
-                isLoggedGlobal={!!clientUser?.id}
+                isLoggedGlobal={canSaveCards}
                 onSavedNewCard={(newDbId) => {
                   // Apres save, on bascule en mode "carte sauvegardee" pour
                   // que le PI suivant utilise la carte saved sans re-saisie.
