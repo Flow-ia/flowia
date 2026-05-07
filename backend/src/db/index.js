@@ -1758,6 +1758,22 @@ async function initDB() {
   await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS uq_cpm_default_per_client
     ON client_payment_methods(global_client_id) WHERE is_default = TRUE`);
 
+  // Mapping (global_client_id, connected_account_id) -> stripe customer id sur
+  // le connected account. Evite de relancer customers.search Stripe (cache
+  // stale -> ID obsolete -> 500 "No such customer") ou de creer 1 customer
+  // par paiement (pollue Stripe Dashboard).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS client_connected_customers (
+      id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      global_client_id      UUID NOT NULL REFERENCES global_clients(id) ON DELETE CASCADE,
+      connected_account_id  TEXT NOT NULL,
+      stripe_customer_id    TEXT NOT NULL,
+      created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (global_client_id, connected_account_id)
+    )`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ccc_client
+    ON client_connected_customers(global_client_id)`);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─

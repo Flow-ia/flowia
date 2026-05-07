@@ -58,25 +58,41 @@ async function ensurePlatformCustomer(globalClientId) {
 }
 
 // Garantit qu'un Customer Stripe existe sur le connected account du salon
-// pour ce global_client. Pas stocke en DB cote FlowIA (la source de verite
-// est le customer plateforme). On retrouve par metadata.global_client_id.
+// pour ce global_client. Mapping stocke en DB (client_connected_customers)
+// pour eviter customers.search Stripe (cache stale -> 500 "No such customer")
+// et eviter de creer 1 customer par paiement.
 async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint = {}) {
-  const stripe = getStripe();
-  // Cherche par metadata via search API (Stripe : metadata['key']:'val').
-  // Fallback list+filter si search indisponible (ex. compte test).
-  let existing = null;
-  try {
-    const found = await stripe.customers.search(
-      { query: `metadata['global_client_id']:'${globalClientId}'`, limit: 1 },
-      { stripeAccount: connectedAccountId }
-    );
-    existing = found.data?.[0] || null;
-  } catch {
-    // Search peut etre indispo dans certaines situations -> on retombe sur
-    // la creation (Stripe accepte plusieurs customers, on filtre par metadata
-    // a l'usage). Acceptable pour un fallback.
+  // 1. Lookup DB
+  const { rows: existing } = await pool.query(
+    `SELECT stripe_customer_id FROM client_connected_customers
+      WHERE global_client_id=$1 AND connected_account_id=$2`,
+    [globalClientId, connectedAccountId]
+  );
+  if (existing.length) {
+    // Verification souple : si le customer a ete supprime cote Stripe (rare),
+    // on en cree un nouveau. Cas critique pour la robustesse contre les
+    // mismatches DB <-> Stripe.
+    try {
+      const stripe = getStripe();
+      const cust = await stripe.customers.retrieve(
+        existing[0].stripe_customer_id,
+        { stripeAccount: connectedAccountId }
+      );
+      if (cust && !cust.deleted) return existing[0].stripe_customer_id;
+    } catch (e) {
+      if (!/No such customer/i.test(e.message || '')) throw e;
+      // sinon : le customer a disparu cote Stripe, on le supprime de DB et
+      // on en cree un nouveau ci-dessous.
+      await pool.query(
+        `DELETE FROM client_connected_customers
+          WHERE global_client_id=$1 AND connected_account_id=$2`,
+        [globalClientId, connectedAccountId]
+      );
+    }
   }
-  if (existing) return existing.id;
+
+  // 2. Creer cote Stripe puis INSERT DB. Race-safe via ON CONFLICT.
+  const stripe = getStripe();
   const customer = await stripe.customers.create(
     {
       email:    hint.email || undefined,
@@ -88,7 +104,22 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     },
     { stripeAccount: connectedAccountId }
   );
-  return customer.id;
+  const ins = await pool.query(
+    `INSERT INTO client_connected_customers
+       (global_client_id, connected_account_id, stripe_customer_id)
+     VALUES ($1,$2,$3)
+     ON CONFLICT (global_client_id, connected_account_id) DO NOTHING
+     RETURNING stripe_customer_id`,
+    [globalClientId, connectedAccountId, customer.id]
+  );
+  if (ins.length) return customer.id;
+  // Race perdue : un autre process a deja insere -> on relit.
+  const { rows: relu } = await pool.query(
+    `SELECT stripe_customer_id FROM client_connected_customers
+      WHERE global_client_id=$1 AND connected_account_id=$2`,
+    [globalClientId, connectedAccountId]
+  );
+  return relu[0]?.stripe_customer_id || customer.id;
 }
 
 // Clone un PaymentMethod du customer plateforme vers le customer du
