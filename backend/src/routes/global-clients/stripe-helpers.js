@@ -127,42 +127,20 @@ async function ensurePlatformCustomer(globalClientId) {
   return again[0].stripe_platform_customer_id;
 }
 
-// Garantit qu'un Customer Stripe existe sur le connected account du salon
-// pour ce global_client. Approche robuste :
-//   1. Lookup DB (table client_connected_customers, source de verite)
-//   2. Verify cote Stripe (retrieve avec stripeAccount per-call)
-//   3. Si invalide/disparu -> cleanup DB + recree
-//   4. Verify post-create explicite (eviter de retourner un customer qui
-//      n'est pas immediatement accessible -- defense contre consistance
-//      eventuelle Stripe ou mauvais routage du SDK).
+// Cree un Customer Stripe sur le connected account du salon pour ce
+// global_client. APPROCHE NO-CACHE (robustesse stricte regle 10) :
+// on cree un NOUVEAU customer a chaque appel. Pas de lookup DB possible
+// (la table contenait des rows stales pointant vers des customers
+// inaccessibles -- legacy des bugs SDK Stripe Connect). Stripe accepte
+// plusieurs customers identiques (memes metadata) -- pollution accepteee
+// pour garantir la fiabilite. La table client_connected_customers reste
+// pour traçabilité audit, mais n'est plus source de verite.
 async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint = {}) {
   if (!connectedAccountId) throw new Error('connectedAccountId requis');
   const opts = { stripeAccount: connectedAccountId };
 
-  // 1. Lookup DB (cache rapide).
-  const { rows: existing } = await pool.query(
-    `SELECT stripe_customer_id FROM client_connected_customers
-      WHERE global_client_id=$1 AND connected_account_id=$2`,
-    [globalClientId, connectedAccountId]
-  );
-  if (existing.length) {
-    let stillValid = false;
-    try {
-      const cust = await stripeFetch('GET', `/customers/${existing[0].stripe_customer_id}`, null, opts);
-      stillValid = !!(cust && !cust.deleted);
-    } catch (e) {
-      if (!/No such customer/i.test(e.message || '')) throw e;
-      stillValid = false;
-    }
-    if (stillValid) return existing[0].stripe_customer_id;
-    await pool.query(
-      `DELETE FROM client_connected_customers
-        WHERE global_client_id=$1 AND connected_account_id=$2`,
-      [globalClientId, connectedAccountId]
-    );
-  }
-
-  // 2. Creer sur le connected via fetch direct (Stripe-Account header garanti).
+  // Creer toujours un nouveau customer sur le connected via fetch direct
+  // (header Stripe-Account explicite garanti par stripeFetch).
   const customer = await stripeFetch('POST', '/customers', {
     email:    hint.email || undefined,
     name:     hint.name  || undefined,
@@ -172,22 +150,19 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     },
   }, opts);
 
-  // 3. INSERT DB. Race-safe via ON CONFLICT.
-  const ins = await pool.query(
+  // Best-effort INSERT pour traçabilité (audit + cleanup futur si besoin).
+  // Si la row existe deja, on update pour avoir le dernier customer en date.
+  pool.query(
     `INSERT INTO client_connected_customers
        (global_client_id, connected_account_id, stripe_customer_id)
      VALUES ($1,$2,$3)
-     ON CONFLICT (global_client_id, connected_account_id) DO NOTHING
-     RETURNING stripe_customer_id`,
+     ON CONFLICT (global_client_id, connected_account_id)
+       DO UPDATE SET stripe_customer_id=EXCLUDED.stripe_customer_id,
+                     created_at=NOW()`,
     [globalClientId, connectedAccountId, customer.id]
-  );
-  if (ins.length) return customer.id;
-  const { rows: relu } = await pool.query(
-    `SELECT stripe_customer_id FROM client_connected_customers
-      WHERE global_client_id=$1 AND connected_account_id=$2`,
-    [globalClientId, connectedAccountId]
-  );
-  return relu[0]?.stripe_customer_id || customer.id;
+  ).catch(() => { /* trace-only, pas critique */ });
+
+  return customer.id;
 }
 
 // Clone un PaymentMethod du customer plateforme vers le connected account.
