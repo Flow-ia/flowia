@@ -528,6 +528,93 @@ export default function BookingPage({ slug }) {
       .finally(() => setSL(false));
   }, [selDate, selEmp, selSvc, slug]);
 
+  // ── Restauration au refresh : parse l'URL pour reconstituer l'etape +
+  // les selections (svc, employe, date, creneau). Permet a l'utilisateur
+  // de rester ou il en etait apres un F5 ou un partage de lien.
+  // S'execute UNE SEULE FOIS apres chargement des services + employees.
+  const urlRestoredRef = useRef(false);
+  useEffect(() => {
+    if (urlRestoredRef.current) return;
+    if (!services.length && !employees.length) return;  // attente du fetch
+    const path = location.pathname;
+    if (path === `/book/${slug}` || path === `/book/${slug}/`) {
+      urlRestoredRef.current = true;
+      return;
+    }
+    // Pattern : /book/:slug/service/:svcId/employe[/:empId/date[/:date/creneau[/:slot/(infos|confirmation)]]]
+    const m = path.match(/^\/book\/[^/]+(?:\/service\/([^/]+)(?:\/employe(?:\/([^/]+)(?:\/date(?:\/([^/]+)(?:\/creneau(?:\/([^/]+)(?:\/(infos|confirmation))?)?)?)?)?)?)?)?\/?$/);
+    if (!m) { urlRestoredRef.current = true; return; }
+    const [, svcId, empId, dateStr, slotStr, finalLeg] = m;
+
+    // Restore selSvc
+    if (svcId && services.length) {
+      const svc = services.find(s => s.id === svcId);
+      if (svc) setSelSvc(svc);
+      else {
+        // Service supprime/desactive depuis -- on previent et on revient au start.
+        showToast('Le service de votre lien n\'est plus disponible.', 'info');
+        navigate(`/book/${slug}`, { replace: true });
+        urlRestoredRef.current = true;
+        return;
+      }
+    }
+    // Restore selEmp
+    if (empId && employees.length) {
+      if (empId === 'any') {
+        setSelEmp({ _anyEmployee: true, id: null, name: 'Premier disponible' });
+      } else {
+        const emp = employees.find(e => e.id === empId);
+        if (emp) setSelEmp(emp);
+        else {
+          showToast('L\'employe selectionne n\'est plus disponible.', 'info');
+          navigate(`/book/${slug}`, { replace: true });
+          urlRestoredRef.current = true;
+          return;
+        }
+      }
+    }
+    // Restore selDate
+    if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (!isNaN(d.getTime())) setSelDate(d);
+    }
+    // Restore selSlot
+    if (slotStr) setSelSlot(slotStr);
+
+    // Determiner l'etape cible. Step5 (legacy /infos) -> Step6 (fusion).
+    let targetStep = 1;
+    if (finalLeg === 'confirmation' || finalLeg === 'infos') targetStep = 6;
+    else if (slotStr) targetStep = 4;       // creneau selectionne mais pas confirmation
+    else if (path.includes('/creneau')) targetStep = 4;
+    else if (dateStr) targetStep = 4;
+    else if (path.includes('/date')) targetStep = 3;
+    else if (empId) targetStep = 3;
+    else if (path.includes('/employe')) targetStep = 2;
+    else if (svcId) targetStep = 2;
+    setStep(targetStep);
+
+    // Si l'URL etait /infos (legacy), on remplace par /confirmation pour
+    // refleter la fusion sans redirection visible.
+    if (finalLeg === 'infos') {
+      const newPath = path.replace(/\/infos\/?$/, '/confirmation');
+      navigate(newPath, { replace: true });
+    }
+
+    urlRestoredRef.current = true;
+  }, [services, employees]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Verification slot disponible apres chargement -- si selSlot etait set
+  // (via URL) mais n'est plus dans la liste des creneaux disponibles,
+  // on previent et on renvoie a l'etape 4.
+  useEffect(() => {
+    if (!selSlot || slotsLoading || slots.length === 0) return;
+    if (!slots.includes(selSlot)) {
+      showToast('Ce creneau n\'est plus disponible. Choisissez un autre horaire.', 'error');
+      setSelSlot(null);
+      setStep(4);
+    }
+  }, [slots, slotsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load month status (open/closed/full par jour)
   useEffect(() => {
     if (!selSvc || !calMonth) return;
@@ -667,11 +754,13 @@ export default function BookingPage({ slug }) {
       // "rembourse automatiquement" vs "contacter le commercant") puis on
       // renvoie a l'etape de selection de creneau pour qu'il puisse retenter.
       else if (e.data?.code === 'SLOT_TAKEN') {
+        // Toast bien visible (1 ligne fixe en haut) + redirige a l'etape 4
+        // pour que le client choisisse un autre creneau immediatement.
+        showToast(e.message || 'Ce creneau vient d\'etre pris. Choisissez un autre horaire.', 'error');
         setBookErr(e.message);
-        // Force un refresh des slots + retour etape 4
         setSelSlot(null);
         setMonthKey('');
-        setTimeout(() => { setStep(4); }, 1500);
+        setTimeout(() => { setStep(4); }, 800);
       }
       else {
         // Affichage enrichi : si le backend a fourni un code (PAYMENT_NOT_SUCCEEDED,
