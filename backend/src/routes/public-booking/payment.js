@@ -14,15 +14,10 @@ const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { extractClientToken } = require('../../utils/clientCookies');
 const {
+  getStripeForAccount,
   ensureConnectedCustomer,
   clonePaymentMethodToConnected,
 } = require('../global-clients/stripe-helpers');
-
-function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
-  return require('stripe')(key);
-}
 
 module.exports = function attachPaymentRoutes(router) {
   // ── POST /api/pub/:slug/booking/payment-intent ───────────────────────────
@@ -171,7 +166,9 @@ module.exports = function attachPaymentRoutes(router) {
         ? Math.round(amountCents * (commission / 100))
         : 0;
 
-      const stripe = getStripe();
+      // Stripe instance scoped sur le compte connecte du salon (Direct Charge).
+      // Plus fiable que { stripeAccount } en 2eme arg de chaque appel.
+      const stripe = getStripeForAccount(m.stripe_account_id);
 
       // ── Reuse carte sauvegardee globale FlowIA ──────────────────────────
       // Si use_saved_pm_id : la carte vient du customer plateforme du client
@@ -195,16 +192,28 @@ module.exports = function attachPaymentRoutes(router) {
           return res.status(404).json({ error: 'Carte introuvable.' });
         }
         const useSavedRow = pmRows[0];
-        connectedCustomerId = await ensureConnectedCustomer(
-          globalClientId, m.stripe_account_id,
-          { email: clientEmail, name: clientName }
-        );
-        clonedPmId = await clonePaymentMethodToConnected({
-          platformPmId:        useSavedRow.stripe_platform_pm_id,
-          platformCustomerId:  useSavedRow.stripe_platform_customer_id,
-          connectedAccountId:  m.stripe_account_id,
-          connectedCustomerId,
-        });
+        try {
+          connectedCustomerId = await ensureConnectedCustomer(
+            globalClientId, m.stripe_account_id,
+            { email: clientEmail, name: clientName }
+          );
+        } catch (e) {
+          console.error('[PUB PAYMENT-INTENT/ensureConnectedCustomer]',
+            e.type || 'GenericError', e.code || '', e.message);
+          throw new Error(`Erreur preparation customer: ${e.message}`);
+        }
+        try {
+          clonedPmId = await clonePaymentMethodToConnected({
+            platformPmId:        useSavedRow.stripe_platform_pm_id,
+            platformCustomerId:  useSavedRow.stripe_platform_customer_id,
+            connectedAccountId:  m.stripe_account_id,
+            connectedCustomerId,
+          });
+        } catch (e) {
+          console.error('[PUB PAYMENT-INTENT/clonePM]',
+            e.type || 'GenericError', e.code || '', e.message);
+          throw new Error(`Erreur clonage carte: ${e.message}`);
+        }
       }
 
       const piParams = {
@@ -246,10 +255,8 @@ module.exports = function attachPaymentRoutes(router) {
         piParams.automatic_payment_methods = { enabled: true };
       }
 
-      const pi = await stripe.paymentIntents.create(
-        piParams,
-        { stripeAccount: m.stripe_account_id }
-      );
+      // L'instance stripe est deja scoped sur le connected account du salon.
+      const pi = await stripe.paymentIntents.create(piParams);
 
       // Mise a jour last_used_at sur la carte reutilisee (best-effort).
       if (use_saved_pm_id) {

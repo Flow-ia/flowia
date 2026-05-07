@@ -19,6 +19,16 @@ function getStripe() {
   return require('stripe')(key);
 }
 
+// Cree une instance Stripe scoped sur un connected account. Plus fiable que
+// de passer { stripeAccount } en 2eme argument a chaque call -- elimine les
+// edge cases ou Stripe SDK pourrait mal interpreter la signature.
+function getStripeForAccount(connectedAccountId) {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
+  if (!connectedAccountId) throw new Error('connectedAccountId requis');
+  return require('stripe')(key, { stripeAccount: connectedAccountId });
+}
+
 // Garantit qu'un Customer Stripe plateforme existe pour ce global_client.
 // Reuse si deja cree. INSERT atomic + check pour eviter duplication.
 async function ensurePlatformCustomer(globalClientId) {
@@ -73,10 +83,9 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     // on en cree un nouveau. Cas critique pour la robustesse contre les
     // mismatches DB <-> Stripe.
     try {
-      const stripe = getStripe();
-      const cust = await stripe.customers.retrieve(
-        existing[0].stripe_customer_id,
-        { stripeAccount: connectedAccountId }
+      const stripeOnAccount = getStripeForAccount(connectedAccountId);
+      const cust = await stripeOnAccount.customers.retrieve(
+        existing[0].stripe_customer_id
       );
       if (cust && !cust.deleted) return existing[0].stripe_customer_id;
     } catch (e) {
@@ -92,18 +101,15 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
   }
 
   // 2. Creer cote Stripe puis INSERT DB. Race-safe via ON CONFLICT.
-  const stripe = getStripe();
-  const customer = await stripe.customers.create(
-    {
-      email:    hint.email || undefined,
-      name:     hint.name  || undefined,
-      metadata: {
-        global_client_id: globalClientId,
-        source:           'flowia_connected_clone',
-      },
+  const stripeOnAccount = getStripeForAccount(connectedAccountId);
+  const customer = await stripeOnAccount.customers.create({
+    email:    hint.email || undefined,
+    name:     hint.name  || undefined,
+    metadata: {
+      global_client_id: globalClientId,
+      source:           'flowia_connected_clone',
     },
-    { stripeAccount: connectedAccountId }
-  );
+  });
   const ins = await pool.query(
     `INSERT INTO client_connected_customers
        (global_client_id, connected_account_id, stripe_customer_id)
@@ -129,22 +135,21 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
 async function clonePaymentMethodToConnected({
   platformPmId, platformCustomerId, connectedAccountId, connectedCustomerId,
 }) {
-  const stripe = getStripe();
-  // Le clone se cree SUR le connected account. Stripe accepte un PM cross-
-  // account uniquement avec le couple (payment_method=src, customer=dst).
-  const cloned = await stripe.paymentMethods.create(
-    {
-      customer:       connectedCustomerId,
-      payment_method: platformPmId,
-    },
-    { stripeAccount: connectedAccountId }
-  );
+  // Le clone se cree SUR le connected account via une instance Stripe
+  // scoped. Stripe accepte un PM cross-account uniquement avec le couple
+  // (payment_method=src, customer=dst).
+  const stripeOnAccount = getStripeForAccount(connectedAccountId);
+  const cloned = await stripeOnAccount.paymentMethods.create({
+    customer:       connectedCustomerId,
+    payment_method: platformPmId,
+  });
   // Note : on ne fait pas attach() apres -- create avec customer le fait deja.
   return cloned.id;
 }
 
 module.exports = {
   getStripe,
+  getStripeForAccount,
   ensurePlatformCustomer,
   ensureConnectedCustomer,
   clonePaymentMethodToConnected,
