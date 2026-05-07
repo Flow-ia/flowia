@@ -1,11 +1,16 @@
 // src/pages/booking-page/steps/Step3Date.jsx
 // Étape 3 : calendrier — choix de la date parmi un mois navigable.
+// Pas de fetch month-status global : les jours fermés du commerce sont
+// detectes via closedDays (charge en bloc). La dispo creneau est calculee
+// a Step4 quand l'utilisateur clique un jour (plus rapide, pas de loader
+// permanent au calendrier). Si 0 creneau a Step4 -> message "aucun
+// creneau" + bouton retour.
 
 import { MONTHS_FR, DAYS_MINI } from '../../booking/shared';
 
 export function Step3Date({
   th, selEmp, selDate, calMonth, setCalMonth, setSelDate,
-  today, maxDate, calDays, monthStatus, closedDays, monthLoading, goToStep,
+  today, maxDate, calDays, closedDays, goToStep,
 }) {
   return (
     <div>
@@ -17,22 +22,7 @@ export function Step3Date({
         </strong>
       </p>
       <div style={{ background:th.card, border: `0.5px solid ${th.border}`,
-        borderRadius:20, padding:'24px 16px', position:'relative' }}>
-        {/* Indicateur de chargement (pendant fetch monthStatus) */}
-        {monthLoading && (
-          <div style={{
-            position:'absolute', top:18, right:18,
-            display:'flex', alignItems:'center', gap:6,
-            fontSize:11, color:th.muted,
-          }}>
-            <span style={{
-              width:10, height:10, borderRadius:99,
-              border:`2px solid ${th.border}`, borderTopColor:th.accent,
-              animation:'spin .7s linear infinite',
-            }}/>
-            {"Verification disponibilites..."}
-          </div>
-        )}
+        borderRadius:20, padding:'24px 16px' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
             style={{ width:36,height:36,borderRadius:8,border: `0.5px solid ${th.border}`,
@@ -58,30 +48,20 @@ export function Step3Date({
         <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6}}>
           {calDays.map((d,i)=>{
             if(!d) return <div key={i}/>;
-            const isPast=d<today, isFuture=d>maxDate;
-            const dateKey=d.toLocaleDateString('sv-SE');
-            const ds=monthStatus[dateKey];
-            const isClosed=ds==='closed'||(ds===undefined&&closedDays.includes(d.getDay()));
-            const isFull=ds==='full';
-            const isSel=selDate&&d.toDateString()===selDate.toDateString();
-            const isToday2=d.toDateString()===today.toDateString();
-            const disabled=isPast||isFuture||isClosed||isFull;
-            // Style nettement distinct pour les jours indisponibles :
-            //   - past/future : opacity 0.25 (totalement gris)
-            //   - closed      : background rouge tres clair + barre diagonale
-            //   - full        : background orange tres clair + texte barre
-            //   - selected    : accent
-            //   - today       : ring accent
+            const isPast = d < today, isFuture = d > maxDate;
+            const isClosed = closedDays.includes(d.getDay());
+            const isSel = selDate && d.toDateString() === selDate.toDateString();
+            const isToday2 = d.toDateString() === today.toDateString();
+            const disabled = isPast || isFuture || isClosed;
             const bg = isSel ? th.accent
               : (!isPast && !isFuture && isClosed) ? 'rgba(239,68,68,0.08)'
-              : (!isPast && !isFuture && isFull)   ? 'rgba(249,115,22,0.10)'
               : 'transparent';
             const fg = isSel ? th.accentText
-              : (isClosed || isFull) ? th.dim
+              : isClosed ? th.dim
               : disabled ? th.dim
               : th.text;
-            const op = isPast || isFuture ? 0.25
-              : (isClosed || isFull) ? 0.7
+            const op = (isPast || isFuture) ? 0.25
+              : isClosed ? 0.7
               : 1;
             return(
               <button key={i} onClick={()=>{if(!disabled){setSelDate(d);goToStep(4,null,null,d);}}} disabled={disabled}
@@ -90,11 +70,14 @@ export function Step3Date({
                     : isToday2 ? `1px solid ${th.accent}40`
                     : '1px solid transparent',
                   background: bg, color: fg, opacity: op,
-                  cursor:disabled?'not-allowed':'pointer', position:'relative',
-                  textDecoration: (isFull||isClosed)&&!isPast&&!isFuture ? 'line-through' : 'none' }}>
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  position:'relative',
+                  textDecoration: isClosed && !isPast && !isFuture ? 'line-through' : 'none' }}>
                 {d.getDate()}
-                {isClosed&&!isPast&&!isFuture&&<span style={{position:'absolute',bottom:3,left:'50%',transform:'translateX(-50%)',width:4,height:4,borderRadius:99,background:'#ef4444',display:'block'}}/>}
-                {isFull&&!isPast&&!isFuture&&<span style={{position:'absolute',bottom:3,left:'50%',transform:'translateX(-50%)',width:4,height:4,borderRadius:99,background:'#f97316',display:'block'}}/>}
+                {isClosed && !isPast && !isFuture && (
+                  <span style={{position:'absolute',bottom:3,left:'50%',transform:'translateX(-50%)',
+                    width:4,height:4,borderRadius:99,background:'#ef4444',display:'block'}}/>
+                )}
               </button>
             );
           })}
@@ -102,9 +85,6 @@ export function Step3Date({
         <div style={{display:'flex',gap:16,marginTop:12}}>
           <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:th.muted}}>
             <div style={{width:8,height:8,borderRadius:99,background:'#ef4444'}}/>Ferme
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:th.muted}}>
-            <div style={{width:8,height:8,borderRadius:99,background:'#f97316'}}/>Complet
           </div>
         </div>
       </div>
