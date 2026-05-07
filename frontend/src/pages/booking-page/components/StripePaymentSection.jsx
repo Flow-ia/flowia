@@ -22,7 +22,7 @@
 //      cote serveur avec off_session=true. Si requires_action,
 //      stripe.handleNextAction cote front pour le 3DS.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements, PaymentElement, useStripe, useElements,
@@ -196,6 +196,11 @@ function SaveCardForm({
   const platformStripe = useStripe(); // instance plateforme via Elements parent
   const elements       = useElements();
   const [errMsg, setErrMsg] = useState('');
+  // saveCard est lu au moment du submit (pas en deps de l'effect -- pas de
+  // remount). On capture la valeur dans une ref pour l'avoir a jour dans
+  // handleSubmit meme si elle change pendant le confirmSetup async.
+  const saveCardRef = useRef(saveCard);
+  useEffect(() => { saveCardRef.current = saveCard; }, [saveCard]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -203,31 +208,33 @@ function SaveCardForm({
     setBusy(true); setErrMsg('');
 
     try {
-      // 1) Confirm SetupIntent plateforme -> PM attache au customer plateforme
+      // 1) Confirm SetupIntent plateforme -> PM attache au customer plateforme.
+      // confirm.payment_method est dispo dans le SetupIntent retourne.
       const { error: setupErr, setupIntent } = await runStripeWithWatchdog(
         () => platformStripe.confirmSetup({ elements, redirect: 'if_required' }),
         TIMEOUT_MSG, CHALLENGE_MSG,
       );
       if (setupErr) {
-        setErrMsg(setupErr.message || 'Erreur sauvegarde carte.');
+        setErrMsg(setupErr.message || 'Erreur de paiement.');
         setBusy(false);
         return;
       }
       if (!setupIntent || setupIntent.status !== 'succeeded') {
-        setErrMsg(`Sauvegarde non confirmee (${setupIntent?.status || 'inconnu'}).`);
+        setErrMsg(`Paiement non confirme (${setupIntent?.status || 'inconnu'}).`);
         setBusy(false);
         return;
       }
 
-      // 2) Persiste la carte cote backend (immediat, le webhook fera idempotent)
+      // 2) Persiste la carte en DB. Si la checkbox sera decochee a la fin,
+      //    on detachera apres -- mais le save est necessaire pour avoir un
+      //    use_saved_pm_id a passer au PI.
       const saved = await globalClientApi.savePaymentMethod(setupIntent.payment_method);
       const newDbId = saved?.method?.id;
       if (!newDbId) {
-        setErrMsg("Carte sauvegardee mais introuvable. Reessayez.");
+        setErrMsg("Erreur lors de la finalisation du paiement.");
         setBusy(false);
         return;
       }
-      onSavedNewCard?.(newDbId);
 
       // 3) Cree le PI sur connected avec use_saved_pm_id (clone + confirm
       //    cote serveur, off_session=true).
@@ -236,23 +243,45 @@ function SaveCardForm({
       });
 
       // 4) Si 3DS / SCA -> handleNextAction sur instance Stripe connected.
+      let piSucceeded = false;
       if (intent.pi_status === 'requires_action') {
         const connectedStripe = await getStripeForAccount(intent.connected_account_id);
         const { error: actErr, paymentIntent: pi } = await runStripeWithWatchdog(
           () => connectedStripe.handleNextAction({ clientSecret: intent.client_secret }),
           TIMEOUT_MSG, CHALLENGE_MSG,
         );
-        if (actErr) { setErrMsg(actErr.message || 'Erreur 3DS.'); setBusy(false); return; }
-        if (pi?.status === 'succeeded') { onPaid(intent.payment_intent_id); return; }
-        setErrMsg(`Paiement non confirme (${pi?.status || 'inconnu'}).`);
+        if (actErr) { setErrMsg(actErr.message || 'Erreur de paiement.'); setBusy(false); return; }
+        piSucceeded = pi?.status === 'succeeded';
+        if (!piSucceeded) {
+          setErrMsg(`Paiement non confirme (${pi?.status || 'inconnu'}).`);
+          setBusy(false);
+          return;
+        }
+      } else if (intent.pi_status === 'succeeded') {
+        piSucceeded = true;
+      } else {
+        setErrMsg(`Paiement non confirme (${intent.pi_status || 'inconnu'}).`);
         setBusy(false);
         return;
       }
-      if (intent.pi_status === 'succeeded') { onPaid(intent.payment_intent_id); return; }
-      setErrMsg(`Paiement non confirme (${intent.pi_status || 'inconnu'}).`);
-      setBusy(false);
+
+      // 5) Decision finale "garder ou detach" -- la checkbox saveCard a pu
+      //    etre decochee pendant le confirmSetup async, on lit la ref a jour.
+      const keep = saveCardRef.current;
+      if (!keep) {
+        // Best-effort detach -- si echec, la carte reste en DB (l'user
+        // pourra la supprimer manuellement depuis Compte > Cartes).
+        try { await globalClientApi.deletePaymentMethod(newDbId); } catch {}
+      } else {
+        onSavedNewCard?.(newDbId);
+      }
+
+      onPaid(intent.payment_intent_id);
     } catch (e) {
-      setErrMsg(e?.message || 'Erreur reseau.');
+      // Affichage enrichi : si l'API a renvoye un code Stripe (e.data.stripe_code),
+      // on l'inclut pour faciliter le diagnostic des 500.
+      const code = e?.data?.stripe_code || e?.data?.error_type;
+      setErrMsg(code ? `${e.message || 'Erreur'} [${code}]` : (e?.message || 'Erreur reseau.'));
       setBusy(false);
     }
   };
@@ -268,7 +297,9 @@ function SaveCardForm({
       <button type="submit" disabled={!platformStripe || busy} style={payButtonStyle(th, busy)}>
         {busy
           ? <>{spinner()}{"Paiement en cours…"}</>
-          : "Payer, sauvegarder ma carte et reserver"}
+          : (amountCents > 0
+              ? `Payer ${(amountCents/100).toFixed(2)} € et reserver`
+              : "Payer et reserver")}
       </button>
     </form>
   );
@@ -348,13 +379,16 @@ export function StripePaymentSection({
   selectedPmId, saveCard, onSaveCardChange,
   isLoggedGlobal, onSavedNewCard,
 }) {
-  // Effective mode :
-  //   - 'saved' si le client a choisi une carte sauvegardee
-  //   - 'save'  si nouvelle carte + checkbox sauvegarder + connecte global
-  //   - 'direct' sinon (flow standard)
+  // Effective mode -- DECIDE UNIQUEMENT par selectedPmId et isLoggedGlobal,
+  // PAS par saveCard. Cocher/decocher la checkbox ne doit JAMAIS remonter
+  // le PaymentElement (sinon perte de la saisie carte). saveCard sert
+  // uniquement a decider de garder ou detach le PM apres paiement.
+  //   - 'saved' si le client a choisi une carte sauvegardee deja en DB
+  //   - 'save'  si client connecte global (SetupIntent + clone vers connected)
+  //   - 'direct' sinon (PaymentIntent direct, pas de save)
   const mode = selectedPmId
     ? 'saved'
-    : (saveCard && isLoggedGlobal ? 'save' : 'direct');
+    : (isLoggedGlobal ? 'save' : 'direct');
 
   // ── Mode SAVED : pas d'Elements, juste un bouton 1-clic. ───────────────
   if (mode === 'saved') {
@@ -546,7 +580,41 @@ function PaymentIntentOrSetupWrapper({
       )}
       <Elements stripe={stripePromise} options={{
         clientSecret: intent.client_secret,
-        appearance: { theme: 'stripe' },
+        appearance: {
+          theme: 'stripe',
+          variables: {
+            // Custom FlowIA : palette claire, bordures fines, radius doux,
+            // typo systeme. Donne a PaymentElement un rendu coherent avec
+            // le reste de l'app sans changer la securite Stripe.
+            colorPrimary:    th.accent || '#111111',
+            colorBackground: th.cardAlt || '#f7f7f8',
+            colorText:       th.text || '#111111',
+            colorDanger:     '#ef4444',
+            fontFamily:      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            spacingUnit:     '4px',
+            borderRadius:    '12px',
+          },
+          rules: {
+            '.Input': {
+              border:      `0.5px solid ${th.border || 'rgba(0,0,0,0.12)'}`,
+              boxShadow:   'none',
+              padding:     '12px 14px',
+              fontSize:    '14px',
+            },
+            '.Input:focus': {
+              border:      `1px solid ${th.accent || '#111111'}`,
+              boxShadow:   `0 0 0 1px ${th.accent || '#111111'}`,
+            },
+            '.Label': {
+              fontSize:    '11px',
+              fontWeight:  '500',
+              color:       th.muted || '#6B7280',
+              marginBottom: '4px',
+            },
+            '.Tab':       { borderRadius: '10px' },
+            '.TabIcon':   { fill: th.text || '#111111' },
+          },
+        },
       }}>
         {mode === 'save' ? (
           <SaveCardFormBridge

@@ -48,6 +48,14 @@ export function Step6Confirm({
   const [saveCard, setSaveCard] = useState(false);
   const [confirmDelPmId, setConfirmDelPmId] = useState(null);
 
+  // Quand le client est connecte global, on coche "sauvegarder" par defaut.
+  // L'utilisateur peut decocher s'il ne veut pas conserver la carte. Cette
+  // decision est appliquee APRES le paiement (detach Stripe) -- elle ne
+  // re-mount pas le PaymentElement.
+  useEffect(() => {
+    if (canSaveCards && selectedPmId === null) setSaveCard(true);
+  }, [canSaveCards, selectedPmId]);
+
   const reloadSavedMethods = async () => {
     try {
       const r = await globalClientApi.paymentMethods();
@@ -128,29 +136,58 @@ export function Step6Confirm({
   };
   const cardableList = availList.filter(d => d.source === 'birthday' || d.source === 'loyalty');
   const referralPending = availList.filter(d => d.source === 'referral_pending');
+  // Recap compact "wallet style" : tout le RDV en 3 lignes denses au lieu
+  // d'un long tableau. Les coordonnees client (email/tel) ont deja ete
+  // saisies a l'etape 5 -- pas besoin de les ressortir ici.
+  const finalPriceCents = (() => {
+    const p = Number(selSvc?.price || 0);
+    if (!p) return 0;
+    if (promoData) return Math.max(0, p - Number(promoData.discount || 0));
+    return p;
+  })();
+
   return (
     <div>
-      <h2 style={{fontSize:20,fontWeight: 500,color:th.text,margin:'0 0 20px',letterSpacing:'-0.02em'}}>
-        Confirmer
+      <h2 style={{fontSize:18,fontWeight:500,color:th.text,margin:'0 0 12px',letterSpacing:'-0.02em'}}>
+        {"Confirmer"}
       </h2>
-      <div style={{background:th.card,border: `0.5px solid ${th.border}`,
-        borderRadius:12,padding:'16px 20px',marginBottom:20}}>
-        {[['Service',selSvc?.name],
-          ['Avec',selEmp?._anyEmployee?'Premier disponible':selEmp?.name],
-          ['Date',selDate?.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})],
-          ['Heure',selSlot],
-          ['Duree',`${selSvc?.duration_minutes} min`],
-          selSvc?.price&&selSvc.price!==''?['Prix',`${Number(selSvc.price).toFixed(2)} €`]:null,
-          ['Client',clientUser?`${clientUser.first_name} ${clientUser.last_name}`:clientName],
-          (clientUser?.email||clientEmail)?['Email',clientUser?.email||clientEmail]:null,
-          clientPhone?['Tel.',clientPhone]:null,
-        ].filter(Boolean).map(([l,v])=>(
-          <div key={l} style={{display:'flex',justifyContent:'space-between',
-            padding:'8px 0',borderBottom: `0.5px solid ${th.border}`}}>
-            <span style={{fontSize:13,color:th.muted}}>{l}</span>
-            <span style={{fontSize:13,fontWeight: 500,color:th.text}}>{v}</span>
-          </div>
-        ))}
+      <div style={{
+        background:th.card, border:`0.5px solid ${th.border}`,
+        borderRadius:14, padding:'14px 16px', marginBottom:16,
+      }}>
+        <p style={{ fontSize:14, fontWeight:500, color:th.text, margin:'0 0 2px',
+          letterSpacing:'-0.01em' }}>
+          {selSvc?.name}
+        </p>
+        <p style={{ fontSize:11, color:th.muted, margin:'0 0 10px' }}>
+          {[
+            selEmp?._anyEmployee ? 'Premier disponible' : selEmp?.name,
+            selSvc?.duration_minutes ? `${selSvc.duration_minutes} min` : null,
+          ].filter(Boolean).join(' · ')}
+        </p>
+        <div style={{
+          display:'flex', justifyContent:'space-between', alignItems:'center',
+          paddingTop:10, borderTop:`0.5px solid ${th.border}`,
+        }}>
+          <span style={{ fontSize:12, color:th.muted }}>
+            {selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}
+            {' · '}
+            {selSlot}
+          </span>
+          {selSvc?.price && Number(selSvc.price) > 0 && (
+            <span style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+              {promoData && (
+                <span style={{ fontSize:11, textDecoration:'line-through', color:th.dim }}>
+                  {`${Number(selSvc.price).toFixed(2)} €`}
+                </span>
+              )}
+              <span style={{ fontSize:14, fontWeight:500, color:th.text,
+                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                {`${(finalPriceCents).toFixed(2)} €`}
+              </span>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Réductions disponibles — commit 24c. Affiché uniquement pour client

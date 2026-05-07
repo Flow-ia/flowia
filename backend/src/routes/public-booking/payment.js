@@ -279,13 +279,22 @@ module.exports = function attachPaymentRoutes(router) {
         pi_status:        pi.status,
       });
     } catch (e) {
-      console.error('[PUB PAYMENT-INTENT ERR]', e.message);
-      // Erreurs Stripe (carte refusee, account locked, etc.) — on remonte
-      // un message lisible pour le client.
+      // Log detaille cote backend pour faciliter le diagnostic. Le client
+      // reçoit aussi le stripe_code/error_type pour aider au support.
+      console.error('[PUB PAYMENT-INTENT ERR]',
+        e.type || 'GenericError',
+        e.code || '',
+        e.message);
       const msg = e.type && e.type.startsWith('Stripe')
         ? (e.message || 'Erreur Stripe')
-        : 'Erreur lors de la creation du paiement.';
-      res.status(500).json({ error: msg });
+        : (e.message || 'Erreur lors de la creation du paiement.');
+      res.status(500).json({
+        error:        msg,
+        error_type:   e.type    || 'GenericError',
+        stripe_code:  e.code    || null,
+        decline_code: e.decline_code || null,
+        param:        e.param   || null,
+      });
     }
   });
 };
