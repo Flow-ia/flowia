@@ -130,22 +130,24 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
   return relu[0]?.stripe_customer_id || customer.id;
 }
 
-// Clone un PaymentMethod du customer plateforme vers le customer du
-// connected account du salon. Stripe : POST /v1/payment_methods avec
-// payment_method=src + customer=dst, sur le connected account.
-// Retourne le pm_id sur le connected account, utilisable dans le PI.
+// Clone un PaymentMethod du customer plateforme vers le connected account.
+// Approche SIMPLIFIEE pour robustesse (regle 10 CLAUDE.md) :
+//   - Pas de customer connected (eliminait une classe entiere de "No such
+//     customer" liees a la consistance eventuelle Stripe / SDK header).
+//   - PM clone sans customer attache : il sera utilise une fois pour ce
+//     paiement uniquement, puis Stripe le cleanup auto apres ~24h s'il
+//     n'est pas attache. Pas de pollution durable.
+// Retourne le pm_id sur le connected account, utilisable dans le PI sans
+// customer (confirm + off_session).
 async function clonePaymentMethodToConnected({
-  platformPmId, platformCustomerId, connectedAccountId, connectedCustomerId,
+  platformPmId, connectedAccountId,
 }) {
-  // Le clone se cree SUR le connected account via une instance Stripe
-  // scoped. Stripe accepte un PM cross-account uniquement avec le couple
-  // (payment_method=src, customer=dst).
+  if (!connectedAccountId) throw new Error('connectedAccountId requis');
+  if (!platformPmId)       throw new Error('platformPmId requis');
   const stripeOnAccount = getStripeForAccount(connectedAccountId);
   const cloned = await stripeOnAccount.paymentMethods.create({
-    customer:       connectedCustomerId,
     payment_method: platformPmId,
   });
-  // Note : on ne fait pas attach() apres -- create avec customer le fait deja.
   return cloned.id;
 }
 
