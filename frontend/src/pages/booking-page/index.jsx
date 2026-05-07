@@ -215,6 +215,8 @@ export default function BookingPage({ slug }) {
   const [closedDays, setClosed]   = useState([]);
   const [monthStatus, setMonthStatus] = useState({}); // { 'YYYY-MM-DD': 'open'|'closed'|'full' }
   const [monthKey,    setMonthKey]    = useState('');  // 'YYYY-MM' courant affiché
+  const [monthLoading, setMonthLoading] = useState(false);
+  const monthCacheRef = useRef({}); // { 'YYYY-MM-empId': monthStatus }
   const [loading, setLoading]  = useState(true);
   const [error, setError]      = useState('');
   const [isBlocked, setIsBlocked] = useState(false); // client bloqué par le commerçant
@@ -624,21 +626,44 @@ export default function BookingPage({ slug }) {
     }
   }, [slots, slotsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load month status (open/closed/full par jour)
+  // Load month status (open/closed/full par jour). Cache par (svc, emp, mois)
+  // pour eviter les refetch repetes (perf + UX). Loader visible pendant fetch.
   useEffect(() => {
     if (!selSvc || !calMonth) return;
     const yr = calMonth.getFullYear();
     const mo = calMonth.getMonth() + 1;
     const empKeyPart = (selEmp && !selEmp._anyEmployee) ? `-${selEmp.id}` : '';
-    const key = `${yr}-${mo}${empKeyPart}`;
-    if (key === monthKey) return;
+    const cacheKey = `${selSvc.id}-${yr}-${mo}${empKeyPart}`;
+    if (cacheKey === monthKey) return;
+
+    // Cache hit : reuse instantane sans refetch.
+    if (monthCacheRef.current[cacheKey]) {
+      setMonthStatus(monthCacheRef.current[cacheKey]);
+      setMonthKey(cacheKey);
+      return;
+    }
+
     const empIdForMonth = (selEmp && !selEmp._anyEmployee) ? selEmp.id : undefined;
     const monthParams = { year: yr, month: String(mo).padStart(2,'0'), service_id: selSvc.id };
     if (empIdForMonth) monthParams.employee_id = empIdForMonth;
+
+    setMonthLoading(true);
     pubApi.getMonthStatus(slug, monthParams)
-      .then(r => { setMonthStatus(r || {}); setMonthKey(key); })
-      .catch(() => {});
+      .then(r => {
+        const data = r || {};
+        monthCacheRef.current[cacheKey] = data;
+        setMonthStatus(data);
+        setMonthKey(cacheKey);
+      })
+      .catch(() => { /* en cas d'erreur, on laisse l'ancien etat */ })
+      .finally(() => setMonthLoading(false));
   }, [selSvc, selEmp, calMonth, slug, monthKey]);
+
+  // Invalider le cache quand selSvc change (services peuvent avoir des dur
+  // differentes -> dispos differentes).
+  useEffect(() => {
+    monthCacheRef.current = {};
+  }, [selSvc?.id]);
 
   const handleAuth = (client, meta = {}) => {
     setClientUser(client);
@@ -1050,7 +1075,8 @@ export default function BookingPage({ slug }) {
                   th={th} selEmp={selEmp} selDate={selDate}
                   calMonth={calMonth} setCalMonth={setCalMonth} setSelDate={setSelDate}
                   today={today} maxDate={maxDate} calDays={calDays}
-                  monthStatus={monthStatus} closedDays={closedDays} goToStep={goToStep}
+                  monthStatus={monthStatus} closedDays={closedDays}
+                  monthLoading={monthLoading} goToStep={goToStep}
                 />
               )}
 

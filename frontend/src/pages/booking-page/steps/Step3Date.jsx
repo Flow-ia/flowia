@@ -5,7 +5,7 @@ import { MONTHS_FR, DAYS_MINI } from '../../booking/shared';
 
 export function Step3Date({
   th, selEmp, selDate, calMonth, setCalMonth, setSelDate,
-  today, maxDate, calDays, monthStatus, closedDays, goToStep,
+  today, maxDate, calDays, monthStatus, closedDays, monthLoading, goToStep,
 }) {
   return (
     <div>
@@ -17,7 +17,22 @@ export function Step3Date({
         </strong>
       </p>
       <div style={{ background:th.card, border: `0.5px solid ${th.border}`,
-        borderRadius:20, padding:'24px 16px' }}>
+        borderRadius:20, padding:'24px 16px', position:'relative' }}>
+        {/* Indicateur de chargement (pendant fetch monthStatus) */}
+        {monthLoading && (
+          <div style={{
+            position:'absolute', top:18, right:18,
+            display:'flex', alignItems:'center', gap:6,
+            fontSize:11, color:th.muted,
+          }}>
+            <span style={{
+              width:10, height:10, borderRadius:99,
+              border:`2px solid ${th.border}`, borderTopColor:th.accent,
+              animation:'spin .7s linear infinite',
+            }}/>
+            {"Verification disponibilites..."}
+          </div>
+        )}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
           <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
             style={{ width:36,height:36,borderRadius:8,border: `0.5px solid ${th.border}`,
@@ -51,24 +66,42 @@ export function Step3Date({
             const isSel=selDate&&d.toDateString()===selDate.toDateString();
             const isToday2=d.toDateString()===today.toDateString();
             const disabled=isPast||isFuture||isClosed||isFull;
+            // Style nettement distinct pour les jours indisponibles :
+            //   - past/future : opacity 0.25 (totalement gris)
+            //   - closed      : background rouge tres clair + barre diagonale
+            //   - full        : background orange tres clair + texte barre
+            //   - selected    : accent
+            //   - today       : ring accent
+            const bg = isSel ? th.accent
+              : (!isPast && !isFuture && isClosed) ? 'rgba(239,68,68,0.08)'
+              : (!isPast && !isFuture && isFull)   ? 'rgba(249,115,22,0.10)'
+              : 'transparent';
+            const fg = isSel ? th.accentText
+              : (isClosed || isFull) ? th.dim
+              : disabled ? th.dim
+              : th.text;
+            const op = isPast || isFuture ? 0.25
+              : (isClosed || isFull) ? 0.7
+              : 1;
             return(
               <button key={i} onClick={()=>{if(!disabled){setSelDate(d);goToStep(4,null,null,d);}}} disabled={disabled}
                 style={{ height:48, borderRadius:12, fontSize:15, fontWeight: 500,
-                  border:isSel?`2px solid ${th.accent}`:isToday2?`1px solid ${th.accent}40`:'1px solid transparent',
-                  background:isSel?th.accent:'transparent',
-                  color:isSel?th.accentText:(isClosed||isFull?th.dim:disabled?th.dim:th.text),
-                  opacity:disabled&&!isClosed&&!isFull?0.3:1,
-                  cursor:disabled?'default':'pointer', position:'relative' }}>
+                  border: isSel ? `2px solid ${th.accent}`
+                    : isToday2 ? `1px solid ${th.accent}40`
+                    : '1px solid transparent',
+                  background: bg, color: fg, opacity: op,
+                  cursor:disabled?'not-allowed':'pointer', position:'relative',
+                  textDecoration: (isFull||isClosed)&&!isPast&&!isFuture ? 'line-through' : 'none' }}>
                 {d.getDate()}
-                {isClosed&&!isPast&&<span style={{position:'absolute',bottom:2,left:'50%',transform:'translateX(-50%)',width:3,height:3,borderRadius:99,background:'#ef4444',display:'block'}}/>}
-                {isFull&&!isPast&&<span style={{position:'absolute',bottom:2,left:'50%',transform:'translateX(-50%)',width:3,height:3,borderRadius:99,background:'#f97316',display:'block'}}/>}
+                {isClosed&&!isPast&&!isFuture&&<span style={{position:'absolute',bottom:3,left:'50%',transform:'translateX(-50%)',width:4,height:4,borderRadius:99,background:'#ef4444',display:'block'}}/>}
+                {isFull&&!isPast&&!isFuture&&<span style={{position:'absolute',bottom:3,left:'50%',transform:'translateX(-50%)',width:4,height:4,borderRadius:99,background:'#f97316',display:'block'}}/>}
               </button>
             );
           })}
         </div>
         <div style={{display:'flex',gap:16,marginTop:12}}>
           <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:th.muted}}>
-            <div style={{width:8,height:8,borderRadius:99,background:'#ef4444'}}/>Fermé
+            <div style={{width:8,height:8,borderRadius:99,background:'#ef4444'}}/>Ferme
           </div>
           <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:th.muted}}>
             <div style={{width:8,height:8,borderRadius:99,background:'#f97316'}}/>Complet
