@@ -824,6 +824,53 @@ router.post('/webhook', async (req, res) => {
         'trial_end:', sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null);
       // Future hook : envoyer email Brevo "votre essai termine bientôt".
     }
+
+    // ── setup_intent.succeeded : carte sauvegardee globale FlowIA ─────────
+    // Event filtre par metadata.flowia_purpose='save_card' (sinon ignore --
+    // d'autres SetupIntent peuvent exister dans le futur). On insere la
+    // carte en DB avec brand/last4/exp pour l'afficher cote client. Index
+    // UNIQUE(global_client_id, stripe_platform_pm_id) garantit l'idempotence
+    // si Stripe retry l'event.
+    if (event.type === 'setup_intent.succeeded') {
+      const si = event.data.object;
+      if (si.metadata?.flowia_purpose !== 'save_card') return;
+      const globalClientId = si.metadata?.global_client_id;
+      const platformPmId   = si.payment_method;
+      const platformCustId = si.customer;
+      if (!globalClientId || !platformPmId || !platformCustId) {
+        console.warn('[SUB WEBHOOK] setup_intent.succeeded incomplet:', si.id);
+        return;
+      }
+      const stripe = getStripe();
+      let pm = null;
+      try {
+        pm = await stripe.paymentMethods.retrieve(platformPmId);
+      } catch (e) {
+        console.error('[SUB WEBHOOK] retrieve PM ko:', platformPmId, e.message);
+      }
+      const card = pm?.card || {};
+      // Si le client n'a pas encore de carte, celle-ci devient default.
+      const { rows: existing } = await pool.query(
+        `SELECT 1 FROM client_payment_methods WHERE global_client_id=$1 LIMIT 1`,
+        [globalClientId]
+      );
+      const isFirst = existing.length === 0;
+      await pool.query(
+        `INSERT INTO client_payment_methods
+           (global_client_id, stripe_platform_pm_id, stripe_platform_customer_id,
+            brand, last4, exp_month, exp_year, is_default)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (global_client_id, stripe_platform_pm_id) DO NOTHING`,
+        [
+          globalClientId, platformPmId, platformCustId,
+          card.brand || null, card.last4 || null,
+          card.exp_month || null, card.exp_year || null,
+          isFirst,
+        ]
+      );
+      console.log('[SUB WEBHOOK] save_card OK:', globalClientId, platformPmId,
+        card.brand || '?', card.last4 || '????');
+    }
   } catch (e) {
     // Stripe est déjà acquitté ; pas de 500. Log pour investigation.
     console.error('[SUB WEBHOOK ERR]', event.type, e.message);

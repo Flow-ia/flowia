@@ -33,6 +33,8 @@ require('./visits')(router);
 require('./change-credentials')(router);
 // ─ Fidélité multi-commerces
 require('./loyalty')(router);
+// ─ Cartes sauvegardees globales FlowIA (Stripe Connect Shared Customer)
+require('./payment-methods')(router);
 // ─ RGPD (suppression + export)
 require('./account')(router);
 

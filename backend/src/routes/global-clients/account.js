@@ -3,6 +3,7 @@
 const { pool } = require('../../db');
 const { globalClientAuth, clientOrGlobalClientAuth } = require('./helpers');
 const { snapshotAllDebtsForGlobalClient } = require('../../utils/debtRecord');
+const { getStripe } = require('./stripe-helpers');
 
 module.exports = function attachAccountRoutes(router) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -21,10 +22,31 @@ module.exports = function attachAccountRoutes(router) {
       const gid = req.globalClient.globalClientId;
 
       const { rows: gcRows } = await dbClient.query(
-        'SELECT email, first_name, last_name, phone FROM global_clients WHERE id=$1', [gid]
+        'SELECT email, first_name, last_name, phone, stripe_platform_customer_id FROM global_clients WHERE id=$1', [gid]
       );
       if (!gcRows.length) return res.status(404).json({ error: 'Compte introuvable.' });
-      const { email, first_name, last_name, phone } = gcRows[0];
+      const { email, first_name, last_name, phone, stripe_platform_customer_id } = gcRows[0];
+
+      // Cleanup Stripe avant suppression DB : detach les PMs + delete le
+      // customer plateforme. Best-effort -- si Stripe est down, on log et on
+      // poursuit la suppression DB (la cascade ON DELETE CASCADE supprimera
+      // les rows client_payment_methods de toute facon, et le customer
+      // orphelin sera collecte par le menage Stripe -- pas de fuite de PII
+      // car son email aura ete anonymise via la suppression du global_client).
+      if (stripe_platform_customer_id) {
+        try {
+          const stripe = getStripe();
+          const pms = await stripe.paymentMethods.list({
+            customer: stripe_platform_customer_id, type: 'card', limit: 50,
+          });
+          for (const pm of pms.data) {
+            try { await stripe.paymentMethods.detach(pm.id); } catch {}
+          }
+          try { await stripe.customers.del(stripe_platform_customer_id); } catch {}
+        } catch (e) {
+          console.warn('[RGPD STRIPE CLEANUP]', e.message);
+        }
+      }
 
       let snapshotReport = { snapshotted: 0 };
       await dbClient.query('BEGIN');

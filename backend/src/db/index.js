@@ -1730,6 +1730,34 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_users_subscription_status
     ON users(subscription_status) WHERE subscription_status IS NOT NULL`);
 
+  // ── Cartes sauvegardees globales FlowIA (Shared Customer Stripe Connect) ──
+  // 1 customer "plateforme" par global_client (sur le compte Stripe FlowIA
+  // principal). Les PaymentMethods sont attaches a ce customer plateforme
+  // -> source de verite. Pour payer chez un salon (compte connecte), on
+  // clone le PM vers le customer du connected account a la volee.
+  await runMigration(`ALTER TABLE global_clients
+    ADD COLUMN IF NOT EXISTS stripe_platform_customer_id TEXT`);
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS client_payment_methods (
+      id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      global_client_id            UUID NOT NULL REFERENCES global_clients(id) ON DELETE CASCADE,
+      stripe_platform_pm_id       TEXT NOT NULL,
+      stripe_platform_customer_id TEXT NOT NULL,
+      brand                       TEXT,
+      last4                       TEXT,
+      exp_month                   INT,
+      exp_year                    INT,
+      is_default                  BOOLEAN NOT NULL DEFAULT FALSE,
+      last_used_at                TIMESTAMPTZ,
+      created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (global_client_id, stripe_platform_pm_id)
+    )`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_cpm_client
+    ON client_payment_methods(global_client_id)`);
+  // Garde-fou : une seule carte par defaut par client.
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS uq_cpm_default_per_client
+    ON client_payment_methods(global_client_id) WHERE is_default = TRUE`);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─

@@ -13,6 +13,10 @@ const jwt = require('jsonwebtoken');
 const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { extractClientToken } = require('../../utils/clientCookies');
+const {
+  ensureConnectedCustomer,
+  clonePaymentMethodToConnected,
+} = require('../global-clients/stripe-helpers');
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -44,7 +48,10 @@ module.exports = function attachPaymentRoutes(router) {
         return res.status(400).json({ error: 'Paiement en ligne non disponible chez ce commerce.' });
       }
 
-      const { service_id, date, start_time, promo_code_id, referral_code } = req.body || {};
+      const {
+        service_id, date, start_time, promo_code_id, referral_code,
+        use_saved_pm_id,
+      } = req.body || {};
       if (!service_id || !date || !start_time) {
         return res.status(400).json({ error: 'Donnees manquantes (service_id, date, start_time).' });
       }
@@ -64,20 +71,35 @@ module.exports = function attachPaymentRoutes(router) {
         return res.status(400).json({ error: 'Service gratuit : pas de paiement requis.' });
       }
 
-      // Identite client (cookie HttpOnly ou Authorization Bearer)
+      // Identite client (cookie HttpOnly ou Authorization Bearer).
+      // Accepte 2 scopes : 'client' (login chez un commercant) ou 'global_client'
+      // (login FlowIA global). Pour la sauvegarde de carte on a besoin du
+      // globalClientId -- present dans les 2 scopes si compte FlowIA lie.
       let clientId = null;
       let clientEmail = null;
+      let globalClientId = null;
+      let clientName = null;
       const tok = extractClientToken(req);
       if (tok) {
         try {
           const dec = jwt.verify(tok, process.env.JWT_SECRET);
           if (dec.scope === 'client' && dec.merchantId === m.user_id) {
             clientId = dec.clientId || null;
+            globalClientId = dec.globalClientId || null;
             const { rows: cli } = await pool.query(
-              'SELECT email FROM client_accounts WHERE id=$1 AND user_id=$2',
+              'SELECT email, first_name, last_name FROM client_accounts WHERE id=$1 AND user_id=$2',
               [clientId, m.user_id]
             );
             clientEmail = cli[0]?.email || null;
+            clientName  = [cli[0]?.first_name, cli[0]?.last_name].filter(Boolean).join(' ') || null;
+          } else if (dec.scope === 'global_client' && dec.globalClientId) {
+            globalClientId = dec.globalClientId;
+            const { rows: gc } = await pool.query(
+              'SELECT email, first_name, last_name FROM global_clients WHERE id=$1',
+              [globalClientId]
+            );
+            clientEmail = gc[0]?.email || null;
+            clientName  = [gc[0]?.first_name, gc[0]?.last_name].filter(Boolean).join(' ') || null;
           }
         } catch {}
       }
@@ -149,35 +171,94 @@ module.exports = function attachPaymentRoutes(router) {
         ? Math.round(amountCents * (commission / 100))
         : 0;
 
-      // Creer le PaymentIntent SUR le compte connecte (Direct Charge).
       const stripe = getStripe();
-      const pi = await stripe.paymentIntents.create(
-        {
-          amount: amountCents,
-          currency: 'eur',
-          ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
-          automatic_payment_methods: { enabled: true },
-          description: `${m.business_name || 'FlowIA'} — ${svc[0].name}`,
-          metadata: {
-            source:        'flowia_booking',
-            user_id:       m.user_id,
-            slug:          req.params.slug,
-            service_id,
-            date,
-            start_time,
-            client_id:     clientId || '',
-            client_email:  clientEmail || '',
-            promo_code_id: promo_code_id || '',
-            referral_code: referral_code || '',
-            original_amount: originalAmt.toFixed(2),
-            discount_amount: discountAmt.toFixed(2),
-            final_price:     finalPrice.toFixed(2),
-            payment_percentage: String(pct),
-            commission_rate:    String(commission),
-          },
+
+      // ── Reuse carte sauvegardee globale FlowIA ──────────────────────────
+      // Si use_saved_pm_id : la carte vient du customer plateforme du client
+      // (sauvegardee via SetupIntent dual flow, /me/setup-intent). On clone
+      // le PM vers le connected account du salon et on cree un PI confirm=true
+      // off_session=true (paiement 1-clic ou redirection 3DS).
+      let connectedCustomerId = null;
+      let clonedPmId = null;
+
+      if (use_saved_pm_id) {
+        if (!globalClientId) {
+          return res.status(401).json({ error: 'Connexion requise pour utiliser une carte sauvegardee.' });
+        }
+        const { rows: pmRows } = await pool.query(
+          `SELECT stripe_platform_pm_id, stripe_platform_customer_id
+             FROM client_payment_methods
+            WHERE id=$1 AND global_client_id=$2`,
+          [use_saved_pm_id, globalClientId]
+        );
+        if (!pmRows.length) {
+          return res.status(404).json({ error: 'Carte introuvable.' });
+        }
+        const useSavedRow = pmRows[0];
+        connectedCustomerId = await ensureConnectedCustomer(
+          globalClientId, m.stripe_account_id,
+          { email: clientEmail, name: clientName }
+        );
+        clonedPmId = await clonePaymentMethodToConnected({
+          platformPmId:        useSavedRow.stripe_platform_pm_id,
+          platformCustomerId:  useSavedRow.stripe_platform_customer_id,
+          connectedAccountId:  m.stripe_account_id,
+          connectedCustomerId,
+        });
+      }
+
+      const piParams = {
+        amount: amountCents,
+        currency: 'eur',
+        ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
+        description: `${m.business_name || 'FlowIA'} — ${svc[0].name}`,
+        metadata: {
+          source:        'flowia_booking',
+          user_id:       m.user_id,
+          slug:          req.params.slug,
+          service_id,
+          date,
+          start_time,
+          client_id:        clientId || '',
+          client_email:     clientEmail || '',
+          global_client_id: globalClientId || '',
+          promo_code_id:    promo_code_id || '',
+          referral_code:    referral_code || '',
+          original_amount: originalAmt.toFixed(2),
+          discount_amount: discountAmt.toFixed(2),
+          final_price:     finalPrice.toFixed(2),
+          payment_percentage: String(pct),
+          commission_rate:    String(commission),
         },
+      };
+
+      if (clonedPmId) {
+        // Reuse carte sauvegardee : confirmation immediate off_session
+        // (1-clic), avec redirection 3DS possible si SCA declenchee.
+        piParams.customer       = connectedCustomerId;
+        piParams.payment_method = clonedPmId;
+        piParams.confirm        = true;
+        piParams.off_session    = true;
+        piParams.return_url = (process.env.FRONTEND_URL || '').split(',')[0]?.replace(/\/$/, '')
+                              + `/book/${req.params.slug}/payment-return`;
+      } else {
+        // Carte saisie cote PaymentElement (flow standard).
+        piParams.automatic_payment_methods = { enabled: true };
+      }
+
+      const pi = await stripe.paymentIntents.create(
+        piParams,
         { stripeAccount: m.stripe_account_id }
       );
+
+      // Mise a jour last_used_at sur la carte reutilisee (best-effort).
+      if (use_saved_pm_id) {
+        pool.query(
+          `UPDATE client_payment_methods SET last_used_at=NOW()
+            WHERE id=$1 AND global_client_id=$2`,
+          [use_saved_pm_id, globalClientId]
+        ).catch(() => {});
+      }
 
       res.json({
         client_secret:   pi.client_secret,
@@ -192,6 +273,10 @@ module.exports = function attachPaymentRoutes(router) {
         final_price:     finalPrice,
         payment_percentage: pct,
         policy:          m.booking_payment_policy || 'optional',
+        // Si carte sauvegardee utilisee + paiement deja confirme cote serveur,
+        // le frontend peut sauter l'etape PaymentElement et appeler /book direct.
+        used_saved_card:  !!clonedPmId,
+        pi_status:        pi.status,
       });
     } catch (e) {
       console.error('[PUB PAYMENT-INTENT ERR]', e.message);
