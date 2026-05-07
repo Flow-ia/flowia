@@ -14,7 +14,7 @@ const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { extractClientToken } = require('../../utils/clientCookies');
 const {
-  getStripe,
+  stripeFetch,
   ensureConnectedCustomer,
   clonePaymentMethodToConnected,
 } = require('../global-clients/stripe-helpers');
@@ -166,7 +166,6 @@ module.exports = function attachPaymentRoutes(router) {
         ? Math.round(amountCents * (commission / 100))
         : 0;
 
-      const stripe = getStripe();
       const stripeOpts = { stripeAccount: m.stripe_account_id };
 
       // ── Reuse carte sauvegardee globale FlowIA ──────────────────────────
@@ -268,8 +267,9 @@ module.exports = function attachPaymentRoutes(router) {
         piParams.automatic_payment_methods = { enabled: true };
       }
 
-      // Syntaxe per-call options pour stripeAccount (cf. fix v22 SDK).
-      const pi = await stripe.paymentIntents.create(piParams, stripeOpts);
+      // stripeFetch (fetch direct API Stripe) -- contourne le bug du SDK v22
+      // qui envoie stripeAccount dans le body au lieu du header Stripe-Account.
+      const pi = await stripeFetch('POST', '/payment_intents', piParams, stripeOpts);
 
       // Mise a jour last_used_at sur la carte reutilisee (best-effort).
       if (use_saved_pm_id) {

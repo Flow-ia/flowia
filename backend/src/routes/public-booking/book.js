@@ -378,9 +378,11 @@ module.exports = function attachBookRoute(router) {
           return res.status(400).json({ error: 'Paiement non disponible chez ce commerce.' });
         }
         try {
-          const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-          const pi = await stripe.paymentIntents.retrieve(
-            payment_intent_id,
+          const { stripeFetch } = require('../global-clients/stripe-helpers');
+          const pi = await stripeFetch(
+            'GET',
+            `/payment_intents/${payment_intent_id}`,
+            null,
             { stripeAccount: stripeAccountId }
           );
           if (pi.status !== 'succeeded') {
@@ -528,8 +530,10 @@ module.exports = function attachBookRoute(router) {
         let refundFailedReason = null;
         if (payment_intent_id && stripeAccountId) {
           try {
-            const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-            await stripe.refunds.create(
+            const { stripeFetch } = require('../global-clients/stripe-helpers');
+            await stripeFetch(
+              'POST',
+              '/refunds',
               {
                 payment_intent: payment_intent_id,
                 reason: 'requested_by_customer',

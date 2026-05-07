@@ -19,15 +19,74 @@ function getStripe() {
   return require('stripe')(key);
 }
 
-// LEGACY (kept for compat): retourne aussi une instance scoped, mais on
-// n'utilise plus ce pattern dans les flow critiques. La syntaxe per-call
-// `(params, { stripeAccount })` est preferree car plus explicite et fiable
-// avec stripe-node v22.
+// LEGACY -- conserve pour compat mais NON utilise dans les flow critiques.
 function getStripeForAccount(connectedAccountId) {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
   if (!connectedAccountId) throw new Error('connectedAccountId requis');
   return require('stripe')(key, { stripeAccount: connectedAccountId });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// stripeFetch -- appel fetch direct a l'API Stripe pour les operations
+// Connect (Direct Charges sur connected accounts). Le SDK stripe-node v22
+// presentait un bug ou des comportements incoherents avec stripeAccount
+// (parfois envoyait stripeAccount dans le body au lieu du header
+// Stripe-Account, parfois ne posait pas le header du tout). Cette fonction
+// contourne le SDK et garantit que Stripe-Account est correctement pose.
+// 100% controle, pas de dependance SDK pour la partie Connect critique.
+// ─────────────────────────────────────────────────────────────────────────
+function flattenForStripe(obj, prefix = '') {
+  const result = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v === undefined || v === null) continue;
+    const key = prefix ? `${prefix}[${k}]` : k;
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      Object.assign(result, flattenForStripe(v, key));
+    } else if (Array.isArray(v)) {
+      v.forEach((item, i) => {
+        if (typeof item === 'object') {
+          Object.assign(result, flattenForStripe(item, `${key}[${i}]`));
+        } else {
+          result[`${key}[${i}]`] = String(item);
+        }
+      });
+    } else {
+      result[key] = String(v);
+    }
+  }
+  return result;
+}
+
+async function stripeFetch(method, path, body, opts = {}) {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
+  const url = `https://api.stripe.com/v1${path}`;
+  const headers = {
+    'Authorization': `Bearer ${key}`,
+  };
+  if (opts.stripeAccount) headers['Stripe-Account'] = opts.stripeAccount;
+  if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+
+  let fetchOpts = { method, headers };
+  if (body && method !== 'GET') {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    const flat = flattenForStripe(body);
+    fetchOpts.body = new URLSearchParams(flat).toString();
+  }
+
+  const res = await fetch(url, fetchOpts);
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(data.error?.message || `Stripe API ${res.status}`);
+    err.code         = data.error?.code         || null;
+    err.type         = data.error?.type         || 'StripeAPIError';
+    err.param        = data.error?.param        || null;
+    err.decline_code = data.error?.decline_code || null;
+    err.statusCode   = res.status;
+    throw err;
+  }
+  return data;
 }
 
 // Garantit qu'un Customer Stripe plateforme existe pour ce global_client.
@@ -78,10 +137,9 @@ async function ensurePlatformCustomer(globalClientId) {
 //      eventuelle Stripe ou mauvais routage du SDK).
 async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint = {}) {
   if (!connectedAccountId) throw new Error('connectedAccountId requis');
-  const stripe = getStripe();
   const opts = { stripeAccount: connectedAccountId };
 
-  // 1. Lookup DB
+  // 1. Lookup DB (cache rapide).
   const { rows: existing } = await pool.query(
     `SELECT stripe_customer_id FROM client_connected_customers
       WHERE global_client_id=$1 AND connected_account_id=$2`,
@@ -90,7 +148,7 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
   if (existing.length) {
     let stillValid = false;
     try {
-      const cust = await stripe.customers.retrieve(existing[0].stripe_customer_id, opts);
+      const cust = await stripeFetch('GET', `/customers/${existing[0].stripe_customer_id}`, null, opts);
       stillValid = !!(cust && !cust.deleted);
     } catch (e) {
       if (!/No such customer/i.test(e.message || '')) throw e;
@@ -104,8 +162,8 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     );
   }
 
-  // 2. Creer cote Stripe sur connected (syntaxe per-call options).
-  const customer = await stripe.customers.create({
+  // 2. Creer sur le connected via fetch direct (Stripe-Account header garanti).
+  const customer = await stripeFetch('POST', '/customers', {
     email:    hint.email || undefined,
     name:     hint.name  || undefined,
     metadata: {
@@ -114,21 +172,7 @@ async function ensureConnectedCustomer(globalClientId, connectedAccountId, hint 
     },
   }, opts);
 
-  // 3. Verify post-create defense -- si le SDK ne pose pas le header
-  // Stripe-Account correctement, customers.retrieve va echouer ici
-  // immediatement avec un message clair (au lieu d'attendre le clone).
-  try {
-    const verify = await stripe.customers.retrieve(customer.id, opts);
-    if (!verify || verify.deleted) {
-      throw new Error(`Customer ${customer.id} cree mais inaccessible immediatement`);
-    }
-  } catch (e) {
-    console.error('[ensureConnectedCustomer/verify] FAILED',
-      'cust=' + customer.id, 'acct=' + connectedAccountId, e.message);
-    throw new Error(`Customer ${customer.id} non disponible sur compte ${connectedAccountId}: ${e.message}`);
-  }
-
-  // 4. INSERT DB. Race-safe via ON CONFLICT.
+  // 3. INSERT DB. Race-safe via ON CONFLICT.
   const ins = await pool.query(
     `INSERT INTO client_connected_customers
        (global_client_id, connected_account_id, stripe_customer_id)
@@ -158,8 +202,7 @@ async function clonePaymentMethodToConnected({
   if (!connectedAccountId)  throw new Error('connectedAccountId requis');
   if (!connectedCustomerId) throw new Error('connectedCustomerId requis');
   if (!platformPmId)        throw new Error('platformPmId requis');
-  const stripe = getStripe();
-  const cloned = await stripe.paymentMethods.create({
+  const cloned = await stripeFetch('POST', '/payment_methods', {
     customer:       connectedCustomerId,
     payment_method: platformPmId,
   }, { stripeAccount: connectedAccountId });
@@ -169,6 +212,7 @@ async function clonePaymentMethodToConnected({
 module.exports = {
   getStripe,
   getStripeForAccount,
+  stripeFetch,
   ensurePlatformCustomer,
   ensureConnectedCustomer,
   clonePaymentMethodToConnected,
