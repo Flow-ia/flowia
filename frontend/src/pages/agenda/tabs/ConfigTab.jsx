@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { bookingApi } from '../../../utils/api';
 import { bookingUrl as buildBookingUrl } from '../../../utils/publicUrl';
 import { DAYS_FR } from '../constants';
@@ -613,45 +614,32 @@ export default function ConfigTab({ settings: initSettings, hours: initHours, on
             />
           </div>
         </div>
-        <div>
-          <Label>Politique d{"'"}annulation</Label>
-          <select
-            value={form.cancellation_policy_hours}
-            onChange={e=>setForm(f=>({...f, cancellation_policy_hours:parseInt(e.target.value)}))}
-            style={inputStyle}
-          >
-            <option value={0}>A tout moment (remboursement integral)</option>
-            <option value={1}>Jusqu{"'"}a 1 h avant le RDV</option>
-            <option value={2}>Jusqu{"'"}a 2 h avant le RDV</option>
-            <option value={6}>Jusqu{"'"}a 6 h avant le RDV</option>
-            <option value={24}>Jusqu{"'"}a 24 h avant le RDV</option>
-            <option value={48}>Jusqu{"'"}a 48 h avant le RDV</option>
-          </select>
-          {/* Bloc d'explication Planity-style : detaille le comportement
-              selon que le RDV est paye en ligne ou pas, dans/hors delais. */}
-          <div style={{ marginTop:8, padding:'10px 12px', borderRadius:8,
-                        background:t.cardAlt, border:`0.5px solid ${t.border}`,
-                        fontSize:11, color:t.muted, lineHeight:1.6 }}>
-            <p style={{ margin:'0 0 4px', fontWeight:500, color:t.text }}>
-              Comment ca marche
+        {/* La politique d'annulation est editable UNIQUEMENT depuis
+            /reglages/paiements pour eviter le doublon (meme champ DB
+            cancellation_policy_hours edite a 2 endroits causait des
+            ecrasements selon la page utilisee). On garde un raccourci ici. */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                      gap:10, padding:'10px 12px', borderRadius:8,
+                      background:t.cardAlt, border:`0.5px solid ${t.border}` }}>
+          <div style={{ minWidth:0, flex:1 }}>
+            <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text }}>
+              {"Politique d'annulation et remboursement"}
             </p>
-            <p style={{ margin:'0 0 4px' }}>
-              <strong style={{ color:'#065f46' }}>Dans les delais :</strong> le
-              client peut annuler en ligne. S{"'"}il a paye un acompte ou la
-              prestation, il est <strong>rembourse integralement</strong>{' '}
-              (FlowIA rend aussi sa commission).
-            </p>
-            <p style={{ margin:'0 0 4px' }}>
-              <strong style={{ color:'#92400e' }}>Hors delais :</strong> si le
-              RDV est paye en ligne, le client peut quand meme annuler mais{' '}
-              <strong>l{"'"}acompte est conserve</strong> (politique no-show).
-              Sinon, le client doit vous contacter directement.
-            </p>
-            <p style={{ margin:0 }}>
-              <strong style={{ color:'#991b1b' }}>Si vous annulez vous-meme :</strong>{' '}
-              le client est toujours rembourse a 100 % automatiquement.
+            <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
+              {"Configurable depuis Réglages > Paiements en ligne"}
             </p>
           </div>
+          <Link to="/reglages/paiements"
+                style={{ fontSize:12, fontWeight:500, color:'#2563eb',
+                         textDecoration:'none', whiteSpace:'nowrap',
+                         display:'inline-flex', alignItems:'center', gap:4 }}>
+            {"Configurer"}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                 strokeLinecap="round" strokeLinejoin="round"
+                 style={{ width:12, height:12 }}>
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </Link>
         </div>
       </Section>
 
