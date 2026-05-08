@@ -79,35 +79,47 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
   // reason 'requested_by_customer' est l'enum Stripe pour ce cas (annulation
   // RDV cote merchant ou client). Metadata pour traçabilite.
   //
-  // STRATEGIE B : refund_application_fee=true → la commission FlowIA
-  // (application_fee_amount preleve sur la charge initiale) est remboursee
-  // au commercant en meme temps que le refund client. C'est juste : si la
-  // prestation n'a pas eu lieu, FlowIA n'a pas a garder sa commission. Seuls
-  // les frais de traitement Stripe (~1,4% + 0,25€) restent a la charge du
-  // commercant — Stripe ne les rembourse JAMAIS depuis sept 2019 en EU,
-  // c'est inevitable. Le client lui recoit son montant integral.
-  // Cf. stripe.com/docs/refunds#standard-refunds.
+  // STRATEGIE B : si une application_fee a ete prelevee a la charge
+  // initiale, on la rembourse aussi au commercant (= notre commission FlowIA
+  // n'est pas conservee si la prestation n'a pas eu lieu). Si commission=0
+  // a la creation du PI, application_fee_amount est absent -> il NE FAUT
+  // PAS passer refund_application_fee=true sinon Stripe rejette : 'Attempting
+  // to refund_application_fee on ch_xxx, but it has no application fee.'
+  // -> on retrieve le PI d'abord pour decider, puis on conditionne le param.
   let succeeded = false;
   let stripeError = null;
   try {
     const stripe = getStripe();
-    await stripe.refunds.create(
-      {
-        payment_intent: a.stripe_payment_intent_id,
-        reason: 'requested_by_customer',
-        // Important : true (defaut Direct Charges) -> on rend l'application_fee
-        // au commercant. False -> FlowIA garderait sa commission (Planity-like).
-        // On a explicitement choisi STRATEGIE B (cf. CHANGELOG).
-        refund_application_fee: true,
-        metadata: {
-          appointment_id: a.id,
-          flowia_reason: reason,
-          source: 'auto_refund_on_cancel',
-          strategy: 'B_refund_app_fee',
-        },
+
+    // Retrieve le PI pour savoir s'il a une application_fee_amount.
+    // Pas besoin de `expand:['charges']` puisqu'on a juste besoin du flag.
+    let hasAppFee = false;
+    try {
+      const pi = await stripe.paymentIntents.retrieve(
+        a.stripe_payment_intent_id,
+        { stripeAccount: a.stripe_account_id }
+      );
+      hasAppFee = !!(pi && pi.application_fee_amount && pi.application_fee_amount > 0);
+    } catch (rErr) {
+      // Si retrieve fail, on tente quand meme le refund SANS le flag
+      // (plus safe : Stripe ne rejettera pas pour 'no application fee').
+      console.warn('[refundAppointment] PI retrieve fail, refund without app_fee flag', rErr.message);
+    }
+
+    const refundParams = {
+      payment_intent: a.stripe_payment_intent_id,
+      reason: 'requested_by_customer',
+      metadata: {
+        appointment_id: a.id,
+        flowia_reason: reason,
+        source: 'auto_refund_on_cancel',
+        strategy: hasAppFee ? 'B_refund_app_fee' : 'no_app_fee_simple_refund',
       },
-      { stripeAccount: a.stripe_account_id }
-    );
+    };
+    // Conditionne le flag : true uniquement si commission a ete prelevee.
+    if (hasAppFee) refundParams.refund_application_fee = true;
+
+    await stripe.refunds.create(refundParams, { stripeAccount: a.stripe_account_id });
     succeeded = true;
   } catch (e) {
     stripeError = e.message || String(e);

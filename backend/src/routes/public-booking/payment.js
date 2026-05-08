@@ -207,20 +207,64 @@ module.exports = function attachPaymentRoutes(router) {
         }
       }
 
+      // Description visible cote merchant (Stripe Dashboard) ET cote client
+      // (recu Stripe envoye automatiquement via receipt_email). Format clair :
+      // 'Salon · Prestation · Date Heure · Client'. Tronque a 500 chars
+      // (limite Stripe). Ex : 'Hair Coiff Lille · Coupe Homme · 15/06/2026
+      // 14:00 · Marie Dupont'.
+      const dateLocale = (() => {
+        try {
+          const [y, mo, d] = String(date).split('-');
+          return `${d}/${mo}/${y}`;
+        } catch { return String(date); }
+      })();
+      const acompteSuffix = pct < 100 ? ` (acompte ${pct}%)` : '';
+      const descParts = [
+        m.business_name || 'FlowIA',
+        svc[0].name,
+        `${dateLocale} ${start_time}`,
+        clientName || clientEmail || 'Client',
+      ];
+      const description = (descParts.join(' · ') + acompteSuffix).substring(0, 500);
+
       const piParams = {
         amount: amountCents,
         currency: 'eur',
         ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
-        description: `${m.business_name || 'FlowIA'} — ${svc[0].name}`,
+        description,
+        // receipt_email : Stripe envoie automatiquement un email recu au
+        // client apres charge reussie (modele Stripe officiel + branding du
+        // compte connecte). Couvre les exigences B2C (preuve de paiement,
+        // facture light) sans qu'on ait a generer un PDF cote app.
+        ...(clientEmail ? { receipt_email: clientEmail } : {}),
+        // statement_descriptor_suffix : 22 chars max, ajoute au descripteur
+        // de base du compte connecte sur le releve bancaire client. Sans ca
+        // le client voit juste 'PAYMENT' sur sa carte. Sanitize : remplace
+        // les caracteres interdits par espace, tronque, et evite les chiffres
+        // initiaux (Stripe rejette dans certains cas).
+        statement_descriptor_suffix: (() => {
+          try {
+            const raw = (svc[0].name || 'RDV').replace(/[<>"'\\]/g, ' ').trim();
+            // Stripe : 5-22 chars, lettres/chiffres/espaces, ne peut etre que des chiffres.
+            return raw.substring(0, 22);
+          } catch { return 'RDV'; }
+        })(),
         metadata: {
           source:        'flowia_booking',
           user_id:       m.user_id,
           slug:          req.params.slug,
           service_id,
+          service_name:  (svc[0].name || '').substring(0, 200),
           date,
           start_time,
           client_id:        clientId || '',
           client_email:     clientEmail || '',
+          // Nom du client (obligatoire pour identifier les clients sur Stripe
+          // Dashboard - le champ 'Customer' reste vide car on n'instancie pas
+          // de stripe.Customer pour rester sur le modele Direct Charges
+          // simple, mais le metadata client_name + receipt_email donne la
+          // meme info au merchant).
+          client_name:      (clientName || '').substring(0, 200),
           global_client_id: globalClientId || '',
           promo_code_id:    promo_code_id || '',
           referral_code:    referral_code || '',
@@ -229,6 +273,7 @@ module.exports = function attachPaymentRoutes(router) {
           final_price:     finalPrice.toFixed(2),
           payment_percentage: String(pct),
           commission_rate:    String(commission),
+          payment_kind:    pct < 100 ? 'deposit' : 'full',
         },
       };
 
