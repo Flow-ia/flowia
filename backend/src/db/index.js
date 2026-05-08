@@ -1551,6 +1551,22 @@ async function initDB() {
   // Le booléen `paid` existant reste maintenu en parallèle (TRUE quand
   // payment_status='paid') pour ne pas casser les requêtes legacy.
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)`);
+  // Tracabilite des annulations : qui a annule + quand. Permet a la fois
+  // l'affichage cote client ('Annule par le salon' vs 'Annule par vous') et
+  // le suivi cote commercant. cancelled_by enum : 'merchant' (PUT cancel
+  // depuis l'agenda), 'client' (POST /:slug/client/.../cancel), 'system'
+  // (no-show automatique, futur). NULL si jamais annule.
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(20)`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='appointments_cancelled_by_check') THEN
+        ALTER TABLE appointments ADD CONSTRAINT appointments_cancelled_by_check
+          CHECK (cancelled_by IS NULL OR cancelled_by IN ('merchant','client','system'));
+      END IF;
+    END $$;
+  `);
+
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'none'`);
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_amount_cents INT`);

@@ -49,6 +49,7 @@ module.exports = function attachClientProfileRoutes(router) {
       const { rows } = await pool.query(
         `SELECT a.id, a.status, a.notes, a.paid, a.paid_method,
                 a.client_name, a.client_email, a.client_phone, a.cancel_reason,
+                a.cancelled_by, a.cancelled_at,
                 a.discount_amount, a.service_id, a.employee_id, a.client_id,
                 TO_CHAR(a.date,        'YYYY-MM-DD') AS date,
                 TO_CHAR(a.start_time,  'HH24:MI')    AS start_time,
@@ -175,15 +176,21 @@ module.exports = function attachClientProfileRoutes(router) {
 
       // ── Annulation effective ────────────────────────────────────────────
       // Note : si paye + hors delais, on annule mais on NE refundera PAS.
+      // cancelled_by='client' + cancelled_at=NOW() pour la tracabilite.
       const { rows } = await pool.query(
-        `UPDATE appointments SET status='cancelled', cancel_reason=$1, updated_at=NOW()
+        `UPDATE appointments
+            SET status='cancelled',
+                cancel_reason=$1,
+                cancelled_by='client',
+                cancelled_at=NOW(),
+                updated_at=NOW()
          WHERE id=$2 AND user_id=$3
            AND LOWER(COALESCE(client_email,'')) = LOWER($4)
          RETURNING id, client_name,
            TO_CHAR(date, 'YYYY-MM-DD') as date,
            TO_CHAR(start_time, 'HH24:MI') as start_time,
            TO_CHAR(end_time,   'HH24:MI') as end_time,
-           status, cancel_reason, updated_at,
+           status, cancel_reason, cancelled_by, cancelled_at, updated_at,
            google_event_id, google_calendar_id`,
         [req.body.reason || 'Annulé par le client', req.params.id, biz.user_id, clientEmail]
       );

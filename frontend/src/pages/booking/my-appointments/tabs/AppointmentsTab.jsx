@@ -177,6 +177,65 @@ export function AppointmentsTab({
                     </span>
                   </div>
                 )}
+
+                {/* Bloc tracabilite annulation : visible uniquement quand
+                    status='cancelled'. Combine 'Annule par X' + statut
+                    refund (rembourse / acompte conserve / non concerne).
+                    Couleurs sémantiques : ambre 'no-show' / vert refund OK /
+                    bleu info simple. */}
+                {a.status === 'cancelled' && (() => {
+                  const by = a.cancelled_by; // 'merchant' | 'client' | 'system' | null
+                  const wasPaid = a.payment_status === 'paid' || a.payment_status === 'refunded';
+                  const refunded = a.payment_status === 'refunded';
+                  const cents = Number(a.paid_amount_cents || 0);
+                  const eur = (cents / 100).toFixed(2).replace('.', ',');
+
+                  let actorText = 'Annulé';
+                  if (by === 'merchant') actorText = 'Annulé par le salon';
+                  else if (by === 'client') actorText = 'Annulé par vous';
+
+                  let refundText = null;
+                  let refundColor = th.muted;
+                  let refundBg = th.cardAlt;
+                  let refundBorder = `0.5px solid ${th.border}`;
+                  if (wasPaid) {
+                    if (refunded) {
+                      refundText = `Remboursé · ${eur} €`;
+                      refundColor = '#065f46';
+                      refundBg = '#f0fdf4';
+                      refundBorder = '0.5px solid #bbf7d0';
+                    } else {
+                      // Paye mais pas refund -> acompte conserve par le salon
+                      // (cas client annule hors delais)
+                      refundText = `Acompte conservé par le salon · ${eur} €`;
+                      refundColor = '#92400e';
+                      refundBg = '#fffbeb';
+                      refundBorder = '0.5px solid #fde68a';
+                    }
+                  }
+
+                  return (
+                    <div style={{
+                      marginTop:12, padding:'10px 12px', borderRadius:8,
+                      background: refundBg, border: refundBorder,
+                      display:'flex', flexDirection:'column', gap:3,
+                    }}>
+                      <p style={{ margin:0, fontSize:12, fontWeight:500, color: th.text }}>
+                        {actorText}
+                      </p>
+                      {refundText && (
+                        <p style={{ margin:0, fontSize:12, color: refundColor, fontWeight:500 }}>
+                          {refundText}
+                        </p>
+                      )}
+                      {a.cancel_reason && (
+                        <p style={{ margin:'2px 0 0', fontSize:11, color: th.muted, lineHeight:1.4 }}>
+                          {a.cancel_reason}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}

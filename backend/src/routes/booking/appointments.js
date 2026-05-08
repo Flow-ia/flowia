@@ -17,6 +17,7 @@ module.exports = function attachAppointmentsRoutes(router) {
         TO_CHAR(a.start_time, 'HH24:MI') as start_time,
         TO_CHAR(a.end_time,   'HH24:MI') as end_time,
         a.duration_minutes, a.total_duration, a.total_amount, a.status, a.notes, a.cancel_reason,
+        a.cancelled_by, a.cancelled_at,
         a.paid, a.paid_method, a.transaction_id,
         a.promo_code_id, a.promo_code, a.discount_amount, a.original_amount,
         a.source, a.created_by_employee_id,
@@ -304,21 +305,30 @@ module.exports = function attachAppointmentsRoutes(router) {
           return res.status(409).json({ error: 'Employé en absence sur cette date.', code: 'EMPLOYEE_ABSENT' });
         }
       }
+      // Si transition vers 'cancelled', on enregistre QUI a annule (ici =
+       // commercant, car endpoint authMiddleware merchant) + le timestamp.
+      const isCancellingTransitionA = status === 'cancelled' && appt.status !== 'cancelled';
+      const newCancelledBy = isCancellingTransitionA ? 'merchant' : appt.cancelled_by;
+      const newCancelledAt = isCancellingTransitionA ? new Date() : appt.cancelled_at;
       const { rows } = await pool.query(
         `UPDATE appointments SET status=$1, notes=$2, cancel_reason=$3, date=$4, start_time=$5, end_time=$6,
-         employee_id=$7, service_id=$8, duration_minutes=$9, updated_at=NOW()
+         employee_id=$7, service_id=$8, duration_minutes=$9,
+         cancelled_by=$12, cancelled_at=$13,
+         updated_at=NOW()
          WHERE id=$10 AND user_id=$11
          RETURNING id, user_id, service_id, employee_id, client_id,
            client_name, client_email, client_phone,
            TO_CHAR(date, 'YYYY-MM-DD') as date,
            TO_CHAR(start_time, 'HH24:MI') as start_time,
            TO_CHAR(end_time,   'HH24:MI') as end_time,
-           duration_minutes, status, notes, cancel_reason, created_at, updated_at`,
+           duration_minutes, status, notes, cancel_reason,
+           cancelled_by, cancelled_at, created_at, updated_at`,
         [status || appt.status, notes ?? appt.notes, cancel_reason || appt.cancel_reason,
          date || appt.date, st, end_time,
          employee_id !== undefined ? employee_id : appt.employee_id,
          service_id !== undefined ? service_id : appt.service_id,
-         duration, req.params.id, req.user.userId]
+         duration, req.params.id, req.user.userId,
+         newCancelledBy, newCancelledAt]
       );
       const updated = rows[0];
 
