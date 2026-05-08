@@ -27,10 +27,11 @@ import { Icon } from '../../components/Icon';
 import { useAdminMode } from '../../contexts/AdminModeContext';
 
 const PM_GRID_CFG = {
-  cash:     { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
-  card:     { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
-  transfer: { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
-  other:    { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
+  cash:        { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
+  card:        { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
+  card_online: { label: 'En ligne', color: '#0891b2', bg: '#cffafe' },
+  transfer:    { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
+  other:       { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
 };
 
 export default function Historique({

@@ -13,12 +13,16 @@ const nd   = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new
 const fmtN = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt  = n => Number(n || 0).toFixed(2);
 
-// Moyens de paiement — pastels sobres (bg + accent text de meme famille)
+// Moyens de paiement — pastels sobres (bg + accent text de meme famille).
+// 'card_online' = paiement Stripe Connect (acompte / integral) cote client,
+// distinct de 'card' (CB au comptoir). Inclus pour l'affichage et les totaux
+// du jour, mais reste lookupOnly (pas dans le selecteur d'encaissement manuel).
 const PM_CFG = {
-  cash:     { label: 'Especes',  color: '#065f46', bg: '#f0fdf4' },
-  card:     { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
-  transfer: { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
-  other:    { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
+  cash:        { label: 'Especes',  color: '#065f46', bg: '#f0fdf4' },
+  card:        { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
+  card_online: { label: 'En ligne', color: '#0891b2', bg: '#cffafe' },
+  transfer:    { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
+  other:       { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
 };
 
 // ── Modal sobre (reutilisee par les sous-modales) ───────────────────────────
@@ -979,7 +983,9 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
     const caToday = todayTx.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
 
     // Ventilation par moyen de paiement : 'multi' éclaté par sous-ligne.
-    const byPM = { cash:0, card:0, transfer:0, other:0, multi:0 };
+    // 'card_online' inclus pour comptabiliser les paiements Stripe Connect
+    // (acompte ou intégral) — sans cette clé, ils tombaient dans 'other'.
+    const byPM = { cash:0, card:0, card_online:0, transfer:0, other:0, multi:0 };
     todayTx.forEach(tx => {
       if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
         tx.payments.forEach(p => {

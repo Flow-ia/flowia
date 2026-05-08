@@ -24,10 +24,11 @@ import { Toast, useToast } from '../../components/UI';
 const PAGE_SIZE = 10;
 
 const PM_GRID_CFG = {
-  cash:     { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
-  card:     { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
-  transfer: { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
-  other:    { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
+  cash:        { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
+  card:        { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
+  card_online: { label: 'En ligne', color: '#0891b2', bg: '#cffafe' },
+  transfer:    { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
+  other:       { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
 };
 
 // Date ISO yyyy-mm-dd à n jours avant aujourd'hui (locale UTC-stable).
@@ -65,7 +66,7 @@ export default function HistoriqueAdmin({
   const [customFrom, setCustomFrom] = useState(isoToday());
   const [customTo,   setCustomTo]   = useState(isoToday());
   const [empF,    setEmpF]    = useState('all');
-  const [pmF,     setPmF]     = useState('all'); // 'all' | 'cash' | 'card' | 'transfer' | 'other' | 'multi'
+  const [pmF,     setPmF]     = useState('all'); // 'all' | 'cash' | 'card' | 'card_online' | 'transfer' | 'other' | 'multi'
   const [search,  setSearch]  = useState('');
   const [typeF,   setTypeF]   = useState('all');
   const [page,    setPage]    = useState(0);
@@ -231,12 +232,13 @@ export default function HistoriqueAdmin({
             <div>
               <p style={lblFilter}>{"Moyen de paiement"}</p>
               <SelectWrap value={pmF} onChange={e => setPmF(e.target.value)}>
-                <option value="all"      style={{ background:optBg, color:optColor }}>{"Tous"}</option>
-                <option value="cash"     style={{ background:optBg, color:optColor }}>{"Espèces"}</option>
-                <option value="card"     style={{ background:optBg, color:optColor }}>{"Carte"}</option>
-                <option value="transfer" style={{ background:optBg, color:optColor }}>{"Virement"}</option>
-                <option value="other"    style={{ background:optBg, color:optColor }}>{"Autre"}</option>
-                <option value="multi"    style={{ background:optBg, color:optColor }}>{"Mixte"}</option>
+                <option value="all"         style={{ background:optBg, color:optColor }}>{"Tous"}</option>
+                <option value="cash"        style={{ background:optBg, color:optColor }}>{"Espèces"}</option>
+                <option value="card"        style={{ background:optBg, color:optColor }}>{"Carte"}</option>
+                <option value="card_online" style={{ background:optBg, color:optColor }}>{"En ligne"}</option>
+                <option value="transfer"    style={{ background:optBg, color:optColor }}>{"Virement"}</option>
+                <option value="other"       style={{ background:optBg, color:optColor }}>{"Autre"}</option>
+                <option value="multi"       style={{ background:optBg, color:optColor }}>{"Mixte"}</option>
               </SelectWrap>
             </div>
             {activeEmps.length > 0 && (

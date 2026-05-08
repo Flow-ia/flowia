@@ -113,6 +113,85 @@ router.get('/pending', async (req, res) => {
   }
 });
 
+// ── POST /api/admin/stripe-payouts/backfill ──────────────────────────────
+// Scanne les appointments payes en ligne (payment_status='paid' +
+// stripe_payment_intent_id + paid_amount_cents>0) qui N'ONT PAS de row
+// dans appointment_payouts (NOT EXISTS) et insere les rows manquantes via
+// scheduleAppointmentPayout. Couvre les cas :
+//   1. Webhook Stripe Connect 'Comptes connectes' non configure / cassé
+//   2. Paiements anterieurs au deploiement de l'escrow (commit 22dd99c)
+//   3. Race condition rarissime entre book.js et webhook
+// Idempotent : ON CONFLICT (appointment_id) DO NOTHING dans
+// scheduleAppointmentPayout, donc rejouable sans duplicat.
+//
+// Note : on ne peut pas recalculer le montant net (amount - application_fee)
+// sans appeler Stripe Retrieve pour chaque PI -> ce serait lourd. On utilise
+// paid_amount_cents qui est le brut paye par le client. Pour le payout c'est
+// LEGEREMENT pessimiste : Stripe ne peut payouter que ce qui est sur le
+// balance Connect (= net), donc si on demande un montant superieur Stripe
+// renverra 'balance_insufficient' et le cron retentera 5x avant 'failed'.
+// En pratique pour les RDV recents c'est OK, et pour la majorite des
+// merchants application_fee=0 donc brut == net.
+router.post('/backfill', async (req, res) => {
+  try {
+    const { scheduleAppointmentPayout } = require('../../utils/scheduleAppointmentPayout');
+
+    // Selection : RDV payes en ligne sans row payout. Limite a 500 par
+    // requete (garde-fou si gros backlog). LEFT JOIN ap.id IS NULL pour
+    // identifier les appts orphelins.
+    const { rows: orphans } = await pool.query(`
+      SELECT a.id, a.user_id, a.stripe_payment_intent_id, a.paid_amount_cents,
+             a.date AS appt_date
+        FROM appointments a
+        LEFT JOIN appointment_payouts ap ON ap.appointment_id = a.id
+       WHERE a.payment_status = 'paid'
+         AND a.stripe_payment_intent_id IS NOT NULL
+         AND a.paid_amount_cents > 0
+         AND ap.id IS NULL
+       ORDER BY a.date DESC
+       LIMIT 500
+    `);
+
+    let inserted = 0, skipped = 0;
+    const errors = [];
+    for (const row of orphans) {
+      try {
+        const r = await scheduleAppointmentPayout(pool, {
+          appointmentId: row.id,
+          paymentIntentId: row.stripe_payment_intent_id,
+          amountCents: row.paid_amount_cents,
+        });
+        if (r?.ok) inserted++;
+        else skipped++;
+      } catch (e) {
+        skipped++;
+        errors.push({ appointment_id: row.id, error: e.message });
+      }
+    }
+
+    try {
+      await logAuditAction({
+        action: 'stripe.backfill_appointment_payouts',
+        targetType: 'platform',
+        targetId: null,
+        payloadAfter: { scanned: orphans.length, inserted, skipped },
+        req,
+      });
+    } catch {}
+
+    res.json({
+      ok: true,
+      scanned: orphans.length,
+      inserted,
+      skipped,
+      errors: errors.slice(0, 20),
+    });
+  } catch (e) {
+    console.error('[ADMIN backfill ERR]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── POST /api/admin/stripe-payouts/release-now ───────────────────────────
 // Declenche manuellement le cron releasePayouts pour traiter les payouts
 // dus immediatement (sans attendre le tick quotidien). Utile pour tester

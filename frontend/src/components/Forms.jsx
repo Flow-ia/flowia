@@ -461,11 +461,12 @@ const SNAP_PALETTE = {
 };
 
 const SNAP_PAY_PASTEL = {
-  cash:     { label:'Especes',  color:'#065f46', bg:'#f0fdf4' },
-  card:     { label:'Carte',    color:'#4338ca', bg:'#eef2ff' },
-  transfer: { label:'Virement', color:'#0e7490', bg:'#ecfeff' },
-  other:    { label:'Autre',    color:'#92400e', bg:'#fffbeb' },
-  multi:    { label:'Mixte',    color:'#7c3aed', bg:'#faf5ff' },
+  cash:        { label:'Especes',  color:'#065f46', bg:'#f0fdf4' },
+  card:        { label:'Carte',    color:'#4338ca', bg:'#eef2ff' },
+  card_online: { label:'En ligne', color:'#0891b2', bg:'#cffafe' },
+  transfer:    { label:'Virement', color:'#0e7490', bg:'#ecfeff' },
+  other:       { label:'Autre',    color:'#92400e', bg:'#fffbeb' },
+  multi:       { label:'Mixte',    color:'#7c3aed', bg:'#faf5ff' },
 };
 
 function snapshotDateLabel(init) {
