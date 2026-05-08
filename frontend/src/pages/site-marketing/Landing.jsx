@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, cardHover, CheckIcon, CaretDown } from './components/shadcn';
+import HeroSocialBg from './components/HeroSocialBg';
 
 const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
@@ -178,8 +179,18 @@ function Hero() {
       padding: 'clamp(72px, 9vw, 104px) 24px 40px',
       background: S.bg,
       borderBottom: `1px solid ${S.border}`,
+      // position:relative + overflow:hidden -> contient les icônes
+      // décoratives flottantes (HeroSocialBg) qui s'envolent en boucle.
+      position: 'relative',
+      overflow: 'hidden',
     }}>
-      <div style={{ maxWidth: 1120, margin: '0 auto', textAlign: 'center' }}>
+      {/* Logos réseaux sociaux flottants (Insta/FB/WhatsApp/SMS/TikTok)
+          en arrière-plan derrière le contenu — évoquent la diffusion
+          multi-canale du produit. */}
+      <HeroSocialBg />
+
+      <div style={{ maxWidth: 1120, margin: '0 auto', textAlign: 'center',
+                    position: 'relative', zIndex: 1 }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
           fontSize: 12, fontWeight: 500,

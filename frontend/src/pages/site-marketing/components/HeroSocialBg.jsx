@@ -1,15 +1,18 @@
-// SocialFloatingBg.jsx — couche décorative de logos réseaux sociaux qui
-// montent en boucle derrière la page d'accueil booking (Step1Home).
+// HeroSocialBg.jsx — couche décorative de logos réseaux sociaux qui montent
+// en boucle derrière la section Hero du site de présentation flowiapro.com.
 //
-// Objectif visuel : évoquer la diffusion du lien de réservation sur les
-// réseaux sociaux (Insta / Facebook / WhatsApp / SMS / TikTok). Les icônes
-// sont semi-transparentes (opacity ≤ 0.18 en peak, animation fixée dans
-// index.css @keyframes floatUp), positionnées en `position:fixed` derrière
-// le contenu (z-index:0, le wrapper Step1Home se met en relative pour rester
-// au-dessus). `pointer-events:none` pour ne jamais bloquer un clic.
+// Objectif visuel : évoquer la diffusion / viralité multi-canale du produit.
+// Les icônes (Instagram / Facebook / WhatsApp / SMS / TikTok) sont semi-
+// transparentes (opacity peak 0.18 dans @keyframes floatUpHero), partent du
+// bas de la section et s'envolent vers le haut. Bornées par overflow:hidden
+// du parent (Hero <section>).
 //
-// Conforme FDS-2026 : pas de gradient, pas de texte décoratif, fw≤500
-// (icônes SVG monochromes colorées avec la couleur de marque).
+// Utilisation : insérer directement dans le <section> Hero ; le parent doit
+// avoir position:relative et overflow:hidden, et le contenu doit être dans
+// un wrapper position:relative + zIndex:1.
+//
+// pointer-events:none -> ne bloque jamais un clic CTA.
+
 import { useMemo } from 'react';
 
 const SVGS = {
@@ -19,7 +22,6 @@ const SVGS = {
   tiktok:   'M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.1z',
 };
 
-// SMS = bulle de message (Lucide-style, stroke-only — donc rendu différent).
 function SMSBubble({ color, size }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size}
@@ -38,13 +40,9 @@ const ICONS = [
   { name:'sms',       color:'#0EA5E9' },
 ];
 
-// 14 icônes (≈ 3 cycles complets de chaque marque) — densité légère, ne
-// surcharge ni le DOM ni les performances mobile.
-const COUNT = 14;
+const COUNT = 16;
 
 function buildSeed() {
-  // Positions (left%) et timings randomisés par mount, fixés via useMemo
-  // pour ne pas re-shuffle à chaque rerender (qui couperait les animations).
   const arr = [];
   for (let i = 0; i < COUNT; i++) {
     const proto = ICONS[i % ICONS.length];
@@ -53,31 +51,30 @@ function buildSeed() {
       name:     proto.name,
       color:    proto.color,
       // Répartition horizontale pseudo-uniforme.
-      left:     Math.round(((i * 73) % 100) * 100) / 100,
-      // Tailles entre 28 et 56 px — assez visibles pour être reconnues
-      // sans masquer le contenu (opacity ≤ 0.18 dans le keyframe).
-      size:     28 + ((i * 11) % 28),
-      // Durée 18-30 s : assez lent pour rester discret.
-      duration: 18 + ((i * 7) % 12),
-      // Délai initial décalé pour éviter qu'elles partent toutes ensemble.
-      delay:    (i * 1.4) % 12,
+      left:     Math.round(((i * 67 + 7) % 100) * 100) / 100,
+      // Tailles 32-58 px : visibles mais discrètes (opacity peak 0.18).
+      size:     32 + ((i * 13) % 26),
+      // Durée 14-24 s : assez lent pour rester décoratif.
+      duration: 14 + ((i * 5) % 10),
+      // Délai initial échelonné pour éviter qu'elles partent toutes ensemble.
+      delay:    (i * 1.1) % 10,
     });
   }
   return arr;
 }
 
-export default function SocialFloatingBg() {
+export default function HeroSocialBg() {
   const items = useMemo(buildSeed, []);
 
   return (
     <div aria-hidden
-         style={{ position:'fixed', inset:0, overflow:'hidden',
+         style={{ position:'absolute', inset:0, overflow:'hidden',
                   pointerEvents:'none', zIndex:0 }}>
       {items.map(it => (
         <div key={it.key}
-             style={{ position:'absolute', left:`${it.left}%`, top:0,
+             style={{ position:'absolute', left:`${it.left}%`, bottom:-80,
                       width:it.size, height:it.size,
-                      animation:`floatUp ${it.duration}s linear ${it.delay}s infinite`,
+                      animation:`floatUpHero ${it.duration}s linear ${it.delay}s infinite`,
                       willChange:'transform, opacity' }}>
           {it.name === 'sms' ? (
             <SMSBubble color={it.color} size={it.size}/>
