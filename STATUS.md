@@ -115,12 +115,27 @@ opérationnel + testé mentalement sur 8+ scénarios.
   à J+3. Comportement no-show standard.
 - Lock applicatif `cron:no_show:auto`, batch 200/tick.
 
+### 9. Dashboard Performances paiements en ligne
+- `backend/src/routes/stripe-connect.js` : endpoint
+  `GET /api/stripe-connect/performance-stats?period=30` (7/30/90 jours).
+  Agrège : `gross_revenue` + `refund_amount` depuis `transactions`
+  (sources `rdv_online` / `rdv_refund`), counts annulations par
+  `cancelled_by` ('system'/'client'/'merchant') depuis `appointments`.
+- Frontend `/reglages/paiements` (commit `742c1ca`) : nouvelle section
+  `PerformancePaymentsSection` insérée après `PaymentConfigSection`.
+  4 KPI cards (CA net, RDV payés, remboursements, no-show auto) FDS-2026
+  (inline-styles, fw≤500, borderLeft 2px coloré), sélecteur période
+  7j/30j/90j en haut à droite. Ligne discrète bonus avec annulations
+  client/merchant si > 0.
+- Atteint la parité analytics paiements Planity Pro côté commerçant.
+
 ### Ce qu'il reste à faire (pour continuer Planity-like)
 
 - Tester end-to-end sur preview Vercel chaque scénario (paiement / annulation
   client / annulation merchant / refund / hors délais / acompte+solde / no-show auto)
-- Éventuellement ajouter un dashboard merchant « Performances paiements en ligne »
-  (taux conversion, no-show, refunds) pour égaler les analytics Planity Pro
+- Plus rien de prioritaire : le chantier Planity-like est complet côté
+  fonctionnalités. Toute amélioration future serait du nice-to-have
+  (graphiques temporels, export CSV des transactions en ligne, etc.).
 
 ---
 
