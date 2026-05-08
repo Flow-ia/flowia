@@ -110,14 +110,19 @@ export default function HistoriqueAdmin({
 
   // ── KPIs (basés sur les revenus filtrés). ─────────────────────────────────
   const revs = filtered.filter(tx => tx.type === 'revenue');
+  // kpiCA = somme totale (positifs - refunds negatifs) -> CA NET periode.
   const kpiCA = revs.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-  const kpiPrest = revs.reduce((s, tx) => {
+  // kpiPrest exclut les refunds (source rdv_refund ou amount<0). Idem
+  // kpiPanier : ne compte que les prestations effectives, pas les refunds.
+  const revsPos = revs.filter(tx =>
+    tx.source !== 'rdv_refund' && (parseFloat(tx.amount) || 0) >= 0);
+  const kpiPrest = revsPos.reduce((s, tx) => {
     const itemsQty = Array.isArray(tx.items)
       ? tx.items.reduce((a, i) => a + (parseInt(i.qty) || 1), 0)
       : 0;
     return s + (itemsQty || parseInt(tx.qty_total) || 1);
   }, 0);
-  const kpiPanier = revs.length > 0 ? kpiCA / revs.length : 0;
+  const kpiPanier = revsPos.length > 0 ? kpiCA / revsPos.length : 0;
 
   // ── 4 moyens de paiement (multi éclatés). ─────────────────────────────────
   const byPM = useMemo(() => {
@@ -362,13 +367,17 @@ export default function HistoriqueAdmin({
                 const cat = getCat(tx.category_id);
                 const emp = getEmp(tx.employee_id);
                 const isRev = tx.type === 'revenue';
+                // Detection refund : source dediee 'rdv_refund' OU type=revenue
+                // avec montant negatif (defense en profondeur). Affichage en
+                // rouge avec libelle 'Remboursement RDV'.
+                const isRefund = tx.source === 'rdv_refund' || (isRev && Number(tx.amount) < 0);
                 const pm   = PAY_INFO[tx.payment_method] || PAY_INFO.other;
                 const PmIc = pm.Ic;
                 const hasItems    = Array.isArray(tx.items) && tx.items.length > 0;
                 const hasPaySplit = Array.isArray(tx.payments) && tx.payments.length > 1;
-                const iconBg     = isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2';
-                const iconColor  = isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b';
-                const amountColor = isRev ? '#065f46' : '#991b1b';
+                const iconBg     = isRefund ? '#fef2f2' : (isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2');
+                const iconColor  = isRefund ? '#991b1b' : (isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b');
+                const amountColor = isRefund ? '#991b1b' : (isRev ? '#065f46' : '#991b1b');
 
                 return (
                   <div key={tx.id}
@@ -377,25 +386,29 @@ export default function HistoriqueAdmin({
                     <div style={{ width:36, height:36, borderRadius:8, flexShrink:0, marginTop:2,
                                   background:iconBg,
                                   display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      {tx.source === 'rdv'
-                        ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
-                        : isRev
-                          ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
-                          : <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>}
+                      {isRefund
+                        ? <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>
+                        : tx.source === 'rdv'
+                          ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
+                          : isRev
+                            ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
+                            : <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>}
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
                                     gap:8, marginBottom:4 }}>
                         <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0,
                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
-                          {tx.source === 'rdv'
-                            ? (tx.description || 'Encaissement RDV')
-                            : (cat?.name || tx.description || 'Transaction')}
+                          {isRefund
+                            ? (tx.description || 'Remboursement RDV')
+                            : tx.source === 'rdv'
+                              ? (tx.description || 'Encaissement RDV')
+                              : (cat?.name || tx.description || 'Transaction')}
                         </p>
                         <span style={{ fontSize:15, fontWeight:500,
                                        fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
                                        color:amountColor, flexShrink:0 }}>
-                          {isRev ? '+' : '-'}{fmt(tx.amount)} €
+                          {isRefund ? '-' : (isRev ? '+' : '-')}{fmt(Math.abs(Number(tx.amount)))} €
                         </span>
                       </div>
                       <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
@@ -433,6 +446,15 @@ export default function HistoriqueAdmin({
                                          fontSize:11, fontWeight:500, flexShrink:0 }}>
                             <I.Calendar style={{ width:10, height:10 }}/>
                             RDV
+                          </span>
+                        )}
+                        {isRefund && (
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:4,
+                                         padding:'2px 8px', borderRadius:99,
+                                         background:'#fef2f2', color:'#991b1b',
+                                         fontSize:11, fontWeight:500, flexShrink:0 }}>
+                            <I.ArrowDown style={{ width:10, height:10 }}/>
+                            Remboursement
                           </span>
                         )}
                         {tx.client_email && (

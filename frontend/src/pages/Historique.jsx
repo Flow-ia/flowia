@@ -54,8 +54,16 @@ export default function Historique({ transactions, employees }) {
   }, [transactions, today, empFilter]);
 
   // ── KPIs recalculés sur le filtre ─────────────────────────────────────────
+  // dayRev : SUM amount sur tous les revenue (includes negative = refunds)
+  //   -> CA NET du jour (encaissements - remboursements). Comportement correct.
+  // prestCount : COUNT prestations effectives. On EXCLUT les refunds
+  //   (source='rdv_refund' ou amount<0) sinon le compteur s'inflate
+  //   alors qu'un refund n'est pas une prestation effectuee.
   const dayRev = todayRevsFiltered.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-  const prestCount = todayRevsFiltered.reduce((s, tx) => s + (parseInt(tx.qty_total) || 1), 0);
+  const prestCount = todayRevsFiltered.reduce((s, tx) => {
+    if (tx.source === 'rdv_refund' || (parseFloat(tx.amount) || 0) < 0) return s;
+    return s + (parseInt(tx.qty_total) || 1);
+  }, 0);
 
   // Par moyen de paiement — eclate les 'multi' en ligne par sous-paiement
   // pour refléter le CA réel de chaque moyen (sinon tout finissait dans 'Autre').

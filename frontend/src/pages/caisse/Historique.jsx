@@ -70,14 +70,18 @@ export default function Historique({
   }, [txs, today, empF]);
 
   // KPIs jour
+  // dayRev = somme tous revenue (refunds negatifs subtraits) = CA NET du jour.
   const dayRev = todayRevs.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-  const prestCount = todayRevs.reduce((s, tx) => {
+  // prestCount + panierMoy excluent les refunds (pas une prestation).
+  const todayRevsPos = todayRevs.filter(tx =>
+    tx.source !== 'rdv_refund' && (parseFloat(tx.amount) || 0) >= 0);
+  const prestCount = todayRevsPos.reduce((s, tx) => {
     const itemsQty = Array.isArray(tx.items)
       ? tx.items.reduce((a, i) => a + (parseInt(i.qty) || 1), 0)
       : 0;
     return s + (itemsQty || parseInt(tx.qty_total) || 1);
   }, 0);
-  const panierMoy = todayRevs.length > 0 ? dayRev / todayRevs.length : 0;
+  const panierMoy = todayRevsPos.length > 0 ? dayRev / todayRevsPos.length : 0;
 
   // ── 4 moyens de paiement (multi éclatés). ─────────────────────────────────
   const byPM = useMemo(() => {

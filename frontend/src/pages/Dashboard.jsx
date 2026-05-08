@@ -653,8 +653,13 @@ function StatsModal({ open, onClose, theme: t, transactions, employees, categori
 
   const todayRevs  = transactions.filter(tx => nd(tx.date) === today && tx.type === 'revenue');
   const todayAll   = transactions.filter(tx => nd(tx.date) === today);
+  // dayRev = SUM amount sur tous revenue (refunds negatifs subtraits) -> CA NET.
   const dayRev     = todayRevs.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-  const prestCount = todayRevs.reduce((s, tx) => s + (parseInt(tx.qty_total) || 1), 0);
+  // prestCount exclut les refunds : un remboursement n'est PAS une prestation.
+  const prestCount = todayRevs.reduce((s, tx) => {
+    if (tx.source === 'rdv_refund' || (parseFloat(tx.amount) || 0) < 0) return s;
+    return s + (parseInt(tx.qty_total) || 1);
+  }, 0);
 
   const byEmp = employees.map(emp => {
     const r = todayRevs.filter(tx => tx.employee_id === emp.id);

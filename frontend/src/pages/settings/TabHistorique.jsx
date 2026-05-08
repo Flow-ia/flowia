@@ -84,13 +84,15 @@ export default function TabHistorique({ transactions, employees, categories, onU
               const cat = getCat(tx.category_id);
               const emp = getEmp(tx.employee_id);
               const isRev = tx.type === 'revenue';
+              // Detection refund (cf. historique/index.jsx pour la meme logique).
+              const isRefund = tx.source === 'rdv_refund' || (isRev && Number(tx.amount) < 0);
               const pm = PAY_INFO[tx.payment_method] || PAY_INFO.other;
               const PmIc = pm.Ic;
               const hasItems    = Array.isArray(tx.items) && tx.items.length > 0;
               const hasPaySplit = Array.isArray(tx.payments) && tx.payments.length > 1;
-              const iconBg      = isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2';
-              const iconColor   = isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b';
-              const amountColor = isRev ? '#065f46' : '#991b1b';
+              const iconBg      = isRefund ? '#fef2f2' : (isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2');
+              const iconColor   = isRefund ? '#991b1b' : (isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b');
+              const amountColor = isRefund ? '#991b1b' : (isRev ? '#065f46' : '#991b1b');
 
               return (
                 <div key={tx.id}
@@ -99,24 +101,28 @@ export default function TabHistorique({ transactions, employees, categories, onU
                   <div style={{ width:36, height:36, borderRadius:8, flexShrink:0, marginTop:2,
                                 background:iconBg,
                                 display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    {tx.source === 'rdv'
-                      ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
-                      : isRev
-                        ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
-                        : <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>}
+                    {isRefund
+                      ? <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>
+                      : tx.source === 'rdv'
+                        ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
+                        : isRev
+                          ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
+                          : <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
                                   gap:8, marginBottom:4 }}>
                       <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0,
                                   overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
-                        {tx.source === 'rdv'
-                          ? (tx.description || 'Encaissement RDV')
-                          : (cat?.name || tx.description || 'Transaction')}
+                        {isRefund
+                          ? (tx.description || 'Remboursement RDV')
+                          : tx.source === 'rdv'
+                            ? (tx.description || 'Encaissement RDV')
+                            : (cat?.name || tx.description || 'Transaction')}
                       </p>
                       <span style={{ fontSize:15, fontWeight:500, fontFamily:"'DM Mono', monospace",
                                      color:amountColor, flexShrink:0 }}>
-                        {isRev ? '+' : '-'}{fmt(tx.amount)} €
+                        {isRefund ? '-' : (isRev ? '+' : '-')}{fmt(Math.abs(Number(tx.amount)))} €
                       </span>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>

@@ -132,6 +132,51 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
     } catch (cancelErr) {
       console.error('[refundAppointment] cancelAppointmentPayout', cancelErr.message);
     }
+    // Tracabilite caisse / stats : on insere une transaction NEGATIVE
+    // (type='revenue' + amount = -X) avec source='rdv_refund'. Pourquoi
+    // negatif sur type='revenue' au lieu d'un nouveau type='refund' :
+    // (a) la contrainte CHECK actuelle de la table autorise revenue/income/
+    //     expense — pas de migration necessaire, pas de risque
+    // (b) SUM(amount) WHERE type='revenue' donne automatiquement le CA NET
+    //     (revenus - refunds) sans modifier les agregations existantes
+    // (c) les places qui filtrent amount > 0 (campaigns.js, marketing.js
+    //     pour le ciblage 'gros payeurs') excluent naturellement les
+    //     refunds — comportement souhaite.
+    // L'amount inclut la commission FlowIA refundee aussi (Strategie B) :
+    // c'est le montant cote client qui revient. Le commercant verra dans
+    // sa caisse 'Remboursement RDV - X€' bien identifiable via source.
+    try {
+      const cents = Number(a.paid_amount_cents || 0);
+      if (cents > 0) {
+        const negAmount = -(cents / 100);
+        const { rows: clientNameR } = await pool.query(
+          'SELECT client_name, employee_id FROM appointments WHERE id=$1',
+          [a.id]
+        );
+        const cn = clientNameR[0]?.client_name || 'client';
+        const empId = clientNameR[0]?.employee_id || null;
+        const desc = `Remboursement RDV — ${cn}`;
+        const now = new Date();
+        // qty_total=0 explicite : le default DB est 1 mais un refund n'est
+        // PAS une prestation -> sinon le compteur 'nb prestations' du jour
+        // s'incremente a tort sur Historique.jsx (reduce sum qty_total).
+        await pool.query(
+          `INSERT INTO transactions
+             (user_id, type, amount, description, employee_id, payment_method,
+              date, time, datetime_iso, appointment_id, source, locked, qty_total)
+           VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE, 0)`,
+          [a.user_id, negAmount, desc, empId,
+           now.toISOString().substring(0, 10),
+           now.toTimeString().substring(0, 8),
+           now.toISOString(), a.id]
+        );
+      }
+    } catch (txErr) {
+      // Erreur d'insertion du log caisse ne doit PAS bloquer le refund.
+      // L'argent a deja ete rendu cote Stripe, on log juste l'echec
+      // d'enregistrement et l'admin peut reconcilier manuellement.
+      console.error('[refundAppointment] tx insert failed', txErr.message);
+    }
     return { ok: true, refunded: true };
   }
 
