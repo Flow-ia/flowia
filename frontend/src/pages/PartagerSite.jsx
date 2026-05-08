@@ -264,16 +264,10 @@ export default function PartagerSite() {
           </div>
         </div>
 
-        {/* QR inscription rapide client — Affiche le QR + bouton telecharger
-            PNG + bouton copier le lien. Utile en boutique : un client scanne,
-            sa fiche est creee en 10 s. Visible aux admins ET aux employes. */}
-        <div>
-          <p style={{ margin: '0 0 10px', fontSize: 11, color: t.muted,
-                      textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            QR inscription rapide client
-          </p>
-          <QRCard theme={t} showToast={showToast}/>
-        </div>
+        {/* QR inscription rapide — le composant QRCard a deja son propre
+            header interne ('QR inscription rapide' + description). Pas de
+            label section au-dessus pour eviter le doublon. */}
+        <QRCard theme={t} showToast={showToast}/>
 
         {/* Conseils */}
         <div style={{
