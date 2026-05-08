@@ -230,6 +230,11 @@ root.render(
               <Route path="/book/:slug/register"                                                                           element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/profil"                                                                      element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/rdv"                                                                         element={<BookingPageWrapper />} />
+              {/* Sous-onglets RDV avec persistance URL (avenir/passes/annules) :
+                  permet au client de refresh / partager / mettre en favori
+                  son onglet actif. MyAppointments lit le segment au mount
+                  et set le rdvTab en consequence + replaceState au switch. */}
+              <Route path="/book/:slug/client/rdv/:rdvTab"                                                                 element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/passages"                                                                    element={<BookingPageWrapper />} />
               <Route path="/book/:slug/client/passages/:visitId"                                                           element={<BookingPageWrapper />} />
               <Route path="/book/:slug/parrain"                                                                            element={<BookingPageWrapper />} />
@@ -256,6 +261,7 @@ root.render(
                 <Route path="/marketplace/book/:slug/register"                                                                           element={<BookingPageWrapper />} />
                 <Route path="/marketplace/book/:slug/client/profil"                                                                      element={<BookingPageWrapper />} />
                 <Route path="/marketplace/book/:slug/client/rdv"                                                                         element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/client/rdv/:rdvTab"                                                                 element={<BookingPageWrapper />} />
                 <Route path="/marketplace/book/:slug/client/passages"                                                                    element={<BookingPageWrapper />} />
                 <Route path="/marketplace/book/:slug/client/passages/:visitId"                                                           element={<BookingPageWrapper />} />
                 <Route path="/marketplace/book/:slug/parrain"                                                                            element={<BookingPageWrapper />} />

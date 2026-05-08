@@ -381,7 +381,46 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
   const inpStyle = makeInpStyle(th);
 
-  const [rdvTab, setRdvTab] = useState('futurs');
+  // Sous-onglets Mes RDV (futurs / passes / annules) avec persistance URL.
+  // Mapping URL <-> tab :
+  //   /client/rdv          -> 'futurs' (defaut)
+  //   /client/rdv/avenir   -> 'futurs'
+  //   /client/rdv/passes   -> 'passes'
+  //   /client/rdv/annules  -> 'annules'
+  // URL_SLUG_TO_TAB est la table inverse pour parser le segment.
+  const URL_SLUG_TO_TAB = { avenir: 'futurs', passes: 'passes', annules: 'annules' };
+  const TAB_TO_URL_SLUG = { futurs: 'avenir', passes: 'passes', annules: 'annules' };
+
+  // Base URL respectant le prefix marketplace (cf. helpers.getBookingBase).
+  const getBase = () => {
+    const p = (typeof window !== 'undefined' ? window.location.pathname : '') || '';
+    if (p.startsWith('/marketplace/book/')) return `/marketplace/book/${slug}`;
+    return `/book/${slug}`;
+  };
+
+  // Lecture de l'URL au mount pour determiner le tab initial.
+  const initialRdvTab = (() => {
+    if (typeof window === 'undefined') return 'futurs';
+    const p = window.location.pathname;
+    const m = p.match(/\/client\/rdv\/([a-z]+)/);
+    if (m && URL_SLUG_TO_TAB[m[1]]) return URL_SLUG_TO_TAB[m[1]];
+    return 'futurs';
+  })();
+
+  const [rdvTab, setRdvTabRaw] = useState(initialRdvTab);
+  // Wrapper qui met aussi a jour l'URL (replaceState pour ne pas polluer
+  // l'historique navigateur).
+  const setRdvTab = (tab) => {
+    setRdvTabRaw(tab);
+    if (typeof window === 'undefined') return;
+    const slugSegment = TAB_TO_URL_SLUG[tab] || '';
+    const newPath = slugSegment
+      ? `${getBase()}/client/rdv/${slugSegment}`
+      : `${getBase()}/client/rdv`;
+    if (window.location.pathname !== newPath) {
+      try { window.history.replaceState({}, '', newPath); } catch { /* ignore */ }
+    }
+  };
 
   // Modals annulation
   const [cancelModal, setCancelModal] = useState(null); // appt à annuler
