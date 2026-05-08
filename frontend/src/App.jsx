@@ -1173,6 +1173,14 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
         { id:'clients',   label:'Clients', icon:'users',    to:'/clients', match:['/clients'] },
       ],
     },
+    {
+      // Outils transverses pour les employes : partage du lien + QR
+      // d'inscription client. Pratique pour un employe au comptoir.
+      label: 'Outils',
+      items: [
+        { id:'partager',  label:'Partager mon site', icon:'share', to:'/partager', match:['/partager'] },
+      ],
+    },
   ] : [
     {
       label: 'Quotidien',
@@ -1450,11 +1458,16 @@ function BottomNav({ theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuit
                 <Icon name="x" size={16} color={t.muted}/>
               </button>
             </div>
-            {isAdminMode && [
-              { label:'Historique',   icon:'history',   to:'/historique'   },
-              { label:'Marketing',    icon:'megaphone', to:'/marketing'    },
-              { label:'Statistiques', icon:'chart',     to:'/statistiques' },
-              { label:'Réglages',     icon:'settings',  to:'/reglages'     },
+            {[
+              ...(isAdminMode ? [
+                { label:'Historique',   icon:'history',   to:'/historique'   },
+                { label:'Marketing',    icon:'megaphone', to:'/marketing'    },
+                { label:'Statistiques', icon:'chart',     to:'/statistiques' },
+                { label:'Réglages',     icon:'settings',  to:'/reglages'     },
+              ] : []),
+              // Partager mon site (lien public + QR inscription) — visible
+              // aussi pour les employes pour faciliter le travail terrain.
+              { label:'Partager mon site', icon:'share',    to:'/partager'    },
             ].map(it => (
               <button key={it.to}
                       onClick={() => { setPlusOpen(false); navigate(it.to); }}
@@ -1467,9 +1480,7 @@ function BottomNav({ theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuit
                 <Icon name="chevronRight" size={14} color={t.muted}/>
               </button>
             ))}
-            {isAdminMode && (
-              <div style={{ height:'0.5px', background:t.separator, margin:'6px 6px' }}/>
-            )}
+            <div style={{ height:'0.5px', background:t.separator, margin:'6px 6px' }}/>
             {/* Bascule mode admin (cohérent avec sidebar desktop). */}
             {!isAdminMode ? (
               <button onClick={() => { setPlusOpen(false); onRequestAdmin && onRequestAdmin(); }}
@@ -2540,9 +2551,11 @@ export default function App() {
       <Route path="/reglages"     element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
       {/* Abonnement plateforme FlowIA — choix plan + Stripe Customer Portal. */}
       <Route path="/abonnement"   element={<RequireAdminMode><Subscription/></RequireAdminMode>}/>
-      {/* Partage du lien public — page dédiée plutôt qu'une modale (évite
-          les bugs de superposition rencontrés depuis la sidebar sticky). */}
-      <Route path="/partager"     element={<RequireAdminMode><PartagerSite/></RequireAdminMode>}/>
+      {/* Partage du lien public + QR inscription client — page accessible
+          aux ADMINS et aux EMPLOYES (pas de RequireAdminMode). Permet a un
+          employe en boutique de partager le lien ou afficher le QR pour
+          creer une fiche client rapidement. */}
+      <Route path="/partager"     element={<PartagerSite/>}/>
       {/* Racine : en mode admin → /dashboard, sinon /agenda. Catch-all idem.
           Exception : si l'utilisateur arrive d'un CTA marketing avec
           ?plan=...&period=... encodé dans /register, AuthFlow a déposé un

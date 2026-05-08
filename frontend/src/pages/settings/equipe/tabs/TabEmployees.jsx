@@ -111,6 +111,20 @@ export default function TabEmployees({ employees, onAdd, onUpd, onDel, onPatchEm
               <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0 }}>{emp.name}</p>
                 {emp.role && <p style={{ fontSize:11, color:t.muted, margin:0 }}>{emp.role}</p>}
+                {/* Hint visible uniquement quand la card est fermée pour
+                    indiquer au commerçant qu'il peut deplier pour modifier
+                    visibilite + droits + permissions credit. */}
+                {!isOpen && (
+                  <p style={{ fontSize:10, color:t.dim, margin:'2px 0 0',
+                              display:'flex', alignItems:'center', gap:4 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                         strokeLinecap="round" strokeLinejoin="round"
+                         style={{ width:10, height:10, flexShrink:0 }}>
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    Ouvrir pour modifier les droits et la visibilité
+                  </p>
+                )}
               </div>
               <div style={{ display:'flex', gap:4, flexShrink:0 }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => setPinModal(emp)} title="Gerer le code PIN"

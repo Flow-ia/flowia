@@ -1,19 +1,18 @@
-// PartagerSite.jsx — page /partager (admin commerçant). Diffusion en 1 clic
-// du lien public de réservation sur les réseaux sociaux.
+// PartagerSite.jsx — page /partager. Accessible aux ADMINS et aux EMPLOYÉS
+// (volontairement publique pour faciliter le travail terrain : un employé
+// peut diffuser le lien à un client en boutique, ou imprimer/montrer le QR
+// d'inscription rapide pour créer une fiche client en 10 s).
+//
+// Sections :
+//   1. Diffusion réseaux sociaux : Copier / WhatsApp / Facebook / Instagram
+//      / SMS / Web Share API natif si supporté.
+//   2. QR inscription rapide client (composant QRCard partagé) : utilisable
+//      en vitrine ou au comptoir, scan -> fiche client cree.
 //
 // Pourquoi une page et pas une modale : la modale rendue depuis la sidebar
 // (DesktopSidebar avec position:sticky) restait piégée dans le stacking
 // context de la sidebar et passait derrière le contenu principal sur
-// certaines pages (ex /abonnement). Une vraie page route évite tout
-// problème de superposition et offre plus d'espace pour les explications.
-//
-// Actions :
-//   - Copier le lien (clipboard)
-//   - WhatsApp (wa.me deep-link)
-//   - Facebook (sharer.php)
-//   - Instagram (copie + tip "collez dans bio/story" — pas d'API publique URL)
-//   - SMS (sms:?body= sur mobile, fallback copie sur desktop)
-//   - Web Share API natif si supporté (navigator.share)
+// certaines pages (ex /abonnement).
 import { useEffect, useState } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
@@ -21,6 +20,7 @@ import { Toast, useToast } from '../components/UI';
 import { PageHeader } from './reglages/shared';
 import { bookingApi } from '../utils/api';
 import { getBookingUrl } from '../utils/publicUrl';
+import QRCard from './settings/QRCard';
 
 // Brand SVG paths (24x24 viewBox).
 const BRAND = {
@@ -237,6 +237,17 @@ export default function PartagerSite() {
           </div>
         </div>
 
+        {/* QR inscription rapide client — Affiche le QR + bouton telecharger
+            PNG + bouton copier le lien. Utile en boutique : un client scanne,
+            sa fiche est creee en 10 s. Visible aux admins ET aux employes. */}
+        <div>
+          <p style={{ margin: '0 0 10px', fontSize: 11, color: t.muted,
+                      textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            QR inscription rapide client
+          </p>
+          <QRCard theme={t} showToast={showToast}/>
+        </div>
+
         {/* Conseils */}
         <div style={{
           background: t.cardAlt, border: `0.5px solid ${t.border}`,
@@ -251,7 +262,7 @@ export default function PartagerSite() {
             <li>Ajoutez votre lien dans la bio Instagram et TikTok du salon.</li>
             <li>Épinglez-le en commentaire sur vos posts Facebook.</li>
             <li>Envoyez-le à vos clients fidèles par WhatsApp ou SMS lors d&apos;un changement de saison.</li>
-            <li>Imprimez le QR code (page Réglages &gt; Mon commerce) sur votre vitrine.</li>
+            <li>Imprimez le QR code ci-dessus et affichez-le en vitrine ou au comptoir.</li>
           </ul>
         </div>
       </div>
