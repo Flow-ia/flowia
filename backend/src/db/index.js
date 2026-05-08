@@ -1608,6 +1608,61 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_id_archived VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_account_disconnected_at TIMESTAMPTZ`);
 
+  // ── Escrow / hold des paiements en ligne avant reversement au commercant ──
+  // Modele : Direct Charges sur compte Connect (deja en place). Au lieu de
+  // payouts automatiques quotidiens vers l'IBAN du commercant, les fonds
+  // restent sur le balance Connect jusqu'a appointment_date + payout_hold_days.
+  // Si le RDV est annule / rembourse avant cette date, le payout n'a jamais
+  // lieu et le refund se fait depuis le balance Connect intact -> protection
+  // client (recoit son acompte) et protection commercant (anti-litige
+  // post-prestation : il a la preuve que le RDV a eu lieu si le payout est
+  // declenche). Cron quotidien (cf utils/releasePayouts.js) traite les rows
+  // status='pending' AND release_at <= NOW().
+  //
+  // Pour activer le hold, le compte Connect doit etre en payout manuel
+  // (`payout_schedule.interval='manual'`). Configure a l'onboarding pour les
+  // nouveaux comptes + endpoint admin de migration pour les anciens.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_hold_days INT NOT NULL DEFAULT 3`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_payout_hold_days_check') THEN
+        ALTER TABLE users ADD CONSTRAINT users_payout_hold_days_check
+          CHECK (payout_hold_days >= 0 AND payout_hold_days <= 30);
+      END IF;
+    END $$;
+  `);
+
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS appointment_payouts (
+      id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      appointment_id      UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+      user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      stripe_account_id   VARCHAR(255) NOT NULL,
+      payment_intent_id   VARCHAR(255) NOT NULL,
+      amount_cents        INT NOT NULL,
+      release_at          TIMESTAMPTZ NOT NULL,
+      released_at         TIMESTAMPTZ,
+      stripe_payout_id    VARCHAR(255),
+      cancelled_reason    VARCHAR(50),
+      stripe_error_message TEXT,
+      retry_count         INT NOT NULL DEFAULT 0,
+      status              VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','released','cancelled','failed')),
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  // 1 row max par appointment (idempotence sur webhook payment_intent.succeeded
+  // qui peut etre delivre 2x).
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_appt_payouts_appt
+    ON appointment_payouts(appointment_id)`);
+  // Cron : recherche rapide des payouts dus.
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appt_payouts_due
+    ON appointment_payouts(release_at) WHERE status = 'pending'`);
+  // Listings UI commercant : ses payouts par etat.
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appt_payouts_user_status
+    ON appointment_payouts(user_id, status, release_at DESC)`);
+
   // ── Sync Google Agenda (sortant FlowIA → Google) ────────────────────────
   // Le merchant connecte son compte Google via OAuth (scope calendar.events)
   // pour que les RDV crees dans FlowIA apparaissent automatiquement dans

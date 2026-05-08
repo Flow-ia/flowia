@@ -78,6 +78,15 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
   // Tente le refund Stripe avec stripeAccount = compte du merchant.
   // reason 'requested_by_customer' est l'enum Stripe pour ce cas (annulation
   // RDV cote merchant ou client). Metadata pour traçabilite.
+  //
+  // STRATEGIE B : refund_application_fee=true → la commission FlowIA
+  // (application_fee_amount preleve sur la charge initiale) est remboursee
+  // au commercant en meme temps que le refund client. C'est juste : si la
+  // prestation n'a pas eu lieu, FlowIA n'a pas a garder sa commission. Seuls
+  // les frais de traitement Stripe (~1,4% + 0,25€) restent a la charge du
+  // commercant — Stripe ne les rembourse JAMAIS depuis sept 2019 en EU,
+  // c'est inevitable. Le client lui recoit son montant integral.
+  // Cf. stripe.com/docs/refunds#standard-refunds.
   let succeeded = false;
   let stripeError = null;
   try {
@@ -86,10 +95,15 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
       {
         payment_intent: a.stripe_payment_intent_id,
         reason: 'requested_by_customer',
+        // Important : true (defaut Direct Charges) -> on rend l'application_fee
+        // au commercant. False -> FlowIA garderait sa commission (Planity-like).
+        // On a explicitement choisi STRATEGIE B (cf. CHANGELOG).
+        refund_application_fee: true,
         metadata: {
           appointment_id: a.id,
           flowia_reason: reason,
           source: 'auto_refund_on_cancel',
+          strategy: 'B_refund_app_fee',
         },
       },
       { stripeAccount: a.stripe_account_id }
