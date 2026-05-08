@@ -15,6 +15,7 @@ import Transactions from './pages/Transactions';
 // Settings.jsx supprime — l'app est entierement migree vers /reglages.
 // Les anciennes URLs /settings* sont redirigees ci-dessous via SettingsRedirect.
 import Subscription from './pages/Subscription';
+import PartagerSite from './pages/PartagerSite';
 import Reglages from './pages/reglages';
 import Marketing from './pages/marketing';
 import Statistiques from './pages/statistiques';
@@ -32,7 +33,6 @@ import { TabletModeProvider, useTabletMode } from './contexts/TabletModeProvider
 import { useAdminMode } from './contexts/AdminModeContext';
 import WhoEncashesModal from './components/WhoEncashesModal';
 import AdminPinModal from './components/AdminPinModal';
-import ShareSiteModal from './components/ShareSiteModal';
 import { registerAdminPinHandler, resolveAdminPinPrompt } from './utils/adminPinPrompt';
 
 // Palette paiements — pastels sobres (unifie avec Dashboard/Forms/Transactions)
@@ -1159,7 +1159,6 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdminMode } = useAdminMode();
-  const [shareOpen, setShareOpen] = useState(false);
 
   // Refonte 2026-05-06 : `match[]` débarrassé des préfixes /settings/* legacy.
   // SettingsRedirect (route /settings/*) continue de rediriger les anciens
@@ -1199,8 +1198,10 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
       items: [
         { id:'reglages',   label:'Réglages',   icon:'settings', to:'/reglages',    match:['/reglages'] },
         { id:'abonnement', label:'Abonnement', icon:'wallet',   to:'/abonnement',  match:['/abonnement'] },
-        // Action — pas de route. Ouvre ShareSiteModal monté en bas du composant.
-        { id:'partager',   label:'Partager mon site', icon:'share', action:'share', match:[] },
+        // Page dédiée — éviter une modale dans la sidebar (stacking context
+        // sticky causait une superposition derrière le contenu sur certaines
+        // pages comme /abonnement).
+        { id:'partager',   label:'Partager mon site', icon:'share', to:'/partager', match:['/partager'] },
       ],
     },
   ];
@@ -1231,12 +1232,8 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
 
   const NavRow = ({ it }) => {
     const active = activeId === it.id;
-    const onClick = () => {
-      if (it.action === 'share') { setShareOpen(true); return; }
-      if (it.to) navigate(it.to);
-    };
     return (
-      <button onClick={onClick}
+      <button onClick={() => it.to && navigate(it.to)}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
                        padding:'9px 12px', borderRadius:8, border:'none',
                        background: active ? t.card : 'transparent',
@@ -1364,9 +1361,6 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
           <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
         </button>
       </div>
-
-      <ShareSiteModal open={shareOpen} onClose={() => setShareOpen(false)}
-                      theme={t} businessName={user?.businessName}/>
     </div>
   );
 }
@@ -2546,6 +2540,9 @@ export default function App() {
       <Route path="/reglages"     element={<RequireAdminMode>{reglagesContent()}</RequireAdminMode>}/>
       {/* Abonnement plateforme FlowIA — choix plan + Stripe Customer Portal. */}
       <Route path="/abonnement"   element={<RequireAdminMode><Subscription/></RequireAdminMode>}/>
+      {/* Partage du lien public — page dédiée plutôt qu'une modale (évite
+          les bugs de superposition rencontrés depuis la sidebar sticky). */}
+      <Route path="/partager"     element={<RequireAdminMode><PartagerSite/></RequireAdminMode>}/>
       {/* Racine : en mode admin → /dashboard, sinon /agenda. Catch-all idem.
           Exception : si l'utilisateur arrive d'un CTA marketing avec
           ?plan=...&period=... encodé dans /register, AuthFlow a déposé un
