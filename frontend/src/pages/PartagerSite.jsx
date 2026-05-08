@@ -225,7 +225,9 @@ export default function PartagerSite() {
           )}
         </div>
 
-        {/* Grille des canaux */}
+        {/* Grille des canaux — boutons icone seule (logo centré, pas de
+            texte). Le label complet est dans l'attribut title (tooltip
+            navigateur) + aria-label pour l'accessibilite. */}
         <div>
           <p style={{ margin: '0 0 10px', fontSize: 11, color: t.muted,
                       textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -233,32 +235,29 @@ export default function PartagerSite() {
           </p>
           <div style={{
             display: 'grid', gap: 10,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 80px), 1fr))',
           }}>
             {channels.map(c => (
               <button key={c.key} onClick={c.onClick} disabled={!url || loading}
-                      style={{ display: 'flex', alignItems: 'center', gap: 12,
-                               padding: '14px 14px', borderRadius: 12,
-                               background: t.card, color: t.text,
-                               border: `0.5px solid ${t.border}`,
+                      title={c.label}
+                      aria-label={c.label}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
+                               aspectRatio: '1 / 1', padding: 0,
+                               borderRadius: 14,
+                               background: `${c.color}15`,
+                               border: `0.5px solid ${c.color}33`,
                                cursor: url ? 'pointer' : 'not-allowed',
-                               fontFamily: 'inherit', textAlign: 'left',
+                               fontFamily: 'inherit',
                                opacity: url ? 1 : 0.5,
-                               transition: 'background 0.15s ease, border-color 0.15s ease' }}
-                      onMouseEnter={e => { if (url) { e.currentTarget.style.background = t.cardAlt; e.currentTarget.style.borderColor = t.borderStrong || t.border; } }}
-                      onMouseLeave={e => { if (url) { e.currentTarget.style.background = t.card; e.currentTarget.style.borderColor = t.border; } }}>
-                <span style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                               background: `${c.color}15` }}>
+                               transition: 'background 0.15s ease, border-color 0.15s ease, transform 0.15s ease' }}
+                      onMouseEnter={e => { if (url) { e.currentTarget.style.background = `${c.color}25`; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                      onMouseLeave={e => { if (url) { e.currentTarget.style.background = `${c.color}15`; e.currentTarget.style.transform = 'translateY(0)'; } }}>
+                {/* Le c.icon est rendu en taille `size=18` par defaut depuis
+                    BrandSvg / SmsBubble. On le surdimensionne via wrapper
+                    pour un visuel plus grand sans modifier le composant. */}
+                <span style={{ display: 'inline-flex', transform: 'scale(1.7)',
+                               color: c.color }}>
                   {c.icon}
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 14, fontWeight: 500, color: t.text }}>
-                    {c.label}
-                  </span>
-                  <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 2 }}>
-                    {c.desc}
-                  </span>
                 </span>
               </button>
             ))}
