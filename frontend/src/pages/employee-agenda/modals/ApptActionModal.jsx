@@ -962,7 +962,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             <div>
               <Label>Mode de paiement</Label>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                {PAY_OPTIONS.map(p => {
+                {PAY_OPTIONS.filter(p => !p.lookupOnly).map(p => {
                   const active = payMethod === p.id;
                   return (
                     <button
@@ -1000,7 +1000,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                   <select value={row.state.method}
                     onChange={e => row.set(p => ({ ...p, method: e.target.value }))}
                     style={{ ...inputStyle, padding:'10px 12px' }}>
-                    {PAY_OPTIONS.map(p => (
+                    {PAY_OPTIONS.filter(p => !p.lookupOnly).map(p => (
                       <option key={p.id} value={p.id}>{p.label}</option>
                     ))}
                   </select>

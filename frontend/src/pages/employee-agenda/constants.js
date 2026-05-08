@@ -25,9 +25,18 @@ export const STATUS_GRID = {
   no_show:   { bg:'#fff7ed', bd:'#fb923c', tx:'#9a3412' },
 };
 
+// PAY_OPTIONS : moyens de paiement disponibles cote merchant pour
+// encaissement MANUEL (caisse au comptoir). 'card_online' n'est PAS dans
+// les options de selection (merchant ne le choisit jamais manuellement —
+// c'est Stripe qui le set automatiquement quand le client paie via la page
+// de reservation), mais il est present dans la table de lookup pour qu'on
+// puisse afficher 'En ligne' quand on rencontre cette valeur dans le DB
+// (historique, stats, modale RDV detail).
 export const PAY_OPTIONS = [
-  { id:'cash',     label:'Especes',  icon:'💵' },
-  { id:'card',     label:'Carte',    icon:'💳' },
-  { id:'transfer', label:'Virement', icon:'🏦' },
-  { id:'other',    label:'Autre',    icon:'🔄' },
+  { id:'cash',        label:'Especes',  icon:'💵' },
+  { id:'card',        label:'Carte',    icon:'💳' },
+  { id:'transfer',    label:'Virement', icon:'🏦' },
+  { id:'other',       label:'Autre',    icon:'🔄' },
+  // Lookup-only : pas affiche dans le selecteur d'encaissement.
+  { id:'card_online', label:'En ligne', icon:'🔒', lookupOnly:true },
 ];

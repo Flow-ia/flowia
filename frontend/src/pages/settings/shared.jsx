@@ -4,14 +4,24 @@ export const nd = (d) => { if (!d) return ''; const s = typeof d === 'string' ? 
 export const fmt = (n) => Number(n || 0).toFixed(2);
 export const ML = ['janvier','fevrier','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','decembre'];
 
+// PAY_INFO : table de mapping payment_method (DB) -> affichage UI.
+// 'card_online' = nouveau type dedie aux paiements Stripe Connect (acompte
+// ou paiement integral fait via la page de reservation client). Visuellement
+// distinct de 'card' (= encaissement CB au comptoir) avec couleur cyan
+// pour separer comptablement (Planity Pro fait pareil : 'Paiement en ligne'
+// est sa propre categorie en stats / historique).
 export const PAY_INFO = {
-  cash:     { label: 'Especes',  color: '#22c55e', bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.2)',  Ic: I.Wallet },
-  card:     { label: 'Carte',    color: '#1a73e8', bg: 'rgba(26,115,232,0.1)', border: 'rgba(26,115,232,0.2)', Ic: I.CreditCard },
-  transfer: { label: 'Virement', color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)',  border: 'rgba(139,92,246,0.2)',  Ic: I.Bank },
-  other:    { label: 'Autre',    color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.2)',  Ic: I.MoreH },
-  multi:    { label: 'Mixte',    color: '#7c3aed', bg: 'rgba(124,58,237,0.1)',  border: 'rgba(124,58,237,0.25)', Ic: I.MoreH },
+  cash:        { label: 'Especes',    color: '#22c55e', bg: 'rgba(34,197,94,0.1)',   border: 'rgba(34,197,94,0.2)',   Ic: I.Wallet },
+  card:        { label: 'Carte',      color: '#1a73e8', bg: 'rgba(26,115,232,0.1)',  border: 'rgba(26,115,232,0.2)',  Ic: I.CreditCard },
+  card_online: { label: 'En ligne',   color: '#0891b2', bg: 'rgba(8,145,178,0.10)',  border: 'rgba(8,145,178,0.25)',  Ic: I.CreditCard },
+  transfer:    { label: 'Virement',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)',  border: 'rgba(139,92,246,0.2)',  Ic: I.Bank },
+  other:       { label: 'Autre',      color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.2)',  Ic: I.MoreH },
+  multi:       { label: 'Mixte',      color: '#7c3aed', bg: 'rgba(124,58,237,0.1)',  border: 'rgba(124,58,237,0.25)', Ic: I.MoreH },
 };
-export const PAY_KEYS = ['cash','card','transfer','other'];
+// PAY_KEYS : ordre d'affichage dans les stats par moyen de paiement (caisse
+// historique). 'card_online' inclus pour qu'il apparaisse dans les
+// repartitions CA (sinon il etait lump dans 'other').
+export const PAY_KEYS = ['cash','card','card_online','transfer','other'];
 
 export function Card({ children, className = '', style = {}, theme }) {
   return (
