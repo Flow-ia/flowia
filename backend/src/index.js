@@ -776,6 +776,18 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                      () => releasePayoutsCron(dbPool));
     }
 
+    // NO-SHOW AUTOMATIQUE : marque cancelled_by='system' sur les RDV passes
+    // depuis +24h non encaisses. Acompte conserve (pas de refund). Le cron
+    // releasePayouts libere ensuite les fonds vers le commercant a J+3.
+    // Frequence horaire : la fenetre de grace est large (24h) donc 1x/h
+    // suffit largement et evite tout risque de course avec une action
+    // commercant tardive.
+    {
+      const { runAutoNoShow } = require('./utils/autoNoShow');
+      scheduleLocked(60 * 60 * 1000, 'cron:no_show:auto', 'no-show',
+                     () => runAutoNoShow(dbPool));
+    }
+
     // Purge automatique des creances orphelines (RGPD Art. 17.3.e)
     // dont la duree de retention legale est depassee. Quotidien suffit
     // (on ne purge pas a la seconde pres apres 2 ans).
