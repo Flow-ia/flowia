@@ -826,6 +826,8 @@ export const connectApi = {
   getPaymentConfig:  ()  => request('/stripe-connect/payment-config'),
   // Escrow : liste des payouts (en attente / liberes / annules) du merchant.
   getPayouts:        (status) => request(`/stripe-connect/payouts${status ? `?status=${status}` : ''}`),
+  // Stats KPI paiements en ligne sur periode glissante (7/30/90 jours).
+  getPerformanceStats: (period = 30) => request(`/stripe-connect/performance-stats?period=${period}`),
   updatePaymentConfig: (b) => request('/stripe-connect/payment-config', {
     method: 'PUT', body: JSON.stringify(b),
   }),

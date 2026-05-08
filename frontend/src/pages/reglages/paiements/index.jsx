@@ -245,6 +245,11 @@ export default function Paiements() {
             <PaymentConfigSection t={t} showToast={showToast}/>
           )}
 
+          {/* Performances paiements en ligne (KPI 7/30/90j) */}
+          {status === 'connected' && (
+            <PerformancePaymentsSection t={t} showToast={showToast}/>
+          )}
+
           {/* Politique annulation + delai escrow + reversements (visibles
               meme si Stripe pas encore connecte pour que le commercant
               voie ce qui l'attend). */}
@@ -382,6 +387,154 @@ function CancellationPolicySection({ t, showToast }) {
       )}
     </section>
   );
+}
+
+// ─── Performances paiements en ligne ────────────────────────────────────────
+// 4 KPI synthetiques sur periode glissante (7/30/90 jours) : CA net en ligne,
+// RDV payes, remboursements, no-show automatiques. Aide le commercant a
+// suivre l'efficacite de son acompte (no-show vs RDV honores).
+function PerformancePaymentsSection({ t, showToast }) {
+  const [period, setPeriod] = useState(30);
+  const [data, setData]     = useState(null);
+  const [loading, setLoad]  = useState(true);
+
+  const load = async (p) => {
+    setLoad(true);
+    try {
+      const r = await connectApi.getPerformanceStats(p);
+      setData(r);
+    } catch (e) {
+      showToast && showToast(e.message || 'Erreur chargement performances.', 'error');
+    } finally { setLoad(false); }
+  };
+  useEffect(() => { load(period); /* eslint-disable-next-line */ }, [period]);
+
+  const fmtEur = (cents) => (Math.round(cents) / 100).toFixed(2).replace('.', ',') + ' €';
+
+  if (loading && !data) {
+    return (
+      <section style={cardStyle(t)}>
+        <div style={{ height: 12, width: 220, background: t.cardAlt,
+                      borderRadius: 6, marginBottom: 14 }}/>
+        <div style={{ height: 90, width: '100%', background: t.cardAlt,
+                      borderRadius: 10 }}/>
+      </section>
+    );
+  }
+
+  const d = data || {};
+  const periods = [7, 30, 90];
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={{ ...panelHeader, justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={dot('#0891b2')}/>
+          <span style={panelLabel(t)}>{"Performances paiements en ligne"}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {periods.map(p => (
+            <button key={p} type="button"
+                    onClick={() => setPeriod(p)}
+                    disabled={loading}
+                    style={periodBtn(t, period === p)}>
+              {p === 7 ? '7 j' : p === 30 ? '30 j' : '90 j'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={kpiGrid}>
+        {/* CA net (revenus - remboursements) */}
+        <KpiCard t={t}
+                 label="Encaissé en ligne (net)"
+                 value={fmtEur(d.net_revenue_cents || 0)}
+                 sub={d.gross_revenue_cents
+                   ? `${fmtEur(d.gross_revenue_cents)} brut${d.refund_amount_cents ? ` − ${fmtEur(d.refund_amount_cents)} remboursé` : ''}`
+                   : 'Aucun encaissement sur la période.'}
+                 accent="#0891b2"/>
+
+        {/* RDV payes en ligne */}
+        <KpiCard t={t}
+                 label="RDV payés en ligne"
+                 value={String(d.online_paid_count || 0)}
+                 sub={(d.online_paid_count || 0) === 0
+                   ? "Aucun paiement en ligne sur la période."
+                   : `Acomptes ou paiements intégraux confirmés.`}
+                 accent="#0891b2"/>
+
+        {/* Remboursements */}
+        <KpiCard t={t}
+                 label="Remboursements"
+                 value={String(d.refund_count || 0)}
+                 sub={(d.refund_count || 0) === 0
+                   ? "Aucun remboursement sur la période."
+                   : `${fmtEur(d.refund_amount_cents || 0)} remboursés au total.`}
+                 accent="#9ca3af"/>
+
+        {/* No-show automatiques */}
+        <KpiCard t={t}
+                 label="No-show automatiques"
+                 value={String(d.no_show_auto_count || 0)}
+                 sub={(d.no_show_auto_count || 0) === 0
+                   ? "Aucun no-show systématique. Vos clients honorent leurs RDV."
+                   : `RDV passés non honorés, marqués automatiquement (acompte conservé).`}
+                 accent="#92400e"/>
+      </div>
+
+      {/* Detail annulations sous-jacentes (optionnel, ligne discrete) */}
+      {((d.cancelled_client_count || 0) + (d.cancelled_merchant_count || 0)) > 0 && (
+        <div style={{ marginTop: 14, paddingTop: 12,
+                      borderTop: `0.5px solid ${t.separator}`,
+                      display: 'flex', gap: 16, flexWrap: 'wrap',
+                      fontSize: 12, color: t.muted }}>
+          <span>{"Annulations client : "}<strong style={{ color: t.text, fontWeight: 500 }}>{d.cancelled_client_count || 0}</strong></span>
+          <span>{"Annulations salon : "}<strong style={{ color: t.text, fontWeight: 500 }}>{d.cancelled_merchant_count || 0}</strong></span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function KpiCard({ t, label, value, sub, accent }) {
+  return (
+    <div style={{
+      padding: '14px 16px', borderRadius: 10,
+      background: t.cardAlt, border: `0.5px solid ${t.border}`,
+      borderLeft: `2px solid ${accent}`,
+      display: 'flex', flexDirection: 'column', gap: 4,
+    }}>
+      <p style={{ margin: 0, fontSize: 11, color: t.muted, fontWeight: 500,
+                  textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        {label}
+      </p>
+      <p style={{ margin: 0, fontSize: 22, fontWeight: 500, color: t.text,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  lineHeight: 1.2 }}>
+        {value}
+      </p>
+      <p style={{ margin: 0, fontSize: 12, color: t.muted, lineHeight: 1.4 }}>
+        {sub}
+      </p>
+    </div>
+  );
+}
+
+const kpiGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+  gap: 10,
+};
+
+function periodBtn(t, active) {
+  return {
+    padding: '4px 10px', fontSize: 12, fontWeight: 500,
+    background: active ? t.text : 'transparent',
+    color:      active ? t.canvas : t.text,
+    border: active ? `1px solid ${t.text}` : `0.5px solid ${t.border}`,
+    borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit',
+    transition: 'background 0.15s, color 0.15s',
+  };
 }
 
 // ─── Mes reversements (escrow) ──────────────────────────────────────────────

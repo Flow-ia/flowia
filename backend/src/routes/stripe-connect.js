@@ -252,6 +252,71 @@ router.get('/payouts', authMiddleware, async (req, res) => {
   }
 });
 
+// ── GET /api/stripe-connect/performance-stats ─────────────────────────────
+// Agrege les KPI paiements en ligne du merchant sur une periode glissante
+// (7 / 30 / 90 jours). Sert a la section "Performances" dans /reglages/paiements.
+//
+// Sources de verite :
+//   - transactions (source='rdv_online') : revenus paiements en ligne (positifs)
+//   - transactions (source='rdv_refund') : remboursements (amount NEGATIF)
+//   - appointments.cancelled_by + cancelled_at : tracabilite annulations
+//
+// Filtre temporel : par tx.date pour revenue/refund (vue cash-flow) ; par
+// cancelled_at pour annulations (date effective de l'action).
+router.get('/performance-stats', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const allowed = [7, 30, 90];
+    const period = allowed.includes(parseInt(req.query.period, 10))
+      ? parseInt(req.query.period, 10)
+      : 30;
+
+    // Revenue + refunds depuis les transactions. amount est en EUR (numeric)
+    // -> on multiplie par 100 cote SQL pour exposer en cents au frontend
+    // (coherent avec /payouts qui expose deja amount_cents).
+    const { rows: txR } = await pool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN source='rdv_online' THEN amount ELSE 0 END), 0)::numeric AS gross_revenue,
+        COALESCE(SUM(CASE WHEN source='rdv_refund' THEN -amount ELSE 0 END), 0)::numeric AS refund_amount,
+        COUNT(*) FILTER (WHERE source='rdv_online') AS online_paid_count,
+        COUNT(*) FILTER (WHERE source='rdv_refund') AS refund_count
+        FROM transactions
+       WHERE user_id = $1
+         AND date >= (CURRENT_DATE - ($2 || ' days')::interval)
+    `, [userId, String(period)]);
+
+    // Annulations par categorie sur la periode (cancelled_at = date effective).
+    const { rows: cxR } = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE cancelled_by='system')   ::int AS no_show_auto,
+        COUNT(*) FILTER (WHERE cancelled_by='client')   ::int AS cancelled_client,
+        COUNT(*) FILTER (WHERE cancelled_by='merchant') ::int AS cancelled_merchant
+        FROM appointments
+       WHERE user_id = $1
+         AND cancelled_at IS NOT NULL
+         AND cancelled_at >= NOW() - ($2 || ' days')::interval
+    `, [userId, String(period)]);
+
+    const gross  = parseFloat(txR[0]?.gross_revenue || 0);
+    const refund = parseFloat(txR[0]?.refund_amount || 0);
+
+    res.json({
+      period_days: period,
+      online_paid_count:        parseInt(txR[0]?.online_paid_count || 0, 10),
+      gross_revenue_cents:      Math.round(gross * 100),
+      refund_count:             parseInt(txR[0]?.refund_count || 0, 10),
+      refund_amount_cents:      Math.round(refund * 100),
+      net_revenue_cents:        Math.round((gross - refund) * 100),
+      no_show_auto_count:       cxR[0]?.no_show_auto       || 0,
+      cancelled_client_count:   cxR[0]?.cancelled_client   || 0,
+      cancelled_merchant_count: cxR[0]?.cancelled_merchant || 0,
+    });
+  } catch (e) {
+    console.error('[CONNECT GET performance-stats ERR]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ── GET /api/stripe-connect/payment-config ─────────────────────────────────
 // Retourne la config paiement RDV du marchand : active/inactif, politique
 // (optionnel/obligatoire), pourcentage d'acompte.
