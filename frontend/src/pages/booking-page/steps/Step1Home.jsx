@@ -13,7 +13,9 @@ export function Step1Home({
   setView, navigate, setSelSvc, setSelEmp, setSelDate, setSelSlot, setMonthKey, goToStep,
 }) {
   return (
-    <div style={{ animation:'fadeIn .2s ease' }}>
+    // display:flex column → permet de réordonner les sections via CSS `order`
+    // sur mobile (Commentaires Google poussé en bas via .bk-section-avis-reorder).
+    <div style={{ animation:'fadeIn .2s ease', display:'flex', flexDirection:'column' }}>
 
       {/* Infos commerçant mobile */}
       <div className="bk-mo" style={{ marginBottom:16, padding:20,
@@ -150,9 +152,14 @@ export function Step1Home({
         </div>
       </section>
 
-      {/* ── SECTION COMMENTAIRES Google ── */}
+      {/* ── SECTION COMMENTAIRES Google ──
+          className `bk-section-avis-reorder` : sur desktop, ordre DOM normal
+          (5e position, après Équipe). Sur mobile, poussée en avant-dernière
+          position (order:90) pour que le client voie d'abord les infos
+          essentielles (prestations, équipe, photos, adresse) puis les avis. */}
       {business?.google_business_url && (
-        <section id="section-avis" style={{ marginBottom:24 }}>
+        <section id="section-avis" className="bk-section-avis-reorder"
+                 style={{ marginBottom:24 }}>
           <h2 style={{ fontSize:20, fontWeight: 500, color:th.text,
             margin:'0 0 16px', letterSpacing:'-0.02em' }}>Commentaires</h2>
 
@@ -387,8 +394,11 @@ export function Step1Home({
         })()}
       </section>
 
-      {/* ── FOOTER ── */}
-      <div className="bk-footer-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
+      {/* ── FOOTER ──
+          className `bk-section-footer-reorder` : sur mobile, order:99 pour
+          rester en dernier sous la section Commentaires (qui est order:90). */}
+      <div className="bk-footer-grid bk-section-footer-reorder"
+           style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24,
         paddingTop:24, borderTop: `0.5px solid ${th.border}` }}>
         <div>
           <p style={{ fontSize:14, fontWeight: 500, color:th.text, margin:'0 0 10px' }}>

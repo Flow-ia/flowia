@@ -884,10 +884,27 @@ export default function BookingPage({ slug }) {
         *{ box-sizing:border-box }
         /* Règles layout spécifiques à la vue booking (sidebar, grid services,
            footer, étapes). Les styles NavBar/drawer sont auto-inclus par le
-           composant NavBar pour fonctionner sur toutes les vues. */
+           composant NavBar pour fonctionner sur toutes les vues — MAIS la
+           NavBar est masquée sous /marketplace/* (shell marketplace fournit
+           son propre header). On duplique donc ici les règles desktop-only/
+           mobile-only critiques (.bk-do / .bk-mo) pour qu'elles s'appliquent
+           dans tous les contextes. */
+        @media(min-width:768px){
+          .bk-mo{ display:none!important }
+        }
         @media(max-width:767px){
+          .bk-do{ display:none!important }
+          /* SideCard masquée sur mobile (le bloc bk-mo dans Step1Home reprend
+             les memes infos en version compacte, donc evite le doublon). La
+             règle .bk-sb est conservée par sécurité au cas où une variante
+             affiche la sidebar sur mobile. */
           .bk-2c{ flex-direction:column!important }
           .bk-sb{ order:-1!important; width:100%!important; position:static!important; padding-top:12px!important }
+          /* Commentaires Google poussés en bas sur mobile (avant-dernier),
+             footer en dernier. Step1Home wrapper est en flex column donc
+             les ordres s'appliquent. */
+          .bk-section-avis-reorder{ order:90!important }
+          .bk-section-footer-reorder{ order:99!important }
           .bk-footer-grid{ grid-template-columns:1fr!important; gap:16px!important }
           .bk-iframe{ height:180px!important }
           .bk-slots{ grid-template-columns:repeat(2,1fr)!important }
