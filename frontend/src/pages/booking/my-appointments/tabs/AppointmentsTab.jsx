@@ -1,8 +1,16 @@
 // src/pages/booking/my-appointments/tabs/AppointmentsTab.jsx
 // Onglet "Mes RDV" : sous-onglets Futurs / Passés / Annulés + liste des RDV.
+// (1) Pagination 5 RDV / page par sous-onglet (evite de tout afficher d'un
+//     coup sur les vieux comptes avec des dizaines de RDV).
+// (2) Clic sur une carte -> vue detail AppointmentDetailCard (memo pattern
+//     que VisitsTab pour les passages).
+import { useState, useEffect } from 'react';
 import { Spinner } from '../../shared';
 import { getDisplayStatus, fmtApptDate } from '../helpers';
 import { I } from '../../../../utils/icons';
+import { AppointmentDetailCard } from '../components/AppointmentDetailCard';
+
+const APPTS_PAGE_SIZE = 5;
 
 export function AppointmentsTab({
   th,
@@ -13,13 +21,44 @@ export function AppointmentsTab({
   onCancel,
   onNewBooking,
 }) {
+  // Vue detail : si selectedAppt set, on affiche le detail au lieu de la liste.
+  const [selectedAppt, setSelectedAppt] = useState(null);
+  // Pagination : 1 indexed (page 1 = 5 premiers RDV).
+  const [page, setPage] = useState(1);
+  // Reset a la page 1 quand on change de sous-onglet ou ferme le detail
+  // (sinon on reste sur une page potentiellement vide).
+  useEffect(() => { setPage(1); }, [rdvTab]);
+
   if (loading) return <div style={{paddingTop:40}}><Spinner color="#6366f1"/></div>;
+
+  // Vue detail : pas de liste, juste la card detail + retour.
+  if (selectedAppt) {
+    // On re-resolve le RDV depuis la liste appts pour avoir les donnees a
+    // jour (ex: apres un cancel, le contexte est merge dans appts par le
+    // parent et on veut afficher 'Annule par vous' immediatement).
+    const fresh = appts.find(a => a.id === selectedAppt.id) || selectedAppt;
+    return (
+      <AppointmentDetailCard
+        appt={fresh}
+        th={th}
+        onBack={() => setSelectedAppt(null)}
+        onCancel={onCancel}
+      />
+    );
+  }
 
   // Grouper les RDV par catégorie
   const apptsFuturs   = appts.filter(a => getDisplayStatus(a).group === 'futurs');
   const apptsPassees  = appts.filter(a => getDisplayStatus(a).group === 'passes');
   const apptsAnnulees = appts.filter(a => getDisplayStatus(a).group === 'annules');
   const currentAppts = rdvTab === 'futurs' ? apptsFuturs : rdvTab === 'passes' ? apptsPassees : apptsAnnulees;
+
+  // Pagination cote client (les 200 RDV de l'api sont tous deja recus mais
+  // on n'en affiche que 5 par page pour eviter les listes interminables).
+  const totalPages = Math.max(1, Math.ceil(currentAppts.length / APPTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * APPTS_PAGE_SIZE;
+  const pageAppts = currentAppts.slice(startIdx, startIdx + APPTS_PAGE_SIZE);
 
   return (
     <div>
@@ -85,16 +124,24 @@ export function AppointmentsTab({
         </div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          {currentAppts.map(a => {
+          {pageAppts.map(a => {
             const st = getDisplayStatus(a);
             return (
-              <div key={a.id} style={{
+              <div key={a.id}
+                onClick={() => setSelectedAppt(a)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedAppt(a); } }}
+                role="button" tabIndex={0}
+                style={{
                 background: th.card,
                 border: `0.5px solid ${th.border}`,
                 borderLeft: `2px solid ${st.color}`,
                 borderRadius: 12, padding: 16,
                 opacity: st.group !== 'futurs' ? 0.92 : 1,
-              }}>
+                cursor: 'pointer',
+                transition: 'background .15s, border-color .15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; }}
+              onMouseLeave={e => { e.currentTarget.style.background = th.card; }}>
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14 }}>
                   {/* ── Bloc info (gauche) ── */}
                   <div style={{ flex:1, minWidth:0 }}>
@@ -142,9 +189,11 @@ export function AppointmentsTab({
                         {Number(a.service_price).toFixed(2)} €
                       </p>
                     )}
-                    {/* Action : Annuler uniquement si le RDV est annulable */}
+                    {/* Action : Annuler uniquement si le RDV est annulable.
+                        stopPropagation pour ne pas declencher le clic carte
+                        qui ouvrirait le detail. */}
                     {st.canCancel && (
-                      <button onClick={() => onCancel(a)} style={{
+                      <button onClick={(e) => { e.stopPropagation(); onCancel(a); }} style={{
                         display:'flex', alignItems:'center', gap:6,
                         padding:'7px 11px', borderRadius:8,
                         background:th.card, color:th.text,
@@ -239,6 +288,37 @@ export function AppointmentsTab({
               </div>
             );
           })}
+          {/* Pagination — visible UNIQUEMENT si plus de 5 RDV. Affiche la
+              page courante + total + boutons Prev/Next. Disabled au bord. */}
+          {totalPages > 1 && (
+            <div style={{
+              marginTop:8, paddingTop:12,
+              borderTop: `0.5px solid ${th.border}`,
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              gap:10,
+            }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                style={{ padding:'8px 14px', borderRadius:9, cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
+                  background: th.cardAlt, border: `0.5px solid ${th.border}`,
+                  color: safePage <= 1 ? th.dim : th.text, fontWeight:500, fontSize:12,
+                  fontFamily:'inherit', opacity: safePage <= 1 ? 0.5 : 1 }}>
+                ← Précédent
+              </button>
+              <span style={{ fontSize:12, color:th.muted }}>
+                Page {safePage} / {totalPages}
+                <span style={{ color:th.dim }}> · {currentAppts.length} RDV</span>
+              </span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                style={{ padding:'8px 14px', borderRadius:9, cursor: safePage >= totalPages ? 'not-allowed' : 'pointer',
+                  background: th.cardAlt, border: `0.5px solid ${th.border}`,
+                  color: safePage >= totalPages ? th.dim : th.text, fontWeight:500, fontSize:12,
+                  fontFamily:'inherit', opacity: safePage >= totalPages ? 0.5 : 1 }}>
+                Suivant →
+              </button>
+            </div>
+          )}
           {rdvTab === 'futurs' && (
             <button onClick={onNewBooking}
               style={{ marginTop:6, width:'100%', padding:'14px', borderRadius:12,
