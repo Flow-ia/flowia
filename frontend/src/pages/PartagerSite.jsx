@@ -264,10 +264,9 @@ export default function PartagerSite() {
           </div>
         </div>
 
-        {/* QR inscription rapide — le composant QRCard a deja son propre
-            header interne ('QR inscription rapide' + description). Pas de
-            label section au-dessus pour eviter le doublon. */}
-        <QRCard theme={t} showToast={showToast}/>
+        {/* QR inscription rapide retire de la page : disponible uniquement
+            via le bouton 'QR inscription' a cote de 'Copier le lien' qui
+            ouvre une modale dediee. Evite le bruit visuel sur la page. */}
 
         {/* Conseils */}
         <div style={{
