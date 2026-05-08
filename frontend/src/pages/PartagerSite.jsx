@@ -16,7 +16,7 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
-import { Toast, useToast } from '../components/UI';
+import { Toast, useToast, Modal } from '../components/UI';
 import { PageHeader } from './reglages/shared';
 import { bookingApi } from '../utils/api';
 import { getBookingUrl } from '../utils/publicUrl';
@@ -69,6 +69,7 @@ export default function PartagerSite() {
   const [slug, setSlug]    = useState('');
   const [loading, setLoading] = useState(true);
   const [err, setErr]      = useState('');
+  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,16 +172,43 @@ export default function PartagerSite() {
                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {loading ? 'Chargement…' : (err ? err : (url || 'Lien indisponible'))}
             </span>
-            <button onClick={copyLink} disabled={!url || loading}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6,
-                             padding: '8px 14px', borderRadius: 8,
-                             cursor: url ? 'pointer' : 'not-allowed',
-                             background: t.text, color: t.bg,
-                             border: 'none', fontFamily: 'inherit',
-                             fontSize: 13, fontWeight: 500, opacity: url ? 1 : 0.5 }}>
-              <CopyIcon size={14} color={t.bg}/>
-              Copier le lien
-            </button>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button onClick={copyLink} disabled={!url || loading}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6,
+                               padding: '8px 14px', borderRadius: 8,
+                               cursor: url ? 'pointer' : 'not-allowed',
+                               background: t.text, color: t.bg,
+                               border: 'none', fontFamily: 'inherit',
+                               fontSize: 13, fontWeight: 500, opacity: url ? 1 : 0.5 }}>
+                <CopyIcon size={14} color={t.bg}/>
+                Copier le lien
+              </button>
+              {/* Bouton QR : ouvre une modale qui affiche le QR d'inscription
+                  rapide client. Acces immediat sans avoir a scroller jusqu'au
+                  bas de la page. */}
+              <button onClick={() => setQrOpen(true)} disabled={loading}
+                      title="Afficher le QR d'inscription rapide"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6,
+                               padding: '8px 14px', borderRadius: 8,
+                               cursor: 'pointer',
+                               background: t.cardAlt, color: t.text,
+                               border: `0.5px solid ${t.borderStrong || t.border}`,
+                               fontFamily: 'inherit',
+                               fontSize: 13, fontWeight: 500 }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                     strokeLinecap="round" strokeLinejoin="round"
+                     style={{ width: 14, height: 14, flexShrink: 0 }}>
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                  <rect x="14" y="14" width="3" height="3"/>
+                  <rect x="18" y="14" width="3" height="3"/>
+                  <rect x="14" y="18" width="3" height="3"/>
+                  <rect x="18" y="18" width="3" height="3"/>
+                </svg>
+                QR inscription
+              </button>
+            </div>
           </div>
 
           {canNativeShare && (
@@ -266,6 +294,19 @@ export default function PartagerSite() {
           </ul>
         </div>
       </div>
+
+      {/* Modale QR : ouverte par le bouton 'QR inscription' a cote de
+          'Copier le lien'. Reutilise le composant QRCard partage qui gere
+          deja canvas + telecharger PNG + copier lien court. */}
+      <Modal open={qrOpen} onClose={() => setQrOpen(false)}
+             title="QR d'inscription rapide" theme={t} maxW={520}>
+        <p style={{ fontSize: 13, color: t.muted, margin: '0 0 14px', lineHeight: 1.5 }}>
+          Affichez ce QR code en vitrine ou au comptoir. Vos clients le
+          scannent et leur fiche est créée en 10 secondes — vous pouvez
+          encaisser ou prendre RDV immédiatement.
+        </p>
+        <QRCard theme={t} showToast={showToast}/>
+      </Modal>
     </div>
   );
 }
