@@ -462,7 +462,16 @@ function NotifModal({ open, onClose, theme: t }) {
         && !/[\x00-\x1f]/.test(raw) && !raw.includes('\\')) {
       target = raw;
     } else if (n?.data?.appointment_id) {
-      target = '/agenda';
+      // Fallback intelligent : reconstruit le deep-link depuis les champs
+      // data.appointment_id + data.appt_date pour les anciennes notifs sans
+      // data.url. L'agenda saute alors au bon jour + ouvre le modal du RDV.
+      const apptId = n.data.appointment_id;
+      const apptDate = n.data.appt_date;
+      if (apptId && apptDate && /^\d{4}-\d{2}-\d{2}$/.test(apptDate)) {
+        target = `/agenda?date=${apptDate}&appt=${encodeURIComponent(apptId)}`;
+      } else {
+        target = '/agenda';
+      }
     }
     if (target) { onClose(); navigate(target); }
   };

@@ -1905,7 +1905,19 @@ function NotificationCenter({ theme: t, drawerSide = 'right' }) {
         && !/[\x00-\x1f]/.test(raw) && !raw.includes('\\')) {
       target = raw;
     } else if (n?.data?.appointment_id) {
-      target = '/agenda';
+      // Fallback intelligent : reconstruit le deep-link depuis les champs
+      // data.appointment_id + data.appt_date pour qu'une vieille notif
+      // (sans data.url) saute quand meme au bon jour de l'agenda + ouvre
+      // le modal du RDV. Sans ca, on retombait sur /agenda generique
+      // (jour courant) -> commercant devait cliquer pour scroller jusqu'au
+      // RDV manuellement.
+      const apptId = n.data.appointment_id;
+      const apptDate = n.data.appt_date; // 'YYYY-MM-DD' depuis push.js
+      if (apptId && apptDate && /^\d{4}-\d{2}-\d{2}$/.test(apptDate)) {
+        target = `/agenda?date=${apptDate}&appt=${encodeURIComponent(apptId)}`;
+      } else {
+        target = '/agenda';
+      }
     }
     if (target) {
       setOpen(false);
