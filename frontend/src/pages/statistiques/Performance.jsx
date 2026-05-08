@@ -5,14 +5,16 @@ import { useEffect, useState } from 'react';
 import TabStats from '../settings/TabStats';
 import { statsApi } from '../../utils/api';
 
-// Palette figée (INVENTAIRE §14, BRIEF COMMIT 6). Ne pas modifier sans
-// propagation dans App.jsx PM_CFG, Historique et Transactions.
+// Palette pastel — 'card_online' = paiement Stripe Connect (distinct de
+// 'card' qui est la CB au comptoir). Coherent avec PAY_INFO de shared.jsx
+// et PM_GRID_CFG de Dashboard/historique/caisse (commit 8906158).
 const PM_CFG = [
-  { id: 'cash',     label: 'Espèces',  text: '#065f46', bg: '#f0fdf4' },
-  { id: 'card',     label: 'Carte',    text: '#4338ca', bg: '#eef2ff' },
-  { id: 'transfer', label: 'Virement', text: '#0e7490', bg: '#ecfeff' },
-  { id: 'other',    label: 'Autre',    text: '#92400e', bg: '#fffbeb' },
-  { id: 'multi',    label: 'Multi',    text: '#3c3489', bg: '#eeedfe' },
+  { id: 'cash',        label: 'Espèces',  text: '#065f46', bg: '#f0fdf4' },
+  { id: 'card',        label: 'Carte',    text: '#4338ca', bg: '#eef2ff' },
+  { id: 'card_online', label: 'En ligne', text: '#0891b2', bg: '#cffafe' },
+  { id: 'transfer',    label: 'Virement', text: '#0e7490', bg: '#ecfeff' },
+  { id: 'other',       label: 'Autre',    text: '#92400e', bg: '#fffbeb' },
+  { id: 'multi',       label: 'Multi',    text: '#3c3489', bg: '#eeedfe' },
 ];
 
 const PERIODS = [

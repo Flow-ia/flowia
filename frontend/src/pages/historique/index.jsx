@@ -15,21 +15,13 @@ import { I } from '../../utils/icons';
 import { Confirm } from '../../components/UI';
 import { TransactionForm } from '../../components/Forms';
 import { disp } from '../../utils/dates';
-import { Card, nd, fmt, PAY_INFO, PAY_KEYS } from '../settings/shared';
+import { Card, nd, fmt, PAY_INFO } from '../settings/shared';
 import { Button, SegmentedControl } from '../../components/primitives';
 import { PageHeader } from '../reglages/shared';
 import { useTheme } from '../../hooks/useTheme';
 import { Toast, useToast } from '../../components/UI';
 
 const PAGE_SIZE = 10;
-
-const PM_GRID_CFG = {
-  cash:        { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
-  card:        { label: 'Carte',    color: '#4338ca', bg: '#eef2ff' },
-  card_online: { label: 'En ligne', color: '#0891b2', bg: '#cffafe' },
-  transfer:    { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
-  other:       { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
-};
 
 // Date ISO yyyy-mm-dd à n jours avant aujourd'hui (locale UTC-stable).
 function isoDaysAgo(n) {
@@ -109,40 +101,12 @@ export default function HistoriqueAdmin({
 
   useEffect(() => { setPage(0); }, [from, to, empF, pmF, typeF, search]);
 
-  // ── KPIs (basés sur les revenus filtrés). ─────────────────────────────────
+  // ── KPI minimal pour l'en-tete : CA NET periode + nb tx revenus.
+  // Les KPI agreges (chips paiement, prestations, panier, stats employe)
+  // ont ete deplaces dans /statistiques pour eviter le doublon (Planity-like :
+  // /historique = ledger, /statistiques = analyse).
   const revs = filtered.filter(tx => tx.type === 'revenue');
-  // kpiCA = somme totale (positifs - refunds negatifs) -> CA NET periode.
   const kpiCA = revs.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
-  // kpiPrest exclut les refunds (source rdv_refund ou amount<0). Idem
-  // kpiPanier : ne compte que les prestations effectives, pas les refunds.
-  const revsPos = revs.filter(tx =>
-    tx.source !== 'rdv_refund' && (parseFloat(tx.amount) || 0) >= 0);
-  const kpiPrest = revsPos.reduce((s, tx) => {
-    const itemsQty = Array.isArray(tx.items)
-      ? tx.items.reduce((a, i) => a + (parseInt(i.qty) || 1), 0)
-      : 0;
-    return s + (itemsQty || parseInt(tx.qty_total) || 1);
-  }, 0);
-  const kpiPanier = revsPos.length > 0 ? kpiCA / revsPos.length : 0;
-
-  // ── 4 moyens de paiement (multi éclatés). ─────────────────────────────────
-  const byPM = useMemo(() => {
-    const acc = {};
-    PAY_KEYS.forEach(k => { acc[k] = { count: 0, total: 0 }; });
-    const addPm = (pm, amount) => {
-      const key = PAY_KEYS.includes(pm) ? pm : 'other';
-      acc[key].count++;
-      acc[key].total += parseFloat(amount) || 0;
-    };
-    revs.forEach(tx => {
-      if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
-        tx.payments.forEach(p => { if (parseFloat(p.amount) > 0) addPm(p.method, p.amount); });
-      } else {
-        addPm(tx.payment_method, tx.amount);
-      }
-    });
-    return acc;
-  }, [revs]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe   = Math.min(page, totalPages - 1);
@@ -277,50 +241,18 @@ export default function HistoriqueAdmin({
           )}
         </div>
 
-        {/* ── Résumé compact : KPIs inline + chips paiement pastel (2 lignes) */}
-        <div style={{ ...card, gap:12 }}>
-          <div style={{ display:'flex', alignItems:'baseline',
-                        flexWrap:'wrap', gap:'6px 16px' }}>
-            <span style={{ fontSize:24, fontWeight:500, color:t.text,
-                           fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {fmt(kpiCA)} €
-            </span>
-            <span style={{ fontSize:11, color:t.muted, fontWeight:500,
-                           textTransform:'uppercase', letterSpacing:'0.04em' }}>
-              {"CA · " + revs.length + (revs.length > 1 ? ' transactions' : ' transaction')}
-            </span>
-            <span style={{ color:t.dim, fontSize:14 }}>{"·"}</span>
-            <span style={{ fontSize:14, color:t.text, fontWeight:500 }}>
-              <span style={{ color:t.muted, fontWeight:500 }}>{"Prestations "}</span>
-              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                             fontWeight:500 }}>{kpiPrest}</span>
-            </span>
-            <span style={{ color:t.dim, fontSize:14 }}>{"·"}</span>
-            <span style={{ fontSize:14, color:t.text, fontWeight:500 }}>
-              <span style={{ color:t.muted, fontWeight:500 }}>{"Panier "}</span>
-              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                             fontWeight:500 }}>{fmt(kpiPanier)} €</span>
-            </span>
-          </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-            {Object.entries(PM_GRID_CFG).map(([id, cfg]) => {
-              const v = byPM[id] || { count: 0, total: 0 };
-              return (
-                <span key={id}
-                      style={{ display:'inline-flex', alignItems:'center', gap:8,
-                               padding:'7px 14px', borderRadius:99,
-                               background:cfg.bg, color:cfg.color,
-                               fontSize:13, fontWeight:500 }}>
-                  {cfg.label}
-                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                 fontWeight:500 }}>
-                    {fmt(v.total)} €
-                  </span>
-                  <span style={{ opacity:0.75, fontSize:12 }}>{"· " + v.count}</span>
-                </span>
-              );
-            })}
-          </div>
+        {/* ── Total CA discret : pattern Planity (caisse = ledger). Les KPI
+              agreges (chips paiement, prestations, panier, stats employe)
+              vivent dans /statistiques pour eviter le doublon. ─────────────── */}
+        <div style={{ display:'flex', alignItems:'baseline', gap:'6px 12px',
+                      flexWrap:'wrap', padding:'0 4px' }}>
+          <span style={{ fontSize:18, fontWeight:500, color:t.text,
+                         fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+            {fmt(kpiCA)} €
+          </span>
+          <span style={{ fontSize:12, color:t.muted, fontWeight:500 }}>
+            {"CA sur la période · " + revs.length + (revs.length > 1 ? ' transactions' : ' transaction')}
+          </span>
         </div>
 
         {/* ── Recherche + segment type ───────────────────────────────────── */}

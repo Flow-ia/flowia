@@ -311,10 +311,12 @@ router.get('/today', async (req, res) => {
 
 // ── GET /api/stats/by-payment-method?period=today|week|month ─────────────────
 // Refonte FDS-2026 commit 6 : ventilation du CA par moyen de paiement pour
-// la page Statistiques. Les 5 méthodes renvoyées correspondent aux cards
-// pastel définies dans INVENTAIRE §14 : cash / card / transfer / other / multi.
+// la page Statistiques. Les 6 méthodes renvoyées correspondent aux cards
+// pastel : cash / card / card_online / transfer / other / multi.
+// 'card_online' = paiement Stripe Connect (acompte ou intégral cote client),
+// distinct de 'card' (CB au comptoir) — ajout STATUS.md §4 + commit 8906158.
 // Le payment_method `check` (historique, whitelisté en back) est agrégé dans
-// `other` pour rester aligné sur l'UI (5 cards, pas 6). Cache 2 min.
+// `other` pour rester aligné sur l'UI. Cache 2 min.
 router.get('/by-payment-method', async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -350,11 +352,12 @@ router.get('/by-payment-method', async (req, res) => {
 
     const EMPTY = { amount: 0, count: 0 };
     const by_method = {
-      cash:     { ...EMPTY },
-      card:     { ...EMPTY },
-      transfer: { ...EMPTY },
-      other:    { ...EMPTY },
-      multi:    { ...EMPTY },
+      cash:        { ...EMPTY },
+      card:        { ...EMPTY },
+      card_online: { ...EMPTY },
+      transfer:    { ...EMPTY },
+      other:       { ...EMPTY },
+      multi:       { ...EMPTY },
     };
     let total = 0;
     for (const r of rows) {
