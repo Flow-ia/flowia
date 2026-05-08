@@ -184,8 +184,8 @@ export function AppointmentsTab({
                     </span>
                   )}
                   <span style={{
-                    fontSize: 10, fontWeight: 500,
-                    padding: '2px 8px', borderRadius: 99,
+                    fontSize: 12, fontWeight: 500,
+                    padding: '4px 10px', borderRadius: 99,
                     background: st.bg, color: st.color,
                     border: `0.5px solid ${st.color}33`,
                     whiteSpace: 'nowrap',
