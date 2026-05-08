@@ -824,6 +824,8 @@ export const connectApi = {
   dashboardLink:     ()  => request('/stripe-connect/dashboard-link', { method: 'POST' }),
   disconnect:        ()  => request('/stripe-connect/disconnect',     { method: 'POST' }),
   getPaymentConfig:  ()  => request('/stripe-connect/payment-config'),
+  // Escrow : liste des payouts (en attente / liberes / annules) du merchant.
+  getPayouts:        (status) => request(`/stripe-connect/payouts${status ? `?status=${status}` : ''}`),
   updatePaymentConfig: (b) => request('/stripe-connect/payment-config', {
     method: 'PUT', body: JSON.stringify(b),
   }),

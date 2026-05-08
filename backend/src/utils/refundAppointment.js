@@ -123,6 +123,15 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
          SET payment_status = 'refunded', updated_at = NOW()
        WHERE id = $1
     `, [a.id]);
+    // Annule la row appointment_payouts en attente (escrow) pour que le
+    // cron releasePayouts ne tente pas un payout vers l'IBAN du commerçant
+    // alors que les fonds viennent d'etre rembourses au client.
+    try {
+      const { cancelAppointmentPayout } = require('./scheduleAppointmentPayout');
+      await cancelAppointmentPayout(pool, a.id, reason || 'refunded');
+    } catch (cancelErr) {
+      console.error('[refundAppointment] cancelAppointmentPayout', cancelErr.message);
+    }
     return { ok: true, refunded: true };
   }
 

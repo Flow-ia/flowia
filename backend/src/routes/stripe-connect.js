@@ -56,6 +56,16 @@ router.post('/onboard', authMiddleware, async (req, res) => {
         business_profile: {
           name: u.business_name || undefined,
         },
+        // ESCROW : payout schedule MANUAL pour que les fonds restent sur
+        // le balance Connect jusqu'a la liberation par le cron releasePayouts
+        // (release_at = appointment_date + payout_hold_days). Sans ca, Stripe
+        // payout auto envoie l'argent vers l'IBAN avant que la prestation ait
+        // lieu -> impossible de gerer les refunds proprement.
+        settings: {
+          payouts: {
+            schedule: { interval: 'manual' },
+          },
+        },
         metadata: { user_id: userId },
       });
       accountId = account.id;
@@ -174,6 +184,71 @@ router.post('/dashboard-link', authMiddleware, async (req, res) => {
   } catch (e) {
     console.error('[CONNECT DASHBOARD LINK ERR]', e.message);
     res.status(500).json({ error: 'Erreur ouverture dashboard Stripe' });
+  }
+});
+
+// ── GET /api/stripe-connect/payouts ─────────────────────────────────────────
+// Liste des payouts (escrow appointment_payouts) du merchant connecte.
+// Filtre optionnel ?status=pending|released|cancelled|failed. Default :
+// renvoie pending + released sur les 90 derniers jours pour le dashboard.
+router.get('/payouts', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const status = req.query.status || null;
+
+    const params = [userId];
+    let whereStatus = '';
+    if (status) {
+      const valid = ['pending', 'released', 'cancelled', 'failed'];
+      if (!valid.includes(status)) {
+        return res.status(400).json({ error: 'status invalide' });
+      }
+      params.push(status);
+      whereStatus = ` AND ap.status = $2`;
+    }
+
+    const { rows } = await pool.query(`
+      SELECT ap.id, ap.appointment_id, ap.amount_cents, ap.release_at,
+             ap.released_at, ap.status, ap.cancelled_reason, ap.created_at,
+             ap.stripe_payout_id,
+             a.client_name, a.date AS appt_date, a.start_time AS appt_time,
+             COALESCE(s.name, '') AS service_name
+        FROM appointment_payouts ap
+        LEFT JOIN appointments a ON a.id = ap.appointment_id
+        LEFT JOIN booking_services s ON s.id = a.service_id
+       WHERE ap.user_id = $1${whereStatus}
+       ORDER BY
+         CASE ap.status
+           WHEN 'pending'   THEN 1
+           WHEN 'failed'    THEN 2
+           WHEN 'released'  THEN 3
+           WHEN 'cancelled' THEN 4
+         END,
+         ap.release_at ASC
+       LIMIT 200
+    `, params);
+
+    // Agrege solde en attente (sum amount_cents WHERE status='pending').
+    const { rows: aggR } = await pool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN status='pending' THEN amount_cents ELSE 0 END), 0)::bigint AS pending_cents,
+        COUNT(*) FILTER (WHERE status='pending')::int AS pending_count,
+        COUNT(*) FILTER (WHERE status='released')::int AS released_count
+      FROM appointment_payouts
+      WHERE user_id = $1
+    `, [userId]);
+
+    res.json({
+      payouts: rows,
+      summary: {
+        pending_cents: parseInt(aggR[0]?.pending_cents || 0, 10),
+        pending_count: aggR[0]?.pending_count || 0,
+        released_count: aggR[0]?.released_count || 0,
+      },
+    });
+  } catch (e) {
+    console.error('[CONNECT GET payouts ERR]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
 
@@ -414,6 +489,26 @@ router.post('/webhook', async (req, res) => {
       if (upd.rowCount > 0) {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded:',
           pi.id, '→ appt', upd.rows[0].id, upd.rows[0].paid ? '(integral)' : '(acompte)');
+        // ESCROW : programme un payout futur vers l'IBAN du commerçant
+        // (release_at = appointment_date + payout_hold_days). Le montant
+        // net sur le balance Connect = amount - application_fee_amount,
+        // donc on calcule depuis pi (amount_received - application_fee).
+        try {
+          const { scheduleAppointmentPayout } = require('../utils/scheduleAppointmentPayout');
+          // application_fee_amount peut etre absent si commission=0.
+          const appFee = pi.application_fee_amount || 0;
+          const netCents = amt - appFee;
+          if (netCents > 0) {
+            await scheduleAppointmentPayout(pool, {
+              appointmentId: upd.rows[0].id,
+              paymentIntentId: pi.id,
+              amountCents: netCents,
+            });
+            console.log('[CONNECT WEBHOOK] payout scheduled for appt', upd.rows[0].id, 'net', netCents);
+          }
+        } catch (escrowErr) {
+          console.error('[CONNECT WEBHOOK] schedule payout fail', escrowErr.message);
+        }
       } else {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded sans RDV (ok si confirme cote front):', pi.id);
       }

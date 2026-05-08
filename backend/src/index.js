@@ -766,6 +766,16 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     // sur client_rewards + filtre last_birthday_reward_at rolling 330j.
     scheduleLocked(60 * 60 * 1000,      'cron:birthday:monthly',       'birthday',  runBirthdayPromos);
 
+    // ESCROW : libere les payouts dus (release_at <= NOW(), status=pending)
+    // -> stripe.payouts.create vers l'IBAN du commerçant. 1x/jour suffit
+    // (la latence d'un payout n'est pas critique au minute pres). Premier
+    // tick quasi-immediat puis toutes les 24h.
+    {
+      const { releasePayouts: releasePayoutsCron } = require('./utils/releasePayouts');
+      scheduleLocked(24 * 60 * 60 * 1000, 'cron:escrow:release_payouts', 'payouts',
+                     () => releasePayoutsCron(dbPool));
+    }
+
     // Purge automatique des creances orphelines (RGPD Art. 17.3.e)
     // dont la duree de retention legale est depassee. Quotidien suffit
     // (on ne purge pas a la seconde pres apres 2 ans).

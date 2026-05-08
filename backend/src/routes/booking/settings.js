@@ -12,8 +12,16 @@ module.exports = function attachSettingsRoutes(router) {
       const { rows } = await pool.query(
         'SELECT * FROM booking_settings WHERE user_id=$1', [req.user.userId]
       );
-      if (!rows.length) return res.json({ settings: null });
-      res.json({ settings: rows[0] });
+      // Joint payout_hold_days depuis users (param Stripe Connect lie au
+      // compte merchant, pas au booking_settings).
+      const { rows: usrRows } = await pool.query(
+        'SELECT payout_hold_days FROM users WHERE id=$1', [req.user.userId]
+      );
+      if (!rows.length) {
+        return res.json({ settings: { payout_hold_days: usrRows[0]?.payout_hold_days ?? 3 } });
+      }
+      res.json({ settings: { ...rows[0],
+                             payout_hold_days: usrRows[0]?.payout_hold_days ?? 3 } });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 
@@ -22,7 +30,7 @@ module.exports = function attachSettingsRoutes(router) {
     try {
       const { is_enabled, slug, business_description, address, phone, timezone,
               advance_booking_days, min_notice_hours, cancellation_policy_hours,
-              require_account, google_business_url } = req.body;
+              require_account, google_business_url, payout_hold_days } = req.body;
 
       // Admin commit 10 — slug verrouille par admin : refuser toute tentative
       // de modification cote merchant. Defense en profondeur sur 3 couches :
@@ -63,6 +71,19 @@ module.exports = function attachSettingsRoutes(router) {
       const ALLOWED = [0, 1, 2, 6, 24, 48];
       const canPol = ALLOWED.includes(parseInt(cancellation_policy_hours))
         ? parseInt(cancellation_policy_hours) : 2;
+
+      // payout_hold_days : entier 0-30. Stocke sur users (pas
+      // booking_settings) car c'est un parametre Stripe Connect lie au
+      // compte du merchant. Update separe si fourni.
+      if (payout_hold_days !== undefined && payout_hold_days !== null) {
+        const phd = parseInt(payout_hold_days, 10);
+        if (Number.isFinite(phd) && phd >= 0 && phd <= 30) {
+          await pool.query(
+            `UPDATE users SET payout_hold_days=$1 WHERE id=$2`,
+            [phd, req.user.userId]
+          );
+        }
+      }
 
       // Couche 3 : meme si tout le reste echoue, le CASE WHEN dans le UPDATE
       // empeche d'ecraser slug si slug_locked=TRUE en DB. Filet de securite

@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../hooks/useTheme';
 import { Toast, useToast, Confirm } from '../../../components/UI';
 import { PageHeader } from '../shared';
-import { connectApi } from '../../../utils/api';
+import { connectApi, bookingApi } from '../../../utils/api';
 
 export default function Paiements() {
   const { theme: t } = useTheme();
@@ -244,10 +244,311 @@ export default function Paiements() {
           {status === 'connected' && (
             <PaymentConfigSection t={t} showToast={showToast}/>
           )}
+
+          {/* Politique annulation + delai escrow + reversements (visibles
+              meme si Stripe pas encore connecte pour que le commercant
+              voie ce qui l'attend). */}
+          <CancellationPolicySection t={t} showToast={showToast}/>
+          {status === 'connected' && (
+            <EscrowPayoutsSection t={t} showToast={showToast}/>
+          )}
         </>
       )}
     </div>
   );
+}
+
+// ─── Politique annulation + remboursement (Planity-like) ────────────────────
+// Carte unique qui regroupe : (a) cancellation_policy_hours (deja existant
+// dans booking_settings), (b) payout_hold_days (delai escrow). Affiche le
+// comportement clair selon les 3 scenarios. Lit/ecrit via bookingApi.
+function CancellationPolicySection({ t, showToast }) {
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [policyHours, setPolicyHours] = useState(2);
+  const [holdDays, setHoldDays] = useState(3);
+  const [origPolicy, setOrigPolicy] = useState(2);
+  const [origHold, setOrigHold] = useState(3);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await bookingApi.getSettings();
+      const s = r?.settings || {};
+      const pol = parseInt(s.cancellation_policy_hours);
+      const hd  = parseInt(s.payout_hold_days);
+      const safePol = Number.isFinite(pol) ? pol : 2;
+      const safeHd  = Number.isFinite(hd) ? hd : 3;
+      setPolicyHours(safePol); setOrigPolicy(safePol);
+      setHoldDays(safeHd);     setOrigHold(safeHd);
+    } catch {} finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const dirty = policyHours !== origPolicy || holdDays !== origHold;
+
+  const handleSave = async () => {
+    setBusy(true);
+    try {
+      await bookingApi.saveSettings({
+        cancellation_policy_hours: policyHours,
+        payout_hold_days: holdDays,
+      });
+      setOrigPolicy(policyHours);
+      setOrigHold(holdDays);
+      showToast('Politique enregistrée.', 'ok');
+    } catch (e) {
+      showToast(e.message || 'Erreur enregistrement.', 'error');
+    } finally { setBusy(false); }
+  };
+
+  if (loading) return null;
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={panelHeader}>
+        <span style={dot('#6366f1')}/>
+        <span style={panelLabel(t)}>{"Annulation et remboursement"}</span>
+      </div>
+      <p style={{ ...paragraph(t), marginBottom: 14 }}>
+        {"Définissez à quel moment vos clients peuvent annuler en ligne avec remboursement, et combien de temps les paiements restent en attente avant d'être versés sur votre compte bancaire."}
+      </p>
+
+      {/* Politique annulation */}
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ ...panelLabel(t), marginBottom: 8 }}>
+          {"Annulation gratuite jusqu'à"}
+        </p>
+        <select value={policyHours}
+                onChange={e => setPolicyHours(parseInt(e.target.value))}
+                style={selectStyle(t)}>
+          <option value={0}>{"À tout moment (remboursement intégral toujours)"}</option>
+          <option value={1}>{"1 h avant le RDV"}</option>
+          <option value={2}>{"2 h avant le RDV"}</option>
+          <option value={6}>{"6 h avant le RDV"}</option>
+          <option value={24}>{"24 h avant le RDV"}</option>
+          <option value={48}>{"48 h avant le RDV"}</option>
+        </select>
+      </div>
+
+      {/* Délai escrow */}
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ ...panelLabel(t), marginBottom: 8 }}>
+          {"Délai de reversement après le RDV"}
+        </p>
+        <select value={holdDays}
+                onChange={e => setHoldDays(parseInt(e.target.value))}
+                style={selectStyle(t)}>
+          <option value={0}>{"Immédiat (le jour du RDV)"}</option>
+          <option value={1}>{"1 jour après le RDV"}</option>
+          <option value={3}>{"3 jours après le RDV (recommandé)"}</option>
+          <option value={5}>{"5 jours après le RDV"}</option>
+          <option value={7}>{"7 jours après le RDV"}</option>
+        </select>
+        <p style={{ fontSize: 12, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>
+          {"L'argent des paiements en ligne reste sur votre compte Stripe (visible mais non disponible) jusqu'à ce délai après la prestation. Ça nous permet de rembourser proprement si le client annule juste avant le RDV, sans découvert pour vous."}
+        </p>
+      </div>
+
+      {/* Bloc explication 3 scenarios — Planity-style */}
+      <div style={{
+        background: t.cardAlt, border: `1px solid ${t.border}`,
+        borderRadius: 10, padding: '14px 16px', marginBottom: 12,
+      }}>
+        <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 500, color: t.text }}>
+          {"Comment ça marche pour les RDV payés en ligne"}
+        </p>
+        <ul style={{ margin: 0, padding: '0 0 0 16px', display: 'flex',
+                     flexDirection: 'column', gap: 6,
+                     fontSize: 12, color: t.text, lineHeight: 1.55 }}>
+          <li>
+            <strong style={{ color: '#065f46' }}>{"Client annule dans les délais :"}</strong>{' '}
+            remboursement intégral automatique. Notre commission FlowIA
+            vous est aussi rendue.
+          </li>
+          <li>
+            <strong style={{ color: '#92400e' }}>{"Client annule hors délais :"}</strong>{' '}
+            l'acompte est <strong>conservé</strong> (politique no-show).
+            Vous le recevrez après la date du RDV + délai de reversement.
+          </li>
+          <li>
+            <strong style={{ color: '#991b1b' }}>{"Vous annulez vous-même :"}</strong>{' '}
+            le client est toujours remboursé à 100 % automatiquement.
+          </li>
+        </ul>
+      </div>
+
+      {dirty && (
+        <div style={{ display: 'flex', gap: 8, paddingTop: 14,
+                      borderTop: `1px solid ${t.separator}` }}>
+          <button onClick={() => { load(); }} disabled={busy} style={btnGhost(t, busy)}>
+            {"Annuler les modifications"}
+          </button>
+          <button onClick={handleSave} disabled={busy}
+                  style={{ ...btnPrimary(t, busy), marginLeft: 'auto' }}>
+            {busy ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Mes reversements (escrow) ──────────────────────────────────────────────
+// Liste les payouts en attente + récents libérés. Le commerçant voit
+// exactement quand chaque paiement va arriver sur son IBAN.
+function EscrowPayoutsSection({ t, showToast }) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await connectApi.getPayouts();
+      setData(r);
+    } catch (e) {
+      showToast && showToast(e.message || 'Erreur chargement reversements.', 'error');
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const fmtEur = (cents) => (Math.round(cents) / 100).toFixed(2).replace('.', ',') + ' €';
+  const fmtDate = (iso) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch { return iso; }
+  };
+
+  if (loading) {
+    return (
+      <section style={cardStyle(t)}>
+        <div style={{ height: 12, width: 200, background: t.cardAlt,
+                      borderRadius: 6, marginBottom: 12 }}/>
+        <div style={{ height: 60, width: '100%', background: t.cardAlt,
+                      borderRadius: 8 }}/>
+      </section>
+    );
+  }
+
+  const summary = data?.summary || {};
+  const payouts = data?.payouts || [];
+  const pending = payouts.filter(p => p.status === 'pending').slice(0, 8);
+  const released = payouts.filter(p => p.status === 'released').slice(0, 5);
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={panelHeader}>
+        <span style={dot('#10b981')}/>
+        <span style={panelLabel(t)}>{"Mes reversements"}</span>
+      </div>
+
+      {/* Solde en attente — gros chiffre rassurant */}
+      <div style={{
+        padding: '16px 18px', borderRadius: 12,
+        background: '#f0fdf4', border: '1px solid #bbf7d0',
+        marginBottom: 14,
+      }}>
+        <p style={{ margin: 0, fontSize: 11, color: '#065f46',
+                    textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+          {"Solde en attente sur Stripe"}
+        </p>
+        <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 500, color: '#065f46',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+          {fmtEur(summary.pending_cents || 0)}
+        </p>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#065f46', lineHeight: 1.5 }}>
+          {summary.pending_count
+            ? `${summary.pending_count} acompte${summary.pending_count > 1 ? 's' : ''} sur des RDV à venir. Sera versé sur votre IBAN après chaque RDV (selon votre délai de reversement).`
+            : 'Aucun paiement en attente actuellement.'}
+        </p>
+      </div>
+
+      {/* Prochains reversements */}
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ ...panelLabel(t), marginBottom: 8 }}>
+            {"Prochains reversements"}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pending.map(p => (
+              <div key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 12px', borderRadius: 8,
+                background: t.cardAlt, border: `1px solid ${t.border}`,
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text }}>
+                    {p.client_name || 'Client'} — {p.service_name || 'RDV'}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+                    {"RDV le "}{fmtDate(p.appt_date)}{p.appt_time ? ` à ${p.appt_time.slice(0, 5)}` : ''}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text,
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    {fmtEur(p.amount_cents)}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+                    {"versé le "}{fmtDate(p.release_at)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reversements récemment effectués */}
+      {released.length > 0 && (
+        <div>
+          <p style={{ ...panelLabel(t), marginBottom: 8 }}>
+            {"Récemment versés"}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {released.map(p => (
+              <div key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '8px 12px',
+                borderBottom: `0.5px solid ${t.separator}`,
+                fontSize: 12,
+              }}>
+                <span style={{ flex: 1, color: t.text }}>
+                  {p.client_name || 'Client'}
+                </span>
+                <span style={{ color: t.muted, fontSize: 11 }}>
+                  {fmtDate(p.released_at)}
+                </span>
+                <span style={{ color: '#065f46', fontWeight: 500,
+                               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  {fmtEur(p.amount_cents)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pending.length === 0 && released.length === 0 && (
+        <p style={{ fontSize: 13, color: t.muted, textAlign: 'center',
+                    padding: '20px 0' }}>
+          {"Aucun reversement pour l'instant. Dès qu'un client paiera en ligne un RDV à venir, il apparaîtra ici."}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function selectStyle(t) {
+  return {
+    width: '100%', padding: '10px 12px',
+    border: `1px solid ${t.borderInput || t.border}`,
+    borderRadius: 8, background: t.inputBg || t.canvas,
+    color: t.text, fontSize: 14, fontFamily: 'inherit',
+    boxSizing: 'border-box', cursor: 'pointer',
+  };
 }
 
 // ─── Configuration des paiements RDV (Phase 4) ──────────────────────────────
