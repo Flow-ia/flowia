@@ -5,7 +5,115 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
-## État actuel (2026-04-24)
+## État actuel (2026-05-08) — Stripe Connect + escrow + refunds + traçabilité Planity-like
+
+Gros chantier : alignement complet sur le modèle **Planity Pro** pour les
+paiements en ligne (Stripe Connect Direct Charges). Tout le flow paiement /
+escrow / refund / annulation / traçabilité côté commerçant ET client est
+opérationnel + testé mentalement sur 8+ scénarios.
+
+### 1. Stripe Connect — paiement & customer
+- **Customer Stripe** créé/réutilisé par (merchant, client) sur le compte connecté.
+  Champ « Client » du Dashboard rempli + recherche/groupement par client. Auto
+  self-healing si l'ID devient invalide. (`stripe_connected_customer_id` sur
+  `client_accounts`)
+- **Description PI enrichie** après création RDV : `RDV-XXXXXXXX · DD/MM/YYYY HH:MM`
+  + metadata complète (appointment_id, client_name, service_name, payment_kind).
+- **receipt_email** + **statement_descriptor_suffix** = nom du service.
+
+### 2. Escrow — payouts manuels Planity-like
+- Comptes Connect créés en `payout_schedule.interval='manual'` à l'onboarding.
+- Endpoint admin `/api/admin/stripe-payouts/migrate-manual` pour migrer les
+  comptes existants (idempotent, skip si déjà manual).
+- Table `appointment_payouts` : 1 row par RDV payé, status pending/released/cancelled/failed.
+- Webhook `payment_intent.succeeded` → INSERT row payout (release_at = appt_date + 3j).
+- Cron quotidien `releasePayouts.js` (worker 1, lock applicatif) → `stripe.payouts.create`
+  pour les payouts dus.
+- **Délai escrow FIXE 3 jours**, non éditable par le commerçant (Planity-like, sécurité).
+
+### 3. Refunds — Stratégie B
+- `refundAppointment.js` : helper auto-refund Stripe Connect avec `stripeAccount`.
+- **Stratégie B** : `refund_application_fee=true` SI le PI initial avait une fee.
+  Conditionne le flag (retrieve PI d'abord) → bug "no application fee" résolu.
+- Fail-safe : table `failed_refunds` pour retry admin.
+- **Annulation merchant** : refund 100% systématique automatique.
+- **Annulation client dans délais** (cancellation_policy_hours configurable
+  0/1/2/6/24/48h, source unique = `/reglages/paiements`) → refund 100% auto.
+- **Annulation client hors délais** : annulation acceptée mais acompte conservé
+  (politique no-show standard Planity).
+
+### 4. Traçabilité caisse / historique / stats — bout-en-bout
+- **DB transactions** : 3 sources distinctes pour les RDV :
+  - `rdv_online` : paiement Stripe (acompte ou intégral)
+  - `rdv` : encaissement manuel au comptoir
+  - `rdv_refund` : remboursement (amount NÉGATIF)
+- **Fix race condition critique** : INSERT transaction synchrone dans `book.js`
+  (chemin principal) + ON CONFLICT DO NOTHING dans le webhook (backup).
+  Index UNIQUE partiel `idx_transactions_rdv_online_appt` garantit 1 row max.
+  Avant : webhook arrivait avant que /book ait créé l'appt → INSERT skippé →
+  caisse VIDE pour les paiements en ligne. Bug majeur résolu.
+- **Type de paiement « En ligne »** distinct de « Carte » (Planity Pro pattern) :
+  - PAY_INFO['card_online'] = label « En ligne », couleur cyan #0891b2
+  - PAY_KEYS = ['cash','card','card_online','transfer','other']
+  - Stats répartition CA jour avec colonne dédiée
+  - Pas dans le sélecteur encaissement manuel (`lookupOnly:true`)
+- **Stats cohérentes** : CA NET = SUM(amount) sur tous revenue (refunds négatifs
+  subtraits). prestCount EXCLUT les refunds (qty_total=0 + filtre).
+- **Colonne DB** `appointments.cancelled_by` ('merchant'|'client'|'system') +
+  `cancelled_at` → traçabilité qui+quand sur chaque annulation.
+
+### 5. UX merchant — modale RDV détail
+- Bloc unifié « Rendez-vous annulé » (priorité haute si status='cancelled') :
+  ligne 1 « Annulé par le salon/client/système le DD/MM à HHhMM »
+  ligne 2 statut refund (Remboursé X € / Acompte conservé / Aucun paiement)
+  ligne 3 motif si renseigné
+- Bug `null · Source : RDV` corrigé sur RDV payé online (paid_method NULL).
+- Notif clic → deep-link `/agenda?date=&appt=` avec fallback intelligent
+  reconstruit depuis `data.appointment_id + data.appt_date`.
+
+### 6. UX client — `/client/rdv`
+- Cartes UNE ligne fine : `Salon — Prestation` + date+heure muted + montant + pill statut + chevron `›`
+- Clic → vue détail `AppointmentDetailCard` (employé, paiement, traçabilité, motif).
+- Pagination **5 RDV/page** par sous-onglet.
+- Persistance URL : `/client/rdv/avenir|passes|annules` (refresh / partage / favoris).
+- Modale annulation : preview AVANT confirmation (3 cas : refund intégral / acompte conservé / pas de paiement).
+- Modale résultat APRÈS annulation (popup, pas toast) : 4 variantes selon issue.
+- Endpoint cross-merchant `/api/global-clients/appointments` aligné sur le
+  merchant-scope endpoint (payment_status, cancelled_by, policy_hours, etc.).
+
+### 7. Page `/reglages/paiements` unifiée
+- Stripe Connect onboarding (existant)
+- Config acomptes (existant)
+- **NEW** Politique d'annulation (cancellation_policy_hours, single source) +
+  bloc explicatif 3 scénarios.
+- **NEW** Délai reversement = 3j fixe (info-only, non éditable).
+- **NEW** « Mes reversements » : solde escrow + prochains payouts datés + récents.
+
+### Tâches manuelles à faire en prod après déploiement
+
+1. **Si tu as des comptes Stripe Connect existants** (créés AVANT ce déploiement) :
+   - Soit clic dans Stripe Dashboard pour passer chacun en `payout_schedule.interval='manual'`
+   - Soit via API : `POST /api/admin/stripe-payouts/migrate-manual` (avec auth admin)
+   - Ou via `curl` direct Stripe API (cf. notre échange précédent)
+   - Sinon les anciens comptes garderont le payout auto et l'escrow ne s'appliquera pas à eux
+
+2. **Webhooks Stripe à vérifier** dans le Dashboard Stripe :
+   - **Compte plateforme** : `account.updated`
+   - **Comptes connectés** : `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`
+   - Aucun nouveau webhook à ajouter (déjà tous configurés)
+
+### Ce qu'il reste à faire (pour continuer Planity-like)
+
+- Tester end-to-end sur preview Vercel chaque scénario (paiement / annulation
+  client / annulation merchant / refund / hors délais / acompte+solde)
+- Éventuellement ajouter un dashboard merchant « Performances paiements en ligne »
+  (taux conversion, no-show, refunds) pour égaler les analytics Planity Pro
+- Système de no-show automatique (cron qui marque `cancelled_by='system'` sur
+  les RDV passés non encaissés depuis X heures, avec garde sur acompte conservé)
+
+---
+
+## État précédent (2026-04-24)
 
 **Fix 5 bugs onboarding : horaires save, absences confirm modal,
 permissions employé preservées, bouton Liste déplacé, conditions
