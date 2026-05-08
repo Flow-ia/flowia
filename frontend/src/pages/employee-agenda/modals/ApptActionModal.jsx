@@ -486,43 +486,122 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
               <p style={{ margin:0, fontSize:13, color:t.text, lineHeight:1.5 }}>{appt.notes}</p>
             </div>
           )}
-          {appt.cancel_reason && (
-            <div style={{
-              padding: '12px 16px',
-              borderRadius: 12,
-              background: '#fef2f2',
-              borderLeft: '2px solid #ef4444',
-            }}>
-              <p style={{ margin:'0 0 4px', fontSize:11, fontWeight:500, color:'#991b1b' }}>Motif d{"'"}annulation</p>
-              <p style={{ margin:0, fontSize:13, color:t.text }}>{appt.cancel_reason}</p>
-            </div>
-          )}
-          {appt.paid && (
-            <div style={{
-              padding: '12px 16px',
-              borderRadius: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              background: '#f0fdf4',
-              borderLeft: '2px solid #10b981',
-            }}>
-              <div>
-                <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#065f46' }}>
-                  {appt.payment_status === 'paid' && appt.stripe_payment_intent_id
-                    ? "Paye en ligne"
-                    : "Encaisse"}
+          {/* ── Bloc tracabilite annulation (priorite haute) ─────────────────
+              Affiche tout le contexte d'une annulation en 1 bloc lisible :
+              qui a annule + quand + statut refund + montant + motif. Evite
+              les blocs disparates 'Motif' + 'Encaisse' (qui faisait apparaitre
+              'null · Source : RDV' a tort sur les RDV payes online refundes).
+              Visible UNIQUEMENT si status='cancelled'. */}
+          {appt.status === 'cancelled' && (() => {
+            // Format date+heure FR : '8 mai 2026 à 14:32'
+            const fmtDateTime = (iso) => {
+              if (!iso) return null;
+              try {
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) return null;
+                return d.toLocaleString('fr-FR', {
+                  day: 'numeric', month: 'long', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit',
+                }).replace(',', ' à').replace(/:/, 'h').replace(/h(\d{2})$/, 'h$1');
+              } catch { return null; }
+            };
+            const cancelledByLabel = appt.cancelled_by === 'merchant'
+              ? 'le salon'
+              : appt.cancelled_by === 'client'
+                ? 'le client'
+                : appt.cancelled_by === 'system'
+                  ? 'le système (no-show)'
+                  : null;
+            const cancelDateLabel = fmtDateTime(appt.cancelled_at) || fmtDateTime(appt.updated_at);
+            const cents = Number(appt.paid_amount_cents || 0);
+            const eur = (cents / 100).toFixed(2).replace('.', ',');
+            const wasRefunded = appt.payment_status === 'refunded';
+            const wasPaidNotRefunded = appt.payment_status === 'paid' && cents > 0;
+
+            return (
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: 12,
+                background: '#fef2f2',
+                borderLeft: '2px solid #ef4444',
+                display:'flex', flexDirection:'column', gap:6,
+              }}>
+                <p style={{ margin:0, fontSize:11, fontWeight:500, color:'#991b1b',
+                            textTransform:'uppercase', letterSpacing:'0.04em' }}>
+                  Rendez-vous annulé
                 </p>
-                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
-                  {appt.payment_status === 'paid' && appt.stripe_payment_intent_id
-                    ? `Stripe · ${(Number(appt.paid_amount_cents || 0) / 100).toFixed(2)} €`
-                    : `${PAY_OPTIONS.find(p=>p.id===appt.paid_method)?.label || appt.paid_method} · Source : RDV`}
+                {/* Ligne 1 : qui a annule + quand */}
+                <p style={{ margin:0, fontSize:13, color:t.text, lineHeight:1.5 }}>
+                  {cancelledByLabel
+                    ? <>Annulé par <strong style={{ fontWeight:500 }}>{cancelledByLabel}</strong></>
+                    : 'Annulé'}
+                  {cancelDateLabel && <> {`le ${cancelDateLabel}`}</>}
                 </p>
+                {/* Ligne 2 : statut refund / acompte conserve */}
+                {wasRefunded && cents > 0 && (
+                  <p style={{ margin:0, fontSize:13, color:'#065f46', fontWeight:500 }}>
+                    Remboursement intégral de {eur} € effectué
+                    {cancelDateLabel && <> le {cancelDateLabel}</>}
+                  </p>
+                )}
+                {wasPaidNotRefunded && (
+                  <p style={{ margin:0, fontSize:13, color:'#92400e', fontWeight:500 }}>
+                    Acompte de {eur} € conservé par le salon (politique no-show)
+                  </p>
+                )}
+                {!wasRefunded && !wasPaidNotRefunded && (
+                  <p style={{ margin:0, fontSize:12, color:t.muted }}>
+                    Aucun paiement en ligne associé à ce RDV.
+                  </p>
+                )}
+                {/* Ligne 3 : motif (si renseigne) */}
+                {appt.cancel_reason && (
+                  <p style={{ margin:'2px 0 0', fontSize:12, color:t.muted, lineHeight:1.5 }}>
+                    <strong style={{ fontWeight:500, color:t.text }}>Motif :</strong>{' '}
+                    {appt.cancel_reason}
+                  </p>
+                )}
               </div>
-            </div>
-          )}
-          {/* Phase 5/5 — acompte paye en ligne : merchant doit encaisser le reste */}
-          {!appt.paid && appt.payment_status === 'paid'
+            );
+          })()}
+
+          {/* ── Blocs paiement (visibles uniquement si NON annule) ──────────
+              Refactor pour eviter le bug 'null · Source : RDV' : on n'affiche
+              le moyen de paiement que s'il est present, et l'ordre des
+              conditions priorise refunded > paid online > paid manuel. */}
+          {appt.status !== 'cancelled' && appt.paid && (() => {
+            const isOnline = appt.payment_status === 'paid' && !!appt.stripe_payment_intent_id;
+            const cents = Number(appt.paid_amount_cents || 0);
+            const eur = cents > 0 ? (cents / 100).toFixed(2) : null;
+            const methodLabel = appt.paid_method
+              ? (PAY_OPTIONS.find(p => p.id === appt.paid_method)?.label || appt.paid_method)
+              : null;
+            return (
+              <div style={{
+                padding: '12px 16px', borderRadius: 12,
+                display: 'flex', alignItems: 'center', gap: 12,
+                background: '#f0fdf4',
+                borderLeft: '2px solid #10b981',
+              }}>
+                <div>
+                  <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#065f46' }}>
+                    {isOnline ? 'Payé en ligne' : 'Encaissé'}
+                  </p>
+                  <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
+                    {isOnline
+                      ? `Stripe${eur ? ` · ${eur} €` : ''}`
+                      : methodLabel
+                        ? `${methodLabel}${eur ? ` · ${eur} €` : ''} · Source : RDV`
+                        : `Source : RDV${eur ? ` · ${eur} €` : ''}`}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Acompte paye en ligne : merchant doit encaisser le reste */}
+          {appt.status !== 'cancelled' && !appt.paid
+            && appt.payment_status === 'paid'
             && appt.stripe_payment_intent_id && appt.paid_amount_cents > 0 && (
             <div style={{
               padding: '12px 16px', borderRadius: 12,
@@ -539,24 +618,10 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
               </div>
             </div>
           )}
-          {/* Phase 5/5 — paiement Stripe Connect : statuts intermediaires */}
-          {!appt.paid && appt.payment_status === 'refunded' && (
-            <div style={{
-              padding: '12px 16px', borderRadius: 12,
-              display: 'flex', alignItems: 'center', gap: 12,
-              background: '#fef3c7', borderLeft: '2px solid #d97706',
-            }}>
-              <div>
-                <p style={{ margin:0, fontSize:13, fontWeight:500, color:'#92400e' }}>
-                  {"Paiement remboursé"}
-                </p>
-                <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
-                  {`Stripe · ${(Number(appt.paid_amount_cents || 0) / 100).toFixed(2)} €`}
-                </p>
-              </div>
-            </div>
-          )}
-          {!appt.paid && appt.payment_status === 'failed' && (
+
+          {/* Paiement Stripe Connect echoue (statut intermediaire) */}
+          {appt.status !== 'cancelled' && !appt.paid
+            && appt.payment_status === 'failed' && (
             <div style={{
               padding: '12px 16px', borderRadius: 12,
               display: 'flex', alignItems: 'center', gap: 12,
