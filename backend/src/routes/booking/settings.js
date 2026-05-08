@@ -30,7 +30,12 @@ module.exports = function attachSettingsRoutes(router) {
     try {
       const { is_enabled, slug, business_description, address, phone, timezone,
               advance_booking_days, min_notice_hours, cancellation_policy_hours,
-              require_account, google_business_url, payout_hold_days } = req.body;
+              require_account, google_business_url } = req.body;
+      // payout_hold_days est INTENTIONNELLEMENT non editable par le merchant
+      // (politique Planity-like : delai escrow fixe a 3 jours pour tous les
+      // commercants, decide par FlowIA pour eviter les decouverts si un
+      // commercant choisit 0). La valeur en DB est conservee a son default
+      // (3) ou peut etre modifiee par un admin via une migration ad-hoc.
 
       // Admin commit 10 — slug verrouille par admin : refuser toute tentative
       // de modification cote merchant. Defense en profondeur sur 3 couches :
@@ -71,19 +76,6 @@ module.exports = function attachSettingsRoutes(router) {
       const ALLOWED = [0, 1, 2, 6, 24, 48];
       const canPol = ALLOWED.includes(parseInt(cancellation_policy_hours))
         ? parseInt(cancellation_policy_hours) : 2;
-
-      // payout_hold_days : entier 0-30. Stocke sur users (pas
-      // booking_settings) car c'est un parametre Stripe Connect lie au
-      // compte du merchant. Update separe si fourni.
-      if (payout_hold_days !== undefined && payout_hold_days !== null) {
-        const phd = parseInt(payout_hold_days, 10);
-        if (Number.isFinite(phd) && phd >= 0 && phd <= 30) {
-          await pool.query(
-            `UPDATE users SET payout_hold_days=$1 WHERE id=$2`,
-            [phd, req.user.userId]
-          );
-        }
-      }
 
       // Couche 3 : meme si tout le reste echoue, le CASE WHEN dans le UPDATE
       // empeche d'ecraser slug si slug_locked=TRUE en DB. Filet de securite

@@ -259,16 +259,16 @@ export default function Paiements() {
 }
 
 // ─── Politique annulation + remboursement (Planity-like) ────────────────────
-// Carte unique qui regroupe : (a) cancellation_policy_hours (deja existant
-// dans booking_settings), (b) payout_hold_days (delai escrow). Affiche le
-// comportement clair selon les 3 scenarios. Lit/ecrit via bookingApi.
+// Carte unique qui regroupe la politique d'annulation client. Le delai de
+// reversement (escrow) est fixe a 3 jours par FlowIA -- non editable par
+// le commercant (comme Planity Pro). Justification : (a) securite financiere
+// (eviter qu'un commercant mette 0 jour et se retrouve a decouvert sur un
+// refund), (b) simplicite produit, (c) coherence cross-merchants.
 function CancellationPolicySection({ t, showToast }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [policyHours, setPolicyHours] = useState(2);
-  const [holdDays, setHoldDays] = useState(3);
   const [origPolicy, setOrigPolicy] = useState(2);
-  const [origHold, setOrigHold] = useState(3);
 
   const load = async () => {
     setLoading(true);
@@ -276,26 +276,21 @@ function CancellationPolicySection({ t, showToast }) {
       const r = await bookingApi.getSettings();
       const s = r?.settings || {};
       const pol = parseInt(s.cancellation_policy_hours);
-      const hd  = parseInt(s.payout_hold_days);
       const safePol = Number.isFinite(pol) ? pol : 2;
-      const safeHd  = Number.isFinite(hd) ? hd : 3;
       setPolicyHours(safePol); setOrigPolicy(safePol);
-      setHoldDays(safeHd);     setOrigHold(safeHd);
     } catch {} finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
-  const dirty = policyHours !== origPolicy || holdDays !== origHold;
+  const dirty = policyHours !== origPolicy;
 
   const handleSave = async () => {
     setBusy(true);
     try {
       await bookingApi.saveSettings({
         cancellation_policy_hours: policyHours,
-        payout_hold_days: holdDays,
       });
       setOrigPolicy(policyHours);
-      setOrigHold(holdDays);
       showToast('Politique enregistrée.', 'ok');
     } catch (e) {
       showToast(e.message || 'Erreur enregistrement.', 'error');
@@ -311,7 +306,7 @@ function CancellationPolicySection({ t, showToast }) {
         <span style={panelLabel(t)}>{"Annulation et remboursement"}</span>
       </div>
       <p style={{ ...paragraph(t), marginBottom: 14 }}>
-        {"Définissez à quel moment vos clients peuvent annuler en ligne avec remboursement, et combien de temps les paiements restent en attente avant d'être versés sur votre compte bancaire."}
+        {"Définissez à quel moment vos clients peuvent annuler en ligne avec remboursement intégral. Au-delà de ce délai, l'acompte est conservé."}
       </p>
 
       {/* Politique annulation */}
@@ -331,22 +326,17 @@ function CancellationPolicySection({ t, showToast }) {
         </select>
       </div>
 
-      {/* Délai escrow */}
-      <div style={{ marginBottom: 16 }}>
-        <p style={{ ...panelLabel(t), marginBottom: 8 }}>
+      {/* Delai de reversement : NON editable, info-seul (FlowIA decide). */}
+      <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10,
+                    background: t.cardAlt, border: `1px solid ${t.border}` }}>
+        <p style={{ ...panelLabel(t), marginBottom: 4 }}>
           {"Délai de reversement après le RDV"}
         </p>
-        <select value={holdDays}
-                onChange={e => setHoldDays(parseInt(e.target.value))}
-                style={selectStyle(t)}>
-          <option value={0}>{"Immédiat (le jour du RDV)"}</option>
-          <option value={1}>{"1 jour après le RDV"}</option>
-          <option value={3}>{"3 jours après le RDV (recommandé)"}</option>
-          <option value={5}>{"5 jours après le RDV"}</option>
-          <option value={7}>{"7 jours après le RDV"}</option>
-        </select>
-        <p style={{ fontSize: 12, color: t.muted, marginTop: 6, lineHeight: 1.5 }}>
-          {"L'argent des paiements en ligne reste sur votre compte Stripe (visible mais non disponible) jusqu'à ce délai après la prestation. Ça nous permet de rembourser proprement si le client annule juste avant le RDV, sans découvert pour vous."}
+        <p style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 500, color: t.text }}>
+          {"3 jours après chaque rendez-vous"}
+        </p>
+        <p style={{ fontSize: 12, color: t.muted, margin: 0, lineHeight: 1.5 }}>
+          {"L'argent des paiements en ligne reste sur votre compte Stripe (visible mais non disponible) pendant 3 jours après la prestation. Ce délai garantit qu'aucun refund de dernière minute ne crée de découvert sur votre compte."}
         </p>
       </div>
 
