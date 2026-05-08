@@ -1,14 +1,19 @@
 // Card resultat de recherche /marketplace.
-// Affiche photo, nom, ville/CP, distance (si geoloc), 5 badges programmes
-// (Parrainage, Fidelite, Code promo, Paiement en ligne, RDV immediat).
-// Click sur la carte → navigation vers /book/<slug>.
+// Affiche photo (carousel des covers du commercant), nom, ville/CP, distance
+// (si geoloc), 5 badges programmes (Parrainage, Fidelite, Code promo, Paiement
+// en ligne, RDV immediat). Click sur la carte → navigation vers
+// /marketplace/book/<slug>.
+//
+// Carousel : si plusieurs covers (m.coverUrls.length > 1), boutons fleche
+// gauche/droite apparaissent (visibles au hover sur desktop, toujours sur
+// mobile). Indicateurs en dots en bas. Les clics sur les fleches font
+// preventDefault pour ne pas declencher la navigation Link.
 //
 // FDS-2026 : pas d'emoji, fw <= 500, bordures 0.5/1px, pas de gradient.
 //
 // Note URLs media : on utilise mediaApi.absoluteUrl() qui mappe les paths
-// /api/... renvoyes par le backend vers VITE_API_URL (ex
-// https://flowia-backend.onrender.com/api). Indispensable en prod ou
-// frontend (Vercel) et backend (Render) sont sur des domaines distincts.
+// /api/... renvoyes par le backend vers VITE_API_URL.
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { S } from './shadcn';
 import { mediaApi } from '../../../utils/api';
@@ -79,8 +84,29 @@ const Ic = {
 
 export default function MerchantSearchCard({ merchant }) {
   const m = merchant;
-  const cover = mediaApi.absoluteUrl(m.coverUrl);
   const profile = mediaApi.absoluteUrl(m.profileUrl);
+
+  // Carousel covers — fallback sur coverUrl unique si coverUrls absent
+  // (cas legacy ou nouveau client/ancien backend). Liste resolue en URLs
+  // absolues une fois (memo) pour eviter de re-mapper a chaque render.
+  const covers = useMemo(() => {
+    const urls = Array.isArray(m.coverUrls) && m.coverUrls.length > 0
+      ? m.coverUrls
+      : (m.coverUrl ? [m.coverUrl] : []);
+    return urls.map(u => mediaApi.absoluteUrl(u)).filter(Boolean);
+  }, [m.coverUrls, m.coverUrl]);
+
+  const [idx, setIdx] = useState(0);
+  const safeIdx = covers.length > 0 ? Math.min(idx, covers.length - 1) : 0;
+  const cover   = covers[safeIdx];
+  const hasMany = covers.length > 1;
+
+  // Handlers carousel : preventDefault stoppe la navigation Link et
+  // stopPropagation empeche le bubbling sur le wrapper.
+  const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+  const prev = (e) => { stop(e); setIdx(i => (i - 1 + covers.length) % covers.length); };
+  const next = (e) => { stop(e); setIdx(i => (i + 1) % covers.length); };
+  const goTo = (i) => (e) => { stop(e); setIdx(i); };
 
   return (
     <Link to={`/marketplace/book/${m.slug}`} style={{
@@ -91,6 +117,7 @@ export default function MerchantSearchCard({ merchant }) {
       transition: 'border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease',
       cursor: 'pointer',
     }}
+    className="mp-card"
     onMouseEnter={(e) => {
       e.currentTarget.style.borderColor = S.borderHv;
       e.currentTarget.style.boxShadow = S.shadowMd;
@@ -101,11 +128,21 @@ export default function MerchantSearchCard({ merchant }) {
       e.currentTarget.style.boxShadow = 'none';
       e.currentTarget.style.transform = 'translateY(0)';
     }}>
-      {/* Cover */}
+      {/* Style local : fleches du carousel cachees par defaut, visibles
+          au hover sur desktop. Sur mobile (touch), toujours visibles. */}
+      <style>{`
+        .mp-card .mp-arrow{ opacity: 0; transition: opacity 0.15s ease, background 0.15s ease; }
+        .mp-card:hover .mp-arrow{ opacity: 1; }
+        @media (hover: none) {
+          .mp-card .mp-arrow{ opacity: 1; }
+        }
+      `}</style>
+      {/* Cover (carousel) */}
       <div style={{
-        height: 140, position: 'relative',
+        height: 160, position: 'relative',
         background: cover ? `center/cover no-repeat url("${cover}")` : S.bgHover,
         borderBottom: `1px solid ${S.border}`,
+        transition: 'background-image 0.2s ease',
       }}>
         {!cover && (
           <div style={{
@@ -116,6 +153,75 @@ export default function MerchantSearchCard({ merchant }) {
             {m.businessName?.[0]?.toUpperCase() || ''}
           </div>
         )}
+
+        {/* Bouton precedent */}
+        {hasMany && (
+          <button type="button" className="mp-arrow"
+                  onClick={prev}
+                  aria-label="Photo precedente"
+                  style={{
+                    position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                    width: 32, height: 32, borderRadius: 999,
+                    border: 'none', cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.92)', color: S.fg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.92)'; }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+        )}
+
+        {/* Bouton suivant */}
+        {hasMany && (
+          <button type="button" className="mp-arrow"
+                  onClick={next}
+                  aria-label="Photo suivante"
+                  style={{
+                    position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                    width: 32, height: 32, borderRadius: 999,
+                    border: 'none', cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.92)', color: S.fg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.92)'; }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        )}
+
+        {/* Indicateurs (dots) — affiches uniquement si plusieurs photos */}
+        {hasMany && (
+          <div style={{
+            position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', gap: 4, padding: '3px 6px', borderRadius: 99,
+            background: 'rgba(0,0,0,0.35)',
+          }}>
+            {covers.map((_, i) => (
+              <button key={i} type="button"
+                      onClick={goTo(i)}
+                      aria-label={`Photo ${i + 1}`}
+                      style={{
+                        width: i === safeIdx ? 16 : 6, height: 6,
+                        borderRadius: 99, border: 'none', cursor: 'pointer',
+                        padding: 0,
+                        background: i === safeIdx ? '#fff' : 'rgba(255,255,255,0.55)',
+                        transition: 'width 0.15s ease, background 0.15s ease',
+                      }}/>
+            ))}
+          </div>
+        )}
+
         {/* Profile pastille */}
         {profile && (
           <div style={{
@@ -123,6 +229,7 @@ export default function MerchantSearchCard({ merchant }) {
             width: 44, height: 44, borderRadius: 22,
             background: `center/cover no-repeat url("${profile}")`,
             border: `2px solid ${S.bg}`, boxShadow: S.shadowSm,
+            zIndex: 1,
           }}/>
         )}
         {/* Distance */}

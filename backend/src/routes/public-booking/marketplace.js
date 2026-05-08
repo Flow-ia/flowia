@@ -174,6 +174,17 @@ module.exports = function attachMarketplaceRoutes(router) {
              WHERE user_id = u.id AND type = 'cover'
              ORDER BY sort_order ASC LIMIT 1
           ) AS cover_id,
+          -- Toutes les photos cover (limite 10) pour le carousel des cards.
+          -- ARRAY_AGG conserve l'ordre defini par sort_order ASC.
+          (SELECT array_agg(id ORDER BY sort_order ASC, created_at ASC)
+             FROM (
+               SELECT id, sort_order, created_at
+                 FROM media
+                WHERE user_id = u.id AND type = 'cover'
+                ORDER BY sort_order ASC, created_at ASC
+                LIMIT 10
+             ) sub
+          ) AS cover_ids,
           (SELECT EXISTS (
              SELECT 1 FROM referral_programs rp
               WHERE rp.user_id = u.id AND rp.is_enabled = TRUE
@@ -225,7 +236,10 @@ module.exports = function attachMarketplaceRoutes(router) {
         distanceKm:           r.distance_km != null ? Math.round(parseFloat(r.distance_km) * 10) / 10 : null,
         // URLs media en proxy (pas d'URL Cloudinary directe exposee).
         profileUrl:           r.has_profile_image ? `/api/media/commercant/${r.user_id}/profile` : null,
+        // coverUrl = premiere photo (retro-compat avec consommateurs existants).
         coverUrl:             r.cover_id ? `/api/media/commercant/${r.user_id}/cover/${r.cover_id}` : null,
+        // coverUrls = toutes les photos cover (carousel des cards marketplace).
+        coverUrls:            (r.cover_ids || []).map(id => `/api/media/commercant/${r.user_id}/cover/${id}`),
         // Badges pour mise en avant cote UI.
         badges: {
           referral:           !!r.has_referral,

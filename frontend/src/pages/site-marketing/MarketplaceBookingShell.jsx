@@ -237,6 +237,19 @@ function menuItemStyle() {
 }
 
 export default function MarketplaceBookingShell() {
+  const loc = useLocation();
+
+  // Scroll en haut a chaque changement de path. Sans ca, naviguer depuis
+  // /marketplace (scrolle au milieu de la liste de salons) vers
+  // /marketplace/book/<slug> conservait la position de scroll -> la page
+  // booking semblait s'ouvrir 'au milieu/en bas'. On ne touche pas au hash
+  // (anchors internes du booking type #equipe) pour ne pas casser le
+  // deep-link section.
+  useEffect(() => {
+    if (loc.hash) return;
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [loc.pathname]);
+
   return (
     <LightThemeProvider>
       <div style={{
