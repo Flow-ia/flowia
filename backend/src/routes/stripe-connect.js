@@ -539,11 +539,17 @@ router.post('/webhook', async (req, res) => {
               ? `Paiement en ligne RDV — ${cn}`
               : `Acompte en ligne RDV — ${cn}`;
             const now = new Date();
+            // ON CONFLICT DO NOTHING : si book.js a deja insere la
+            // transaction (chemin sync, race-safe), on no-op ici. UNIQUE
+            // index partiel idx_transactions_rdv_online_appt sur
+            // (appointment_id) WHERE source='rdv_online' garantit qu'il
+            // n'y a qu'1 row 'rdv_online' par RDV.
             await pool.query(
               `INSERT INTO transactions
                  (user_id, type, amount, description, employee_id, payment_method,
                   date, time, datetime_iso, appointment_id, source, locked, qty_total)
-               VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1)`,
+               VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1)
+               ON CONFLICT (appointment_id) WHERE source = 'rdv_online' DO NOTHING`,
               [apptInfo[0].user_id, amt / 100, desc, empId,
                now.toISOString().substring(0, 10),
                now.toTimeString().substring(0, 8),

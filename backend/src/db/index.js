@@ -1560,6 +1560,16 @@ async function initDB() {
   // detecte par retrieve fail et on recree (auto-self-healing).
   await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS stripe_connected_customer_id VARCHAR(255)`);
 
+  // Idempotence transactions 'rdv_online' : evite les doublons quand book.js
+  // (sync, chemin principal) ET le webhook payment_intent.succeeded (backup,
+  // race-safe) tentent tous les 2 d'inserer une row pour le meme RDV. Index
+  // partiel : 1 seule transaction de type 'rdv_online' par appointment_id.
+  // Les autres sources (rdv = encaissement manuel, rdv_refund) ne sont pas
+  // contraintes (un meme RDV peut avoir 1 acompte rdv_online + 1 encaissement
+  // solde rdv + 1 refund rdv_refund = 3 rows valides).
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_rdv_online_appt
+    ON transactions(appointment_id) WHERE source = 'rdv_online'`);
+
   // Tracabilite des annulations : qui a annule + quand. Permet a la fois
   // l'affichage cote client ('Annule par le salon' vs 'Annule par vous') et
   // le suivi cote commercant. cancelled_by enum : 'merchant' (PUT cancel

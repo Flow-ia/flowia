@@ -574,6 +574,47 @@ module.exports = function attachBookRoute(router) {
         });
       }
       const appt = rows[0];
+
+      // ─── TRACABILITE CAISSE — paiement en ligne ───────────────────────
+      // INSERT immediat de la transaction quand le RDV est paye en ligne.
+      // Pourquoi sync ici (en plus du webhook payment_intent.succeeded) :
+      // race condition possible — le webhook peut arriver AVANT que /book
+      // soit termine. Si le webhook fire avant que l'appt soit cree, son
+      // UPDATE WHERE stripe_payment_intent_id=$1 retourne 0 rows et le
+      // fallback INSERT cote webhook ne s'execute pas (condition
+      // upd.rowCount > 0). Resultat : aucune transaction creee.
+      // -> On insere ici en sync. Le webhook reste comme backup, idempotent
+      //    via UNIQUE index partiel idx_transactions_rdv_online_appt.
+      // qty_total=1 (1 prestation comptee), source='rdv_online' pour
+      // distinguer du 'rdv' (encaissement manuel au comptoir).
+      if (payment_intent_id && paidAmountCents && paidAmountCents > 0) {
+        try {
+          const isFully = !!isFullyPaid;
+          const cn = appt.client_name || 'client';
+          const desc = isFully
+            ? `Paiement en ligne RDV — ${cn}`
+            : `Acompte en ligne RDV — ${cn}`;
+          const now = new Date();
+          await pool.query(
+            `INSERT INTO transactions
+               (user_id, type, amount, description, employee_id, payment_method,
+                date, time, datetime_iso, appointment_id, source, locked, qty_total)
+             VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1)
+             ON CONFLICT (appointment_id) WHERE source = 'rdv_online' DO NOTHING`,
+            [userId, paidAmountCents / 100, desc, appt.employee_id || null,
+             now.toISOString().substring(0, 10),
+             now.toTimeString().substring(0, 8),
+             now.toISOString(), appt.id]
+          );
+        } catch (txErr) {
+          // Erreur d'insertion ne doit PAS bloquer la reservation
+          // (paiement Stripe deja confirme cote client). On log et on
+          // continue. L'admin peut reconcilier via le webhook (si arrive
+          // apres) ou manuellement.
+          console.error('[BOOK tx insert online]', txErr.message);
+        }
+      }
+
       // Invalide le cache slots pour ce date (memCache 30s) — sinon un autre
       // client chargeant /slots dans les 30s voit encore le créneau libre.
       try {
