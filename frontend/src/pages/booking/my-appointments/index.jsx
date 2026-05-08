@@ -492,7 +492,24 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       // la page courante.
       const cancelSlug = apptBeingCancelled.slug || slug;
       const r = await pubApi.cancel(cancelSlug, apptBeingCancelled.id, { reason: 'Annule par le client' });
-      setAppts(p => p.map(a => a.id === apptBeingCancelled.id ? {...a, status:'cancelled'} : a));
+      // Merge complet de la reponse : status + cancelled_by + cancelled_at +
+      // payment_status (refunded si refund declenche). Avant on ne mergeait
+      // que status, donc la carte annulee n'affichait pas le contexte
+      // 'Annule par vous · Rembourse X€' tant qu'un refresh n'avait pas ete
+      // declenche. Maintenant l'UX est immediate : la carte passe en
+      // 'Annules' avec toutes les infos correctes.
+      setAppts(p => p.map(a => a.id === apptBeingCancelled.id
+        ? {
+            ...a,
+            status: 'cancelled',
+            cancelled_by: 'client',
+            cancelled_at: r?.cancelled_at || new Date().toISOString(),
+            cancel_reason: r?.cancel_reason || 'Annule par le client',
+            // Si le refund a effectivement ete declenche cote backend,
+            // payment_status passe a 'refunded' immediatement.
+            payment_status: r?.refund?.refunded ? 'refunded' : a.payment_status,
+          }
+        : a));
       setCancelModal(null);
 
       // Determine le 'kind' pour la modale resultat selon le retour backend.
