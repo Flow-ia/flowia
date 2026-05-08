@@ -135,10 +135,13 @@ export default function ClientPortal() {
         subtitle="Decouvrez les salons FlowIA pres de chez vous, profitez des programmes parrainage, fidelite et codes promo, et reservez en quelques secondes."
       />
 
-      <section style={{ padding: '0 24px 16px', background: S.bg, borderBottom: `1px solid ${S.border}` }}>
+      <section style={{
+        padding: '0 clamp(12px, 4vw, 24px) 16px',
+        background: S.bg, borderBottom: `1px solid ${S.border}`,
+      }}>
         <div style={{
           maxWidth: 920, margin: '-32px auto 0',
-          padding: 18, borderRadius: 14,
+          padding: 'clamp(12px, 3vw, 18px)', borderRadius: 14,
           background: S.bg, border: `1px solid ${S.border}`,
           boxShadow: S.shadowMd,
           display: 'flex', flexDirection: 'column', gap: 10,
@@ -197,7 +200,7 @@ export default function ClientPortal() {
         </div>
       </section>
 
-      <section style={{ padding: '40px 24px 80px' }}>
+      <section style={{ padding: 'clamp(24px, 5vw, 40px) clamp(12px, 4vw, 24px) clamp(48px, 8vw, 80px)' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           {/* Bandeau resultats */}
           <div style={{
@@ -226,12 +229,14 @@ export default function ClientPortal() {
             }}>{error}</div>
           )}
 
-          {/* Grille */}
+          {/* Grille — mobile-first : sur étroit (<300px), 1 colonne pleine
+              largeur ; sinon auto-fill avec colonnes 260px min. minmax(min(100%,...))
+              évite que la colonne 280px déborde sur les écrans <320px. */}
           {items.length > 0 && (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 18,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+              gap: 'clamp(12px, 2vw, 18px)',
             }}>
               {items.map(m => <MerchantSearchCard key={m.slug} merchant={m}/>)}
             </div>

@@ -78,31 +78,53 @@ function MarketplaceHeader() {
       WebkitBackdropFilter: scrolled ? 'saturate(160%) blur(10px)' : 'none',
       transition: 'background 0.2s ease, border-color 0.2s ease',
     }}>
-      <div style={{
-        maxWidth: 1200, margin: '0 auto', padding: '14px 24px',
+      {/* Style mobile : labels CTA tronques sur tres petit ecran pour eviter
+          que les boutons depassent ou wrappent sur 2 lignes. Le bouton garde
+          son icone toujours visible. */}
+      <style>{`
+        .mp-h-pad{ padding: 14px 24px; }
+        .mp-h-cta-text{ display: inline; }
+        .mp-h-logo-text{ display: inline; }
+        @media (max-width: 480px) {
+          .mp-h-pad{ padding: 10px 14px; gap: 8px !important; }
+          .mp-h-cta-text-long{ display: none; }
+          .mp-h-cta-text-short{ display: inline !important; }
+        }
+        @media (max-width: 360px) {
+          .mp-h-logo-text{ display: none; }
+        }
+      `}</style>
+      <div className="mp-h-pad" style={{
+        maxWidth: 1200, margin: '0 auto',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
       }}>
-        {/* Logo → marketplace home */}
+        {/* Logo → marketplace home. Texte 'FlowIA' masqué sur très petit
+            écran (<360px) pour libérer de la place pour les CTAs. */}
         <Link to="/marketplace" style={{
           display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none',
           flexShrink: 0,
         }}>
           <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
-          <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>FlowIA</span>
+          <span className="mp-h-logo-text"
+                style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>
+            FlowIA
+          </span>
         </Link>
 
-        {/* CTAs droite */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {/* CTAs droite — wrap autorisé sur très petit ecran */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <a href={COMMERCANT_URL} style={{
             fontSize: 13, fontWeight: 500, color: S.fg,
-            textDecoration: 'none', padding: '8px 14px', borderRadius: S.r,
+            textDecoration: 'none', padding: '8px 12px', borderRadius: S.r,
             border: `1px solid ${S.border}`, background: S.bg,
             display: 'inline-flex', alignItems: 'center', gap: 5,
             transition: 'background 0.15s ease',
+            whiteSpace: 'nowrap',
           }}
             onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = S.bg; }}>
-            Portail pro
+            <span className="mp-h-cta-text-long">Portail pro</span>
+            <span className="mp-h-cta-text-short" style={{ display: 'none' }}>Pro</span>
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
               <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -111,10 +133,11 @@ function MarketplaceHeader() {
           {!client ? (
             <Link to={loginHref} style={{
               fontSize: 13, fontWeight: 500, color: S.fgInv,
-              textDecoration: 'none', padding: '8px 14px', borderRadius: S.r,
+              textDecoration: 'none', padding: '8px 12px', borderRadius: S.r,
               background: S.fg, border: `1px solid ${S.fg}`,
               display: 'inline-flex', alignItems: 'center', gap: 6,
               transition: 'opacity 0.15s ease',
+              whiteSpace: 'nowrap',
             }}
               onMouseEnter={(e) => { e.currentTarget.style.opacity = 0.9; }}
               onMouseLeave={(e) => { e.currentTarget.style.opacity = 1; }}>
@@ -124,7 +147,8 @@ function MarketplaceHeader() {
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                 <circle cx="12" cy="7" r="4"/>
               </svg>
-              Mon compte client
+              <span className="mp-h-cta-text-long">Mon compte client</span>
+              <span className="mp-h-cta-text-short" style={{ display: 'none' }}>Mon compte</span>
             </Link>
           ) : (
             // Profil connecté : bouton avec initiale + menu déroulant
@@ -225,11 +249,12 @@ export default function MarketplaceBookingShell() {
         <MarketplaceHeader />
 
         {/* Breadcrumb "Retour aux salons" — accentue le contexte marketplace
-            et donne au client un retour explicite vers la liste des salons. */}
+            et donne au client un retour explicite vers la liste des salons.
+            Padding horizontal clamp pour matcher le header mobile. */}
         <div style={{
           background: S.bgMuted,
           borderBottom: `1px solid ${S.border}`,
-          padding: '10px 24px',
+          padding: '10px clamp(14px, 4vw, 24px)',
         }}>
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <Link to="/marketplace" style={{

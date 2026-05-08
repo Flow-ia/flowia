@@ -139,7 +139,7 @@ function startServer() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), usb=(), autoplay=()');
+    res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=(), usb=(), autoplay=()');
     next();
   });
   // Webhook Stripe doit recevoir le raw body AVANT express.json()
