@@ -32,6 +32,18 @@ body {
 @keyframes scaleIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
 @keyframes shake   { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
 
+/* Icônes réseaux sociaux flottantes en arrière-plan de la page d'accueil
+   booking. Démarre tout en bas (translateY 100vh), monte hors écran en haut
+   en oscillant légèrement, puis se réinitialise. Apparition/disparition
+   progressive via opacity. */
+@keyframes floatUp {
+   0%   { transform: translate3d(0, 100vh, 0) rotate(-6deg); opacity: 0; }
+  10%   { opacity: 0.18; }
+  50%   { transform: translate3d(20px, 50vh, 0) rotate(4deg); }
+  90%   { opacity: 0.18; }
+ 100%   { transform: translate3d(-10px, -20vh, 0) rotate(-3deg); opacity: 0; }
+}
+
 .anim-fadeIn   { animation: fadeIn  0.22s ease forwards; }
 .anim-slideUp  { animation: slideUp 0.26s ease forwards; }
 .anim-scaleIn  { animation: scaleIn 0.20s ease forwards; }

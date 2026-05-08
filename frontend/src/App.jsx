@@ -32,6 +32,7 @@ import { TabletModeProvider, useTabletMode } from './contexts/TabletModeProvider
 import { useAdminMode } from './contexts/AdminModeContext';
 import WhoEncashesModal from './components/WhoEncashesModal';
 import AdminPinModal from './components/AdminPinModal';
+import ShareSiteModal from './components/ShareSiteModal';
 import { registerAdminPinHandler, resolveAdminPinPrompt } from './utils/adminPinPrompt';
 
 // Palette paiements — pastels sobres (unifie avec Dashboard/Forms/Transactions)
@@ -1158,6 +1159,7 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdminMode } = useAdminMode();
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Refonte 2026-05-06 : `match[]` débarrassé des préfixes /settings/* legacy.
   // SettingsRedirect (route /settings/*) continue de rediriger les anciens
@@ -1197,6 +1199,8 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
       items: [
         { id:'reglages',   label:'Réglages',   icon:'settings', to:'/reglages',    match:['/reglages'] },
         { id:'abonnement', label:'Abonnement', icon:'wallet',   to:'/abonnement',  match:['/abonnement'] },
+        // Action — pas de route. Ouvre ShareSiteModal monté en bas du composant.
+        { id:'partager',   label:'Partager mon site', icon:'share', action:'share', match:[] },
       ],
     },
   ];
@@ -1227,8 +1231,12 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
 
   const NavRow = ({ it }) => {
     const active = activeId === it.id;
+    const onClick = () => {
+      if (it.action === 'share') { setShareOpen(true); return; }
+      if (it.to) navigate(it.to);
+    };
     return (
-      <button onClick={() => navigate(it.to)}
+      <button onClick={onClick}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
                        padding:'9px 12px', borderRadius:8, border:'none',
                        background: active ? t.card : 'transparent',
@@ -1356,6 +1364,9 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
           <span style={{ fontSize:13, fontWeight:400, whiteSpace:'nowrap' }}>{"Déconnexion"}</span>
         </button>
       </div>
+
+      <ShareSiteModal open={shareOpen} onClose={() => setShareOpen(false)}
+                      theme={t} businessName={user?.businessName}/>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { mediaUrl, employeeImgUrl } from '../../booking/shared';
 import { MobileHoursBlock } from '../../booking/SideCard';
 import { AccordionGroup } from '../../booking/Services';
 import AnnouncementBanner from '../components/AnnouncementBanner';
+import SocialFloatingBg from '../components/SocialFloatingBg';
 
 export function Step1Home({
   th, slug, business, services, employees, refProgram, googleRating,
@@ -13,7 +14,17 @@ export function Step1Home({
   setView, navigate, setSelSvc, setSelEmp, setSelDate, setSelSlot, setMonthKey, goToStep,
 }) {
   return (
-    <div style={{ animation:'fadeIn .2s ease' }}>
+    <div style={{ animation:'fadeIn .2s ease', position:'relative' }}>
+
+      {/* Icônes réseaux sociaux flottantes en arrière-plan — uniquement sur
+          la page d'accueil. Effet décoratif (Insta, Facebook, WhatsApp,
+          SMS, TikTok montent en boucle pour évoquer le partage). */}
+      <SocialFloatingBg />
+
+      {/* Wrapper de contenu : position:relative + zIndex pour rester
+          au-dessus des icônes flottantes (qui sont en position:fixed
+          zIndex:0). */}
+      <div style={{ position:'relative', zIndex:1 }}>
 
       {/* Infos commerçant mobile */}
       <div className="bk-mo" style={{ marginBottom:16, padding:20,
@@ -424,6 +435,8 @@ export function Step1Home({
           </a>
         </div>
       </div>
+
+      </div>{/* fin wrapper position:relative zIndex:1 */}
     </div>
   );
 }
