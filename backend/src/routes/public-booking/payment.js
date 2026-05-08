@@ -207,6 +207,69 @@ module.exports = function attachPaymentRoutes(router) {
         }
       }
 
+      // ── Customer Stripe sur le compte connecte du merchant ─────────────
+      // Cree ou reutilise un stripe.Customer pour le client. Permet de
+      // remplir le champ 'Client' dans le Stripe Dashboard du commercant et
+      // de regrouper les paiements par client (recherche, historique). Auto
+      // self-healing : si le customer_id stocke est invalide (account
+      // disconnect/reconnect, ou customer supprime), on detecte par
+      // retrieve fail et on recree.
+      let connectedCustomerId = null;
+      if (clientId && clientEmail) {
+        try {
+          // Lit le customer_id eventuellement deja sauvegarde.
+          const { rows: caRow } = await pool.query(
+            'SELECT stripe_connected_customer_id FROM client_accounts WHERE id=$1 AND user_id=$2',
+            [clientId, m.user_id]
+          );
+          let savedCustId = caRow[0]?.stripe_connected_customer_id || null;
+
+          // Verifie qu'il existe encore cote Stripe (defense contre stale ID).
+          if (savedCustId) {
+            try {
+              await stripeFetch('GET', `/customers/${savedCustId}`, null, stripeOpts);
+              connectedCustomerId = savedCustId;
+            } catch (rErr) {
+              // Customer disparu (account reconnecte, ou customer.deleted).
+              // -> on flague pour recreer.
+              console.warn('[PAYMENT customer retrieve fail]', rErr.message);
+              savedCustId = null;
+            }
+          }
+
+          // Pas de customer valide -> on en cree un.
+          if (!savedCustId) {
+            try {
+              const newCust = await stripeFetch('POST', '/customers', {
+                email: clientEmail,
+                name:  clientName || clientEmail,
+                metadata: {
+                  flowia_client_id:        clientId,
+                  flowia_global_client_id: globalClientId || '',
+                  flowia_merchant_id:      m.user_id,
+                },
+              }, stripeOpts);
+              if (newCust?.id) {
+                connectedCustomerId = newCust.id;
+                // Sauvegarde pour reuse aux prochains paiements (silent fail
+                // ok : si l'UPDATE echoue, on recreera juste un customer la
+                // prochaine fois — pas un drame, juste un doublon Stripe).
+                pool.query(
+                  'UPDATE client_accounts SET stripe_connected_customer_id=$1 WHERE id=$2 AND user_id=$3',
+                  [newCust.id, clientId, m.user_id]
+                ).catch(err => console.warn('[PAYMENT save customer_id]', err.message));
+              }
+            } catch (createErr) {
+              console.error('[PAYMENT customer create fail]', createErr.message);
+              // Fail-safe : on continue sans customer (PI sera quand meme
+              // cree, juste pas attache a un Customer cote Stripe).
+            }
+          }
+        } catch (e) {
+          console.error('[PAYMENT customer setup]', e.message);
+        }
+      }
+
       // Description visible cote merchant (Stripe Dashboard) ET cote client
       // (recu Stripe envoye automatiquement via receipt_email). Format clair :
       // 'Salon · Prestation · Date Heure · Client'. Tronque a 500 chars
@@ -232,6 +295,14 @@ module.exports = function attachPaymentRoutes(router) {
         currency: 'eur',
         ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
         description,
+        // Customer Stripe sur le compte connecte (cree/reutilise plus haut).
+        // Permet le binding paiement <-> client cote Stripe Dashboard du
+        // merchant + recherche par client + historique paiements groupé.
+        // IMPORTANT : on ne le passe PAS si on reutilise une carte clonee
+        // (clonedPmId), car le PM clone est single-use et non attache a un
+        // customer cote connected -> conflit avec customer + PM. Le binding
+        // se fera alors uniquement via metadata + receipt_email + description.
+        ...(connectedCustomerId && !clonedPmId ? { customer: connectedCustomerId } : {}),
         // receipt_email : Stripe envoie automatiquement un email recu au
         // client apres charge reussie (modele Stripe officiel + branding du
         // compte connecte). Couvre les exigences B2C (preuve de paiement,

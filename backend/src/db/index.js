@@ -1551,6 +1551,15 @@ async function initDB() {
   // Le booléen `paid` existant reste maintenu en parallèle (TRUE quand
   // payment_status='paid') pour ne pas casser les requêtes legacy.
   await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)`);
+  // Tracabilite Stripe : un Customer Stripe par (merchant connected account,
+  // client). Stocke sur client_accounts (mapping naturel par merchant +
+  // email). Permet de remplir le champ 'Client' dans le Stripe Dashboard du
+  // commercant pour identifier rapidement les paiements + recherche.
+  // Si NULL, on en cree un au premier paiement online. Si l'account merchant
+  // change (disconnect/reconnect), le customer_id devient invalide -> on
+  // detecte par retrieve fail et on recree (auto-self-healing).
+  await runMigration(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS stripe_connected_customer_id VARCHAR(255)`);
+
   // Tracabilite des annulations : qui a annule + quand. Permet a la fois
   // l'affichage cote client ('Annule par le salon' vs 'Annule par vous') et
   // le suivi cote commercant. cancelled_by enum : 'merchant' (PUT cancel
