@@ -84,14 +84,16 @@ export default function TabHistorique({ transactions, employees, categories, onU
               const cat = getCat(tx.category_id);
               const emp = getEmp(tx.employee_id);
               const isRev = tx.type === 'revenue';
-              // Detection refund (cf. historique/index.jsx pour la meme logique).
+              // Idem historique/index.jsx : 3 sous-types revenue/RDV.
               const isRefund = tx.source === 'rdv_refund' || (isRev && Number(tx.amount) < 0);
+              const isOnline = tx.source === 'rdv_online';
+              const isRdvLike = tx.source === 'rdv' || isOnline;
               const pm = PAY_INFO[tx.payment_method] || PAY_INFO.other;
               const PmIc = pm.Ic;
               const hasItems    = Array.isArray(tx.items) && tx.items.length > 0;
               const hasPaySplit = Array.isArray(tx.payments) && tx.payments.length > 1;
-              const iconBg      = isRefund ? '#fef2f2' : (isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2');
-              const iconColor   = isRefund ? '#991b1b' : (isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b');
+              const iconBg      = isRefund ? '#fef2f2' : (isRev ? (isRdvLike ? '#eef2ff' : t.cardAlt) : '#fef2f2');
+              const iconColor   = isRefund ? '#991b1b' : (isRev ? (isRdvLike ? '#4338ca' : t.text)    : '#991b1b');
               const amountColor = isRefund ? '#991b1b' : (isRev ? '#065f46' : '#991b1b');
 
               return (
@@ -103,7 +105,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
                                 display:'flex', alignItems:'center', justifyContent:'center' }}>
                     {isRefund
                       ? <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>
-                      : tx.source === 'rdv'
+                      : isRdvLike
                         ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
                         : isRev
                           ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
@@ -116,8 +118,8 @@ export default function TabHistorique({ transactions, employees, categories, onU
                                   overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
                         {isRefund
                           ? (tx.description || 'Remboursement RDV')
-                          : tx.source === 'rdv'
-                            ? (tx.description || 'Encaissement RDV')
+                          : isRdvLike
+                            ? (tx.description || (isOnline ? 'Paiement en ligne RDV' : 'Encaissement RDV'))
                             : (cat?.name || tx.description || 'Transaction')}
                       </p>
                       <span style={{ fontSize:15, fontWeight:500, fontFamily:"'DM Mono', monospace",

@@ -509,6 +509,51 @@ router.post('/webhook', async (req, res) => {
         } catch (escrowErr) {
           console.error('[CONNECT WEBHOOK] schedule payout fail', escrowErr.message);
         }
+
+        // CAISSE / TRACABILITE : INSERT transaction revenue pour la
+        // tracabilite cote commercant. Sans cette ligne, le paiement online
+        // n'apparaissait nulle part dans la caisse / historique / stats.
+        // Description distinct selon paiement integral ou acompte. payment_method
+        // 'card_online' pour distinguer du card classique au comptoir. source
+        // 'rdv_online' pour discriminer rdv (encaissement manuel) vs rdv_online
+        // (paiement Stripe direct cote client). qty_total=1 (1 prestation
+        // payee = 1 prestation comptee dans les KPIs).
+        // Idempotence : l'anti-replay processed_stripe_events deja en place
+        // (vu plus haut) garantit que le webhook ne sera pas traite 2x. En
+        // defense supplementaire, ON CONFLICT DO NOTHING sur stripe_pi_id
+        // si cette colonne unique etait ajoutee plus tard. Pour l'instant
+        // on s'appuie sur l'anti-replay au niveau webhook.
+        try {
+          const { rows: apptInfo } = await pool.query(
+            `SELECT a.client_name, a.employee_id, a.paid, a.user_id,
+                    bs.timezone
+               FROM appointments a
+               LEFT JOIN booking_settings bs ON bs.user_id = a.user_id
+              WHERE a.id = $1`, [upd.rows[0].id]
+          );
+          if (apptInfo.length) {
+            const cn = apptInfo[0].client_name || 'client';
+            const empId = apptInfo[0].employee_id || null;
+            const isFullyPaid = !!upd.rows[0].paid;
+            const desc = isFullyPaid
+              ? `Paiement en ligne RDV — ${cn}`
+              : `Acompte en ligne RDV — ${cn}`;
+            const now = new Date();
+            await pool.query(
+              `INSERT INTO transactions
+                 (user_id, type, amount, description, employee_id, payment_method,
+                  date, time, datetime_iso, appointment_id, source, locked, qty_total)
+               VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1)`,
+              [apptInfo[0].user_id, amt / 100, desc, empId,
+               now.toISOString().substring(0, 10),
+               now.toTimeString().substring(0, 8),
+               now.toISOString(), upd.rows[0].id]
+            );
+            console.log('[CONNECT WEBHOOK] tx inserted for appt', upd.rows[0].id, '+', amt / 100, '€');
+          }
+        } catch (txErr) {
+          console.error('[CONNECT WEBHOOK] tx insert fail', txErr.message);
+        }
       } else {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded sans RDV (ok si confirme cote front):', pi.id);
       }

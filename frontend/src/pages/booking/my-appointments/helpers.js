@@ -30,6 +30,11 @@ export const parseTimeStr = (t) => {
 };
 
 // ── Calcul du statut réel d'un RDV ──────────────────────────────────────────
+// FIX : un RDV payé en ligne EN AVANCE (paid=true) n'est PAS un RDV passé.
+// Le critère 'passes' doit etre uniquement temporel (date passee) ou
+// status='completed' explicite. paid=true peut tres bien etre vrai sur un
+// RDV futur (acompte / paiement integral en ligne au moment de la
+// reservation).
 export const getDisplayStatus = (a) => {
   if (a.status === 'cancelled') {
     return { label:'Annule', color:'#f87171', bg:'rgba(248,113,113,0.10)', icon:'✕', canCancel:false, group:'annules' };
@@ -37,26 +42,35 @@ export const getDisplayStatus = (a) => {
   if (a.status === 'no_show') {
     return { label:'Absent', color:'#94a3b8', bg:'rgba(148,163,184,0.10)', icon:'-', canCancel:false, group:'passes' };
   }
-  if (a.status === 'completed' || a.paid) {
-    return { label: a.paid ? 'Encaisse' : 'Termine', color:'#34d399', bg:'rgba(52,211,153,0.10)', icon:'✓', canCancel:false, group:'passes' };
-  }
   // Construire datetime locale — on utilise start_time comme référence
-  // Un RDV dont le START est passé = classé 'passe', indépendamment du end_time
   const rawDate  = parseDateStr(a.date);
   const startRaw = parseTimeStr(a.start_time);
-  // Heure de début pour isPast (si inconnue → 23:59 → très permissif = futur)
   const startTimeStr = startRaw || '23:59';
   const startDateTime = rawDate ? new Date(`${rawDate}T${startTimeStr}:00`) : null;
   const isPast = startDateTime && !isNaN(startDateTime) && startDateTime < new Date();
+
+  // RDV manuellement marque 'completed' (encaisse en boutique) : peu
+  // importe la date, c'est termine.
+  if (a.status === 'completed') {
+    return { label: a.paid ? 'Encaisse' : 'Termine', color:'#34d399', bg:'rgba(52,211,153,0.10)', icon:'✓', canCancel:false, group:'passes' };
+  }
+  // RDV passe (date depassee) qui n'est pas marque completed -> passes.
+  // S'il est paid online (paid=true), on indique 'Encaisse' (la prestation
+  // a eu lieu et le paiement etait deja regle).
   if (isPast) {
-    return { label:'Passe', color:'#94a3b8', bg:'rgba(148,163,184,0.10)', icon:'↩', canCancel:false, group:'passes' };
+    return { label: a.paid ? 'Encaisse' : 'Passe', color:'#94a3b8', bg:'rgba(148,163,184,0.10)', icon: a.paid ? '✓' : '↩', canCancel:false, group:'passes' };
   }
   // Règle 2h : annulation possible si RDV dans plus de 2h
   const canCancelByTime = !startDateTime || ((startDateTime - new Date()) / (1000 * 60 * 60)) >= 2;
+  // RDV futur -> group 'futurs' meme si paid=true. Le paid=true ajoute
+  // juste une indication 'Paye' au statut pour rassurer le client.
   if (a.status === 'confirmed') {
-    return { label:'Confirme', color:'#4ade80', bg:'rgba(74,222,128,0.10)', icon:'✓', canCancel:canCancelByTime, group:'futurs' };
+    const lbl = a.paid ? 'Confirme · Paye' : 'Confirme';
+    return { label: lbl, color:'#4ade80', bg:'rgba(74,222,128,0.10)', icon:'✓', canCancel:canCancelByTime, group:'futurs' };
   }
-  return { label:'En attente', color:'#fbbf24', bg:'rgba(251,191,36,0.10)', icon:'...', canCancel:canCancelByTime, group:'futurs' };
+  return { label: a.paid ? 'En attente · Paye' : 'En attente',
+           color:'#fbbf24', bg:'rgba(251,191,36,0.10)', icon:'...',
+           canCancel:canCancelByTime, group:'futurs' };
 };
 
 // Formater la date proprement (supporte Date JS, ISO, YYYY-MM-DD)

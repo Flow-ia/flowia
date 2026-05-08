@@ -367,16 +367,19 @@ export default function HistoriqueAdmin({
                 const cat = getCat(tx.category_id);
                 const emp = getEmp(tx.employee_id);
                 const isRev = tx.type === 'revenue';
-                // Detection refund : source dediee 'rdv_refund' OU type=revenue
-                // avec montant negatif (defense en profondeur). Affichage en
-                // rouge avec libelle 'Remboursement RDV'.
+                // 3 sous-types de revenue lies aux RDV :
+                //   source='rdv'         -> encaissement manuel au comptoir
+                //   source='rdv_online'  -> paiement client via Stripe (acompte/integral)
+                //   source='rdv_refund'  -> remboursement Stripe (amount < 0)
                 const isRefund = tx.source === 'rdv_refund' || (isRev && Number(tx.amount) < 0);
+                const isOnline = tx.source === 'rdv_online';
+                const isRdvLike = tx.source === 'rdv' || isOnline;
                 const pm   = PAY_INFO[tx.payment_method] || PAY_INFO.other;
                 const PmIc = pm.Ic;
                 const hasItems    = Array.isArray(tx.items) && tx.items.length > 0;
                 const hasPaySplit = Array.isArray(tx.payments) && tx.payments.length > 1;
-                const iconBg     = isRefund ? '#fef2f2' : (isRev ? (tx.source === 'rdv' ? '#eef2ff' : t.cardAlt) : '#fef2f2');
-                const iconColor  = isRefund ? '#991b1b' : (isRev ? (tx.source === 'rdv' ? '#4338ca' : t.text)    : '#991b1b');
+                const iconBg     = isRefund ? '#fef2f2' : (isRev ? (isRdvLike ? '#eef2ff' : t.cardAlt) : '#fef2f2');
+                const iconColor  = isRefund ? '#991b1b' : (isRev ? (isRdvLike ? '#4338ca' : t.text)    : '#991b1b');
                 const amountColor = isRefund ? '#991b1b' : (isRev ? '#065f46' : '#991b1b');
 
                 return (
@@ -388,7 +391,7 @@ export default function HistoriqueAdmin({
                                   display:'flex', alignItems:'center', justifyContent:'center' }}>
                       {isRefund
                         ? <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>
-                        : tx.source === 'rdv'
+                        : isRdvLike
                           ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
                           : isRev
                             ? <I.ArrowUp style={{ width:15, height:15, color:iconColor }}/>
@@ -401,8 +404,8 @@ export default function HistoriqueAdmin({
                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
                           {isRefund
                             ? (tx.description || 'Remboursement RDV')
-                            : tx.source === 'rdv'
-                              ? (tx.description || 'Encaissement RDV')
+                            : isRdvLike
+                              ? (tx.description || (isOnline ? 'Paiement en ligne RDV' : 'Encaissement RDV'))
                               : (cat?.name || tx.description || 'Transaction')}
                         </p>
                         <span style={{ fontSize:15, fontWeight:500,
@@ -439,13 +442,14 @@ export default function HistoriqueAdmin({
                           <PmIc style={{ width:10, height:10, color:pm.color, flexShrink:0 }}/>
                           {pm.label}
                         </span>
-                        {tx.source === 'rdv' && (
+                        {isRdvLike && !isRefund && (
                           <span style={{ display:'inline-flex', alignItems:'center', gap:4,
                                          padding:'2px 8px', borderRadius:99,
-                                         background:'#eef2ff', color:'#4338ca',
+                                         background: isOnline ? '#ecfeff' : '#eef2ff',
+                                         color:    isOnline ? '#0e7490' : '#4338ca',
                                          fontSize:11, fontWeight:500, flexShrink:0 }}>
                             <I.Calendar style={{ width:10, height:10 }}/>
-                            RDV
+                            {isOnline ? 'RDV en ligne' : 'RDV'}
                           </span>
                         )}
                         {isRefund && (
