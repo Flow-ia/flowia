@@ -83,7 +83,7 @@ export default function MerchantSearchCard({ merchant }) {
   const profile = mediaApi.absoluteUrl(m.profileUrl);
 
   return (
-    <Link to={`/book/${m.slug}`} style={{
+    <Link to={`/marketplace/book/${m.slug}`} style={{
       display: 'flex', flexDirection: 'column',
       borderRadius: 14, overflow: 'hidden',
       background: S.bg, border: `1px solid ${S.border}`,

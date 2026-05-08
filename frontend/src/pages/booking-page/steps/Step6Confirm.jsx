@@ -12,7 +12,7 @@ import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 const NOTES_MAX = 250;
 
 export function Step6Confirm({
-  th, slug, selSvc, selEmp, selDate, selSlot,
+  th, slug, base, selSvc, selEmp, selDate, selSlot,
   clientUser, setClientUser, clientName, clientEmail, clientPhone, setCP,
   notes, setNotes, phoneErr, setPhoneErr,
   promoCode, setPromoCode, promoData, setPromoData, promoErr, setPromoErr,
@@ -270,7 +270,7 @@ export function Step6Confirm({
           {clientUser.first_name} {clientUser.last_name} · {clientUser.email}
         </span>
         <button type="button"
-          onClick={()=>{ if (navigate) navigate(`/book/${slug}/client/profil`,{replace:false}); if (setMyApptsInitTab) setMyApptsInitTab('profile'); if (setView) setView('myAppts'); }}
+          onClick={()=>{ if (navigate) navigate(`${base}/client/profil`,{replace:false}); if (setMyApptsInitTab) setMyApptsInitTab('profile'); if (setView) setView('myAppts'); }}
           style={{padding:0,fontSize:12,fontWeight:500,
             color:th.accent,background:'transparent',border:'none',cursor:'pointer'}}>
           {"Profil"}

@@ -8,7 +8,7 @@ import { AccordionGroup } from '../../booking/Services';
 import AnnouncementBanner from '../components/AnnouncementBanner';
 
 export function Step1Home({
-  th, slug, business, services, employees, refProgram, googleRating,
+  th, slug, base, business, services, employees, refProgram, googleRating,
   svcGroups, svcNoCat,
   setView, navigate, setSelSvc, setSelEmp, setSelDate, setSelSlot, setMonthKey, goToStep,
 }) {
@@ -61,7 +61,7 @@ export function Step1Home({
           <MobileHoursBlock th={th} hours={business.hours} />
         )}
         {refProgram && refProgram !== 'none' && refProgram.is_enabled === true && (
-          <button onClick={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
+          <button onClick={() => { setView('parrain'); navigate(`${base}/parrain`, {replace:false}); }}
             style={{ marginTop:10, padding:'8px 12px', borderRadius:9, cursor:'pointer',
               background:'#8b5cf615', border: '0.5px solid #8b5cf640',
               color:'#6d28d9', fontWeight: 500, fontSize:12,
@@ -410,7 +410,7 @@ export function Step1Home({
           <p style={{ fontSize:14, fontWeight: 500, color:th.text, margin:'0 0 10px' }}>
             Bon à savoir
           </p>
-          <a href={`/book/${slug}/politique`} target="_blank" rel="noopener noreferrer"
+          <a href={`${base}/politique`} target="_blank" rel="noopener noreferrer"
             style={{ display:'flex', alignItems:'center', gap:7, fontSize:13,
               color:'#2563eb', textDecoration:'none' }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

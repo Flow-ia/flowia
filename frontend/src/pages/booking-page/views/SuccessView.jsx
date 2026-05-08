@@ -5,7 +5,7 @@ import { NavBar } from '../../booking/NavBar';
 import { pubApi, globalClientApi } from '../../../utils/api';
 
 export function SuccessView({
-  th, slug, business, clientUser, bookedAppt, selSvc, selEmp, selDate, selSlot,
+  th, slug, base, business, clientUser, bookedAppt, selSvc, selEmp, selDate, selSlot,
   clientName, clientEmail, postRegOverlay, toggleTheme,
   setShowAuthPanel, navigate, setView, setMyApptsInitTab,
   setClientUser, setCN, setCE, setCP, resetBooking,
@@ -16,7 +16,7 @@ export function SuccessView({
       {/* Navbar persistante */}
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
         onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
-        onMyAppts={()=>{navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
+        onMyAppts={()=>{navigate(`${base}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
         onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
         onNavigateHome={(id)=>{ resetBooking(); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },300); }} />
 
@@ -112,7 +112,7 @@ export function SuccessView({
         {/* Actions */}
         <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8, marginTop:14 }}>
           {clientUser && (
-            <button onClick={() => { navigate(`/book/${slug}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts'); }}
+            <button onClick={() => { navigate(`${base}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts'); }}
               style={{ width:'100%', padding:'13px', borderRadius:12, border:'none',
                 background:th.accent, color:th.accentText, fontWeight: 500, fontSize:14,
                 cursor:'pointer', letterSpacing:'-0.01em' }}>

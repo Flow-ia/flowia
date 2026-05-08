@@ -93,10 +93,11 @@ function BookingPageWrapper() {
         if (cancelled) return;
         if (r.redirected && r.slug && r.slug !== slug) {
           // Reconstruit l'URL avec le nouveau slug en preservant le path
-          // sous /book/:slug et la query string.
+          // (gère /book/:slug ET /marketplace/book/:slug) et la query string.
+          const escapedSlug = slug.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
           const newPath = location.pathname.replace(
-            new RegExp('^/book/' + slug.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')),
-            '/book/' + r.slug
+            new RegExp('(^|/)book/' + escapedSlug),
+            '$1book/' + r.slug
           );
           navigate(newPath + location.search + location.hash, { replace: true });
           return;
@@ -131,18 +132,17 @@ function QuickJoinRedirect() {
   return <Navigate to={`/book/${slug}/auth${location.search}${sep}quick=1`} replace />;
 }
 
-// Wrapper conditionnel des routes /book/:slug/*. Si le visiteur est sur
-// flowiapro.com (host marketing) → on enveloppe avec MarketplaceBookingShell
-// (Header + Footer marketplace + breadcrumb retour). Sur tout autre host
-// (custom domain commerçant, commercant.flowiapro.com, dev) → Outlet nu :
-// la page booking s'affiche comme un site propre au commerçant.
-function BookingHostGate() {
-  if (isMarketingHost()) {
-    // MarketplaceBookingShell rend déjà <Outlet /> en interne.
-    return <MarketplaceBookingShell />;
-  }
-  return <Outlet />;
-}
+// Plus de BookingHostGate basé sur le host : la décision se fait désormais
+// par URL. /book/:slug/* → page de réservation nue (site propre du
+// commerçant) ; /marketplace/book/:slug/* → enveloppée par
+// MarketplaceBookingShell (header marketplace + footer + breadcrumb).
+//
+// Cela donne au commerçant deux liens distincts qu'il peut partager :
+//   - https://flowiapro.com/book/<slug>           (sans header marketplace)
+//   - https://flowiapro.com/marketplace/book/<slug>  (avec header marketplace)
+//
+// La marketplace publique linke par défaut vers /marketplace/book/<slug>
+// pour préserver le contexte de navigation (cf. MerchantSearchCard).
 
 // Catch-all : décide entre marketing site, redirect legacy ou app commerçant
 // selon le hostname courant. /book/* sont toujours accessibles avant ce switch.
@@ -213,35 +213,55 @@ root.render(
             <Routes>
               {/* ── Callback OAuth (popup retour Google → ferme + broadcast) ── */}
               <Route path="/__oauth" element={<OAuthCallback />} />
-              {/* ── Routes PUBLIQUES booking (toujours accessibles sur tous les hosts) ──
-                  Wrappées dans BookingHostGate : sur flowiapro.com → Header +
-                  Footer marketplace ; sur les autres hosts (commercant.*,
-                  custom domain) → Outlet nu (site propre du commerçant). */}
-              <Route path="/j/:slug"                                                                       element={<QuickJoinRedirect />} />
-              <Route element={<BookingHostGate />}>
-                <Route path="/book/:slug/politique"                                                          element={<BookingPolitiqueWrapper />} />
-                {/* Alias commit 17 (RGPD) — /conditions pointe vers la même page que /politique. */}
-                <Route path="/book/:slug/conditions"                                                         element={<BookingPolitiqueWrapper />} />
-                {/* Toutes les sous-routes du flow de réservation → même composant BookingPage */}
-                {/* Le composant gère lui-même la lecture et l'ecriture de l'URL via useNavigate  */}
-                <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/confirmation" element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/infos"        element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau"                    element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date"                                     element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/employe/:employeeId"                                                             element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/service/:serviceId/employe"                                                      element={<BookingPageWrapper />} />
-                {/* RGPD commit 19 — page de confirmation OAuth Google (création différée) */}
-                <Route path="/book/:slug/auth/google-confirm"                                                              element={<GoogleConfirm />} />
-                <Route path="/book/:slug/auth"                                                                             element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/login"                                                                            element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/register"                                                                         element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/client/profil"                                                                    element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/client/rdv"                                                                       element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/client/passages"                                                                  element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/client/passages/:visitId"                                                         element={<BookingPageWrapper />} />
-                <Route path="/book/:slug/parrain"                                                                          element={<BookingPageWrapper />} />
-                <Route path="/book/:slug"                                                                                  element={<BookingPageWrapper />} />
+              {/* ── Routes PUBLIQUES booking nu (site propre commerçant) ──
+                  Pas de wrapping marketplace, peu importe le host. */}
+              <Route path="/j/:slug"                                                                                       element={<QuickJoinRedirect />} />
+              <Route path="/book/:slug/politique"                                                                          element={<BookingPolitiqueWrapper />} />
+              <Route path="/book/:slug/conditions"                                                                         element={<BookingPolitiqueWrapper />} />
+              <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/confirmation"    element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/infos"           element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau"                       element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/service/:serviceId/employe/:employeeId/date"                                        element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/employe/:employeeId"                                                                element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/service/:serviceId/employe"                                                         element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/auth/google-confirm"                                                                element={<GoogleConfirm />} />
+              <Route path="/book/:slug/auth"                                                                               element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/login"                                                                              element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/register"                                                                           element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/client/profil"                                                                      element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/client/rdv"                                                                         element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/client/passages"                                                                    element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/client/passages/:visitId"                                                           element={<BookingPageWrapper />} />
+              <Route path="/book/:slug/parrain"                                                                            element={<BookingPageWrapper />} />
+              <Route path="/book/:slug"                                                                                    element={<BookingPageWrapper />} />
+
+              {/* ── Routes booking SOUS la marketplace ──
+                  /marketplace/book/:slug/* → wrappées par MarketplaceBookingShell
+                  qui ajoute le Header marketplace (logo + Portail pro + Mon
+                  compte client) et le Footer. Le composant booking interne
+                  reste identique mais navigate avec ce préfixe (helpers.js
+                  getBookingBase). */}
+              <Route element={<MarketplaceBookingShell />}>
+                <Route path="/marketplace/book/:slug/politique"                                                                          element={<BookingPolitiqueWrapper />} />
+                <Route path="/marketplace/book/:slug/conditions"                                                                         element={<BookingPolitiqueWrapper />} />
+                <Route path="/marketplace/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/confirmation"    element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau/:slot/infos"           element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/service/:serviceId/employe/:employeeId/date/:dateStr/creneau"                       element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/service/:serviceId/employe/:employeeId/date"                                        element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/employe/:employeeId"                                                                element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/service/:serviceId/employe"                                                         element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/auth/google-confirm"                                                                element={<GoogleConfirm />} />
+                <Route path="/marketplace/book/:slug/auth"                                                                               element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/login"                                                                              element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/register"                                                                           element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/client/profil"                                                                      element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/client/rdv"                                                                         element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/client/passages"                                                                    element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/client/passages/:visitId"                                                           element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug/parrain"                                                                            element={<BookingPageWrapper />} />
+                <Route path="/marketplace/book/:slug"                                                                                    element={<BookingPageWrapper />} />
               </Route>
+
               {/* Commit 26 — désinscription marketing publique (RGPD), accessible sans auth */}
               <Route path="/unsubscribe"                                                                                 element={<Unsubscribe />} />
               {/* ── Catch-all : marketing, redirect legacy ou app commerçant selon hostname ── */}

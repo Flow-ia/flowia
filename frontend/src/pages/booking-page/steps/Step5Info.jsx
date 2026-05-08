@@ -9,7 +9,7 @@ import { AuthPanel } from '../../booking/Account';
 import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 
 export function Step5Info({
-  th, slug, selSvc, selEmp, selDate, selSlot,
+  th, slug, base, selSvc, selEmp, selDate, selSlot,
   clientUser, setClientUser,
   clientPhone, setCP, notes, setNotes, bookErr,
   phoneErr, setPhoneErr,
@@ -54,7 +54,7 @@ export function Step5Info({
               {clientUser.first_name} {clientUser.last_name} · {clientUser.email}
             </span>
             <button type="button"
-              onClick={()=>{navigate(`/book/${slug}/client/profil`,{replace:false}); setMyApptsInitTab('profile'); setView('myAppts');}}
+              onClick={()=>{navigate(`${base}/client/profil`,{replace:false}); setMyApptsInitTab('profile'); setView('myAppts');}}
               style={{padding:0,fontSize:12,fontWeight:500,
                 color:th.accent,background:'transparent',border:'none',cursor:'pointer'}}>
               {"Profil"}

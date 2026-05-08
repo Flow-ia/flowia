@@ -33,9 +33,23 @@ export const parsePhone = (phone) => {
   return { country: PHONE_COUNTRIES[0], local: phone };
 };
 
-// Construire l'URL pour chaque étape du flow réservation
-export const stepToPath = (slug, s, svcId, empId, dateStr, slot) => {
-  const base = `/book/${slug}`;
+// Détecte si l'utilisateur arrive via la marketplace
+// (URL `/marketplace/book/:slug/...`) et retourne le préfixe correspondant
+// pour préserver le contexte marketplace dans toutes les navigations
+// internes du flow (sinon les liens cassent et on perd le shell marketplace).
+//   /marketplace/book/lille  → /marketplace/book/lille
+//   /book/lille (any host)   → /book/lille
+export const getBookingBase = (slug, pathname) => {
+  const p = String(pathname || '');
+  if (p.startsWith('/marketplace/book/')) return `/marketplace/book/${slug}`;
+  return `/book/${slug}`;
+};
+
+// Construire l'URL pour chaque étape du flow réservation à partir d'un
+// base path déjà calculé (issu de getBookingBase). Avant : ce helper
+// hardcodait `/book/${slug}` ; on prend désormais base directement pour
+// supporter le préfixe `/marketplace/book/...`.
+export const stepToPath = (base, s, svcId, empId, dateStr, slot) => {
   if (s === 1) return base;
   if (s === 2 && svcId) return `${base}/service/${svcId}/employe`;
   if (s === 3 && svcId && empId) return `${base}/service/${svcId}/employe/${empId}/date`;

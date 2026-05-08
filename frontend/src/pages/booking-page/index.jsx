@@ -15,7 +15,7 @@ import { SideCard } from '../booking/SideCard';
 import { AuthPanel, PostRegisterPopup } from '../booking/Account';
 
 import { PHONE_COUNTRIES, ANCHOR_MAP, REF_RE } from './constants';
-import { formatPhone, validatePhone, parsePhone, stepToPath, groupServicesByCategory } from './helpers';
+import { formatPhone, validatePhone, parsePhone, stepToPath, groupServicesByCategory, getBookingBase } from './helpers';
 import { ReferralBanner } from './ReferralBanner';
 import { BlockedView } from './views/BlockedView';
 import { MyApptsView } from './views/MyApptsView';
@@ -52,6 +52,12 @@ export default function BookingPage({ slug }) {
   // ── Routing — synchronisation URL ↔ état réservation ──────────────────
   const navigate  = useNavigate();
   const location  = useLocation();
+
+  // Préfixe de toutes les routes du flow réservation. Si le visiteur arrive
+  // via /marketplace/book/:slug → on garde ce préfixe pour préserver le
+  // shell marketplace (Header + Footer) à chaque navigation interne (auth,
+  // mes RDV, parrainage…). Sinon → /book/:slug standard.
+  const base = getBookingBase(slug, location.pathname);
 
   // Code de parrainage capturé depuis ?ref=CODE (persistant dans localStorage
   // pour survivre au flow auth qui peut rediriger). Envoyé au POST /book.
@@ -132,7 +138,7 @@ export default function BookingPage({ slug }) {
       if (!sessionMarker) {
         setAuthInitMode('login');
         setShowAuthPanel(true);
-        navigate(`/book/${slug}/login`, { replace: true });
+        navigate(`${base}/login`, { replace: true });
         return;
       }
     }
@@ -142,7 +148,7 @@ export default function BookingPage({ slug }) {
       // rediriger vers sa page de compte (ou la page booking racine si
       // on vient d'un deep-link). Évite d'imposer une reconnexion inutile.
       if (localStorage.getItem('ff_client_info') || localStorage.getItem('ff_client_token')) {
-        navigate(`/book/${slug}/client/profil`, { replace: true });
+        navigate(`${base}/client/profil`, { replace: true });
         setView('myAppts');
         setMyApptsInitTab('profile');
       } else {
@@ -200,7 +206,7 @@ export default function BookingPage({ slug }) {
     const empId   = (emp  || selEmp)?._anyEmployee ? 'any' : ((emp || selEmp)?.id || null);
     const dateStr = (date || selDate)?.toLocaleDateString('sv-SE') || null;
     const slotStr = slot || selSlot || null;
-    const path    = stepToPath(slug, s, svcId, empId, dateStr, slotStr);
+    const path    = stepToPath(base, s, svcId, empId, dateStr, slotStr);
     navigate(path, { replace: s === 1 });
     setStep(s);
   };
@@ -569,7 +575,7 @@ export default function BookingPage({ slug }) {
       if (svc) setSelSvc(svc);
       else {
         showToast('Le service de votre lien n\'est plus disponible.', 'info');
-        navigate(`/book/${slug}`, { replace: true });
+        navigate(`${base}`, { replace: true });
         urlRestoredRef.current = true;
         return;
       }
@@ -583,7 +589,7 @@ export default function BookingPage({ slug }) {
         if (emp) setSelEmp(emp);
         else {
           showToast('L\'employe de votre lien n\'est plus disponible.', 'info');
-          navigate(`/book/${slug}`, { replace: true });
+          navigate(`${base}`, { replace: true });
           urlRestoredRef.current = true;
           return;
         }
@@ -780,7 +786,7 @@ export default function BookingPage({ slug }) {
     setPendingBook(false);
     setInlineAuthMode('none');
     setPhoneLocal(''); setPhoneErr(''); setPhoneDrop(false);
-    navigate(`/book/${slug}`, { replace: true });
+    navigate(`${base}`, { replace: true });
   };
 
   // Calendrier
@@ -825,7 +831,7 @@ export default function BookingPage({ slug }) {
   // Vue : Mes RDV
   if (view === 'myAppts') return (
     <MyApptsView
-      th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
+      th={th} slug={slug} base={base} business={business} clientUser={clientUser} refProgram={refProgram}
       myApptsInitTab={myApptsInitTab} myApptsInitVisitId={myApptsInitVisitId}
       bookedAppt={bookedAppt} location={location} postRegOverlay={postRegOverlay}
       toggleTheme={toggleTheme} setShowAuthPanel={setShowAuthPanel} navigate={navigate}
@@ -838,7 +844,7 @@ export default function BookingPage({ slug }) {
   // Vue : Page parrainage
   if (view === 'parrain') return (
     <ParrainView
-      th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
+      th={th} slug={slug} base={base} business={business} clientUser={clientUser} refProgram={refProgram}
       refMyCode={refMyCode} refMyHistory={refMyHistory} refMyRewards={refMyRewards}
       postRegOverlay={postRegOverlay} toggleTheme={toggleTheme}
       setShowAuthPanel={setShowAuthPanel} navigate={navigate} setView={setView}
@@ -851,7 +857,7 @@ export default function BookingPage({ slug }) {
   // Vue : Confirmation
   if (view === 'success' && bookedAppt) return (
     <SuccessView
-      th={th} slug={slug} business={business} clientUser={clientUser}
+      th={th} slug={slug} base={base} business={business} clientUser={clientUser}
       bookedAppt={bookedAppt} selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
       clientName={clientName} clientEmail={clientEmail}
       postRegOverlay={postRegOverlay} toggleTheme={toggleTheme}
@@ -909,11 +915,11 @@ export default function BookingPage({ slug }) {
 
       {/* ══ NAVBAR — composant partagé ══ */}
       <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
-        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`/book/${slug}/login`, {replace:false}); }}
-        onMyAppts={()=>{ navigate(`/book/${slug}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
+        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`${base}/login`, {replace:false}); }}
+        onMyAppts={()=>{ navigate(`${base}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
         onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
-        onReferralPage={() => { setView('parrain'); navigate(`/book/${slug}/parrain`, {replace:false}); }}
-        onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`/book/${slug}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
+        onReferralPage={() => { setView('parrain'); navigate(`${base}/parrain`, {replace:false}); }}
+        onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`${base}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
 
       {/* ══ Bandeau parrainage ══ */}
       {!showAuthPanel && clientUser && view === 'booking' && (
@@ -963,7 +969,7 @@ export default function BookingPage({ slug }) {
                   // pour que le refresh garde l'écran en cours.
                   if (m === 'login' || m === 'register') {
                     setAuthInitMode(m);
-                    navigate(`/book/${slug}/${m}`, { replace: true });
+                    navigate(`${base}/${m}`, { replace: true });
                   }
                 }}
                 onAuth={(u, meta) => {
@@ -976,17 +982,17 @@ export default function BookingPage({ slug }) {
                   // Inscription QR : nettoyer `?quick=1` + repartir sur l'accueil
                   if (meta?.quick) {
                     setQuickMode(false);
-                    navigate(`/book/${slug}`, { replace:true });
+                    navigate(`${base}`, { replace:true });
                   }
                 }}
-                onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); setAuthInitMode('login'); navigate(`/book/${slug}`, {replace:true}); }} />
+                onClose={requireAccount ? null : ()=>{ setShowAuthPanel(false); setAuthInitEmail(''); setAuthInitMode('login'); navigate(`${base}`, {replace:true}); }} />
             </div>
           )}
 
           {/* ══ PAGE D'ACCUEIL (étape 1) ══ */}
           {!showAuthPanel && step === 1 && (
             <Step1Home
-              th={th} slug={slug} business={business} services={services} employees={employees}
+              th={th} slug={slug} base={base} business={business} services={services} employees={employees}
               refProgram={refProgram} googleRating={googleRating}
               svcGroups={svcGroups} svcNoCat={svcNoCat}
               setView={setView} navigate={navigate}
@@ -1060,7 +1066,7 @@ export default function BookingPage({ slug }) {
                   tel + reductions + code promo + notes + paiement + bouton. */}
               {step === 6 && (
                 <Step6Confirm
-                  th={th} slug={slug}
+                  th={th} slug={slug} base={base}
                   selSvc={selSvc} selEmp={selEmp} selDate={selDate} selSlot={selSlot}
                   clientUser={clientUser} setClientUser={setClientUser}
                   clientName={clientName} clientEmail={clientEmail}

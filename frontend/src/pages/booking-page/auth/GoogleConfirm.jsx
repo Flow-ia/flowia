@@ -9,8 +9,9 @@
 // Le décodage JWT côté front sert UNIQUEMENT à pré-remplir l'UI ; la
 // véritable validation (signature + scope + expiration) est côté back.
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { pubApi } from '../../../utils/api';
+import { getBookingBase } from '../helpers';
 import { ConsentCheckboxes } from '../../../components/ConsentCheckboxes';
 import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 import { Icon } from '../../../components/Icon';
@@ -46,6 +47,8 @@ function initials(first, last) {
 export default function GoogleConfirm() {
   const { slug } = useParams();
   const [search] = useSearchParams();
+  const location = useLocation();
+  const base = getBookingBase(slug, location.pathname);
   const preToken = search.get('pre_token') || '';
 
   const saved = (typeof localStorage !== 'undefined' && localStorage.getItem('ff_booking_theme')) || 'light';
@@ -101,7 +104,7 @@ export default function GoogleConfirm() {
       localStorage.setItem('ff_client_info', JSON.stringify(res.client));
       try { localStorage.removeItem('ff_oauth_pre_register'); } catch {}
       // Redirect vers la page de réservation du commerce — onAuth-équivalent.
-      window.location.assign(`/book/${slug}`);
+      window.location.assign(`${base}`);
     } catch (e) {
       // Côté back : 400 CGU_REQUIRED, 401 OAUTH_PRE_TOKEN_INVALID,
       // 410 OAUTH_PRE_TOKEN_EXPIRED. On mappe vers l'écran approprié.
@@ -123,7 +126,7 @@ export default function GoogleConfirm() {
 
   const cancel = () => {
     try { localStorage.removeItem('ff_oauth_pre_register'); } catch {}
-    window.location.assign(`/book/${slug}/login`);
+    window.location.assign(`${base}/login`);
   };
 
   // ─── Écran d'erreur expiré / invalide ────────────────────────────────────
