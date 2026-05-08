@@ -10,15 +10,20 @@ export function SuccessView({
   setShowAuthPanel, navigate, setView, setMyApptsInitTab,
   setClientUser, setCN, setCE, setCP, resetBooking,
 }) {
+  // NavBar masquée sous /marketplace/* : MarketplaceBookingShell fournit
+  // déjà son header dédié.
+  const inMarketplace = String(base || '').startsWith('/marketplace/');
   return (
     <><div style={{ minHeight:'100vh', background:th.bg,
       fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
-      {/* Navbar persistante */}
-      <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
-        onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
-        onMyAppts={()=>{navigate(`${base}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
-        onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
-        onNavigateHome={(id)=>{ resetBooking(); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },300); }} />
+      {/* Navbar persistante (masquée si shell marketplace actif) */}
+      {!inMarketplace && (
+        <NavBar th={th} slug={slug} business={business} clientUser={clientUser}
+          onToggleTheme={toggleTheme} onShowAuth={()=>setShowAuthPanel(true)}
+          onMyAppts={()=>{navigate(`${base}/client/rdv`,{replace:false}); setView('myAppts'); setMyApptsInitTab('appts');}}
+          onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
+          onNavigateHome={(id)=>{ resetBooking(); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },300); }} />
+      )}
 
       <div style={{ maxWidth:440, margin:'0 auto', padding:'28px 20px 40px',
         display:'flex', flexDirection:'column', alignItems:'stretch' }}>

@@ -913,13 +913,19 @@ export default function BookingPage({ slug }) {
         .bk-touch{ min-height:44px }
       `}</style>
 
-      {/* ══ NAVBAR — composant partagé ══ */}
-      <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
-        onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`${base}/login`, {replace:false}); }}
-        onMyAppts={()=>{ navigate(`${base}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
-        onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
-        onReferralPage={() => { setView('parrain'); navigate(`${base}/parrain`, {replace:false}); }}
-        onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`${base}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
+      {/* ══ NAVBAR — composant partagé ══
+          Masquée quand on est sous /marketplace/book/<slug> : le shell
+          marketplace (MarketplaceBookingShell) fournit déjà son header
+          dédié (logo FlowIA + Portail pro + Mon compte client). Évite la
+          superposition de 2 nav bars en haut de page. */}
+      {!base.startsWith('/marketplace/') && (
+        <NavBar th={th} slug={slug} business={business} clientUser={clientUser} refProgram={refProgram}
+          onToggleTheme={toggleTheme} onShowAuth={()=>{ setShowAuthPanel(true); navigate(`${base}/login`, {replace:false}); }}
+          onMyAppts={()=>{ navigate(`${base}/client/rdv`, {replace:false}); setMyApptsInitTab('appts'); setView('myAppts'); }}
+          onLogout={()=>{ pubApi.logout(slug).catch(()=>{}); globalClientApi.logout().catch(()=>{}); localStorage.removeItem('ff_client_token'); localStorage.removeItem('ff_gc_token'); localStorage.removeItem('ff_client_info'); setClientUser(null); setCN(''); setCE(''); setCP(''); }}
+          onReferralPage={() => { setView('parrain'); navigate(`${base}/parrain`, {replace:false}); }}
+          onNavigateHome={(id)=>{ setView('booking'); goToStep(1); setShowAuthPanel(false); navigate(`${base}`, {replace:false}); if(id) setTimeout(()=>{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },200); }} />
+      )}
 
       {/* ══ Bandeau parrainage ══ */}
       {!showAuthPanel && clientUser && view === 'booking' && (
