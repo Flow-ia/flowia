@@ -745,6 +745,39 @@ module.exports = function attachBookRoute(router) {
       appt.referral_skip_reason  = referralCtx ? null : (referralSkipReason || null);
       res.status(201).json(appt);
 
+      // Tracabilite Stripe : a present que l'appointment est cree, on peut
+      // enrichir la description du PaymentIntent avec le RDV ref + date +
+      // heure. Avant ce point la, le PI etait deja cree avec une description
+      // generique 'Salon · Service · Date · Client'. On surcharge ici pour
+      // que le merchant retrouve le RDV directement depuis Stripe Dashboard
+      // (description format : 'RDV-XXXXXXXX · DD/MM/YYYY HH:MM').
+      // Plus la metadata appointment_id (ID complet) pour reconciliation
+      // automatique. Non-bloquant : si update echoue, le PI garde sa
+      // description initiale, pas grave.
+      if (payment_intent_id && stripeAccountId) {
+        const apptRefShort = String(appt.id).substring(0, 8).toUpperCase();
+        const dateLocale = (() => {
+          try {
+            const [y, mo, d] = String(appt.date).split('-');
+            return `${d}/${mo}/${y}`;
+          } catch { return String(appt.date); }
+        })();
+        const newDesc = `RDV-${apptRefShort} · ${dateLocale} ${String(appt.start_time).substring(0,5)}`;
+        const { stripeFetch } = require('../global-clients/stripe-helpers');
+        stripeFetch('POST', `/payment_intents/${payment_intent_id}`, {
+          description: newDesc,
+          metadata: {
+            appointment_id:     appt.id,
+            appointment_ref:    apptRefShort,
+            appt_date:          appt.date,
+            appt_start_time:    appt.start_time,
+            // On garde aussi les champs deja en metadata (Stripe les conserve
+            // en merge sur update) : client_name, client_email, etc.
+          },
+        }, { stripeAccount: stripeAccountId })
+          .catch(err => console.warn('[BOOK PI update desc]', err.message));
+      }
+
       // Notification in-app + push + email transactionnel au commerçant
       // (commit 25 : email ajouté). Non-bloquant.
       notifyNewAppointment(
