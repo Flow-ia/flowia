@@ -138,7 +138,29 @@ module.exports = function attachClientProfileRoutes(router) {
         [dateStr, timeStr, biz.timezone]
       );
       const diffHours = parseFloat(tzDiff[0].diff_hours);
-      if (policyHours > 0 && diffHours < policyHours) {
+
+      // ── Politique d'annulation Planity-like ─────────────────────────────
+      // (a) Hors delais (diffHours < policyHours) : annulation REFUSEE pour
+      //     les RDV NON payes en ligne. Pour les RDV PAYES en ligne, on
+      //     accepte l'annulation mais SANS refund (acompte conservé par le
+      //     salon — politique no-show standard marche).
+      // (b) Dans les delais : annulation OK + refund automatique si paiement
+      //     en ligne (Strategie B = la commission FlowIA est aussi rendue
+      //     au commerçant).
+      // (c) policy_hours=0 : annulation toujours possible avec refund integral.
+      const isWithinPolicy = policyHours === 0 || diffHours >= policyHours;
+
+      // Lit le statut paiement pour decider si on refund.
+      const { rows: payRows } = await pool.query(
+        `SELECT payment_status, stripe_payment_intent_id, paid_amount_cents
+           FROM appointments WHERE id=$1 LIMIT 1`,
+        [req.params.id]
+      );
+      const wasPaidOnline = payRows[0]?.payment_status === 'paid'
+                         && !!payRows[0]?.stripe_payment_intent_id;
+
+      // Hors delais ET pas paye en ligne -> blocage habituel (rien a sauver).
+      if (!isWithinPolicy && !wasPaidOnline) {
         const labelHours = policyHours < 24 ? `${policyHours}h`
                                             : `${Math.round(policyHours/24)} jour${policyHours>=48?'s':''}`;
         return res.status(400).json({
@@ -152,6 +174,7 @@ module.exports = function attachClientProfileRoutes(router) {
       }
 
       // ── Annulation effective ────────────────────────────────────────────
+      // Note : si paye + hors delais, on annule mais on NE refundera PAS.
       const { rows } = await pool.query(
         `UPDATE appointments SET status='cancelled', cancel_reason=$1, updated_at=NOW()
          WHERE id=$2 AND user_id=$3
@@ -164,6 +187,29 @@ module.exports = function attachClientProfileRoutes(router) {
            google_event_id, google_calendar_id`,
         [req.body.reason || 'Annulé par le client', req.params.id, biz.user_id, clientEmail]
       );
+
+      // ── Refund automatique si paye en ligne ET dans les delais ──────────
+      // Strategie B (commit 8e5e7bd) : refund_application_fee=true, donc la
+      // commission FlowIA est aussi rendue au commerçant.
+      let refundResult = null;
+      if (rows.length && wasPaidOnline) {
+        if (isWithinPolicy) {
+          try {
+            const { refundAppointment } = require('../../utils/refundAppointment');
+            refundResult = await refundAppointment(pool, req.params.id, 'client_cancelled_in_policy');
+          } catch (refErr) {
+            console.error('[client-cancel refund]', refErr.message);
+            refundResult = { ok: false, error: refErr.message };
+          }
+        } else {
+          // Acompte conserve par le salon (no-show policy). On le marque
+          // explicitement pour que le frontend puisse afficher 'Acompte
+          // conserve' au client. Pas de refund Stripe = les fonds restent
+          // sur le balance Connect et seront payouts apres la date du RDV
+          // + payout_hold_days (cron releasePayouts a venir).
+          refundResult = { ok: true, refunded: false, reason: 'too_late_no_refund' };
+        }
+      }
       // Google Calendar : delete event si lie (non-bloquant). Le merchant
       // verra l'annulation dans son agenda Google.
       if (rows.length && rows[0].google_event_id) {
@@ -183,7 +229,12 @@ module.exports = function attachClientProfileRoutes(router) {
         ).catch(() => {});
       }
       if (!rows.length) return res.status(404).json({ error: 'RDV introuvable ou déjà annulé.' });
-      res.json(rows[0]);
+      // refund={ok,refunded?,error?,reason?} - le frontend peut afficher
+      // un message specifique selon le cas (refund OK / acompte conserve /
+      // erreur Stripe).
+      res.json({ ...rows[0], refund: refundResult,
+                 within_policy: isWithinPolicy,
+                 policy_hours: policyHours });
     } catch (e) { console.error('[CANCEL]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 

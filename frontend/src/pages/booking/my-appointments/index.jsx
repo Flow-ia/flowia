@@ -446,9 +446,24 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       // utilise le slug porté par l'appointment lui-même, pas le slug de
       // la page courante.
       const cancelSlug = cancelModal.slug || slug;
-      await pubApi.cancel(cancelSlug, cancelModal.id, { reason: 'Annule par le client' });
+      const r = await pubApi.cancel(cancelSlug, cancelModal.id, { reason: 'Annule par le client' });
       setAppts(p => p.map(a => a.id === cancelModal.id ? {...a, status:'cancelled'} : a));
       setCancelModal(null);
+      // Toast informatif selon le resultat refund (Strategie B + politique salon).
+      // r.refund = { ok, refunded?, reason?, error? } | null
+      if (r?.refund) {
+        if (r.refund.refunded) {
+          showToast('RDV annulé. Remboursement intégral en cours sur votre carte (3-5 jours ouvrés).', 'ok');
+        } else if (r.refund.reason === 'too_late_no_refund') {
+          showToast('RDV annulé hors des délais — l\'acompte est conservé par le salon.', 'info');
+        } else if (r.refund.ok === false) {
+          showToast('RDV annulé. Le remboursement a rencontré un problème, le support du salon va le traiter.', 'error');
+        } else {
+          showToast('RDV annulé.', 'ok');
+        }
+      } else {
+        showToast('RDV annulé.', 'ok');
+      }
     } catch(e) {
       const payload = e.data || {};
       setCancelModal(null);
