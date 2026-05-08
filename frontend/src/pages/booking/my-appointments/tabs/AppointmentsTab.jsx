@@ -6,7 +6,7 @@
 //     que VisitsTab pour les passages).
 import { useState, useEffect } from 'react';
 import { Spinner } from '../../shared';
-import { getDisplayStatus } from '../helpers';
+import { getDisplayStatus, fmtApptDate } from '../helpers';
 import { AppointmentDetailCard } from '../components/AppointmentDetailCard';
 
 const APPTS_PAGE_SIZE = 5;
@@ -125,11 +125,16 @@ export function AppointmentsTab({
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {pageAppts.map(a => {
             const st = getDisplayStatus(a);
-            // Card en UNE seule ligne fine. Tout le detail (employe, refund,
-            // motif, paiement, ref) est dans la vue detail au clic.
-            // Format : "Salon — Prestation"  (gauche)   |   "X € · Statut · ›"  (droite)
+            // Card compacte 2 lignes :
+            // - Ligne 1 : 'Salon — Prestation' + 'Montant € + Statut + ›'
+            // - Ligne 2 (sous-ligne discrete muted) : 'date courte HH:MM'
+            // Tout le detail (employe, refund, motif, paiement, ref) est
+            // dans la vue detail au clic.
             const titleLeft = [a.business_name, a.service_name || 'Service']
               .filter(Boolean).join(' — ');
+            const dateStr = fmtApptDate(a.date);
+            const timeStr = (a.start_time || '').substring(0, 5);
+            const dateTimeLabel = [dateStr, timeStr].filter(Boolean).join(' à ');
             return (
               <div key={a.id}
                 onClick={() => setSelectedAppt(a)}
@@ -140,7 +145,7 @@ export function AppointmentsTab({
                   border: `0.5px solid ${th.border}`,
                   borderLeft: `2px solid ${st.color}`,
                   borderRadius: 10,
-                  padding: '12px 14px',
+                  padding: '10px 14px',
                   display: 'flex', alignItems: 'center', gap: 12,
                   cursor: 'pointer',
                   opacity: st.group !== 'futurs' ? 0.92 : 1,
@@ -148,15 +153,24 @@ export function AppointmentsTab({
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; }}
                 onMouseLeave={e => { e.currentTarget.style.background = th.card; }}>
-                {/* Gauche : Salon — Prestation (1 ligne ellipsis) */}
-                <p style={{
-                  flex: 1, minWidth: 0, margin: 0,
-                  fontSize: 14, fontWeight: 500, color: th.text,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  letterSpacing: '-0.01em',
-                }}>
-                  {titleLeft}
-                </p>
+                {/* Gauche : 2 lignes compactes — titre + date/heure muted */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: 14, fontWeight: 500, color: th.text,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    letterSpacing: '-0.01em',
+                  }}>
+                    {titleLeft}
+                  </p>
+                  <p style={{
+                    margin: '2px 0 0',
+                    fontSize: 12, fontWeight: 400, color: th.muted,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {dateTimeLabel}
+                  </p>
+                </div>
 
                 {/* Droite : montant + status pill + chevron */}
                 <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
