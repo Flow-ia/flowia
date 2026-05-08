@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { STATUS_CFG } from '../constants';
 import { fmtTime } from '../helpers';
+import PaymentPill from './PaymentPill';
 
 // Convertit "HH:MM[:SS]" en minutes depuis minuit. Tolère null/undefined.
 function timeToMin(t) {
@@ -339,17 +340,7 @@ export default function ListView({ employees, dayAppts, isToday, t, onOpenAppt }
                                   En cours
                                 </span>
                               )}
-                              {appt.paid && (
-                                <span style={{
-                                  fontSize: 10, fontWeight: 500,
-                                  display: 'inline-flex', alignItems: 'center', gap: 3,
-                                  padding: '2px 8px', borderRadius: 99,
-                                  background: '#f0fdf4', color: '#065f46',
-                                }}>
-                                  <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#10b981' }} />
-                                  {appt.payment_status === 'paid' && appt.stripe_payment_intent_id ? 'Paye en ligne' : 'Encaisse'}
-                                </span>
-                              )}
+                              <PaymentPill appt={appt} size="sm" />
                             </div>
                           </div>
                         </button>

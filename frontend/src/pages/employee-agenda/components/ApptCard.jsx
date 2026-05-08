@@ -2,6 +2,7 @@
 import { STATUS_CFG } from '../constants';
 import { fmtTime } from '../helpers';
 import { I } from '../../../utils/icons';
+import PaymentPill from './PaymentPill';
 
 export default function ApptCard({ appt, onClick, theme: t }) {
   const st = STATUS_CFG[appt.status] || STATUS_CFG.confirmed;
@@ -42,19 +43,8 @@ export default function ApptCard({ appt, onClick, theme: t }) {
                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
             {fmtTime(appt.start_time)} — {fmtTime(appt.end_time)}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {appt.paid && (
-              <span style={{
-                fontSize: 11,
-                fontWeight: 500,
-                padding: '2px 8px',
-                borderRadius: 8,
-                background: '#f0fdf4',
-                color: '#065f46',
-              }}>
-                {appt.payment_status === 'paid' && appt.stripe_payment_intent_id ? 'Paye en ligne' : 'Paye'}
-              </span>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+            <PaymentPill appt={appt} />
             <span style={{
               fontSize: 11,
               fontWeight: 500,

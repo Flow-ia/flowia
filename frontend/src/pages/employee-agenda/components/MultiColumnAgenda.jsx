@@ -13,6 +13,7 @@ import AgendaLoader from './AgendaLoader';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
 import ListView from './ListView';
+import { resolvePaymentDisplay } from './PaymentPill';
 import ApptActionModal from '../modals/ApptActionModal';
 import QuickAddApptModal from '../modals/QuickAddApptModal';
 
@@ -677,14 +678,21 @@ export default function MultiColumnAgenda({ employees, services, onTxCreated, on
                                   whiteSpace: 'nowrap',
                                 }}>{appt.client_name}{totalMin ? ` · ${totalMin} min` : ''}</p>
                               )}
-                              {height > 80 && appt.paid && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981' }} />
-                                  <span style={{ fontSize: 10, color: tx, fontWeight: 500 }}>
-                                    {appt.payment_status === 'paid' && appt.stripe_payment_intent_id ? 'Paye en ligne' : 'Encaisse'}
-                                  </span>
-                                </div>
-                              )}
+                              {height > 80 && (() => {
+                                const pd = resolvePaymentDisplay(appt);
+                                if (!pd) return null;
+                                return (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: pd.dot }} />
+                                    <span style={{
+                                      fontSize: 10, color: tx, fontWeight: 500,
+                                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                    }}>
+                                      {pd.label}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </button>
                         );
