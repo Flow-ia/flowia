@@ -59,10 +59,17 @@ module.exports = function attachClientProfileRoutes(router) {
                 bs.name  AS service_name,
                 bs.color AS service_color,
                 bs.price AS service_price,
-                e.name   AS employee_name
+                e.name   AS employee_name,
+                -- Politique d'annulation merchant exposee au client pour
+                -- afficher dans la popup 'Annuler' un preview clair :
+                -- 'Vous serez rembourse X€' OU 'Acompte conserve par le salon'.
+                -- Le frontend calcule diff_hours vs policy_hours en local.
+                COALESCE(bset.cancellation_policy_hours, 2) AS policy_hours,
+                COALESCE(bset.timezone, 'Europe/Paris')     AS merchant_tz
          FROM appointments a
          LEFT JOIN booking_services bs ON bs.id = a.service_id
          LEFT JOIN employees e ON e.id = a.employee_id
+         LEFT JOIN booking_settings bset ON bset.user_id = a.user_id
          WHERE a.user_id=$1 AND LOWER(a.client_email)=LOWER($2)
          ORDER BY a.date DESC, a.start_time DESC`,
         [userId, clientEmail]
