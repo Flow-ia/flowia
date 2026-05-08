@@ -11,6 +11,7 @@ import { ProfileTab } from './tabs/ProfileTab';
 import { ReferralTab } from './tabs/ReferralTab';
 import { PaymentMethodsTab } from './tabs/PaymentMethodsTab';
 import { CancelApptModal } from './modals/CancelApptModal';
+import { CancelResultModal } from './modals/CancelResultModal';
 import { TooLateModal } from './modals/TooLateModal';
 import { DeleteAccountModal } from './modals/DeleteAccountModal';
 import { ChangeEmailModal } from './modals/ChangeEmailModal';
@@ -385,6 +386,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   // Modals annulation
   const [cancelModal, setCancelModal] = useState(null); // appt à annuler
   const [tooLateModal, setTooLateModal] = useState(null); // appt dont délai dépassé
+  const [cancelResultModal, setCancelResultModal] = useState(null); // {kind, amountEur, appt, apptDateLabel} apres cancel reussi
   const [cancelLoading, setCancelLoading] = useState(false);
 
   // Modal suppression de compte (RGPD)
@@ -441,36 +443,54 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
   const doCancel = async () => {
     if (!cancelModal) return;
     setCancelLoading(true);
+    // On capture l'appt avant de le clear pour le passer au modal resultat
+    // (sinon apres setCancelModal(null) la modale resultat n'aurait plus
+    // les infos du RDV pour son recap).
+    const apptBeingCancelled = cancelModal;
     try {
       // Si le RDV vient d'un autre commerçant (cross-merchant list), on
       // utilise le slug porté par l'appointment lui-même, pas le slug de
       // la page courante.
-      const cancelSlug = cancelModal.slug || slug;
-      const r = await pubApi.cancel(cancelSlug, cancelModal.id, { reason: 'Annule par le client' });
-      setAppts(p => p.map(a => a.id === cancelModal.id ? {...a, status:'cancelled'} : a));
+      const cancelSlug = apptBeingCancelled.slug || slug;
+      const r = await pubApi.cancel(cancelSlug, apptBeingCancelled.id, { reason: 'Annule par le client' });
+      setAppts(p => p.map(a => a.id === apptBeingCancelled.id ? {...a, status:'cancelled'} : a));
       setCancelModal(null);
-      // Toast informatif selon le resultat refund (Strategie B + politique salon).
+
+      // Determine le 'kind' pour la modale resultat selon le retour backend.
       // r.refund = { ok, refunded?, reason?, error? } | null
+      let kind = 'simple';
       if (r?.refund) {
-        if (r.refund.refunded) {
-          showToast('RDV annulé. Remboursement intégral en cours sur votre carte (3-5 jours ouvrés).', 'ok');
-        } else if (r.refund.reason === 'too_late_no_refund') {
-          showToast('RDV annulé hors des délais — l\'acompte est conservé par le salon.', 'info');
-        } else if (r.refund.ok === false) {
-          showToast('RDV annulé. Le remboursement a rencontré un problème, le support du salon va le traiter.', 'error');
-        } else {
-          showToast('RDV annulé.', 'ok');
-        }
-      } else {
-        showToast('RDV annulé.', 'ok');
+        if (r.refund.refunded) kind = 'refunded';
+        else if (r.refund.reason === 'too_late_no_refund') kind = 'too_late';
+        else if (r.refund.ok === false) kind = 'failed';
       }
+
+      const cents = Number(apptBeingCancelled.paid_amount_cents || 0);
+      const amountEur = cents > 0 ? (cents / 100).toFixed(2).replace('.', ',') : '';
+      // Format date FR pour le rappel dans la modale resultat.
+      let apptDateLabel = '';
+      try {
+        const dStr = String(apptBeingCancelled.date || '').substring(0, 10);
+        const tStr = String(apptBeingCancelled.start_time || '').substring(0, 5);
+        if (dStr) {
+          const [y, mo, d] = dStr.split('-');
+          apptDateLabel = `${d}/${mo}/${y}${tStr ? ' à ' + tStr : ''}`;
+        }
+      } catch {}
+
+      setCancelResultModal({
+        kind,
+        amountEur,
+        appt: apptBeingCancelled,
+        apptDateLabel,
+      });
     } catch(e) {
       const payload = e.data || {};
       setCancelModal(null);
       // Backend renvoie code=TOO_LATE avec policy_hours + coordonnées merchant
       if (payload.code === 'TOO_LATE' || (e.message || '').includes('TOO_LATE') || (e.message || '').includes('moins de')) {
         setTooLateModal({
-          ...cancelModal,
+          ...apptBeingCancelled,
           _policyHours:     payload.policy_hours || 2,
           _businessName:    payload.business_name    || business?.businessName || business?.business_name || null,
           _businessPhone:   payload.merchant_phone   || business?.phone   || null,
@@ -692,6 +712,14 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
         cancelLoading={cancelLoading}
         onClose={() => setCancelModal(null)}
         onConfirm={doCancel}
+      />
+
+      {/* ── Modal résultat annulation (rembousement initie / acompte
+          conserve / probleme refund / annulation simple) ── */}
+      <CancelResultModal
+        th={th}
+        result={cancelResultModal}
+        onClose={() => setCancelResultModal(null)}
       />
 
       {/* ── Modal délai dépassé (RDV dans moins de 2h) ── */}
