@@ -102,14 +102,25 @@ opérationnel + testé mentalement sur 8+ scénarios.
    - **Comptes connectés** : `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`
    - Aucun nouveau webhook à ajouter (déjà tous configurés)
 
+### 8. No-show automatique (cron horaire)
+- `backend/src/utils/autoNoShow.js` (commit `aada5f5`) : cron horaire qui
+  sélectionne les RDV `confirmed`/`pending` dont `end_time + 24h` est passé
+  (timezone du commerçant via `booking_settings.timezone`), sans transaction
+  `source='rdv'` (encaissement comptoir), et les passe en :
+  `status='cancelled' + cancelled_by='system' + cancel_reason='no_show_automatique'`.
+- UPDATE batch atomique avec garde anti-race (status check répété dans WHERE).
+- **Acompte conservé** (Planity-like) : pas de refund, pas de
+  `cancelAppointmentPayout` → la row escrow reste `pending` et le cron
+  `releasePayouts` libère naturellement les fonds vers l'IBAN du commerçant
+  à J+3. Comportement no-show standard.
+- Lock applicatif `cron:no_show:auto`, batch 200/tick.
+
 ### Ce qu'il reste à faire (pour continuer Planity-like)
 
 - Tester end-to-end sur preview Vercel chaque scénario (paiement / annulation
-  client / annulation merchant / refund / hors délais / acompte+solde)
+  client / annulation merchant / refund / hors délais / acompte+solde / no-show auto)
 - Éventuellement ajouter un dashboard merchant « Performances paiements en ligne »
   (taux conversion, no-show, refunds) pour égaler les analytics Planity Pro
-- Système de no-show automatique (cron qui marque `cancelled_by='system'` sur
-  les RDV passés non encaissés depuis X heures, avec garde sur acompte conservé)
 
 ---
 
