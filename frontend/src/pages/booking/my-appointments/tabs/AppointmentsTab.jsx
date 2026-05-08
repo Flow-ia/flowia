@@ -6,8 +6,7 @@
 //     que VisitsTab pour les passages).
 import { useState, useEffect } from 'react';
 import { Spinner } from '../../shared';
-import { getDisplayStatus, fmtApptDate } from '../helpers';
-import { I } from '../../../../utils/icons';
+import { getDisplayStatus } from '../helpers';
 import { AppointmentDetailCard } from '../components/AppointmentDetailCard';
 
 const APPTS_PAGE_SIZE = 5;
@@ -123,168 +122,69 @@ export function AppointmentsTab({
           )}
         </div>
       ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {pageAppts.map(a => {
             const st = getDisplayStatus(a);
+            // Card en UNE seule ligne fine. Tout le detail (employe, refund,
+            // motif, paiement, ref) est dans la vue detail au clic.
+            // Format : "Salon — Prestation"  (gauche)   |   "X € · Statut · ›"  (droite)
+            const titleLeft = [a.business_name, a.service_name || 'Service']
+              .filter(Boolean).join(' — ');
             return (
               <div key={a.id}
                 onClick={() => setSelectedAppt(a)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedAppt(a); } }}
                 role="button" tabIndex={0}
                 style={{
-                background: th.card,
-                border: `0.5px solid ${th.border}`,
-                borderLeft: `2px solid ${st.color}`,
-                borderRadius: 12, padding: 16,
-                opacity: st.group !== 'futurs' ? 0.92 : 1,
-                cursor: 'pointer',
-                transition: 'background .15s, border-color .15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; }}
-              onMouseLeave={e => { e.currentTarget.style.background = th.card; }}>
-                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14 }}>
-                  {/* ── Bloc info (gauche) ── */}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    {/* Commerçant — titre principal */}
-                    {a.business_name && (
-                      <p style={{ fontWeight: 500, fontSize:16, color: st.group !== 'futurs' ? th.muted : th.text, margin:'0 0 4px', letterSpacing:'-0.015em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {a.business_name}
-                      </p>
-                    )}
-                    {/* Prestation */}
-                    <p style={{ fontWeight: 400, fontSize:15, color:th.text, margin:'0 0 4px', letterSpacing:'-0.015em' }}>
-                      {a.service_name || 'Service'}
-                    </p>
-                    {/* Date + heure */}
-                    <p style={{ fontWeight: 400, fontSize:14, color:th.muted, margin:0, letterSpacing:'-0.015em' }}>
-                      {fmtApptDate(a.date)} à {(a.start_time||'').substring(0,5)}
-                    </p>
-                    {/* Ref en bas à gauche, très discret */}
-                    <p style={{ fontSize:10, fontWeight:500, color:th.dim,
-                      fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                      margin:'8px 0 0', letterSpacing:0.3 }}>
-                      #{a.id.substring(0,8).toUpperCase()}
-                    </p>
-                  </div>
+                  background: th.card,
+                  border: `0.5px solid ${th.border}`,
+                  borderLeft: `2px solid ${st.color}`,
+                  borderRadius: 10,
+                  padding: '12px 14px',
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  cursor: 'pointer',
+                  opacity: st.group !== 'futurs' ? 0.92 : 1,
+                  transition: 'background .15s, border-color .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; }}
+                onMouseLeave={e => { e.currentTarget.style.background = th.card; }}>
+                {/* Gauche : Salon — Prestation (1 ligne ellipsis) */}
+                <p style={{
+                  flex: 1, minWidth: 0, margin: 0,
+                  fontSize: 14, fontWeight: 500, color: th.text,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  letterSpacing: '-0.01em',
+                }}>
+                  {titleLeft}
+                </p>
 
-                  {/* ── Bloc statut + prix + action (droite) ── */}
-                  <div style={{
-                    display:'flex', flexDirection:'column', alignItems:'flex-end',
-                    gap:8, flexShrink:0,
-                  }}>
-                    {/* Statut — juste au-dessus du prix (recommandation) */}
+                {/* Droite : montant + status pill + chevron */}
+                <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                  {a.service_price > 0 && (
                     <span style={{
-                      fontSize:11, fontWeight:500, padding:'3px 9px', borderRadius:99,
-                      background: st.bg, color: st.color,
-                      border: `0.5px solid ${st.color}33`,
-                      whiteSpace:'nowrap',
+                      fontSize: 13, fontWeight: 500, color: th.text,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      whiteSpace: 'nowrap',
                     }}>
-                      {st.label}
+                      {Number(a.service_price).toFixed(2)} €
                     </span>
-                    {/* Prix sous le statut */}
-                    {a.service_price > 0 && (
-                      <p style={{ fontSize:16, fontWeight:500, color:th.text, margin:0,
-                        fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                        letterSpacing:'-0.01em', whiteSpace:'nowrap' }}>
-                        {Number(a.service_price).toFixed(2)} €
-                      </p>
-                    )}
-                    {/* Action : Annuler uniquement si le RDV est annulable.
-                        stopPropagation pour ne pas declencher le clic carte
-                        qui ouvrirait le detail. */}
-                    {st.canCancel && (
-                      <button onClick={(e) => { e.stopPropagation(); onCancel(a); }} style={{
-                        display:'flex', alignItems:'center', gap:6,
-                        padding:'7px 11px', borderRadius:8,
-                        background:th.card, color:th.text,
-                        border:`0.5px solid ${th.border}`,
-                        cursor:'pointer', fontFamily:'inherit',
-                        fontSize:12, fontWeight:500, letterSpacing:'-0.01em',
-                        transition:'background .15s, border-color .15s',
-                        marginTop:2,
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.background = th.cardAlt; e.currentTarget.style.borderColor = th.borderStrong || th.border; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = th.card; e.currentTarget.style.borderColor = th.border; }}
-                      >
-                        <I.X style={{ width:13, height:13 }} />
-                        Annuler
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {/* Employé — centré sous la ligne principale, séparateur fin
-                    pour identifier d'un coup d'œil avec qui se passe le RDV. */}
-                {a.employee_name && (
-                  <div style={{
-                    marginTop:14, paddingTop:12,
-                    borderTop:`0.5px solid ${th.border}`,
-                    display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                  )}
+                  <span style={{
+                    fontSize: 10, fontWeight: 500,
+                    padding: '2px 8px', borderRadius: 99,
+                    background: st.bg, color: st.color,
+                    border: `0.5px solid ${st.color}33`,
+                    whiteSpace: 'nowrap',
                   }}>
-                    <I.User style={{ width:15, height:15, color:th.muted }} />
-                    <span style={{ fontSize:14, fontWeight:500, color:th.text, letterSpacing:'-0.01em' }}>
-                      avec {a.employee_name}
-                    </span>
-                  </div>
-                )}
-
-                {/* Bloc tracabilite annulation : visible uniquement quand
-                    status='cancelled'. Combine 'Annule par X' + statut
-                    refund (rembourse / acompte conserve / non concerne).
-                    Couleurs sémantiques : ambre 'no-show' / vert refund OK /
-                    bleu info simple. */}
-                {a.status === 'cancelled' && (() => {
-                  const by = a.cancelled_by; // 'merchant' | 'client' | 'system' | null
-                  const wasPaid = a.payment_status === 'paid' || a.payment_status === 'refunded';
-                  const refunded = a.payment_status === 'refunded';
-                  const cents = Number(a.paid_amount_cents || 0);
-                  const eur = (cents / 100).toFixed(2).replace('.', ',');
-
-                  let actorText = 'Annulé';
-                  if (by === 'merchant') actorText = 'Annulé par le salon';
-                  else if (by === 'client') actorText = 'Annulé par vous';
-
-                  let refundText = null;
-                  let refundColor = th.muted;
-                  let refundBg = th.cardAlt;
-                  let refundBorder = `0.5px solid ${th.border}`;
-                  if (wasPaid) {
-                    if (refunded) {
-                      refundText = `Remboursé · ${eur} €`;
-                      refundColor = '#065f46';
-                      refundBg = '#f0fdf4';
-                      refundBorder = '0.5px solid #bbf7d0';
-                    } else {
-                      // Paye mais pas refund -> acompte conserve par le salon
-                      // (cas client annule hors delais)
-                      refundText = `Acompte conservé par le salon · ${eur} €`;
-                      refundColor = '#92400e';
-                      refundBg = '#fffbeb';
-                      refundBorder = '0.5px solid #fde68a';
-                    }
-                  }
-
-                  return (
-                    <div style={{
-                      marginTop:12, padding:'10px 12px', borderRadius:8,
-                      background: refundBg, border: refundBorder,
-                      display:'flex', flexDirection:'column', gap:3,
-                    }}>
-                      <p style={{ margin:0, fontSize:12, fontWeight:500, color: th.text }}>
-                        {actorText}
-                      </p>
-                      {refundText && (
-                        <p style={{ margin:0, fontSize:12, color: refundColor, fontWeight:500 }}>
-                          {refundText}
-                        </p>
-                      )}
-                      {a.cancel_reason && (
-                        <p style={{ margin:'2px 0 0', fontSize:11, color: th.muted, lineHeight:1.4 }}>
-                          {a.cancel_reason}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
+                    {st.label}
+                  </span>
+                  {/* Chevron > pour signaler que la carte est cliquable */}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                       strokeLinecap="round" strokeLinejoin="round"
+                       style={{ width:14, height:14, color:th.muted, flexShrink:0 }}>
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </div>
               </div>
             );
           })}
