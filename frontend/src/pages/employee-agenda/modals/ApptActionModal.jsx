@@ -114,6 +114,12 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
     } catch(e) { showToast(e.message || 'Une erreur est survenue.', 'error'); } finally { setSaving(false); }
   };
 
+  // Detection RDV paye en ligne (Stripe Connect) -> declenchera un refund
+  // automatique si le commercant annule. Le warning est affiche dans l'onglet
+  // 'Annuler' pour que le merchant comprenne avant de confirmer.
+  const wasPaidOnline = appt.payment_status === 'paid' && !!appt.stripe_payment_intent_id;
+  const paidAmount = Number(appt.paid_amount_cents || 0) / 100;
+
   const doCancel = () => setConfirmCancel(true);
   const performCancel = async () => {
     setSaving(true);
@@ -125,6 +131,16 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       });
       const merged = {...appt,...upd, status:'cancelled', cancel_reason:cancelReason};
       setAppt(merged); onUpdated(merged); setTab('detail');
+
+      // Toast informatif sur l'issue du refund (le backend a retourne
+      // upd.refund = { ok, refunded?, error? }).
+      if (upd?.refund) {
+        if (upd.refund.refunded) {
+          showToast(`RDV annule. Remboursement de ${paidAmount.toFixed(2)} € envoye au client.`, 'ok');
+        } else if (upd.refund.ok === false) {
+          showToast(`RDV annule mais le remboursement a echoue : ${upd.refund.error || 'erreur Stripe'}. Le support va le traiter.`, 'error');
+        }
+      }
     } catch(e) { showToast(e.message || 'Une erreur est survenue.', 'error'); } finally { setSaving(false); }
   };
 
@@ -177,7 +193,9 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       onClose={() => setConfirmCancel(false)}
       onConfirm={performCancel}
       title="Annuler ce rendez-vous ?"
-      message="Cette action est définitive."
+      message={wasPaidOnline
+        ? `Le client a payé ${paidAmount.toFixed(2)} € en ligne — un remboursement automatique de ce montant sera émis. Cette action est définitive.`
+        : "Cette action est définitive."}
       danger
       theme={t}/>
     <Confirm
@@ -641,6 +659,31 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
               {appt.client_name} · {fmtDateFull(appt.date)} a {fmtTime(appt.start_time)}
             </p>
           </div>
+
+          {/* Warning refund automatique : le RDV a ete paye en ligne par le
+              client. Annulation par le commercant -> refund Stripe automatique
+              sur le compte Connect du salon (impossible a bypasser, faute du
+              salon = client doit etre rembourse). Bandeau ambre pour signaler
+              clairement les consequences avant la confirmation. */}
+          {wasPaidOnline && (
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: '#fffbeb',
+              border: '0.5px solid #fde68a',
+              borderLeft: '2px solid #d97706',
+            }}>
+              <p style={{ margin:'0 0 4px', fontSize:13, fontWeight:500, color:'#92400e' }}>
+                Remboursement automatique
+              </p>
+              <p style={{ margin:0, fontSize:12, color:'#92400e', lineHeight:1.55 }}>
+                Le client a payé <strong style={{ fontWeight:500 }}>{paidAmount.toFixed(2)} €</strong> en
+                ligne. Comme l&apos;annulation vient du salon, un remboursement
+                intégral sera émis automatiquement vers la carte du client
+                depuis votre compte Stripe.
+              </p>
+            </div>
+          )}
           <div>
             <Label>Motif (facultatif)</Label>
             <textarea

@@ -321,6 +321,28 @@ module.exports = function attachAppointmentsRoutes(router) {
          duration, req.params.id, req.user.userId]
       );
       const updated = rows[0];
+
+      // ── Auto-refund Stripe Connect si annulation par le commercant d'un
+      // RDV paye en ligne. Le commercant ne peut PAS bypasser : la plateforme
+      // FlowIA appelle Stripe avec sa cle + l'account_id du merchant via
+      // header Stripe-Account, le refund part directement sur le compte
+      // connecte. C'est conforme au business : le client ne doit pas perdre
+      // d'argent quand le salon ferme. Si Stripe echoue, le row est cree
+      // dans failed_refunds pour retry admin (audit Phase 5).
+      let refundResult = null;
+      const isCancellingTransition = status === 'cancelled' && appt.status !== 'cancelled';
+      if (isCancellingTransition
+          && appt.payment_status === 'paid'
+          && appt.stripe_payment_intent_id) {
+        try {
+          const { refundAppointment } = require('../../utils/refundAppointment');
+          refundResult = await refundAppointment(pool, updated.id, 'merchant_cancelled');
+        } catch (refundErr) {
+          console.error('[refundAppointment ERR]', refundErr.message);
+          refundResult = { ok: false, error: refundErr.message };
+        }
+      }
+
       // Mail annulation si status passe à 'cancelled' et client a un email
       if (status === 'cancelled' && updated.client_email) {
         try {
@@ -331,7 +353,11 @@ module.exports = function attachAppointmentsRoutes(router) {
           setImmediate(() => sendAppointmentCancellation({ to: updated.client_email, clientName: updated.client_name, businessName: usrR.rows[0]?.business_name || 'Le commerce', serviceName: svcR.rows[0]?.name || 'Service', date: updated.date, startTime: updated.start_time, reason: cancel_reason || null, appointmentId: updated.id, }).catch(e => console.error('[EMAIL]', e.message)));
         } catch(me){ console.error('[MAIL ANNUL]', me.message); }
       }
-      res.json(updated);
+      // Renvoie le RDV mis a jour + le resultat refund si applicable.
+      // Si refund.refunded=true, le frontend doit afficher payment_status
+      // 'refunded' immediatement (le UPDATE en DB est deja fait par refundAppointment).
+      res.json({ ...updated, refund: refundResult,
+                 payment_status: refundResult?.refunded ? 'refunded' : appt.payment_status });
 
       // Google Calendar sync (non-bloquant)
       // - status=cancelled → DELETE event Google
