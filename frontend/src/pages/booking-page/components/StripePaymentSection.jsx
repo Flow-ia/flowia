@@ -48,34 +48,65 @@ function getStripeForAccount(accountId) {
 }
 
 // ── Persistence pi_id (Planity-style PI reuse) ───────────────────────────
-// On garde le payment_intent_id de la session de booking en cours dans
-// sessionStorage (clef par slug). Pourquoi sessionStorage et pas useRef :
-// le composant StripePaymentSection est monte/demonté quand l'utilisateur
-// navigue entre les steps du booking ou quand le parent re-render apres
-// login -- une useRef serait reinitialisee a chaque remount, perdant la
-// reference au PI deja cree -> retour aux PIs orphelins. sessionStorage
-// survit aux remounts du composant mais pas a la fermeture de l'onglet,
-// ce qui est exactement le bon scope (1 PI par session de booking).
+// Storage hybride sessionStorage + localStorage avec TTL pour gerer TOUS
+// les scenarios :
+//   - Refresh page (Ctrl+R)            : sessionStorage survit ✓
+//   - Navigation steps (remount comp.) : sessionStorage survit ✓
+//   - Multi-tab simultanes             : sessionStorage isole par onglet ✓
+//   - Tab ferme + reouvert (booking en cours, pas paye) : localStorage
+//     fallback (TTL 1h) -> reuse du meme PI ✓
 //
-// Cleanup automatique : on retire la cle apres un paiement reussi pour
-// que le prochain RDV cree un nouveau PI propre. Si la cle est stale
-// (PI succeeded/canceled/failed cote Stripe), le backend tombe en
-// fallback CREATE -> safe.
+// Lecture : sessionStorage prioritaire (per-tab clean), fallback
+// localStorage si fresh tab. Ecriture : les deux. Cleanup au paiement
+// reussi ou expiration TTL.
+//
+// Si le pi_id stocke pointe vers un PI Stripe deja final (succeeded,
+// canceled, expired apres 24h Stripe), le backend retrieve detecte le
+// statut et tombe en fallback CREATE proprement -> safe.
 const PI_STORAGE_PREFIX = 'flowia_pi_';
+const PI_STORAGE_TTL_MS = 60 * 60 * 1000; // 1h - apres ca le PI Stripe
+                                          // est probablement expire de toute facon
+
+function _safeWindow() {
+  return (typeof window !== 'undefined') ? window : null;
+}
 function getStoredPiId(slug) {
   if (!slug) return null;
+  const w = _safeWindow();
+  if (!w) return null;
+  // 1. sessionStorage (prioritaire)
   try {
-    return (typeof window !== 'undefined' && window.sessionStorage)
-      ? window.sessionStorage.getItem(PI_STORAGE_PREFIX + slug) || null
-      : null;
+    const ses = w.sessionStorage?.getItem(PI_STORAGE_PREFIX + slug);
+    if (ses) return ses;
+  } catch {}
+  // 2. localStorage avec verif TTL
+  try {
+    const raw = w.localStorage?.getItem(PI_STORAGE_PREFIX + slug);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.pi_id) return null;
+    if (parsed.expires_at && parsed.expires_at < Date.now()) {
+      w.localStorage.removeItem(PI_STORAGE_PREFIX + slug);
+      return null;
+    }
+    return parsed.pi_id;
   } catch { return null; }
 }
 function setStoredPiId(slug, id) {
   if (!slug) return;
+  const w = _safeWindow();
+  if (!w) return;
   try {
-    if (typeof window === 'undefined' || !window.sessionStorage) return;
-    if (id) window.sessionStorage.setItem(PI_STORAGE_PREFIX + slug, id);
-    else    window.sessionStorage.removeItem(PI_STORAGE_PREFIX + slug);
+    if (id) {
+      w.sessionStorage?.setItem(PI_STORAGE_PREFIX + slug, id);
+      w.localStorage?.setItem(PI_STORAGE_PREFIX + slug, JSON.stringify({
+        pi_id: id,
+        expires_at: Date.now() + PI_STORAGE_TTL_MS,
+      }));
+    } else {
+      w.sessionStorage?.removeItem(PI_STORAGE_PREFIX + slug);
+      w.localStorage?.removeItem(PI_STORAGE_PREFIX + slug);
+    }
   } catch {}
 }
 

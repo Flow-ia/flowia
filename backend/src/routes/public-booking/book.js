@@ -787,23 +787,35 @@ module.exports = function attachBookRoute(router) {
       res.status(201).json(appt);
 
       // Tracabilite Stripe : a present que l'appointment est cree, on peut
-      // enrichir la description du PaymentIntent avec le RDV ref + date +
-      // heure. Avant ce point la, le PI etait deja cree avec une description
-      // generique 'Salon · Service · Date · Client'. On surcharge ici pour
-      // que le merchant retrouve le RDV directement depuis Stripe Dashboard
-      // (description format : 'RDV-XXXXXXXX · DD/MM/YYYY HH:MM').
-      // Plus la metadata appointment_id (ID complet) pour reconciliation
-      // automatique. Non-bloquant : si update echoue, le PI garde sa
-      // description initiale, pas grave.
+      // enrichir la description du PaymentIntent avec le RDV ref + immatricule
+      // client + date + heure. Avant ce point la, le PI etait deja cree avec
+      // une description generique 'Salon · Service · Date · CLI-XXXXXXXX'.
+      // On surcharge ici pour que le merchant retrouve le RDV directement
+      // depuis le dashboard Stripe.
+      // Format final : 'RDV-{REF8} · CLI-{IMMAT} · DD/MM/YYYY HH:MM'.
+      // L'immatricule reste stable meme si le client change d'email ou
+      // anonymise son compte (RGPD), contrairement au nom/email.
+      // Non-bloquant : si update echoue, le PI garde sa description
+      // initiale (qui contient deja l'immatricule).
       if (payment_intent_id && stripeAccountId) {
         const apptRefShort = String(appt.id).substring(0, 8).toUpperCase();
+        // Immatricule client : prefere global_client_id (stable
+        // cross-merchant) sinon client_id (per-merchant). Aligne avec
+        // payment.js pour coherence dashboard.
+        const clientStableUuid = tokenGlobalClientId || appt.client_id || null;
+        const clientImmatricule = clientStableUuid
+          ? `CLI-${String(clientStableUuid).substring(0, 8).toUpperCase()}`
+          : null;
         const dateLocale = (() => {
           try {
             const [y, mo, d] = String(appt.date).split('-');
             return `${d}/${mo}/${y}`;
           } catch { return String(appt.date); }
         })();
-        const newDesc = `RDV-${apptRefShort} · ${dateLocale} ${String(appt.start_time).substring(0,5)}`;
+        const timeShort = String(appt.start_time).substring(0, 5);
+        const newDesc = clientImmatricule
+          ? `RDV-${apptRefShort} · ${clientImmatricule} · ${dateLocale} ${timeShort}`
+          : `RDV-${apptRefShort} · ${dateLocale} ${timeShort}`;
         const { stripeFetch } = require('../global-clients/stripe-helpers');
         stripeFetch('POST', `/payment_intents/${payment_intent_id}`, {
           description: newDesc,
@@ -812,8 +824,9 @@ module.exports = function attachBookRoute(router) {
             appointment_ref:    apptRefShort,
             appt_date:          appt.date,
             appt_start_time:    appt.start_time,
-            // On garde aussi les champs deja en metadata (Stripe les conserve
-            // en merge sur update) : client_name, client_email, etc.
+            flowia_immatricule: clientImmatricule || '',
+            // Stripe merge la metadata : client_name, client_email, etc.
+            // posees a la creation sont conserves.
           },
         }, { stripeAccount: stripeAccountId })
           .catch(err => console.warn('[BOOK PI update desc]', err.message));
