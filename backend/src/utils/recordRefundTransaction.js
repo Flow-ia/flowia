@@ -60,18 +60,48 @@ async function recordRefundTransaction(pool, { appointmentId, refundedCents }) {
   const now        = new Date();
 
   try {
+    // Refonte v3 : on alimente aussi les nouvelles colonnes (payment_status,
+    // payment_source, payment_type, gross/net cents, refunded_at) pour que
+    // /historique et /stats/* classifient le refund correctement sans attendre
+    // le retro-fill. gross_amount_cents = -cents (signe negatif legacy preserve).
     const ins = await pool.query(
       `INSERT INTO transactions
          (user_id, type, amount, description, employee_id, payment_method,
-          date, time, datetime_iso, appointment_id, source, locked, qty_total)
-       VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE,0)
+          date, time, datetime_iso, appointment_id, source, locked, qty_total,
+          payment_source, payment_status, payment_type,
+          gross_amount_cents, net_amount_cents, refunded_at)
+       VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE,0,
+               'online_booking','REFUNDED','refund',
+               $9,$9, NOW())
        ON CONFLICT (appointment_id) WHERE source = 'rdv_refund' DO NOTHING
        RETURNING id`,
       [userId, negAmount, desc, employeeId || null,
        now.toISOString().substring(0, 10),
        now.toTimeString().substring(0, 8),
-       now.toISOString(), appointmentId]
+       now.toISOString(), appointmentId,
+       -cents]
     );
+    // Met aussi a jour la transaction d'origine 'rdv_online' pour qu'elle
+    // refletre le statut REFUNDED (les KPIs en ligne passent du brut au net).
+    if (ins.rowCount > 0) {
+      try {
+        await pool.query(
+          `UPDATE transactions
+              SET payment_status = 'REFUNDED',
+                  refunded_at    = COALESCE(refunded_at, NOW())
+            WHERE appointment_id = $1
+              AND source = 'rdv_online'`,
+          [appointmentId]
+        );
+      } catch (e) {
+        // Best-effort : ne casse pas l'insert principal si update fail
+      }
+      // Invalide le cache stats v3 du user (refund visible immediat dans /historique)
+      try {
+        const { invalidateUserStatsCache } = require('./paymentV3');
+        invalidateUserStatsCache(userId);
+      } catch {}
+    }
     return { ok: true, inserted: ins.rowCount > 0 };
   } catch (e) {
     return { ok: false, error: e.message };

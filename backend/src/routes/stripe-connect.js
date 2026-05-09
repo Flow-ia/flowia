@@ -658,18 +658,69 @@ router.post('/webhook', async (req, res) => {
             // index partiel idx_transactions_rdv_online_appt sur
             // (appointment_id) WHERE source='rdv_online' garantit qu'il
             // n'y a qu'1 row 'rdv_online' par RDV.
+            // Refonte v3 : on alimente aussi les nouvelles colonnes
+            // (payment_status, payment_source, *_cents, paid_at, payment_type,
+            // stripe_payment_intent_id) en plus des legacy. Permet a /historique
+            // et /stats/* de classifier la transaction sans attendre le retro-fill.
+            // payment_type='deposit' si acompte (paiement partiel : amt < total),
+            // 'full' sinon. payment_status='STRIPE_ACOMPTE' pour acompte sinon
+            // 'STRIPE_100'. application_fee_amount = commission FlowIA.
+            const isFullyPaid_v3 = !!upd.rows[0].paid;
+            const platformFeeCents_v3 = pi.application_fee_amount || 0;
+            // stripe_fee_cents : retrieve balance_transaction si possible.
+            // Best-effort, defaut 0 si erreur.
+            let stripeFeeCents_v3 = 0;
+            try {
+              const chargeId = pi.latest_charge;
+              if (chargeId) {
+                const stripeApi = getStripe();
+                const ch = await stripeApi.charges.retrieve(chargeId, { stripeAccount: event.account });
+                if (ch?.balance_transaction) {
+                  const bt = await stripeApi.balanceTransactions.retrieve(
+                    ch.balance_transaction,
+                    { stripeAccount: event.account }
+                  );
+                  stripeFeeCents_v3 = bt?.fee || 0;
+                }
+              }
+            } catch (feeErr) {
+              console.warn('[CONNECT WEBHOOK] balance_transaction fee fetch fail:', feeErr.message);
+            }
+            const grossCents_v3 = amt;
+            const netCents_v3   = grossCents_v3 - stripeFeeCents_v3 - platformFeeCents_v3;
+            const v3Status = isFullyPaid_v3 ? 'STRIPE_100' : 'STRIPE_ACOMPTE';
+            const v3Type   = isFullyPaid_v3 ? 'full' : 'deposit';
+
             await pool.query(
               `INSERT INTO transactions
                  (user_id, type, amount, description, employee_id, payment_method,
-                  date, time, datetime_iso, appointment_id, source, locked, qty_total)
-               VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1)
+                  date, time, datetime_iso, appointment_id, source, locked, qty_total,
+                  payment_source, payment_status, payment_type,
+                  gross_amount_cents, stripe_fee_cents, platform_fee_cents, net_amount_cents,
+                  stripe_payment_intent_id, paid_at)
+               VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1,
+                       'online_booking',$9,$10,
+                       $11,$12,$13,$14,
+                       $15, NOW())
                ON CONFLICT (appointment_id) WHERE source = 'rdv_online' DO NOTHING`,
               [apptInfo[0].user_id, amt / 100, desc, empId,
                now.toISOString().substring(0, 10),
                now.toTimeString().substring(0, 8),
-               now.toISOString(), upd.rows[0].id]
+               now.toISOString(), upd.rows[0].id,
+               v3Status, v3Type,
+               grossCents_v3, stripeFeeCents_v3, platformFeeCents_v3, netCents_v3,
+               pi.id]
             );
-            console.log('[CONNECT WEBHOOK] tx inserted for appt', upd.rows[0].id, '+', amt / 100, '€');
+            console.log('[CONNECT WEBHOOK] tx inserted for appt', upd.rows[0].id, '+', amt / 100, '€', v3Status);
+
+            // Invalide le cache stats v3 pour ce user (5min TTL devient
+            // immediat -> les routes /api/historique et /api/stats/* re-query).
+            try {
+              const { invalidateUserStatsCache } = require('../utils/paymentV3');
+              invalidateUserStatsCache(apptInfo[0].user_id);
+            } catch (cacheErr) {
+              // Cache invalidation est best-effort : pas critique si fail
+            }
           }
         } catch (txErr) {
           console.error('[CONNECT WEBHOOK] tx insert fail', txErr.message);
@@ -757,7 +808,127 @@ router.post('/webhook', async (req, res) => {
           } else if (!txRes.ok) {
             console.error('[CONNECT WEBHOOK] refund tx insert fail', txRes.error);
           }
+          // Refonte v3 : marquer la transaction d'origine 'rdv_online' comme
+          // REFUNDED + invalider le cache stats v3.
+          await pool.query(
+            `UPDATE transactions
+                SET payment_status = 'REFUNDED',
+                    stripe_refund_id = COALESCE(stripe_refund_id, $2),
+                    refunded_at = COALESCE(refunded_at, NOW())
+              WHERE appointment_id = $1
+                AND source = 'rdv_online'`,
+            [row.id, ch.refunds?.data?.[0]?.id || null]
+          );
+          try {
+            const { invalidateUserStatsCache } = require('../utils/paymentV3');
+            invalidateUserStatsCache(row.user_id);
+          } catch {}
         }
+      }
+    }
+
+    // ── Refonte v3 : payout.paid / payout.failed ───────────────────────────
+    // Stripe envoie ces events pour les transferts bancaires reels (vers
+    // l'IBAN du commercant via le compte Connect). On synchronise la table
+    // `payouts` et on lie les transactions au stripe_payout_id pour que
+    // /historique affiche "Payout reçu" sur les lignes concernees.
+    else if (event.type === 'payout.paid' || event.type === 'payout.failed') {
+      const po = event.data.object;
+      const accountId = event.account;
+      // Resoudre user_id via stripe_account_id
+      let userId = null;
+      if (accountId) {
+        const { rows: ur } = await pool.query(
+          'SELECT id FROM users WHERE stripe_account_id = $1 LIMIT 1',
+          [accountId]
+        );
+        userId = ur[0]?.id || null;
+      }
+      if (!userId) {
+        console.warn('[CONNECT WEBHOOK] payout sans user_id resolu (account:', accountId, ')');
+      } else {
+        const isPaid = event.type === 'payout.paid';
+        const status = isPaid ? 'paid' : 'failed';
+        // UPSERT dans payouts (id stripe_payout_id UNIQUE)
+        await pool.query(
+          `INSERT INTO payouts
+             (user_id, stripe_payout_id, amount_cents, currency, status,
+              triggered_by, requested_at, arrival_date, completed_at, failed_at, failure_reason)
+           VALUES ($1, $2, $3, $4, $5,
+                   COALESCE($6,'stripe'),
+                   to_timestamp($7), to_timestamp($8)::date,
+                   $9, $10, $11)
+           ON CONFLICT (stripe_payout_id) DO UPDATE SET
+             status         = EXCLUDED.status,
+             arrival_date   = COALESCE(payouts.arrival_date, EXCLUDED.arrival_date),
+             completed_at   = COALESCE(EXCLUDED.completed_at, payouts.completed_at),
+             failed_at      = COALESCE(EXCLUDED.failed_at, payouts.failed_at),
+             failure_reason = COALESCE(EXCLUDED.failure_reason, payouts.failure_reason)`,
+          [
+            userId,
+            po.id,
+            po.amount || 0,
+            (po.currency || 'eur').toLowerCase(),
+            status,
+            'stripe',
+            po.created || Math.floor(Date.now() / 1000),
+            po.arrival_date || (po.created || Math.floor(Date.now() / 1000)),
+            isPaid ? new Date() : null,
+            !isPaid ? new Date() : null,
+            !isPaid ? (po.failure_message || po.failure_code || 'unknown') : null,
+          ]
+        );
+
+        if (isPaid) {
+          // Lier les transactions de ce user qui n'ont pas encore de
+          // payout_received_at et qui sont anterieures a la creation du
+          // payout. On prend les rdv_online + rdv_refund (reverses + refunds).
+          const cutoff = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
+          await pool.query(
+            `UPDATE transactions
+                SET payout_received_at = NOW(),
+                    stripe_payout_id   = $2
+              WHERE user_id = $1
+                AND payout_received_at IS NULL
+                AND created_at <= $3
+                AND source IN ('rdv_online','rdv_refund')`,
+            [userId, po.id, cutoff]
+          );
+          console.log('[CONNECT WEBHOOK] payout.paid:', po.id, 'user', userId, '+', (po.amount || 0) / 100, '€');
+        } else {
+          console.log('[CONNECT WEBHOOK] payout.failed:', po.id, 'user', userId, po.failure_message || po.failure_code);
+          // Email d'alerte au commercant. Best-effort sync (emailSender deja
+          // resilient ; pas de reject pour ne pas casser le webhook).
+          try {
+            const { sendMarketingEmailRaw } = require('../utils/emailSender');
+            const { rows: ur2 } = await pool.query(
+              'SELECT email, business_name FROM users WHERE id = $1',
+              [userId]
+            );
+            if (ur2[0]?.email) {
+              const reason = po.failure_message || po.failure_code || 'raison inconnue';
+              const amountEur = ((po.amount || 0) / 100).toFixed(2).replace('.', ',');
+              await sendMarketingEmailRaw({
+                to:          ur2[0].email,
+                toName:      ur2[0].business_name || '',
+                subject:     `[FlowIA] Echec virement Stripe — ${amountEur} EUR`,
+                type:        'transactional',
+                htmlContent: `<p>Bonjour ${ur2[0].business_name || ''},</p>
+                              <p>Le virement Stripe de <b>${amountEur} EUR</b> vers votre compte bancaire a echoue.</p>
+                              <p><b>Raison :</b> ${reason}</p>
+                              <p>Connectez-vous a votre dashboard Stripe pour verifier vos coordonnees bancaires et relancer le virement manuellement.</p>
+                              <p>L'equipe FlowIA</p>`,
+              });
+            }
+          } catch (mailErr) {
+            console.error('[CONNECT WEBHOOK] payout.failed email fail:', mailErr.message);
+          }
+        }
+
+        try {
+          const { invalidateUserStatsCache } = require('../utils/paymentV3');
+          invalidateUserStatsCache(userId);
+        } catch {}
       }
     }
   } catch (e) {

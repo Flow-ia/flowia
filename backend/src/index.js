@@ -271,6 +271,10 @@ function startServer() {
   app.use('/api/media',          apiLimiter,  require('./routes/media'));
   app.use('/api/booking',        apiLimiter,  require('./routes/booking'));
   app.use('/api/stats',          statsLimiter, require('./routes/stats'));
+  // Refonte v3 (Commit 2) — historique enrichi, payouts table, balance riche
+  app.use('/api/historique',     apiLimiter,   require('./routes/historique'));
+  app.use('/api/payouts',        apiLimiter,   require('./routes/payouts'));
+  app.use('/api/stripe',         apiLimiter,   require('./routes/stripe-balance'));
   app.use('/api/absences',       apiLimiter,  require('./routes/absences'));
   app.use('/api/commissions',    apiLimiter,  require('./routes/commissions'));
   app.use('/api/loyalty',        apiLimiter,  require('./routes/loyalty').router);
