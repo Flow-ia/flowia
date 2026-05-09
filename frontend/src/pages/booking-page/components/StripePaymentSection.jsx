@@ -462,6 +462,14 @@ function PaymentIntentOrSetupWrapper({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(false);
 
+  // Planity-style PI reuse : on garde le payment_intent_id du dernier intent
+  // dans une ref qui survit aux re-renders. Au prochain createPaymentIntent
+  // (changement de prix, promo, date...), on le passe au backend qui UPDATE
+  // le meme PI au lieu d'en creer un nouveau. Evite les PIs orphelins
+  // 'Incomplet' dans le dashboard Stripe + preserve la saisie carte du
+  // client (le client_secret reste identique -> Elements ne re-monte pas).
+  const previousPiIdRef = useRef(null);
+
   // Reset busy si une erreur apres paiement remonte du parent (ex. /book ko).
   useEffect(() => {
     if (bookingError && busy) setBusy(false);
@@ -479,7 +487,10 @@ function PaymentIntentOrSetupWrapper({
     let cancelled = false;
     setLoading(true);
     setError('');
-    setIntent(null);
+    // PAS de setIntent(null) : si le backend update le meme PI, le
+    // client_secret reste identique et Stripe Elements ne re-monte pas
+    // (la carte saisie est preservee). Le render bypasse le skeleton de
+    // chargement quand on a deja un intent (cf. `if (loading && !intent)`).
 
     const promise = mode === 'save'
       ? globalClientApi.createSetupIntent()
@@ -489,11 +500,21 @@ function PaymentIntentOrSetupWrapper({
             connected_account_id: null,           // PI sera cree apres save
             amount_cents:         null,           // recap uniquement
           }))
-      : pubApi.createPaymentIntent(slug, booking);
+      : pubApi.createPaymentIntent(slug, {
+          ...booking,
+          // Reuse PI : le backend tente UPDATE si present, sinon CREATE.
+          pi_id: previousPiIdRef.current,
+        });
 
     promise
       .then(r => {
         if (cancelled) return;
+        // Memorise le PI courant pour le prochain refresh (update plutot
+        // que create). En mode 'save', payment_intent_id est absent
+        // (SetupIntent) -> on garde l'ancien ref tel quel.
+        if (r && r.payment_intent_id) {
+          previousPiIdRef.current = r.payment_intent_id;
+        }
         setIntent(r);
       })
       .catch(e => {
@@ -516,7 +537,11 @@ function PaymentIntentOrSetupWrapper({
   // pouvoir gerer le 3DS du PI cree apres save -- on le recoit dans la
   // reponse createPaymentIntent (use_saved_pm_id), pas besoin de prefetch.
 
-  if (loading) {
+  // Skeleton uniquement au PREMIER chargement (intent absent). Sur un
+  // refresh (update PI), on garde l'UI Elements montee avec l'ancien
+  // intent jusqu'a l'arrivee du nouveau -> pas de flash, pas de
+  // re-mount Elements, carte saisie preservee.
+  if (loading && !intent) {
     return (
       <div style={{
         marginTop: 12, padding: 16, borderRadius: 12,
@@ -578,7 +603,7 @@ function PaymentIntentOrSetupWrapper({
           )}
         </p>
       )}
-      <Elements stripe={stripePromise} options={{
+      <Elements key={intent.client_secret} stripe={stripePromise} options={{
         clientSecret: intent.client_secret,
         appearance: {
           theme: 'stripe',

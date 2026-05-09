@@ -45,6 +45,11 @@ module.exports = function attachPaymentRoutes(router) {
       const {
         service_id, date, start_time, promo_code_id, referral_code,
         use_saved_pm_id,
+        // pi_id : Planity-style PaymentIntent reuse. Si le client a deja un
+        // PI ouvert pour cette session de booking et change qqch (montant,
+        // promo, date), on UPDATE le meme PI au lieu d'en creer un nouveau.
+        // Evite les rows 'Incomplet' orphelines dans le Stripe Dashboard.
+        pi_id,
       } = req.body || {};
       if (!service_id || !date || !start_time) {
         return res.status(400).json({ error: 'Donnees manquantes (service_id, date, start_time).' });
@@ -362,9 +367,72 @@ module.exports = function attachPaymentRoutes(router) {
         piParams.automatic_payment_methods = { enabled: true };
       }
 
+      // ── Reuse PI existant (Planity-style) ──────────────────────────────
+      // Si le frontend a passe un pi_id (PI deja cree pour cette session de
+      // booking) ET qu'on n'est pas dans le flow carte sauvegardee (qui
+      // confirme immediatement, donc rien a updater), on tente d'updater
+      // ce PI au lieu d'en creer un nouveau. Resultat : un seul PI par
+      // tentative de booking, dashboard Stripe propre, pas de rows
+      // 'Incomplet' orphelines, et le PaymentElement cote front conserve
+      // la saisie du client (meme client_secret).
+      //
+      // Update possible si status in (requires_payment_method,
+      // requires_confirmation). Sinon (succeeded/canceled/failed/processing
+      // /requires_action) : fallback CREATE.
+      //
+      // Securite : le retrieve passe par le header Stripe-Account du
+      // merchant courant. Si pi_id appartient a un autre merchant, le GET
+      // 404 -> fallback CREATE proprement (pas de fuite cross-tenant).
+      let pi = null;
+      let oldPiToCancel = null;
+      if (pi_id && !clonedPmId) {
+        try {
+          const existing = await stripeFetch('GET', `/payment_intents/${pi_id}`, null, stripeOpts);
+          const updatable = existing
+            && (existing.status === 'requires_payment_method'
+              || existing.status === 'requires_confirmation');
+          if (updatable) {
+            try {
+              const updateParams = {
+                amount: amountCents,
+                ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
+                description,
+                ...(connectedCustomerId ? { customer: connectedCustomerId } : {}),
+                ...(clientEmail ? { receipt_email: clientEmail } : {}),
+                statement_descriptor_suffix: piParams.statement_descriptor_suffix,
+                metadata: piParams.metadata,
+              };
+              pi = await stripeFetch('POST', `/payment_intents/${pi_id}`, updateParams, stripeOpts);
+            } catch (updErr) {
+              // Update rejete par Stripe (params incompatibles, race, etc.)
+              // -> on cancel l'ancien (encore au statut requires_*) puis
+              // on recree un PI propre ci-dessous.
+              console.warn('[PUB PAYMENT-INTENT/update]', updErr.message);
+              oldPiToCancel = pi_id;
+            }
+          }
+          // Si non updatable (succeeded/canceled/failed/...) : on cree un
+          // nouveau PI ci-dessous, pas besoin de cancel l'ancien (deja final).
+        } catch (retrErr) {
+          // PI introuvable cote Stripe (ID stale, autre merchant, supprime).
+          // Pas de cleanup necessaire : si retrieve fail, le PI n'est pas
+          // accessible donc Stripe le considere absent pour ce account.
+          console.warn('[PUB PAYMENT-INTENT/retrieve]', retrErr.message);
+        }
+      }
+
+      // Fallback : pas de pi_id, ou PI non updatable, ou update echoue.
       // stripeFetch (fetch direct API Stripe) -- contourne le bug du SDK v22
       // qui envoie stripeAccount dans le body au lieu du header Stripe-Account.
-      const pi = await stripeFetch('POST', '/payment_intents', piParams, stripeOpts);
+      if (!pi) {
+        pi = await stripeFetch('POST', '/payment_intents', piParams, stripeOpts);
+        // Best-effort : annule l'ancien PI orphan (statut requires_*) pour
+        // ne pas polluer le dashboard avec une row 'Incomplet'. Non-bloquant.
+        if (oldPiToCancel) {
+          stripeFetch('POST', `/payment_intents/${oldPiToCancel}/cancel`, {}, stripeOpts)
+            .catch(err => console.warn('[PUB PAYMENT-INTENT/cancel old]', err.message));
+        }
+      }
 
       // Mise a jour last_used_at sur la carte reutilisee (best-effort).
       if (use_saved_pm_id) {
