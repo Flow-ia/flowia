@@ -51,6 +51,66 @@ function paymentStatusLabel(s) {
   return map[s] || { label: s, cls: '' };
 }
 
+// Bouton compact "copier" : icone + feedback visuel 1.2s sur clic.
+// Utilise navigator.clipboard.writeText (HTTPS only) ; fallback document
+// .execCommand pour les contextes non-secure (rare en admin mais defensif).
+// Disabled si pas de valeur a copier (evite les copies de '—').
+function CopyButton({ value, title }) {
+  const [copied, setCopied] = useState(false);
+  if (!value || value === '—') return null;
+
+  async function handleCopy(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(String(value));
+      } else {
+        // Fallback (dev local non-HTTPS, vieux navigateurs).
+        const ta = document.createElement('textarea');
+        ta.value = String(value);
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch { /* navigator interdit copy : silent, l'admin peut selectionner manuellement */ }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? 'Copie !' : (title || 'Copier')}
+      aria-label={title || 'Copier'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        marginLeft: 4, padding: 2, border: 'none', background: 'transparent',
+        cursor: 'pointer', color: copied ? 'var(--success)' : 'var(--fg-muted)',
+        verticalAlign: 'middle', transition: 'color 0.15s ease',
+      }}
+    >
+      {copied
+        ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        )
+        : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        )
+      }
+    </button>
+  );
+}
+
 export default function SearchPage() {
   const navigate = useNavigate();
   const [me, setMe]           = useState(null);
@@ -208,8 +268,14 @@ export default function SearchPage() {
                     <td className="mono">{immat}</td>
                     <td>
                       <div style={{ fontSize: 11, lineHeight: 1.4 }}>
-                        <div className="mono">{clientEmail}</div>
-                        <div className="mono" style={{ opacity: 0.7 }}>{clientPhone}</div>
+                        <div className="mono" style={{ display: 'flex', alignItems: 'center' }}>
+                          <span>{clientEmail}</span>
+                          <CopyButton value={clientEmail} title="Copier l'email" />
+                        </div>
+                        <div className="mono" style={{ opacity: 0.7, display: 'flex', alignItems: 'center' }}>
+                          <span>{clientPhone}</span>
+                          <CopyButton value={clientPhone} title="Copier le telephone" />
+                        </div>
                       </div>
                     </td>
                     <td>{r.service_name || '—'}</td>
@@ -221,8 +287,13 @@ export default function SearchPage() {
                       <span className={`badge ${paySt.cls}`}>{paySt.label}</span>
                     </td>
                     <td className="mono">{formatEuros(r.paid_amount_cents)}</td>
-                    <td className="mono" style={{ fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.payment_intent_id || '—'}
+                    <td className="mono" style={{ fontSize: 11 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', maxWidth: 200 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          {r.payment_intent_id || '—'}
+                        </span>
+                        <CopyButton value={r.payment_intent_id} title="Copier le PaymentIntent ID Stripe" />
+                      </div>
                     </td>
                   </tr>
                 );
