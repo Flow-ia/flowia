@@ -373,6 +373,13 @@ module.exports = function attachBookRoute(router) {
       // Si le client a paye en ligne (Stripe Elements cote front), on verifie
       // le PI cote Stripe AVANT de creer le RDV. Si KO → 400.
       let paidAmountCents = null;
+      // intended_appointment_id : UUID pre-genere par payment.js, present
+      // dans les metadata du PI. Utilise pour synchroniser appointments.id
+      // avec la description Stripe figée 'RDV-{REF8} · ...' (description
+      // jamais modifiee post-creation, conformement au requis user).
+      // Fallback : si absent (PI cree avant le deploy de cette feature),
+      // gen_random_uuid() cote DB comme avant.
+      let intendedAppointmentId = null;
       if (payment_intent_id) {
         if (!paymentEnabled || !stripeAccountId) {
           return res.status(400).json({ error: 'Paiement non disponible chez ce commerce.' });
@@ -419,6 +426,13 @@ module.exports = function attachBookRoute(router) {
             });
           }
           paidAmountCents = pi.amount_received || pi.amount;
+          // Lit l'UUID pre-genere par payment.js. Format UUID v4 valide
+          // attendu (regex defensive contre injection si Stripe renvoyait
+          // une chaine arbitraire). Si absent ou invalide -> fallback DB.
+          const candidate = String(md.intended_appointment_id || '').trim();
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate)) {
+            intendedAppointmentId = candidate;
+          }
         } catch (e) {
           console.error('[BOOK PI VERIFY ERR]', e.message);
           return res.status(400).json({
@@ -444,14 +458,19 @@ module.exports = function attachBookRoute(router) {
       // l'existant au lieu de 23505 (cas : double-clic apres confirmation).
       let rows;
       try {
+        // id : si intendedAppointmentId fourni (UUID pre-genere par
+        // payment.js et present dans la PI metadata), on l'utilise pour
+        // que appointments.id == REF8 visible dans description Stripe.
+        // Sinon (PI legacy ou pas de paiement), DEFAULT gen_random_uuid().
         const ins = await pool.query(
         `INSERT INTO appointments
-           (user_id, service_id, employee_id, client_id, client_name, client_email,
+           (id, user_id, service_id, employee_id, client_id, client_name, client_email,
             client_phone, date, start_time, end_time, duration_minutes, notes, status,
             total_amount, original_amount, promo_code_id, promo_code, discount_amount,
             source, created_by_employee_id,
             stripe_payment_intent_id, payment_status, paid_amount_cents, paid_at, paid)
-         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL,
+         SELECT COALESCE($22::uuid, gen_random_uuid()),
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17,'public',NULL,
                 $18,$19::varchar,$20,
                 CASE WHEN $19::varchar='paid' THEN NOW() ELSE NULL END,
                 $21
@@ -472,7 +491,8 @@ module.exports = function attachBookRoute(router) {
         [userId, service_id, finalEmpId, clientId, client_name, client_email||null,
          clientPhoneE164, date, start_time, end_time, duration, notes||null,
          finalPrice, originalAmt, promoCodeId, promoCodeStr, discountAmt,
-         payment_intent_id || null, paidStatus, paidAmountCents, isFullyPaid]
+         payment_intent_id || null, paidStatus, paidAmountCents, isFullyPaid,
+         intendedAppointmentId]
         );
         rows = ins.rows;
       } catch (e) {
@@ -786,50 +806,25 @@ module.exports = function attachBookRoute(router) {
       appt.referral_skip_reason  = referralCtx ? null : (referralSkipReason || null);
       res.status(201).json(appt);
 
-      // Tracabilite Stripe : a present que l'appointment est cree, on peut
-      // enrichir la description du PaymentIntent avec le RDV ref + immatricule
-      // client + date + heure. Avant ce point la, le PI etait deja cree avec
-      // une description generique 'Salon · Service · Date · CLI-XXXXXXXX'.
-      // On surcharge ici pour que le merchant retrouve le RDV directement
-      // depuis le dashboard Stripe.
-      // Format final : 'RDV-{REF8} · CLI-{IMMAT} · DD/MM/YYYY HH:MM'.
-      // L'immatricule reste stable meme si le client change d'email ou
-      // anonymise son compte (RGPD), contrairement au nom/email.
-      // Non-bloquant : si update echoue, le PI garde sa description
-      // initiale (qui contient deja l'immatricule).
+      // Tracabilite Stripe : la description du PI est figee a sa creation
+      // (payment.js l'ecrit deja au format final 'RDV-{REF8} · CLI-{IMMAT} ·
+      // DD/MM/YYYY HH:MM' grace a intended_appointment_id genere a l'avance).
+      // Plus de update post-creation -> conforme au requis user "la description
+      // ne doit jamais changer une fois la transaction creee".
+      // On enrichit uniquement la metadata avec le lien retrograde
+      // appointment_id (utile pour reconciliation cote admin) -- la metadata
+      // n'est pas visible cote client (recu Stripe), pas un probleme.
       if (payment_intent_id && stripeAccountId) {
-        const apptRefShort = String(appt.id).substring(0, 8).toUpperCase();
-        // Immatricule client : prefere global_client_id (stable
-        // cross-merchant) sinon client_id (per-merchant). Aligne avec
-        // payment.js pour coherence dashboard.
-        const clientStableUuid = tokenGlobalClientId || appt.client_id || null;
-        const clientImmatricule = clientStableUuid
-          ? `CLI-${String(clientStableUuid).substring(0, 8).toUpperCase()}`
-          : null;
-        const dateLocale = (() => {
-          try {
-            const [y, mo, d] = String(appt.date).split('-');
-            return `${d}/${mo}/${y}`;
-          } catch { return String(appt.date); }
-        })();
-        const timeShort = String(appt.start_time).substring(0, 5);
-        const newDesc = clientImmatricule
-          ? `RDV-${apptRefShort} · ${clientImmatricule} · ${dateLocale} ${timeShort}`
-          : `RDV-${apptRefShort} · ${dateLocale} ${timeShort}`;
         const { stripeFetch } = require('../global-clients/stripe-helpers');
         stripeFetch('POST', `/payment_intents/${payment_intent_id}`, {
-          description: newDesc,
           metadata: {
-            appointment_id:     appt.id,
-            appointment_ref:    apptRefShort,
-            appt_date:          appt.date,
-            appt_start_time:    appt.start_time,
-            flowia_immatricule: clientImmatricule || '',
-            // Stripe merge la metadata : client_name, client_email, etc.
-            // posees a la creation sont conserves.
+            appointment_id: appt.id,
+            // Stripe merge la metadata : intended_appointment_id,
+            // appointment_ref, flowia_immatricule, client_*, etc. posees a
+            // la creation sont conserves.
           },
         }, { stripeAccount: stripeAccountId })
-          .catch(err => console.warn('[BOOK PI update desc]', err.message));
+          .catch(err => console.warn('[BOOK PI metadata link]', err.message));
       }
 
       // Notification in-app + push + email transactionnel au commerçant

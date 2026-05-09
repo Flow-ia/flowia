@@ -595,27 +595,47 @@ export function Step6Confirm({
                 </div>
               )}
 
-              <StripePaymentSection
-                th={th} slug={slug}
-                booking={{
-                  service_id:    selSvc?.id,
-                  date:          selDate?.toLocaleDateString('sv-SE'),
-                  start_time:    selSlot,
-                  promo_code_id: promoData?.source === 'promo' ? (promoData.promo_id || null) : null,
-                  referral_code: promoData?.source === 'referral' ? (referralCode || null) : null,
-                }}
-                bookingError={bookErr}
-                selectedPmId={selectedPmId}
-                saveCard={saveCard}
-                onSaveCardChange={setSaveCard}
-                isLoggedGlobal={canSaveCards}
-                onSavedNewCard={(newDbId) => {
-                  reloadSavedMethods();
-                  setSelectedPmId(newDbId);
-                  setSaveCard(false);
-                }}
-                onPaid={(piId) => { commitBook(piId); }}
-              />
+              {/* IMPORTANT : on n'instancie StripePaymentSection QU'APRES
+                  le chargement de paymentMethods (methodsLoaded=true).
+                  Pourquoi : le composant utilise canSaveCards et selectedPmId
+                  pour choisir son mode (direct/save/saved). Si on le rend
+                  trop tot avec canSaveCards=false (etat initial), il cree
+                  un PaymentIntent en mode 'direct' qui devient orphelin
+                  Incomplet quand canSaveCards passe a true et le mode
+                  flippe -- d'ou les rows 'Saon de Test · beard · ...'
+                  observees sur le dashboard Stripe. Skeleton pendant le
+                  chargement (~100-300ms typiquement). */}
+              {methodsLoaded ? (
+                <StripePaymentSection
+                  th={th} slug={slug}
+                  booking={{
+                    service_id:    selSvc?.id,
+                    date:          selDate?.toLocaleDateString('sv-SE'),
+                    start_time:    selSlot,
+                    promo_code_id: promoData?.source === 'promo' ? (promoData.promo_id || null) : null,
+                    referral_code: promoData?.source === 'referral' ? (referralCode || null) : null,
+                  }}
+                  bookingError={bookErr}
+                  selectedPmId={selectedPmId}
+                  saveCard={saveCard}
+                  onSaveCardChange={setSaveCard}
+                  isLoggedGlobal={canSaveCards}
+                  onSavedNewCard={(newDbId) => {
+                    reloadSavedMethods();
+                    setSelectedPmId(newDbId);
+                    setSaveCard(false);
+                  }}
+                  onPaid={(piId) => { commitBook(piId); }}
+                />
+              ) : (
+                <div style={{
+                  marginTop: 12, padding: 16, borderRadius: 12,
+                  background: th.card, border: `0.5px solid ${th.border}`,
+                  textAlign: 'center', fontSize: 13, color: th.muted,
+                }}>
+                  {"Chargement des moyens de paiement…"}
+                </div>
+              )}
             </>
           )}
         </div>

@@ -10,6 +10,7 @@
 // - Le book.js confirme le RDV apres verification PI.status='succeeded'.
 
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { extractClientToken } = require('../../utils/clientCookies');
@@ -356,20 +357,19 @@ module.exports = function attachPaymentRoutes(router) {
         } catch { return String(date); }
       })();
       const acompteSuffix = pct < 100 ? ` (acompte ${pct}%)` : '';
-      // Description initiale (avant /book qui la reecrit avec RDV-{ref}).
-      // Format : 'Salon · Service · Date Heure · CLI-XXXXXXXX (Client)'.
-      // L'immatricule remplace l'email/nom comme identifiant primaire car
-      // c'est l'info la plus stable (UUID-derive, ne change jamais).
-      const clientLabel = clientImmatricule
-        ? (clientName ? `${clientImmatricule} (${clientName})` : clientImmatricule)
-        : (clientName || clientEmail || 'Client');
-      const descParts = [
-        m.business_name || 'FlowIA',
-        svc[0].name,
-        `${dateLocale} ${start_time}`,
-        clientLabel,
-      ];
-      const description = (descParts.join(' · ') + acompteSuffix).substring(0, 500);
+      // ── UUID pre-genere pour le RDV ────────────────────────────────────
+      // On genere ICI l'UUID que /book.js utilisera comme appointments.id.
+      // Permet de fixer la description du PI dans son format FINAL des la
+      // creation : 'RDV-{REF8} · CLI-{IMMAT} · DD/MM/YYYY HH:MM'. Plus
+      // jamais de modif de description apres : la transaction Stripe est
+      // immuable une fois creee, conformement au requis user.
+      // Le UUID est passe en metadata.intended_appointment_id ; book.js
+      // le lit et l'utilise comme `appointments.id` au INSERT.
+      const intendedApptId   = crypto.randomUUID();
+      const intendedApptRef8 = intendedApptId.substring(0, 8).toUpperCase();
+      const description = clientImmatricule
+        ? (`RDV-${intendedApptRef8} · ${clientImmatricule} · ${dateLocale} ${start_time}` + acompteSuffix).substring(0, 500)
+        : (`RDV-${intendedApptRef8} · ${dateLocale} ${start_time}` + acompteSuffix).substring(0, 500);
 
       const piParams = {
         amount: amountCents,
@@ -408,6 +408,14 @@ module.exports = function attachPaymentRoutes(router) {
           service_name:  (svc[0].name || '').substring(0, 200),
           date,
           start_time,
+          // intended_appointment_id : UUID pre-genere ici, utilise par
+          // book.js comme appointments.id au INSERT. Permet a la
+          // description du PI de contenir 'RDV-{REF8}' des la creation
+          // (description immuable post-creation). Si /book ne tourne pas
+          // (booking abandonne, error), le PI n'est jamais confirme et
+          // expire naturellement cote Stripe.
+          intended_appointment_id: intendedApptId,
+          appointment_ref:         intendedApptRef8,
           // Immatricule client (CLI-XXXXXXXX) : identifiant stable
           // visible dans le dashboard et utilisable pour la
           // reconciliation. Source de verite : global_client_id sinon
@@ -486,17 +494,32 @@ module.exports = function attachPaymentRoutes(router) {
             || existing.status === 'requires_confirmation');
 
         if (updatable) {
-          // Construit les params d'update partages entre les 2 paths.
-          // `customer` toujours passe quand on l'a (visibilite dashboard).
-          // Stripe accepte le change de customer sur un PI updatable.
+          // Update params : on ne touche PAS a `description` ni
+          // a `metadata.intended_appointment_id` (immuables post-creation,
+          // requis user). On met a jour uniquement les champs qui peuvent
+          // legitimement changer pendant la session de booking : montant,
+          // fee, customer, receipt_email, et un sous-ensemble de
+          // metadata (promo, referral, prix detailles).
+          const updateMetadata = {
+            // On garde les keys 'volatiles' (qui peuvent changer si l'user
+            // change de promo/code parrainage). Les keys 'immuables'
+            // (intended_appointment_id, appointment_ref, immatricule,
+            // client_id, service_id, date, start_time) ne sont PAS
+            // re-envoyees -> Stripe les preserve par merge.
+            promo_code_id:      promo_code_id || '',
+            referral_code:      referral_code || '',
+            original_amount:    originalAmt.toFixed(2),
+            discount_amount:    discountAmt.toFixed(2),
+            final_price:        finalPrice.toFixed(2),
+            payment_percentage: String(pct),
+            payment_kind:       pct < 100 ? 'deposit' : 'full',
+          };
           const updateParams = {
             amount: amountCents,
             ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
-            description,
             ...(connectedCustomerId ? { customer: connectedCustomerId } : {}),
             ...(clientEmail ? { receipt_email: clientEmail } : {}),
-            statement_descriptor_suffix: piParams.statement_descriptor_suffix,
-            metadata: piParams.metadata,
+            metadata: updateMetadata,
           };
 
           let updateOk = false;
