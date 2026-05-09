@@ -47,6 +47,38 @@ function getStripeForAccount(accountId) {
   return stripePromiseCache[key];
 }
 
+// ── Persistence pi_id (Planity-style PI reuse) ───────────────────────────
+// On garde le payment_intent_id de la session de booking en cours dans
+// sessionStorage (clef par slug). Pourquoi sessionStorage et pas useRef :
+// le composant StripePaymentSection est monte/demonté quand l'utilisateur
+// navigue entre les steps du booking ou quand le parent re-render apres
+// login -- une useRef serait reinitialisee a chaque remount, perdant la
+// reference au PI deja cree -> retour aux PIs orphelins. sessionStorage
+// survit aux remounts du composant mais pas a la fermeture de l'onglet,
+// ce qui est exactement le bon scope (1 PI par session de booking).
+//
+// Cleanup automatique : on retire la cle apres un paiement reussi pour
+// que le prochain RDV cree un nouveau PI propre. Si la cle est stale
+// (PI succeeded/canceled/failed cote Stripe), le backend tombe en
+// fallback CREATE -> safe.
+const PI_STORAGE_PREFIX = 'flowia_pi_';
+function getStoredPiId(slug) {
+  if (!slug) return null;
+  try {
+    return (typeof window !== 'undefined' && window.sessionStorage)
+      ? window.sessionStorage.getItem(PI_STORAGE_PREFIX + slug) || null
+      : null;
+  } catch { return null; }
+}
+function setStoredPiId(slug, id) {
+  if (!slug) return;
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return;
+    if (id) window.sessionStorage.setItem(PI_STORAGE_PREFIX + slug, id);
+    else    window.sessionStorage.removeItem(PI_STORAGE_PREFIX + slug);
+  } catch {}
+}
+
 // ── Helper UX : watchdog + capture unhandledrejection autour d'une promesse
 // Stripe (cas hCaptcha bloque par extension navigateur, voir commit 1).
 function runStripeWithWatchdog(stripeCall, onTimeout, onChallengeFailed) {
@@ -462,13 +494,12 @@ function PaymentIntentOrSetupWrapper({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(false);
 
-  // Planity-style PI reuse : on garde le payment_intent_id du dernier intent
-  // dans une ref qui survit aux re-renders. Au prochain createPaymentIntent
-  // (changement de prix, promo, date...), on le passe au backend qui UPDATE
-  // le meme PI au lieu d'en creer un nouveau. Evite les PIs orphelins
-  // 'Incomplet' dans le dashboard Stripe + preserve la saisie carte du
-  // client (le client_secret reste identique -> Elements ne re-monte pas).
-  const previousPiIdRef = useRef(null);
+  // Planity-style PI reuse : le payment_intent_id de la session courante
+  // est persiste en sessionStorage (cf. helpers en haut du fichier). Au
+  // prochain createPaymentIntent (changement de prix/promo/date OU remount
+  // du composant apres navigation entre steps), on le passe au backend
+  // qui UPDATE le meme PI au lieu d'en creer un nouveau. Evite les PIs
+  // 'Incomplet' orphelins dans le dashboard Stripe.
 
   // Reset busy si une erreur apres paiement remonte du parent (ex. /book ko).
   useEffect(() => {
@@ -503,17 +534,20 @@ function PaymentIntentOrSetupWrapper({
       : pubApi.createPaymentIntent(slug, {
           ...booking,
           // Reuse PI : le backend tente UPDATE si present, sinon CREATE.
-          pi_id: previousPiIdRef.current,
+          // Lit la valeur a chaque appel (pas de cache useRef) pour gerer
+          // le remount du composant lors de la navigation entre steps.
+          pi_id: getStoredPiId(slug),
         });
 
     promise
       .then(r => {
         if (cancelled) return;
-        // Memorise le PI courant pour le prochain refresh (update plutot
-        // que create). En mode 'save', payment_intent_id est absent
-        // (SetupIntent) -> on garde l'ancien ref tel quel.
+        // Persist le PI pour le prochain refresh (update plutot que
+        // create) y compris apres remount. En mode 'save',
+        // payment_intent_id est absent (SetupIntent) -> on ne touche pas
+        // au stockage existant.
         if (r && r.payment_intent_id) {
-          previousPiIdRef.current = r.payment_intent_id;
+          setStoredPiId(slug, r.payment_intent_id);
         }
         setIntent(r);
       })
@@ -644,7 +678,7 @@ function PaymentIntentOrSetupWrapper({
         {mode === 'save' ? (
           <SaveCardFormBridge
             th={th} slug={slug} booking={booking}
-            onPaid={(piId) => onPaid(piId)}
+            onPaid={(piId) => { setStoredPiId(slug, null); onPaid(piId); }}
             onSavedNewCard={onSavedNewCard}
             busy={busy} setBusy={setBusy}
             showSaveCheckbox={showSaveCheckbox}
@@ -655,7 +689,7 @@ function PaymentIntentOrSetupWrapper({
           <DirectPayForm
             th={th}
             amountCents={intent.amount_cents || 0}
-            onPaid={(piId) => onPaid(piId, intent.amount_cents)}
+            onPaid={(piId) => { setStoredPiId(slug, null); onPaid(piId, intent.amount_cents); }}
             busy={busy} setBusy={setBusy}
             showSaveCheckbox={showSaveCheckbox}
             saveCard={saveCard}
