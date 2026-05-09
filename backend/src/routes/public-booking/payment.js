@@ -18,6 +18,7 @@ const {
   stripeFetch,
   clonePaymentMethodToConnected,
 } = require('../global-clients/stripe-helpers');
+const { ensureMerchantConnectedCustomer } = require('../../utils/ensureMerchantConnectedCustomer');
 
 module.exports = function attachPaymentRoutes(router) {
   // ── POST /api/pub/:slug/booking/payment-intent ───────────────────────────
@@ -230,120 +231,34 @@ module.exports = function attachPaymentRoutes(router) {
         : null;
 
       // ── Customer Stripe sur le compte connecte du merchant ─────────────
-      // TOUJOURS cree/reutilise pour que le merchant voie le client dans
-      // la column 'Client' du Stripe Dashboard, peu importe le scope JWT
-      // (client ou global_client) et peu importe si paiement direct, save
-      // card ou carte sauvegardee.
+      // Cree ou reutilise le Customer pour binder le PI au client dans la
+      // column 'Client' du Stripe Dashboard. Logique cache (per-merchant
+      // via client_accounts ou cross-merchant via client_connected_customers)
+      // + self-healing dans utils/ensureMerchantConnectedCustomer.
       //
-      // 2 caches selon scope (le PI passe via Stripe-Account header donc
-      // le customer doit exister sur le compte connecte du merchant) :
-      // (a) clientId set    : cache via client_accounts.stripe_connected_customer_id
-      //                       (per-merchant). Le scope='client' ou client linked.
-      // (b) globalClientId only : cache via client_connected_customers
-      //                           (global_client_id, connected_account_id).
-      //
-      // Auto self-healing : retrieve fail (account reconnecte, customer
-      // supprime, ID stale) -> on recree et on update le cache.
-      // Fail-safe : si la creation echoue, on continue sans customer
-      // (le PI fonctionne quand meme, juste pas de binding dashboard).
-      let connectedCustomerId = null;
-
-      // Customer name : nom du client + immatricule -> column 'Client'
-      // affiche par exemple "Marie Dupont (CLI-A1B2C3D4)".
+      // Customer name : 'Marie Dupont (CLI-A1B2C3D4)' -> immatricule visible
+      // dans le dashboard merchant. Fail-safe : null si non logged ou create
+      // fail Stripe -> le PI fonctionne quand meme sans binding.
       const customerName = (() => {
         if (clientName && clientImmatricule) return `${clientName} (${clientImmatricule})`;
         if (clientName) return clientName;
         if (clientImmatricule) return clientImmatricule;
         return clientEmail || 'Client FlowIA';
       })();
-      const customerMetadata = {
-        flowia_client_id:        clientId || '',
-        flowia_global_client_id: globalClientId || '',
-        flowia_merchant_id:      m.user_id,
-        flowia_immatricule:      clientImmatricule || '',
-      };
-      // Helper : retrieve safe (true si OK, false si stale/deleted/etc.).
-      const tryRetrieveCustomer = async (custId) => {
-        try {
-          await stripeFetch('GET', `/customers/${custId}`, null, stripeOpts);
-          return true;
-        } catch (rErr) {
-          console.warn('[PAYMENT customer retrieve fail]', rErr.message);
-          return false;
-        }
-      };
-
-      if (clientId) {
-        // Path (a) : cache per-merchant via client_accounts.
-        try {
-          const { rows: caRow } = await pool.query(
-            'SELECT stripe_connected_customer_id FROM client_accounts WHERE id=$1 AND user_id=$2',
-            [clientId, m.user_id]
-          );
-          const savedCustId = caRow[0]?.stripe_connected_customer_id || null;
-          if (savedCustId && await tryRetrieveCustomer(savedCustId)) {
-            connectedCustomerId = savedCustId;
-          }
-          if (!connectedCustomerId) {
-            try {
-              const newCust = await stripeFetch('POST', '/customers', {
-                ...(clientEmail ? { email: clientEmail } : {}),
-                name:     customerName,
-                metadata: customerMetadata,
-              }, stripeOpts);
-              if (newCust?.id) {
-                connectedCustomerId = newCust.id;
-                pool.query(
-                  'UPDATE client_accounts SET stripe_connected_customer_id=$1 WHERE id=$2 AND user_id=$3',
-                  [newCust.id, clientId, m.user_id]
-                ).catch(err => console.warn('[PAYMENT save customer_id]', err.message));
-              }
-            } catch (createErr) {
-              console.error('[PAYMENT customer create fail (clientId)]', createErr.message);
-            }
-          }
-        } catch (e) {
-          console.error('[PAYMENT customer setup (clientId)]', e.message);
-        }
-      } else if (globalClientId) {
-        // Path (b) : cache cross-merchant via client_connected_customers.
-        try {
-          const { rows: cccRow } = await pool.query(
-            `SELECT stripe_customer_id FROM client_connected_customers
-              WHERE global_client_id=$1 AND connected_account_id=$2`,
-            [globalClientId, m.stripe_account_id]
-          );
-          const savedCustId = cccRow[0]?.stripe_customer_id || null;
-          if (savedCustId && await tryRetrieveCustomer(savedCustId)) {
-            connectedCustomerId = savedCustId;
-          }
-          if (!connectedCustomerId) {
-            try {
-              const newCust = await stripeFetch('POST', '/customers', {
-                ...(clientEmail ? { email: clientEmail } : {}),
-                name:     customerName,
-                metadata: customerMetadata,
-              }, stripeOpts);
-              if (newCust?.id) {
-                connectedCustomerId = newCust.id;
-                pool.query(
-                  `INSERT INTO client_connected_customers
-                     (global_client_id, connected_account_id, stripe_customer_id)
-                   VALUES ($1, $2, $3)
-                   ON CONFLICT (global_client_id, connected_account_id)
-                     DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id,
-                                   created_at = NOW()`,
-                  [globalClientId, m.stripe_account_id, newCust.id]
-                ).catch(err => console.warn('[PAYMENT save ccc_id]', err.message));
-              }
-            } catch (createErr) {
-              console.error('[PAYMENT customer create fail (globalClientId)]', createErr.message);
-            }
-          }
-        } catch (e) {
-          console.error('[PAYMENT customer setup (globalClientId)]', e.message);
-        }
-      }
+      const connectedCustomerId = await ensureMerchantConnectedCustomer(pool, {
+        merchantUserId:  m.user_id,
+        stripeAccountId: m.stripe_account_id,
+        clientId,
+        globalClientId,
+        clientEmail,
+        customerName,
+        customerMetadata: {
+          flowia_client_id:        clientId || '',
+          flowia_global_client_id: globalClientId || '',
+          flowia_merchant_id:      m.user_id,
+          flowia_immatricule:      clientImmatricule || '',
+        },
+      });
 
       // Description visible cote merchant (Stripe Dashboard) ET cote client
       // (recu Stripe envoye automatiquement via receipt_email). Format clair :
