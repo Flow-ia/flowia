@@ -269,9 +269,12 @@ function SaveCardForm({
       }
 
       // 3) Cree le PI sur connected avec use_saved_pm_id (clone + confirm
-      //    cote serveur, off_session=true).
+      //    cote serveur, off_session=true). On passe pi_id pour que le
+      //    backend cancel un eventuel PI ouvert plus tot dans la session
+      //    (mode='direct' avant login -> Incomplet orphelin sinon).
       const intent = await pubApi.createPaymentIntent(slug, {
         ...booking, use_saved_pm_id: newDbId,
+        pi_id: getStoredPiId(slug),
       });
 
       // 4) Si 3DS / SCA -> handleNextAction sur instance Stripe connected.
@@ -360,8 +363,11 @@ function SavedCardPay({
     if (busy) return;
     setBusy(true); setErrMsg('');
     try {
+      // pi_id : reuse / cancel d'un eventuel PI ouvert plus tot (mode
+      // 'direct' avant que l'user ne switch sur sa carte sauvegardee).
       const intent = await pubApi.createPaymentIntent(slug, {
         ...booking, use_saved_pm_id: selectedPmId,
+        pi_id: getStoredPiId(slug),
       });
       setIntentInfo({ amount_cents: intent.amount_cents });
 
@@ -372,12 +378,20 @@ function SavedCardPay({
           TIMEOUT_MSG, CHALLENGE_MSG,
         );
         if (error) { setErrMsg(error.message || 'Erreur 3DS.'); setBusy(false); return; }
-        if (paymentIntent?.status === 'succeeded') { onPaid(intent.payment_intent_id); return; }
+        if (paymentIntent?.status === 'succeeded') {
+          setStoredPiId(slug, null);
+          onPaid(intent.payment_intent_id);
+          return;
+        }
         setErrMsg(`Paiement non confirme (${paymentIntent?.status || 'inconnu'}).`);
         setBusy(false);
         return;
       }
-      if (intent.pi_status === 'succeeded') { onPaid(intent.payment_intent_id); return; }
+      if (intent.pi_status === 'succeeded') {
+        setStoredPiId(slug, null);
+        onPaid(intent.payment_intent_id);
+        return;
+      }
       setErrMsg(`Paiement non confirme (${intent.pi_status || 'inconnu'}).`);
       setBusy(false);
     } catch (e) {
@@ -541,14 +555,17 @@ function PaymentIntentOrSetupWrapper({
 
     promise
       .then(r => {
-        if (cancelled) return;
-        // Persist le PI pour le prochain refresh (update plutot que
-        // create) y compris apres remount. En mode 'save',
-        // payment_intent_id est absent (SetupIntent) -> on ne touche pas
-        // au stockage existant.
+        // Persist le pi_id MEME si l'effet est cancelled. Pourquoi : si
+        // bookingKey change rapidement (login, toggle mode, promo) pendant
+        // qu'un createPaymentIntent est en vol, le 2eme appel partirait
+        // sans pi_id -> nouveau PI orphelin. En stockant tout pi_id que
+        // le backend nous renvoie, le prochain effet le voit et passe en
+        // update path. Le setIntent reste gate par cancelled (pas de
+        // setState sur composant unmounted).
         if (r && r.payment_intent_id) {
           setStoredPiId(slug, r.payment_intent_id);
         }
+        if (cancelled) return;
         setIntent(r);
       })
       .catch(e => {
