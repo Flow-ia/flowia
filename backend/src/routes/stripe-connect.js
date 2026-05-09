@@ -742,33 +742,20 @@ router.post('/webhook', async (req, res) => {
             console.error('[CONNECT WEBHOOK] cancelAppointmentPayout', cancelErr.message);
           }
 
-          // INSERT transaction 'rdv_refund' (montant negatif) pour la
-          // tracabilite cote commercant. Montant lu depuis charge.amount_refunded
-          // (cents) -- gere les refunds partiels aussi (montant remboursé
-          // != montant initial). Si paid_amount_cents en DB n'est pas
-          // dispo (rare), fallback amount_refunded.
-          try {
-            const refundedCents = Number(ch.amount_refunded || row.paid_amount_cents || 0);
-            if (refundedCents > 0) {
-              const negAmount = -(refundedCents / 100);
-              const cn = row.client_name || 'client';
-              const desc = `Remboursement RDV — ${cn}`;
-              const now = new Date();
-              await pool.query(
-                `INSERT INTO transactions
-                   (user_id, type, amount, description, employee_id, payment_method,
-                    date, time, datetime_iso, appointment_id, source, locked, qty_total)
-                 VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE, 0)
-                 ON CONFLICT (appointment_id) WHERE source = 'rdv_refund' DO NOTHING`,
-                [row.user_id, negAmount, desc, row.employee_id || null,
-                 now.toISOString().substring(0, 10),
-                 now.toTimeString().substring(0, 8),
-                 now.toISOString(), row.id]
-              );
-              console.log('[CONNECT WEBHOOK] refund tx inserted for appt', row.id, negAmount, '€');
-            }
-          } catch (txErr) {
-            console.error('[CONNECT WEBHOOK] refund tx insert fail', txErr.message);
+          // INSERT transaction 'rdv_refund' via le helper partage avec
+          // refundAppointment.js (sync path). Lit charge.amount_refunded
+          // pour gerer les refunds partiels ; fallback paid_amount_cents
+          // de la row appointments si l'event Stripe ne le porte pas.
+          const { recordRefundTransaction } = require('../utils/recordRefundTransaction');
+          const refundedCents = Number(ch.amount_refunded || row.paid_amount_cents || 0);
+          const txRes = await recordRefundTransaction(pool, {
+            appointmentId: row.id,
+            refundedCents,
+          });
+          if (txRes.inserted) {
+            console.log('[CONNECT WEBHOOK] refund tx inserted for appt', row.id, '-', (refundedCents / 100), '€');
+          } else if (!txRes.ok) {
+            console.error('[CONNECT WEBHOOK] refund tx insert fail', txRes.error);
           }
         }
       }
