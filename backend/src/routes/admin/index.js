@@ -45,5 +45,6 @@ router.use('/stats',     require('./stats'));
 router.use('/audit',     require('./audit'));
 router.use('/failed-refunds', require('./failed-refunds'));
 router.use('/stripe-payouts', require('./stripe-payouts'));
+router.use('/search',         require('./search'));
 
 module.exports = router;

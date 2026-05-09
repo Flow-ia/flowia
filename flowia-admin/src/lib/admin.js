@@ -206,6 +206,17 @@ export async function getGlobalStats() {
   return await apiJson('/api/admin/stats');
 }
 
+// ── Recherche universelle (RDV ref / immatricule / email / phone) ──────────
+// type ∈ auto | rdv | immat | email | phone (auto = detection backend).
+export async function searchUniversal({ q, type = 'auto', limit = 50, offset = 0 } = {}) {
+  const qs = new URLSearchParams();
+  qs.set('q', q || '');
+  if (type && type !== 'auto') qs.set('type', type);
+  qs.set('limit',  String(limit));
+  qs.set('offset', String(offset));
+  return await apiJson(`/api/admin/search?${qs.toString()}`);
+}
+
 // ── Audit log ───────────────────────────────────────────────────────────────
 export async function listAudit({ action = '', adminId = '', targetType = '', status = '', search = '', since = '', until = '', limit = 100, offset = 0 } = {}) {
   const qs = new URLSearchParams();
