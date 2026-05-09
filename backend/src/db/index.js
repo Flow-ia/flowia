@@ -1570,6 +1570,16 @@ async function initDB() {
   await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_rdv_online_appt
     ON transactions(appointment_id) WHERE source = 'rdv_online'`);
 
+  // Idempotence transactions 'rdv_refund' : meme logique que rdv_online,
+  // pour permettre 2 chemins concurrents (refundAppointment.js synchrone +
+  // webhook charge.refunded asynchrone — necessaire si le merchant lance
+  // un refund directement depuis le dashboard Stripe). UN SEUL row
+  // 'rdv_refund' par appointment_id, ON CONFLICT DO NOTHING dans les
+  // deux chemins -> dashboard /historique et /statistiques toujours
+  // coherents quel que soit l'origine du refund.
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_rdv_refund_appt
+    ON transactions(appointment_id) WHERE source = 'rdv_refund'`);
+
   // Tracabilite des annulations : qui a annule + quand. Permet a la fois
   // l'affichage cote client ('Annule par le salon' vs 'Annule par vous') et
   // le suivi cote commercant. cancelled_by enum : 'merchant' (PUT cancel

@@ -542,13 +542,21 @@ function periodBtn(t, active) {
 // exactement quand chaque paiement va arriver sur son IBAN.
 function EscrowPayoutsSection({ t, showToast }) {
   const [data, setData]       = useState(null);
+  const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await connectApi.getPayouts();
-      setData(r);
+      // Parallel : escrow FlowIA (appointment_payouts) + balance Stripe live.
+      // Le solde live reflete IMMEDIATEMENT les refunds (Stripe API), tandis
+      // que appointment_payouts depend du cron releasePayouts.
+      const [r, b] = await Promise.allSettled([
+        connectApi.getPayouts(),
+        connectApi.getStripeBalance(),
+      ]);
+      if (r.status === 'fulfilled') setData(r.value);
+      if (b.status === 'fulfilled') setBalance(b.value);
     } catch (e) {
       showToast && showToast(e.message || 'Erreur chargement reversements.', 'error');
     } finally { setLoading(false); }
@@ -586,7 +594,7 @@ function EscrowPayoutsSection({ t, showToast }) {
         <span style={panelLabel(t)}>{"Mes reversements"}</span>
       </div>
 
-      {/* Solde en attente — gros chiffre rassurant */}
+      {/* Solde Stripe live (source de verite) — refunds reflechis instantanement */}
       <div style={{
         padding: '16px 18px', borderRadius: 12,
         background: '#f0fdf4', border: '1px solid #bbf7d0',
@@ -594,16 +602,31 @@ function EscrowPayoutsSection({ t, showToast }) {
       }}>
         <p style={{ margin: 0, fontSize: 11, color: '#065f46',
                     textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
-          {"Solde en attente sur Stripe"}
+          {"Solde Stripe (en direct)"}
         </p>
         <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 500, color: '#065f46',
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-          {fmtEur(summary.pending_cents || 0)}
+          {fmtEur(((balance?.available_cents) || 0) + ((balance?.pending_cents) || 0))}
         </p>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#065f46', lineHeight: 1.5 }}>
+        {/* Decomposition disponible / en attente Stripe */}
+        <div style={{ marginTop: 8, display: 'flex', gap: 16, fontSize: 11, color: '#065f46', lineHeight: 1.5 }}>
+          <span>
+            {"Disponible : "}
+            <span style={{ fontWeight: 500, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {fmtEur(balance?.available_cents || 0)}
+            </span>
+          </span>
+          <span>
+            {"En transit : "}
+            <span style={{ fontWeight: 500, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {fmtEur(balance?.pending_cents || 0)}
+            </span>
+          </span>
+        </div>
+        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#065f46', lineHeight: 1.5, opacity: 0.85 }}>
           {summary.pending_count
-            ? `${summary.pending_count} acompte${summary.pending_count > 1 ? 's' : ''} sur des RDV à venir. Sera versé sur votre IBAN après chaque RDV (selon votre délai de reversement).`
-            : 'Aucun paiement en attente actuellement.'}
+            ? `Programmation FlowIA : ${summary.pending_count} reversement${summary.pending_count > 1 ? 's' : ''} planifie${summary.pending_count > 1 ? 's' : ''} pour ${fmtEur(summary.pending_cents || 0)} (versés selon le délai après chaque RDV).`
+            : 'Aucun reversement programmé actuellement.'}
         </p>
       </div>
 

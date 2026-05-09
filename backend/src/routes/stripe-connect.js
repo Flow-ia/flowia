@@ -187,6 +187,55 @@ router.post('/dashboard-link', authMiddleware, async (req, res) => {
   }
 });
 
+// ── GET /api/stripe-connect/balance ────────────────────────────────────────
+// Solde live cote Stripe (compte connecte du merchant). Source de verite
+// pour le solde en attente affiche dans /reglages/paiements -- l'API Stripe
+// reflete IMMEDIATEMENT les refunds (le pending diminue) contrairement a
+// la table appointment_payouts qui depend du cron releasePayouts.
+//
+// Returns:
+//   - available_cents : solde disponible (peut etre payout maintenant)
+//   - pending_cents   : solde en attente de settlement Stripe (encaisse
+//                       mais pas encore disponible -- typiquement 2-7j)
+//   - currency
+// Best-effort : si Stripe API fail (compte deconnecte, rate-limit), on
+// fallback sur 0 cents pour ne pas casser le dashboard.
+router.get('/balance', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { rows } = await pool.query(
+      'SELECT stripe_account_id FROM users WHERE id=$1', [userId]
+    );
+    if (!rows.length || !rows[0].stripe_account_id) {
+      return res.json({ available_cents: 0, pending_cents: 0, currency: 'eur', connected: false });
+    }
+    try {
+      const stripe = getStripe();
+      const balance = await stripe.balance.retrieve({
+        stripeAccount: rows[0].stripe_account_id,
+      });
+      // balance.available et balance.pending sont des arrays par devise.
+      // On somme tout en EUR (cas multi-devise rare en France).
+      const sumCurrency = (arr, cur) => (arr || [])
+        .filter(b => (b.currency || '').toLowerCase() === cur)
+        .reduce((s, b) => s + (b.amount || 0), 0);
+      const currency = 'eur';
+      res.json({
+        available_cents: sumCurrency(balance.available, currency),
+        pending_cents:   sumCurrency(balance.pending,   currency),
+        currency,
+        connected: true,
+      });
+    } catch (apiErr) {
+      console.warn('[CONNECT GET balance] Stripe API fail', apiErr.message);
+      res.json({ available_cents: 0, pending_cents: 0, currency: 'eur', connected: true, error: apiErr.message });
+    }
+  } catch (e) {
+    console.error('[CONNECT GET balance ERR]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ── GET /api/stripe-connect/payouts ─────────────────────────────────────────
 // Liste des payouts (escrow appointment_payouts) du merchant connecte.
 // Filtre optionnel ?status=pending|released|cancelled|failed. Default :
@@ -650,18 +699,78 @@ router.post('/webhook', async (req, res) => {
       const ch = event.data.object;
       // On retrouve le RDV via le PaymentIntent du charge (payment_intent
       // est sur charge object). Marque payment_status='refunded'.
+      //
+      // 3 chemins de refund possibles :
+      // (a) Client annule dans les delais via /cancel  -> refundAppointment.js
+      //     (synchrone) qui INSERT transaction + cancel payout + ce webhook
+      //     en backup async (no-op grace a ON CONFLICT et payment_status check).
+      // (b) Merchant annule via PUT appointments               -> refundAppointment.js idem.
+      // (c) Merchant lance refund directement depuis Stripe Dashboard
+      //     (manuel, hors flow FlowIA) -> SEUL ce webhook tourne.
+      //
+      // Donc ce webhook DOIT mirror tout ce que refundAppointment fait
+      // (sauf l'appel API Stripe refund -- deja fait par definition) :
+      // 1. UPDATE appointments.payment_status = 'refunded'
+      // 2. cancelAppointmentPayout (escrow) -- evite payout vers merchant
+      //    apres remboursement client
+      // 3. INSERT transactions row 'rdv_refund' (negative) -- visible
+      //    /historique, /statistiques, /reglages/paiements performance
+      // ON CONFLICT DO NOTHING via index unique idx_transactions_rdv_refund_appt
+      // pour eviter le doublon si refundAppointment a deja insere.
       const piId = ch.payment_intent;
       if (piId) {
         const upd = await pool.query(
           `UPDATE appointments
-              SET payment_status = 'refunded'
+              SET payment_status = 'refunded',
+                  updated_at     = NOW()
             WHERE stripe_payment_intent_id = $1
               AND payment_status <> 'refunded'
-            RETURNING id`,
+            RETURNING id, user_id, client_name, employee_id, paid_amount_cents`,
           [piId]
         );
         console.log('[CONNECT WEBHOOK] charge.refunded:', piId,
           upd.rowCount > 0 ? '→ appt ' + upd.rows[0].id : 'sans RDV');
+
+        if (upd.rowCount > 0) {
+          const row = upd.rows[0];
+          // Cancel le payout en escrow pour eviter le double-debit (client
+          // rembourse + merchant paye). Best-effort, log si echec.
+          try {
+            const { cancelAppointmentPayout } = require('../utils/scheduleAppointmentPayout');
+            await cancelAppointmentPayout(pool, row.id, 'webhook_charge_refunded');
+          } catch (cancelErr) {
+            console.error('[CONNECT WEBHOOK] cancelAppointmentPayout', cancelErr.message);
+          }
+
+          // INSERT transaction 'rdv_refund' (montant negatif) pour la
+          // tracabilite cote commercant. Montant lu depuis charge.amount_refunded
+          // (cents) -- gere les refunds partiels aussi (montant remboursé
+          // != montant initial). Si paid_amount_cents en DB n'est pas
+          // dispo (rare), fallback amount_refunded.
+          try {
+            const refundedCents = Number(ch.amount_refunded || row.paid_amount_cents || 0);
+            if (refundedCents > 0) {
+              const negAmount = -(refundedCents / 100);
+              const cn = row.client_name || 'client';
+              const desc = `Remboursement RDV — ${cn}`;
+              const now = new Date();
+              await pool.query(
+                `INSERT INTO transactions
+                   (user_id, type, amount, description, employee_id, payment_method,
+                    date, time, datetime_iso, appointment_id, source, locked, qty_total)
+                 VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE, 0)
+                 ON CONFLICT (appointment_id) WHERE source = 'rdv_refund' DO NOTHING`,
+                [row.user_id, negAmount, desc, row.employee_id || null,
+                 now.toISOString().substring(0, 10),
+                 now.toTimeString().substring(0, 8),
+                 now.toISOString(), row.id]
+              );
+              console.log('[CONNECT WEBHOOK] refund tx inserted for appt', row.id, negAmount, '€');
+            }
+          } catch (txErr) {
+            console.error('[CONNECT WEBHOOK] refund tx insert fail', txErr.message);
+          }
+        }
       }
     }
   } catch (e) {

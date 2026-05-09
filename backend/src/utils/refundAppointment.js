@@ -172,11 +172,17 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
         // qty_total=0 explicite : le default DB est 1 mais un refund n'est
         // PAS une prestation -> sinon le compteur 'nb prestations' du jour
         // s'incremente a tort sur Historique.jsx (reduce sum qty_total).
+        // ON CONFLICT DO NOTHING : si le webhook charge.refunded a deja
+        // insere la row (chemin async, race-safe avec refund initie depuis
+        // le Stripe Dashboard direct par exemple), on no-op. Index unique
+        // partiel idx_transactions_rdv_refund_appt garantit 1 seule row
+        // 'rdv_refund' par appointment_id quel que soit le chemin.
         await pool.query(
           `INSERT INTO transactions
              (user_id, type, amount, description, employee_id, payment_method,
               date, time, datetime_iso, appointment_id, source, locked, qty_total)
-           VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE, 0)`,
+           VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_refund',TRUE, 0)
+           ON CONFLICT (appointment_id) WHERE source = 'rdv_refund' DO NOTHING`,
           [a.user_id, negAmount, desc, empId,
            now.toISOString().substring(0, 10),
            now.toTimeString().substring(0, 8),

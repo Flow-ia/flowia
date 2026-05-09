@@ -828,6 +828,10 @@ export const connectApi = {
   getPayouts:        (status) => request(`/stripe-connect/payouts${status ? `?status=${status}` : ''}`),
   // Stats KPI paiements en ligne sur periode glissante (7/30/90 jours).
   getPerformanceStats: (period = 30) => request(`/stripe-connect/performance-stats?period=${period}`),
+  // Solde live Stripe (available + pending) -- source de verite a jour
+  // immediat (refunds reflechis sans attendre le cron). Complete /payouts
+  // qui montre l'escrow FlowIA (release planifies sur appointment_payouts).
+  getStripeBalance:    ()       => request('/stripe-connect/balance'),
   updatePaymentConfig: (b) => request('/stripe-connect/payment-config', {
     method: 'PUT', body: JSON.stringify(b),
   }),
