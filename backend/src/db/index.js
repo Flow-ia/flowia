@@ -1874,6 +1874,277 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_ccc_client
     ON client_connected_customers(global_client_id)`);
 
+  // ── v3 Commit 1 : modèle paiement 4-sources + 6 statuts ──────────────────
+  // Adapté au schéma réel FlowIA (user_id, pas de `businesses`/`clients`/
+  // `services`). Les colonnes _cents sont AJOUTÉES en parallèle des NUMERIC
+  // legacy ; les valeurs legacy de transactions.source ('rdv_online',
+  // 'rdv_refund', 'rdv', 'manual') et appointments.source ('public', 'admin',
+  // 'online', 'rdv') sont PRÉSERVÉES — on ajoute payment_source /
+  // appointment_source à côté pour ne pas casser les ~10 routes qui filtrent
+  // sur les valeurs legacy. Le SQL équivalent est dans
+  // backend/migrations/20260509_120000_add_4_source_payment_model.sql
+  // (à exécuter manuellement sur Supabase prod via l'éditeur SQL).
+
+  // appointments
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS appointment_source VARCHAR(50)`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='appointments_appointment_source_check') THEN
+        ALTER TABLE appointments ADD CONSTRAINT appointments_appointment_source_check
+          CHECK (appointment_source IS NULL OR appointment_source IN ('online_booking','phone_internal'));
+      END IF;
+    END $$;
+  `);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS total_price_cents INTEGER`);
+  await runMigration(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(255)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_appointments_appointment_source
+    ON appointments(appointment_source) WHERE appointment_source IS NOT NULL`);
+
+  // transactions — nouvelles colonnes
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_source VARCHAR(50)`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='transactions_payment_source_check') THEN
+        ALTER TABLE transactions ADD CONSTRAINT transactions_payment_source_check
+          CHECK (payment_source IS NULL OR payment_source IN ('online_booking','phone_internal','cash_register_rdv','walkin'));
+      END IF;
+    END $$;
+  `);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(50)`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='transactions_payment_status_check') THEN
+        ALTER TABLE transactions ADD CONSTRAINT transactions_payment_status_check
+          CHECK (payment_status IS NULL OR payment_status IN ('STRIPE_100','STRIPE_ACOMPTE','NOT_PAID','CASH_PAID','REFUNDED','NO_SHOW_RETAINED'));
+      END IF;
+    END $$;
+  `);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS gross_amount_cents INTEGER`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_fee_cents INTEGER NOT NULL DEFAULT 0`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER NOT NULL DEFAULT 0`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS net_amount_cents INTEGER`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_type VARCHAR(50) NOT NULL DEFAULT 'full'`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='transactions_payment_type_check') THEN
+        ALTER TABLE transactions ADD CONSTRAINT transactions_payment_type_check
+          CHECK (payment_type IN ('full','deposit','remaining','refund'));
+      END IF;
+    END $$;
+  `);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_charge_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_refund_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stripe_payout_id VARCHAR(255)`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`);
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payout_received_at TIMESTAMPTZ`);
+
+  // transactions — indexes nouveaux
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_created ON transactions(user_id, created_at)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_payment_status_v3
+    ON transactions(payment_status) WHERE payment_status IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_payment_source
+    ON transactions(payment_source) WHERE payment_source IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_stripe_payout
+    ON transactions(stripe_payout_id) WHERE stripe_payout_id IS NOT NULL`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_payment_method_v3
+    ON transactions(payment_method)`);
+  // L'UNIQUE anti-double-paiement (idx_transactions_appointment_active) est
+  // créé tout à la FIN, après le rétro-fill, avec un pre-flight check qui
+  // skip silencieusement si des doublons résiduels (STRIPE_100 + CASH_PAID
+  // sur même appointment_id) sont détectés — cf bloc DO $$ plus bas.
+
+  // payouts (1 row par stripe_payout_id, distinct de appointment_payouts qui
+  // est l'escrow par RDV de la Phase 5 Stripe Connect — voir plus haut)
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS payouts (
+      id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id                  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      stripe_payout_id         VARCHAR(255) UNIQUE NOT NULL,
+      amount_cents             INTEGER NOT NULL,
+      currency                 VARCHAR(3) NOT NULL DEFAULT 'eur',
+      status                   VARCHAR(50) NOT NULL,
+      bank_account_last4       VARCHAR(4),
+      bank_name                VARCHAR(255),
+      triggered_by             VARCHAR(50) NOT NULL DEFAULT 'manual',
+      triggered_by_employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
+      requested_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      arrival_date             DATE,
+      completed_at             TIMESTAMPTZ,
+      failed_at                TIMESTAMPTZ,
+      failure_reason           TEXT,
+      created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='payouts_status_check') THEN
+        ALTER TABLE payouts ADD CONSTRAINT payouts_status_check
+          CHECK (status IN ('pending','in_transit','paid','failed','canceled'));
+      END IF;
+    END $$;
+  `);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_payouts_user      ON payouts(user_id)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_payouts_status    ON payouts(status)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_payouts_requested ON payouts(requested_at)`);
+
+  // users — commission plateforme par commerçant (0% par défaut)
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_fee_percent NUMERIC(5,2) NOT NULL DEFAULT 0.0`);
+  await runMigration(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='users_platform_fee_percent_check') THEN
+        ALTER TABLE users ADD CONSTRAINT users_platform_fee_percent_check
+          CHECK (platform_fee_percent >= 0 AND platform_fee_percent <= 100);
+      END IF;
+    END $$;
+  `);
+
+  // ── Rétro-fill — idempotent (filtre WHERE <colonne> IS NULL) ────────────
+  await runMigration(`
+    UPDATE appointments
+       SET appointment_source = CASE
+         WHEN stripe_payment_intent_id IS NOT NULL THEN 'online_booking'
+         WHEN source IN ('public','online') THEN 'online_booking'
+         ELSE 'phone_internal'
+       END
+     WHERE appointment_source IS NULL
+  `);
+  await runMigration(`
+    UPDATE appointments
+       SET total_price_cents = ROUND(total_amount * 100)::INTEGER
+     WHERE total_price_cents IS NULL AND total_amount IS NOT NULL
+  `);
+  await runMigration(`
+    UPDATE appointments
+       SET cancellation_reason = LEFT(cancel_reason, 255)
+     WHERE cancellation_reason IS NULL AND cancel_reason IS NOT NULL AND cancel_reason <> ''
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET payment_source = 'walkin'
+     WHERE payment_source IS NULL AND appointment_id IS NULL AND type = 'revenue'
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET payment_source = 'online_booking'
+     WHERE payment_source IS NULL AND source IN ('rdv_online','rdv_refund') AND type = 'revenue'
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET payment_source = 'cash_register_rdv'
+     WHERE payment_source IS NULL AND appointment_id IS NOT NULL
+       AND source IN ('rdv','manual') AND type = 'revenue'
+  `);
+  // L'ordre des UPDATEs payment_status est important : on détecte d'abord
+  // les couples acompte+reste (rdv_online + rdv sur même appointment_id)
+  // pour les classer en STRIPE_ACOMPTE / CASH_PAID 'remaining', avant de
+  // classer les rdv_online isolés en STRIPE_100. Évite les conflits sur
+  // l'UNIQUE anti-double-paiement créé en fin.
+  await runMigration(`
+    UPDATE transactions
+       SET payment_status = 'REFUNDED', payment_type = 'refund'
+     WHERE payment_status IS NULL AND source = 'rdv_refund' AND type = 'revenue'
+  `);
+  await runMigration(`
+    UPDATE transactions t
+       SET payment_status = 'STRIPE_ACOMPTE', payment_type = 'deposit'
+     WHERE t.payment_status IS NULL AND t.source = 'rdv_online'
+       AND t.appointment_id IS NOT NULL AND t.type = 'revenue'
+       AND EXISTS (
+         SELECT 1 FROM transactions t2
+          WHERE t2.appointment_id = t.appointment_id
+            AND t2.source = 'rdv' AND t2.id <> t.id
+       )
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET payment_status = 'STRIPE_100'
+     WHERE payment_status IS NULL AND source = 'rdv_online' AND type = 'revenue'
+  `);
+  await runMigration(`
+    UPDATE transactions t
+       SET payment_status = 'CASH_PAID', payment_type = 'remaining'
+     WHERE t.payment_status IS NULL AND t.source = 'rdv'
+       AND t.appointment_id IS NOT NULL AND t.type = 'revenue'
+       AND EXISTS (
+         SELECT 1 FROM transactions t2
+          WHERE t2.appointment_id = t.appointment_id
+            AND t2.payment_status = 'STRIPE_ACOMPTE'
+       )
+  `);
+  await runMigration(`
+    WITH first_cash AS (
+      SELECT DISTINCT ON (appointment_id) id
+        FROM transactions
+       WHERE payment_status IS NULL
+         AND source IN ('rdv','manual')
+         AND appointment_id IS NOT NULL
+         AND type = 'revenue'
+       ORDER BY appointment_id, created_at ASC NULLS LAST
+    )
+    UPDATE transactions
+       SET payment_status = 'CASH_PAID', payment_type = 'full'
+     WHERE id IN (SELECT id FROM first_cash)
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET payment_status = 'CASH_PAID', payment_type = 'full'
+     WHERE payment_status IS NULL AND appointment_id IS NULL
+       AND payment_source = 'walkin' AND type = 'revenue'
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET gross_amount_cents = ROUND(amount * 100)::INTEGER
+     WHERE gross_amount_cents IS NULL AND amount IS NOT NULL
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET net_amount_cents = COALESCE(gross_amount_cents, ROUND(amount * 100)::INTEGER)
+                              - COALESCE(stripe_fee_cents, 0)
+                              - COALESCE(platform_fee_cents, 0)
+     WHERE net_amount_cents IS NULL AND (gross_amount_cents IS NOT NULL OR amount IS NOT NULL)
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET paid_at = COALESCE(paid_at, created_at)
+     WHERE paid_at IS NULL AND payment_status IN ('STRIPE_100','STRIPE_ACOMPTE','CASH_PAID')
+  `);
+  await runMigration(`
+    UPDATE transactions
+       SET refunded_at = COALESCE(refunded_at, created_at)
+     WHERE refunded_at IS NULL AND payment_status = 'REFUNDED'
+  `);
+
+  // UNIQUE anti-double-paiement (créé après rétro-fill avec pre-flight check).
+  // Si des doublons résiduels (STRIPE_100 + CASH_PAID sur même appointment_id)
+  // existent, on émet une NOTICE et on saute la création — le commerçant peut
+  // les nettoyer puis le prochain boot du backend recréera l'index.
+  await runMigration(`
+    DO $$
+    DECLARE dup_count INT;
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes WHERE indexname='idx_transactions_appointment_active'
+      ) THEN
+        SELECT COUNT(*) INTO dup_count FROM (
+          SELECT appointment_id FROM transactions
+           WHERE appointment_id IS NOT NULL
+             AND payment_status IN ('STRIPE_100','CASH_PAID')
+           GROUP BY appointment_id HAVING COUNT(*) > 1
+        ) AS dups;
+        IF dup_count > 0 THEN
+          RAISE NOTICE 'idx_transactions_appointment_active : % RDV avec doublons paiement, index NON cree (cleaner manuellement puis relancer)', dup_count;
+        ELSE
+          CREATE UNIQUE INDEX idx_transactions_appointment_active
+            ON transactions(appointment_id)
+            WHERE appointment_id IS NOT NULL
+              AND payment_status IN ('STRIPE_100','CASH_PAID');
+        END IF;
+      END IF;
+    END $$;
+  `);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─
