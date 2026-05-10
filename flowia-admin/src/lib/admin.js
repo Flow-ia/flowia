@@ -235,3 +235,22 @@ export async function listAudit({ action = '', adminId = '', targetType = '', st
 export async function listAuditActions() {
   return await apiJson('/api/admin/audit/actions');
 }
+
+// ── Transactions multi legacy (commit D) ────────────────────────────────────
+// Liste les transactions avec payment_method='multi' AND payment_group_id NULL
+// (rows créées avant la refonte traçable du commit A) qui n'ont pas de détail
+// des sous-paiements. Le super-admin saisit manuellement le breakdown via
+// migrateLegacyMultiBreakdown pour rétablir une traçabilité complète.
+export async function listLegacyMulti() {
+  return await apiJson('/api/admin/transactions/legacy-multi');
+}
+
+export async function migrateLegacyMultiBreakdown(transactionId, payment_breakdown) {
+  return await apiJson(
+    `/api/admin/transactions/${encodeURIComponent(transactionId)}/migrate-breakdown`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ payment_breakdown }),
+    }
+  );
+}

@@ -37,6 +37,7 @@ export default function AppShell({ me, children, footer }) {
           <Link to="/clients"    className={"nav-link " + (isActive('/clients')    ? 'nav-link-active' : '')}>{"Clients"}</Link>
           <Link to="/search"     className={"nav-link " + (isActive('/search')     ? 'nav-link-active' : '')}>{"Recherche"}</Link>
           <Link to="/audit"      className={"nav-link " + (isActive('/audit')      ? 'nav-link-active' : '')}>{"Audit"}</Link>
+          <Link to="/legacy-multi" className={"nav-link " + (isActive('/legacy-multi') ? 'nav-link-active' : '')}>{"Multi legacy"}</Link>
           <Link to="/settings"   className={"nav-link " + (isActive('/settings')   ? 'nav-link-active' : '')}>{"Reglages"}</Link>
         </nav>
 
