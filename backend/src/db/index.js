@@ -2151,6 +2151,31 @@ async function initDB() {
        AND amount IS NOT NULL
   `);
 
+  // Rétro-fill estimation des frais Stripe pour les transactions online qui
+  // ont stripe_fee_cents=0 alors qu'elles devraient avoir ~1.4% + 25c.
+  // Cause : sync path book.js insere avant que balance_transaction Stripe
+  // soit disponible, et avant le commit 6.2 le webhook ne mettait pas a
+  // jour les fees (ON CONFLICT DO NOTHING).
+  // Estimation 1.4% + 25c = tarif standard Stripe FR carte EU. Pour la vraie
+  // valeur il faudrait appeler l'API Stripe pour chaque PI mais c'est lourd
+  // et non temps-reel. L'estimation suffit pour des KPIs corrects.
+  // payment_type='refund' EXCLU : les rows refund ne paient pas de frais
+  // Stripe (Stripe ne rembourse pas ses fees, mais ne les debite pas non plus
+  // sur le refund row qui represente juste l'effet inverse de la charge).
+  // Idempotent via WHERE stripe_fee_cents=0.
+  await runMigration(`
+    UPDATE transactions
+       SET stripe_fee_cents = ROUND(gross_amount_cents * 0.014)::INTEGER + 25,
+           net_amount_cents = gross_amount_cents
+                              - (ROUND(gross_amount_cents * 0.014)::INTEGER + 25)
+                              - COALESCE(platform_fee_cents, 0)
+     WHERE payment_status IN ('STRIPE_100','STRIPE_ACOMPTE','REFUNDED')
+       AND payment_type   IN ('full','deposit')
+       AND COALESCE(stripe_fee_cents, 0) = 0
+       AND COALESCE(gross_amount_cents, 0) > 0
+       AND stripe_payment_intent_id IS NOT NULL
+  `);
+
   // UNIQUE anti-double-paiement (créé après rétro-fill avec pre-flight check).
   // Si des doublons résiduels (STRIPE_100 + CASH_PAID sur même appointment_id)
   // existent, on émet une NOTICE et on saute la création — le commerçant peut

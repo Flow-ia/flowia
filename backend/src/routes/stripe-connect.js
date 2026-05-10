@@ -701,6 +701,20 @@ router.post('/webhook', async (req, res) => {
             const v3Status = isFullyPaid_v3 ? 'STRIPE_100' : 'STRIPE_ACOMPTE';
             const v3Type   = isFullyPaid_v3 ? 'full' : 'deposit';
 
+            // ON CONFLICT DO UPDATE pour les fees : le sync path (book.js)
+            // a peut-etre deja insere la row avec stripe_fee_cents=0 (avant
+            // que le balance_transaction Stripe ne soit disponible). Le
+            // webhook arrive plus tard avec les vraies valeurs depuis
+            // balance_transaction.fee -> on ECRASE uniquement les colonnes
+            // de frais (stripe/platform/net cents).
+            //
+            // WHERE de l'UPDATE : idempotence -> ne touche que si fees=0
+            // (= row pas encore enrichie). Si une autre source a deja rempli
+            // les fees, on ne reecrase pas.
+            //
+            // On ne touche PAS payment_status / payment_type / source / etc.
+            // (le sync path les a setes sur la base du paiement initial,
+            // potentiellement encore plus a jour si le client a confirme).
             await pool.query(
               `INSERT INTO transactions
                  (user_id, type, amount, description, employee_id, payment_method,
@@ -712,7 +726,13 @@ router.post('/webhook', async (req, res) => {
                        'online_booking',$9,$10,
                        $11,$12,$13,$14,
                        $15, NOW())
-               ON CONFLICT (appointment_id) WHERE source = 'rdv_online' DO NOTHING`,
+               ON CONFLICT (appointment_id) WHERE source = 'rdv_online'
+               DO UPDATE SET
+                 stripe_fee_cents   = EXCLUDED.stripe_fee_cents,
+                 platform_fee_cents = EXCLUDED.platform_fee_cents,
+                 net_amount_cents   = EXCLUDED.net_amount_cents
+               WHERE transactions.stripe_fee_cents = 0
+                  OR transactions.stripe_fee_cents IS NULL`,
               [apptInfo[0].user_id, amt / 100, desc, empId,
                now.toISOString().substring(0, 10),
                now.toTimeString().substring(0, 8),
@@ -721,7 +741,13 @@ router.post('/webhook', async (req, res) => {
                grossCents_v3, stripeFeeCents_v3, platformFeeCents_v3, netCents_v3,
                pi.id]
             );
-            console.log('[CONNECT WEBHOOK] tx inserted for appt', upd.rows[0].id, '+', amt / 100, '€', v3Status);
+            console.log('[STRIPE FEES UPDATE] source=webhook appt=' + upd.rows[0].id
+              + ' pi=' + pi.id
+              + ' gross=' + grossCents_v3
+              + ' stripe_fee=' + stripeFeeCents_v3
+              + ' platform_fee=' + platformFeeCents_v3
+              + ' net=' + netCents_v3
+              + ' status=' + v3Status);
 
             // Invalide le cache stats v3 pour ce user (5min TTL devient
             // immediat -> les routes /api/historique et /api/stats/* re-query).
