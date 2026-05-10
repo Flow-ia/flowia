@@ -318,6 +318,15 @@ router.post('/', async (req, res) => {
       } catch (e) { console.warn('[TX global_client lookup]', e.message); }
     }
 
+    // signedByEmployeeId : déclaré ICI (avant la branche CAS B qui s'en sert
+    // dans les INSERT multi-rows) — sinon TDZ "Cannot access 'signedByEmployeeId'
+    // before initialization" lors d'un POST avec payment_breakdown.
+    // Définition : employé identifié par son PIN (x-employee-pin valide →
+    // req.employee.id), distinct de employee_id (celui assigné au RDV / à
+    // la ligne). Permet de retrouver QUI a encaissé physiquement en mode
+    // tablette. Null si merchant PIN admin ou création direct merchant.
+    const signedByEmployeeId = req.employee ? req.employee.id : null;
+
     // ── CAS B — Multi-paiement traçable (Commit A) ──────────────────────────
     // Si payment_breakdown présent → crée N rows en TRANSACTION SQL, liées
     // par un payment_group_id partagé. Chaque row porte sa propre méthode +
@@ -573,13 +582,7 @@ router.post('/', async (req, res) => {
     // INSERT avec ON CONFLICT sur (user_id, idempotency_key) — si le client
     // a envoyé la même clé en race (double-clic), la 2e tentative ne crée pas
     // de doublon. RETURNING vide → on SELECT l'existant et retourne.
-    // Refonte FDS-2026 commit 11 : audit trail mode tablette partagée.
-    // signed_by_employee_id = employé identifié par son PIN (x-employee-pin
-    // valide → req.employee.id), distinct de employee_id (celui assigné au
-    // RDV / à la ligne). Permet de retrouver QUI a encaissé physiquement
-    // en mode tablette, même si la transaction est créée "au nom de" un
-    // autre employé. Null si merchant PIN admin ou création direct merchant.
-    const signedByEmployeeId = req.employee ? req.employee.id : null;
+    // (signedByEmployeeId est déclaré plus haut, avant la branche CAS B.)
 
     // ── Refonte v3 : derive payment_source / payment_status / *_cents ─────
     // Double ecriture des nouveaux champs en parallele du legacy (source,
