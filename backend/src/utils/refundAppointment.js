@@ -101,8 +101,13 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
 
     let pi = null;
     try {
+      // 3-arg form (id, params, options) : le 2-arg (id, { stripeAccount })
+      // est rejete car le SDK Node 22.x interprete le 2e arg comme params
+      // de retrieve (parametres comme `expand`) et envoie 'stripeAccount'
+      // comme query param -> "Received unknown parameter: stripeAccount".
       pi = await stripe.paymentIntents.retrieve(
         a.stripe_payment_intent_id,
+        undefined,
         { stripeAccount: a.stripe_account_id }
       );
       chargeMode = 'direct';

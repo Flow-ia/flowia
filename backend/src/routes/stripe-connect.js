@@ -681,10 +681,13 @@ router.post('/webhook', async (req, res) => {
               const chargeId = pi.latest_charge;
               if (chargeId) {
                 const stripeApi = getStripe();
-                const ch = await stripeApi.charges.retrieve(chargeId, { stripeAccount: event.account });
+                // 3-arg form (id, params, options) : le 2-arg avec
+                // stripeAccount est rejete par le SDK Node 22.x.
+                const ch = await stripeApi.charges.retrieve(chargeId, undefined, { stripeAccount: event.account });
                 if (ch?.balance_transaction) {
                   const bt = await stripeApi.balanceTransactions.retrieve(
                     ch.balance_transaction,
+                    undefined,
                     { stripeAccount: event.account }
                   );
                   stripeFeeCents_v3 = bt?.fee || 0;
