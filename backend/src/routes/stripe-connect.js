@@ -19,6 +19,97 @@ function getStripe() {
   if (!key) throw new Error('STRIPE_SECRET_KEY manquante sur Render');
   return require('stripe')(key);
 }
+
+// Race-safe : appele depuis le webhook payment_intent.succeeded pour
+// garantir que stripe_fee_cents est rempli sur la row 'rdv_online' du PI,
+// MEME si le webhook arrive avant que le sync path (book.js) ait insere
+// la row. Retry une fois apres 2s. Idempotent : ne touche que si
+// stripe_fee_cents IS NULL OR = 0.
+//
+// Pourquoi separe du flow principal du webhook : le block existant
+// `if (upd.rowCount > 0) { ... }` skip tout si l'appointment n'existe pas
+// encore. Ce helper s'execute apres, sans condition, pour rattraper la
+// race entre webhook async et sync path.
+async function ensureFeesUpdated(pool, pi, eventAccount) {
+  const findTx = async () => {
+    const { rows } = await pool.query(
+      `SELECT id, user_id, stripe_fee_cents, gross_amount_cents
+         FROM transactions
+        WHERE stripe_payment_intent_id = $1
+          AND source = 'rdv_online'
+        LIMIT 1`,
+      [pi.id]
+    );
+    return rows[0] || null;
+  };
+
+  let tx = await findTx();
+  if (!tx) {
+    console.log('[STRIPE FEES UPDATE] tx not found yet for pi=' + pi.id + ', waiting 2s for sync path');
+    await new Promise(r => setTimeout(r, 2000));
+    tx = await findTx();
+  }
+  if (!tx) {
+    console.log('[STRIPE FEES UPDATE] tx still not found after 2s for pi=' + pi.id + ', skipping');
+    return;
+  }
+
+  // Idempotence : si fees deja remplis (par le flow principal ou un
+  // retro-fill), ne pas recalculer.
+  if (tx.stripe_fee_cents != null && tx.stripe_fee_cents > 0) {
+    return;
+  }
+
+  // Retrieve balance_transaction.fee (vraie valeur Stripe)
+  let stripeFee = 0;
+  try {
+    const stripe = getStripe();
+    const chargeId = pi.latest_charge;
+    if (chargeId) {
+      const ch = await stripe.charges.retrieve(
+        chargeId,
+        undefined,
+        { stripeAccount: eventAccount }
+      );
+      if (ch?.balance_transaction) {
+        const bt = await stripe.balanceTransactions.retrieve(
+          ch.balance_transaction,
+          undefined,
+          { stripeAccount: eventAccount }
+        );
+        stripeFee = bt?.fee || 0;
+      }
+    }
+  } catch (e) {
+    console.warn('[STRIPE FEES UPDATE] balance_transaction fetch fail:', e.message);
+    return;
+  }
+
+  if (stripeFee <= 0) {
+    console.log('[STRIPE FEES UPDATE] no fee available for pi=' + pi.id + ', skipping');
+    return;
+  }
+
+  // UPDATE idempotent : WHERE stripe_fee_cents IS NULL OR = 0 garantit
+  // qu'un 2e webhook ne reecrase pas une valeur deja correcte.
+  await pool.query(
+    `UPDATE transactions
+        SET stripe_fee_cents = $1,
+            net_amount_cents = COALESCE(gross_amount_cents, 0) - $1 - COALESCE(platform_fee_cents, 0)
+      WHERE stripe_payment_intent_id = $2
+        AND source = 'rdv_online'
+        AND (stripe_fee_cents IS NULL OR stripe_fee_cents = 0)`,
+    [stripeFee, pi.id]
+  );
+  console.log('[STRIPE FEES UPDATE] source=webhook_retry pi=' + pi.id
+    + ' tx=' + tx.id
+    + ' stripe_fee=' + stripeFee);
+
+  try {
+    const { invalidateUserStatsCache } = require('../utils/paymentV3');
+    invalidateUserStatsCache(tx.user_id);
+  } catch {}
+}
 function getFrontendUrl() {
   return (process.env.FRONTEND_URL || 'http://localhost:3000')
     .split(',')[0].replace(/\/$/, '');
@@ -763,6 +854,15 @@ router.post('/webhook', async (req, res) => {
         }
       } else {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded sans RDV (ok si confirme cote front):', pi.id);
+      }
+
+      // Race-safe fees update : tourne TOUJOURS, meme si le block ci-dessus
+      // a ete skip (cas webhook arrive avant que le sync path book.js ait
+      // insere la transaction). Le helper retry apres 2s + idempotent.
+      try {
+        await ensureFeesUpdated(pool, pi, event.account);
+      } catch (feeErr) {
+        console.error('[CONNECT WEBHOOK] ensureFeesUpdated fail:', feeErr.message);
       }
     }
 
