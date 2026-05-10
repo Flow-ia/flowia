@@ -8,6 +8,7 @@ import { useEmployeePin } from '../hooks/useEmployeePin';
 import { bookingApi, notifApi, paymentsApi, userSettingsApi } from '../utils/api';
 import { StatusBadge } from '../components/primitives/StatusBadge';
 import { I } from '../utils/icons';
+import PayoutDashboardBanner from '../components/payout/PayoutDashboardBanner';
 
 const nd   = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
 const fmtN = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1117,6 +1118,9 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
             </button>
           </div>
         </div>
+
+        {/* ── Bandeau "Argent à recevoir" (Refonte v3, Commit 5) ── */}
+        <PayoutDashboardBanner />
 
         {/* ── Alertes proactives ── */}
         {alerts.length > 0 && (

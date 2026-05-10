@@ -730,7 +730,11 @@ export const historiqueApi = {
 // Refonte v3 — payouts agreges (table payouts, distincte de appointment_payouts
 // escrow). Utilise par l'onglet Reversements (Commit 4).
 export const payoutsV3Api = {
-  list: (q) => request('/payouts' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+  list:   (q) => request('/payouts' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+  // Refonte v3 (Commit 5) — declenche un payout manuel Stripe vers la banque
+  // du commercant. Pas de body : le backend lit user_id du JWT et le solde
+  // disponible depuis Stripe directement.
+  create: ()  => request('/stripe/payout/create', { method: 'POST' }),
 };
 
 // Refonte v3 — balance Stripe Connect avec estimation prochain payout.

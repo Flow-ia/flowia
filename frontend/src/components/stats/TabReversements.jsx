@@ -9,6 +9,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { Toast, useToast } from "../../components/UI";
 import { formatCents, formatDateWeekday } from "../../utils/format";
 import PayoutHistoryRow from "./PayoutHistoryRow";
+import PayoutButton from "../payout/PayoutButton";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 const STRIPE_DASHBOARD_URL = "https://dashboard.stripe.com/payouts";
@@ -102,19 +103,14 @@ export default function TabReversements({ period }) {
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-            <button type="button"
-                    onClick={() => showToast("Bouton fonctionnel au Commit 5", "info")}
-                    style={{
-                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      background: "#1D9E75", color: "#fff",
-                      border: "none", padding: "12px 20px",
-                      borderRadius: 8, fontSize: 14, fontWeight: 500,
-                      cursor: "pointer", fontFamily: "inherit",
-                      whiteSpace: "nowrap",
-                    }}>
-              <Icon paths={PATH_SEND} size={14} color="#fff" />
-              Reverser maintenant
-            </button>
+            <PayoutButton
+              variant="hero"
+              availableAmount={balance.available_cents || 0}
+              bankAccountLast4={balance.bank_account?.last4 || null}
+              bankName={balance.bank_account?.bank_name || null}
+              hasPendingPayout={payouts.some(p => p.status === "pending" || p.status === "in_transit")}
+              onSuccess={() => { try { window.location.reload(); } catch {} }}
+            />
             <button type="button"
                     onClick={() => window.open(STRIPE_DASHBOARD_URL, "_blank", "noopener,noreferrer")}
                     style={{

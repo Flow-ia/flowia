@@ -275,6 +275,8 @@ function startServer() {
   app.use('/api/historique',     apiLimiter,   require('./routes/historique'));
   app.use('/api/payouts',        apiLimiter,   require('./routes/payouts'));
   app.use('/api/stripe',         apiLimiter,   require('./routes/stripe-balance'));
+  // Refonte v3 (Commit 5) — bouton "Reverser maintenant" (payout manuel Stripe)
+  app.use('/api/stripe/payout',  apiLimiter,   require('./routes/stripe-payout'));
   app.use('/api/absences',       apiLimiter,  require('./routes/absences'));
   app.use('/api/commissions',    apiLimiter,  require('./routes/commissions'));
   app.use('/api/loyalty',        apiLimiter,  require('./routes/loyalty').router);

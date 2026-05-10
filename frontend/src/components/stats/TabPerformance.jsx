@@ -7,6 +7,7 @@ import { Toast, useToast } from "../../components/UI";
 import { formatCents, formatDateLong } from "../../utils/format";
 import KPICard from "./KPICard";
 import LineChart from "./LineChart";
+import PayoutButton from "../payout/PayoutButton";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
@@ -154,18 +155,13 @@ export default function TabPerformance({ period }) {
                                ? "Estim. " + formatDateLong(balance.next_payout_estimate.estimated_date)
                                : "Pas d'historique"} />
               <div style={{ textAlign: "right" }}>
-                <button type="button"
-                        onClick={() => showToast("Bouton fonctionnel au Commit 5", "info")}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          background: t.text, color: t.bg,
-                          border: "none", padding: "10px 16px",
-                          borderRadius: 8, fontSize: 13, fontWeight: 500,
-                          cursor: "pointer", fontFamily: "inherit",
-                        }}>
-                  <Icon paths={PATH_SEND} size={14} color={t.bg} />
-                  Reverser maintenant
-                </button>
+                <PayoutButton
+                  variant="primary"
+                  availableAmount={balance.available_cents || 0}
+                  bankAccountLast4={balance.bank_account?.last4 || null}
+                  bankName={balance.bank_account?.bank_name || null}
+                  onSuccess={() => { try { window.location.reload(); } catch {} }}
+                />
               </div>
             </div>
           )}
