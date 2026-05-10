@@ -34,164 +34,444 @@ function Av({ emp, size = 34 }) {
   );
 }
 
-// ─── Ligne transaction ────────────────────────────────────────────────────────
-function TxRow({ tx, cat, emp, isLast, theme: t, onEdit, onDelete }) {
-  const isRev    = tx.type === 'revenue';
-  const isRdv    = tx.source === 'rdv';
-  const pm       = PM[tx.payment_method] || PM.other;
-  const PmIc     = pm.Ic;
-  const CatIcon  = ICON_MAP[cat?.icon] || null;
+// ─── Ligne transaction (mode compacte ~56px, clic ouvre le drawer) ────────
+// Une seule ligne par transaction : icone categorie / nom service / badge
+// mode paiement (ou "Multi (N)") / avatar+nom employe / montant. Le detail
+// (sous-paiements, items, metadonnees) est deplace dans TxDetailDrawer.
+function TxRow({ tx, cat, emp, isLast, theme: t, onEdit, onDelete, onOpenDetail }) {
+  const isRev = tx.type === 'revenue';
+  const isRdv = tx.source === 'rdv';
+  const pm    = PM[tx.payment_method] || PM.other;
+  const PmIc  = pm.Ic;
+  const CatIcon = ICON_MAP[cat?.icon] || null;
 
-  const iconBg    = isRev ? (isRdv ? '#eef2ff' : t.cardAlt) : '#fef2f2';
-  const iconColor = isRev ? (isRdv ? '#4338ca' : t.text)    : '#991b1b';
+  const isMulti = tx.payment_method === 'multi'
+               && Array.isArray(tx.payments) && tx.payments.length > 0;
+
+  const iconBg      = isRev ? (isRdv ? '#eef2ff' : t.cardAlt) : '#fef2f2';
+  const iconColor   = isRev ? (isRdv ? '#4338ca' : t.text)    : '#991b1b';
   const amountColor = isRev ? '#065f46' : '#991b1b';
 
+  const handleRowClick = () => { if (onOpenDetail) onOpenDetail(tx); };
+
   return (
-    <div style={{ display:'flex', alignItems:'flex-start', gap:10,
-                  padding:'12px 16px',
-                  borderBottom: isLast ? 'none' : `0.5px solid ${t.separator}` }}>
+    <div onClick={handleRowClick}
+         style={{ display:'flex', alignItems:'center', gap:10,
+                  padding:'10px 14px', minHeight:56,
+                  cursor: onOpenDetail ? 'pointer' : 'default',
+                  background:'transparent',
+                  borderBottom: isLast ? 'none' : `0.5px solid ${t.separator}`,
+                  transition: 'background 0.12s ease' }}
+         onMouseEnter={e => { if (onOpenDetail) e.currentTarget.style.background = t.cardAlt; }}
+         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+
       {/* Icone categorie / type */}
-      <div style={{ width:40, height:40, borderRadius:8, background:iconBg,
+      <div style={{ width:32, height:32, borderRadius:7, background:iconBg,
                     display:'flex', alignItems:'center', justifyContent:'center',
-                    flexShrink:0, marginTop:2 }}>
-        {isRdv ? <I.Calendar style={{ width:18, height:18, color:iconColor }}/>
-          : CatIcon ? <CatIcon style={{ width:18, height:18, color:iconColor }}/>
-          : isRev   ? <I.ArrowUp   style={{ width:18, height:18, color:iconColor }}/>
-                    : <I.ArrowDown style={{ width:18, height:18, color:iconColor }}/>}
+                    flexShrink:0 }}>
+        {isRdv ? <I.Calendar style={{ width:15, height:15, color:iconColor }}/>
+          : CatIcon ? <CatIcon style={{ width:15, height:15, color:iconColor }}/>
+          : isRev   ? <I.ArrowUp   style={{ width:15, height:15, color:iconColor }}/>
+                    : <I.ArrowDown style={{ width:15, height:15, color:iconColor }}/>}
       </div>
 
-      {/* Corps */}
-      <div style={{ flex:1, minWidth:0 }}>
-        {/* Ligne 1 : nom + montant */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:5 }}>
-          <p style={{ fontWeight:500, fontSize:14, color:t.text,
-                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                      flex:1, margin:0 }}>
-            {isRdv ? (tx.description || 'Encaissement RDV')
-                   : (cat?.name || tx.description || (isRev ? 'Revenu' : 'Depense'))}
-          </p>
-          <span style={{ fontWeight:500, fontSize:16, fontFamily:"'DM Mono', monospace",
-                         color:amountColor, flexShrink:0 }}>
-            {isRev ? '+' : '-'}{fmt(tx.amount)} €
+      {/* Nom service */}
+      <span style={{ flex:1, minWidth:0, fontWeight:500, fontSize:13.5, color:t.text,
+                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+        {isRdv ? (tx.description || 'Encaissement RDV')
+               : (cat?.name || tx.description || (isRev ? 'Revenu' : 'Depense'))}
+      </span>
+
+      {/* Badge mode paiement (ou "Multi (N)" si multi-paiement) */}
+      {isMulti ? (
+        <span title={`${tx.payments.length} methodes — cliquer pour le detail`}
+              style={{ display:'inline-flex', alignItems:'center', gap:4,
+                       padding:'3px 8px', borderRadius:99,
+                       background: PM.multi.bg, color: PM.multi.color,
+                       fontSize:11, fontWeight:500, flexShrink:0 }}>
+          <PM.multi.Ic style={{ width:10, height:10, flexShrink:0 }}/>
+          Multi ({tx.payments.length})
+        </span>
+      ) : (
+        <span style={{ display:'inline-flex', alignItems:'center', gap:4,
+                       padding:'3px 8px', borderRadius:99,
+                       background:pm.bg, color:pm.color,
+                       fontSize:11, fontWeight:500, flexShrink:0 }}>
+          <PmIc style={{ width:10, height:10, flexShrink:0 }}/>
+          {pm.label}
+        </span>
+      )}
+
+      {/* Avatar + nom employe (tronque si trop long) */}
+      {emp && (
+        <span style={{ display:'inline-flex', alignItems:'center', gap:5,
+                       padding:'3px 9px 3px 3px', borderRadius:99,
+                       background:t.cardAlt,
+                       fontSize:11, fontWeight:500, color:t.text,
+                       flexShrink:0, maxWidth:130 }}>
+          <Av emp={emp} size={14}/>
+          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {emp.name}
           </span>
-        </div>
+        </span>
+      )}
 
-        {/* Details items (chaque unite = ligne) */}
-        {Array.isArray(tx.items) && tx.items.length > 0 && (tx.items.length > 1 || (tx.items[0].qty || 1) > 1) && (
-          <div style={{ display:'flex', flexDirection:'column', gap:2, marginBottom:5, paddingLeft:2 }}>
-            {tx.items.flatMap((it, i) =>
-              Array.from({ length: Math.max(1, parseInt(it.qty) || 1) }, (_, k) => (
-                <div key={`${i}-${k}`} style={{ fontSize:11, color:t.muted,
-                                                display:'flex', gap:6, alignItems:'baseline' }}>
-                  <span style={{ color:t.dim }}>•</span>
-                  <span style={{ fontWeight:500 }}>{it.service_name}</span>
-                  <span style={{ color:t.dim, fontFamily:'var(--mono)' }}>— {fmt(it.unit_price)} €</span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+      {/* Montant aligne a droite */}
+      <span style={{ fontWeight:500, fontSize:14, fontFamily:"'DM Mono', monospace",
+                     color:amountColor, flexShrink:0,
+                     minWidth:78, textAlign:'right' }}>
+        {isRev ? '+' : '-'}{fmt(tx.amount)} €
+      </span>
 
-        {/* Ligne 2 : date · employe · paiement · flags */}
-        <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
-          <span style={{ fontSize:11, color:t.muted, flexShrink:0 }}>
-            {disp(nd(tx.date), 'short')}{tx.time ? ` · ${tx.time}` : ''}
-          </span>
-          {emp && <span style={{ fontSize:11, color:t.dim, flexShrink:0 }}>·</span>}
-          {emp && (
-            <span style={{ display:'inline-flex', alignItems:'center', gap:5,
-                           padding:'2px 8px 2px 3px', borderRadius:99,
-                           background:t.cardAlt,
-                           fontSize:11, fontWeight:500, color:t.text, flexShrink:0 }}>
-              <Av emp={emp} size={14}/>
-              {emp.name}
-            </span>
-          )}
-          {emp && <span style={{ fontSize:11, color:t.dim, flexShrink:0 }}>·</span>}
-          {tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length > 0 ? (
-            <div style={{ display:'inline-flex', flexWrap:'wrap', gap:3, alignItems:'center', minWidth:0 }}>
-              {tx.payments.map((p, i) => {
-                const sub = PM[p.method] || PM.other;
-                const SIc = sub.Ic;
-                return (
-                  <span key={i} title={`${sub.label} : ${fmt(p.amount)} €`}
-                        style={{ display:'inline-flex', alignItems:'center', gap:3,
-                                 padding:'2px 7px', borderRadius:99,
-                                 background:sub.bg, color:sub.color,
-                                 fontSize:10, fontWeight:500, flexShrink:0 }}>
-                    <SIc style={{ width:9, height:9, flexShrink:0 }}/>
-                    {fmt(p.amount)} €
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <span style={{ display:'inline-flex', alignItems:'center', gap:4,
-                           padding:'2px 8px', borderRadius:99,
-                           background:pm.bg, color:pm.color,
-                           fontSize:11, fontWeight:500, flexShrink:0 }}>
-              <PmIc style={{ width:10, height:10, flexShrink:0 }}/>
-              {pm.label}
-            </span>
-          )}
-          {tx.source === 'rdv' && (
-            <span style={{ display:'inline-flex', alignItems:'center', gap:4,
-                           padding:'2px 8px', borderRadius:99,
-                           background:'#eef2ff', color:'#4338ca',
-                           fontSize:11, fontWeight:500, flexShrink:0 }}>
-              <I.Calendar style={{ width:10, height:10, flexShrink:0 }}/>
-              RDV
-            </span>
-          )}
-          {tx.referral_use_id && (() => {
-            const parrain = [tx.referral_parrain_first_name, tx.referral_parrain_last_name].filter(Boolean).join(' ')
-                         || tx.referral_parrain_email || 'parrain';
-            const st = tx.referral_status || 'pending';
-            const palette = st === 'validated'
-              ? { bg:'#f0fdf4', fg:'#065f46' }
-              : st === 'cancelled'
-                ? { bg:'#fef2f2', fg:'#991b1b' }
-                : { bg:'#eeedfe', fg:'#3c3489' };
-            return (
-              <span title={`Parrainage par ${parrain}`}
-                    style={{ display:'inline-flex', alignItems:'center', gap:4,
-                             padding:'2px 8px', borderRadius:99,
-                             background:palette.bg, color:palette.fg,
-                             fontSize:11, fontWeight:500, flexShrink:0 }}>
-                <I.Heart style={{ width:10, height:10, flexShrink:0 }}/>
-                Parrainage · {parrain}
-              </span>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* Actions admin (edit/delete) ou cadenas */}
+      {/* Actions admin (Edit/Trash) — stopPropagation pour ne PAS ouvrir le drawer */}
       {(onEdit || onDelete) ? (
-        <div style={{ display:'flex', gap:4, flexShrink:0, marginTop:2 }}>
+        <div style={{ display:'flex', gap:4, flexShrink:0 }}
+             onClick={e => e.stopPropagation()}>
           {onEdit && (
-            <button onClick={() => onEdit(tx)} title="Modifier (admin)"
-                    style={{ width:30, height:30, borderRadius:8, border:'none', cursor:'pointer',
-                             background:t.cardAlt, display:'flex', alignItems:'center', justifyContent:'center',
+            <button onClick={e => { e.stopPropagation(); onEdit(tx); }}
+                    title="Modifier (admin)"
+                    style={{ width:28, height:28, borderRadius:7, border:'none', cursor:'pointer',
+                             background:t.cardAlt,
+                             display:'flex', alignItems:'center', justifyContent:'center',
                              fontFamily:'inherit' }}>
-              <I.Edit style={{ width:12, height:12, color:t.muted }}/>
+              <I.Edit style={{ width:11, height:11, color:t.muted }}/>
             </button>
           )}
           {onDelete && (
-            <button onClick={() => onDelete(tx.id)} title="Supprimer (admin)"
-                    style={{ width:30, height:30, borderRadius:8, border:'none', cursor:'pointer',
+            <button onClick={e => { e.stopPropagation(); onDelete(tx.id); }}
+                    title="Supprimer (admin)"
+                    style={{ width:28, height:28, borderRadius:7, border:'none', cursor:'pointer',
                              background:'rgba(239,68,68,0.1)',
                              display:'flex', alignItems:'center', justifyContent:'center',
                              fontFamily:'inherit' }}>
-              <I.Trash style={{ width:12, height:12, color:'#991b1b' }}/>
+              <I.Trash style={{ width:11, height:11, color:'#991b1b' }}/>
             </button>
           )}
         </div>
       ) : (
-        <div style={{ flexShrink:0, marginTop:4, opacity:0.35 }}>
+        <div style={{ flexShrink:0, opacity:0.35 }}>
           <I.Lock style={{ width:13, height:13, color:t.dim }}/>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Drawer de detail transaction (lecture seule pour ce commit) ──────────
+// Glisse depuis la droite (transition 200 ms), overlay sombre cliquable,
+// touche Escape ferme. Sections : recapitulatif / paiement / employe /
+// items / metadonnees + footer 2 boutons Modifier/Supprimer (visuellement
+// desactives, ne font rien au clic). Pas d'API call : pure presentation.
+function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
+  const [visible, setVisible] = useState(false);
+
+  // Slide-in : on monte avec transform translateX(100%) puis on bascule a 0
+  // 10 ms apres pour declencher l'animation CSS.
+  useEffect(() => {
+    const tm = setTimeout(() => setVisible(true), 10);
+    return () => clearTimeout(tm);
+  }, []);
+
+  // Touche Escape ferme. Ne pas oublier le cleanup pour eviter les listeners
+  // orphelins quand on ferme/rouvre le drawer plusieurs fois.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 200);
+  };
+
+  if (!tx) return null;
+
+  const emp = employees?.find(e => e.id === tx.employee_id) || null;
+  const cat = categories?.find(c => c.id === tx.category_id) || null;
+  const isRev   = tx.type === 'revenue';
+  const pm      = PM[tx.payment_method] || PM.other;
+  const isMulti = tx.payment_method === 'multi'
+               && Array.isArray(tx.payments) && tx.payments.length > 0;
+  const sourceLabel = tx.source === 'rdv'         ? 'Encaissement RDV (caisse)'
+                    : tx.source === 'rdv_online'  ? 'Paiement en ligne (Stripe)'
+                    : tx.source === 'walkin'      ? 'Walk-in'
+                    : tx.source === 'rdv_refund'  ? 'Remboursement'
+                    : tx.source === 'rdv_admin'   ? 'Admin'
+                    : 'Manuel';
+
+  // Boutons footer disabled pour ce commit. Tooltip distinct si Stripe
+  // (la regle metier interdit de modifier/supprimer un paiement Stripe meme
+  // une fois la fonctionnalite branchee).
+  const isStripe = tx.source === 'rdv_online';
+  const disabledTooltip = isStripe ? 'Paiement Stripe verrouille'
+                                   : 'Disponible prochainement';
+
+  // Helpers de styles partages.
+  const sectionTitle = {
+    margin:'0 0 8px', fontSize:11, fontWeight:500,
+    color:t.muted, textTransform:'uppercase', letterSpacing:'0.05em',
+  };
+  const row = {
+    display:'flex', justifyContent:'space-between', alignItems:'baseline',
+    fontSize:13, color:t.text, padding:'4px 0',
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:50,
+                  display:'flex', justifyContent:'flex-end' }}>
+      {/* Overlay (fade in/out) */}
+      <div onClick={handleClose}
+           style={{ position:'absolute', inset:0,
+                    background:'rgba(0,0,0,0.4)',
+                    opacity: visible ? 1 : 0,
+                    transition:'opacity 200ms ease' }}/>
+      {/* Panel (slide in/out depuis la droite) */}
+      <div role="dialog" aria-label="Detail transaction"
+           style={{ position:'relative', width:450, maxWidth:'100vw', height:'100vh',
+                    background:t.card,
+                    borderLeft:`0.5px solid ${t.border}`,
+                    display:'flex', flexDirection:'column',
+                    transform: visible ? 'translateX(0)' : 'translateX(100%)',
+                    transition:'transform 200ms ease',
+                    boxShadow: visible ? '-12px 0 40px rgba(0,0,0,0.18)' : 'none' }}>
+
+        {/* Header */}
+        <div style={{ padding:'16px 20px', borderBottom:`0.5px solid ${t.separator}`,
+                      display:'flex', alignItems:'center', justifyContent:'space-between',
+                      flexShrink:0 }}>
+          <h3 style={{ margin:0, fontSize:15, fontWeight:500, color:t.text }}>
+            Detail transaction
+          </h3>
+          <button onClick={handleClose} title="Fermer (Echap)"
+                  style={{ width:32, height:32, borderRadius:8, border:'none', cursor:'pointer',
+                           background:t.cardAlt,
+                           display:'flex', alignItems:'center', justifyContent:'center',
+                           fontFamily:'inherit' }}>
+            <I.X style={{ width:14, height:14, color:t.muted }}/>
+          </button>
+        </div>
+
+        {/* Content scrollable */}
+        <div style={{ flex:1, overflowY:'auto', padding:20,
+                      display:'flex', flexDirection:'column', gap:18 }}>
+
+          {/* Recapitulatif */}
+          <div>
+            <p style={sectionTitle}>Recapitulatif</p>
+            <div style={{ borderRadius:8, padding:14,
+                          background:t.cardAlt, border:`0.5px solid ${t.border}` }}>
+              <p style={{ margin:'0 0 6px', fontSize:14, fontWeight:500, color:t.text }}>
+                {cat?.name || tx.description || (isRev ? 'Revenu' : 'Depense')}
+              </p>
+              {tx.description && cat?.name && tx.description !== cat?.name && (
+                <p style={{ margin:'0 0 8px', fontSize:12, color:t.muted }}>
+                  {tx.description}
+                </p>
+              )}
+              <div style={row}>
+                <span style={{ color:t.muted }}>Date</span>
+                <span style={{ fontFamily:'var(--mono)' }}>
+                  {disp(nd(tx.date), 'long')}{tx.time ? ` · ${tx.time}` : ''}
+                </span>
+              </div>
+              <div style={row}>
+                <span style={{ color:t.muted }}>Type</span>
+                <span style={{ color: isRev ? '#065f46' : '#991b1b', fontWeight:500 }}>
+                  {isRev ? 'Revenu' : 'Depense'}
+                </span>
+              </div>
+              <div style={row}>
+                <span style={{ color:t.muted }}>Source</span>
+                <span style={{ color:t.text }}>{sourceLabel}</span>
+              </div>
+              <div style={{ ...row, borderTop:`0.5px solid ${t.separator}`,
+                            marginTop:6, paddingTop:10,
+                            fontSize:15, fontWeight:500 }}>
+                <span style={{ color:t.muted }}>Total</span>
+                <span style={{ fontFamily:"'DM Mono', monospace",
+                               color: isRev ? '#065f46' : '#991b1b' }}>
+                  {isRev ? '+' : '-'}{fmt(tx.amount)} €
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Paiement (sous-paiements si multi, sinon badge unique) */}
+          <div>
+            <p style={sectionTitle}>Paiement</p>
+            {isMulti ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {tx.payments.map((p, i) => {
+                  const sub = PM[p.method] || PM.other;
+                  const SIc = sub.Ic;
+                  return (
+                    <div key={i}
+                         style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                                  padding:'9px 12px', borderRadius:8,
+                                  background: sub.bg, color: sub.color,
+                                  border:'0.5px solid rgba(0,0,0,0.04)' }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:7,
+                                     fontSize:13, fontWeight:500 }}>
+                        <SIc style={{ width:14, height:14, flexShrink:0 }}/>
+                        {sub.label}
+                      </span>
+                      <span style={{ fontFamily:"'DM Mono', monospace",
+                                     fontSize:13, fontWeight:500 }}>
+                        {fmt(p.amount)} €
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                            padding:'9px 12px', borderRadius:8,
+                            background:pm.bg, color:pm.color,
+                            border:'0.5px solid rgba(0,0,0,0.04)' }}>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:7,
+                               fontSize:13, fontWeight:500 }}>
+                  <pm.Ic style={{ width:14, height:14, flexShrink:0 }}/>
+                  {pm.label}
+                </span>
+                <span style={{ fontFamily:"'DM Mono', monospace",
+                               fontSize:13, fontWeight:500 }}>
+                  {fmt(tx.amount)} €
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Employe (si renseigne) */}
+          {emp && (
+            <div>
+              <p style={sectionTitle}>Employe</p>
+              <div style={{ display:'flex', alignItems:'center', gap:10,
+                            padding:'10px 12px', borderRadius:8,
+                            background:t.cardAlt, border:`0.5px solid ${t.border}` }}>
+                <Av emp={emp} size={32}/>
+                <div style={{ minWidth:0 }}>
+                  <p style={{ margin:0, fontSize:13, fontWeight:500, color:t.text,
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {emp.name}
+                  </p>
+                  {emp.email && (
+                    <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted,
+                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {emp.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Items (prestations — chaque unite = une ligne, identique a TxRow d'avant) */}
+          {Array.isArray(tx.items) && tx.items.length > 0 && (
+            <div>
+              <p style={sectionTitle}>Items</p>
+              <div style={{ borderRadius:8, overflow:'hidden',
+                            border:`0.5px solid ${t.border}`,
+                            background:t.cardAlt }}>
+                {tx.items.flatMap((it, i) => {
+                  const qty = Math.max(1, parseInt(it.qty) || 1);
+                  const isLastItem = i === tx.items.length - 1;
+                  return Array.from({ length: qty }, (_, k) => {
+                    const isLastUnit = isLastItem && k === qty - 1;
+                    return (
+                      <div key={`${i}-${k}`}
+                           style={{ display:'flex', alignItems:'center',
+                                    justifyContent:'space-between',
+                                    padding:'8px 12px',
+                                    borderBottom: isLastUnit
+                                                    ? 'none'
+                                                    : `0.5px solid ${t.separator}`,
+                                    fontSize:12 }}>
+                        <span style={{ color:t.text, fontWeight:500,
+                                       overflow:'hidden', textOverflow:'ellipsis',
+                                       whiteSpace:'nowrap', paddingRight:8 }}>
+                          {it.service_name}
+                        </span>
+                        <span style={{ color:t.muted, fontFamily:'var(--mono)', flexShrink:0 }}>
+                          {fmt(it.unit_price)} €
+                        </span>
+                      </div>
+                    );
+                  });
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Metadonnees */}
+          <div>
+            <p style={sectionTitle}>Metadonnees</p>
+            <div style={{ borderRadius:8, padding:'10px 12px',
+                          background:t.cardAlt, border:`0.5px solid ${t.border}`,
+                          display:'flex', flexDirection:'column', gap:6 }}>
+              <div style={{ ...row, padding:0, fontSize:11 }}>
+                <span style={{ color:t.muted }}>ID</span>
+                <span style={{ fontFamily:"'DM Mono', monospace", color:t.muted,
+                               fontSize:10, overflow:'hidden', textOverflow:'ellipsis',
+                               whiteSpace:'nowrap', maxWidth:'70%' }}>
+                  {tx.id}
+                </span>
+              </div>
+              {tx.created_at && (
+                <div style={{ ...row, padding:0, fontSize:11 }}>
+                  <span style={{ color:t.muted }}>Cree le</span>
+                  <span style={{ color:t.text, fontFamily:'var(--mono)' }}>
+                    {disp(nd(tx.created_at), 'long')}
+                  </span>
+                </div>
+              )}
+              {tx.referral_use_id && (() => {
+                const parrain = [tx.referral_parrain_first_name, tx.referral_parrain_last_name]
+                                  .filter(Boolean).join(' ')
+                             || tx.referral_parrain_email || 'parrain';
+                const st = tx.referral_status || 'pending';
+                const stColor = st === 'validated' ? '#065f46'
+                              : st === 'cancelled' ? '#991b1b'
+                              : '#3c3489';
+                return (
+                  <div style={{ ...row, padding:0, fontSize:11 }}>
+                    <span style={{ color:t.muted }}>Parrainage</span>
+                    <span style={{ color: stColor, fontWeight:500 }}>{parrain} · {st}</span>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer (boutons desactives pour ce commit) */}
+        <div style={{ padding:14, borderTop:`0.5px solid ${t.separator}`,
+                      display:'flex', gap:8, flexShrink:0 }}>
+          <button disabled aria-disabled="true" title={disabledTooltip}
+                  style={{ flex:1, padding:'10px 14px', borderRadius:8,
+                           background:t.cardAlt, color:t.text,
+                           opacity:0.4, cursor:'not-allowed',
+                           border:`0.5px solid ${t.border}`,
+                           fontSize:13, fontWeight:500, fontFamily:'inherit',
+                           display:'inline-flex', alignItems:'center',
+                           justifyContent:'center', gap:6 }}>
+            <I.Edit style={{ width:12, height:12 }}/>
+            Modifier
+          </button>
+          <button disabled aria-disabled="true" title={disabledTooltip}
+                  style={{ flex:1, padding:'10px 14px', borderRadius:8,
+                           background:'#fef2f2', color:'#991b1b',
+                           opacity:0.4, cursor:'not-allowed',
+                           border:'0.5px solid rgba(239,68,68,0.18)',
+                           fontSize:13, fontWeight:500, fontFamily:'inherit',
+                           display:'inline-flex', alignItems:'center',
+                           justifyContent:'center', gap:6 }}>
+            <I.Trash style={{ width:12, height:12 }}/>
+            Supprimer
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -201,9 +481,11 @@ export default function Transactions({ transactions, employees, categories, onAd
   const t = theme;
   const { requestPin, PinModalNode } = useEmployeePinGate();
 
-  const [modal,  setModal]  = useState(false);
-  const [edit,   setEdit]   = useState(null);
-  const [delId,  setDelId]  = useState(null);
+  const [modal,    setModal]    = useState(false);
+  const [edit,     setEdit]     = useState(null);
+  const [delId,    setDelId]    = useState(null);
+  // Drawer de detail (lecture seule). null = ferme, sinon la tx active.
+  const [detailTx, setDetailTx] = useState(null);
   const [search, setSearch] = useState('');
   const [typeF,  setTypeF]  = useState('all');
   const [payF,   setPayF]   = useState('all');
@@ -486,7 +768,8 @@ export default function Transactions({ transactions, employees, categories, onAd
                          cat={getCat(tx.category_id)} emp={getEmp(tx.employee_id)}
                          isLast={i === txs.length - 1} theme={t}
                          onEdit={isAdmin ? (tr => { setEdit(tr); setModal(true); }) : null}
-                         onDelete={isAdmin ? (id => setDelId(id)) : null}/>
+                         onDelete={isAdmin ? (id => setDelId(id)) : null}
+                         onOpenDetail={setDetailTx}/>
                 ))}
               </div>
             </div>
@@ -534,6 +817,12 @@ export default function Transactions({ transactions, employees, categories, onAd
                title="Supprimer cette transaction ?"
                message="Cette action est irreversible."
                theme={theme}/>
+      {detailTx && (
+        <TxDetailDrawer tx={detailTx}
+                        employees={employees} categories={categories}
+                        theme={t}
+                        onClose={() => setDetailTx(null)}/>
+      )}
       {PinModalNode}
     </div>
   );
