@@ -18,26 +18,31 @@ import { referralsApi } from '../../../utils/api';
 import { useEmployeePinGate } from '../../../components/EmployeePinModal';
 import { todayStr, nowStr } from '../../../utils/dates';
 import { Icon } from '../../../components/Icon';
+import { useMultiPaymentMutation } from '../../../hooks/useMultiPaymentMutation';
 
 const PM_CFG = {
-  cash:     { label: 'Espèces',  text: '#065f46', bg: '#f0fdf4' },
-  card:     { label: 'Carte',    text: '#4338ca', bg: '#eef2ff' },
-  transfer: { label: 'Virement', text: '#0e7490', bg: '#ecfeff' },
-  other:    { label: 'Autre',    text: '#92400e', bg: '#fffbeb' },
-  multi:    { label: 'Multi',    text: '#374151', bg: '#f3f4f6' },
+  cash:      { label: 'Espèces',     text: '#065f46', bg: '#f0fdf4' },
+  card:      { label: 'CB physique', text: '#4338ca', bg: '#eef2ff' },
+  transfer:  { label: 'Virement',    text: '#0e7490', bg: '#ecfeff' },
+  gift_card: { label: 'Bon cadeau',  text: '#9a3412', bg: '#fff7ed' },
+  other:     { label: 'Autre',       text: '#92400e', bg: '#fffbeb' },
+  multi:     { label: 'Multi',       text: '#374151', bg: '#f3f4f6' },
 };
 
 function fmt(n) { return Number(n || 0).toFixed(2); }
 
 export default function Step4Confirm({
   theme: t, cart, employees,
-  empId, payMethod, splitMode, splitAmts,
+  empId, payMethod, splitMode, breakdownLines,
   promoCode, promoData, clientEmail, clientName, clientNote,
   selectedRewardId, onAdd, onBack, onSuccess, showToast,
 }) {
   const { requestPin, PinModalNode } = useEmployeePinGate();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  // Hook commit B : wrappe POST /transactions, traduit les codes
+  // BREAKDOWN_* en messages FR et déclenche le toast récap multi-méthodes.
+  const { submit: submitTx } = useMultiPaymentMutation({ onAdd, showToast });
 
   // Snapshot figé après succès : on ne dépend plus des props (qu'on va
   // bientôt reset) pour afficher le récap final.
@@ -49,10 +54,15 @@ export default function Step4Confirm({
   const discount   = parseFloat(promoData?.discount || 0);
   const finalTotal = Math.max(0, total - discount);
 
+  // Lignes breakdown actives (montant > 0) — accepte virgule FR.
+  const breakdownActive = (breakdownLines || [])
+    .map(l => ({
+      method: l.method,
+      amount: parseFloat(String(l.amount).replace(',', '.')) || 0,
+    }))
+    .filter(p => p.amount > 0);
   const paymentsEntries = splitMode
-    ? Object.entries(splitAmts)
-        .map(([method, raw]) => ({ method, amount: parseFloat(raw) || 0 }))
-        .filter(p => p.amount > 0)
+    ? breakdownActive
     : [{ method: payMethod, amount: finalTotal }];
 
   const emp = employees?.find(e => e.id === empId) || null;
@@ -75,14 +85,25 @@ export default function Step4Confirm({
       const primaryMethod = paymentsEntries.length === 1
         ? paymentsEntries[0].method
         : 'multi';
+      // Commit B — payment_breakdown envoyé au backend uniquement en mode
+      // multi avec >= 2 sous-paiements. Le backend crée alors N rows liées
+      // par un payment_group_id UUID. payment_method='multi' reste pour la
+      // compat historique (filtres/affichages legacy).
+      const paymentBreakdown = (splitMode && paymentsEntries.length >= 2)
+        ? paymentsEntries.map(p => ({
+            method: p.method,
+            amount_cents: Math.round(p.amount * 100),
+          }))
+        : undefined;
 
-      await onAdd({
+      await submitTx({
         type:            'revenue',
         amount:          finalTotal,
         category_id:     cart.length === 1 ? cart[0].category_id : null,
         employee_id:     empId || null,
         payment_method:  primaryMethod,
         payments:        paymentsEntries,
+        payment_breakdown: paymentBreakdown,
         items,
         description:     desc,
         date, time,
@@ -108,7 +129,8 @@ export default function Step4Confirm({
       if (selectedRewardId) {
         try { await referralsApi.useReward(selectedRewardId); } catch { /* non-bloquant */ }
       }
-      if (showToast) showToast('Encaissement enregistré', 'ok');
+      // Le hook submitTx a déjà émis le toast vert (avec récap multi-méthodes
+      // en mode breakdown). Pas de double-toast ici.
       // Figer un snapshot pour l'écran de succès, puis basculer en mode
       // « done ». Le reset (onSuccess) n'a lieu qu'au clic « Nouvel
       // encaissement » ou à l'expiration du compteur 8 s.
@@ -122,7 +144,9 @@ export default function Step4Confirm({
         clientEmail: (clientEmail || '').trim() || '',
       });
     } catch (e) {
-      if (showToast) showToast(e.message || "Erreur lors de l'encaissement", 'error');
+      // Le hook a déjà émis le toast d'erreur traduit (mapping FR par code).
+      // On absorbe ici pour réactiver le bouton et permettre une nouvelle
+      // tentative.
       setBusy(false);
     }
   };

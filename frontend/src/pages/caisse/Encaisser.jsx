@@ -31,7 +31,14 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
 
   const [payMethod, setPayMethod] = useState('cash');
   const [splitMode, setSplitMode] = useState(false);
-  const [splitAmts, setSplitAmts] = useState({ cash: '', card: '', transfer: '', other: '' });
+  // Commit B — multi-paiement traçable. Liste ordonnée de lignes (chaque
+  // ligne = une méthode + un montant en €). Défaut : Espèces + Virement
+  // (méthodes les plus fréquentes hors carte en France). 4 lignes max,
+  // les 2 premières non supprimables. card_online absent (réservé Stripe).
+  const [breakdownLines, setBreakdownLines] = useState([
+    { method: 'cash',     amount: '' },
+    { method: 'transfer', amount: '' },
+  ]);
 
   const [promoCode, setPromoCode] = useState('');
   const [promoData, setPromoData] = useState(null);
@@ -46,7 +53,10 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
   const resetAll = () => {
     setStep(1); setCart([]); setEmpId('');
     setPayMethod('cash'); setSplitMode(false);
-    setSplitAmts({ cash: '', card: '', transfer: '', other: '' });
+    setBreakdownLines([
+      { method: 'cash',     amount: '' },
+      { method: 'transfer', amount: '' },
+    ]);
     setPromoCode(''); setPromoData(null); setPromoErr('');
     setClientEmail(''); setClientName(''); setClientNote('');
     setSelectedRewardId(null);
@@ -124,7 +134,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
           theme={t} cart={cart}
           payMethod={payMethod} setPayMethod={setPayMethod}
           splitMode={splitMode} setSplitMode={setSplitMode}
-          splitAmts={splitAmts} setSplitAmts={setSplitAmts}
+          breakdownLines={breakdownLines} setBreakdownLines={setBreakdownLines}
           promoCode={promoCode} setPromoCode={setPromoCode}
           promoData={promoData} setPromoData={setPromoData}
           promoErr={promoErr}   setPromoErr={setPromoErr}
@@ -142,7 +152,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
         <Step4Confirm
           theme={t} cart={cart} employees={employees}
           empId={empId}
-          payMethod={payMethod} splitMode={splitMode} splitAmts={splitAmts}
+          payMethod={payMethod} splitMode={splitMode} breakdownLines={breakdownLines}
           promoCode={promoCode} promoData={promoData}
           clientEmail={clientEmail} clientName={clientName} clientNote={clientNote}
           selectedRewardId={selectedRewardId}

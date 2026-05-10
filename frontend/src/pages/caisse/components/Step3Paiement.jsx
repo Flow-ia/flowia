@@ -7,13 +7,34 @@
 import { useEffect, useRef, useState } from 'react';
 import { promoApi, referralsApi, creditsApi, clientsApi } from '../../../utils/api';
 import { Icon } from '../../../components/Icon';
+import { Confirm } from '../../../components/UI';
 
+// Commit B — méthodes valides en breakdown (whitelist alignée backend
+// BREAKDOWN_METHODS). card_online JAMAIS proposé : réservé aux paiements
+// Stripe en ligne via /book. 'check' et 'multi' interdits aussi.
 const PM_CFG = {
-  cash:     { label: 'Espèces',  text: '#065f46', bg: '#f0fdf4', icon: 'wallet'     },
-  card:     { label: 'Carte',    text: '#4338ca', bg: '#eef2ff', icon: 'creditCard' },
-  transfer: { label: 'Virement', text: '#0e7490', bg: '#ecfeff', icon: 'send'       },
-  other:    { label: 'Autre',    text: '#92400e', bg: '#fffbeb', icon: 'more'       },
+  cash:      { label: 'Espèces',     text: '#065f46', bg: '#f0fdf4', icon: 'wallet'     },
+  transfer:  { label: 'Virement',    text: '#0e7490', bg: '#ecfeff', icon: 'send'       },
+  card:      { label: 'CB physique', text: '#4338ca', bg: '#eef2ff', icon: 'creditCard' },
+  gift_card: { label: 'Bon cadeau',  text: '#9a3412', bg: '#fff7ed', icon: 'gift'       },
+  other:     { label: 'Autre',       text: '#92400e', bg: '#fffbeb', icon: 'more'       },
 };
+
+// Mode simple : on garde la palette historique (cash/card/transfer/other).
+// gift_card n'apparaît qu'en mode multi (utilisation partielle d'un bon).
+const PM_CFG_SIMPLE = {
+  cash:     PM_CFG.cash,
+  card:     PM_CFG.card,
+  transfer: PM_CFG.transfer,
+  other:    PM_CFG.other,
+};
+
+// Ordre d'ajout pour le bouton "+ Ajouter une méthode" : on prend la
+// première méthode encore non utilisée dans l'ordre cash → transfer →
+// card → gift_card → other. cash et transfer sont déjà pré-remplis donc
+// l'ajout pioche d'abord card.
+const ADD_PRIORITY = ['cash', 'transfer', 'card', 'gift_card', 'other'];
+const MAX_BREAKDOWN_LINES = 4;
 
 function fmt(n) { return Number(n || 0).toFixed(2); }
 
@@ -21,7 +42,7 @@ export default function Step3Paiement({
   theme: t, cart,
   payMethod, setPayMethod,
   splitMode, setSplitMode,
-  splitAmts, setSplitAmts,
+  breakdownLines, setBreakdownLines,
   promoCode, setPromoCode,
   promoData, setPromoData,
   promoErr, setPromoErr,
@@ -32,6 +53,8 @@ export default function Step3Paiement({
   onBack, onContinue, showToast,
 }) {
   const [promoLoad, setPromoLoad] = useState(false);
+  // Confirm modal lorsque l'employé bascule ON→OFF avec des montants saisis.
+  const [confirmDropBreakdown, setConfirmDropBreakdown] = useState(false);
   const [pendingRefs, setPendingRefs]   = useState([]);
   const [clientRewards, setClientRewards] = useState([]);
   const [clientCredit, setClientCredit] = useState(null);
@@ -153,15 +176,61 @@ export default function Step3Paiement({
     setTimeout(() => checkPromo(reward.code), 0);
   };
 
-  // Multi-paiements : somme = finalTotal à 0.01 € près.
-  const paymentsEntries = splitMode
-    ? Object.entries(splitAmts)
-        .map(([method, raw]) => ({ method, amount: parseFloat(raw) || 0 }))
+  // Multi-paiements : somme = finalTotal à 0.01 € près. En mode multi on
+  // exige >= 2 lignes avec amount > 0 (sinon = paiement simple, l'employé
+  // doit décocher le toggle).
+  const breakdownActive = splitMode
+    ? breakdownLines
+        .map(l => ({ method: l.method, amount: parseFloat(String(l.amount).replace(',', '.')) || 0 }))
         .filter(p => p.amount > 0)
+    : [];
+  const paymentsEntries = splitMode
+    ? breakdownActive
     : [{ method: payMethod, amount: finalTotal }];
   const paymentsSum  = paymentsEntries.reduce((s, p) => s + p.amount, 0);
   const paymentsDiff = finalTotal - paymentsSum;
-  const paymentsOk   = !splitMode || Math.abs(paymentsDiff) < 0.01;
+  const sumMatches   = Math.abs(paymentsDiff) < 0.01;
+  const paymentsOk   = !splitMode
+    ? true
+    : (sumMatches && breakdownActive.length >= 2);
+
+  // Helpers gestion des lignes de breakdown.
+  const updateLineMethod = (idx, newMethod) => {
+    setBreakdownLines(prev => prev.map((l, i) => i === idx ? { ...l, method: newMethod } : l));
+  };
+  const updateLineAmount = (idx, raw) => {
+    // Accepte virgule FR. On stocke la chaîne brute pour permettre la saisie
+    // intermédiaire ("12,") ; le parse en nombre se fait à l'affichage et
+    // à la soumission.
+    const cleaned = String(raw).replace(/[^0-9.,]/g, '');
+    setBreakdownLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: cleaned } : l));
+  };
+  const removeLine = (idx) => {
+    if (idx < 2) return; // les 2 premières lignes ne sont pas supprimables
+    setBreakdownLines(prev => prev.filter((_, i) => i !== idx));
+  };
+  const addLine = () => {
+    setBreakdownLines(prev => {
+      if (prev.length >= MAX_BREAKDOWN_LINES) return prev;
+      const used = new Set(prev.map(l => l.method));
+      const next = ADD_PRIORITY.find(m => !used.has(m)) || 'other';
+      return [...prev, { method: next, amount: '' }];
+    });
+  };
+  // Toggle Simple/Multi : si on revient en simple alors qu'au moins une
+  // ligne a un montant, on demande confirmation avant d'écraser.
+  const requestSimpleMode = () => {
+    const hasAmount = breakdownLines.some(l => (parseFloat(String(l.amount).replace(',', '.')) || 0) > 0);
+    if (hasAmount) { setConfirmDropBreakdown(true); return; }
+    setSplitMode(false);
+  };
+  const dropBreakdownAndGoSimple = () => {
+    setBreakdownLines([
+      { method: 'cash',     amount: '' },
+      { method: 'transfer', amount: '' },
+    ]);
+    setSplitMode(false);
+  };
 
   const card = {
     padding: 14, borderRadius: 12, background: t.card,
@@ -497,7 +566,7 @@ export default function Step3Paiement({
         <p style={title}>{"Mode de paiement"}</p>
 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-          <button onClick={() => setSplitMode(false)}
+          <button onClick={requestSimpleMode}
                   style={{ minHeight:42, padding:'10px 14px', borderRadius:8,
                            border:`0.5px solid ${!splitMode ? t.text : t.border}`,
                            background: !splitMode ? t.cardAlt : t.card,
@@ -511,7 +580,7 @@ export default function Step3Paiement({
                            background: splitMode ? t.cardAlt : t.card,
                            color: t.text, cursor:'pointer', fontFamily:'inherit',
                            fontSize:13, fontWeight:500 }}>
-            {"Multi-paiements"}
+            {"Paiement en plusieurs méthodes"}
           </button>
         </div>
 
@@ -519,7 +588,7 @@ export default function Step3Paiement({
           <div style={{ display:'grid',
                         gridTemplateColumns:'repeat(2, 1fr)',
                         gap: 8 }}>
-            {Object.entries(PM_CFG).map(([id, cfg]) => {
+            {Object.entries(PM_CFG_SIMPLE).map(([id, cfg]) => {
               const active = payMethod === id;
               return (
                 <button key={id} onClick={() => setPayMethod(id)}
@@ -555,23 +624,57 @@ export default function Step3Paiement({
             })}
           </div>
         ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {Object.entries(PM_CFG).map(([id, cfg]) => (
-              <div key={id}
-                   style={{ padding:10, borderRadius:8,
-                            background: cfg.bg, borderLeft: '2px solid ' + cfg.text,
-                            display:'flex', justifyContent:'space-between',
-                            alignItems:'center', gap:10 }}>
-                <span style={{ display:'inline-flex', alignItems:'center', gap:8,
-                               fontSize:13, fontWeight:500, color: cfg.text }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {/* Bandeau total à atteindre — visible en haut du breakdown. */}
+            <div style={{ padding:'10px 12px', borderRadius:8,
+                          background: t.cardAlt,
+                          border: `0.5px solid ${t.border}`,
+                          display:'flex', justifyContent:'space-between',
+                          alignItems:'center' }}>
+              <span style={{ fontSize:12, color: t.muted, fontWeight:500 }}>
+                {"Total à encaisser"}
+              </span>
+              <span style={{ fontSize:16, fontWeight:500, color: t.text,
+                             fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                {fmt(finalTotal) + " €"}
+              </span>
+            </div>
+
+            {breakdownLines.map((line, idx) => {
+              const cfg = PM_CFG[line.method] || PM_CFG.other;
+              const usedElsewhere = new Set(
+                breakdownLines.filter((_, i) => i !== idx).map(l => l.method)
+              );
+              const removable = idx >= 2;
+              return (
+                <div key={idx}
+                     style={{ padding:10, borderRadius:8,
+                              background: cfg.bg, borderLeft: '2px solid ' + cfg.text,
+                              display:'flex', alignItems:'center', gap:8,
+                              transition: 'background 0.15s ease' }}
+                     onMouseEnter={e => { e.currentTarget.style.background = '#F8F9FA'; }}
+                     onMouseLeave={e => { e.currentTarget.style.background = cfg.bg; }}>
                   <Icon name={cfg.icon} size={16} color={cfg.text}/>
-                  {cfg.label}
-                </span>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <input type="number" step="0.01" min="0"
-                         value={splitAmts[id] || ''}
-                         onChange={e => setSplitAmts({ ...splitAmts, [id]: e.target.value })}
-                         placeholder="0"
+                  <select value={line.method}
+                          onChange={e => updateLineMethod(idx, e.target.value)}
+                          style={{ flex:1, minHeight:40, padding:'8px 10px',
+                                   borderRadius:8,
+                                   border:`0.5px solid ${t.borderInput}`,
+                                   background: t.inputBg, color: cfg.text,
+                                   fontFamily: 'inherit', fontSize:13, fontWeight:500,
+                                   outline:'none', cursor:'pointer',
+                                   boxSizing:'border-box' }}>
+                    {Object.entries(PM_CFG).map(([id, c]) => (
+                      <option key={id} value={id}
+                              disabled={id !== line.method && usedElsewhere.has(id)}>
+                        {c.label + (id !== line.method && usedElsewhere.has(id) ? "  (déjà utilisé)" : "")}
+                      </option>
+                    ))}
+                  </select>
+                  <input type="text" inputMode="decimal"
+                         value={line.amount}
+                         onChange={e => updateLineAmount(idx, e.target.value)}
+                         placeholder="0,00"
                          style={{ width:96, minHeight:40, padding:'8px 10px',
                                   borderRadius:8,
                                   border:`0.5px solid ${t.borderInput}`,
@@ -580,9 +683,38 @@ export default function Step3Paiement({
                                   fontSize:14, fontWeight:500,
                                   textAlign:'right', outline:'none', boxSizing:'border-box' }}/>
                   <span style={{ fontSize:13, fontWeight:500, color: cfg.text }}>{"€"}</span>
+                  {removable ? (
+                    <button onClick={() => removeLine(idx)}
+                            aria-label="Supprimer cette méthode"
+                            style={{ width:32, height:32, borderRadius:6,
+                                     border:'none', background:'transparent',
+                                     cursor:'pointer', color: cfg.text,
+                                     display:'inline-flex', alignItems:'center',
+                                     justifyContent:'center', fontFamily:'inherit',
+                                     flexShrink:0 }}>
+                      <Icon name="x" size={14} color={cfg.text}/>
+                    </button>
+                  ) : (
+                    // Spacer pour aligner les lignes non supprimables.
+                    <span style={{ width:32, flexShrink:0 }}/>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
+
+            {breakdownLines.length < MAX_BREAKDOWN_LINES && (
+              <button onClick={addLine}
+                      style={{ minHeight:38, padding:'8px 12px', borderRadius:8,
+                               border: `0.5px dashed ${t.border}`,
+                               background: 'transparent', color: t.muted,
+                               cursor:'pointer', fontFamily:'inherit',
+                               fontSize:12, fontWeight:500,
+                               display:'inline-flex', alignItems:'center',
+                               justifyContent:'center', gap:6 }}>
+                <Icon name="plus" size={13} color={t.muted}/>
+                {"Ajouter une méthode"}
+              </button>
+            )}
           </div>
         )}
 
@@ -602,16 +734,21 @@ export default function Step3Paiement({
           {splitMode && (
             <>
               <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
-                <span>{"Saisi"}</span>
+                <span>{"Somme actuelle"}</span>
                 <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(paymentsSum)} €</span>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between',
-                            color: paymentsOk ? '#065f46' : '#991b1b' }}>
-                <strong style={{ fontWeight:500 }}>{"Écart"}</strong>
+                            color: sumMatches ? '#1D9E75' : '#F59E0B' }}>
+                <strong style={{ fontWeight:500 }}>{"Restant à répartir"}</strong>
                 <strong style={{ fontWeight:500, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {(paymentsDiff >= 0 ? '+' : '') + fmt(paymentsDiff)} €
+                  {fmt(Math.abs(paymentsDiff))} €
                 </strong>
               </div>
+              {splitMode && sumMatches && breakdownActive.length < 2 && (
+                <p style={{ margin:'2px 0 0', fontSize:11, color:'#F59E0B', fontWeight:500 }}>
+                  {"Au moins 2 méthodes avec un montant > 0 sont requises."}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -664,6 +801,13 @@ export default function Step3Paiement({
           </button>
         </div>
       </div>
+      <Confirm open={confirmDropBreakdown}
+               theme={t}
+               onClose={() => setConfirmDropBreakdown(false)}
+               onConfirm={dropBreakdownAndGoSimple}
+               title="Abandonner les méthodes saisies ?"
+               message="Vous avez déjà saisi des montants dans le multi-paiement. Repasser en mode simple les effacera."
+               danger/>
     </div>
   );
 }
