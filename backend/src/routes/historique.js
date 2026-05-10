@@ -157,7 +157,12 @@ router.get('/', async (req, res) => {
       LEFT JOIN appointments a ON a.id = t.appointment_id
       LEFT JOIN employees e ON e.id = t.employee_id
       WHERE ${where}
-      ORDER BY COALESCE(t.datetime_iso, t.created_at) DESC NULLS LAST, t.id DESC
+      -- created_at est TIMESTAMPTZ NOT NULL DEFAULT NOW() (toujours present
+      -- + indexe via idx_transactions_user_created). Ne PAS faire
+      -- COALESCE(t.datetime_iso, t.created_at) : datetime_iso est TEXT
+      -- legacy (string ISO inseree par le JS) -> PG refuse le mix
+      -- "text and timestamp with time zone" dans un COALESCE.
+      ORDER BY t.created_at DESC NULLS LAST, t.id DESC
       LIMIT $${listParams.length - 1} OFFSET $${listParams.length}
     `, listParams);
 
