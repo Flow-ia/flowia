@@ -179,7 +179,11 @@ router.get('/', async (req, res) => {
       WITH groups AS (
         SELECT
           COALESCE(t.payment_group_id, t.id)                AS group_key,
-          MIN(t.id)                                         AS rep_id,
+          -- PG n'a pas de MIN(uuid). On prend la 1re row du groupe via
+          -- array_agg ordonné (created_at puis id pour stabilité), puis [1].
+          -- Équivaut à "la row la plus ancienne du groupe" — celle dont les
+          -- méta (description, employé, etc.) seront affichées en historique.
+          (array_agg(t.id ORDER BY t.created_at, t.id))[1]  AS rep_id,
           MAX(t.created_at)                                 AS group_created_at,
           COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}), 0)::bigint AS group_gross_cents,
           COALESCE(SUM(${EFFECTIVE_NET_CENTS_SQL}), 0)::bigint   AS group_net_cents,
