@@ -45,10 +45,20 @@ const PATH_DOTS            = '<circle cx="12" cy="12" r="1"/><circle cx="19" cy=
 
 // Mapping method → icône SVG + label FR pour les sous-lignes breakdown
 // (commit C). Conforme FDS-2026 : icônes vectorielles, pas d'emoji.
+//
+// IMPORTANT (fix TDZ) : on INLINE les SVG strings au lieu de référencer
+// PATH_CASH / PATH_CREDIT_CARD. Terser hoisted ces consts partagées
+// derrière l'initialisation de BREAKDOWN_METHOD_META en prod minifié,
+// causant `Cannot access 'Xt' before initialization` au chargement du
+// bundle. PATH_BANK / PATH_GIFT / PATH_DOTS n'étaient pas affectés car
+// uniquement utilisés ici (terser les inlinait déjà). On normalise pour
+// éviter de dépendre de l'heuristique du minifier.
 const BREAKDOWN_METHOD_META = {
-  cash:      { paths: PATH_CASH,        label: "Espèces"     },
+  cash:      { paths: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="10" x2="3" y2="10"/><line x1="21" y1="10" x2="21" y2="10"/>',
+               label: "Espèces"     },
   transfer:  { paths: PATH_BANK,        label: "Virement"    },
-  card:      { paths: PATH_CREDIT_CARD, label: "CB physique" },
+  card:      { paths: '<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>',
+               label: "CB physique" },
   gift_card: { paths: PATH_GIFT,        label: "Bon cadeau"  },
   other:     { paths: PATH_DOTS,        label: "Autre"       },
 };
