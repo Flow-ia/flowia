@@ -53,7 +53,12 @@ router.get('/balance', async (req, res) => {
     let bankAccount = null;
     try {
       const stripe = getStripe();
-      const balance = await stripe.balance.retrieve({ stripeAccount: accountId });
+      // 2-arg form obligatoire : 1er = params (vide ici), 2e = options
+      // (stripeAccount). Le 1-arg form { stripeAccount: ... } n'est plus
+      // auto-detecte par les versions recentes du SDK Stripe et envoie
+      // 'stripeAccount' comme parametre de requete -> Stripe rejette avec
+      // "Received unknown parameter: stripeAccount".
+      const balance = await stripe.balance.retrieve({}, { stripeAccount: accountId });
       const sumEur = arr => (arr || [])
         .filter(b => (b.currency || '').toLowerCase() === 'eur')
         .reduce((s, b) => s + (b.amount || 0), 0);

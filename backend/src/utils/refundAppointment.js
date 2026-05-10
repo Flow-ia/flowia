@@ -77,59 +77,85 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
     return { ok: false, error: 'Compte Stripe du commerce indisponible' };
   }
 
-  // Tente le refund Stripe. IMPORTANT : pas de { stripeAccount } dans les
-  // params — FlowIA cree les PaymentIntents sur le compte PLATEFORME via
-  // transfer_data.destination (Stripe Connect Standard). Les appels
-  // paymentIntents.retrieve / refunds.create se font donc sur la cle
-  // plateforme directement, sans header Stripe-Account. Sinon Stripe rejette
-  // avec "Received unknown parameter: stripeAccount" (cf bug logs Render).
+  // FlowIA utilise des DIRECT CHARGES : les PaymentIntents sont crees sur
+  // le compte connecte du commercant via { stripeAccount: acct }. Les
+  // appels paymentIntents.retrieve et refunds.create DOIVENT donc passer
+  // { stripeAccount: a.stripe_account_id } en 2e arg.
   //
-  // STRATEGIE B : si une application_fee a ete prelevee a la charge initiale,
-  // on rembourse aussi la commission FlowIA + on inverse le transfert vers
-  // le compte connecte (reverse_transfer:true, indispensable avec
-  // transfer_data.destination). Sinon Stripe garde la commission.
-  let succeeded = false;
+  // Auto-detection direct vs destination charges (defensif) :
+  //   1. Tente PI retrieve AVEC stripeAccount  -> direct charges (cas FlowIA)
+  //   2. Si "No such payment_intent" : retente SANS stripeAccount (cas
+  //      hypothetique destination charges) et applique alors les flags
+  //      refund_application_fee + reverse_transfer.
+  //
+  // Direct charges : Stripe rembourse automatiquement l'application_fee au
+  // prorata du refund (default behavior). On NE passe PAS
+  // refund_application_fee ni reverse_transfer (incompatibles avec direct
+  // charges, Stripe rejetterait).
+  let succeeded   = false;
   let stripeError = null;
   let refundId    = null;
+  let chargeMode  = null; // 'direct' | 'destination'
   try {
     const stripe = getStripe();
 
-    // Retrieve le PI sur la plateforme (pas le compte connecte).
-    let hasAppFee   = false;
-    let hasTransfer = false;
+    let pi = null;
     try {
-      const pi = await stripe.paymentIntents.retrieve(a.stripe_payment_intent_id);
-      hasAppFee   = !!(pi && pi.application_fee_amount && pi.application_fee_amount > 0);
-      hasTransfer = !!(pi && (pi.transfer_data || pi.transfer_group));
+      pi = await stripe.paymentIntents.retrieve(
+        a.stripe_payment_intent_id,
+        { stripeAccount: a.stripe_account_id }
+      );
+      chargeMode = 'direct';
     } catch (rErr) {
-      console.warn('[refundAppointment] PI retrieve fail, refund without app_fee/reverse flags', rErr.message);
+      if (/No such payment_intent/i.test(rErr.message || '')) {
+        try {
+          pi = await stripe.paymentIntents.retrieve(a.stripe_payment_intent_id);
+          chargeMode = 'destination';
+          console.warn('[refundAppointment] destination_charge_path detected (rare) appt=' + a.id);
+        } catch (rErr2) {
+          console.warn('[refundAppointment] PI retrieve fail in both paths', rErr2.message);
+        }
+      } else {
+        console.warn('[refundAppointment] PI retrieve unexpected error', rErr.message);
+      }
     }
+    console.log('[refundAppointment] charge_mode=' + (chargeMode || 'unknown'),
+                'appt=' + a.id, 'pi=' + a.stripe_payment_intent_id);
 
     const refundParams = {
       payment_intent: a.stripe_payment_intent_id,
       reason: 'requested_by_customer',
       metadata: {
         appointment_id: a.id,
-        flowia_reason: reason,
-        source: 'auto_refund_on_cancel',
-        strategy: hasAppFee ? 'B_refund_app_fee' : 'simple_refund',
+        flowia_reason:  reason,
+        source:         'auto_refund_on_cancel',
+        charge_mode:    chargeMode || 'direct_assumed',
       },
     };
-    // refund_application_fee : seulement si une commission existe (sinon
-    // Stripe rejette "Attempting to refund_application_fee on ch_xxx, but
-    // it has no application fee").
-    if (hasAppFee)   refundParams.refund_application_fee = true;
-    // reverse_transfer : indispensable avec transfer_data.destination pour
-    // que les fonds soient retires du compte connecte du commercant lors
-    // du refund (sinon le commercant recupere le reverse comme bonus).
-    if (hasTransfer) refundParams.reverse_transfer = true;
 
-    const refund = await stripe.refunds.create(refundParams);
+    let refund;
+    if (chargeMode === 'destination') {
+      // Cas hypothetique non-FlowIA : refund sur la plateforme + flags
+      // explicites pour rendre la commission et inverser le transfert.
+      const hasAppFee   = !!(pi && pi.application_fee_amount && pi.application_fee_amount > 0);
+      const hasTransfer = !!(pi && (pi.transfer_data || pi.transfer_group));
+      if (hasAppFee)   refundParams.refund_application_fee = true;
+      if (hasTransfer) refundParams.reverse_transfer       = true;
+      refund = await stripe.refunds.create(refundParams);
+    } else {
+      // Direct charges (cas FlowIA standard) : refund sur le compte connecte
+      // du commercant. Pas de flag app_fee ni reverse_transfer (Stripe
+      // gere automatiquement la commission au prorata).
+      refund = await stripe.refunds.create(
+        refundParams,
+        { stripeAccount: a.stripe_account_id }
+      );
+    }
     refundId  = refund?.id || null;
     succeeded = true;
   } catch (e) {
     stripeError = e.message || String(e);
-    console.error('[refundAppointment] Stripe error', stripeError);
+    console.error('[refundAppointment] Stripe error charge_mode=' + chargeMode, stripeError);
   }
 
   if (succeeded) {

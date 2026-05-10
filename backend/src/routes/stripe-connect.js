@@ -211,9 +211,13 @@ router.get('/balance', authMiddleware, async (req, res) => {
     }
     try {
       const stripe = getStripe();
-      const balance = await stripe.balance.retrieve({
-        stripeAccount: rows[0].stripe_account_id,
-      });
+      // 2-arg form (params, options) : le 1-arg { stripeAccount: ... } n'est
+      // plus auto-detecte par le SDK Stripe recent et envoie 'stripeAccount'
+      // comme query param -> "Received unknown parameter: stripeAccount".
+      const balance = await stripe.balance.retrieve(
+        {},
+        { stripeAccount: rows[0].stripe_account_id }
+      );
       // balance.available et balance.pending sont des arrays par devise.
       // On somme tout en EUR (cas multi-devise rare en France).
       const sumCurrency = (arr, cur) => (arr || [])
