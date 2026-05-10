@@ -77,35 +77,32 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
     return { ok: false, error: 'Compte Stripe du commerce indisponible' };
   }
 
-  // Tente le refund Stripe avec stripeAccount = compte du merchant.
-  // reason 'requested_by_customer' est l'enum Stripe pour ce cas (annulation
-  // RDV cote merchant ou client). Metadata pour traçabilite.
+  // Tente le refund Stripe. IMPORTANT : pas de { stripeAccount } dans les
+  // params — FlowIA cree les PaymentIntents sur le compte PLATEFORME via
+  // transfer_data.destination (Stripe Connect Standard). Les appels
+  // paymentIntents.retrieve / refunds.create se font donc sur la cle
+  // plateforme directement, sans header Stripe-Account. Sinon Stripe rejette
+  // avec "Received unknown parameter: stripeAccount" (cf bug logs Render).
   //
-  // STRATEGIE B : si une application_fee a ete prelevee a la charge
-  // initiale, on la rembourse aussi au commercant (= notre commission FlowIA
-  // n'est pas conservee si la prestation n'a pas eu lieu). Si commission=0
-  // a la creation du PI, application_fee_amount est absent -> il NE FAUT
-  // PAS passer refund_application_fee=true sinon Stripe rejette : 'Attempting
-  // to refund_application_fee on ch_xxx, but it has no application fee.'
-  // -> on retrieve le PI d'abord pour decider, puis on conditionne le param.
+  // STRATEGIE B : si une application_fee a ete prelevee a la charge initiale,
+  // on rembourse aussi la commission FlowIA + on inverse le transfert vers
+  // le compte connecte (reverse_transfer:true, indispensable avec
+  // transfer_data.destination). Sinon Stripe garde la commission.
   let succeeded = false;
   let stripeError = null;
+  let refundId    = null;
   try {
     const stripe = getStripe();
 
-    // Retrieve le PI pour savoir s'il a une application_fee_amount.
-    // Pas besoin de `expand:['charges']` puisqu'on a juste besoin du flag.
-    let hasAppFee = false;
+    // Retrieve le PI sur la plateforme (pas le compte connecte).
+    let hasAppFee   = false;
+    let hasTransfer = false;
     try {
-      const pi = await stripe.paymentIntents.retrieve(
-        a.stripe_payment_intent_id,
-        { stripeAccount: a.stripe_account_id }
-      );
-      hasAppFee = !!(pi && pi.application_fee_amount && pi.application_fee_amount > 0);
+      const pi = await stripe.paymentIntents.retrieve(a.stripe_payment_intent_id);
+      hasAppFee   = !!(pi && pi.application_fee_amount && pi.application_fee_amount > 0);
+      hasTransfer = !!(pi && (pi.transfer_data || pi.transfer_group));
     } catch (rErr) {
-      // Si retrieve fail, on tente quand meme le refund SANS le flag
-      // (plus safe : Stripe ne rejettera pas pour 'no application fee').
-      console.warn('[refundAppointment] PI retrieve fail, refund without app_fee flag', rErr.message);
+      console.warn('[refundAppointment] PI retrieve fail, refund without app_fee/reverse flags', rErr.message);
     }
 
     const refundParams = {
@@ -115,13 +112,20 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
         appointment_id: a.id,
         flowia_reason: reason,
         source: 'auto_refund_on_cancel',
-        strategy: hasAppFee ? 'B_refund_app_fee' : 'no_app_fee_simple_refund',
+        strategy: hasAppFee ? 'B_refund_app_fee' : 'simple_refund',
       },
     };
-    // Conditionne le flag : true uniquement si commission a ete prelevee.
-    if (hasAppFee) refundParams.refund_application_fee = true;
+    // refund_application_fee : seulement si une commission existe (sinon
+    // Stripe rejette "Attempting to refund_application_fee on ch_xxx, but
+    // it has no application fee").
+    if (hasAppFee)   refundParams.refund_application_fee = true;
+    // reverse_transfer : indispensable avec transfer_data.destination pour
+    // que les fonds soient retires du compte connecte du commercant lors
+    // du refund (sinon le commercant recupere le reverse comme bonus).
+    if (hasTransfer) refundParams.reverse_transfer = true;
 
-    await stripe.refunds.create(refundParams, { stripeAccount: a.stripe_account_id });
+    const refund = await stripe.refunds.create(refundParams);
+    refundId  = refund?.id || null;
     succeeded = true;
   } catch (e) {
     stripeError = e.message || String(e);
@@ -146,19 +150,21 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
     } catch (cancelErr) {
       console.error('[refundAppointment] cancelAppointmentPayout', cancelErr.message);
     }
-    // Tracabilite caisse / stats : insere une row 'rdv_refund' (montant
-    // negatif) via le helper partage. Idempotent. Cf. recordRefundTransaction
-    // pour le detail des conventions de la row (type='revenue' negatif,
-    // qty_total=0, locked=TRUE, etc.). Erreur d'insert ne bloque pas le
-    // refund : l'argent a deja ete rendu cote Stripe.
+    // Tracabilite caisse / stats : insere une row 'rdv_refund' POSITIVE
+    // (CHECK constraint transactions_amount_nonneg interdit amount<0). Le
+    // sens "refund" est porte par payment_status='REFUNDED' + payment_type
+    // ='refund' + source='rdv_refund'. Idempotent (UNIQUE index partiel
+    // sur appointment_id WHERE source='rdv_refund'). Erreur d'insert ne
+    // bloque pas le refund — l'argent est deja rendu cote Stripe.
     const txRes = await recordRefundTransaction(pool, {
       appointmentId: a.id,
       refundedCents: a.paid_amount_cents,
+      stripeRefundId: refundId,
     });
     if (!txRes.ok) {
       console.error('[refundAppointment] tx insert failed', txRes.error);
     }
-    return { ok: true, refunded: true };
+    return { ok: true, refunded: true, refund_id: refundId };
   }
 
   // Echec Stripe : insert dans failed_refunds pour retry admin.

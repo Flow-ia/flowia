@@ -307,7 +307,10 @@ router.get('/payouts', authMiddleware, async (req, res) => {
 //
 // Sources de verite :
 //   - transactions (source='rdv_online') : revenus paiements en ligne (positifs)
-//   - transactions (source='rdv_refund') : remboursements (amount NEGATIF)
+//   - transactions (source='rdv_refund') : remboursements (amount POSITIF
+//     depuis la refonte v3 ; le sens 'refund' est porte par payment_status
+//     ='REFUNDED'. On utilise ABS pour rester compatible avec d'eventuelles
+//     rows legacy negatives anterieures au CHECK constraint amount>=0).
 //   - appointments.cancelled_by + cancelled_at : tracabilite annulations
 //
 // Filtre temporel : par tx.date pour revenue/refund (vue cash-flow) ; par
@@ -326,7 +329,7 @@ router.get('/performance-stats', authMiddleware, async (req, res) => {
     const { rows: txR } = await pool.query(`
       SELECT
         COALESCE(SUM(CASE WHEN source='rdv_online' THEN amount ELSE 0 END), 0)::numeric AS gross_revenue,
-        COALESCE(SUM(CASE WHEN source='rdv_refund' THEN -amount ELSE 0 END), 0)::numeric AS refund_amount,
+        COALESCE(SUM(CASE WHEN source='rdv_refund' THEN ABS(amount) ELSE 0 END), 0)::numeric AS refund_amount,
         COUNT(*) FILTER (WHERE source='rdv_online') AS online_paid_count,
         COUNT(*) FILTER (WHERE source='rdv_refund') AS refund_count
         FROM transactions
@@ -799,9 +802,11 @@ router.post('/webhook', async (req, res) => {
           // de la row appointments si l'event Stripe ne le porte pas.
           const { recordRefundTransaction } = require('../utils/recordRefundTransaction');
           const refundedCents = Number(ch.amount_refunded || row.paid_amount_cents || 0);
+          const refundIdFromCharge = ch.refunds?.data?.[0]?.id || null;
           const txRes = await recordRefundTransaction(pool, {
             appointmentId: row.id,
             refundedCents,
+            stripeRefundId: refundIdFromCharge,
           });
           if (txRes.inserted) {
             console.log('[CONNECT WEBHOOK] refund tx inserted for appt', row.id, '-', (refundedCents / 100), '€');
