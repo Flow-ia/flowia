@@ -103,6 +103,7 @@ router.get('/', async (req, res) => {
       `SELECT t.id, t.user_id, t.type, t.amount, t.description,
         t.category_id, t.employee_id, t.payment_method, t.qty_total,
         t.locked, t.discount_amount, t.original_amount, t.promo_code_id,
+        t.payment_group_id,
         TO_CHAR(t.date, 'YYYY-MM-DD') as date,
         TO_CHAR(t.time, 'HH24:MI') as time,
         t.datetime_iso, t.appointment_id, t.source, t.created_at,

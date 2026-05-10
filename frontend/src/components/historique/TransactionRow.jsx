@@ -116,7 +116,19 @@ function getStatusPill(tx) {
   else if (ps === "REFUNDED") palette = PALETTE.refund;
   else if (ps === "NO_SHOW_RETAINED") palette = PALETTE.noshow;
   else palette = PALETTE.neutral;
-  // Pour CASH_PAID : differencier especes / carte locale dans le label
+  // Multi-paiement traçable : le badge méthode unique (Espèces/Virement/…)
+  // serait trompeur car la rep_row ne porte qu'une des N méthodes. On force
+  // un label "Multi (N)" neutre pour signaler explicitement le multi. Le
+  // breakdown détaillé ├─/└─ s'affiche dessous (cf. JSX plus bas).
+  const breakdownArr = Array.isArray(tx.breakdown_payments) ? tx.breakdown_payments : null;
+  if (ps === "CASH_PAID" && breakdownArr && breakdownArr.length >= 2) {
+    return {
+      label: "Multi (" + breakdownArr.length + ")",
+      bg:    "#F3F4F6",
+      color: "#6B7280",
+    };
+  }
+  // Pour CASH_PAID single : differencier especes / carte locale dans le label
   let label = STATUS_LABELS[ps] || ps;
   if (ps === "CASH_PAID") {
     if (tx.payment_method === "cash") label = "Espèces";
