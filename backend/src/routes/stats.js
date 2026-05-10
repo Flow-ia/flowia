@@ -339,33 +339,59 @@ router.get('/by-payment-method', async (req, res) => {
     const _h = global.memCache?.get(_k);
     if (_h) return res.json(_h);
 
+    // Commit C — on distingue désormais les rows multi traçables (chaque
+    // sous-paiement porte sa vraie méthode 'cash'/'transfer'/etc. et a
+    // payment_group_id IS NOT NULL) des 4 rows legacy 'multi' restantes
+    // (payment_method='multi' AND payment_group_id IS NULL). Ces dernières
+    // sont agrégées sous la clé `multi_legacy` en attendant le commit D.
+    // Ajout également de `gift_card` qui apparaît naturellement comme
+    // payment_method d'une sous-row de breakdown.
     const { rows } = await pool.query(
       `SELECT payment_method,
-              COALESCE(SUM(amount), 0)::numeric AS amount,
-              COUNT(*)                          AS count
+              CASE WHEN payment_method = 'multi' AND payment_group_id IS NULL
+                   THEN TRUE ELSE FALSE END             AS is_legacy_multi,
+              COALESCE(SUM(amount), 0)::numeric         AS amount,
+              COUNT(*)                                  AS count
          FROM transactions
         WHERE user_id=$1 AND type='revenue'
           AND date BETWEEN $2 AND $3
-        GROUP BY payment_method`,
+        GROUP BY payment_method,
+                 (payment_method = 'multi' AND payment_group_id IS NULL)`,
       [userId, from, to]
     );
 
     const EMPTY = { amount: 0, count: 0 };
     const by_method = {
-      cash:        { ...EMPTY },
-      card:        { ...EMPTY },
-      card_online: { ...EMPTY },
-      transfer:    { ...EMPTY },
-      other:       { ...EMPTY },
-      multi:       { ...EMPTY },
+      cash:         { ...EMPTY },
+      card:         { ...EMPTY },
+      card_online:  { ...EMPTY },
+      transfer:     { ...EMPTY },
+      gift_card:    { ...EMPTY },
+      other:        { ...EMPTY },
+      multi_legacy: { ...EMPTY },
+      // Compat front actuel : on garde 'multi' comme alias de 'multi_legacy'
+      // tant que d'autres consommateurs lisent encore by_method.multi.
+      multi:        { ...EMPTY },
     };
     let total = 0;
     for (const r of rows) {
       const amt = parseFloat(r.amount) || 0;
       const cnt = parseInt(r.count, 10) || 0;
       total += amt;
-      // `check` (whitelisté historique) agrégé dans `other` pour matcher l'UI 5 cards.
-      const key = (r.payment_method === 'check') ? 'other' : r.payment_method;
+      // `check` (whitelisté historique) agrégé dans `other` pour matcher l'UI.
+      let key;
+      if (r.is_legacy_multi) {
+        key = 'multi_legacy';
+      } else if (r.payment_method === 'check') {
+        key = 'other';
+      } else if (r.payment_method === 'multi') {
+        // Cas théorique : payment_method='multi' avec payment_group_id NOT NULL.
+        // Le commit A n'en crée pas (chaque sous-row porte sa vraie méthode),
+        // mais filet de sécurité : on agrège dans `other`.
+        key = 'other';
+      } else {
+        key = r.payment_method;
+      }
       if (by_method[key]) {
         by_method[key].amount += amt;
         by_method[key].count  += cnt;
@@ -374,13 +400,46 @@ router.get('/by-payment-method', async (req, res) => {
         by_method.other.count  += cnt;
       }
     }
+    // Alias rétro-compat : multi reflète multi_legacy.
+    by_method.multi.amount = by_method.multi_legacy.amount;
+    by_method.multi.count  = by_method.multi_legacy.count;
     // Arrondir 2 décimales à la sortie (flottants JS).
     for (const k of Object.keys(by_method)) {
       by_method[k].amount = Math.round(by_method[k].amount * 100) / 100;
     }
     total = Math.round(total * 100) / 100;
 
-    const result = { period, from, to, by_method, total };
+    // Commit C — nouveau format `by_payment_method` consommé par les KPI
+    // cards de la page Performance (label + icon + total_cents + count).
+    // `icon` = nom de l'icône Tabler/Lucide à charger côté frontend (PAS
+    // un emoji : conformité FDS-2026 « pas d'emoji UI »).
+    const PM_META = {
+      cash:         { label: 'Espèces',         icon: 'cash'       },
+      transfer:     { label: 'Virement',        icon: 'send'       },
+      card:         { label: 'CB physique',     icon: 'creditCard' },
+      gift_card:    { label: 'Bon cadeau',      icon: 'gift'       },
+      card_online:  { label: 'Stripe en ligne', icon: 'globe'      },
+      other:        { label: 'Autre',           icon: 'more'       },
+      multi_legacy: { label: 'Multi (legacy)',  icon: 'more'       },
+    };
+    const by_payment_method = {};
+    for (const k of Object.keys(PM_META)) {
+      const e = by_method[k] || EMPTY;
+      by_payment_method[k] = {
+        label:       PM_META[k].label,
+        icon:        PM_META[k].icon,
+        total_cents: Math.round((e.amount || 0) * 100),
+        count:       e.count || 0,
+      };
+    }
+
+    const result = {
+      period, from, to,
+      by_method,
+      by_payment_method,
+      total_by_period_cents: Math.round(total * 100),
+      total,
+    };
     global.memCache?.set(_k, result, 2 * 60 * 1000); // cache 2 min
     res.json(result);
   } catch (e) {

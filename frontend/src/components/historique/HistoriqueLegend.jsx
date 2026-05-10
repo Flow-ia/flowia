@@ -90,6 +90,13 @@ function HistoriqueLegendImpl() {
           </div>
         ))}
       </div>
+      <p style={{
+        margin: "12px 0 0", paddingTop: 10,
+        borderTop: "0.5px solid " + t.separator,
+        fontSize: 11, color: t.muted, lineHeight: 1.5,
+      }}>
+        {"Les paiements multiples affichent le détail des méthodes utilisées sous le montant total."}
+      </p>
     </div>
   );
 }

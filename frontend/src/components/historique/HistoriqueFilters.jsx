@@ -30,7 +30,7 @@ const MODE_OPTIONS = [
   { value: "card_online", label: "Stripe en ligne" },
   { value: "cash",        label: "Espèces" },
   { value: "card",        label: "CB physique" },
-  { value: "multi",       label: "Paiement mixte" },
+  { value: "multi",       label: "Paiement multiple" },
   { value: "other",       label: "Autre" },
   { value: "transfer",    label: "Virement" },
 ];

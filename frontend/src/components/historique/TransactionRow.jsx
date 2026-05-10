@@ -36,6 +36,22 @@ const Icon = ({ paths, size = 20, color }) => (
 );
 // ti-credit-card
 const PATH_CREDIT_CARD     = '<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>';
+// ti-building-bank (virement)
+const PATH_BANK            = '<line x1="3" y1="21" x2="21" y2="21"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="5 6 12 3 19 6"/><line x1="4" y1="10" x2="4" y2="21"/><line x1="20" y1="10" x2="20" y2="21"/><line x1="8" y1="14" x2="8" y2="17"/><line x1="12" y1="14" x2="12" y2="17"/><line x1="16" y1="14" x2="16" y2="17"/>';
+// ti-gift (bon cadeau)
+const PATH_GIFT            = '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>';
+// ti-dots-circle (autre)
+const PATH_DOTS            = '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>';
+
+// Mapping method → icône SVG + label FR pour les sous-lignes breakdown
+// (commit C). Conforme FDS-2026 : icônes vectorielles, pas d'emoji.
+const BREAKDOWN_METHOD_META = {
+  cash:      { paths: PATH_CASH,        label: "Espèces"     },
+  transfer:  { paths: PATH_BANK,        label: "Virement"    },
+  card:      { paths: PATH_CREDIT_CARD, label: "CB physique" },
+  gift_card: { paths: PATH_GIFT,        label: "Bon cadeau"  },
+  other:     { paths: PATH_DOTS,        label: "Autre"       },
+};
 // ti-credit-card-pay (carte + fleche bas-droite)
 const PATH_CREDIT_CARD_PAY = '<path d="M12 19H5a2 2 0 0 1 -2 -2V7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v6"/><path d="M3 10h18"/><path d="M16 19h6"/><path d="M19 16l3 3l-3 3"/>';
 // ti-cash
@@ -178,6 +194,15 @@ function TransactionRowImpl({ transaction: tx, isLast }) {
   const amount  = getAmountStyle(tx);
   const isWalkin = tx.payment_source === "walkin";
 
+  // Breakdown multi-paiement (commit C). breakdown_payments = array
+  // [{method, amount_cents}, ...] uniquement si payment_group_id IS NOT NULL.
+  // Les rows legacy (payment_method='multi' sans group) ont breakdown_payments
+  // null → on affiche le badge "Détail non disponible (legacy)".
+  const breakdown = Array.isArray(tx.breakdown_payments) && tx.breakdown_payments.length >= 2
+    ? tx.breakdown_payments
+    : null;
+  const isLegacyMulti = !breakdown && tx.payment_method === "multi";
+
   const grossCents   = Math.abs(parseInt(tx.gross_amount_cents || 0, 10));
   const netCents     = parseInt(tx.net_amount_cents || 0, 10);
   const stripeFee    = parseInt(tx.stripe_fee_cents || 0, 10);
@@ -221,7 +246,39 @@ function TransactionRowImpl({ transaction: tx, isLast }) {
           {statusP && <Pill {...statusP} />}
           {sourceP && <Pill {...sourceP} />}
           {payoutP && <Pill {...payoutP} />}
+          {isLegacyMulti && (
+            <span style={{
+              fontSize: 11, color: t.muted, fontStyle: "italic",
+            }}>
+              {"Détail non disponible (legacy)"}
+            </span>
+          )}
         </div>
+        {breakdown && (
+          <div style={{
+            marginTop: 6,
+            display: "flex", flexDirection: "column", gap: 2,
+            paddingLeft: 4,
+          }}>
+            {breakdown.map((sub, i) => {
+              const meta = BREAKDOWN_METHOD_META[sub.method] || BREAKDOWN_METHOD_META.other;
+              const subCents = Math.abs(parseInt(sub.amount_cents || 0, 10));
+              return (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  fontSize: 12, color: "rgba(0,0,0,0.65)",
+                }}>
+                  <span style={{ color: t.muted, flexShrink: 0 }}>{"├─"}</span>
+                  <Icon paths={meta.paths} size={12} color="rgba(0,0,0,0.55)" />
+                  <span style={{ flex: 1 }}>{meta.label}</span>
+                  <span style={{ fontFamily: MONO, color: "rgba(0,0,0,0.75)" }}>
+                    {formatCents(subCents)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
         <p style={{
           margin: "5px 0 0", fontSize: 12, color: t.muted,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

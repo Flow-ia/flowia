@@ -110,8 +110,17 @@ router.get('/', async (req, res) => {
     params.push(range.to);   conds.push(`t.date <= $${params.length}`);
 
     if (mode) {
-      params.push(mode);
-      conds.push(`t.payment_method = $${params.length}`);
+      // Commit C — mode='multi' englobe à la fois les rows legacy
+      // (payment_method='multi') ET les nouvelles rows multi traçables
+      // (payment_group_id IS NOT NULL, chaque sous-paiement portant sa
+      // propre méthode 'cash'/'transfer'/etc.). Les autres modes restent
+      // un filtre strict sur payment_method.
+      if (mode === 'multi') {
+        conds.push(`(t.payment_method = 'multi' OR t.payment_group_id IS NOT NULL)`);
+      } else {
+        params.push(mode);
+        conds.push(`t.payment_method = $${params.length}`);
+      }
     }
     if (employee_id && employee_id !== 'all') {
       params.push(employee_id);
@@ -154,18 +163,49 @@ router.get('/', async (req, res) => {
     if (cached) return res.json(cached);
 
     // ── Liste des transactions paginee ──────────────────────────────────────
+    // Commit C — Regroupement multi-paiement traçable. Une CTE `groups`
+    // agrège les rows par COALESCE(payment_group_id, id) : chaque groupe
+    // = 1 ligne dans la liste (au lieu de N rows pour un multi). On porte
+    // group_size, group_gross_cents, group_net_cents, et l'array
+    // breakdown_payments JSON pour les multi traçables. Les rows simples
+    // ont group_size=1 et breakdown_payments=NULL (compat 100%). Les rows
+    // legacy 'multi' (sans payment_group_id) restent group_size=1 mais
+    // payment_method='multi' permet au frontend d'afficher le badge
+    // « Détail non disponible (legacy) » jusqu'au commit D.
     const listParams = params.slice();
     listParams.push(perPageN);
     listParams.push(offset);
     const { rows: transactions } = await pool.query(`
+      WITH groups AS (
+        SELECT
+          COALESCE(t.payment_group_id, t.id)                AS group_key,
+          MIN(t.id)                                         AS rep_id,
+          MAX(t.created_at)                                 AS group_created_at,
+          COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}), 0)::bigint AS group_gross_cents,
+          COALESCE(SUM(${EFFECTIVE_NET_CENTS_SQL}), 0)::bigint   AS group_net_cents,
+          COUNT(*)::int                                     AS group_size,
+          BOOL_OR(t.payment_group_id IS NOT NULL)           AS has_group_id,
+          json_agg(
+            json_build_object(
+              'method',       t.payment_method,
+              'amount_cents', ${EFFECTIVE_GROSS_CENTS_SQL}
+            ) ORDER BY t.created_at, t.id
+          )                                                 AS breakdown_raw
+        FROM transactions t
+        LEFT JOIN appointments a ON a.id = t.appointment_id
+        WHERE ${where}
+        GROUP BY COALESCE(t.payment_group_id, t.id)
+      )
       SELECT
         t.id,
         t.appointment_id,
         t.client_email,
         a.client_name,
         e.name AS employee_name,
-        ${EFFECTIVE_GROSS_CENTS_SQL}                      AS gross_amount_cents,
-        ${EFFECTIVE_NET_CENTS_SQL}                        AS net_amount_cents,
+        -- gross/net : on EXPOSE le total du groupe (pour les multi, la
+        -- rep_row seule sous-évalue le montant affiché en historique).
+        g.group_gross_cents                               AS gross_amount_cents,
+        g.group_net_cents                                 AS net_amount_cents,
         COALESCE(t.stripe_fee_cents, 0)                   AS stripe_fee_cents,
         COALESCE(t.platform_fee_cents, 0)                 AS platform_fee_cents,
         t.payment_method,
@@ -177,49 +217,62 @@ router.get('/', async (req, res) => {
         t.date,
         t.time,
         t.stripe_payout_id,
-        t.payout_received_at
-      FROM transactions t
+        t.payout_received_at,
+        t.payment_group_id,
+        g.group_size,
+        -- breakdown_payments : NULL pour les rows simples ET pour les rows
+        -- legacy 'multi' (pas de payment_group_id). Le frontend affiche
+        -- les sous-lignes uniquement quand cet array est non NULL.
+        CASE WHEN g.has_group_id THEN g.breakdown_raw ELSE NULL END AS breakdown_payments
+      FROM groups g
+      JOIN transactions t   ON t.id = g.rep_id
       LEFT JOIN appointments a ON a.id = t.appointment_id
-      LEFT JOIN employees e ON e.id = t.employee_id
-      WHERE ${where}
-      -- created_at est TIMESTAMPTZ NOT NULL DEFAULT NOW() (toujours present
-      -- + indexe via idx_transactions_user_created). Ne PAS faire
-      -- COALESCE(t.datetime_iso, t.created_at) : datetime_iso est TEXT
-      -- legacy (string ISO inseree par le JS) -> PG refuse le mix
-      -- "text and timestamp with time zone" dans un COALESCE.
-      ORDER BY t.created_at DESC NULLS LAST, t.id DESC
+      LEFT JOIN employees    e ON e.id = t.employee_id
+      ORDER BY g.group_created_at DESC NULLS LAST, g.rep_id DESC
       LIMIT $${listParams.length - 1} OFFSET $${listParams.length}
     `, listParams);
 
     // ── Totaux agreges (sur le meme filtre, sans pagination) ────────────────
+    // Commit C — `total` compte les GROUPES (DISTINCT par
+    // COALESCE(payment_group_id, id)) pour aligner pagination.total avec le
+    // nombre de lignes affichées (sinon un multi 2-rows compterait double).
+    // Les sub-aggregates (en_ligne_count, walkin_count, etc.) restent en
+    // COUNT(*) FILTER : ils agrègent par source/status, pas par groupe ;
+    // un encaissement multi reste 1 ligne walkin/cash_register_rdv multi-
+    // méthodes mais N rows pour les SUM(montants) — la SUM reste correcte.
     const { rows: totalsRows } = await pool.query(`
       SELECT
-        COUNT(*)::int AS total,
+        COUNT(DISTINCT COALESCE(t.payment_group_id, t.id))::int AS total,
         COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}), 0)::bigint AS ca_total_cents,
 
-        COUNT(*) FILTER (WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
-                            AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE'))::int AS en_ligne_count,
+        COUNT(DISTINCT COALESCE(t.payment_group_id, t.id))
+          FILTER (WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
+                    AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE'))::int AS en_ligne_count,
         COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}) FILTER (
           WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
             AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE')
         ), 0)::bigint AS en_ligne_cents,
 
-        COUNT(*) FILTER (WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'cash_register_rdv')::int AS caisse_rdv_count,
+        COUNT(DISTINCT COALESCE(t.payment_group_id, t.id))
+          FILTER (WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'cash_register_rdv')::int AS caisse_rdv_count,
         COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}) FILTER (
           WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'cash_register_rdv'
         ), 0)::bigint AS caisse_rdv_cents,
 
-        COUNT(*) FILTER (WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'walkin')::int AS walkin_count,
+        COUNT(DISTINCT COALESCE(t.payment_group_id, t.id))
+          FILTER (WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'walkin')::int AS walkin_count,
         COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}) FILTER (
           WHERE ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'walkin'
         ), 0)::bigint AS walkin_cents,
 
-        COUNT(*) FILTER (WHERE ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'REFUNDED')::int AS refunded_count,
+        COUNT(DISTINCT COALESCE(t.payment_group_id, t.id))
+          FILTER (WHERE ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'REFUNDED')::int AS refunded_count,
         COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}) FILTER (
           WHERE ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'REFUNDED'
         ), 0)::bigint AS refunded_cents,
 
-        COUNT(*) FILTER (WHERE ${EFFECTIVE_PAYMENT_STATUS_SQL} IS NULL)::int AS unclassified_count
+        COUNT(DISTINCT COALESCE(t.payment_group_id, t.id))
+          FILTER (WHERE ${EFFECTIVE_PAYMENT_STATUS_SQL} IS NULL)::int AS unclassified_count
       FROM transactions t
       LEFT JOIN appointments a ON a.id = t.appointment_id
       WHERE ${where}

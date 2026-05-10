@@ -1,20 +1,38 @@
 // Statistiques > Performance — KPIs mois + 30j + CA par employé + top
-// prestations (TabStats) + nouveau bloc « moyens de paiement » (pastel
-// §15 INVENTAIRE) alimenté par statsApi.getByPaymentMethod(period).
+// prestations (TabStats) + bloc « Totaux par méthode de paiement » (refonte
+// commit C : 7 cards, alimenté par statsApi.getByPaymentMethod → consomme
+// le nouveau champ `by_payment_method` qui éclate les multi traçables en
+// vraies méthodes et isole les 4 rows multi legacy sous `multi_legacy`).
 import { useEffect, useState } from 'react';
 import TabStats from '../settings/TabStats';
 import { statsApi } from '../../utils/api';
 
-// Palette pastel — 'card_online' = paiement Stripe Connect (distinct de
-// 'card' qui est la CB au comptoir). Coherent avec PAY_INFO de shared.jsx
-// et PM_GRID_CFG de Dashboard/historique/caisse (commit 8906158).
+// Palette pastel par méthode + path SVG d'icône (Tabler outline). Pas
+// d'emoji UI (FDS-2026 §6).
+const SVG_BASE = {
+  viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+  strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round',
+};
+const PMIcon = ({ paths, size = 28, color }) => (
+  <svg {...SVG_BASE} width={size} height={size} style={{ color, flexShrink: 0 }}
+       dangerouslySetInnerHTML={{ __html: paths }} />
+);
+const PATH_CASH       = '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>';
+const PATH_BANK       = '<line x1="3" y1="21" x2="21" y2="21"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="5 6 12 3 19 6"/><line x1="4" y1="10" x2="4" y2="21"/><line x1="20" y1="10" x2="20" y2="21"/><line x1="8" y1="14" x2="8" y2="17"/><line x1="12" y1="14" x2="12" y2="17"/><line x1="16" y1="14" x2="16" y2="17"/>';
+const PATH_CARD       = '<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>';
+const PATH_GIFT       = '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>';
+const PATH_GLOBE      = '<circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0 -18"/>';
+const PATH_DOTS       = '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>';
+
+// Ordre + style par méthode (label/icon viennent du backend, palette ici).
 const PM_CFG = [
-  { id: 'cash',        label: 'Espèces',  text: '#065f46', bg: '#f0fdf4' },
-  { id: 'card',        label: 'Carte',    text: '#4338ca', bg: '#eef2ff' },
-  { id: 'card_online', label: 'En ligne', text: '#0891b2', bg: '#cffafe' },
-  { id: 'transfer',    label: 'Virement', text: '#0e7490', bg: '#ecfeff' },
-  { id: 'other',       label: 'Autre',    text: '#92400e', bg: '#fffbeb' },
-  { id: 'multi',       label: 'Multi',    text: '#3c3489', bg: '#eeedfe' },
+  { id: 'cash',         text: '#065f46', bg: '#f0fdf4', paths: PATH_CASH  },
+  { id: 'transfer',     text: '#0e7490', bg: '#ecfeff', paths: PATH_BANK  },
+  { id: 'card',         text: '#4338ca', bg: '#eef2ff', paths: PATH_CARD  },
+  { id: 'gift_card',    text: '#9a3412', bg: '#fff7ed', paths: PATH_GIFT  },
+  { id: 'card_online',  text: '#0891b2', bg: '#cffafe', paths: PATH_GLOBE },
+  { id: 'other',        text: '#92400e', bg: '#fffbeb', paths: PATH_DOTS  },
+  { id: 'multi_legacy', text: '#3c3489', bg: '#eeedfe', paths: PATH_DOTS  },
 ];
 
 const PERIODS = [
@@ -53,10 +71,11 @@ function PaymentMethodsBlock({ theme: t, showToast }) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
                     gap:10, flexWrap:'wrap' }}>
         <div>
-          <p style={{ margin:0, fontSize:14, fontWeight:500, color:t.text }}>
-            {"Moyens de paiement"}
+          <p style={{ margin:0, fontSize:11, fontWeight:500, color:t.muted,
+                      textTransform:'uppercase', letterSpacing:'0.04em' }}>
+            {"Totaux par méthode de paiement"}
           </p>
-          <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
+          <p style={{ margin:'4px 0 0', fontSize:11, color:t.muted }}>
             {"CA ventilé par méthode d'encaissement (revenus uniquement)"}
           </p>
         </div>
@@ -79,26 +98,47 @@ function PaymentMethodsBlock({ theme: t, showToast }) {
       </div>
 
       <div style={{ display:'grid',
-                    gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))',
+                    gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))',
                     gap:8 }}>
         {PM_CFG.map(m => {
-          const entry = data?.by_method?.[m.id] || { amount: 0, count: 0 };
+          // Nouveau format `by_payment_method` (commit C) : { label, icon,
+          // total_cents, count }. Fallback sur ancien `by_method` pour
+          // compat si réponse API en cache antérieure au déploiement.
+          const newFmt = data?.by_payment_method?.[m.id];
+          const oldFmt = data?.by_method?.[m.id];
+          const totalCents = newFmt
+            ? (newFmt.total_cents || 0)
+            : Math.round((oldFmt?.amount || 0) * 100);
+          const count = newFmt
+            ? (newFmt.count || 0)
+            : (oldFmt?.count || 0);
+          const label = newFmt?.label || m.id;
           return (
             <div key={m.id}
-                 style={{ padding:'12px 14px', borderRadius:10,
+                 style={{ padding:'14px 14px', borderRadius:10,
                           background: m.bg,
-                          border:'0.5px solid rgba(0,0,0,0.04)' }}>
-              <p style={{ margin:0, fontSize:11, fontWeight:500, color:m.text,
-                          textTransform:'uppercase', letterSpacing:'0.04em' }}>
-                {m.label}
-              </p>
-              <p style={{ margin:'4px 0 2px', fontSize:18, fontWeight:500,
-                          color:m.text, fontFamily:'monospace' }}>
-                {loading ? '…' : fmtEur(entry.amount)}
-              </p>
-              <p style={{ margin:0, fontSize:10, color:m.text, opacity:0.75 }}>
-                {(entry.count || 0) + (entry.count === 1 ? ' transaction' : ' transactions')}
-              </p>
+                          border:'0.5px solid rgba(0,0,0,0.04)',
+                          display:'flex', alignItems:'flex-start', gap:12 }}>
+              <div style={{ width:40, height:40, borderRadius:10,
+                            background:'rgba(255,255,255,0.55)',
+                            display:'flex', alignItems:'center',
+                            justifyContent:'center', flexShrink:0 }}>
+                <PMIcon paths={m.paths} size={22} color={m.text} />
+              </div>
+              <div style={{ minWidth:0, flex:1 }}>
+                <p style={{ margin:0, fontSize:11, fontWeight:500, color:m.text,
+                            textTransform:'uppercase', letterSpacing:'0.04em',
+                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {label}
+                </p>
+                <p style={{ margin:'4px 0 2px', fontSize:18, fontWeight:500,
+                            color:m.text, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                  {loading ? "…" : fmtEur(totalCents / 100)}
+                </p>
+                <p style={{ margin:0, fontSize:10, color:m.text, opacity:0.75 }}>
+                  {count + (count === 1 ? " transaction" : " transactions")}
+                </p>
+              </div>
             </div>
           );
         })}
@@ -106,7 +146,10 @@ function PaymentMethodsBlock({ theme: t, showToast }) {
 
       {data && (
         <p style={{ margin:0, fontSize:11, color:t.muted, textAlign:'right' }}>
-          {"Total période : "}<strong style={{ color:t.text, fontWeight:500 }}>{fmtEur(data.total)}</strong>
+          {"Total période : "}
+          <strong style={{ color:t.text, fontWeight:500 }}>
+            {fmtEur((data.total_by_period_cents != null ? data.total_by_period_cents / 100 : data.total) || 0)}
+          </strong>
         </p>
       )}
     </div>
