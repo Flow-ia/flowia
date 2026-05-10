@@ -60,20 +60,23 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
     setParams(usp, { replace: true });
   };
 
-  // Filtres effectifs envoyes a l'API : on retire les vides + on ne fait pas
-  // l'appel si custom incomplet (cf hook qui gere le case via apiFilters).
+  // Custom incomplet (period=custom mais une date manque) : on SKIP totalement
+  // l'appel API. Evite tout flash d'erreur ou de chargement entre la
+  // selection du filtre "Personnalise" et le remplissage des 2 dates.
+  const customIncomplete = filters.period === "custom"
+                        && (!filters.date_from || !filters.date_to);
+
+  // Filtres effectifs envoyes a l'API (vides retires).
   const apiFilters = useMemo(() => {
     const out = {};
     Object.entries(filters).forEach(([k, v]) => {
       if (v == null || v === "" || v === "all") return;
       out[k] = v;
     });
-    // period=custom sans les 2 dates : on envoie quand meme — le backend
-    // renvoie un empty result tolerant (cf paymentV3.resolvePeriodRange).
     return out;
   }, [filters]);
 
-  const { data, loading, error } = useHistorique(apiFilters);
+  const { data, loading, error } = useHistorique(apiFilters, { skip: customIncomplete });
   const transactionsList = data?.transactions || [];
   const totals           = data?.totals || {};
   const pagination       = data?.pagination || { page: 1, per_page: DEFAULT_PER_PAGE, total: 0 };

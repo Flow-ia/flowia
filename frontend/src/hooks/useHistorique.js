@@ -17,26 +17,33 @@ const EMPTY_TOTALS = {
   unclassified_count: 0,
 };
 
-export function useHistorique(filters) {
+// Option `skip` : ne fait pas d'appel API et retourne des donnees vides
+// silencieusement. Utilise par /historique quand period=custom mais une
+// des 2 dates manque (le backend renvoie aussi vide en 200, mais on
+// court-circuite ici pour eviter tout flash d'erreur en cas de latence
+// reseau ou de regression backend).
+export function useHistorique(filters, { skip = false } = {}) {
   const [data,    setData]    = useState({ transactions: [], totals: EMPTY_TOTALS, pagination: { page: 1, per_page: 50, total: 0 } });
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
-  // Increment a chaque fetch pour eviter les race conditions (un fetch tardif
-  // qui revient apres un fetch plus recent ne doit PAS ecraser l'etat).
   const reqIdRef = useRef(0);
 
-  // Serialise les filtres en string stable pour la cle de dependance React
-  // (l'objet filters change de reference a chaque render parent).
-  const key = JSON.stringify(filters || {});
+  const key = JSON.stringify(filters || {}) + ":" + (skip ? "skip" : "go");
 
   useEffect(() => {
+    if (skip) {
+      setData({ transactions: [], totals: EMPTY_TOTALS, pagination: { page: 1, per_page: 50, total: 0 } });
+      setLoading(false);
+      setError(null);
+      return;
+    }
     const myReqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
 
     historiqueApi.list(filters || {})
       .then(res => {
-        if (myReqId !== reqIdRef.current) return; // race : un fetch plus recent a pris la main
+        if (myReqId !== reqIdRef.current) return;
         setData({
           transactions: Array.isArray(res?.transactions) ? res.transactions : [],
           totals:       res?.totals || EMPTY_TOTALS,
