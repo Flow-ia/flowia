@@ -2,7 +2,7 @@
 // Utilise par la refonte v3 (Historique, Statistiques) et reutilisable
 // partout dans l'app.
 
-import { MS } from "./dates";
+import { MS, DL } from "./dates";
 
 const NBSP = " "; // espace insecable avant le symbole monetaire (typo FR)
 
@@ -55,6 +55,17 @@ export function formatDateLong(iso) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   return d.getDate() + " " + MS[d.getMonth()] + " " + d.getFullYear();
+}
+
+// Format avec jour de la semaine en tete : "Vendredi 16 mai".
+// Utilise par TabReversements pour la date du prochain reversement estime.
+export function formatDateWeekday(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const day = DL[d.getDay()];
+  const cap = day.charAt(0).toUpperCase() + day.slice(1);
+  return cap + " " + d.getDate() + " " + MS[d.getMonth()];
 }
 
 // Formate un pourcentage : "+12,5 %" ou "−3,2 %" ou "0 %".
