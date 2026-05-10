@@ -21,6 +21,11 @@ router.use(employeePinOptional);
 // cassés (agrégats en GROUP BY invalides). Aligné avec audits K/P.
 const VALID_TX_TYPES   = new Set(['revenue', 'expense', 'refund', 'adjustment']);
 const VALID_TX_METHODS = new Set(['cash', 'card', 'transfer', 'check', 'multi', 'other']);
+// Commit A — multi-paiement traçable. Whitelist distincte de VALID_TX_METHODS :
+// 'check' et 'multi' interdits dans un breakdown (un breakdown EST le multi),
+// 'gift_card' autorisé (carte cadeau partielle), 'card_online' explicitement
+// rejeté avec un code dédié (réservé aux paiements Stripe en ligne).
+const BREAKDOWN_METHODS = new Set(['cash', 'card', 'gift_card', 'transfer', 'other']);
 const MAX_AMOUNT       = 999999.99;          // NUMERIC(10,2) safe + realistic
 const MAX_DESC_LEN     = 500;                // anti-DB-bloat
 const MAX_NOTE_LEN     = 2000;               // idem sur client_note
@@ -153,6 +158,7 @@ router.post('/', async (req, res) => {
             promo_code_id, discount_amount, original_amount,
             client_note, items, payments, referral_code,
             client_reward_id,
+            payment_breakdown,
             idempotency_key } = req.body;
     if (!type || amount == null || !date)
       return res.status(400).json({ error: 'Champs obligatoires manquants.' });
@@ -310,6 +316,258 @@ router.post('/', async (req, res) => {
         );
         if (gc.length) globalClientId = gc[0].id;
       } catch (e) { console.warn('[TX global_client lookup]', e.message); }
+    }
+
+    // ── CAS B — Multi-paiement traçable (Commit A) ──────────────────────────
+    // Si payment_breakdown présent → crée N rows en TRANSACTION SQL, liées
+    // par un payment_group_id partagé. Chaque row porte sa propre méthode +
+    // montant. Permet l'audit FEC/RGPD et des stats EN CAISSE cohérentes.
+    // Rétro-compat : absent ou [] → flow single-row classique ci-dessous.
+    if (Array.isArray(payment_breakdown) && payment_breakdown.length > 0) {
+      // Validation longueur
+      if (payment_breakdown.length < 2) {
+        return res.status(400).json({
+          error: 'Le multi-paiement doit contenir au moins 2 méthodes (sinon utiliser le flow simple).',
+          code: 'BREAKDOWN_SINGLE_ITEM',
+        });
+      }
+      if (payment_breakdown.length > 4) {
+        return res.status(400).json({
+          error: 'Le multi-paiement ne peut excéder 4 méthodes.',
+          code: 'BREAKDOWN_TOO_MANY_METHODS',
+        });
+      }
+      // Validation par item + somme + doublons
+      const seenMethods = new Set();
+      let sumCents = 0;
+      for (let i = 0; i < payment_breakdown.length; i++) {
+        const it = payment_breakdown[i];
+        if (!it || typeof it !== 'object') {
+          return res.status(400).json({
+            error: `Élément ${i + 1} du multi-paiement invalide.`,
+            code: 'BREAKDOWN_INVALID_ITEM',
+          });
+        }
+        if (it.method === 'card_online') {
+          return res.status(400).json({
+            error: 'Le mode card_online est réservé aux paiements Stripe en ligne et ne peut pas être combiné en multi-paiement.',
+            code: 'BREAKDOWN_CARD_ONLINE_NOT_SUPPORTED',
+          });
+        }
+        if (typeof it.method !== 'string' || !BREAKDOWN_METHODS.has(it.method)) {
+          return res.status(400).json({
+            error: `Mode de paiement invalide dans le multi-paiement : ${it.method}.`,
+            code: 'BREAKDOWN_INVALID_METHOD',
+          });
+        }
+        if (!Number.isInteger(it.amount_cents) || it.amount_cents <= 0) {
+          return res.status(400).json({
+            error: `Montant invalide pour ${it.method} (entier > 0 attendu en centimes).`,
+            code: 'BREAKDOWN_INVALID_AMOUNT',
+          });
+        }
+        if (seenMethods.has(it.method)) {
+          return res.status(400).json({
+            error: `Mode de paiement en doublon dans le multi-paiement : ${it.method}.`,
+            code: 'BREAKDOWN_DUPLICATE_METHODS',
+          });
+        }
+        seenMethods.add(it.method);
+        sumCents += it.amount_cents;
+      }
+      const totalCents = Math.round(amt * 100);
+      if (sumCents !== totalCents) {
+        return res.status(400).json({
+          error: `La somme du multi-paiement (${(sumCents / 100).toFixed(2)} €) ne correspond pas au total (${amt.toFixed(2)} €).`,
+          code: 'BREAKDOWN_SUM_MISMATCH',
+        });
+      }
+
+      // Idempotency replay : si on retrouve `<idemKey>-1` en BDD, on renvoie
+      // le groupe existant sans rejouer les INSERT (double-clic, retry réseau).
+      if (idemKey) {
+        const { rows: existingFirst } = await pool.query(
+          `SELECT payment_group_id FROM transactions
+            WHERE user_id=$1::uuid AND idempotency_key=$2::text LIMIT 1`,
+          [req.user.userId, `${idemKey}-1`]
+        );
+        if (existingFirst.length && existingFirst[0].payment_group_id) {
+          const grpId = existingFirst[0].payment_group_id;
+          const { rows: grpRows } = await pool.query(
+            `SELECT id, payment_method AS method, amount
+               FROM transactions
+              WHERE user_id=$1::uuid AND payment_group_id=$2::uuid
+              ORDER BY created_at`,
+            [req.user.userId, grpId]
+          );
+          const tot = grpRows.reduce((s, r) => s + parseFloat(r.amount), 0);
+          return res.status(200).json({
+            success: true,
+            idempotent_replay: true,
+            payment_group_id: grpId,
+            transactions: grpRows.map(r => ({
+              id: r.id, method: r.method, amount: parseFloat(r.amount),
+            })),
+            total_amount: tot,
+            count: grpRows.length,
+          });
+        }
+      }
+
+      // Anti-double-encaissement : check une seule fois en passant la SOMME
+      // comme amount validé. Détermine aussi payment_source / payment_type.
+      let multiPaymentSource;
+      let multiPaymentType = 'full';
+      if (!appointment_id) {
+        multiPaymentSource = 'walkin';
+      } else {
+        const validation = await canCreateCashTransaction(appointment_id);
+        if (!validation.allow) {
+          return res.status(409).json({
+            error: 'Ce RDV est déjà encaissé intégralement.',
+            code: 'ALREADY_PAID',
+            existing_status: validation.existing_status,
+          });
+        }
+        multiPaymentSource = 'cash_register_rdv';
+        multiPaymentType = validation.type === 'remaining' ? 'remaining' : 'full';
+      }
+      const multiPaymentStatus = type === 'revenue' ? 'CASH_PAID' : null;
+      const groupId = require('crypto').randomUUID();
+      const paidAt = multiPaymentStatus === 'CASH_PAID' ? new Date() : null;
+
+      // Transaction SQL atomique (BEGIN/COMMIT/ROLLBACK).
+      const dbClient = await pool.connect();
+      const insertedRows = [];
+      const methodsLog = [];
+      try {
+        await dbClient.query('BEGIN');
+        for (let i = 0; i < payment_breakdown.length; i++) {
+          const item = payment_breakdown[i];
+          const itemAmt = item.amount_cents / 100;
+          const itemIdemKey = idemKey ? `${idemKey}-${i + 1}` : null;
+          const r = await dbClient.query(
+            `INSERT INTO transactions
+              (user_id, type, amount, description, category_id, employee_id,
+               payment_method, date, time, datetime_iso, appointment_id, source, locked,
+               promo_code_id, discount_amount, original_amount, client_email, client_note,
+               qty_total, global_client_id, idempotency_key, signed_by_employee_id,
+               payment_source, payment_status, payment_type,
+               gross_amount_cents, stripe_fee_cents, platform_fee_cents, net_amount_cents,
+               paid_at, payment_group_id)
+             VALUES ($1::uuid, $2::text, $3::numeric, $4::text, $5::uuid, $6::uuid,
+                     $7::text, $8::date, $9::time, $10::text, $11::uuid, $12::text, TRUE,
+                     $13::uuid, $14::numeric, $15::numeric, $16::text, $17::text,
+                     $18::integer, $19::uuid, $20::text, $21::uuid,
+                     $22::text, $23::text, $24::text,
+                     $25::integer, $26::integer, $27::integer, $28::integer,
+                     $29::timestamptz, $30::uuid)
+             RETURNING id`,
+            [req.user.userId, type, itemAmt, description || null, category_id || null,
+             effectiveEmployeeId, item.method, date, time || null,
+             datetime_iso || null, appointment_id || null, source || 'manual',
+             promo_code_id || null, discount_amount || 0, original_amount || null,
+             clientEmailNorm, client_note || null, qtyTotal, globalClientId,
+             itemIdemKey, signedByEmployeeId,
+             multiPaymentSource, multiPaymentStatus, multiPaymentType,
+             item.amount_cents, 0, 0, item.amount_cents,
+             paidAt, groupId]
+          );
+          insertedRows.push({ id: r.rows[0].id, method: item.method, amount: itemAmt });
+          methodsLog.push(`${item.method}:${item.amount_cents}c`);
+        }
+        await dbClient.query('COMMIT');
+      } catch (err) {
+        try { await dbClient.query('ROLLBACK'); } catch {}
+        console.error(`[TX POST MULTI] rollback group=${groupId} reason=${err.message}`);
+        // Race idempotency : si le -1 vient d'être inséré par un autre process
+        // entre notre check et notre INSERT, on relit et on renvoie le groupe.
+        if (idemKey && /idempotency_key/.test(err.message || '')) {
+          try {
+            const { rows: ex } = await pool.query(
+              `SELECT payment_group_id FROM transactions
+                WHERE user_id=$1::uuid AND idempotency_key=$2::text LIMIT 1`,
+              [req.user.userId, `${idemKey}-1`]
+            );
+            if (ex.length && ex[0].payment_group_id) {
+              const { rows: grp } = await pool.query(
+                `SELECT id, payment_method AS method, amount
+                   FROM transactions
+                  WHERE user_id=$1::uuid AND payment_group_id=$2::uuid
+                  ORDER BY created_at`,
+                [req.user.userId, ex[0].payment_group_id]
+              );
+              const tot = grp.reduce((s, r) => s + parseFloat(r.amount), 0);
+              return res.status(200).json({
+                success: true,
+                idempotent_replay: true,
+                payment_group_id: ex[0].payment_group_id,
+                transactions: grp.map(r => ({ id: r.id, method: r.method, amount: parseFloat(r.amount) })),
+                total_amount: tot,
+                count: grp.length,
+              });
+            }
+          } catch {}
+        }
+        return res.status(500).json({
+          error: 'Erreur lors de la création du multi-paiement.',
+          code: 'MULTI_INSERT_FAILED',
+        });
+      } finally {
+        try { dbClient.release(); } catch {}
+      }
+
+      // Cache + log structuré (audit trail).
+      try { invalidateUserStatsCache(req.user.userId); } catch {}
+      global.memCache?.del(`txs:${req.user.userId}`);
+      invalidateStatsCache(req.user.userId);
+      console.log(`[TX POST MULTI] inserted group=${groupId} count=${insertedRows.length}`
+        + ` user=${req.user.userId} total=${sumCents}c methods=[${methodsLog.join(',')}]`);
+
+      // Audit log : 1 entrée par row (traçabilité FEC).
+      for (const r of insertedRows) {
+        try {
+          await audit(req.user.userId, r.id, 'create', null,
+            { ...r, payment_group_id: groupId, total_amount: amt }, 'multi_payment');
+        } catch (e) { console.warn('[TX POST MULTI audit]', e.message); }
+      }
+
+      // Fidélité : 1 seul incrément avec le total (le breakdown = 1 vente).
+      if (type === 'revenue') {
+        try {
+          let cEmail = clientEmailNorm;
+          let cName = client_name || null;
+          if (!cEmail && appointment_id) {
+            const { rows: appt } = await pool.query(
+              'SELECT client_email, client_name FROM appointments WHERE id=$1 AND user_id=$2',
+              [appointment_id, req.user.userId]
+            );
+            if (appt.length) {
+              cEmail = (appt[0].client_email || '').toLowerCase().trim() || null;
+              cName = appt[0].client_name;
+            }
+          }
+          if (cEmail) {
+            await incrementStamps(req.user.userId, cEmail, cName, 1, 'physical', amt || 0);
+            try {
+              const parts = (cName || '').split(' ');
+              await upsertLocalClient(req.user.userId, {
+                email: cEmail,
+                first_name: parts[0] || '',
+                last_name: parts.slice(1).join(' ') || '',
+              });
+            } catch (e2) { console.warn('[AUTO-CLIENT MULTI]', e2.message); }
+          }
+        } catch (loyErr) { console.error('[FIDELITE MULTI ERR]', loyErr.message); }
+      }
+
+      return res.status(201).json({
+        success: true,
+        payment_group_id: groupId,
+        transactions: insertedRows,
+        total_amount: amt,
+        count: insertedRows.length,
+      });
     }
 
     // INSERT avec ON CONFLICT sur (user_id, idempotency_key) — si le client

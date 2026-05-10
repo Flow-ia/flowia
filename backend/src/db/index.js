@@ -2205,6 +2205,19 @@ async function initDB() {
     END $$;
   `);
 
+  // ── Multi-paiement traçable (Commit A) ─────────────────────────────────
+  // Une transaction multi (ex: 10€ cash + 15€ CB pour un RDV à 25€) crée
+  // désormais N rows liées par un même payment_group_id UUID. Avant ce
+  // commit, c'était 1 seule row payment_method='multi' qui perdait le
+  // détail des sous-paiements (stats EN CAISSE incohérentes, audit FEC
+  // impossible). Pas de FK constraint volontaire (préserve les rows en cas
+  // de soft-delete d'audit). Les rows legacy payment_method='multi'
+  // restent payment_group_id=NULL — un Commit D futur permettra au
+  // super-admin de saisir leur breakdown manuellement.
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_group_id UUID`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_payment_group_id
+    ON transactions(payment_group_id) WHERE payment_group_id IS NOT NULL`);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─
