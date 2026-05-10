@@ -78,6 +78,7 @@ function FilterSelect({ label, value, options, onChange, theme: t }) {
 function HistoriqueFiltersImpl({ filters, onChange, employees }) {
   const { theme: t } = useTheme();
   const update = (key, value) => onChange({ ...filters, [key]: value, page: 1 });
+  const updateMany = (patch) => onChange({ ...filters, ...patch, page: 1 });
 
   const employeeOptions = [
     { value: "all", label: "Tous employés" },
@@ -86,25 +87,87 @@ function HistoriqueFiltersImpl({ filters, onChange, employees }) {
     }))),
   ];
 
+  const isCustom = filters.period === "custom";
+  const dateFrom = filters.date_from || "";
+  const dateTo   = filters.date_to   || "";
+  const customIncomplete = isCustom && (!dateFrom || !dateTo);
+
   return (
     <div style={{
       padding: 14, borderRadius: 12,
       background: t.card, border: "0.5px solid " + t.border,
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-      gap: 10,
+      display: "flex", flexDirection: "column", gap: 10,
     }}>
-      <FilterSelect label="Période"    theme={t} value={filters.period} options={PERIOD_OPTIONS}
-                    onChange={(v) => update("period", v)} />
-      <FilterSelect label="Type"       theme={t} value={filters.type}   options={TYPE_OPTIONS}
-                    onChange={(v) => update("type", v)} />
-      <FilterSelect label="Mode"       theme={t} value={filters.mode}   options={MODE_OPTIONS}
-                    onChange={(v) => update("mode", v)} />
-      <FilterSelect label="Source RDV" theme={t} value={filters.source} options={SOURCE_OPTIONS}
-                    onChange={(v) => update("source", v)} />
-      <FilterSelect label="Employé"    theme={t} value={filters.employee_id || "all"}
-                    options={employeeOptions}
-                    onChange={(v) => update("employee_id", v === "all" ? "" : v)} />
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+        gap: 10,
+      }}>
+        <FilterSelect label="Période"    theme={t} value={filters.period} options={PERIOD_OPTIONS}
+                      onChange={(v) => updateMany({
+                        period: v,
+                        // Reset date_from/date_to si on quitte custom (evite filtre fantome)
+                        date_from: v === "custom" ? dateFrom : "",
+                        date_to:   v === "custom" ? dateTo   : "",
+                      })} />
+        <FilterSelect label="Type"       theme={t} value={filters.type}   options={TYPE_OPTIONS}
+                      onChange={(v) => update("type", v)} />
+        <FilterSelect label="Mode"       theme={t} value={filters.mode}   options={MODE_OPTIONS}
+                      onChange={(v) => update("mode", v)} />
+        <FilterSelect label="Source RDV" theme={t} value={filters.source} options={SOURCE_OPTIONS}
+                      onChange={(v) => update("source", v)} />
+        <FilterSelect label="Employé"    theme={t} value={filters.employee_id || "all"}
+                      options={employeeOptions}
+                      onChange={(v) => update("employee_id", v === "all" ? "" : v)} />
+      </div>
+      {/* Date picker conditionnel pour period=custom */}
+      {isCustom && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          alignItems: "end",
+          paddingTop: 10,
+          borderTop: "0.5px solid " + t.separator,
+        }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={{
+              fontSize: 11, color: t.muted, fontWeight: 500,
+              textTransform: "uppercase", letterSpacing: "0.04em",
+            }}>Du</label>
+            <input type="date" value={dateFrom}
+                   onChange={(e) => update("date_from", e.target.value)}
+                   style={{
+                     padding: "10px 12px", borderRadius: 8, outline: "none",
+                     background: t.inputBg, border: "0.5px solid " + t.borderInput,
+                     color: t.text, fontSize: 13, fontFamily: "inherit",
+                     boxSizing: "border-box",
+                   }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <label style={{
+              fontSize: 11, color: t.muted, fontWeight: 500,
+              textTransform: "uppercase", letterSpacing: "0.04em",
+            }}>Au</label>
+            <input type="date" value={dateTo}
+                   onChange={(e) => update("date_to", e.target.value)}
+                   style={{
+                     padding: "10px 12px", borderRadius: 8, outline: "none",
+                     background: t.inputBg, border: "0.5px solid " + t.borderInput,
+                     color: t.text, fontSize: 13, fontFamily: "inherit",
+                     boxSizing: "border-box",
+                   }} />
+          </div>
+          {customIncomplete && (
+            <div style={{
+              gridColumn: "1 / -1",
+              fontSize: 11, color: t.muted, fontStyle: "italic",
+            }}>
+              {"Choisissez les 2 dates pour afficher les transactions."}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

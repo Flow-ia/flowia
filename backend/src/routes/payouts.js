@@ -21,6 +21,15 @@ router.get('/', async (req, res) => {
     const userId = req.user.userId;
     const { period = 'month', date_from, date_to, status, page, per_page } = req.query;
     const range = resolvePeriodRange(period, date_from, date_to);
+    // Tolerance custom sans dates : retourne empty au lieu de 400
+    if (range === null) {
+      return res.json({
+        payouts: [],
+        stats: { count: 0, total_period_cents: 0, avg_amount_cents: 0, min_cents: 0, max_cents: 0 },
+        pagination: { page: 1, per_page: 50 },
+        period: null,
+      });
+    }
 
     const VALID_STATUSES = new Set(['pending', 'in_transit', 'paid', 'failed', 'canceled']);
     if (status && !VALID_STATUSES.has(status)) {

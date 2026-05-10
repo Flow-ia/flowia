@@ -28,12 +28,13 @@ const PATH_INFO        = '<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2
 const PATH_CLOCK       = '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 12"/>';
 const PATH_WALLET      = '<path d="M17 8V7a2 2 0 0 0 -2 -2H5a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-1"/><path d="M19 12h2a1 1 0 0 0 1 -1v-2a1 1 0 0 0 -1 -1h-2a2 2 0 0 0 0 4z"/>';
 
+const DEFAULT_PER_PAGE = 10;
 const VOIR_TOUT_PER_PAGE = 50;
 
 export default function TabReversements({ period }) {
   const { theme: t } = useTheme();
   const [toast, showToast] = useToast();
-  const [perPage, setPerPage] = useState(5);
+  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
   const { data, loading, error } = useStatsPayouts(period, { perPage });
 
   if (loading && !data) return <Loading theme={t} />;
@@ -261,7 +262,7 @@ export default function TabReversements({ period }) {
             ))
           )}
         </div>
-        {payouts.length === 5 && perPage === 5 && (
+        {payouts.length >= DEFAULT_PER_PAGE && perPage === DEFAULT_PER_PAGE && (
           <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
             <button type="button"
                     onClick={() => setPerPage(VOIR_TOUT_PER_PAGE)}

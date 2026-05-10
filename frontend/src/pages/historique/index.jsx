@@ -1,21 +1,17 @@
-// pages/historique/index.jsx — Refonte v3 (Commit 3)
+// pages/historique/index.jsx — Refonte v3 (Commit 3 + bugfix Commit 4).
 //
-// Refonte complete : 5 KPI cards (CA total / En ligne / Caisse RDV / Walk-in /
-// Rembourses), bandeau de 5 filtres (Periode, Type, Mode, Source, Employe),
-// liste enrichie avec icones semantiques par payment_status / payment_source
-// (walk-in distinct visuellement avec fond dore), legende des 5 types en bas.
+// 5 KPI cards + 5 filtres + liste enrichie + legende. Source de donnees :
+// GET /api/historique via useHistorique.
 //
-// Source de donnees : GET /api/historique (Commit 2 backend), via le hook
-// useHistorique. Pagination cote serveur (per_page=50 max), bouton "Voir tout"
-// pour augmenter per_page.
+// Filtres persistes dans l'URL via useSearchParams (?period=today&page=2&...)
+// pour survie au reload + deep linking + back/forward navigation.
 //
-// Les props transactions/employees/categories/onUpdTx/onDelTx sont conservees
-// dans la signature pour compat avec App.jsx (RequireAdminMode + sidebar),
-// mais seul `employees` est utilise pour le filtre. Les actions edit/delete
-// sont retirees du nouveau design (gestion via /caisse pour edition, ou
-// futur menu contextuel a redessiner si besoin).
+// Default period = "today" (charge moins de donnees au premier paint que
+// "month"). Pagination par defaut per_page=20 avec selecteur 20/50/100 +
+// boutons Prev/Next en bas.
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme";
 import { useHistorique } from "../../hooks/useHistorique";
 import { Toast, useToast } from "../../components/UI";
@@ -28,33 +24,52 @@ import TransactionRow    from "../../components/historique/TransactionRow";
 
 import { formatDateLong } from "../../utils/format";
 
+const PER_PAGE_OPTIONS = [20, 50, 100];
 const DEFAULT_PER_PAGE  = 20;
-const VOIR_TOUT_PER_PAGE = 200;
+const VALID_PERIODS     = new Set(["today", "week", "month", "90days", "custom"]);
 
 // eslint-disable-next-line no-unused-vars
 export default function HistoriqueAdmin({ employees = [], transactions, categories, onUpdTx, onDelTx }) {
   const { theme: t } = useTheme();
   const [toast, showToast] = useToast();
+  const [params, setParams] = useSearchParams();
 
-  // ── Filtres locaux ─────────────────────────────────────────────────────
-  const [filters, setFilters] = useState({
-    period: "month",
-    type:   "",
-    mode:   "",
-    source: "",
-    employee_id: "",
-    page:    1,
-    per_page: DEFAULT_PER_PAGE,
-  });
+  // ── Etat depuis l'URL (URL = source de verite, persistance reload-safe) ─
+  const filters = useMemo(() => ({
+    period:      VALID_PERIODS.has(params.get("period")) ? params.get("period") : "today",
+    type:        params.get("type")        || "",
+    mode:        params.get("mode")        || "",
+    source:      params.get("source")      || "",
+    employee_id: params.get("employee_id") || "",
+    date_from:   params.get("date_from")   || "",
+    date_to:     params.get("date_to")     || "",
+    page:        Math.max(1, parseInt(params.get("page"), 10) || 1),
+    per_page:    PER_PAGE_OPTIONS.includes(parseInt(params.get("per_page"), 10))
+                  ? parseInt(params.get("per_page"), 10) : DEFAULT_PER_PAGE,
+  }), [params]);
 
-  // Serialize filters pour l'API : on retire les valeurs vides pour ne pas
-  // polluer l'URL (et matcher la cache key cote backend).
+  // Setter qui ecrit dans l'URL (replace pour ne pas polluer l'historique).
+  const setFilters = (next) => {
+    const usp = new URLSearchParams();
+    const defaults = { period: "today", page: 1, per_page: DEFAULT_PER_PAGE };
+    Object.entries(next).forEach(([k, v]) => {
+      if (v == null || v === "" || v === "all") return;
+      if (defaults[k] != null && String(defaults[k]) === String(v)) return; // skip default
+      usp.set(k, String(v));
+    });
+    setParams(usp, { replace: true });
+  };
+
+  // Filtres effectifs envoyes a l'API : on retire les vides + on ne fait pas
+  // l'appel si custom incomplet (cf hook qui gere le case via apiFilters).
   const apiFilters = useMemo(() => {
     const out = {};
-    Object.keys(filters).forEach(k => {
-      const v = filters[k];
-      if (v != null && v !== "" && v !== "all") out[k] = v;
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v == null || v === "" || v === "all") return;
+      out[k] = v;
     });
+    // period=custom sans les 2 dates : on envoie quand meme — le backend
+    // renvoie un empty result tolerant (cf paymentV3.resolvePeriodRange).
     return out;
   }, [filters]);
 
@@ -64,8 +79,8 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
   const pagination       = data?.pagination || { page: 1, per_page: DEFAULT_PER_PAGE, total: 0 };
   const period           = data?.period;
 
-  const showVoirTout = pagination.total > pagination.per_page
-                    && filters.per_page < VOIR_TOUT_PER_PAGE;
+  const totalPages = Math.max(1, Math.ceil((pagination.total || 0) / (pagination.per_page || DEFAULT_PER_PAGE)));
+  const currentPage = Math.min(filters.page, totalPages);
 
   const onExport = (kind) => {
     showToast("Export " + kind + " à venir (Commit suivant)", "info");
@@ -85,7 +100,6 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
         maxWidth: 1100, margin: "0 auto", padding: "18px 16px",
         display: "flex", flexDirection: "column", gap: 14,
       }}>
-        {/* ── En-tete ───────────────────────────────────────────────────── */}
         <div>
           <PageHeader title="Historique des transactions" />
           <p style={{ margin: "4px 0 0", fontSize: 13, color: t.muted, lineHeight: 1.5 }}>
@@ -93,17 +107,14 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
           </p>
         </div>
 
-        {/* ── 5 KPI cards ───────────────────────────────────────────────── */}
         <HistoriqueKPI totals={totals} />
 
-        {/* ── Filtres ───────────────────────────────────────────────────── */}
         <HistoriqueFilters
           filters={filters}
           onChange={setFilters}
           employees={employees}
         />
 
-        {/* ── Header de liste ───────────────────────────────────────────── */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 12, padding: "0 4px", flexWrap: "wrap",
@@ -123,7 +134,6 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
           </div>
         </div>
 
-        {/* ── Liste des transactions ────────────────────────────────────── */}
         <div style={{
           borderRadius: 12, background: t.card,
           border: "0.5px solid " + t.border, overflow: "hidden",
@@ -133,7 +143,11 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
           ) : error ? (
             <EmptyState theme={t} message={"Erreur : " + error} isError />
           ) : transactionsList.length === 0 ? (
-            <EmptyState theme={t} message="Aucune transaction sur cette période" />
+            <EmptyState theme={t} message={
+              filters.period === "custom" && (!filters.date_from || !filters.date_to)
+                ? "Choisissez 2 dates dans le filtre pour afficher les transactions."
+                : "Aucune transaction sur cette période"
+            } />
           ) : (
             <div>
               {transactionsList.map((tx, i) => (
@@ -147,24 +161,43 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
           )}
         </div>
 
-        {/* ── Bouton "Voir tout" / pagination ───────────────────────────── */}
-        {showVoirTout && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
-            <button
-              type="button"
-              onClick={() => setFilters(f => ({ ...f, per_page: VOIR_TOUT_PER_PAGE, page: 1 }))}
-              style={{
-                padding: "10px 20px", borderRadius: 8,
-                background: t.cardAlt, border: "0.5px solid " + t.border,
-                color: t.text, fontSize: 13, fontWeight: 500,
-                cursor: "pointer", fontFamily: "inherit",
-              }}>
-              {"Voir tout (" + (pagination.total - pagination.per_page) + " transactions supplémentaires)"}
-            </button>
+        {/* Pagination Prev/Next + select per_page */}
+        {pagination.total > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 12, padding: "0 4px", flexWrap: "wrap",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: t.muted }}>Par page</span>
+              <select value={filters.per_page}
+                      onChange={(e) => setFilters({ ...filters, per_page: parseInt(e.target.value, 10), page: 1 })}
+                      style={{
+                        padding: "6px 10px", borderRadius: 6,
+                        background: t.inputBg, border: "0.5px solid " + t.borderInput,
+                        color: t.text, fontSize: 12, fontFamily: "inherit",
+                        cursor: "pointer",
+                      }}>
+                {PER_PAGE_OPTIONS.map(n => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <PageButton theme={t} disabled={currentPage <= 1}
+                          onClick={() => setFilters({ ...filters, page: currentPage - 1 })}>
+                {"‹ Précédent"}
+              </PageButton>
+              <span style={{ fontSize: 12, color: t.muted, minWidth: 90, textAlign: "center" }}>
+                {"Page " + currentPage + " sur " + totalPages}
+              </span>
+              <PageButton theme={t} disabled={currentPage >= totalPages}
+                          onClick={() => setFilters({ ...filters, page: currentPage + 1 })}>
+                {"Suivant ›"}
+              </PageButton>
+            </div>
           </div>
         )}
 
-        {/* ── Legende fixe en bas ───────────────────────────────────────── */}
         <HistoriqueLegend />
       </div>
     </div>
@@ -182,6 +215,23 @@ function ExportButton({ label, onClick, theme: t }) {
               whiteSpace: "nowrap",
             }}>
       {label}
+    </button>
+  );
+}
+
+function PageButton({ theme: t, disabled, onClick, children }) {
+  return (
+    <button type="button" disabled={disabled} onClick={onClick}
+            style={{
+              padding: "8px 14px", borderRadius: 8,
+              background: t.cardAlt, border: "0.5px solid " + t.border,
+              color: disabled ? t.dim : t.text,
+              fontSize: 12, fontWeight: 500,
+              cursor: disabled ? "default" : "pointer",
+              opacity: disabled ? 0.5 : 1,
+              fontFamily: "inherit",
+            }}>
+      {children}
     </button>
   );
 }

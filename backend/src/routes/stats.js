@@ -409,6 +409,48 @@ const {
   statsCacheSet,
 } = require('../utils/paymentV3');
 
+// Reponse vide standardisee pour les onglets stats quand period=custom est
+// fourni sans les 2 dates (tolerance UI : on ne casse pas avec un 400 le
+// temps que l'utilisateur remplisse le date picker).
+const EMPTY_PERFORMANCE = {
+  en_ligne:   { gross_cents: 0, stripe_fee_cents: 0, platform_fee_cents: 0, net_cents: 0, count: 0, especes_cents: 0, carte_cents: 0 },
+  caisse_rdv: { gross_cents: 0, stripe_fee_cents: 0, platform_fee_cents: 0, net_cents: 0, count: 0, especes_cents: 0, carte_cents: 0 },
+  walkin:     { gross_cents: 0, stripe_fee_cents: 0, platform_fee_cents: 0, net_cents: 0, count: 0, especes_cents: 0, carte_cents: 0 },
+  total:      { gross_cents: 0, total_fees_cents: 0, net_cents: 0, count: 0, vs_previous_period_pct: null },
+  evolution_30j: [],
+  period: null,
+};
+const EMPTY_RDV = {
+  by_source: {
+    online_booking: { count: 0, ca_cents: 0, by_payment_status: { stripe_100: 0, stripe_acompte: 0, not_paid: 0 } },
+    phone_internal: { count: 0, ca_cents: 0, by_employee: {} },
+  },
+  by_status: {
+    stripe_100:        { count: 0, total_cents: 0 },
+    stripe_acompte:    { count: 0, total_cents: 0, remaining_cents: 0 },
+    not_paid:          { count: 0, total_cents: 0 },
+    cash_paid:         { count: 0, total_cents: 0 },
+    refunded:          { count: 0, total_cents: 0 },
+    no_show_retained:  { count: 0, total_cents: 0 },
+  },
+  by_employee: [],
+  insight: { deposit_honor_rate_pct: null, no_deposit_honor_rate_pct: null, message_fr: "Pas de données sur cette période." },
+  period: null,
+};
+const EMPTY_ONLINE = {
+  summary: { gross_cents: 0, count: 0, stripe_fee_cents: 0, platform_fee_cents: 0, net_cents: 0, vs_previous_pct: null },
+  by_status: {
+    payouts_received: { count: 0, amount_cents: 0 },
+    pending_payout:   { count: 0, amount_cents: 0 },
+    refunded:         { count: 0, amount_cents: 0 },
+    no_show_retained: { count: 0, amount_cents: 0 },
+  },
+  policy: { mode: 'manual', deposit_pct: null, cancellation_window_hours: null, payout_delay_days: null, commission_rate: 0 },
+  business_impact: { no_show_reduction_pct: null, additional_revenue_cents: null },
+  evolution_30j: [],
+  period: null,
+};
+
 // ── GET /api/stats/performance ─────────────────────────────────────────────
 // KPI brut/net par source pour l'onglet Performance.
 router.get('/performance', async (req, res) => {
@@ -416,6 +458,7 @@ router.get('/performance', async (req, res) => {
     const userId = req.user.userId;
     const { period = 'month', date_from, date_to } = req.query;
     const range = resolvePeriodRange(period, date_from, date_to);
+    if (range === null) return res.json(EMPTY_PERFORMANCE);
 
     const cacheKey = `performance:${period}:${range.from}:${range.to}`;
     const cached = statsCacheGet(userId, cacheKey);
@@ -526,6 +569,7 @@ router.get('/rdv', async (req, res) => {
     const userId = req.user.userId;
     const { period = 'month', date_from, date_to } = req.query;
     const range = resolvePeriodRange(period, date_from, date_to);
+    if (range === null) return res.json(EMPTY_RDV);
 
     const cacheKey = `rdv:${period}:${range.from}:${range.to}`;
     const cached = statsCacheGet(userId, cacheKey);
@@ -749,6 +793,7 @@ router.get('/online-payments', async (req, res) => {
     const userId = req.user.userId;
     const { period = 'month', date_from, date_to } = req.query;
     const range = resolvePeriodRange(period, date_from, date_to);
+    if (range === null) return res.json(EMPTY_ONLINE);
 
     const cacheKey = `online-payments:${period}:${range.from}:${range.to}`;
     const cached = statsCacheGet(userId, cacheKey);

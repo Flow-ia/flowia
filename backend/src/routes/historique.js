@@ -34,6 +34,7 @@ const {
   resolvePeriodRange,
   statsCacheGet,
   statsCacheSet,
+  EMPTY_HISTORIQUE_RESPONSE,
 } = require('../utils/paymentV3');
 
 const router = express.Router();
@@ -71,8 +72,11 @@ router.get('/', async (req, res) => {
 
     // ── Validation ──────────────────────────────────────────────────────────
     const range = resolvePeriodRange(period, date_from, date_to);
-    if (period === 'custom' && (!date_from || !date_to)) {
-      return res.status(400).json({ error: 'date_from et date_to requis quand period=custom' });
+    // period='custom' sans les 2 dates -> tolerance : retourne empty result
+    // au lieu d'un 400. Le frontend (date picker) rend la requete prematuree
+    // tant que l'utilisateur n'a pas choisi les 2 dates ; on ne casse pas l'UI.
+    if (range === null) {
+      return res.json({ ...EMPTY_HISTORIQUE_RESPONSE });
     }
     if (type && !TYPE_TO_FILTER[type]) {
       return res.status(400).json({ error: 'type invalide' });

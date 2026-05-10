@@ -51,29 +51,67 @@ const EFFECTIVE_NET_CENTS_SQL = `
   )
 `;
 
-// Resout une periode en {from, to} (DATE strings YYYY-MM-DD).
-// Accepte period IN ('today','week','month','custom') + date_from/date_to.
+// Resout une periode en {from, to} (DATE strings YYYY-MM-DD) ou null.
+// Accepte period IN ('today','week','month','90days','custom') + date_from/date_to.
+//
+// IMPORTANT : les dates sont calculees en TZ Europe/Paris (pas UTC). Une
+// transaction caisse a 23h45 a Paris doit apparaitre dans "Aujourd'hui"
+// jusqu'a minuit Paris (et pas minuit UTC = 02h00 Paris en ete).
+//
 // Defaut : month (30 derniers jours).
+//
+// Cas special : period='custom' avec date_from OU date_to manquante
+// -> retourne NULL. Le caller doit interpreter ca comme "pas de filtre,
+// retourner empty result" (au lieu de plantage 400).
+const PARIS_TZ = 'Europe/Paris';
+
+function todayInParis() {
+  // sv-SE locale produit un format YYYY-MM-DD propre, et timeZone gere la TZ.
+  return new Date().toLocaleDateString('sv-SE', { timeZone: PARIS_TZ });
+}
+
+function shiftDays(parisDateStr, deltaDays) {
+  // Decale une date YYYY-MM-DD de N jours en restant en TZ Paris.
+  // On parse a midi pour eviter les artefacts DST.
+  const d = new Date(parisDateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toLocaleDateString('sv-SE', { timeZone: PARIS_TZ });
+}
+
 function resolvePeriodRange(period, dateFrom, dateTo) {
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   const isValidDate = s => typeof s === 'string' && DATE_RE.test(s);
 
-  if (period === 'custom' && isValidDate(dateFrom) && isValidDate(dateTo)) {
-    return { from: dateFrom, to: dateTo };
+  if (period === 'custom') {
+    if (isValidDate(dateFrom) && isValidDate(dateTo)) {
+      return { from: dateFrom, to: dateTo };
+    }
+    return null; // custom incomplet -> caller retourne empty result
   }
-  const now = new Date();
-  const today = now.toISOString().substring(0, 10);
-  if (period === 'today') return { from: today, to: today };
-  if (period === 'week') {
-    const from = new Date(now);
-    from.setDate(from.getDate() - 7);
-    return { from: from.toISOString().substring(0, 10), to: today };
-  }
+
+  const today = todayInParis();
+  if (period === 'today')  return { from: today, to: today };
+  if (period === 'week')   return { from: shiftDays(today, -7),  to: today };
+  if (period === '90days') return { from: shiftDays(today, -90), to: today };
   // month / default
-  const from = new Date(now);
-  from.setDate(from.getDate() - 30);
-  return { from: from.toISOString().substring(0, 10), to: today };
+  return { from: shiftDays(today, -30), to: today };
 }
+
+// Resultat empty standardise pour /api/historique et /api/stats/* quand
+// period=custom est demande sans les 2 dates.
+const EMPTY_HISTORIQUE_RESPONSE = {
+  transactions: [],
+  totals: {
+    ca_total_cents:    0,
+    en_ligne_cents:    0, en_ligne_count:    0,
+    caisse_rdv_cents:  0, caisse_rdv_count:  0,
+    walkin_cents:      0, walkin_count:      0,
+    refunded_cents:    0, refunded_count:    0,
+    unclassified_count: 0,
+  },
+  pagination: { page: 1, per_page: 50, total: 0 },
+  period: null,
+};
 
 // Retourne {prevFrom, prevTo} de la periode equivalente immediatement
 // precedente (pour calcul vs_previous_period_pct).
@@ -130,6 +168,8 @@ module.exports = {
   EFFECTIVE_NET_CENTS_SQL,
   resolvePeriodRange,
   previousPeriodRange,
+  todayInParis,
+  EMPTY_HISTORIQUE_RESPONSE,
   statsCacheGet,
   statsCacheSet,
   invalidateUserStatsCache,

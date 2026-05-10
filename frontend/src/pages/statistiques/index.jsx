@@ -58,7 +58,7 @@ export default function Statistiques({ employees, transactions, categories }) {
   const [params, setParams] = useSearchParams();
 
   const tabId    = TABS.find(x => x.id === params.get("tab"))?.id || "performance";
-  const periodId = PERIODS.find(x => x.id === params.get("period"))?.id || "month";
+  const periodId = PERIODS.find(x => x.id === params.get("period"))?.id || "today";
 
   const setTab = (id) => {
     const next = new URLSearchParams(params);
@@ -71,10 +71,9 @@ export default function Statistiques({ employees, transactions, categories }) {
     setParams(next, { replace: true });
   };
 
-  // Map period chip id -> backend period param
-  const apiPeriod = periodId === "90days" ? "month" : periodId;
-  // Note : 90 jours et "Personnalisé" mappent provisoirement sur "month"
-  // (l'API backend ne supporte pas encore ces presets — extension future).
+  // L'API backend supporte today / week / month / 90days nativement (cf
+  // utils/paymentV3.resolvePeriodRange qui prend en compte la TZ Europe/Paris).
+  const apiPeriod = periodId;
 
   return (
     <div style={{ minHeight: "100vh", background: t.bg, paddingBottom: 32 }}>
