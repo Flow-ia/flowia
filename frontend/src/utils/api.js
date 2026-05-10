@@ -716,6 +716,26 @@ export const statsApi = {
   getToday:        ()  => request('/stats/today'),
   // Refonte FDS-2026 commit 6 — ventilation par moyen de paiement.
   getByPaymentMethod: (period) => request('/stats/by-payment-method?period=' + encodeURIComponent(period || 'today')),
+  // Refonte v3 (Commit 2 backend) — 4 sources / 6 statuts.
+  getPerformance:    (q) => request('/stats/performance' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+  getRdv:            (q) => request('/stats/rdv' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+  getOnlinePayments: (q) => request('/stats/online-payments' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+};
+
+// Refonte v3 (Commit 2 backend) — historique enrichi avec 4 sources / 6 statuts.
+export const historiqueApi = {
+  list: (q) => request('/historique' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+};
+
+// Refonte v3 — payouts agreges (table payouts, distincte de appointment_payouts
+// escrow). Utilise par l'onglet Reversements (Commit 4).
+export const payoutsV3Api = {
+  list: (q) => request('/payouts' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+};
+
+// Refonte v3 — balance Stripe Connect avec estimation prochain payout.
+export const stripeBalanceV3Api = {
+  get: () => request('/stripe/balance'),
 };
 
 export const clientNotesApi = {
