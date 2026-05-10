@@ -33,7 +33,7 @@ function getStripe() {
 async function ensureFeesUpdated(pool, pi, eventAccount) {
   const findTx = async () => {
     const { rows } = await pool.query(
-      `SELECT id, user_id, stripe_fee_cents, gross_amount_cents
+      `SELECT id, user_id, stripe_fee_cents, platform_fee_cents, gross_amount_cents
          FROM transactions
         WHERE stripe_payment_intent_id = $1
           AND source = 'rdv_online'
@@ -43,28 +43,41 @@ async function ensureFeesUpdated(pool, pi, eventAccount) {
     return rows[0] || null;
   };
 
-  let tx = await findTx();
-  if (!tx) {
-    console.log('[STRIPE FEES UPDATE] tx not found yet for pi=' + pi.id + ', waiting 2s for sync path');
-    await new Promise(r => setTimeout(r, 2000));
+  // Backoff progressif : le sync path (book.js) prend 6-8s en prod a inserer
+  // la row apres POST /payment_intents/confirm. Un retry court rate la
+  // fenetre. On retente a 0s, +1s, +3s, +6s, +10s cumules (= jusqu'a 10s
+  // d'attente totale). Premiere fois qu'on trouve la row, on sort.
+  const delays = [0, 1000, 2000, 3000, 4000];
+  let tx = null;
+  let totalWaited = 0;
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) {
+      await new Promise(r => setTimeout(r, delays[i]));
+      totalWaited += delays[i];
+    }
     tx = await findTx();
+    if (tx) {
+      console.log('[STRIPE FEES UPDATE] tx found after ' + totalWaited + 'ms for pi=' + pi.id);
+      break;
+    }
   }
   if (!tx) {
-    console.log('[STRIPE FEES UPDATE] tx still not found after 2s for pi=' + pi.id + ', skipping');
+    console.log('[STRIPE FEES UPDATE] tx still not found after ' + totalWaited + 'ms for pi=' + pi.id + ', skipping');
     return;
   }
 
-  // Idempotence : si fees deja remplis (par le flow principal ou un
-  // retro-fill), ne pas recalculer.
-  if (tx.stripe_fee_cents != null && tx.stripe_fee_cents > 0) {
+  // Idempotence : si les 2 fees sont deja non-zero, on a deja le calcul
+  // complet. On skip pour eviter un round-trip Stripe inutile.
+  if ((tx.stripe_fee_cents != null && tx.stripe_fee_cents > 0)
+      && (tx.platform_fee_cents != null && tx.platform_fee_cents > 0)) {
     return;
   }
 
-  // Retrieve balance_transaction.fee (vraie valeur Stripe)
+  // Recupere stripe_fee depuis balance_transaction.fee (vraie valeur Stripe).
   let stripeFee = 0;
   try {
     const stripe = getStripe();
-    const chargeId = pi.latest_charge;
+    const chargeId = pi.latest_charge || pi.charges?.data?.[0]?.id;
     if (chargeId) {
       const ch = await stripe.charges.retrieve(
         chargeId,
@@ -72,8 +85,11 @@ async function ensureFeesUpdated(pool, pi, eventAccount) {
         { stripeAccount: eventAccount }
       );
       if (ch?.balance_transaction) {
+        const btId = typeof ch.balance_transaction === 'string'
+          ? ch.balance_transaction
+          : ch.balance_transaction.id;
         const bt = await stripe.balanceTransactions.retrieve(
-          ch.balance_transaction,
+          btId,
           undefined,
           { stripeAccount: eventAccount }
         );
@@ -82,28 +98,42 @@ async function ensureFeesUpdated(pool, pi, eventAccount) {
     }
   } catch (e) {
     console.warn('[STRIPE FEES UPDATE] balance_transaction fetch fail:', e.message);
+  }
+
+  // Recupere platform_fee directement depuis pi.application_fee_amount
+  // (pas besoin du charge pour ca, c'est sur le PaymentIntent lui-meme).
+  const platformFee = pi.application_fee_amount || 0;
+  const grossCents  = parseInt(tx.gross_amount_cents || 0, 10);
+  const netCents    = grossCents - stripeFee - platformFee;
+
+  // Si les deux fees sont 0 ET on n'a rien recupere, skip (rien a faire).
+  if (stripeFee <= 0 && platformFee <= 0) {
+    console.log('[STRIPE FEES UPDATE] no fees to apply for pi=' + pi.id + ' (stripe=0, platform=0), skipping');
     return;
   }
 
-  if (stripeFee <= 0) {
-    console.log('[STRIPE FEES UPDATE] no fee available for pi=' + pi.id + ', skipping');
-    return;
-  }
-
-  // UPDATE idempotent : WHERE stripe_fee_cents IS NULL OR = 0 garantit
-  // qu'un 2e webhook ne reecrase pas une valeur deja correcte.
+  // UPDATE idempotent : WHERE garantit qu'un 2e webhook ne reecrase pas
+  // une valeur deja correcte. On UPDATE si AU MOINS une des 2 colonnes
+  // fees est encore vide (cas typique : sync path a tout mis a 0).
   await pool.query(
     `UPDATE transactions
-        SET stripe_fee_cents = $1,
-            net_amount_cents = COALESCE(gross_amount_cents, 0) - $1 - COALESCE(platform_fee_cents, 0)
-      WHERE stripe_payment_intent_id = $2
+        SET stripe_fee_cents   = $1,
+            platform_fee_cents = $2,
+            net_amount_cents   = $3
+      WHERE stripe_payment_intent_id = $4
         AND source = 'rdv_online'
-        AND (stripe_fee_cents IS NULL OR stripe_fee_cents = 0)`,
-    [stripeFee, pi.id]
+        AND (
+          stripe_fee_cents IS NULL OR stripe_fee_cents = 0
+          OR platform_fee_cents IS NULL OR platform_fee_cents = 0
+        )`,
+    [stripeFee, platformFee, netCents, pi.id]
   );
-  console.log('[STRIPE FEES UPDATE] source=webhook_retry pi=' + pi.id
+  console.log('[STRIPE FEES UPDATE] source=webhook pi=' + pi.id
     + ' tx=' + tx.id
-    + ' stripe_fee=' + stripeFee);
+    + ' gross=' + grossCents
+    + ' stripe_fee=' + stripeFee
+    + ' platform_fee=' + platformFee
+    + ' net=' + netCents);
 
   try {
     const { invalidateUserStatsCache } = require('../utils/paymentV3');
