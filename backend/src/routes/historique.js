@@ -52,8 +52,16 @@ const TYPE_TO_FILTER = {
   refunded:       { effStatus: 'REFUNDED' },
 };
 
-const VALID_MODES   = new Set(['cash', 'card_local', 'transfer', 'stripe', 'card_online']);
-const VALID_SOURCES = new Set(['online_booking', 'phone_internal', 'cash_register_rdv', 'walkin']);
+// VALID_MODES : strings exactes de transactions.payment_method en BDD.
+// 'card_local' et 'stripe' n'existaient pas en BDD prod -> retires.
+// Ajout 'card', 'multi', 'other' qui sont les vraies valeurs presentes.
+const VALID_MODES = new Set(['card_online', 'cash', 'card', 'multi', 'other', 'transfer']);
+// VALID_SOURCES : 3 valeurs simplifiees envoyees par le frontend
+// (mappees en interne vers les vraies valeurs payment_source en BDD).
+//   online -> payment_source = 'online_booking'
+//   manual -> payment_source IN ('phone_internal', 'cash_register_rdv')
+//   walkin -> payment_source = 'walkin'
+const VALID_SOURCES = new Set(['online', 'manual', 'walkin']);
 
 router.get('/', async (req, res) => {
   try {
@@ -120,8 +128,21 @@ router.get('/', async (req, res) => {
       params.push(typeFilter.effSource);
       conds.push(`${EFFECTIVE_PAYMENT_SOURCE_SQL} = $${params.length}`);
     }
-    if (source) {
-      params.push(source);
+    // Source filter : mapping des 3 valeurs UI simplifiees vers les vraies
+    // valeurs payment_source en BDD. 'manual' regroupe phone_internal +
+    // cash_register_rdv (les badges detailles sur chaque row gardent la
+    // distinction).
+    if (source === 'online') {
+      params.push('online_booking');
+      conds.push(`${EFFECTIVE_PAYMENT_SOURCE_SQL} = $${params.length}`);
+    } else if (source === 'manual') {
+      params.push('phone_internal');
+      const idxA = params.length;
+      params.push('cash_register_rdv');
+      const idxB = params.length;
+      conds.push(`${EFFECTIVE_PAYMENT_SOURCE_SQL} IN ($${idxA}, $${idxB})`);
+    } else if (source === 'walkin') {
+      params.push('walkin');
       conds.push(`${EFFECTIVE_PAYMENT_SOURCE_SQL} = $${params.length}`);
     }
 

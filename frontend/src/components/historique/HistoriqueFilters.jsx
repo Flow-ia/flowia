@@ -21,20 +21,28 @@ const TYPE_OPTIONS = [
   { value: "walkin",          label: "Walk-in" },
   { value: "refunded",        label: "Remboursements" },
 ];
+// MODE_OPTIONS : les `value` matchent EXACTEMENT les strings de
+// transactions.payment_method en BDD (sensible a la casse). Avant,
+// "card_local" etait dans la liste mais la colonne contient en realite
+// "card" -> filtre toujours vide (8 rows manquees en prod).
 const MODE_OPTIONS = [
   { value: "",            label: "Tous modes" },
-  { value: "stripe",      label: "Stripe" },
-  { value: "card_online", label: "Stripe (en ligne)" },
+  { value: "card_online", label: "Stripe en ligne" },
   { value: "cash",        label: "Espèces" },
-  { value: "card_local",  label: "Carte locale" },
+  { value: "card",        label: "CB physique" },
+  { value: "multi",       label: "Paiement mixte" },
+  { value: "other",       label: "Autre" },
   { value: "transfer",    label: "Virement" },
 ];
+// SOURCE_OPTIONS : 4 options simplifiees pour l'UX (au lieu de 5).
+// "manual" regroupe RDV telephone (phone_internal) + caisse RDV
+// (cash_register_rdv) — les badges detailles sur chaque row gardent la
+// distinction (Telephone / Caisse RDV separes).
 const SOURCE_OPTIONS = [
-  { value: "",                  label: "Toutes sources" },
-  { value: "online_booking",    label: "Booking en ligne" },
-  { value: "phone_internal",    label: "RDV téléphone" },
-  { value: "cash_register_rdv", label: "Caisse RDV" },
-  { value: "walkin",            label: "Walk-in" },
+  { value: "",       label: "Toutes sources" },
+  { value: "online", label: "RDV En ligne" },
+  { value: "manual", label: "RDV Manuel" },
+  { value: "walkin", label: "Walk-in" },
 ];
 
 function FilterSelect({ label, value, options, onChange, theme: t }) {
