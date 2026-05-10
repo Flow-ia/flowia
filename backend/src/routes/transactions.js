@@ -366,6 +366,13 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // paid_at calcule en JS (au lieu d'un CASE WHEN $23 = 'CASH_PAID' dans
+    // le SQL qui utilisait $23 deux fois -> PG echouait avec "inconsistent
+    // types deduced for parameter $23" quand v3PaymentStatus etait null
+    // pour les rows type='expense'). 1 seul slot par param, casts explicites
+    // sur les params nullables pour que PG infere le bon type meme sur null.
+    const v3PaidAt = v3PaymentStatus === 'CASH_PAID' ? new Date() : null;
+
     const insertResult = await pool.query(
       `INSERT INTO transactions
         (user_id, type, amount, description, category_id, employee_id,
@@ -374,9 +381,12 @@ router.post('/', async (req, res) => {
          qty_total, global_client_id, idempotency_key, signed_by_employee_id,
          payment_source, payment_status, payment_type,
          gross_amount_cents, net_amount_cents, paid_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-               $22,$23,$24,$25,$26,
-               CASE WHEN $23 = 'CASH_PAID' THEN NOW() ELSE NULL END)
+       VALUES ($1::uuid, $2::text, $3::numeric, $4::text, $5::uuid, $6::uuid,
+               $7::text, $8::date, $9::time, $10::text, $11::uuid, $12::text, TRUE,
+               $13::uuid, $14::numeric, $15::numeric, $16::text, $17::text,
+               $18::integer, $19::uuid, $20::text, $21::uuid,
+               $22::text, $23::text, $24::text,
+               $25::integer, $26::integer, $27::timestamptz)
        ON CONFLICT (user_id, idempotency_key) DO NOTHING
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
          payment_method, locked, client_email, client_note, qty_total,
@@ -390,12 +400,17 @@ router.post('/', async (req, res) => {
        clientEmailNorm, client_note || null, qtyTotal, globalClientId,
        idemKey, signedByEmployeeId,
        v3PaymentSource, v3PaymentStatus, v3PaymentType,
-       v3GrossCents, v3NetCents]
+       v3GrossCents, v3NetCents, v3PaidAt]
     );
     // Invalide le cache stats v3 du user (la nouvelle tx doit apparaitre
     // immediatement dans /historique et /statistiques).
     if (insertResult.rows.length && type === 'revenue') {
       try { invalidateUserStatsCache(req.user.userId); } catch {}
+      console.log('[TX POST] inserted tx=' + insertResult.rows[0].id
+        + ' user=' + req.user.userId
+        + ' payment_source=' + (v3PaymentSource || '-')
+        + ' payment_status=' + (v3PaymentStatus || '-')
+        + ' gross_cents=' + (v3GrossCents || 0));
     }
     if (!insertResult.rows.length && idemKey) {
       // Race idempotency : un autre process a gagné. Retourner sa transaction.
