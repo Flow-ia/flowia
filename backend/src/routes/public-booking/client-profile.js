@@ -101,7 +101,13 @@ module.exports = function attachClientProfileRoutes(router) {
       );
       if (!bizRows.length) return res.status(404).json({ error: 'Commerce introuvable.' });
       const biz = bizRows[0];
-      const policyHours = parseInt(biz.policy_hours);
+      // Defensif : COALESCE SQL doit retourner 2 si NULL, mais en cas de
+      // edge case (parseInt sur valeur exotique), on retombe explicitement
+      // sur 2 (= politique permissive par defaut, jamais 0 car ca dispenserait
+      // de toute restriction et jamais NaN car NaN >= X = false casserait
+      // l'eligibilite refund).
+      const parsedPolicy = parseInt(biz.policy_hours, 10);
+      const policyHours = Number.isFinite(parsedPolicy) ? parsedPolicy : 2;
 
       // ── Résoudre l'email du client (robuste aux suppressions de fiches) ──
       let clientEmail = null;
@@ -134,18 +140,28 @@ module.exports = function attachClientProfileRoutes(router) {
       // ── Politique d'annulation merchant-driven ──────────────────────────
       // policy_hours=0 → annulation possible à tout moment
       // sinon → doit être plus de N heures avant le RDV
-      // AUDIT booking #24 : diff calculée en UTC via TZ merchant (gère DST).
+      // Calcul JS pur (delegue PG pour la conversion TZ-aware DST-safe via
+      // 2 SELECT explicites). Structured log avant la decision pour
+      // diagnostiquer les cas de mis-classification (cf bug commit 8).
       const dateStr = typeof appt.date === 'string'
         ? appt.date.substring(0, 10)
         : new Date(appt.date).toISOString().substring(0, 10);
-      const timeStr = typeof appt.start_time === 'string'
-        ? appt.start_time.substring(0, 5)
-        : '00:00';
+      const timeStrFull = typeof appt.start_time === 'string'
+        ? (appt.start_time.length >= 8 ? appt.start_time : appt.start_time.substring(0, 5) + ':00')
+        : '00:00:00';
       const { rows: tzDiff } = await pool.query(
-        `SELECT EXTRACT(EPOCH FROM (($1::date + $2::time) AT TIME ZONE $3 - NOW())) / 3600 AS diff_hours`,
-        [dateStr, timeStr, biz.timezone]
+        `SELECT
+           ($1::date + $2::time) AT TIME ZONE $3                                      AS rdv_utc,
+           NOW()                                                                       AS now_utc,
+           EXTRACT(EPOCH FROM (($1::date + $2::time) AT TIME ZONE $3 - NOW())) / 3600 AS diff_hours`,
+        [dateStr, timeStrFull, biz.timezone]
       );
-      const diffHours = parseFloat(tzDiff[0].diff_hours);
+      const rdvUtc    = tzDiff[0]?.rdv_utc;
+      const nowUtc    = tzDiff[0]?.now_utc;
+      const rawDiff   = tzDiff[0]?.diff_hours;
+      const diffHours = (rawDiff != null && Number.isFinite(parseFloat(rawDiff)))
+        ? parseFloat(rawDiff)
+        : null;
 
       // ── Politique d'annulation Planity-like ─────────────────────────────
       // (a) Hors delais (diffHours < policyHours) : annulation REFUSEE pour
@@ -156,7 +172,23 @@ module.exports = function attachClientProfileRoutes(router) {
       //     en ligne (Strategie B = la commission FlowIA est aussi rendue
       //     au commerçant).
       // (c) policy_hours=0 : annulation toujours possible avec refund integral.
-      const isWithinPolicy = policyHours === 0 || diffHours >= policyHours;
+      // Defensif : si diffHours est null (SQL fail), on traite comme hors delais
+      // (pas de refund) plutot que d'autoriser un refund sans verification.
+      const isWithinPolicy = (diffHours != null)
+        && (policyHours === 0 || diffHours >= policyHours);
+
+      console.log('[CANCEL] decision input', JSON.stringify({
+        appointment_id:        req.params.id,
+        date_str:              dateStr,
+        time_str:              timeStrFull,
+        timezone:              biz.timezone,
+        rdv_utc:               rdvUtc instanceof Date ? rdvUtc.toISOString() : String(rdvUtc),
+        now_utc:               nowUtc instanceof Date ? nowUtc.toISOString() : String(nowUtc),
+        diff_hours:            diffHours,
+        policy_hours:          policyHours,
+        is_within_policy:      isWithinPolicy,
+        decision:              isWithinPolicy ? 'refund_if_paid' : 'retain_if_paid',
+      }));
 
       // Lit le statut paiement pour decider si on refund.
       const { rows: payRows } = await pool.query(

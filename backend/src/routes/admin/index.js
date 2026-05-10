@@ -46,5 +46,6 @@ router.use('/audit',     require('./audit'));
 router.use('/failed-refunds', require('./failed-refunds'));
 router.use('/stripe-payouts', require('./stripe-payouts'));
 router.use('/search',         require('./search'));
+router.use('/refund-misclassified', require('./refund-misclassified'));
 
 module.exports = router;
