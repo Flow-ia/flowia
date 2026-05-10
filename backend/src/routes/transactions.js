@@ -6,6 +6,8 @@ const { incrementStamps } = require('../utils/loyalty-utils');
 const { upsertLocalClient } = require('./clients');
 const { resolveReferralForFilleul, validateReferralUse } = require('./referrals');
 const { employeePinOptional } = require('../middleware/employeePinOptional');
+const { canCreateCashTransaction } = require('../services/transactionValidator');
+const { invalidateUserStatsCache } = require('../utils/paymentV3');
 const router = express.Router();
 
 router.use(authMiddleware);
@@ -321,13 +323,60 @@ router.post('/', async (req, res) => {
     // autre employé. Null si merchant PIN admin ou création direct merchant.
     const signedByEmployeeId = req.employee ? req.employee.id : null;
 
+    // ── Refonte v3 : derive payment_source / payment_status / *_cents ─────
+    // Double ecriture des nouveaux champs en parallele du legacy (source,
+    // amount). Sans ca, /historique et /statistiques v3 voient ces rows
+    // comme NULL et les excluent ou les comptent dans "unclassified".
+    //
+    // Mapping :
+    //   type='expense'                                 -> tous v3 NULL (hors modele)
+    //   type='revenue', appointment_id IS NULL         -> walkin / CASH_PAID / 'full'
+    //   type='revenue', appointment_id IS NOT NULL     -> cash_register_rdv / CASH_PAID
+    //                                                     'remaining' si STRIPE_ACOMPTE existe,
+    //                                                     'full' sinon. Bloque si STRIPE_100/CASH_PAID
+    //                                                     deja present (anti-double-encaissement).
+    //   type='refund'/'adjustment'                     -> v3 NULL (hors modele)
+    let v3PaymentSource = null;
+    let v3PaymentStatus = null;
+    let v3PaymentType   = null;
+    let v3GrossCents    = null;
+    let v3NetCents      = null;
+    if (type === 'revenue') {
+      const grossCents = Math.round(parseFloat(amt) * 100);
+      if (!appointment_id) {
+        v3PaymentSource = 'walkin';
+        v3PaymentStatus = 'CASH_PAID';
+        v3PaymentType   = 'full';
+        v3GrossCents    = grossCents;
+        v3NetCents      = grossCents;
+      } else {
+        const validation = await canCreateCashTransaction(appointment_id);
+        if (!validation.allow) {
+          return res.status(409).json({
+            error: 'Ce RDV est deja encaisse integralement.',
+            code: 'ALREADY_PAID',
+            existing_status: validation.existing_status,
+          });
+        }
+        v3PaymentSource = 'cash_register_rdv';
+        v3PaymentStatus = 'CASH_PAID';
+        v3PaymentType   = validation.type === 'remaining' ? 'remaining' : 'full';
+        v3GrossCents    = grossCents;
+        v3NetCents      = grossCents;
+      }
+    }
+
     const insertResult = await pool.query(
       `INSERT INTO transactions
         (user_id, type, amount, description, category_id, employee_id,
          payment_method, date, time, datetime_iso, appointment_id, source, locked,
          promo_code_id, discount_amount, original_amount, client_email, client_note,
-         qty_total, global_client_id, idempotency_key, signed_by_employee_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+         qty_total, global_client_id, idempotency_key, signed_by_employee_id,
+         payment_source, payment_status, payment_type,
+         gross_amount_cents, net_amount_cents, paid_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,TRUE,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+               $22,$23,$24,$25,$26,
+               CASE WHEN $23 = 'CASH_PAID' THEN NOW() ELSE NULL END)
        ON CONFLICT (user_id, idempotency_key) DO NOTHING
        RETURNING id, user_id, type, amount, description, category_id, employee_id,
          payment_method, locked, client_email, client_note, qty_total,
@@ -339,8 +388,15 @@ router.post('/', async (req, res) => {
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
        clientEmailNorm, client_note || null, qtyTotal, globalClientId,
-       idemKey, signedByEmployeeId]
+       idemKey, signedByEmployeeId,
+       v3PaymentSource, v3PaymentStatus, v3PaymentType,
+       v3GrossCents, v3NetCents]
     );
+    // Invalide le cache stats v3 du user (la nouvelle tx doit apparaitre
+    // immediatement dans /historique et /statistiques).
+    if (insertResult.rows.length && type === 'revenue') {
+      try { invalidateUserStatsCache(req.user.userId); } catch {}
+    }
     if (!insertResult.rows.length && idemKey) {
       // Race idempotency : un autre process a gagné. Retourner sa transaction.
       const { rows: existing } = await pool.query(

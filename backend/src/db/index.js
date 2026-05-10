@@ -2116,6 +2116,41 @@ async function initDB() {
      WHERE refunded_at IS NULL AND payment_status = 'REFUNDED'
   `);
 
+  // ── v3 Commit 5 : catch-all par payment_method ────────────────────────
+  // Le rétro-fill ci-dessus filtre cash_register_rdv sur source IN ('rdv','manual').
+  // Mais des rows legacy peuvent avoir source='admin' (cf book.js:121) ou autre,
+  // tout en étant clairement des encaissements caisse (payment_method='cash').
+  // Catch-all par payment_method pour rattraper ces edge cases résiduels,
+  // sans toucher aux rows déjà classifiées (filtre WHERE payment_source IS NULL).
+  await runMigration(`
+    UPDATE transactions
+       SET payment_source = 'cash_register_rdv',
+           payment_status = COALESCE(payment_status, 'CASH_PAID'),
+           payment_type   = COALESCE(payment_type, 'full'),
+           gross_amount_cents = COALESCE(gross_amount_cents, ROUND(amount * 100)::INTEGER),
+           net_amount_cents   = COALESCE(net_amount_cents, ROUND(amount * 100)::INTEGER)
+     WHERE payment_source IS NULL
+       AND appointment_id IS NOT NULL
+       AND type = 'revenue'
+       AND payment_method IN ('cash', 'card_local', 'transfer', 'manual', 'card', 'check')
+       AND amount IS NOT NULL
+       AND stripe_payment_intent_id IS NULL
+  `);
+  // Catch-all walk-in (appointment_id NULL) — couvre toutes les rows revenue
+  // sans appointment_id qui auraient échappé au filtre type='revenue' précédent.
+  await runMigration(`
+    UPDATE transactions
+       SET payment_source = 'walkin',
+           payment_status = COALESCE(payment_status, 'CASH_PAID'),
+           payment_type   = COALESCE(payment_type, 'full'),
+           gross_amount_cents = COALESCE(gross_amount_cents, ROUND(amount * 100)::INTEGER),
+           net_amount_cents   = COALESCE(net_amount_cents, ROUND(amount * 100)::INTEGER)
+     WHERE payment_source IS NULL
+       AND appointment_id IS NULL
+       AND type = 'revenue'
+       AND amount IS NOT NULL
+  `);
+
   // UNIQUE anti-double-paiement (créé après rétro-fill avec pre-flight check).
   // Si des doublons résiduels (STRIPE_100 + CASH_PAID sur même appointment_id)
   // existent, on émet une NOTICE et on saute la création — le commerçant peut

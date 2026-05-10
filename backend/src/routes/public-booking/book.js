@@ -615,17 +615,37 @@ module.exports = function attachBookRoute(router) {
             ? `Paiement en ligne RDV — ${cn}`
             : `Acompte en ligne RDV — ${cn}`;
           const now = new Date();
+          // Refonte v3 : on alimente aussi payment_source / payment_status /
+          // payment_type / *_cents / stripe_payment_intent_id / paid_at en
+          // parallele du legacy. Cohérent avec le webhook qui fait pareil
+          // (et idempotent via ON CONFLICT). stripe_fee_cents reste 0 ici
+          // (pas de balance_transaction recuperee dans ce chemin sync ;
+          // le webhook les remplit s'il arrive apres).
+          const v3Status = isFully ? 'STRIPE_100' : 'STRIPE_ACOMPTE';
+          const v3Type   = isFully ? 'full' : 'deposit';
           await pool.query(
             `INSERT INTO transactions
                (user_id, type, amount, description, employee_id, payment_method,
-                date, time, datetime_iso, appointment_id, source, locked, qty_total)
-             VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1)
+                date, time, datetime_iso, appointment_id, source, locked, qty_total,
+                payment_source, payment_status, payment_type,
+                gross_amount_cents, net_amount_cents,
+                stripe_payment_intent_id, paid_at)
+             VALUES ($1,'revenue',$2,$3,$4,'card_online',$5,$6,$7,$8,'rdv_online',TRUE,1,
+                     'online_booking',$9,$10,
+                     $11,$11,
+                     $12, NOW())
              ON CONFLICT (appointment_id) WHERE source = 'rdv_online' DO NOTHING`,
             [userId, paidAmountCents / 100, desc, appt.employee_id || null,
              now.toISOString().substring(0, 10),
              now.toTimeString().substring(0, 8),
-             now.toISOString(), appt.id]
+             now.toISOString(), appt.id,
+             v3Status, v3Type, paidAmountCents, payment_intent_id]
           );
+          // Invalide le cache stats v3 du user
+          try {
+            const { invalidateUserStatsCache } = require('../../utils/paymentV3');
+            invalidateUserStatsCache(userId);
+          } catch {}
         } catch (txErr) {
           // Erreur d'insertion ne doit PAS bloquer la reservation
           // (paiement Stripe deja confirme cote client). On log et on

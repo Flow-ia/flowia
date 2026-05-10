@@ -4,6 +4,8 @@
 const { pool } = require('../../db');
 const { incrementStamps } = require('../../utils/loyalty-utils');
 const { validateReferralUse } = require('../referrals');
+const { canCreateCashTransaction } = require('../../services/transactionValidator');
+const { invalidateUserStatsCache } = require('../../utils/paymentV3');
 
 module.exports = function attachCheckoutRoutes(router) {
   // ── Encaissement RDV → crée une transaction + marque le RDV paid ─────────────
@@ -155,14 +157,33 @@ module.exports = function attachCheckoutRoutes(router) {
         } catch (e) { console.warn('[CHECKOUT global_client lookup]', e.message); }
       }
 
-      // Créer la transaction — inclure les infos promo si le RDV en avait une
+      // ── Refonte v3 : derive payment_source / payment_status / *_cents ───
+      // Encaissement caisse RDV. Anti-double-encaissement via validator :
+      // bloque si le RDV est deja STRIPE_100 ou CASH_PAID. Si STRIPE_ACOMPTE
+      // existe, on classe en payment_type='remaining'.
+      const validation = await canCreateCashTransaction(req.params.id);
+      if (!validation.allow) {
+        return res.status(409).json({
+          error: 'Ce RDV est deja encaisse integralement.',
+          code: 'ALREADY_PAID',
+          existing_status: validation.existing_status,
+        });
+      }
+      const v3GrossCents  = Math.round(parseFloat(amount) * 100);
+      const v3PaymentType = validation.type === 'remaining' ? 'remaining' : 'full';
+
+      // Créer la transaction — inclure les infos promo + champs v3
       const { rows: txR } = await pool.query(
         `INSERT INTO transactions
            (user_id, type, amount, description, employee_id, payment_method,
             date, time, datetime_iso, appointment_id, source,
             promo_code_id, discount_amount, original_amount,
-            client_email, global_client_id)
-         VALUES ($1,'revenue',$2,$3,$4,$5,$6,$7,$8,$9,'rdv',$10,$11,$12,$13,$14)
+            client_email, global_client_id,
+            payment_source, payment_status, payment_type,
+            gross_amount_cents, net_amount_cents, paid_at)
+         VALUES ($1,'revenue',$2,$3,$4,$5,$6,$7,$8,$9,'rdv',$10,$11,$12,$13,$14,
+                 'cash_register_rdv','CASH_PAID',$15,
+                 $16,$16, NOW())
          RETURNING id, type, TO_CHAR(date,'YYYY-MM-DD') as date, TO_CHAR(time,'HH24:MI') as time,
            amount, description, payment_method, employee_id, appointment_id, source, created_at,
            promo_code_id, discount_amount, original_amount`,
@@ -172,9 +193,11 @@ module.exports = function attachCheckoutRoutes(router) {
          appt.promo_code_id || null,
          discountFromAppt || 0,
          appt.original_amount || null,
-         appt.client_email || null, globalClientId]
+         appt.client_email || null, globalClientId,
+         v3PaymentType, v3GrossCents]
       );
       const tx = txR[0];
+      try { invalidateUserStatsCache(req.user.userId); } catch {}
 
       // Multi-paiement : insérer les lignes transaction_payments comme dans
       // le flow caisse standard. Source de vérité pour l'historique éclaté
