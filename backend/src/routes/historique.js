@@ -304,8 +304,22 @@ router.get('/', async (req, res) => {
     statsCacheSet(userId, cacheKey, payload);
     res.json(payload);
   } catch (e) {
-    console.error('[GET /api/historique]', e.message);
-    res.status(500).json({ error: 'Erreur serveur historique' });
+    // Logging détaillé : code PG (ex: 42P01, 22P02), detail, hint, position,
+    // table/column. Sans ces champs, impossible d'identifier la cause sur
+    // Render logs. e.where contient le contexte exécution.
+    console.error('[GET /api/historique]',
+      'msg=' + (e.message || ''),
+      'code=' + (e.code || ''),
+      'detail=' + (e.detail || ''),
+      'hint=' + (e.hint || ''),
+      'position=' + (e.position || ''),
+      'where=' + (e.where || '').slice(0, 200));
+    res.status(500).json({
+      error: 'Erreur serveur historique',
+      // Renvoie le code PG côté client pour diagnostic rapide (sans leak
+      // d'info sensible : juste le code SQLSTATE).
+      pg_code: e.code || null,
+    });
   }
 });
 

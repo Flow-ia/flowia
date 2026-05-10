@@ -2218,6 +2218,25 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_payment_group_id
     ON transactions(payment_group_id) WHERE payment_group_id IS NOT NULL`);
 
+  // ── Hotfix commit C2 : exclure les rows multi-paiement de l'UNIQUE
+  // anti-double-encaissement. La contrainte originale (créée plus haut)
+  // empêche d'avoir 2 rows STRIPE_100/CASH_PAID sur le même appointment_id.
+  // Mais un multi-paiement RDV crée N rows CASH_PAID partageant le même
+  // appointment_id (avec leur payment_group_id partagé) : la 2e INSERT
+  // violait la contrainte → POST /api/transactions multi 500. La nouvelle
+  // version v2 ajoute `AND payment_group_id IS NULL` pour ne s'appliquer
+  // qu'aux paiements simples. La protection multi-paiement est assurée par
+  // canCreateCashTransaction() côté app (qui détecte tout STRIPE_100/
+  // CASH_PAID existant avant la 1re INSERT du groupe).
+  await runMigration(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_appointment_active_v2
+      ON transactions(appointment_id)
+      WHERE appointment_id IS NOT NULL
+        AND payment_status IN ('STRIPE_100','CASH_PAID')
+        AND payment_group_id IS NULL
+  `);
+  await runMigration(`DROP INDEX IF EXISTS idx_transactions_appointment_active`);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─
