@@ -159,8 +159,10 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       async () => {
         setSaving(true);
         try {
-          // Split → array `payments`. Single → champ `payment_method`.
-          // Le backend gère les 2 et insère transaction_payments si multi.
+          // Split → array `payments` (legacy) + `payment_breakdown` (commit A
+          // pattern : N rows liées par payment_group_id côté backend). Single
+          // → champ `payment_method`. Le backend privilégie payment_breakdown
+          // quand présent (>= 2 méthodes), sinon retombe sur le flow legacy.
           const payments = splitMode
             ? [
                 { method: splitA.method, amount: parseFloat(splitA.amount)||0 },
@@ -173,12 +175,24 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             amount: finalAmt,
             payments,
           };
+          if (splitMode) {
+            payload.payment_breakdown = [
+              { method: splitA.method, amount_cents: Math.round((parseFloat(splitA.amount)||0) * 100) },
+              { method: splitB.method, amount_cents: Math.round((parseFloat(splitB.amount)||0) * 100) },
+            ];
+          }
           if (employee) payload.employee_id = employee.id;
           const res = await bookingApi.checkoutAppt(appt.id, payload, employee?.id);
           const refPatch = res?.referral_validated ? { referral_status: 'validated' } : {};
           const merged = {...appt, status:'completed', paid:true, paid_method:finalMethod, ...refPatch};
           setAppt(merged); onUpdated(merged);
-          if (res.transaction) onTxCreated(res.transaction);
+          // Legacy → res.transaction (1 row). Multi-paiement (commit A) →
+          // res.transactions (array de N rows). Le callback onTxCreated joue
+          // un son et affiche un toast — appel unique suffit (1 par
+          // encaissement logique, peu importe le nombre de sous-paiements).
+          const firstTx = res?.transaction
+                       || (Array.isArray(res?.transactions) ? res.transactions[0] : null);
+          if (firstTx) onTxCreated(firstTx);
           setTab('detail');
         } catch(e) { showToast(e.message || 'Une erreur est survenue.', 'error'); } finally { setSaving(false); }
       }

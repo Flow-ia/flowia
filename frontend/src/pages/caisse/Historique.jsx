@@ -70,11 +70,47 @@ export default function Historique({
     return list.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   }, [txs, today, empF]);
 
-  // KPIs jour
+  // ── Regroupement des multi-paiements par payment_group_id (commit C) ─────
+  // Depuis le commit A, un encaissement multi crée N rows transactions liées
+  // par un payment_group_id UUID partagé. Côté affichage caisse, on les
+  // fusionne en 1 ligne « virtuelle » (tx représentative = la 1re par
+  // created_at) avec un payments_breakdown synthétique pour les sous-lignes.
+  // Les rows sans payment_group_id (paiements simples + legacy 'multi' avec
+  // tx.payments) restent inchangées.
+  const groupedTodayRevs = useMemo(() => {
+    const buckets = new Map();
+    const order = [];
+    todayRevs.forEach(tx => {
+      const key = tx.payment_group_id || ('single:' + tx.id);
+      if (!buckets.has(key)) { buckets.set(key, []); order.push(key); }
+      buckets.get(key).push(tx);
+    });
+    return order.map(key => {
+      const rows = buckets.get(key);
+      if (rows.length === 1 && !rows[0].payment_group_id) return rows[0];
+      // Multi-groupe → tx synthétique avec breakdown trié chronologiquement.
+      const sorted = [...rows].sort(
+        (a, b) => (a.created_at || '').localeCompare(b.created_at || '')
+      );
+      const rep = sorted[0];
+      const totalAmount = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+      return {
+        ...rep,
+        amount: totalAmount,
+        payment_method: 'multi',
+        payments_breakdown: sorted.map(r => ({
+          method: r.payment_method,
+          amount: parseFloat(r.amount) || 0,
+        })),
+      };
+    });
+  }, [todayRevs]);
+
+  // KPIs jour — calculs basés sur les groupes (1 multi-paiement = 1 tx).
   // dayRev = somme tous revenue (refunds negatifs subtraits) = CA NET du jour.
-  const dayRev = todayRevs.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
+  const dayRev = groupedTodayRevs.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
   // prestCount + panierMoy excluent les refunds (pas une prestation).
-  const todayRevsPos = todayRevs.filter(tx =>
+  const todayRevsPos = groupedTodayRevs.filter(tx =>
     tx.source !== 'rdv_refund' && (parseFloat(tx.amount) || 0) >= 0);
   const prestCount = todayRevsPos.reduce((s, tx) => {
     const itemsQty = Array.isArray(tx.items)
@@ -84,7 +120,7 @@ export default function Historique({
   }, 0);
   const panierMoy = todayRevsPos.length > 0 ? dayRev / todayRevsPos.length : 0;
 
-  // ── 4 moyens de paiement (multi éclatés). ─────────────────────────────────
+  // ── 4 moyens de paiement (multi éclatés sur les vraies méthodes). ─────────
   const byPM = useMemo(() => {
     const acc = {};
     PAY_KEYS.forEach(k => { acc[k] = { count: 0, total: 0 }; });
@@ -93,33 +129,65 @@ export default function Historique({
       acc[key].count++;
       acc[key].total += parseFloat(amount) || 0;
     };
-    todayRevs.forEach(tx => {
-      if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
+    groupedTodayRevs.forEach(tx => {
+      // Nouveau format : payments_breakdown synthétisé par le regroupement
+      // (1 entrée par sous-paiement traçable, méthodes réelles).
+      if (Array.isArray(tx.payments_breakdown) && tx.payments_breakdown.length) {
+        tx.payments_breakdown.forEach(p => { if (parseFloat(p.amount) > 0) addPm(p.method, p.amount); });
+      // Legacy format : payment_method='multi' + tx.payments (transaction_payments).
+      } else if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
         tx.payments.forEach(p => { if (parseFloat(p.amount) > 0) addPm(p.method, p.amount); });
       } else {
         addPm(tx.payment_method, tx.amount);
       }
     });
     return acc;
-  }, [todayRevs]);
+  }, [groupedTodayRevs]);
 
   // ── Lignes ligne-par-ligne (une ligne par item ou par tx si pas d'items) ──
+  // Pour un multi-paiement traçable (commit A) : 1 SEULE ligne agrégée par
+  // groupe (pas 1 par item, pour éviter de dupliquer le breakdown sur N
+  // sous-lignes). Le breakdown s'affiche en sous-lignes dans le JSX (├─).
   const empById = useMemo(() => Object.fromEntries(emps.map(e => [e.id, e])), [emps]);
   const lines = useMemo(() => {
     const out = [];
-    todayRevs.forEach(tx => {
+    groupedTodayRevs.forEach(tx => {
       const emp = empById[tx.employee_id];
       const items = Array.isArray(tx.items) ? tx.items : [];
+      const isMultiBreakdown = Array.isArray(tx.payments_breakdown)
+                            && tx.payments_breakdown.length >= 2;
       let pmLabel;
-      if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
+      if (isMultiBreakdown) {
+        pmLabel = `Multi (${tx.payments_breakdown.length})`;
+      } else if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
         pmLabel = tx.payments.map(p => PM_GRID_CFG[p.method]?.label || p.method).join(' + ');
       } else {
         pmLabel = PM_GRID_CFG[tx.payment_method]?.label || 'Autre';
       }
-      const pmCfg = tx.payment_method === 'multi'
+      const pmCfg = (isMultiBreakdown || tx.payment_method === 'multi')
         ? { color: '#3c3489', bg: '#eeedfe' }
         : (PM_GRID_CFG[tx.payment_method] || PM_GRID_CFG.other);
       const hour = tx.time ? String(tx.time).slice(0, 5) : '';
+
+      // Multi traçable → 1 ligne agrégée pour le groupe + breakdown sous-lignes.
+      if (isMultiBreakdown) {
+        const totalQty = items.length > 0
+          ? items.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
+          : (parseInt(tx.qty_total) || 1);
+        const desc = items.length === 1
+          ? (items[0].service_name || tx.description || 'Prestation')
+          : (tx.description || 'Prestation');
+        out.push({
+          id: tx.id,
+          service: desc,
+          qty: totalQty,
+          amount: parseFloat(tx.amount) || 0,
+          emp, pmLabel, pmCfg, hour,
+          breakdown: tx.payments_breakdown,
+        });
+        return;
+      }
+
       if (items.length > 0) {
         items.forEach((it, i) => {
           const qty  = parseInt(it.qty) || 1;
@@ -159,7 +227,7 @@ export default function Historique({
       }
     });
     return out;
-  }, [todayRevs, empById]);
+  }, [groupedTodayRevs, empById]);
 
   // ── Si pas unlocked → gate seul ──────────────────────────────────────────
   if (!unlocked) {
@@ -247,7 +315,7 @@ export default function Historique({
             {fmt(dayRev)} €
           </p>
           <p style={{ margin:0, fontSize:11, color:t.muted }}>
-            {todayRevs.length + (todayRevs.length > 1 ? ' transactions' : ' transaction')}
+            {groupedTodayRevs.length + (groupedTodayRevs.length > 1 ? ' transactions' : ' transaction')}
           </p>
         </div>
         <div style={{ ...card, gap:6 }}>
@@ -301,7 +369,7 @@ export default function Historique({
             {"Encaissements ligne par ligne"}
           </p>
           <span style={{ fontSize:11, color:t.muted }}>
-            {lines.length + (lines.length > 1 ? ' lignes' : ' ligne')}
+            {groupedTodayRevs.length + (groupedTodayRevs.length > 1 ? ' transactions' : ' transaction')}
           </span>
         </div>
 
@@ -315,55 +383,89 @@ export default function Historique({
         ) : (
           lines.map((l, idx) => (
             <div key={l.id} style={{
-              display:'grid', gridTemplateColumns:'1fr auto', gap:12,
               padding:'12px 14px',
               borderBottom: idx < lines.length - 1 ? sep : 'none',
-              alignItems:'center',
             }}>
-              <div style={{ minWidth:0 }}>
-                <p style={{ fontSize:14, fontWeight:500, color:t.text,
-                            margin:'0 0 4px',
-                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {l.qty > 1 && <span style={{ color:t.muted, marginRight:6 }}>{l.qty}×</span>}
-                  {l.service}
-                  {l.hour && (
-                    <span style={{ marginLeft:8, fontSize:11, color:t.muted,
-                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                   fontWeight:400 }}>
-                      {l.hour}
-                    </span>
-                  )}
-                </p>
-                <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                  {l.emp && (
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <div style={{ width:18, height:18, borderRadius:6,
-                                    background: l.emp.avatar_color || t.text,
-                                    display:'flex', alignItems:'center', justifyContent:'center',
-                                    color:'#fff', fontSize:10, fontWeight:500, flexShrink:0 }}>
-                        {(l.emp.name || '?').charAt(0).toUpperCase()}
+              <div style={{
+                display:'grid', gridTemplateColumns:'1fr auto', gap:12,
+                alignItems:'center',
+              }}>
+                <div style={{ minWidth:0 }}>
+                  <p style={{ fontSize:14, fontWeight:500, color:t.text,
+                              margin:'0 0 4px',
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {l.qty > 1 && <span style={{ color:t.muted, marginRight:6 }}>{l.qty}×</span>}
+                    {l.service}
+                    {l.hour && (
+                      <span style={{ marginLeft:8, fontSize:11, color:t.muted,
+                                     fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                     fontWeight:400 }}>
+                        {l.hour}
+                      </span>
+                    )}
+                  </p>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    {l.emp && (
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ width:18, height:18, borderRadius:6,
+                                      background: l.emp.avatar_color || t.text,
+                                      display:'flex', alignItems:'center', justifyContent:'center',
+                                      color:'#fff', fontSize:10, fontWeight:500, flexShrink:0 }}>
+                          {(l.emp.name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ fontSize:11, color:t.muted }}>{l.emp.name}</span>
                       </div>
-                      <span style={{ fontSize:11, color:t.muted }}>{l.emp.name}</span>
-                    </div>
-                  )}
-                  <span style={{
-                    fontSize:11, fontWeight:500,
-                    padding:'2px 7px', borderRadius:8,
-                    background: l.pmCfg.bg, color: l.pmCfg.color,
-                    whiteSpace:'nowrap',
-                  }}>
-                    {l.pmLabel}
-                  </span>
+                    )}
+                    <span style={{
+                      fontSize:11, fontWeight:500,
+                      padding:'2px 7px', borderRadius:8,
+                      background: l.pmCfg.bg, color: l.pmCfg.color,
+                      whiteSpace:'nowrap',
+                    }}>
+                      {l.pmLabel}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{
+                  fontSize:16, fontWeight:500, color:t.text,
+                  fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  whiteSpace:'nowrap',
+                }}>
+                  {fmt(l.amount)} €
                 </div>
               </div>
 
-              <div style={{
-                fontSize:16, fontWeight:500, color:t.text,
-                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                whiteSpace:'nowrap',
-              }}>
-                {fmt(l.amount)} €
-              </div>
+              {/* Sous-lignes breakdown (multi-paiement traçable) */}
+              {Array.isArray(l.breakdown) && l.breakdown.length >= 2 && (
+                <div style={{ marginTop:6, paddingLeft:6,
+                              display:'flex', flexDirection:'column', gap:2 }}>
+                  {l.breakdown.map((sub, k) => {
+                    const subCfg = PM_GRID_CFG[sub.method] || PM_GRID_CFG.other;
+                    const subLabel = subCfg?.label || sub.method;
+                    const isLastSub = k === l.breakdown.length - 1;
+                    return (
+                      <div key={k} style={{
+                        display:'flex', alignItems:'center', gap:6,
+                        fontSize:12, color:'rgba(0,0,0,0.65)',
+                      }}>
+                        <span style={{ color:t.muted, flexShrink:0 }}>
+                          {isLastSub ? "└─" : "├─"}
+                        </span>
+                        <span style={{ flex:1, color: subCfg?.color || t.muted, fontWeight:500 }}>
+                          {subLabel}
+                        </span>
+                        <span style={{
+                          fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
+                          color: subCfg?.color || t.text,
+                        }}>
+                          {fmt(sub.amount)} €
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ))
         )}
