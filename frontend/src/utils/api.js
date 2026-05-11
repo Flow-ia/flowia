@@ -405,6 +405,9 @@ export const bookingApi = {
 
   // Services
   getServices:    ()    => request('/booking/services'),
+  // Catalogue intelligent pour le drawer édition /historique. Choisit le bon
+  // catalogue (caisse vs réservation) selon le contexte de la transaction.
+  getServicesForEdit: (context) => request('/services-for-edit?context=' + encodeURIComponent(context || 'walkin')),
   createService:  (b)   => request('/booking/services',         { method: 'POST',   body: JSON.stringify(b) }),
   updateService:  (id,b)=> request(`/booking/services/${id}`,   { method: 'PUT',    body: JSON.stringify(b) }),
   deleteService:  (id)  => request(`/booking/services/${id}`,   { method: 'DELETE' }),

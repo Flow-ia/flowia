@@ -718,6 +718,10 @@ function TxDetailDrawerImpl({
                   removeItem={removeItem}
                   syncTotalToItems={syncTotalToItems}
                   colors={colors}
+                  // Catalogue intelligent : si la tx a un appointment_id, on
+                  // pioche dans booking_services (catalogue réservation) ;
+                  // sinon dans categories niveau 2 (catalogue caisse physique).
+                  dropdownContext={transaction?.appointment_id ? "appointment" : "walkin"}
                 />
               )}
 
@@ -1396,7 +1400,7 @@ function ItemsView({ tx, colors, grossCents }) {
 // Mode édition : inputs qty + ServiceDropdown + unit_price + bouton remove.
 // Bouton "Ajouter une prestation" + bandeau d'écart vs montant total si
 // somme(items) ≠ form.total_amount + bouton Synchroniser.
-function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, colors }) {
+function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, colors, dropdownContext }) {
   const items = form?.items || [];
   const totalAmount = parseAmount(form?.total_amount);
   const itemsSum = items.reduce(
@@ -1436,11 +1440,16 @@ function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, color
               <ServiceDropdown
                 value={it.service_id}
                 displayName={it.service_name}
-                onChange={(svc) => setItem(idx, {
-                  service_id:   svc.id,
-                  service_name: svc.name,
-                  unit_price:   svc.price != null ? String(Number(svc.price).toFixed(2)) : it.unit_price,
-                })}
+                context={dropdownContext}
+                onChange={(svc) => {
+                  // is_free_price (catalogue caisse uniquement) : ne PAS
+                  // auto-remplir unit_price — le caissier doit le saisir.
+                  const patch = { service_id: svc.id, service_name: svc.name };
+                  if (!svc.is_free_price && svc.price != null) {
+                    patch.unit_price = String(Number(svc.price).toFixed(2));
+                  }
+                  setItem(idx, patch);
+                }}
                 colors={colors}
               />
               <input type="number" min="0" step="0.01"

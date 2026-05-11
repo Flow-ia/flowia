@@ -267,6 +267,10 @@ function startServer() {
   app.use('/api/categories',     apiLimiter,  require('./routes/categories'));
   app.use('/api/employees',      apiLimiter,  require('./routes/employees'));
   app.use('/api/transactions',   apiLimiter,  require('./routes/transactions'));
+  // Route mince : catalogue intelligent pour le drawer édition /historique.
+  // Sert le bon catalogue (categories niveau 2 vs booking_services) selon
+  // le context (walkin/appointment) que le frontend déduit de la tx.
+  app.use('/api',                apiLimiter,  require('./routes/services'));
   app.use('/api/booking/service-categories', apiLimiter, require('./routes/booking-service-categories'));
   app.use('/api/media',          apiLimiter,  require('./routes/media'));
   app.use('/api/booking',        apiLimiter,  require('./routes/booking'));

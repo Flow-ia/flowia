@@ -400,6 +400,11 @@ async function initDB() {
   // scan sur toute la table à chaque page d'historique.
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_transaction_items_tx
     ON transaction_items(transaction_id)`).catch(()=>{});
+  // Partial index sur service_id : utile pour les stats /produits qui agrègent
+  // par prestation. WHERE clause exclut les rows à prix libre (service_id NULL)
+  // pour garder l'index compact.
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_transaction_items_service_id
+    ON transaction_items(service_id) WHERE service_id IS NOT NULL`).catch(()=>{});
   // Migration : table transaction_payments — multi-paiement (split)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS transaction_payments (

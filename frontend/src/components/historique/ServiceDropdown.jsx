@@ -2,36 +2,56 @@
 // l'édition d'une transaction. Bouton compact (~140px) qui s'ouvre en
 // dropdown avec recherche live + groupage par catégorie + sélection.
 //
-// Charge la liste via bookingApi.getServices() au 1er ouverture, met en
-// cache au niveau du module pour ne pas re-fetcher entre les drawers.
+// Charge la liste via /api/services-for-edit (catalogue intelligent dual :
+// walkin = categories niveau 2 / appointment = booking_services). Le context
+// est passé en prop par le drawer parent en fonction de tx.appointment_id.
+// Cache module-scope par context pour ne pas re-fetcher entre drawers.
 // Filtrage insensible casse + accents via String.normalize.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bookingApi } from "../../utils/api";
 
-// Cache module-scope : la liste ne change quasi jamais en cours de session.
-// Premier ouverture déclenche le fetch, les suivants sont instantanés.
-let SERVICES_CACHE = null;
-let SERVICES_PROMISE = null;
-function loadServices() {
-  if (SERVICES_CACHE) return Promise.resolve(SERVICES_CACHE);
-  if (SERVICES_PROMISE) return SERVICES_PROMISE;
-  SERVICES_PROMISE = bookingApi.getServices()
-    .then(list => {
-      SERVICES_CACHE = Array.isArray(list) ? list : [];
-      SERVICES_PROMISE = null;
-      return SERVICES_CACHE;
+// Cache module-scope, séparé par context. Les 2 catalogues sont distincts
+// en BDD (categories vs booking_services), donc on ne mélange pas. Le 1er
+// ouverture déclenche le fetch, les suivants sont instantanés.
+const SERVICES_CACHE   = { walkin: null, appointment: null };
+const SERVICES_PROMISE = { walkin: null, appointment: null };
+function loadServices(context) {
+  const ctx = context === "appointment" ? "appointment" : "walkin";
+  if (SERVICES_CACHE[ctx]) return Promise.resolve(SERVICES_CACHE[ctx]);
+  if (SERVICES_PROMISE[ctx]) return SERVICES_PROMISE[ctx];
+  SERVICES_PROMISE[ctx] = bookingApi.getServicesForEdit(ctx)
+    .then(payload => {
+      // Le backend renvoie { success, context, services, categories }.
+      // On normalise vers la shape attendue par le dropdown :
+      // { id, name, price, category_name, is_active }.
+      const services = Array.isArray(payload?.services) ? payload.services : [];
+      const normalized = services.map(s => ({
+        id:             s.id,
+        name:           s.service_name || s.name || "Prestation",
+        price:          s.price,
+        is_free_price:  !!s.is_free_price,
+        category_id:    s.category_id || null,
+        category_name:  s.category_name || "Sans catégorie",
+        category_color: s.category_color || null,
+        is_active:      true,
+      }));
+      SERVICES_CACHE[ctx] = normalized;
+      SERVICES_PROMISE[ctx] = null;
+      return normalized;
     })
     .catch(() => {
-      SERVICES_PROMISE = null;
+      SERVICES_PROMISE[ctx] = null;
       return [];
     });
-  return SERVICES_PROMISE;
+  return SERVICES_PROMISE[ctx];
 }
 // Invalidation manuelle (ex: après création d'un service côté Réglages).
 export function invalidateServicesCache() {
-  SERVICES_CACHE = null;
-  SERVICES_PROMISE = null;
+  SERVICES_CACHE.walkin      = null;
+  SERVICES_CACHE.appointment = null;
+  SERVICES_PROMISE.walkin      = null;
+  SERVICES_PROMISE.appointment = null;
 }
 
 // Normalise pour comparaison insensible aux accents et à la casse.
@@ -66,29 +86,39 @@ export default function ServiceDropdown({
   value,          // service_id UUID ou null
   displayName,    // nom à afficher (fallback si value=null = service custom)
   onChange,       // (service) => void — appelé avec l'objet service complet
+  context,        // 'walkin' | 'appointment' — déterminé par le drawer parent
+                  // (tx.appointment_id ? 'appointment' : 'walkin'). Par défaut
+                  // 'walkin' si non renseigné.
   colors,         // palette héritée du drawer
   style,          // style supplémentaire pour le bouton
 }) {
+  const ctx = context === "appointment" ? "appointment" : "walkin";
   const [open, setOpen] = useState(false);
-  const [services, setServices] = useState(SERVICES_CACHE || []);
-  const [loading, setLoading] = useState(!SERVICES_CACHE);
+  const [services, setServices] = useState(SERVICES_CACHE[ctx] || []);
+  const [loading, setLoading] = useState(!SERVICES_CACHE[ctx]);
   const [query, setQuery] = useState("");
   const btnRef   = useRef(null);
   const panelRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  // Charge la liste au 1er ouverture (lazy, pas au mount).
+  // Charge la liste au 1er ouverture (lazy, pas au mount). Refetch si
+  // le context change (passage d'un drawer walkin à un drawer RDV).
   useEffect(() => {
-    if (!open || SERVICES_CACHE) return;
+    if (!open) return;
+    if (SERVICES_CACHE[ctx]) {
+      setServices(SERVICES_CACHE[ctx]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    loadServices().then(list => {
+    loadServices(ctx).then(list => {
       if (cancelled) return;
       setServices(list);
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, ctx]);
 
   // Focus input recherche à l'ouverture (UX clavier-first).
   useEffect(() => {

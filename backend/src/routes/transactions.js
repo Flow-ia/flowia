@@ -300,6 +300,26 @@ router.post('/', async (req, res) => {
     const qtyTotal = itemList.length
       ? itemList.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
       : 1;
+    // Validation : items.length capé + somme(qty × unit_price) cohérente avec
+    // amount. Tolérance 0.01€ pour les arrondis. Sinon ITEMS_AMOUNT_MISMATCH.
+    if (itemList.length > 20) {
+      return res.status(400).json({
+        error: 'Trop de prestations sur une seule transaction (max 20).',
+        code: 'ITEMS_TOO_MANY',
+      });
+    }
+    if (itemList.length > 0) {
+      const itemsSum = itemList.reduce(
+        (s, it) => s + ((parseFloat(it.unit_price) || 0) * (parseInt(it.qty) || 1)),
+        0
+      );
+      if (Math.abs(itemsSum - amt) > 0.01) {
+        return res.status(400).json({
+          error: `La somme des prestations (${itemsSum.toFixed(2)} €) ne correspond pas au montant total (${amt.toFixed(2)} €).`,
+          code: 'ITEMS_AMOUNT_MISMATCH',
+        });
+      }
+    }
 
     // ── Paiements normalisés → méthode stockée + breakdown ────────────────────
     // Réutilise payListRaw déjà filtré + validé (sum check en R2 plus haut).
@@ -1007,6 +1027,49 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     const itemList = hasItemsPayload
       ? items.filter(it => it && it.service_name)
       : [];
+    if (hasItemsPayload && itemList.length > 20) {
+      client.release();
+      return res.status(400).json({
+        error: 'Trop de prestations sur une seule transaction (max 20).',
+        code: 'ITEMS_TOO_MANY',
+      });
+    }
+    // Cohérence somme(items) vs amount cible — utilise body.amount si présent,
+    // sinon le montant existant (before.amount) puisque l'édition ne change
+    // que les items. Tolérance 0.01€. Pour un multi avec breakdown, l'amount
+    // effectif est la somme du breakdown (cohérent avec le reste du handler).
+    if (hasItemsPayload && itemList.length > 0) {
+      let amountTarget;
+      if (hasBreakdownPayload && payments_norm && payments_norm.length > 0) {
+        amountTarget = payments_norm.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+      } else if (has('amount') && amount != null) {
+        amountTarget = parseFloat(amount);
+      } else {
+        amountTarget = parseFloat(before.amount);
+        // Multi pré-existant : before.amount n'est que la rep_row, pas le total.
+        if (before.payment_group_id) {
+          const { rows: grp } = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total
+               FROM transactions
+              WHERE user_id=$1::uuid AND payment_group_id=$2::uuid
+                AND deleted_at IS NULL`,
+            [req.user.userId, before.payment_group_id]
+          );
+          amountTarget = parseFloat(grp[0]?.total || amountTarget);
+        }
+      }
+      const itemsSum = itemList.reduce(
+        (s, it) => s + ((parseFloat(it.unit_price) || 0) * (parseInt(it.qty) || 1)),
+        0
+      );
+      if (Math.abs(itemsSum - amountTarget) > 0.01) {
+        client.release();
+        return res.status(400).json({
+          error: `La somme des prestations (${itemsSum.toFixed(2)} €) ne correspond pas au montant total (${amountTarget.toFixed(2)} €).`,
+          code: 'ITEMS_AMOUNT_MISMATCH',
+        });
+      }
+    }
 
     // ── Paiements normalisés ──────────────────────────────────────────────────
     // payList sert à 2 choses :
