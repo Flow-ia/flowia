@@ -2325,6 +2325,14 @@ export default function App() {
     if (!id || !t) return;
     setTxs(p => p.map(x => x.id === id ? { ...x, ...t } : x));
   }, []);
+  // State-only setter pour le DELETE : utilisé quand l'appel réseau a déjà été
+  // fait par useTransactionDelete (drawer /historique). Évite un 2e DELETE qui
+  // renvoie 404 "Transaction introuvable ou déjà supprimée" sur une row déjà
+  // soft-deletée → toast erreur faux-positif après suppression réussie.
+  const removeTxLocal = useCallback((id) => {
+    if (!id) return;
+    setTxs(p => p.filter(x => x.id !== id));
+  }, []);
   const delTx  = useCallback(async id => { await api.deleteTransaction(id); setTxs(p => p.filter(x => x.id !== id)); }, []);
   const addCat = useCallback(async d => { const c = await api.createCategory(d); setCats(p => [...p, c]); }, []);
   const updCat = useCallback(async (id, d) => { const c = await api.updateCategory(id, d); setCats(p => p.map(x => x.id === id ? c : x)); }, []);
@@ -2545,7 +2553,7 @@ export default function App() {
           /caisse/historique reste lecture seule, jour courant, gate PIN
           employé. /transactions redirige vers /historique pour les anciens
           liens. */}
-      <Route path="/historique"   element={<RequireAdminMode><HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={replaceTxLocal} onDelTx={delTx}/></RequireAdminMode>}/>
+      <Route path="/historique"   element={<RequireAdminMode><HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={replaceTxLocal} onDelTx={removeTxLocal}/></RequireAdminMode>}/>
       <Route path="/transactions" element={<Navigate to="/historique" replace/>}/>
       <Route path="/clients"      element={<ClientsPage/>}/>
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
