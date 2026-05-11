@@ -219,7 +219,9 @@ export default function Historique({
       else map.set(key, { service_name: name, unit_price: price / 100, qty });
     }
     const arr   = Array.from(map.values());
-    const label = arr.map(it => it.qty + '× ' + it.service_name).join(', ');
+    // Séparateur " · " (point milieu) — cohérent avec /historique
+    // TransactionRow + drawer TxDetailDrawer pour un titre identique partout.
+    const label = arr.map(it => it.qty + '× ' + it.service_name).join(' · ');
     const sum   = arr.reduce((s, it) => s + it.unit_price * it.qty, 0);
     const qty   = arr.reduce((s, it) => s + it.qty, 0);
     return { label, sum, qty };

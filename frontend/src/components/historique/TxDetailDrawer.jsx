@@ -111,10 +111,12 @@ function parseAmount(str) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Formate les items granulaires en "3× Coupe homme, 1× Coupe femme" pour
+// Formate les items granulaires en "3× Coupe homme · 1× Coupe femme" pour
 // affichage. Dédupe par (service_name + unit_price) au cas où la caisse
 // aurait stocké N rows séparées avec qty=1 au lieu d'1 row avec qty=N.
 // Fallback sur tx.description si pas d'items en BDD (tx legacy).
+// Séparateur " · " (point milieu) — cohérent avec TransactionRow et
+// /caisse/historique pour que le titre soit identique partout.
 function formatItemsLabel(tx) {
   const items = Array.isArray(tx?.items) ? tx.items : [];
   if (items.length === 0) return tx?.description || "";
@@ -129,7 +131,7 @@ function formatItemsLabel(tx) {
   }
   return Array.from(map.values())
     .map(it => it.qty + "× " + it.name)
-    .join(", ");
+    .join(" · ");
 }
 
 // Normalise une date BDD (DATE Postgres serialisee en ISO via node-pg, ou
@@ -1127,18 +1129,16 @@ function MetaRow({ label, value, colors, mono, small, selectable }) {
 // ── Edit ────────────────────────────────────────────────────────────────────
 
 function EditRecap({ form, updateForm, employees, colors }) {
-  // Note : "Montant total (€)" est désormais affiché en BAS de la section
-  // Paiement (BreakdownEdit) pour que les erreurs de validation business
-  // (somme paiements/prestations ≠ total) s'affichent juste sous ce champ
-  // qui est le pivot des calculs.
+  // Description supprimée : le titre est dérivé automatiquement de la
+  // composition des prestations (qty × service_name) via formatItemsLabel.
+  // Modifier les prestations dans la section Prestations met à jour le titre
+  // automatiquement — pas besoin de saisir 2 fois la même information.
+  //
+  // "Montant total (€)" est affiché en BAS de la section Paiement
+  // (BreakdownEdit) pour que les erreurs de validation business
+  // (somme paiements/prestations ≠ total) s'affichent juste sous ce champ.
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <Field label="Description" colors={colors}>
-        <input type="text" value={form.description}
-               onChange={e => updateForm({ description: e.target.value })}
-               placeholder="Description ou nom du service"
-               style={inputStyle(colors)} />
-      </Field>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Field label="Date" colors={colors}>
           <input type="date" value={form.date}

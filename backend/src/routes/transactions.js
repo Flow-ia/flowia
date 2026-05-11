@@ -45,6 +45,30 @@ function invalidateStatsCache(userId) {
     .forEach(prefix => global.memCache.del(`${prefix}:${userId}`));
 }
 
+// Dérive automatiquement la description "3× Coupe homme, 1× Coupe femme" à
+// partir des items. Dédup par (service_name + unit_price) pour fusionner
+// les rows séparées. Stocké en BDD avec séparateur ", " (lisible CSV/PDF
+// export) ; le frontend affichage utilise " · " (point milieu). Le titre
+// est ainsi TOUJOURS synchronisé avec la composition réelle de la tx —
+// pas besoin pour l'utilisateur de saisir une description manuelle.
+function descriptionFromItems(itemList) {
+  if (!Array.isArray(itemList) || itemList.length === 0) return null;
+  const map = new Map();
+  for (const it of itemList) {
+    const name = String(it.service_name || 'Prestation').trim();
+    if (!name) continue;
+    const cents = Math.round((parseFloat(it.unit_price) || 0) * 100);
+    const key   = name + '|' + cents;
+    const qty   = parseInt(it.qty, 10) || 1;
+    if (map.has(key)) map.get(key).qty += qty;
+    else map.set(key, { name, qty });
+  }
+  if (map.size === 0) return null;
+  return Array.from(map.values())
+    .map(it => it.qty + '× ' + it.name)
+    .join(', ');
+}
+
 // ── Helper : snapshot complet d'une transaction (incl. items + payments) ────
 async function getSnapshot(id) {
   const { rows } = await pool.query('SELECT * FROM transactions WHERE id=$1', [id]);
@@ -295,11 +319,18 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // ── Items normalisés → qty_total ──────────────────────────────────────────
+    // ── Items normalisés → qty_total + description auto ─────────────────────
     const itemList = Array.isArray(items) ? items.filter(it => it && it.service_name) : [];
     const qtyTotal = itemList.length
       ? itemList.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
       : 1;
+    // Description auto-dérivée des items quand présents — la description
+    // explicite envoyée par le client est IGNORÉE car le titre doit
+    // toujours refléter la composition réelle (qty × service_name).
+    const autoDescription = descriptionFromItems(itemList);
+    const finalDescription = autoDescription !== null
+      ? autoDescription
+      : (description || null);
     // Validation : items.length capé + somme(qty × unit_price) cohérente avec
     // amount. Tolérance 0.01€ pour les arrondis. Sinon ITEMS_AMOUNT_MISMATCH.
     if (itemList.length > 20) {
@@ -495,7 +526,7 @@ router.post('/', async (req, res) => {
                      $25::integer, $26::integer, $27::integer, $28::integer,
                      $29::timestamptz, $30::uuid)
              RETURNING id`,
-            [req.user.userId, type, itemAmt, description || null, category_id || null,
+            [req.user.userId, type, itemAmt, finalDescription, category_id || null,
              effectiveEmployeeId, item.method, date, time || null,
              datetime_iso || null, appointment_id || null, source || 'manual',
              promo_code_id || null, discount_amount || 0, original_amount || null,
@@ -692,7 +723,7 @@ router.post('/', async (req, res) => {
          TO_CHAR(date, 'YYYY-MM-DD') as date,
          TO_CHAR(time, 'HH24:MI') as time,
          datetime_iso, appointment_id, source, signed_by_employee_id, created_at`,
-      [req.user.userId, type, amt, description || null, category_id || null,
+      [req.user.userId, type, amt, finalDescription, category_id || null,
        effectiveEmployeeId, pmStored, date, time || null,
        datetime_iso || null, appointment_id || null, source || 'manual',
        promo_code_id || null, discount_amount || 0, original_amount || null,
@@ -1164,7 +1195,15 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       pushSet('gross_amount_cents', amtCents);
       pushSet('net_amount_cents',   amtCents);
     }
-    if (has('description'))  pushSet('description', description || null);
+    // Description : si items[] envoyé, on régénère systématiquement depuis
+    // la composition (qty × service_name) — la description explicite du
+    // client est ignorée. Sinon (description envoyée seule), on la prend.
+    if (hasItemsPayload) {
+      const autoDesc = descriptionFromItems(itemList);
+      if (autoDesc !== null) pushSet('description', autoDesc);
+    } else if (has('description')) {
+      pushSet('description', description || null);
+    }
     if (has('category_id'))  pushSet('category_id', category_id || null);
     if (has('employee_id'))  pushSet('employee_id', employee_id || null);
     if (has('date'))         pushSet('date', date);
@@ -1269,7 +1308,14 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       const groupMap = new Map();
       const pushGroup = (col, val) => { groupMap.set(col, val); };
       if (has('type'))         pushGroup('type', type);
-      if (has('description'))  pushGroup('description', description || null);
+      // Description : items prioritaires (auto-dérivée), sinon description
+      // explicite. Cohérent avec le setMap rep_row plus haut.
+      if (hasItemsPayload) {
+        const autoDesc = descriptionFromItems(itemList);
+        if (autoDesc !== null) pushGroup('description', autoDesc);
+      } else if (has('description')) {
+        pushGroup('description', description || null);
+      }
       if (has('category_id'))  pushGroup('category_id', category_id || null);
       if (has('employee_id'))  pushGroup('employee_id', employee_id || null);
       if (has('date'))         pushGroup('date', date);
