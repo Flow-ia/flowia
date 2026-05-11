@@ -960,9 +960,9 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     const rawBreakdownInput = hasBreakdownField
       ? (Array.isArray(payment_breakdown) ? payment_breakdown : null)
       : (hasPaymentsField && Array.isArray(payments) ? payments : null);
-    const hasBreakdownPayload = rawBreakdownInput !== null;
+    let hasBreakdownPayload = rawBreakdownInput !== null;
     // payments_norm = liste normalisée {method, amount(€)} pour le reste du code.
-    const payments_norm = hasBreakdownPayload
+    let payments_norm = hasBreakdownPayload
       ? rawBreakdownInput
           .map(p => {
             if (!p || typeof p.method !== 'string') return null;
@@ -1041,6 +1041,29 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
           error: _lockReason(before) || 'Transaction verrouillée.',
           code:  'TX_LOCKED',
         });
+      }
+    }
+
+    // ── Conversion multi → single via `payment_method` seul ─────────────────
+    // Cas frontend "j'ai annulé le mode multi et tout passe sur cash" :
+    //   PUT { amount: 58, payment_method: 'cash', payment_breakdown: null }
+    // Sans cette synthèse, la guard BREAKDOWN_REQUIRED juste en-dessous rejetait
+    // l'appel car aucun breakdown n'a été fourni — alors qu'en pratique
+    // l'utilisateur a explicitement nommé la méthode cible et le nouveau total.
+    // On synthétise un breakdown single-element pour réactiver le chemin de
+    // conversion existant (clear payment_group_id + soft-delete sister rows).
+    if (
+      has('amount') && has('payment_method')
+      && !hasBreakdownPayload
+      && before.payment_group_id
+      && typeof payment_method === 'string'
+      && payment_method !== 'multi'
+      && VALID_TX_METHODS.has(payment_method)
+    ) {
+      const conversionAmount = parseFloat(amount);
+      if (Number.isFinite(conversionAmount) && conversionAmount > 0) {
+        payments_norm = [{ method: payment_method, amount: conversionAmount }];
+        hasBreakdownPayload = true;
       }
     }
 

@@ -566,9 +566,17 @@ function TxDetailDrawerImpl({
           amount_cents: Math.round(parseAmount(p.amount) * 100),
         }));
       } else {
-        body.payment_method    = form.payments[0]?.method || "cash";
-        // Forcer la sortie du mode multi côté backend si on quittait un multi.
-        body.payment_breakdown = null;
+        // Single : envoyer un breakdown single-element pour que le backend
+        // traite proprement une éventuelle transition multi → single
+        // (clear payment_group_id sur la rep_row + soft-delete des sister rows).
+        // Envoyer `payment_breakdown: null` déclenchait BREAKDOWN_REQUIRED côté
+        // backend quand la tx d'origine était un multi.
+        const singleMethod = form.payments[0]?.method || "cash";
+        body.payment_method    = singleMethod;
+        body.payment_breakdown = [{
+          method:       singleMethod,
+          amount_cents: Math.round(totalCurrent * 100),
+        }];
       }
       // Items toujours co-envoyés si on en a (création rétroactive ou update).
       // Items vide ET initial vide → on n'envoie pas items[] (rétro-compat
