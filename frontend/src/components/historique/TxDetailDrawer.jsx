@@ -148,6 +148,11 @@ function normalizeTime(value) {
 // Validation pure d'un form d'édition. Retourne null si OK, sinon une string FR.
 // Extrait du composant pour pouvoir être appelé depuis un useMemo (canSave)
 // sans dépendances de closure changeantes.
+//
+// La règle d'or de cohérence : total_amount = somme(paiements) = somme(items).
+// Si une de ces 3 valeurs diverge, le save est bloqué avec un message qui
+// précise EXACTEMENT le couple en conflit pour que l'utilisateur sache quoi
+// corriger (item, paiement, ou montant total).
 function validateForm(form) {
   if (!form) return "Données invalides";
   const total = parseAmount(form.total_amount);
@@ -157,7 +162,7 @@ function validateForm(form) {
     if (form.payments.length < 2) return "Au moins 2 méthodes requises";
     if (form.payments.length > 4) return "Maximum 4 méthodes autorisées";
     const seen = new Set();
-    let sum = 0;
+    let paymentsSum = 0;
     for (const p of form.payments) {
       if (!METHOD_META[p.method]) return "Méthode invalide";
       if (p.method === "card_online") return "Le paiement Stripe en ligne n'est pas autorisé en multi";
@@ -165,15 +170,38 @@ function validateForm(form) {
       seen.add(p.method);
       const a = parseAmount(p.amount);
       if (!Number.isFinite(a) || a <= 0) return "Montant invalide pour une méthode";
-      sum += a;
+      paymentsSum += a;
     }
     // Tolerance 1 centime (arrondis fr-FR).
-    if (Math.abs(sum - total) > 0.01) {
-      return "La somme des paiements doit égaler le total";
+    if (Math.abs(paymentsSum - total) > 0.01) {
+      return "Somme des paiements (" + paymentsSum.toFixed(2).replace(".", ",")
+        + " €) ≠ total (" + total.toFixed(2).replace(".", ",") + " €).";
     }
   } else {
     if (!form.payments[0] || !METHOD_META[form.payments[0].method]) {
       return "Méthode invalide";
+    }
+  }
+  // Items granulaires : si présents, leur somme doit égaler le total. Sans
+  // cette règle, le backend rejettera avec ITEMS_AMOUNT_MISMATCH et le drawer
+  // ne saurait pas lequel des champs corriger. Avec items.length === 0, on
+  // laisse passer (rétro-compat tx legacy sans items détaillés).
+  const items = Array.isArray(form.items) ? form.items : [];
+  if (items.length > 0) {
+    let itemsSum = 0;
+    for (const it of items) {
+      const name = String(it.service_name || "").trim();
+      if (!name) return "Chaque prestation doit avoir un nom";
+      const q = parseInt(it.qty, 10);
+      if (!Number.isFinite(q) || q < 1) return "Quantité invalide sur une prestation";
+      const u = parseAmount(it.unit_price);
+      if (!Number.isFinite(u) || u < 0) return "Prix unitaire invalide sur une prestation";
+      itemsSum += q * u;
+    }
+    if (Math.abs(itemsSum - total) > 0.01) {
+      return "Somme des prestations (" + itemsSum.toFixed(2).replace(".", ",")
+        + " €) ≠ total (" + total.toFixed(2).replace(".", ",")
+        + " €) — utilisez le bouton « Synchroniser ».";
     }
   }
   return null;
@@ -442,11 +470,14 @@ function TxDetailDrawerImpl({
     }
     setErrBanner(null);
 
-    // ── Diff vs état initial : on n'envoie que ce qui a changé ────────────
-    // Backend en PATCH semantics — un champ absent du body est conservé en
-    // BDD, n'est ni validé ni écrasé. Économise une UPDATE inutile sur les
-    // colonnes inchangées + évite les effets de bord (cascade fidélité,
-    // broadcast multi-payment) quand rien ne change réellement.
+    // ── Construction du payload : 2 groupes de champs ─────────────────────
+    //  - Métadonnées indépendantes (description, date, time, employee_id) →
+    //    diff vs initial, on n'envoie que ce qui a changé.
+    //  - Trio cohérent (amount + items + payment_breakdown) → si UNE des trois
+    //    valeurs a bougé, on envoie les TROIS ensemble. Sinon le backend
+    //    pourrait recevoir un items[] qui ne matche pas l'ancien amount, ou
+    //    un nouvel amount qui ne matche pas le breakdown initial. validateForm()
+    //    a déjà garanti que les 3 sont cohérents avant qu'on arrive ici.
     const initial = buildInitialForm(transaction);
     const body = {};
     const totalCurrent = parseAmount(form.total_amount);
@@ -465,9 +496,7 @@ function TxDetailDrawerImpl({
       body.employee_id = form.employee_id || null;
     }
 
-    // Paiements : on déclenche l'écriture côté backend uniquement si quelque
-    // chose a changé dans le breakdown OU dans le montant total OU dans le
-    // toggle single/multi. Sinon on laisse intact côté BDD.
+    // Détection des changements sur le trio cohérent.
     const paymentsChanged =
       form.is_multi !== initial.is_multi
       || form.payments.length !== initial.payments.length
@@ -479,47 +508,6 @@ function TxDetailDrawerImpl({
       });
     const totalChanged = Math.abs(totalCurrent - totalInitial) > 0.005;
 
-    // FIX 2026-05-11 : le backend attend `payment_breakdown` (nouveau nom) avec
-    // `amount_cents` (centimes entiers), pas `payments` avec `amount` en euros.
-    // L'ancien payload était partiellement ignoré → toast "modifié" sans réelle
-    // écriture en BDD. On envoie désormais le bon format pour les multi ;
-    // pour un single, on passe par `payment_method` + `amount` (euros) sans
-    // breakdown, ce qui dit explicitement au backend "tx simple, pas multi".
-    if (paymentsChanged) {
-      if (form.is_multi) {
-        body.payment_breakdown = form.payments.map(p => ({
-          method:       p.method,
-          amount_cents: Math.round(parseAmount(p.amount) * 100),
-        }));
-        // Le total du multi DOIT être renvoyé pour que le backend valide
-        // la cohérence somme(breakdown) = total. Le drawer a déjà validé
-        // localement via validate(), mais le backend re-valide.
-        body.amount = totalCurrent;
-      } else {
-        // Single : pas de breakdown ; on transmet la méthode et le total.
-        body.payment_method = form.payments[0]?.method || "cash";
-        body.amount         = totalCurrent;
-        // Forcer la sortie du mode multi côté backend si on quittait un multi.
-        body.payment_breakdown = null;
-      }
-    } else if (totalChanged) {
-      // Total modifié sans changement de breakdown ni du toggle.
-      // Cas single : on re-pousse 1 paiement aligné sur le nouveau total.
-      // Cas multi : le backend rejettera avec BREAKDOWN_REQUIRED si on n'envoie
-      // pas le breakdown — validate() bloque déjà ce cas en amont (sum != total).
-      if (!form.is_multi) {
-        body.amount         = totalCurrent;
-        body.payment_method = form.payments[0]?.method || "cash";
-      } else {
-        body.amount = totalCurrent;
-      }
-    }
-
-    // ── Items granulaires : diff vs initial, on n'envoie que si modifiés.
-    // Backend PUT supporte items[] : DELETE + re-INSERT sur la rep_row du
-    // groupe (cf. transactions.js lignes 1325-1335). Rétro-compat avec
-    // les transactions legacy sans items en BDD : items[] présent dans le
-    // body crée les rows pour la 1re fois (création rétroactive).
     const itemsCurrent = (form.items || []).map(it => ({
       service_id:   it.service_id || null,
       service_name: String(it.service_name || "").trim() || "Prestation",
@@ -541,8 +529,30 @@ function TxDetailDrawerImpl({
             || it.qty          !== init.qty
             || Math.abs(it.unit_price - init.unit_price) > 0.005;
       });
-    if (itemsChanged && itemsCurrent.length > 0) {
-      body.items = itemsCurrent;
+
+    // Si UNE des 3 valeurs du trio a bougé → on envoie les 3 ensemble pour
+    // garantir la cohérence côté BDD (sinon ITEMS_AMOUNT_MISMATCH ou
+    // BREAKDOWN_REQUIRED côté backend, avec une UX dégradée).
+    const trioChanged = paymentsChanged || totalChanged || itemsChanged;
+    if (trioChanged) {
+      body.amount = totalCurrent;
+      if (form.is_multi) {
+        // Multi : backend attend payment_breakdown[] avec amount_cents.
+        body.payment_breakdown = form.payments.map(p => ({
+          method:       p.method,
+          amount_cents: Math.round(parseAmount(p.amount) * 100),
+        }));
+      } else {
+        body.payment_method    = form.payments[0]?.method || "cash";
+        // Forcer la sortie du mode multi côté backend si on quittait un multi.
+        body.payment_breakdown = null;
+      }
+      // Items toujours co-envoyés si on en a (création rétroactive ou update).
+      // Items vide ET initial vide → on n'envoie pas items[] (rétro-compat
+      // tx legacy sans détail des prestations).
+      if (itemsCurrent.length > 0 || itemsInitial.length > 0) {
+        body.items = itemsCurrent;
+      }
     }
 
     // Si rien n'a réellement changé : warning UX (pas d'appel backend).
