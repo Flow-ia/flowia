@@ -270,7 +270,10 @@ function startServer() {
   // Route mince : catalogue intelligent pour le drawer édition /historique.
   // Sert le bon catalogue (categories niveau 2 vs booking_services) selon
   // le context (walkin/appointment) que le frontend déduit de la tx.
-  app.use('/api',                apiLimiter,  require('./routes/services'));
+  // ⚠ Mount sur path spécifique (pas '/api') : sinon le authMiddleware du
+  // router se déclenche pour TOUS les /api/*, casse les preflights CORS
+  // et bloque /api/auth/me, /api/user-settings, etc.
+  app.use('/api/services-for-edit', apiLimiter, require('./routes/services'));
   app.use('/api/booking/service-categories', apiLimiter, require('./routes/booking-service-categories'));
   app.use('/api/media',          apiLimiter,  require('./routes/media'));
   app.use('/api/booking',        apiLimiter,  require('./routes/booking'));

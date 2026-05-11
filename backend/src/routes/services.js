@@ -33,7 +33,9 @@ function cacheSet(userId, context, v) {
   CACHE.set(cacheKey(userId, context), { v, t: Date.now() });
 }
 
-router.get('/services-for-edit', async (req, res) => {
+// Mount path: '/api/services-for-edit' (cf. index.js). On expose '/' ici pour
+// éviter une double imbrication d'URL et garder le router compact.
+router.get('/', async (req, res) => {
   try {
     const userId = req.user.userId;
     const context = String(req.query.context || '').trim();
