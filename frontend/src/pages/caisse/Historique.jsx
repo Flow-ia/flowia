@@ -196,35 +196,33 @@ export default function Historique({
     return acc;
   }, [groupedTodayRevs]);
 
-  // ── Lignes ligne-par-ligne (une ligne par prestation distincte) ──────────
-  // Multi ET single → 1 ligne par groupe d'items (déduplication par
-  // service_name + unit_price). Pour un encaissement « 3 Coupe homme + 1
-  // Coupe femme » payé en multi 41€/17€, on obtient :
-  //   • « 3× Coupe homme — 45,00 € »   (avec sous-lignes breakdown attachées)
-  //   • « 1× Coupe femme — 13,00 € »
-  // Avant le fix : « 4× Coupe homme, Coupe femme — 58 € » sur une seule
-  // ligne agrégée — utilisateur ne voyait plus le détail par prestation.
-  // Le breakdown des paiements reste attaché UNIQUEMENT à la 1ère ligne du
-  // groupe pour ne pas le dupliquer.
+  // ── 1 ligne par transaction (= 1 encaissement = 1 ligne) ────────────────
+  // Le titre concatène toutes les prestations au format « 3× Coupe homme,
+  // 1× Coupe femme ». Pour les multi-paiement, le breakdown des moyens est
+  // affiché en sous-lignes dans la colonne paiements (├─ Espèces / ├─ CB).
+  // Pas de qty prefix devant le titre puisque la description contient déjà
+  // les quantités item par item.
   const empById = useMemo(() => Object.fromEntries(emps.map(e => [e.id, e])), [emps]);
 
-  // Aggregate items par (service_name + unit_price arrondi au centime). Si
-  // la caisse a stocké 3 rows séparées « Coupe homme qty=1 » au lieu d'1
-  // row « Coupe homme qty=3 », on les fusionne ici pour un affichage propre.
-  function dedupeItems(items) {
+  // Aggregate items par (service_name + unit_price). Si la caisse stocke 3
+  // rows séparées « Coupe homme qty=1 » au lieu d'1 row « qty=3 », on
+  // fusionne pour un affichage propre. Renvoie aussi le label formaté
+  // « 3× Coupe homme, 1× Coupe femme ».
+  function formatItems(items) {
     const map = new Map();
     for (const it of items) {
       const name  = (it.service_name || 'Prestation').trim();
-      const price = Math.round((parseFloat(it.unit_price) || 0) * 100); // cents
+      const price = Math.round((parseFloat(it.unit_price) || 0) * 100);
       const key   = name + '|' + price;
       const qty   = parseInt(it.qty) || 1;
-      if (map.has(key)) {
-        map.get(key).qty += qty;
-      } else {
-        map.set(key, { service_name: name, unit_price: price / 100, qty });
-      }
+      if (map.has(key)) map.get(key).qty += qty;
+      else map.set(key, { service_name: name, unit_price: price / 100, qty });
     }
-    return Array.from(map.values());
+    const arr   = Array.from(map.values());
+    const label = arr.map(it => it.qty + '× ' + it.service_name).join(', ');
+    const sum   = arr.reduce((s, it) => s + it.unit_price * it.qty, 0);
+    const qty   = arr.reduce((s, it) => s + it.qty, 0);
+    return { label, sum, qty };
   }
 
   const lines = useMemo(() => {
@@ -232,7 +230,7 @@ export default function Historique({
     groupedTodayRevs.forEach(tx => {
       const emp = empById[tx.employee_id];
       const rawItems = Array.isArray(tx.items) ? tx.items : [];
-      const items    = dedupeItems(rawItems);
+      const { label: itemsLabel, qty: itemsQty } = formatItems(rawItems);
       const isMultiBreakdown = Array.isArray(tx.payments_breakdown)
                             && tx.payments_breakdown.length >= 2;
       let pmLabel;
@@ -251,51 +249,30 @@ export default function Historique({
         : (PM_GRID_CFG[tx.payment_method] ? tx.payment_method : 'other');
       const hour = tx.time ? String(tx.time).slice(0, 5) : '';
       const breakdownArr = isMultiBreakdown ? tx.payments_breakdown : null;
+      // Total de la transaction : pour un multi, utiliser le total du groupe
+      // (gross_amount_cents agrège les rows soeurs). Pour un single, amount
+      // = total. Fallback sur tx.amount si gross_amount_cents absent.
+      const txTotal = isMultiBreakdown && tx.gross_amount_cents
+        ? (parseInt(tx.gross_amount_cents, 10) / 100)
+        : (parseFloat(tx.amount) || 0);
 
-      if (items.length > 0) {
-        // 1 ligne par prestation. breakdown attaché UNIQUEMENT à la 1re ligne
-        // (sinon les sous-lignes paiement se dupliqueraient sur chaque item).
-        items.forEach((it, i) => {
-          out.push({
-            id: tx.id + '_' + i,
-            service: it.service_name,
-            qty: it.qty,
-            amount: it.unit_price * it.qty,
-            emp, pmLabel, pmCfg, pmKey, hour,
-            breakdown: i === 0 ? breakdownArr : null,
-          });
-        });
-        // Ligne d'ajustement si somme(items) != tx.amount (legacy / overrides).
-        // Pour un multi, on compare au total du groupe (tx.amount = rep_row
-        // only, donc on regarde gross_amount_cents qui contient le total).
-        const itemsSum = items.reduce((s, it) => s + it.unit_price * it.qty, 0);
-        const txTotal  = isMultiBreakdown && tx.gross_amount_cents
-          ? (parseInt(tx.gross_amount_cents, 10) / 100)
-          : (parseFloat(tx.amount) || 0);
-        const diff = txTotal - itemsSum;
-        if (Math.abs(diff) > 0.01) {
-          out.push({
-            id: tx.id + '_adj',
-            service: diff > 0 ? 'Supplément' : 'Remise',
-            qty: 1, amount: diff,
-            emp, pmLabel, pmCfg, pmKey, hour,
-            breakdown: null,
-          });
-        }
-      } else {
-        // Pas d'items détaillés (tx legacy) → 1 ligne basée sur description.
-        const txTotal = isMultiBreakdown && tx.gross_amount_cents
-          ? (parseInt(tx.gross_amount_cents, 10) / 100)
-          : (parseFloat(tx.amount) || 0);
-        out.push({
-          id: tx.id,
-          service: tx.description || 'Prestation',
-          qty: parseInt(tx.qty_total) || 1,
-          amount: txTotal,
-          emp, pmLabel, pmCfg, pmKey, hour,
-          breakdown: breakdownArr,
-        });
-      }
+      // 1 ligne unique par transaction. Le titre = format "Qte× Nom, Qte× Nom"
+      // si items présents, sinon fallback sur description.
+      out.push({
+        id: tx.id,
+        service: itemsLabel || tx.description || 'Prestation',
+        // Pas de qty prefix devant le titre — les quantités sont déjà dans
+        // le label item par item.
+        qty: 1,
+        amount: txTotal,
+        emp, pmLabel, pmCfg, pmKey, hour,
+        breakdown: breakdownArr,
+      });
+      // Pas de ligne d'ajustement Supplément/Remise — l'écart éventuel
+      // entre somme(items) et txTotal sera visible naturellement dans le
+      // drawer édition (validation business). En liste, on garde le total
+      // réel encaissé qui fait foi.
+      void itemsQty;
     });
     return out;
   }, [groupedTodayRevs, empById]);
