@@ -203,6 +203,8 @@ router.get('/', async (req, res) => {
       SELECT
         t.id,
         t.appointment_id,
+        t.employee_id,
+        t.stripe_payment_intent_id,
         t.client_email,
         a.client_name,
         e.name AS employee_name,

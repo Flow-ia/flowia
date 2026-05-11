@@ -111,6 +111,40 @@ function parseAmount(str) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Normalise une date BDD (DATE Postgres serialisee en ISO via node-pg, ou
+// string "YYYY-MM-DD" via TO_CHAR, ou timestamptz ISO) vers le format attendu
+// par <input type="date"> : "YYYY-MM-DD". Tolere null/undefined.
+function normalizeDate(value) {
+  if (!value) return "";
+  const s = String(value);
+  // Cas 1 : deja "YYYY-MM-DD" (TO_CHAR ou string raw)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // Cas 2 : ISO timestamp (cree par JSON.stringify d'une Date JS)
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  // Utiliser les composants UTC pour eviter le decalage timezone (le DATE
+  // backend n'a pas de TZ ; node-pg le pose a 00:00:00 UTC).
+  const y  = d.getUTCFullYear();
+  const m  = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return y + "-" + m + "-" + dd;
+}
+
+// Normalise une heure BDD (TIME Postgres -> "HH:MM:SS", ou ISO timestamp via
+// created_at) vers le format <input type="time"> : "HH:MM". Tolere null.
+function normalizeTime(value) {
+  if (!value) return "";
+  const s = String(value);
+  // Cas 1 : "HH:MM" ou "HH:MM:SS" (TIME column)
+  if (/^\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
+  // Cas 2 : ISO timestamp (created_at fallback)
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return hh + ":" + mm;
+}
+
 function TxDetailDrawerImpl({
   transaction,
   onClose,
@@ -180,8 +214,8 @@ function TxDetailDrawerImpl({
     const isMulti = breakdown.length >= 2;
     return {
       description: tx?.description || "",
-      date:        tx?.date || (tx?.created_at ? String(tx.created_at).slice(0, 10) : ""),
-      time:        (tx?.time || "").slice(0, 5),
+      date:        normalizeDate(tx?.date || tx?.created_at),
+      time:        normalizeTime(tx?.time || tx?.created_at),
       employee_id: tx?.employee_id || "",
       total_amount: total,
       is_multi:    isMulti,
