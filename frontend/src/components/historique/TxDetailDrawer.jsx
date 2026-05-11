@@ -15,7 +15,6 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { formatCents } from "../../utils/format";
 import { isTransactionLocked, lockReason } from "../../utils/transactionLock";
-import { Confirm } from "../UI";
 
 // ── SVG inline (memes regles que TransactionRow) ─────────────────────────────
 const SVG_BASE = {
@@ -639,26 +638,113 @@ function TxDetailDrawerImpl({
         ) : null}
       </aside>
 
-      {/* Modal suppression */}
-      <Confirm
+      {/* Modal suppression — z-index local > drawer (71) */}
+      <LocalConfirm
         open={confirmDelete && !deleting}
         onClose={() => setConfirmDelete(false)}
         onConfirm={handleDelete}
         title="Supprimer cette transaction ?"
         message={"Cette action est définitive et la transaction n'apparaîtra plus dans votre historique. Si vous confirmez, le RDV associé redeviendra « à encaisser » (si applicable)."}
+        confirmLabel="Confirmer la suppression"
         danger
+        colors={colors}
       />
 
       {/* Modal discard */}
-      <Confirm
+      <LocalConfirm
         open={confirmDiscard}
         onClose={() => setConfirmDiscard(false)}
         onConfirm={discardAndClose}
         title="Annuler les modifications ?"
         message={"Vos modifications seront perdues. Voulez-vous continuer ?"}
+        confirmLabel="Continuer"
         danger
+        colors={colors}
       />
     </>
+  );
+}
+
+// ── LocalConfirm ────────────────────────────────────────────────────────────
+// Confirm dialog dedie au drawer. Identique visuellement au composant Confirm
+// global (UI.jsx) mais avec z-index 90 (au-dessus du drawer 71). Necessaire
+// car le Confirm global a z-index 60 et restait masque par le drawer.
+function LocalConfirm({ open, onClose, onConfirm, title, message, confirmLabel, danger, colors }) {
+  // Echap ferme le confirm sans propager au drawer (qui ecouterait aussi).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const confirmBg    = danger ? "#991b1b" : (colors?.text || "#111827");
+  const confirmColor = danger ? "#ffffff" : "#ffffff";
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 90,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 16,
+    }}>
+      <div onClick={onClose}
+           style={{ position: "absolute", inset: 0,
+                    background: "rgba(0,0,0,0.55)" }} />
+      <div style={{
+        position: "relative", width: "100%", maxWidth: 400,
+        overflow: "hidden", borderRadius: 14,
+        background: colors?.drawerBg || "#ffffff",
+        border: "0.5px solid " + (colors?.border || "rgba(0,0,0,0.08)"),
+        boxShadow: "0 20px 60px rgba(0,0,0,0.30)",
+        fontFamily: "inherit",
+      }}>
+        <div style={{ padding: 22 }}>
+          <h3 style={{
+            fontSize: 15, fontWeight: 500,
+            color: colors?.text || "#111827",
+            margin: "0 0 8px",
+          }}>
+            {title}
+          </h3>
+          {message && (
+            <p style={{
+              fontSize: 13, color: colors?.muted || "#6B7280",
+              margin: 0, lineHeight: 1.5,
+            }}>
+              {message}
+            </p>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 10, padding: "0 22px 22px" }}>
+          <button type="button" onClick={onClose}
+                  style={{
+                    flex: 1, padding: 10, borderRadius: 8,
+                    fontSize: 13, fontWeight: 500, cursor: "pointer",
+                    background: "transparent",
+                    color: colors?.text || "#111827",
+                    border: "0.5px solid " + (colors?.inputBorder || "rgba(0,0,0,0.14)"),
+                    fontFamily: "inherit",
+                  }}>
+            {"Annuler"}
+          </button>
+          <button type="button"
+                  onClick={() => { onConfirm?.(); }}
+                  style={{
+                    flex: 1, padding: 10, borderRadius: 8,
+                    fontSize: 13, fontWeight: 500, cursor: "pointer",
+                    background: confirmBg, color: confirmColor,
+                    border: "none", fontFamily: "inherit",
+                  }}>
+            {confirmLabel || "Confirmer"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
