@@ -4,16 +4,56 @@ require('dotenv').config();
 const cluster = require('cluster');
 const os      = require('os');
 
+console.log('[BOOT] Starting server pid=' + process.pid
+  + ' node=' + process.version
+  + ' env=' + (process.env.NODE_ENV || 'development'));
+
+// ── Global error handlers ────────────────────────────────────────────────────
+// On NE FAIT PAS process.exit() : sur Render Free, un crash = cold start de
+// 10-30s pendant lequel le port est fermé → healthcheck Render échoue → logs
+// "connection refused". Mieux vaut logger et laisser le process continuer ;
+// si l'état devient vraiment corrompu, Render redémarrera de toute façon via
+// healthcheck. Un uncaughtException dans un handler de route n'affecte pas
+// le reste du process (l'event loop est isolé par requête).
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] uncaughtException:',
+    (err && err.stack) || String(err));
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] unhandledRejection:',
+    (reason && reason.stack) || String(reason));
+});
+
 // ── Cluster mode : 1 worker par CPU ──────────────────────────────────────────
+// Sur Render Free (0.1 vCPU, 512 Mo), WEB_CONCURRENCY=1 (cf. render.yaml).
+// Le fallback os.cpus().length reste utile en self-host multi-cores.
 const NUM_WORKERS = parseInt(process.env.WEB_CONCURRENCY) || os.cpus().length;
 
 if (cluster.isPrimary && process.env.NODE_ENV === 'production') {
-  console.log(`🚀 FlowIA Primary ${process.pid} — spawning ${NUM_WORKERS} workers`);
+  console.log('[BOOT] Primary ' + process.pid + ' — spawning ' + NUM_WORKERS + ' workers');
   for (let i = 0; i < NUM_WORKERS; i++) cluster.fork();
+  let respawnEnabled = true;
   cluster.on('exit', (worker, code) => {
-    console.warn(`Worker ${worker.process.pid} mort (code ${code}) — relance`);
+    if (!respawnEnabled) {
+      console.log('[BOOT] Worker ' + worker.process.pid + ' exited during shutdown.');
+      return;
+    }
+    console.warn('[BOOT] Worker ' + worker.process.pid + ' mort (code ' + code + ') — relance');
     cluster.fork();
   });
+  // Forward SIGTERM/SIGINT aux workers pour un graceful shutdown coordonné.
+  // Sans ça, le primary meurt brutalement et orpheline les workers → réponses
+  // partielles + transactions DB tronquées.
+  const forwardShutdown = (signal) => {
+    respawnEnabled = false;
+    console.log('[SHUTDOWN] Primary received ' + signal + ' — signaling workers…');
+    for (const id in cluster.workers) {
+      try { cluster.workers[id].kill(signal); } catch {}
+    }
+    setTimeout(() => process.exit(0), 12_000).unref();
+  };
+  process.on('SIGTERM', () => forwardShutdown('SIGTERM'));
+  process.on('SIGINT',  () => forwardShutdown('SIGINT'));
 } else {
   startServer();
 }
@@ -27,6 +67,19 @@ function startServer() {
   const { initDB } = require('./db');
 
   const app = express();
+
+  // ── Healthcheck ULTRA-LÉGER ──────────────────────────────────────────────
+  // Mounted FIRST, avant tout middleware (auth, rate-limit, body-parser, CORS,
+  // DB pool). Ne dépend de RIEN. Render utilise /api/health pour son
+  // healthcheck (cf. render.yaml). On expose aussi /health (sans /api) pour
+  // les pings externes (cron-job.org, UptimeRobot…) et les load balancers
+  // génériques. Si ce handler est inatteignable, c'est que le port n'est pas
+  // bind — pas qu'une dépendance interne est cassée.
+  const healthHandler = (req, res) => {
+    res.status(200).type('text/plain').send('ok');
+  };
+  app.get('/health',     healthHandler);
+  app.get('/api/health', healthHandler);
 
   // ── Trust proxy (Render, Vercel, Nginx) ──────────────────────────────────
   app.set('trust proxy', 1);
@@ -375,9 +428,19 @@ function startServer() {
   // séparés (ADMIN_JWT_SECRET / ADMIN_JWT_REFRESH_SECRET), audit log obligatoire.
   app.use('/api/admin', require('./routes/admin'));
 
-  // ── Health ───────────────────────────────────────────────────────────────
-  app.get('/api/health', (req, res) => {
-    res.json({ ok: true, pid: process.pid, uptime: process.uptime(), time: new Date() });
+  // ── Health (riche) ───────────────────────────────────────────────────────
+  // /api/health-rich = diagnostic complet (incl. DB ready, uptime, pid).
+  // L'endpoint Render /api/health reste sur le handler ultra-léger mounted
+  // tout en haut — Render ne doit JAMAIS faillir parce que la DB est
+  // momentanément KO ou parce qu'un module a un soucis.
+  app.get('/api/health-rich', (req, res) => {
+    res.json({
+      ok:        true,
+      pid:       process.pid,
+      uptime:    process.uptime(),
+      time:      new Date(),
+      db_ready:  global.__dbReady === true,
+    });
   });
 
   // ── Route de test email — À SUPPRIMER APRÈS TEST ─────────────────────────
@@ -1158,62 +1221,121 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
   // Expose pour endpoint admin de test (POST /api/birthday-campaign/test-run).
   app.locals.runBirthdayPromos = runBirthdayPromos;
 
-  const PORT = process.env.PORT || 5000;
-  initDB()
-    .then(() => {
-      app.listen(PORT, () => {
-        // « isLocalLeader » remplace l'ancienne garde `cluster.worker.id === 1`
-        // qui servait de protection contre la double exécution des crons.
-        // Cette garantie est désormais portée par pg_advisory_lock (cf.
-        // utils/distributedLock.js) — efficace même en multi-instance Render.
-        // On garde cette condition uniquement comme **optimisation locale**
-        // pour ne pas multiplier les setInterval/log diagnostic au sein
-        // d'un même container avec cluster Node (1 worker leader par
-        // instance suffit ; les autres workers n'ouvrent que les requêtes
-        // HTTP). En mono-process (NODE_ENV != production), la condition
-        // est trivialement vraie.
-        const isLocalLeader = !cluster.worker || cluster.worker.id === 1;
-        console.log(`✅ Worker ${process.pid} → http://localhost:${PORT}`);
-        // Commit 28b — log diagnostic des URLs unsubscribe émises dans les
-        // emails marketing. Si l'URL pointe vers un backend qui ne contient
-        // pas la route `/api/pub/unsubscribe-page` (ex. backend prod sur
-        // branche main pendant la refonte), les liens cliquables renverront
-        // 404 « Cannot GET ». Ce log permet de détecter la config en 1 coup.
-        if (isLocalLeader) {
-          try {
-            const { unsubscribeUrl, backendUnsubscribeUrl } = require('./utils/unsubscribe');
-            const stub = '00000000-0000-0000-0000-000000000000';
-            const footerUrl = unsubscribeUrl(stub);
-            const headerUrl = backendUnsubscribeUrl(stub);
-            console.log(`[UNSUB CFG] footer email → ${footerUrl || '(non générable, BACKEND_PUBLIC_URL manquante)'}`);
-            console.log(`[UNSUB CFG] List-Unsubscribe header → ${headerUrl || '(non générable)'}`);
-            if (process.env.UNSUBSCRIBE_FRONTEND_PAGE_URL) {
-              console.log(`[UNSUB CFG] redirect 302 actif vers → ${process.env.UNSUBSCRIBE_FRONTEND_PAGE_URL}`);
-            }
-          } catch (e) { console.warn('[UNSUB CFG] Log diagnostic indisponible:', e.message); }
-          startCron();
+  // ── Validation env vars critiques ────────────────────────────────────────
+  // On ne CRASH PAS si manquant (Render Free : un crash = cold-start de 30s).
+  // On logue clairement pour que le diagnostic soit immédiat dans les logs.
+  const REQUIRED_ENV = ['DATABASE_URL', 'JWT_SECRET'];
+  const OPTIONAL_ENV = ['FRONTEND_URL', 'SMTP_HOST', 'STRIPE_SECRET_KEY',
+                        'CLOUDINARY_CLOUD_NAME', 'VAPID_PUBLIC_KEY'];
+  for (const k of REQUIRED_ENV) {
+    if (!process.env[k]) console.error('[ENV] MISSING REQUIRED: ' + k
+      + ' — endpoints dépendants renverront 500.');
+  }
+  for (const k of OPTIONAL_ENV) {
+    if (!process.env[k]) console.warn('[ENV] missing optional: ' + k
+      + ' — feature désactivée.');
+  }
 
-          // ── Email queue (commit 30) ─────────────────────────────────────
-          // Démarre pg-boss + worker uniquement sur le worker leader local
-          // (isLocalLeader) pour économiser les connexions DB. pg-boss gère
-          // lui-même la concurrence inter-instances Render via FOR UPDATE
-          // SKIP LOCKED → safe en multi-instance. Si le démarrage échoue
-          // (DATABASE_URL absente, schéma bloqué…), enqueueEmail() bascule
-          // automatiquement en envoi synchrone — aucun email perdu.
-          (async () => {
-            try {
-              const { startEmailQueue, startEmailWorker } = require('./utils/emailQueue');
-              const b = await startEmailQueue();
-              if (b) await startEmailWorker();
-            } catch (e) {
-              console.error('[emailQueue] init globale échouée:', e.message);
-            }
-          })();
-        }
-      });
-    })
-    .catch(err => {
-      console.error('❌ DB init failed:', err);
-      process.exit(1);
+  // ── BIND HTTP IMMEDIATEMENT — AVANT toute init lourde ────────────────────
+  // C'est LA correction principale pour les erreurs Render "connection refused".
+  // Avant : app.listen() était dans le .then() de initDB() → si les migrations
+  // prenaient 10s, le port n'était pas ouvert pendant 10s → Render healthcheck
+  // échoue → "dial tcp ...:5000: connect: connection refused".
+  // Maintenant : on listen IMMEDIATEMENT, initDB tourne en arrière-plan.
+  // L'endpoint /health (top du fichier) répond 200 dès la 1re ms.
+  const PORT = parseInt(process.env.PORT, 10) || 5000;
+  const HOST = '0.0.0.0'; // bind explicite — sinon certains containers
+                          // résolvent en 127.0.0.1 et Render proxy ne joint pas.
+  const server = app.listen(PORT, HOST, () => {
+    console.log('[HTTP] Listening on ' + HOST + ':' + PORT
+      + ' (pid=' + process.pid + ')');
+  });
+  // Socket timeout : si une requête traîne >65s (ex. query DB pendue), on
+  // ferme la connexion plutôt que de bloquer le worker. Render proxy timeout
+  // est ~100s, on reste en-dessous.
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout   = 66_000;
+  server.requestTimeout   = 0; // pas de hard cap (les routes gèrent leur timeout)
+
+  // ── Graceful shutdown ────────────────────────────────────────────────────
+  // Render envoie SIGTERM au deploy ou au scale-down. Sans handler, les
+  // connexions en cours sont coupées brutalement (transactions DB perdues,
+  // réponses partielles). On laisse 10s aux requêtes en vol pour terminer,
+  // puis on force close. SIGINT = Ctrl+C en local.
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log('[SHUTDOWN] Received ' + signal + ' — draining HTTP server…');
+    server.close(() => {
+      console.log('[SHUTDOWN] HTTP server closed. Bye.');
+      process.exit(0);
     });
+    setTimeout(() => {
+      console.warn('[SHUTDOWN] Forced exit after 10s drain timeout.');
+      process.exit(0);
+    }, 10_000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
+
+  // ── DB init + heavy bootstrap en arrière-plan ────────────────────────────
+  // Tout ce qui suit ne bloque PAS le listen. Si une étape échoue, on logue
+  // et on retry — jamais d'exit du process. Le flag global __dbReady passe à
+  // true quand la DB est prête (consommé par /api/health-rich).
+  const isLocalLeader = !cluster.worker || cluster.worker.id === 1;
+
+  async function bootDB(attempt) {
+    try {
+      console.log('[DB] Init attempt ' + attempt + '…');
+      await initDB();
+      global.__dbReady = true;
+      console.log('[DB] Connected and migrations applied');
+      bootPostDB();
+    } catch (err) {
+      // Backoff exponentiel cappé à 60s. Render Postgres free a parfois des
+      // hiccups au boot — retry au lieu de crasher.
+      const delay = Math.min(60_000, 2_000 * Math.pow(2, attempt - 1));
+      console.error('[DB] Init failed (attempt ' + attempt + '), retry in '
+        + Math.round(delay / 1000) + 's:', err.message);
+      setTimeout(() => bootDB(attempt + 1), delay);
+    }
+  }
+
+  function bootPostDB() {
+    if (!isLocalLeader) return; // workers non-leader : juste les requêtes HTTP
+
+    // Diagnostic URLs unsubscribe (cf. commit 28b)
+    try {
+      const { unsubscribeUrl, backendUnsubscribeUrl } = require('./utils/unsubscribe');
+      const stub = '00000000-0000-0000-0000-000000000000';
+      const footerUrl = unsubscribeUrl(stub);
+      const headerUrl = backendUnsubscribeUrl(stub);
+      console.log('[UNSUB CFG] footer email → ' + (footerUrl
+        || '(non générable, BACKEND_PUBLIC_URL manquante)'));
+      console.log('[UNSUB CFG] List-Unsubscribe header → '
+        + (headerUrl || '(non générable)'));
+      if (process.env.UNSUBSCRIBE_FRONTEND_PAGE_URL) {
+        console.log('[UNSUB CFG] redirect 302 actif vers → '
+          + process.env.UNSUBSCRIBE_FRONTEND_PAGE_URL);
+      }
+    } catch (e) { console.warn('[UNSUB CFG] indisponible:', e.message); }
+
+    // Crons (pg_advisory_lock empêche la double-exécution multi-instance)
+    try { startCron(); }
+    catch (e) { console.error('[CRON] startup failed:', e.message); }
+
+    // Email queue (pg-boss) — non bloquant, fallback synchrone si KO
+    (async () => {
+      try {
+        const { startEmailQueue, startEmailWorker } = require('./utils/emailQueue');
+        const b = await startEmailQueue();
+        if (b) await startEmailWorker();
+      } catch (e) {
+        console.error('[emailQueue] init échouée (fallback sync):', e.message);
+      }
+    })();
+  }
+
+  bootDB(1);
 }
