@@ -26,8 +26,14 @@ module.exports = function attachSettingsRoutes(router) {
   });
 
   // POST /api/booking/settings
+  // Merge partiel : un body qui ne contient qu'un sous-ensemble de champs
+  // conserve les valeurs existantes pour les champs absents. Indispensable
+  // car plusieurs UI (politique d'annulation, agenda, etc.) envoient un
+  // body restreint -- un UPSERT brutal ecrasait is_enabled / slug et
+  // desactivait silencieusement la page de reservation du marchand.
   router.post('/settings', async (req, res) => {
     try {
+      const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
       const { is_enabled, slug, business_description, address, phone, timezone,
               advance_booking_days, min_notice_hours, cancellation_policy_hours,
               require_account, google_business_url } = req.body;
@@ -44,29 +50,37 @@ module.exports = function attachSettingsRoutes(router) {
       //   3. CASE WHEN dans le UPSERT SQL (verrou final cote DB — empeche
       //      meme une bypass JS de modifier la colonne)
       const { rows: current } = await pool.query(
-        'SELECT slug, slug_locked FROM booking_settings WHERE user_id=$1',
+        'SELECT * FROM booking_settings WHERE user_id=$1',
         [req.user.userId]
       );
-      const isLocked = current.length && current[0].slug_locked === true;
-      const currentSlug = current.length ? current[0].slug : null;
+      const cur = current[0] || {};
+      const isLocked = cur.slug_locked === true;
+      const currentSlug = cur.slug ?? null;
       // Comparaison normalisee (trim + lowercase) pour absorber un envoi
       // avec casse differente. Un slug envoye undefined/null ne compte pas
       // comme "tentative de change" si l'utilisateur PATCHait une autre
       // section sans inclure le champ slug.
       const sentSlug = (slug == null) ? null : String(slug).trim().toLowerCase();
       const curSlugN = currentSlug ? String(currentSlug).trim().toLowerCase() : null;
-      if (isLocked && sentSlug != null && sentSlug !== curSlugN) {
+      if (isLocked && has('slug') && sentSlug != null && sentSlug !== curSlugN) {
         return res.status(403).json({
           error: "Votre URL de reservation a ete imposee par notre equipe et ne peut pas etre modifiee. Merci de contacter le support pour toute demande.",
           code: 'SLUG_LOCKED',
         });
       }
+      // Merge field-par-field : si la cle est absente du body, on reprend
+      // la valeur existante en DB ; si la row n'existe pas (premier POST),
+      // on utilise le default produit.
+      const pick = (key, defaultVal) =>
+        has(key) ? req.body[key] : (cur[key] !== undefined ? cur[key] : defaultVal);
+
       // Couche 2 : force la valeur a celle en DB si verrouille (si jamais
       // le check ci-dessus etait contourne par un cas inattendu).
-      const slugToWrite = isLocked ? currentSlug : (slug || null);
+      const slugMerged = has('slug') ? (slug || null) : currentSlug;
+      const slugToWrite = isLocked ? currentSlug : slugMerged;
 
-      // Vérifier unicité du slug (uniquement si on tente d'en ecrire un)
-      if (slugToWrite) {
+      // Vérifier unicité du slug (uniquement si on tente d'en ecrire un nouveau)
+      if (slugToWrite && has('slug') && slugToWrite !== currentSlug) {
         const { rows: existing } = await pool.query(
           'SELECT id FROM booking_settings WHERE slug=$1 AND user_id!=$2', [slugToWrite, req.user.userId]
         );
@@ -74,8 +88,18 @@ module.exports = function attachSettingsRoutes(router) {
       }
       // Valeurs autorisées pour la politique d'annulation
       const ALLOWED = [0, 1, 2, 6, 24, 48];
-      const canPol = ALLOWED.includes(parseInt(cancellation_policy_hours))
-        ? parseInt(cancellation_policy_hours) : 2;
+      const rawCanPol = pick('cancellation_policy_hours', 2);
+      const canPol = ALLOWED.includes(parseInt(rawCanPol)) ? parseInt(rawCanPol) : 2;
+
+      const effIsEnabled    = has('is_enabled') ? !!is_enabled : (cur.is_enabled ?? false);
+      const effBusinessDesc = pick('business_description', null);
+      const effAddress      = pick('address', null);
+      const effPhone        = pick('phone', null);
+      const effTimezone     = pick('timezone', 'Europe/Paris') || 'Europe/Paris';
+      const effAdvanceDays  = pick('advance_booking_days', 30);
+      const effMinNotice    = pick('min_notice_hours', 1);
+      const effRequireAcc   = has('require_account') ? !!require_account : (cur.require_account ?? false);
+      const effGoogleUrl    = pick('google_business_url', null);
 
       // Couche 3 : meme si tout le reste echoue, le CASE WHEN dans le UPDATE
       // empeche d'ecraser slug si slug_locked=TRUE en DB. Filet de securite
@@ -91,10 +115,10 @@ module.exports = function attachSettingsRoutes(router) {
            cancellation_policy_hours=$10, require_account=$11,
            google_business_url=$12, updated_at=NOW()
          RETURNING *`,
-        [req.user.userId, is_enabled ?? false, slugToWrite, business_description || null,
-         address || null, phone || null, timezone || 'Europe/Paris',
-         advance_booking_days ?? 30, min_notice_hours ?? 1, canPol,
-         require_account ?? false, google_business_url || null]
+        [req.user.userId, effIsEnabled, slugToWrite, effBusinessDesc,
+         effAddress, effPhone, effTimezone,
+         effAdvanceDays, effMinNotice, canPol,
+         effRequireAcc, effGoogleUrl]
       );
       res.json({ settings: rows[0] });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }

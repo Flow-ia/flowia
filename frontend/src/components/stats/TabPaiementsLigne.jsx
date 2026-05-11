@@ -2,6 +2,7 @@
 // HERO GRADIENT BLEU (#042C53 -> #185FA5) en haut, 4 KPI status, policy +
 // business impact, histogramme 30j.
 
+import { useNavigate } from "react-router-dom";
 import { useStatsOnlinePayments } from "../../hooks/useStats";
 import { useTheme } from "../../hooks/useTheme";
 import { Toast, useToast } from "../../components/UI";
@@ -24,7 +25,8 @@ const PATH_SETTINGS = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.6
 
 export default function TabPaiementsLigne({ period }) {
   const { theme: t } = useTheme();
-  const [toast, showToast] = useToast();
+  const [toast] = useToast();
+  const navigate = useNavigate();
   const { data, loading, error } = useStatsOnlinePayments(period);
 
   if (loading && !data) return <Loading theme={t} />;
@@ -169,7 +171,7 @@ export default function TabPaiementsLigne({ period }) {
                        : "—"}
                      isLast />
           <button type="button"
-                  onClick={() => showToast("Configuration au Commit 6", "info")}
+                  onClick={() => navigate("/reglages/paiements")}
                   style={{
                     width: "100%", marginTop: 12,
                     padding: "10px 12px", borderRadius: 8,
