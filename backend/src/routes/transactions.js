@@ -874,36 +874,45 @@ router.post('/', async (req, res) => {
 router.put('/:id', pinAdminMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
-    const { type, amount, description, category_id, employee_id,
-            payment_method, date, time, datetime_iso, reason,
-            client_email, client_name, client_note,
-            items, payments } = req.body;
+    const body = req.body || {};
+    const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+    const {
+      type, amount, description, category_id, employee_id,
+      payment_method, date, time, datetime_iso, reason,
+      client_email, /* client_name unused */ client_note,
+      items, payments,
+    } = body;
 
-    // Audit V : mêmes validations strictes que POST.
-    if (type !== undefined && !VALID_TX_TYPES.has(String(type))) {
+    // Audit V : validations strictes UNIQUEMENT sur les champs envoyés.
+    // PATCH semantics — un champ absent du body n'est pas validé ni écrit
+    // (avant : `type=undefined` était lié en NULL et violait NOT NULL).
+    if (has('type') && !VALID_TX_TYPES.has(String(type))) {
       client.release();
       return res.status(400).json({ error: 'Type de transaction invalide.' });
     }
-    if (payment_method !== undefined && !VALID_TX_METHODS.has(String(payment_method))) {
+    if (has('payment_method') && payment_method != null
+        && !VALID_TX_METHODS.has(String(payment_method))) {
       client.release();
       return res.status(400).json({ error: 'Mode de paiement invalide.' });
     }
-    if (date && !isRealDate(String(date))) {
+    if (has('date') && date && !isRealDate(String(date))) {
       client.release();
       return res.status(400).json({ error: 'Date invalide (attendu YYYY-MM-DD).' });
     }
-    if (amount != null) {
+    if (has('amount') && amount != null) {
       const amtPut = parseFloat(amount);
       if (!Number.isFinite(amtPut) || amtPut < 0 || amtPut > MAX_AMOUNT) {
         client.release();
         return res.status(400).json({ error: 'Montant invalide.' });
       }
     }
-    if (typeof description === 'string' && description.length > MAX_DESC_LEN) {
+    if (has('description') && typeof description === 'string'
+        && description.length > MAX_DESC_LEN) {
       client.release();
       return res.status(400).json({ error: 'Description trop longue.' });
     }
-    if (typeof client_note === 'string' && client_note.length > MAX_NOTE_LEN) {
+    if (has('client_note') && typeof client_note === 'string'
+        && client_note.length > MAX_NOTE_LEN) {
       client.release();
       return res.status(400).json({ error: 'Note client trop longue.' });
     }
@@ -914,58 +923,285 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Transaction introuvable.' });
     }
 
-    // Items normalisés → qty_total (fallback 1 si aucun item fourni)
+    // ── Items normalisés (lus uniquement si items[] fourni) ───────────────────
     const hasItemsPayload = Array.isArray(items);
     const itemList = hasItemsPayload
       ? items.filter(it => it && it.service_name)
       : [];
-    const qtyTotal = hasItemsPayload
-      ? (itemList.length
-          ? itemList.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
-          : 1)
-      : (before.qty_total || 1);
 
-    // Paiements normalisés → pmStored + breakdown
+    // ── Paiements normalisés ──────────────────────────────────────────────────
+    // payments[] sert à 2 choses :
+    //   1. ré-écrire la table legacy transaction_payments (single row + N children)
+    //   2. ré-écrire un groupe multi-payment payment_group_id (N rows transactions)
+    // Whitelist BREAKDOWN_METHODS pour interdire 'card_online' / 'multi' / 'check'.
     const hasPayPayload = Array.isArray(payments);
     const payList = hasPayPayload
       ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
       : [];
-    const pmStored = hasPayPayload
-      ? (payList.length > 1 ? 'multi' : (payList[0]?.method || payment_method || 'cash'))
-      : (payment_method || before.payment_method || 'cash');
+    if (hasPayPayload && payList.length >= 2) {
+      // Validation breakdown alignée admin/transactions.js (commit A backend)
+      const seen = new Set();
+      let sumCents = 0;
+      for (const p of payList) {
+        if (p.method === 'card_online') {
+          client.release();
+          return res.status(400).json({
+            error: 'card_online interdit en paiement multiple.',
+            code: 'BREAKDOWN_CARD_ONLINE_NOT_SUPPORTED',
+          });
+        }
+        if (!BREAKDOWN_METHODS.has(p.method)) {
+          client.release();
+          return res.status(400).json({
+            error: `Méthode invalide en breakdown : ${p.method}.`,
+            code: 'BREAKDOWN_INVALID_METHOD',
+          });
+        }
+        if (seen.has(p.method)) {
+          client.release();
+          return res.status(400).json({
+            error: `Méthode en doublon : ${p.method}.`,
+            code: 'BREAKDOWN_DUPLICATE_METHODS',
+          });
+        }
+        seen.add(p.method);
+        sumCents += Math.round((parseFloat(p.amount) || 0) * 100);
+      }
+      if (payList.length > 4) {
+        client.release();
+        return res.status(400).json({
+          error: 'Maximum 4 méthodes.',
+          code: 'BREAKDOWN_TOO_MANY_METHODS',
+        });
+      }
+      // Si amount est aussi fourni, vérifier que la somme correspond.
+      if (has('amount') && amount != null) {
+        const totalCents = Math.round(parseFloat(amount) * 100);
+        if (sumCents !== totalCents) {
+          client.release();
+          return res.status(400).json({
+            error: `La somme des paiements (${(sumCents/100).toFixed(2)} €) doit égaler le total (${(totalCents/100).toFixed(2)} €).`,
+            code: 'BREAKDOWN_SUM_MISMATCH',
+          });
+        }
+      }
+    }
+
+    // qty_total dérivé d'items[] uniquement si présent. Sinon conservé.
+    const qtyTotal = hasItemsPayload
+      ? (itemList.length
+          ? itemList.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
+          : 1)
+      : null;
 
     await client.query('BEGIN');
 
-    // Normalisation client_email (LOWER+TRIM) cohérente avec POST
-    const clientEmailNormPut = (typeof client_email === 'string' && client_email.trim())
-      ? client_email.trim().toLowerCase()
-      : null;
+    // ── Construction dynamique du SET (PATCH semantics) ───────────────────────
+    // Un champ n'est inclus que s'il est PRESENT dans req.body, ce qui évite
+    // d'écraser à NULL des colonnes NOT NULL (type, payment_method…) quand le
+    // frontend envoie un diff partiel. Map<col, val> garantit qu'une colonne
+    // n'apparaît qu'une fois dans le SET (priorité : dernier pushSet gagne).
+    const setMap = new Map();
+    const pushSet = (col, val) => { setMap.set(col, val); };
 
-    const { rows } = await client.query(
-      `UPDATE transactions SET
-        type=$1, amount=$2, description=$3, category_id=$4, employee_id=$5,
-        payment_method=$6, date=$7, time=$8, datetime_iso=$9,
-        client_email=$10, client_note=$11, qty_total=$12
-       WHERE id=$13 AND user_id=$14
-       RETURNING id, user_id, type, amount, description, category_id, employee_id,
-         payment_method, locked, client_email, client_note, qty_total,
-         TO_CHAR(date, 'YYYY-MM-DD') as date,
-         TO_CHAR(time, 'HH24:MI') as time,
-         datetime_iso, appointment_id, source, created_at`,
-      [type, amount, description || null, category_id || null, employee_id || null,
-       pmStored, date, time || null, datetime_iso || null,
-       clientEmailNormPut,
-       client_note != null ? client_note : before.client_note,
-       qtyTotal,
-       req.params.id, req.user.userId]
-    );
-    if (!rows.length) {
-      await client.query('ROLLBACK');
-      client.release();
-      return res.status(404).json({ error: 'Transaction introuvable.' });
+    if (has('type'))         pushSet('type', type);
+    if (has('amount')) {
+      pushSet('amount', amount);
+      // Maintenir gross_amount_cents / net_amount_cents en cohérence avec
+      // amount pour les rows non-Stripe (sinon le COALESCE dans
+      // EFFECTIVE_GROSS_CENTS_SQL prend l'ancienne valeur cents).
+      const amtCents = Math.round(parseFloat(amount) * 100);
+      pushSet('gross_amount_cents', amtCents);
+      pushSet('net_amount_cents',   amtCents);
+    }
+    if (has('description'))  pushSet('description', description || null);
+    if (has('category_id'))  pushSet('category_id', category_id || null);
+    if (has('employee_id'))  pushSet('employee_id', employee_id || null);
+    if (has('date'))         pushSet('date', date);
+    if (has('time'))         pushSet('time', time || null);
+    if (has('datetime_iso')) pushSet('datetime_iso', datetime_iso || null);
+    if (has('client_email')) {
+      const norm = (typeof client_email === 'string' && client_email.trim())
+        ? client_email.trim().toLowerCase()
+        : null;
+      pushSet('client_email', norm);
+    }
+    if (has('client_note'))  pushSet('client_note', client_note);
+    if (hasItemsPayload)     pushSet('qty_total', qtyTotal);
+
+    // payment_method : sur la rep_row, en cas de multi on grave la méthode du
+    // 1er sous-paiement (chaque row du groupe porte sa propre méthode).
+    if (hasPayPayload && payList.length >= 2) {
+      pushSet('payment_method', payList[0].method);
+      // Le montant de la rep_row = montant du 1er sous-paiement.
+      const repAmt = parseFloat(payList[0].amount) || 0;
+      const repCents = Math.round(repAmt * 100);
+      pushSet('amount', repAmt);
+      pushSet('gross_amount_cents', repCents);
+      pushSet('net_amount_cents',   repCents);
+      // En cas de transition single → multi, assigner un payment_group_id.
+      if (!before.payment_group_id) {
+        pushSet('payment_group_id', require('crypto').randomUUID());
+      }
+    } else if (hasPayPayload && payList.length === 1) {
+      // Single row : on bascule éventuellement la méthode + montant via payments[0].
+      const sAmt = parseFloat(payList[0].amount) || 0;
+      const sCents = Math.round(sAmt * 100);
+      pushSet('payment_method', payList[0].method);
+      pushSet('amount', sAmt);
+      pushSet('gross_amount_cents', sCents);
+      pushSet('net_amount_cents',   sCents);
+      // Si on quittait un multi pour repasser en single : effacer le group_id.
+      if (before.payment_group_id) {
+        pushSet('payment_group_id', null);
+      }
+    } else if (has('payment_method')) {
+      pushSet('payment_method', payment_method);
     }
 
-    // Remplacer items (si fournis)
+    let updatedRepRow = null;
+    if (setMap.size > 0) {
+      // Materialiser la Map en SQL : `col=$N, ...` + params parallèles.
+      const sets   = [];
+      const params = [];
+      for (const [col, val] of setMap.entries()) {
+        params.push(val);
+        sets.push(`${col}=$${params.length}`);
+      }
+      params.push(req.params.id);
+      params.push(req.user.userId);
+      const idIdx  = params.length - 1;
+      const uidIdx = params.length;
+      const { rows } = await client.query(
+        `UPDATE transactions SET ${sets.join(', ')}
+         WHERE id=$${idIdx} AND user_id=$${uidIdx}
+         RETURNING id, user_id, type, amount, description, category_id, employee_id,
+           payment_method, locked, client_email, client_note, qty_total,
+           payment_group_id,
+           TO_CHAR(date, 'YYYY-MM-DD') as date,
+           TO_CHAR(time, 'HH24:MI') as time,
+           datetime_iso, appointment_id, source, created_at`,
+        params
+      );
+      if (!rows.length) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(404).json({ error: 'Transaction introuvable.' });
+      }
+      updatedRepRow = rows[0];
+    } else {
+      // Aucun champ scalaire à patcher (cas extrême) — on prend la row courante.
+      const { rows } = await client.query(
+        `SELECT id, user_id, type, amount, description, category_id, employee_id,
+                payment_method, locked, client_email, client_note, qty_total,
+                payment_group_id,
+                TO_CHAR(date, 'YYYY-MM-DD') as date,
+                TO_CHAR(time, 'HH24:MI') as time,
+                datetime_iso, appointment_id, source, created_at
+           FROM transactions WHERE id=$1 AND user_id=$2`,
+        [req.params.id, req.user.userId]
+      );
+      if (!rows.length) {
+        await client.query('ROLLBACK');
+        client.release();
+        return res.status(404).json({ error: 'Transaction introuvable.' });
+      }
+      updatedRepRow = rows[0];
+    }
+
+    // ── Broadcast meta aux autres rows du groupe (si multi) ───────────────────
+    // Les colonnes "métier identiques sur tout le groupe" (description, date,
+    // employé, etc.) doivent rester cohérentes entre toutes les rows liées par
+    // payment_group_id. On REJOUE les SET pertinents sur les sister rows.
+    const groupId = updatedRepRow.payment_group_id || before.payment_group_id;
+    if (groupId) {
+      const groupMap = new Map();
+      const pushGroup = (col, val) => { groupMap.set(col, val); };
+      if (has('type'))         pushGroup('type', type);
+      if (has('description'))  pushGroup('description', description || null);
+      if (has('category_id'))  pushGroup('category_id', category_id || null);
+      if (has('employee_id'))  pushGroup('employee_id', employee_id || null);
+      if (has('date'))         pushGroup('date', date);
+      if (has('time'))         pushGroup('time', time || null);
+      if (has('datetime_iso')) pushGroup('datetime_iso', datetime_iso || null);
+      if (has('client_email')) {
+        const norm = (typeof client_email === 'string' && client_email.trim())
+          ? client_email.trim().toLowerCase()
+          : null;
+        pushGroup('client_email', norm);
+      }
+      if (has('client_note'))  pushGroup('client_note', client_note);
+      if (hasItemsPayload)     pushGroup('qty_total', qtyTotal);
+      if (groupMap.size > 0) {
+        const groupSets   = [];
+        const groupParams = [];
+        for (const [col, val] of groupMap.entries()) {
+          groupParams.push(val);
+          groupSets.push(`${col}=$${groupParams.length}`);
+        }
+        groupParams.push(req.user.userId);
+        groupParams.push(groupId);
+        groupParams.push(req.params.id);
+        await client.query(
+          `UPDATE transactions SET ${groupSets.join(', ')}
+            WHERE user_id=$${groupParams.length - 2}::uuid
+              AND payment_group_id=$${groupParams.length - 1}::uuid
+              AND id != $${groupParams.length}::uuid`,
+          groupParams
+        );
+      }
+    }
+
+    // ── Rewrite multi-payment group : si payments[] >=2 fourni ────────────────
+    // La rep_row porte la 1re sous-méthode (déjà patchée plus haut). Les autres
+    // rows sœurs sont SUPPRIMÉES puis RECRÉÉES avec les méthodes/montants
+    // restants, en clonant les colonnes métier depuis la rep_row mise à jour.
+    if (hasPayPayload && payList.length >= 2) {
+      const finalGroupId = updatedRepRow.payment_group_id || before.payment_group_id;
+      // 1. DELETE les sister rows du groupe (sauf la rep_row).
+      if (before.payment_group_id) {
+        await client.query(
+          `DELETE FROM transactions
+             WHERE user_id=$1::uuid AND payment_group_id=$2::uuid AND id != $3::uuid`,
+          [req.user.userId, before.payment_group_id, req.params.id]
+        );
+      }
+      // 2. INSERT N-1 nouvelles rows pour entries[1..]
+      for (let i = 1; i < payList.length; i++) {
+        const p = payList[i];
+        const pAmt = parseFloat(p.amount) || 0;
+        const pCents = Math.round(pAmt * 100);
+        const newIdemKey = `edit:${finalGroupId}:${i + 1}:${Date.now()}`;
+        await client.query(
+          `INSERT INTO transactions
+             (user_id, type, amount, description, category_id, employee_id,
+              payment_method, date, time, datetime_iso, appointment_id, source,
+              locked, payment_source, payment_status, payment_type,
+              gross_amount_cents, stripe_fee_cents, platform_fee_cents, net_amount_cents,
+              paid_at, payment_group_id, qty_total, idempotency_key,
+              client_email, client_note, original_amount, discount_amount,
+              signed_by_employee_id, global_client_id)
+           SELECT user_id, type, $1::numeric, description, category_id, employee_id,
+                  $2::text, date, time, datetime_iso, appointment_id, source,
+                  locked, payment_source, payment_status, payment_type,
+                  $3::integer, 0, 0, $3::integer,
+                  paid_at, $4::uuid, qty_total, $5::text,
+                  client_email, client_note, original_amount, discount_amount,
+                  signed_by_employee_id, global_client_id
+             FROM transactions WHERE id=$6::uuid`,
+          [pAmt, p.method, pCents, finalGroupId, newIdemKey, req.params.id]
+        );
+      }
+    } else if (hasPayPayload && payList.length === 1 && before.payment_group_id) {
+      // Multi → Single : supprimer les sister rows du groupe.
+      await client.query(
+        `DELETE FROM transactions
+           WHERE user_id=$1::uuid AND payment_group_id=$2::uuid AND id != $3::uuid`,
+        [req.user.userId, before.payment_group_id, req.params.id]
+      );
+    }
+
+    // ── Remplacer items (si fournis) ──────────────────────────────────────────
     if (hasItemsPayload) {
       await client.query('DELETE FROM transaction_items WHERE transaction_id=$1', [req.params.id]);
       for (const it of itemList) {
@@ -978,10 +1214,14 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       }
     }
 
-    // Remplacer payments (si fournis) — toujours vider la table puis ré-insérer si split
+    // ── Legacy transaction_payments table (single row + N children) ───────────
+    // Conservée pour compat avec l'historique caisse legacy. Pour les rows
+    // payment_group_id-aware, transaction_payments reste vide (le breakdown
+    // est porté par les multi-rows transactions, pas par cette table enfant).
     if (hasPayPayload) {
       await client.query('DELETE FROM transaction_payments WHERE transaction_id=$1', [req.params.id]);
-      if (payList.length > 1) {
+      if (payList.length > 1 && !before.payment_group_id && !updatedRepRow.payment_group_id) {
+        // Pure legacy fallback : pas de group_id, on tombe sur l'ancien modèle.
         for (const p of payList) {
           await client.query(
             `INSERT INTO transaction_payments (transaction_id, method, amount)
@@ -993,6 +1233,9 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // Récupérer la rep_row finale (avec items + payments enrichis).
+    const rows = [updatedRepRow];
 
     // Invalider le cache liste + stats
     global.memCache?.del(`txs:${req.user.userId}`);

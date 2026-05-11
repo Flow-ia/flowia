@@ -369,26 +369,80 @@ function TxDetailDrawerImpl({
       return;
     }
     setErrBanner(null);
-    setSaving(true);
-    try {
-      const total = parseAmount(form.total_amount);
-      const body = {
-        amount: total,
-        description: form.description || null,
-        employee_id: form.employee_id || null,
-        date: form.date,
-        time: form.time || null,
-      };
+
+    // ── Diff vs état initial : on n'envoie que ce qui a changé ────────────
+    // Backend en PATCH semantics — un champ absent du body est conservé en
+    // BDD, n'est ni validé ni écrasé. Économise une UPDATE inutile sur les
+    // colonnes inchangées + évite les effets de bord (cascade fidélité,
+    // broadcast multi-payment) quand rien ne change réellement.
+    const initial = buildInitialForm(transaction);
+    const body = {};
+    const totalCurrent = parseAmount(form.total_amount);
+    const totalInitial = parseAmount(initial.total_amount);
+
+    if (form.description !== initial.description) {
+      body.description = form.description || null;
+    }
+    if (form.date !== initial.date && form.date) {
+      body.date = form.date;
+    }
+    if (form.time !== initial.time) {
+      body.time = form.time || null;
+    }
+    if (form.employee_id !== initial.employee_id) {
+      body.employee_id = form.employee_id || null;
+    }
+
+    // Paiements : on déclenche l'écriture côté backend uniquement si quelque
+    // chose a changé dans le breakdown OU dans le montant total OU dans le
+    // toggle single/multi. Sinon on laisse intact côté BDD.
+    const paymentsChanged =
+      form.is_multi !== initial.is_multi
+      || form.payments.length !== initial.payments.length
+      || form.payments.some((p, i) => {
+        const init = initial.payments[i];
+        if (!init) return true;
+        return p.method !== init.method
+            || parseAmount(p.amount) !== parseAmount(init.amount);
+      });
+    const totalChanged = Math.abs(totalCurrent - totalInitial) > 0.005;
+
+    if (paymentsChanged) {
       if (form.is_multi) {
         body.payments = form.payments.map(p => ({
           method: p.method,
           amount: parseAmount(p.amount),
         }));
-        body.payment_method = "multi";
       } else {
-        body.payment_method = form.payments[0]?.method || "cash";
-        body.payments = [{ method: body.payment_method, amount: total }];
+        body.payments = [{
+          method: form.payments[0]?.method || "cash",
+          amount: totalCurrent,
+        }];
       }
+    } else if (totalChanged) {
+      // Total modifié sans changement de breakdown ni du toggle.
+      // Cas single : on re-pousse 1 paiement aligné sur le nouveau total.
+      // Cas multi sans diff dans le breakdown : impossible si le breakdown
+      // sommait à l'ancien total — l'erreur serait remontée par validate().
+      if (!form.is_multi) {
+        body.amount   = totalCurrent;
+        body.payments = [{
+          method: form.payments[0]?.method || "cash",
+          amount: totalCurrent,
+        }];
+      } else {
+        body.amount = totalCurrent;
+      }
+    }
+
+    // Si rien n'a réellement changé : ne pas appeler le backend (UX silent).
+    if (Object.keys(body).length === 0) {
+      setEditMode(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
       await onPatch?.(transaction.id, body);
       setEditMode(false);
     } catch {
