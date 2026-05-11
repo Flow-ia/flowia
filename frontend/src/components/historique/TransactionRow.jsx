@@ -2,7 +2,7 @@
 // /historique. Choisit icone, couleurs, pills selon payment_status +
 // payment_source. Walk-in distinct visuellement (fond dore leger sur la ligne).
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { formatCents, formatCentsSign, formatDate } from "../../utils/format";
 
@@ -207,14 +207,16 @@ function Pill({ label, bg, color, paths }) {
   );
 }
 
-function TransactionRowImpl({ transaction: tx, isLast }) {
+function TransactionRowImpl({ transaction: tx, isLast, onOpenDetail }) {
   const { theme: t } = useTheme();
+  const [hover, setHover] = useState(false);
   const cfg     = getIconConfig(tx);
   const statusP = getStatusPill(tx);
   const sourceP = getSourcePill(tx);
   const payoutP = getPayoutPill(tx);
   const amount  = getAmountStyle(tx);
   const isWalkin = tx.payment_source === "walkin";
+  const clickable = typeof onOpenDetail === "function";
 
   // Breakdown multi-paiement (commit C). breakdown_payments = array
   // [{method, amount_cents}, ...] uniquement si payment_group_id IS NOT NULL.
@@ -240,13 +242,33 @@ function TransactionRowImpl({ transaction: tx, isLast }) {
   const dateIso = tx.created_at || (tx.date && tx.time ? tx.date + "T" + tx.time : tx.date);
   const dateStr = formatDate(dateIso);
 
+  // Couleur hover : on superpose un voile subtil via le fond du theme (cardAlt)
+  // sans casser le voile dore walk-in. Le voile dore est legerement assombri
+  // au hover pour rester visible.
+  const baseBg  = isWalkin ? "rgba(250, 238, 218, 0.30)" : "transparent";
+  const hoverBg = isWalkin ? "rgba(250, 238, 218, 0.55)" : (t.cardAlt || "rgba(0,0,0,0.03)");
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 14,
-      padding: "14px 16px",
-      borderBottom: isLast ? "none" : "0.5px solid " + t.separator,
-      background: isWalkin ? "rgba(250, 238, 218, 0.30)" : "transparent",
-    }}>
+    <div
+      onClick={clickable ? () => onOpenDetail(tx) : undefined}
+      onMouseEnter={clickable ? () => setHover(true) : undefined}
+      onMouseLeave={clickable ? () => setHover(false) : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenDetail(tx);
+        }
+      } : undefined}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "14px 16px",
+        borderBottom: isLast ? "none" : "0.5px solid " + t.separator,
+        background: hover ? hoverBg : baseBg,
+        cursor: clickable ? "pointer" : "default",
+        transition: "background 150ms ease",
+        outline: "none",
+      }}>
       {/* Icone gauche 40x40 */}
       <div style={{
         width: 40, height: 40, borderRadius: 10, flexShrink: 0,

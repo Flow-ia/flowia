@@ -10,10 +10,12 @@
 // "month"). Pagination par defaut per_page=20 avec selecteur 20/50/100 +
 // boutons Prev/Next en bas.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme";
 import { useHistorique } from "../../hooks/useHistorique";
+import { useTransactionPatch } from "../../hooks/useTransactionPatch";
+import { useTransactionDelete } from "../../hooks/useTransactionDelete";
 import { Toast, useToast } from "../../components/UI";
 import { PageHeader } from "../reglages/shared";
 
@@ -21,6 +23,7 @@ import HistoriqueKPI     from "../../components/historique/HistoriqueKPI";
 import HistoriqueFilters from "../../components/historique/HistoriqueFilters";
 import HistoriqueLegend  from "../../components/historique/HistoriqueLegend";
 import TransactionRow    from "../../components/historique/TransactionRow";
+import TxDetailDrawer    from "../../components/historique/TxDetailDrawer";
 
 import { formatDateLong } from "../../utils/format";
 
@@ -29,10 +32,17 @@ const DEFAULT_PER_PAGE  = 20;
 const VALID_PERIODS     = new Set(["today", "week", "month", "90days", "custom"]);
 
 // eslint-disable-next-line no-unused-vars
-export default function HistoriqueAdmin({ employees = [], transactions, categories, onUpdTx, onDelTx }) {
+export default function HistoriqueAdmin({ employees = [], transactions, categories = [], onUpdTx, onDelTx }) {
   const { theme: t } = useTheme();
   const [toast, showToast] = useToast();
   const [params, setParams] = useSearchParams();
+  const [detailTx, setDetailTx] = useState(null);
+  // Bump pour forcer un refetch /api/historique apres PATCH/DELETE. Le hook
+  // useHistorique re-derive sa cle a partir des filtres ; on injecte un
+  // pseudo-filtre _r qui ne va pas vers le backend (apiFilters skip)
+  // mais qui force la re-execution du useEffect. Plus simple qu'exposer un
+  // refetch explicite depuis useHistorique.
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // ── Etat depuis l'URL (URL = source de verite, persistance reload-safe) ─
   const filters = useMemo(() => ({
@@ -66,15 +76,18 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
   const customIncomplete = filters.period === "custom"
                         && (!filters.date_from || !filters.date_to);
 
-  // Filtres effectifs envoyes a l'API (vides retires).
+  // Filtres effectifs envoyes a l'API (vides retires). Le `refreshTick` est
+  // injecte uniquement dans la cle de cache du hook useHistorique, pas envoye
+  // au backend (filtres reconnus uniquement par leur nom officiel cote SQL).
   const apiFilters = useMemo(() => {
     const out = {};
     Object.entries(filters).forEach(([k, v]) => {
       if (v == null || v === "" || v === "all") return;
       out[k] = v;
     });
+    if (refreshTick) out._r = refreshTick;
     return out;
-  }, [filters]);
+  }, [filters, refreshTick]);
 
   const { data, loading, error } = useHistorique(apiFilters, { skip: customIncomplete });
   const transactionsList = data?.transactions || [];
@@ -88,6 +101,32 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
   const onExport = (kind) => {
     showToast("Export " + kind + " à venir (Commit suivant)", "info");
   };
+
+  // ── PATCH / DELETE transaction (Commit F) ──────────────────────────────────
+  // Apres mutation reussie : refetch la liste (refreshTick++) ET propager au
+  // state global App.jsx via onUpdTx/onDelTx (utilise par /caisse, /dashboard,
+  // /statistiques pour rester coherents).
+  const patchMut = useTransactionPatch({
+    showToast,
+    onSuccess: (updated) => {
+      if (updated?.id && typeof onUpdTx === "function") {
+        try { onUpdTx(updated.id, updated); } catch { /* tolerant */ }
+      }
+      setRefreshTick(n => n + 1);
+    },
+  });
+  const deleteMut = useTransactionDelete({
+    showToast,
+    onSuccess: () => {
+      if (detailTx?.id && typeof onDelTx === "function") {
+        try { onDelTx(detailTx.id); } catch { /* tolerant */ }
+      }
+      setRefreshTick(n => n + 1);
+    },
+  });
+
+  const handlePatch  = (id, body) => patchMut.submit(id, body);
+  const handleDelete = (id)       => deleteMut.submit(id);
 
   const periodLabel = period
     ? (period.from === period.to
@@ -158,6 +197,7 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
                   key={tx.id}
                   transaction={tx}
                   isLast={i === transactionsList.length - 1}
+                  onOpenDetail={setDetailTx}
                 />
               ))}
             </div>
@@ -203,6 +243,15 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
 
         <HistoriqueLegend />
       </div>
+
+      <TxDetailDrawer
+        transaction={detailTx}
+        onClose={() => setDetailTx(null)}
+        onPatch={handlePatch}
+        onDelete={handleDelete}
+        employees={employees}
+        categories={categories}
+      />
     </div>
   );
 }
