@@ -1263,6 +1263,7 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     // Les colonnes "métier identiques sur tout le groupe" (description, date,
     // employé, etc.) doivent rester cohérentes entre toutes les rows liées par
     // payment_group_id. On REJOUE les SET pertinents sur les sister rows.
+    let mutatedSisters = 0;
     const groupId = updatedRepRow.payment_group_id || before.payment_group_id;
     if (groupId) {
       const groupMap = new Map();
@@ -1292,13 +1293,20 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
         groupParams.push(req.user.userId);
         groupParams.push(groupId);
         groupParams.push(req.params.id);
-        await client.query(
+        const broadcast = await client.query(
           `UPDATE transactions SET ${groupSets.join(', ')}
             WHERE user_id=$${groupParams.length - 2}::uuid
               AND payment_group_id=$${groupParams.length - 1}::uuid
-              AND id != $${groupParams.length}::uuid`,
+              AND id != $${groupParams.length}::uuid
+              AND deleted_at IS NULL`,
           groupParams
         );
+        // Compte les sister rows qui ont reçu le broadcast metadata.
+        // Avant : `mutatedSisters` ne capturait que le rééquilibrage breakdown
+        // plus bas → le log indiquait `sisters=0` même quand 3 sisters venaient
+        // de recevoir un nouveau employee_id. Maintenant le log reflète la
+        // réalité : `sisters=N` = N rows soeurs mutées.
+        mutatedSisters += broadcast.rowCount || 0;
       }
     }
 
@@ -1309,8 +1317,8 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     // (méthode, montant). N'INSERT que si le nouveau breakdown contient plus
     // d'entrées que de rows existantes. Soft-delete (deleted_at) les rows en
     // surplus si le breakdown rétrécit. La rep_row[0] est déjà patchée plus
-    // haut via setMap — on traite ici les sister rows uniquement.
-    let mutatedSisters = 0;
+    // haut via setMap — on traite ici les sister rows uniquement. mutatedSisters
+    // est déclaré plus haut (broadcast metadata), on accumule simplement ici.
     if (hasPayPayload && payList.length >= 2) {
       const finalGroupId = updatedRepRow.payment_group_id || before.payment_group_id;
 
@@ -1435,9 +1443,15 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     // Récupérer la rep_row finale (avec items + payments enrichis).
     const rows = [updatedRepRow];
 
-    // Invalider le cache liste + stats
+    // Invalider le cache liste + stats + historique. invalidateStatsCache
+    // clear uniquement 4 keys (stats:products, stats:today, etc.) ;
+    // invalidateUserStatsCache bump la version → invalide TOUTES les entrées
+    // statsv3:* du user, y compris le cache historique (5 min TTL sinon).
+    // Sans ce 2e appel, GET /api/historique renvoyait l'ancien employee_id
+    // pendant 5 min après chaque edit → "le changement n'est pas pris en compte".
     global.memCache?.del(`txs:${req.user.userId}`);
     invalidateStatsCache(req.user.userId);
+    try { invalidateUserStatsCache(req.user.userId); } catch {}
 
     // R4 : resync fidélité si le montant ou qty_total a changé.
     // - mode points : delta = (new_amount - old_amount) * points_per_euro
@@ -1778,8 +1792,12 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
       }
     }
 
+    // Invalide les 3 caches : transactions list (memCache key direct), stats
+    // legacy (4 keys explicites), et statsv3 versionné (= /api/historique +
+    // /api/statistiques). Cf. PUT pour le détail du bug cache stale.
     global.memCache?.del(`txs:${req.user.userId}`);
     invalidateStatsCache(req.user.userId);
+    try { invalidateUserStatsCache(req.user.userId); } catch {}
 
     await audit(req.user.userId, req.params.id, 'delete', before, null,
       req.body?.reason || 'Soft-delete admin');
