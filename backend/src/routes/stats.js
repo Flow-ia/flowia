@@ -37,7 +37,9 @@ router.get('/products', async (req, res) => {
     if (_h) return res.json(_h);
 
     // Construire les filtres de date et employé sur la transaction
-    const conditions = ['t.user_id = $1', "t.type = 'revenue'"];
+    // Soft-delete : exclure les transactions archivées des stats produits/jour
+    // (sinon un encaissement supprimé continuerait à gonfler le CA cumulé).
+    const conditions = ['t.user_id = $1', "t.type = 'revenue'", 't.deleted_at IS NULL'];
     const params     = [userId];
 
     if (from) { params.push(from); conditions.push(`t.date >= $${params.length}`); }
@@ -136,6 +138,7 @@ router.get('/forecast', async (req, res) => {
          COUNT(*) as tx_count
        FROM transactions
        WHERE user_id=$1 AND type='revenue'
+         AND deleted_at IS NULL
          AND date >= (NOW() AT TIME ZONE (
            SELECT COALESCE(timezone,'Europe/Paris') FROM booking_settings WHERE user_id=$1
          ))::date - INTERVAL '12 months'
@@ -217,6 +220,7 @@ router.get('/heatmap', async (req, res) => {
          SUM(amount) as revenue
        FROM transactions
        WHERE user_id=$1 AND type='revenue'
+         AND deleted_at IS NULL
          AND date BETWEEN $2 AND $3
          AND time IS NOT NULL
        GROUP BY day_of_week, hour_of_day
@@ -263,7 +267,7 @@ router.get('/today', async (req, res) => {
         COUNT(CASE WHEN type='revenue' THEN 1 END)                        AS tx_count,
         COUNT(CASE WHEN type='revenue' AND employee_id IS NOT NULL THEN 1 END) AS with_employee
       FROM transactions
-      WHERE user_id=$1 AND date=$2
+      WHERE user_id=$1 AND date=$2 AND deleted_at IS NULL
     `, [userId, today]);
 
     // Top employé du jour
@@ -274,6 +278,7 @@ router.get('/today', async (req, res) => {
       FROM transactions t
       JOIN employees e ON e.id = t.employee_id
       WHERE t.user_id=$1 AND t.date=$2 AND t.type='revenue'
+        AND t.deleted_at IS NULL
       GROUP BY e.id, e.name, e.avatar_color
       ORDER BY SUM(t.amount) DESC
       LIMIT 1
@@ -354,6 +359,7 @@ router.get('/by-payment-method', async (req, res) => {
               COUNT(*)                                  AS count
          FROM transactions
         WHERE user_id=$1 AND type='revenue'
+          AND deleted_at IS NULL
           AND date BETWEEN $2 AND $3
         GROUP BY payment_method,
                  (payment_method = 'multi' AND payment_group_id IS NULL)`,
@@ -539,6 +545,7 @@ router.get('/performance', async (req, res) => {
       FROM transactions t
       WHERE t.user_id = $1
         AND t.type = 'revenue'
+        AND t.deleted_at IS NULL
         AND t.date >= $2 AND t.date <= $3
       GROUP BY ${EFFECTIVE_PAYMENT_SOURCE_SQL}
     `, params);
@@ -571,6 +578,7 @@ router.get('/performance', async (req, res) => {
       FROM transactions t
       WHERE t.user_id = $1
         AND t.type = 'revenue'
+        AND t.deleted_at IS NULL
         AND t.date >= $2 AND t.date <= $3
     `, [userId, prevFrom, prevTo]);
     const prevGross = parseInt(prevR[0]?.gross_cents || 0, 10);
@@ -590,6 +598,7 @@ router.get('/performance', async (req, res) => {
         ON t.date = d.day::date
        AND t.user_id = $1
        AND t.type   = 'revenue'
+       AND t.deleted_at IS NULL
       GROUP BY d.day
       ORDER BY d.day ASC
     `, [userId]);
@@ -685,16 +694,19 @@ router.get('/rdv', async (req, res) => {
         COUNT(*) FILTER (WHERE EXISTS (
           SELECT 1 FROM transactions t
            WHERE t.appointment_id = ao.id
+             AND t.deleted_at IS NULL
              AND ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'STRIPE_100'
         ))::int AS stripe_100,
         COUNT(*) FILTER (WHERE EXISTS (
           SELECT 1 FROM transactions t
            WHERE t.appointment_id = ao.id
+             AND t.deleted_at IS NULL
              AND ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'STRIPE_ACOMPTE'
         ))::int AS stripe_acompte,
         COUNT(*) FILTER (WHERE NOT EXISTS (
           SELECT 1 FROM transactions t
            WHERE t.appointment_id = ao.id
+             AND t.deleted_at IS NULL
              AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE','CASH_PAID')
         ))::int AS not_paid
       FROM appt_online ao
@@ -716,6 +728,7 @@ router.get('/rdv', async (req, res) => {
       FROM transactions t
       JOIN appointments a ON a.id = t.appointment_id
       WHERE t.user_id = $1
+        AND t.deleted_at IS NULL
         AND a.date >= $2 AND a.date <= $3
         AND t.appointment_id IS NOT NULL
       GROUP BY ${EFFECTIVE_PAYMENT_STATUS_SQL}
@@ -753,6 +766,7 @@ router.get('/rdv', async (req, res) => {
             SELECT SUM(${EFFECTIVE_GROSS_CENTS_SQL})
               FROM transactions t
              WHERE t.appointment_id = a.id
+               AND t.deleted_at IS NULL
                AND ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'STRIPE_ACOMPTE'
           ), 0)
       ), 0)::bigint AS remaining_cents
@@ -762,6 +776,7 @@ router.get('/rdv', async (req, res) => {
         AND EXISTS (
           SELECT 1 FROM transactions t
            WHERE t.appointment_id = a.id
+             AND t.deleted_at IS NULL
              AND ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'STRIPE_ACOMPTE'
         )
     `, [userId, range.from, range.to]);
@@ -799,6 +814,7 @@ router.get('/rdv', async (req, res) => {
           EXISTS (
             SELECT 1 FROM transactions t
              WHERE t.appointment_id = a.id
+               AND t.deleted_at IS NULL
                AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE')
           ) AS has_deposit
         FROM appointments a
@@ -870,6 +886,7 @@ router.get('/online-payments', async (req, res) => {
       FROM transactions t
       WHERE t.user_id = $1
         AND t.type = 'revenue'
+        AND t.deleted_at IS NULL
         AND t.date >= $2 AND t.date <= $3
         AND ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
         AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE')
@@ -882,6 +899,7 @@ router.get('/online-payments', async (req, res) => {
       FROM transactions t
       WHERE t.user_id = $1
         AND t.type = 'revenue'
+        AND t.deleted_at IS NULL
         AND t.date >= $2 AND t.date <= $3
         AND ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
     `, [userId, prevFrom, prevTo]);
@@ -905,6 +923,7 @@ router.get('/online-payments', async (req, res) => {
       FROM transactions t
       WHERE t.user_id = $1
         AND t.type = 'revenue'
+        AND t.deleted_at IS NULL
         AND t.date >= $2 AND t.date <= $3
         AND ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
     `, [userId, range.from, range.to]);
@@ -947,6 +966,7 @@ router.get('/online-payments', async (req, res) => {
         ON t.date = d.day::date
        AND t.user_id = $1
        AND t.type   = 'revenue'
+       AND t.deleted_at IS NULL
        AND ${EFFECTIVE_PAYMENT_SOURCE_SQL} = 'online_booking'
        AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE')
       GROUP BY d.day

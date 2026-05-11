@@ -459,6 +459,7 @@ router.get('/performance-stats', authMiddleware, async (req, res) => {
         COUNT(*) FILTER (WHERE source='rdv_refund') AS refund_count
         FROM transactions
        WHERE user_id = $1
+         AND deleted_at IS NULL
          AND date >= (CURRENT_DATE - ($2 || ' days')::interval)
     `, [userId, String(period)]);
 

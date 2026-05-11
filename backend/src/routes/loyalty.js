@@ -313,7 +313,7 @@ router.get('/stats', async (req, res) => {
          COUNT(*) AS total_codes,
          COALESCE(SUM(
            CASE WHEN p.type='fixed' THEN p.value
-                ELSE (SELECT AVG(t.amount) FROM transactions t WHERE t.user_id=p.user_id) * p.value / 100
+                ELSE (SELECT AVG(t.amount) FROM transactions t WHERE t.user_id=p.user_id AND t.deleted_at IS NULL) * p.value / 100
            END
          ), 0) AS montant_genere,
          COALESCE(SUM(
@@ -333,7 +333,7 @@ router.get('/stats', async (req, res) => {
          cl.stamps, cl.total_stamps_ever, cl.rewards_earned,
          COALESCE(SUM(t.amount), 0) AS ca_total
        FROM client_loyalty cl
-       LEFT JOIN transactions t ON t.user_id=cl.user_id AND t.client_email=cl.client_email AND t.type='revenue'
+       LEFT JOIN transactions t ON t.user_id=cl.user_id AND t.client_email=cl.client_email AND t.type='revenue' AND t.deleted_at IS NULL
        WHERE cl.user_id=$1
        GROUP BY cl.client_email, cl.client_name, cl.stamps, cl.total_stamps_ever, cl.rewards_earned
        ORDER BY ca_total DESC LIMIT 50`,

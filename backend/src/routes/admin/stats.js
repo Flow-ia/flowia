@@ -63,6 +63,7 @@ router.get('/', async (req, res) => {
           COALESCE(SUM(amount) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'),  0)::numeric(14,2) AS this_week,
           COALESCE(SUM(amount) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'), 0)::numeric(14,2) AS this_month
         FROM transactions
+        WHERE deleted_at IS NULL
       `),
       pool.query(`
         SELECT u.id, u.business_name, u.email, u.is_frozen,
@@ -71,6 +72,7 @@ router.get('/', async (req, res) => {
           FROM users u
           LEFT JOIN transactions t
                  ON t.user_id = u.id
+                AND t.deleted_at IS NULL
                 AND t.created_at >= CURRENT_DATE - INTERVAL '30 days'
          GROUP BY u.id, u.business_name, u.email, u.is_frozen
          ORDER BY revenue_month DESC

@@ -1940,6 +1940,30 @@ async function initDB() {
   await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payout_received_at TIMESTAMPTZ`);
 
+  // Commit F-hotfix : vrai soft-delete pour conformité FEC / RGPD.
+  // Tous les SELECT business doivent désormais filtrer WHERE deleted_at IS NULL.
+  // L'index partiel accélère les listes /historique (case dominant : non
+  // supprimés) sans payer le coût de stocker un index sur les rows archivées.
+  await runMigration(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  await runMigration(`
+    CREATE INDEX IF NOT EXISTS idx_transactions_not_deleted
+      ON transactions(user_id, created_at DESC)
+      WHERE deleted_at IS NULL
+  `);
+
+  // Cleanup ponctuel : un commit DELETE cassé (588d1ca) a supprimé
+  // PHYSIQUEMENT une row d'un groupe multi-payment, laissant la sœur
+  // orpheline. On la marque soft-delete pour préserver la cohérence du
+  // groupe côté commerçant (sinon une ligne fantôme 30€ apparaîtrait pour
+  // un paiement initialement 42€). Idempotent : ne touche que si la row
+  // existe encore et n'est pas déjà soft-deletée.
+  await runMig(`
+    UPDATE transactions
+       SET deleted_at = NOW()
+     WHERE id = '7482af1b-55b4-4eb7-8418-739bd44eca0b'::uuid
+       AND deleted_at IS NULL
+  `);
+
   // transactions — indexes nouveaux
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_user_created ON transactions(user_id, created_at)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_transactions_payment_status_v3

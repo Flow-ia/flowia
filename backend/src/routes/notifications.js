@@ -128,7 +128,7 @@ async function triggerDailyRecapForUser(userId, user, dateStr) {
   const { rows: txs } = await pool.query(
     `SELECT t.*, e.name as employee_name
      FROM transactions t LEFT JOIN employees e ON e.id=t.employee_id
-     WHERE t.user_id=$1 AND t.date=$2 AND t.type='revenue'`,
+     WHERE t.user_id=$1 AND t.date=$2 AND t.type='revenue' AND t.deleted_at IS NULL`,
     [userId, dateStr]
   );
   const ca      = txs.reduce((s,t) => s+(parseFloat(t.amount)||0), 0);

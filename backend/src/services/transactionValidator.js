@@ -29,6 +29,7 @@ async function canCreateCashTransaction(appointmentId) {
     `SELECT id, payment_status, gross_amount_cents
        FROM transactions
       WHERE appointment_id = $1
+        AND deleted_at IS NULL
         AND payment_status IN ('STRIPE_100','STRIPE_ACOMPTE','CASH_PAID')`,
     [appointmentId]
   );
@@ -70,6 +71,7 @@ async function getRemainingAmount(appointmentId) {
               SELECT SUM(t.gross_amount_cents)
                 FROM transactions t
                WHERE t.appointment_id = a.id
+                 AND t.deleted_at IS NULL
                  AND t.payment_status = 'STRIPE_ACOMPTE'
             ), 0) AS deposit_cents
        FROM appointments a

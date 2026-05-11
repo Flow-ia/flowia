@@ -309,7 +309,7 @@ async function generateCampaignPlan(userId, budget, durationDays, customDiscount
   // Panier moyen réel
   const { rows: avgR } = await pool.query(
     `SELECT AVG(amount)::float AS avg_price
-     FROM transactions WHERE user_id=$1 AND type='revenue' AND amount > 0`,
+     FROM transactions WHERE user_id=$1 AND type='revenue' AND amount > 0 AND deleted_at IS NULL`,
     [userId]
   );
   const avgPrice = Math.round(parseFloat(avgR[0]?.avg_price) || 29);

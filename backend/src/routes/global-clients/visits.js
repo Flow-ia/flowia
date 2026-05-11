@@ -33,6 +33,7 @@ module.exports = function attachVisitsRoutes(router) {
       const where  = [
         `t.type IN ('income','revenue')`,
         `t.appointment_id IS NULL`,
+        `t.deleted_at IS NULL`,
         `(t.global_client_id = $1 OR LOWER(t.client_email) = LOWER($2))`,
       ];
       const params = [gcId, email];
@@ -140,6 +141,7 @@ module.exports = function attachVisitsRoutes(router) {
          WHERE t.id = $1
            AND t.type IN ('income','revenue')
            AND t.appointment_id IS NULL
+           AND t.deleted_at IS NULL
            AND (t.global_client_id = $2 OR LOWER(t.client_email) = LOWER($3))
          LIMIT 1`,
         [txId, gcId, email]

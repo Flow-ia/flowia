@@ -66,6 +66,7 @@ router.post('/check', async (req, res) => {
       const { rows: prev } = await pool.query(
         `SELECT id FROM transactions
          WHERE user_id=$1 AND source != 'rdv'
+           AND deleted_at IS NULL
            AND description ILIKE $2
          LIMIT 1`,
         [req.user.userId, `%${client_email}%`]

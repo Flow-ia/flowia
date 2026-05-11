@@ -144,8 +144,8 @@ router.get('/:id', async (req, res) => {
          (SELECT COUNT(*)::int FROM appointments WHERE user_id = $1 AND status = 'cancelled') AS appointments_cancelled,
          (SELECT COUNT(*)::int FROM client_accounts WHERE user_id = $1) AS clients_count,
          (SELECT COUNT(*)::int FROM employees WHERE user_id = $1 AND is_active = TRUE) AS employees_active,
-         (SELECT COUNT(*)::int FROM transactions WHERE user_id = $1) AS transactions_count,
-         (SELECT COALESCE(SUM(amount), 0)::numeric(14,2) FROM transactions WHERE user_id = $1) AS revenue_total,
+         (SELECT COUNT(*)::int FROM transactions WHERE user_id = $1 AND deleted_at IS NULL) AS transactions_count,
+         (SELECT COALESCE(SUM(amount), 0)::numeric(14,2) FROM transactions WHERE user_id = $1 AND deleted_at IS NULL) AS revenue_total,
          (SELECT MAX(created_at) FROM appointments WHERE user_id = $1) AS last_appointment_at`,
       [user.id]
     );

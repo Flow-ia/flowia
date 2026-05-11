@@ -96,7 +96,7 @@ router.get('/csv', pinAdminMiddleware, async (req, res) => {
         ) as label
         FROM transaction_payments tp WHERE tp.transaction_id = t.id
       ) pm_multi ON t.payment_method = 'multi'
-      WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
+      WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
 
     if (employee_id && employee_id !== 'all') { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
@@ -148,12 +148,12 @@ router.get('/csv', pinAdminMiddleware, async (req, res) => {
            SELECT tp.method, tp.amount, t.id AS tx_id
            FROM transactions t
            JOIN transaction_payments tp ON tp.transaction_id = t.id
-           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3
              AND t.payment_method='multi'
            UNION ALL
            SELECT t.payment_method AS method, t.amount, t.id AS tx_id
            FROM transactions t
-           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3
              AND t.payment_method IS DISTINCT FROM 'multi'
          )
          SELECT CASE method
@@ -182,7 +182,7 @@ router.get('/csv', pinAdminMiddleware, async (req, res) => {
       const { rows: empRows } = await pool.query(
         `SELECT COALESCE(e.name, 'Non attribué') as employe, SUM(t.amount) as total, COUNT(*) as nb
          FROM transactions t LEFT JOIN employees e ON e.id=t.employee_id
-         WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+         WHERE t.user_id=$1 AND t.type='revenue' AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3
          GROUP BY e.id, e.name ORDER BY total DESC`,
         [req.user.userId, fromD, toD]
       );
@@ -306,7 +306,7 @@ router.get('/pdf', pinAdminMiddleware, async (req, res) => {
         ) as label
         FROM transaction_payments tp WHERE tp.transaction_id = t.id
       ) pm_multi ON t.payment_method = 'multi'
-      WHERE t.user_id=$1 AND t.date BETWEEN $2 AND $3`;
+      WHERE t.user_id=$1 AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3`;
     const params = [req.user.userId, fromD, toD];
 
     if (employee_id && employee_id !== 'all') { params.push(employee_id); q += ` AND t.employee_id=$${params.length}`; }
@@ -334,12 +334,12 @@ router.get('/pdf', pinAdminMiddleware, async (req, res) => {
            SELECT tp.method, tp.amount, t.id AS tx_id
            FROM transactions t
            JOIN transaction_payments tp ON tp.transaction_id = t.id
-           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3
              AND t.payment_method='multi'
            UNION ALL
            SELECT t.payment_method AS method, t.amount, t.id AS tx_id
            FROM transactions t
-           WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+           WHERE t.user_id=$1 AND t.type='revenue' AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3
              AND t.payment_method IS DISTINCT FROM 'multi'
          )
          SELECT CASE method
@@ -360,7 +360,7 @@ router.get('/pdf', pinAdminMiddleware, async (req, res) => {
       const res3 = await pool.query(
         `SELECT COALESCE(e.name,'Non attribue') as employe, SUM(t.amount) as total, COUNT(*) as nb
          FROM transactions t LEFT JOIN employees e ON e.id=t.employee_id
-         WHERE t.user_id=$1 AND t.type='revenue' AND t.date BETWEEN $2 AND $3
+         WHERE t.user_id=$1 AND t.type='revenue' AND t.deleted_at IS NULL AND t.date BETWEEN $2 AND $3
          GROUP BY e.id, e.name ORDER BY total DESC`,
         [req.user.userId, fromD, toD]);
       empRows = res3.rows;

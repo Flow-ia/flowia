@@ -103,7 +103,9 @@ router.get('/', async (req, res) => {
     const offset    = (pageN - 1) * perPageN;
 
     // ── Construction des filtres SQL ────────────────────────────────────────
-    const conds  = [`t.user_id = $1`, `t.type = 'revenue'`];
+    // Soft-delete : `deleted_at IS NULL` exclut les rows archivées du listing
+    // commerçant. La row reste en BDD pour audit FEC mais devient invisible.
+    const conds  = [`t.user_id = $1`, `t.type = 'revenue'`, `t.deleted_at IS NULL`];
     const params = [userId];
 
     params.push(range.from); conds.push(`t.date >= $${params.length}`);

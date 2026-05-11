@@ -182,10 +182,10 @@ router.get('/', async (req, res) => {
           cl.client_name AS loyalty_name,
           COALESCE(lp.loyalty_mode, 'stamps') AS loyalty_mode,
           COALESCE(
-            (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email), 0
+            (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email AND t.deleted_at IS NULL), 0
           )::int AS tx_count,
           COALESCE(
-            (SELECT SUM(t.amount) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email AND t.type='revenue'), 0
+            (SELECT SUM(t.amount) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email AND t.type='revenue' AND t.deleted_at IS NULL), 0
           )::numeric AS total_spent,
           COALESCE(
             (SELECT COUNT(*) FROM appointments a WHERE a.user_id=$1 AND a.client_email=ca.email), 0
@@ -256,7 +256,7 @@ router.get('/', async (req, res) => {
           ca.created_at, ca.birth_date, ca.is_booking_blocked,
           cl.stamps, cl.points, cl.last_visit,
           COALESCE(
-            (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email), 0
+            (SELECT COUNT(*) FROM transactions t WHERE t.user_id=$1 AND t.client_email=ca.email AND t.deleted_at IS NULL), 0
           )::int AS tx_count,
           EXISTS(
             SELECT 1 FROM client_credits cc
@@ -495,6 +495,7 @@ router.get('/:id', async (req, res) => {
        LEFT JOIN employees e ON e.id=t.employee_id
        LEFT JOIN categories c ON c.id=t.category_id
        WHERE t.user_id=$1 AND t.client_email=$2 AND t.type='revenue'
+         AND t.deleted_at IS NULL
        ORDER BY t.date DESC, t.time DESC LIMIT 50`,
       [uid, email]
     )).rows : [];

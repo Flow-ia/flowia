@@ -91,7 +91,9 @@ router.get('/', async (req, res) => {
     }
 
     const params  = [userId];
-    const filters = ['t.user_id=$1'];
+    // Soft-delete : exclure systématiquement les rows archivées de la liste
+    // commerçant (audit FEC : la row existe en BDD mais devient invisible).
+    const filters = ['t.user_id=$1', 't.deleted_at IS NULL'];
 
     if (from) { params.push(from); filters.push(`t.date >= $${params.length}`); }
     if (to)   { params.push(to);   filters.push(`t.date <= $${params.length}`); }
@@ -922,6 +924,30 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       client.release();
       return res.status(404).json({ error: 'Transaction introuvable.' });
     }
+    if (before.deleted_at) {
+      // Une row soft-deletée n'est plus éditable — cohérent avec la liste
+      // /historique qui ne l'affiche plus, et anti-fraude (impossible de
+      // ressusciter une ligne sans audit).
+      client.release();
+      return res.status(404).json({
+        error: 'Transaction introuvable ou déjà supprimée.',
+        code:  'NOT_FOUND',
+      });
+    }
+    // Verrouillage anti-fraude PATCH (cohérent avec DELETE). Les paiements
+    // Stripe / remboursements / online_booking ne peuvent pas être modifiés
+    // par le commerçant — pour rembourser un client, passer par "Annuler
+    // le RDV" qui déclenche un Stripe Refund propre.
+    {
+      const { isTransactionLocked: _isLocked, lockReason: _lockReason } = require('../utils/transactionLock');
+      if (_isLocked(before)) {
+        client.release();
+        return res.status(403).json({
+          error: _lockReason(before) || 'Transaction verrouillée.',
+          code:  'TX_LOCKED',
+        });
+      }
+    }
 
     // ── Items normalisés (lus uniquement si items[] fourni) ───────────────────
     const hasItemsPayload = Array.isArray(items);
@@ -1307,46 +1333,174 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
   }
 });
 
-// ── DELETE /:id — supprimer (admin PIN requis + audit) ────────────────────────
-// Rollback complet : promo uses_count, client_loyalty stamps/points, RDV
-// paid + transaction_id, promo_usage_logs, client_rewards used→available,
-// referral_uses cascade (existant).
-router.delete('/:id', pinAdminMiddleware, async (req, res) => {
-  try {
-    const before = await getSnapshot(req.params.id);
-    if (!before || before.user_id !== req.user.userId)
-      return res.status(404).json({ error: 'Transaction introuvable.' });
+// ── DELETE /:id — soft-delete avec audit FEC + cascade RDV/fidélité/promo ────
+// Marque la transaction comme supprimée (deleted_at = NOW()) au lieu de
+// DELETE FROM SQL :
+//   - conformité comptable FEC (registre obligatoire 6 ans, aucune ligne
+//     ne doit DISPARAÎTRE de la BDD, juste être masquée)
+//   - RGPD (anonymisation NULL plutôt que destruction)
+//   - audit forensique (impossible de prouver un paiement effacé si la row
+//     n'existe plus)
+//
+// Multi-payment : si payment_group_id IS NOT NULL, soft-delete ATOMIQUE de
+// toutes les rows sœurs du groupe (sinon orphelins comme l'incident
+// payment_group_id='23ae740f-6472-4357-894e-b14cb2d42d3f').
+//
+// Verrouillage : isTransactionLocked() rejette les rows Stripe / remboursement
+// / online_booking (anti-fraude — utiliser "Annuler le RDV" pour un refund).
+const { isTransactionLocked, lockReason } = require('../utils/transactionLock');
 
-    // Récupérer les referral_uses liés AVANT le DELETE (FK SET NULL perdrait la trace)
-    const { rows: refs } = await pool.query(
+router.delete('/:id', pinAdminMiddleware, async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    // Étape A — SELECT cible (filtre deleted_at IS NULL pour idempotence).
+    const { rows: targetRows } = await dbClient.query(
+      `SELECT id, amount, payment_method, payment_source, payment_status,
+              payment_type, payment_group_id, appointment_id, user_id,
+              stripe_payment_intent_id, client_email, type, qty_total,
+              promo_code_id, locked, deleted_at
+         FROM transactions
+        WHERE id = $1::uuid
+          AND user_id = $2::uuid
+          AND deleted_at IS NULL
+        LIMIT 1`,
+      [req.params.id, req.user.userId]
+    );
+    if (!targetRows.length) {
+      dbClient.release();
+      return res.status(404).json({
+        error: 'Transaction introuvable ou déjà supprimée.',
+        code: 'NOT_FOUND',
+      });
+    }
+    const before = targetRows[0];
+
+    // Étape B — Verrouillage anti-fraude.
+    if (isTransactionLocked(before)) {
+      dbClient.release();
+      return res.status(403).json({
+        error: lockReason(before) || 'Transaction verrouillée.',
+        code:  'TX_LOCKED',
+      });
+    }
+
+    // Avant le soft-delete : récupérer les referral_uses liés (audit + cascade).
+    const { rows: refs } = await dbClient.query(
       `SELECT id, status, parrain_promo_id FROM referral_uses
-        WHERE transaction_id=$1 AND user_id=$2`,
+        WHERE transaction_id=$1::uuid AND user_id=$2::uuid`,
       [req.params.id, req.user.userId]
     );
 
-    await pool.query('DELETE FROM transactions WHERE id=$1 AND user_id=$2',
-      [req.params.id, req.user.userId]);
+    await dbClient.query('BEGIN');
 
-    // R3a : rollback uses_count + restaurer client_rewards (birthday / fidélité
-    // / parrain) si la promo était liée à une reward consommée par cette tx.
+    // ── Étape C/D — Soft-delete (single row OU groupe entier) ─────────────────
+    let deletedCount = 0;
+    let appointmentId = before.appointment_id;
+    let groupRowsForLockRecheck = [];
+
+    if (before.payment_group_id) {
+      // MULTI : re-vérifier que toutes les rows actives du groupe sont éditables.
+      // Une seule sister row verrouillée (ex: un Stripe collé par erreur) bloque
+      // tout le groupe. SELECT FOR UPDATE pour empêcher une race avec un autre
+      // PIN admin qui éditerait en parallèle.
+      const { rows: groupRows } = await dbClient.query(
+        `SELECT id, payment_status, payment_method, payment_source, payment_type,
+                stripe_payment_intent_id, appointment_id
+           FROM transactions
+          WHERE payment_group_id = $1::uuid
+            AND user_id = $2::uuid
+            AND deleted_at IS NULL
+          FOR UPDATE`,
+        [before.payment_group_id, req.user.userId]
+      );
+      groupRowsForLockRecheck = groupRows;
+      for (const r of groupRows) {
+        if (isTransactionLocked(r)) {
+          await dbClient.query('ROLLBACK');
+          dbClient.release();
+          return res.status(403).json({
+            error: 'Une ligne du paiement multiple est verrouillée. ' + (lockReason(r) || ''),
+            code: 'TX_LOCKED',
+          });
+        }
+      }
+
+      const { rows: updRows } = await dbClient.query(
+        `UPDATE transactions
+            SET deleted_at = NOW()
+          WHERE payment_group_id = $1::uuid
+            AND user_id = $2::uuid
+            AND deleted_at IS NULL
+          RETURNING id, appointment_id`,
+        [before.payment_group_id, req.user.userId]
+      );
+      deletedCount = updRows.length;
+      // appointment_id : tous les rows d'un groupe partagent normalement le
+      // même RDV. On prend le premier non-null.
+      const firstAppt = updRows.find(r => r.appointment_id)?.appointment_id;
+      if (firstAppt) appointmentId = firstAppt;
+    } else {
+      // SINGLE row.
+      const { rowCount } = await dbClient.query(
+        `UPDATE transactions
+            SET deleted_at = NOW()
+          WHERE id = $1::uuid
+            AND user_id = $2::uuid
+            AND deleted_at IS NULL`,
+        [req.params.id, req.user.userId]
+      );
+      deletedCount = rowCount;
+      if (deletedCount === 0) {
+        // Race : un autre client a déjà soft-deleté entre notre SELECT et UPDATE.
+        await dbClient.query('ROLLBACK');
+        dbClient.release();
+        return res.status(404).json({
+          error: 'Transaction introuvable ou déjà supprimée.',
+          code: 'NOT_FOUND',
+        });
+      }
+    }
+
+    // ── Étape E — Reset appointment.paid si plus aucune tx active sur le RDV ──
+    let appointmentUnlocked = false;
+    if (appointmentId) {
+      const { rows: residuals } = await dbClient.query(
+        `SELECT id FROM transactions
+          WHERE appointment_id = $1::uuid
+            AND deleted_at IS NULL
+          LIMIT 1`,
+        [appointmentId]
+      );
+      if (residuals.length === 0) {
+        await dbClient.query(
+          `UPDATE appointments
+              SET paid = FALSE, paid_method = NULL, transaction_id = NULL,
+                  status = 'confirmed', updated_at = NOW()
+            WHERE id = $1::uuid AND user_id = $2::uuid`,
+          [appointmentId, req.user.userId]
+        );
+        appointmentUnlocked = true;
+      }
+    }
+
+    await dbClient.query('COMMIT');
+
+    // ── Étape F — Rollbacks side-effects (best-effort hors transaction) ───────
+    // Promo : décrémenter uses_count, restaurer client_rewards 'used'→'available'
     if (before.promo_code_id) {
       try {
         await pool.query(
           `UPDATE promo_codes
-             SET uses_count = GREATEST(0, uses_count - 1),
-                 is_active  = TRUE
-           WHERE id=$1 AND user_id=$2`,
+              SET uses_count = GREATEST(0, uses_count - 1),
+                  is_active  = TRUE
+            WHERE id=$1 AND user_id=$2`,
           [before.promo_code_id, req.user.userId]
         );
-        // Client_rewards : la promo consommée peut être 'used' — restaurer
-        // à 'available' pour que le client puisse ré-utiliser (puisque la
-        // transaction qui l'a consommée n'existe plus).
         await pool.query(
           `UPDATE client_rewards SET status='available', used_at=NULL
             WHERE user_id=$1 AND promo_code_id=$2 AND status='used'`,
           [req.user.userId, before.promo_code_id]
         );
-        // Promo_usage_logs : supprimer la ligne pour cette transaction
         await pool.query(
           `DELETE FROM promo_usage_logs WHERE transaction_id=$1`,
           [req.params.id]
@@ -1354,8 +1508,7 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
       } catch (pErr) { console.warn('[TX DELETE promo rollback]', pErr.message); }
     }
 
-    // R3b : décrémenter stamps / points fidélité (best effort, clamp ≥ 0).
-    // On cherche le programme actif pour savoir s'il est en mode points ou stamps.
+    // Fidélité : décrémenter stamps / points (clamp ≥ 0).
     if (before.client_email && before.type === 'revenue') {
       try {
         const { rows: prog } = await pool.query(
@@ -1380,21 +1533,7 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
       } catch (lErr) { console.warn('[TX DELETE loyalty rollback]', lErr.message); }
     }
 
-    // R3c : si transaction liée à un RDV, le RDV redevient non-encaissé
-    // (sinon il reste paid=TRUE avec transaction_id vers une ligne supprimée).
-    if (before.appointment_id) {
-      try {
-        await pool.query(
-          `UPDATE appointments
-              SET paid=FALSE, paid_method=NULL, transaction_id=NULL,
-                  status='confirmed', updated_at=NOW()
-            WHERE id=$1 AND user_id=$2`,
-          [before.appointment_id, req.user.userId]
-        );
-      } catch (aErr) { console.warn('[TX DELETE appt unpay]', aErr.message); }
-    }
-
-    // Cascade referral_uses (déjà en place)
+    // Cascade referral_uses : annuler les parrainages en cours liés.
     for (const ref of refs) {
       try {
         await pool.query(
@@ -1422,15 +1561,28 @@ router.delete('/:id', pinAdminMiddleware, async (req, res) => {
     invalidateStatsCache(req.user.userId);
 
     await audit(req.user.userId, req.params.id, 'delete', before, null,
-      req.body?.reason || 'Suppression admin');
+      req.body?.reason || 'Soft-delete admin');
+
+    console.log(`[TX DELETE] tx=${req.params.id} group=${before.payment_group_id || 'null'}`
+      + ` user=${req.user.userId} count=${deletedCount}`
+      + ` appointment_unlocked=${appointmentUnlocked}`);
 
     res.json({
-      ok: true,
-      referrals_revoked: refs.length,
-      appointment_unpaid: !!before.appointment_id,
-      promo_rollback: !!before.promo_code_id,
+      success: true,
+      deleted_count:        deletedCount,
+      appointment_unlocked: appointmentUnlocked,
+      deleted_at:           new Date().toISOString(),
+      referrals_revoked:    refs.length,
+      promo_rollback:       !!before.promo_code_id,
+      group_size:           groupRowsForLockRecheck.length || 1,
     });
-  } catch(e) { console.error('[TX DELETE]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
+  } catch (e) {
+    try { await dbClient.query('ROLLBACK'); } catch {}
+    console.error('[TX DELETE]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  } finally {
+    try { dbClient.release(); } catch {}
+  }
 });
 
 // ── GET /audit/:id — historique d'une transaction (admin) ────────────────────

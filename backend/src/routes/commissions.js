@@ -28,6 +28,7 @@ router.get('/', async (req, res) => {
        FROM employees e
        LEFT JOIN transactions t ON t.employee_id=e.id
          AND t.user_id=$1 AND t.type='revenue'
+         AND t.deleted_at IS NULL
          AND t.date BETWEEN $2 AND $3
        WHERE e.user_id=$1 AND e.is_active=TRUE
        GROUP BY e.id, e.name, e.avatar_color, e.commission_pct

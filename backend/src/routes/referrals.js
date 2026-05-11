@@ -636,6 +636,7 @@ async function resolveReferralForFilleul(userId, rawCode, filleulEmailRaw, baseA
   const { rows: prevTx } = await pool.query(
     `SELECT 1 FROM transactions
       WHERE user_id=$1 AND LOWER(client_email)=$2 AND type IN ('income','revenue')
+        AND deleted_at IS NULL
       LIMIT 1`,
     [userId, filEmail]
   );
