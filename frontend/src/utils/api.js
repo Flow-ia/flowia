@@ -200,7 +200,25 @@ function emitNetworkOk() {
   try { window.dispatchEvent(new Event('ff-network-ok')); } catch {}
 }
 
-async function request(path, options = {}) {
+// Détection cold-start Render : 502/503/504 du proxy ou TypeError "Failed to
+// fetch" (réponse 5xx sans CORS bloquée par le navigateur). Sur free tier,
+// Render hiberne après 15 min d'inactivité ; le premier hit prend 5-15s pour
+// réveiller le container, et peut renvoyer un 502/503 avant que le backend
+// ne réponde. On retry avec backoff pour absorber ces hiccups sans que
+// l'utilisateur voie d'erreur.
+const RETRY_STATUSES = new Set([502, 503, 504]);
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+function emitBackendWaking(attempt, max) {
+  try {
+    window.dispatchEvent(new CustomEvent('ff-backend-waking',
+      { detail: { attempt, max } }));
+  } catch {}
+}
+function emitBackendAwake() {
+  try { window.dispatchEvent(new Event('ff-backend-awake')); } catch {}
+}
+
+async function request(path, options = {}, _attempt = 0) {
   const token = getToken();
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -211,20 +229,41 @@ async function request(path, options = {}) {
     if (pinT) headers['x-employee-pin'] = pinT;
   }
 
+  const method     = String(options.method || 'GET').toUpperCase();
+  const isReadOnly = method === 'GET' || method === 'HEAD';
+  // Polling silencieux (notifs) : on ne retry pas pour ne pas spammer la
+  // console à chaque réveil Render. Le poll suivant (30s) reprendra tout seul.
+  const isQuietPoll = path.startsWith('/notifications/inapp');
+  // GETs lourds : jusqu'à 3 retries (5-15s de backoff cumulé couvre un cold
+  // start Render typique). Mutations : 1 seul retry uniquement sur erreur
+  // RÉSEAU (le backend n'a probablement pas traité la requête) — pas sur 5xx
+  // qui pourrait indiquer une mutation partielle.
+  const maxRetries = isQuietPoll ? 0 : (isReadOnly ? 3 : 1);
+
   let res;
   try {
     res = await fetch(`${BASE}${path}`, { ...options, headers });
   } catch (netErr) {
-    // Erreur reseau pure : DNS down, offline, fetch abort. On signale au
-    // OfflineBanner et on laisse l'erreur remonter (l'appelant existant
-    // gere ses toasts en aval).
     emitNetworkError();
+    if (_attempt < maxRetries) {
+      emitBackendWaking(_attempt + 1, maxRetries);
+      await delay(1000 * Math.pow(2, _attempt));
+      return request(path, options, _attempt + 1);
+    }
     throw netErr;
+  }
+  // 5xx cold-start : retry uniquement pour GET (mutation pourrait avoir été
+  // partiellement traitée côté backend, on évite les double-écritures).
+  if (RETRY_STATUSES.has(res.status) && isReadOnly && _attempt < maxRetries) {
+    emitNetworkError();
+    emitBackendWaking(_attempt + 1, maxRetries);
+    await delay(1000 * Math.pow(2, _attempt));
+    return request(path, options, _attempt + 1);
   }
   // 5xx = serveur down. On signale aussi pour OfflineBanner (l'appelant
   // continue a recevoir l'erreur, on ne change rien au comportement existant).
   if (res.status >= 500) emitNetworkError();
-  else emitNetworkOk();
+  else { emitNetworkOk(); if (_attempt > 0) emitBackendAwake(); }
   handleMerchant401(res, path);
   const data = await res.json();
   if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }

@@ -18,6 +18,10 @@ export default function OfflineBanner() {
   const [online, setOnline]   = useState(typeof navigator === 'undefined' || navigator.onLine);
   const [trying, setTrying]   = useState(false);
   const [serverDown, setServerDown] = useState(false); // distincte de navigateur offline
+  // Réveil Render free-tier : event 'ff-backend-waking' émis par utils/api.js
+  // pendant un retry sur 5xx ou erreur réseau (cold start). Distinct de
+  // serverDown qui apparaît seulement quand les retries sont épuisés.
+  const [waking, setWaking] = useState(false);
 
   // Listeners natifs : declenches par l'OS quand la connexion change.
   useEffect(() => {
@@ -38,12 +42,20 @@ export default function OfflineBanner() {
     const onErr = () => {
       if (navigator.onLine) setServerDown(true);
     };
-    const onOk = () => setServerDown(false);
-    window.addEventListener('ff-network-error', onErr);
-    window.addEventListener('ff-network-ok',    onOk);
+    const onOk = () => { setServerDown(false); setWaking(false); };
+    // Réveil Render : retry en cours, on affiche un bandeau amical et on
+    // ne montre PAS le serverDown rouge pour ne pas alarmer inutilement.
+    const onWaking = () => { setWaking(true); setServerDown(false); };
+    const onAwake  = () => { setWaking(false); setServerDown(false); };
+    window.addEventListener('ff-network-error',  onErr);
+    window.addEventListener('ff-network-ok',     onOk);
+    window.addEventListener('ff-backend-waking', onWaking);
+    window.addEventListener('ff-backend-awake',  onAwake);
     return () => {
-      window.removeEventListener('ff-network-error', onErr);
-      window.removeEventListener('ff-network-ok',    onOk);
+      window.removeEventListener('ff-network-error',  onErr);
+      window.removeEventListener('ff-network-ok',     onOk);
+      window.removeEventListener('ff-backend-waking', onWaking);
+      window.removeEventListener('ff-backend-awake',  onAwake);
     };
   }, []);
 
@@ -83,15 +95,27 @@ export default function OfflineBanner() {
     }
   }, []);
 
-  if (online && !serverDown) return null;
+  if (online && !serverDown && !waking) return null;
 
   const isOffline = !online;
-  const bg    = isOffline ? '#7f1d1d' : '#92400e';
-  const accent = isOffline ? '#fca5a5' : '#fcd34d';
-  const title = isOffline ? 'Hors ligne'           : 'Serveur indisponible';
-  const desc  = isOffline
-    ? "Vérifiez votre connexion internet. Vos modifications ne seront enregistrées qu'au retour."
-    : "Le serveur ne répond pas. Réessayez dans un instant.";
+  // Ordre de priorité : offline > waking (transitoire, attendu) > serverDown.
+  let bg, accent, title, desc, showRetryBtn;
+  if (isOffline) {
+    bg = '#7f1d1d'; accent = '#fca5a5';
+    title = 'Hors ligne';
+    desc  = "Vérifiez votre connexion internet. Vos modifications ne seront enregistrées qu'au retour.";
+    showRetryBtn = true;
+  } else if (waking) {
+    bg = '#1e3a8a'; accent = '#93c5fd';
+    title = 'Réveil du serveur…';
+    desc  = "Premier accès après une période d'inactivité. Patientez quelques secondes.";
+    showRetryBtn = false;
+  } else {
+    bg = '#92400e'; accent = '#fcd34d';
+    title = 'Serveur indisponible';
+    desc  = "Le serveur ne répond pas. Réessayez dans un instant.";
+    showRetryBtn = true;
+  }
 
   return (
     <div role="status" aria-live="polite" style={{
@@ -122,17 +146,19 @@ export default function OfflineBanner() {
         <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>{title}</div>
         <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2, lineHeight: 1.35 }}>{desc}</div>
       </div>
-      <button
-        onClick={retry}
-        disabled={trying}
-        style={{
-          background: '#fff', color: bg, border: 0,
-          borderRadius: 8, padding: '7px 12px', fontWeight: 500,
-          fontSize: 12, cursor: trying ? 'wait' : 'pointer',
-          whiteSpace: 'nowrap', fontFamily: 'inherit',
-          opacity: trying ? 0.7 : 1,
-        }}
-      >{trying ? 'Test…' : 'Réessayer'}</button>
+      {showRetryBtn && (
+        <button
+          onClick={retry}
+          disabled={trying}
+          style={{
+            background: '#fff', color: bg, border: 0,
+            borderRadius: 8, padding: '7px 12px', fontWeight: 500,
+            fontSize: 12, cursor: trying ? 'wait' : 'pointer',
+            whiteSpace: 'nowrap', fontFamily: 'inherit',
+            opacity: trying ? 0.7 : 1,
+          }}
+        >{trying ? 'Test…' : 'Réessayer'}</button>
+      )}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
