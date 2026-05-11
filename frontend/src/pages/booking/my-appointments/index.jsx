@@ -302,6 +302,12 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
 
   // Charger la page courante quand on est sur l'onglet visits, en vue liste
   // (pas dans la vue détail). Appelle GET /me/visits?page=&limit=&q=&date=.
+  // visitsRefreshTick : bumpé manuellement (visibilitychange + pull-to-refresh
+  // si on l'ajoute plus tard) pour forcer un re-fetch sans changer un filtre.
+  // Cas d'usage : le commerçant modifie l'employé d'un passage côté caisse,
+  // le client est sur cette page → il revoit la page (visibilitychange) et
+  // sa liste se met à jour automatiquement sans Ctrl+R.
+  const [visitsRefreshTick, setVisitsRefreshTick] = useState(0);
   useEffect(() => {
     if (activeTab !== 'visits' || selectedVisit) return;
     let cancelled = false;
@@ -327,7 +333,27 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       })
       .finally(() => { if (!cancelled) setVisitsLoading(false); });
     return () => { cancelled = true; };
-  }, [activeTab, selectedVisit, visitsPage, visitsDebounced, visitsDate]);
+  }, [activeTab, selectedVisit, visitsPage, visitsDebounced, visitsDate, visitsRefreshTick]);
+
+  // Re-fetch quand l'onglet redevient visible (retour de l'utilisateur sur
+  // l'app après avoir basculé dans une autre app / verrouillé l'écran). Sans
+  // ça, un client qui laisse la page ouverte pendant que le commerçant
+  // modifie un passage doit faire Ctrl+R pour voir l'update. Avec ça, le
+  // simple fait de revenir sur l'onglet déclenche un refetch.
+  useEffect(() => {
+    if (activeTab !== 'visits' || selectedVisit) return;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        setVisitsRefreshTick(n => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+    };
+  }, [activeTab, selectedVisit]);
 
   // Ouverture directe d'un passage via URL /passages/:id — fetch ciblé
   // (utile en bookmark ou refresh de la vue détail).

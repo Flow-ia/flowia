@@ -3,7 +3,41 @@
 // VisitDetailCard — vue détail d'un passage (ouverte par clic dans la liste
 // ou via URL directe /book/:slug/client/passages/:id). Responsive : flex
 // wrap sur la ligne commerçant/montant, champs qui s'empilent sur mobile.
+//
+// Cohérence avec le merchant (/historique) :
+//  - items affichés au format "Qte× Nom" (déduplication par nom+prix)
+//  - paiements multi : sous-lignes par moyen (├─ Espèces 41,00 € / ├─ CB 17,00 €)
+//    avec le total agrégé sur le bloc principal.
 // ─────────────────────────────────────────────────────────────────────────────
+const PAY_METHOD_LABELS = {
+  cash:      'Espèces',
+  card:      'Carte',
+  card_online: 'Stripe',
+  transfer:  'Virement',
+  check:     'Chèque',
+  gift_card: 'Bon cadeau',
+  other:     'Autre',
+  multi:     'Multiple',
+};
+function payLabelFor(method) {
+  return PAY_METHOD_LABELS[method] || method || '-';
+}
+
+// Dédup items par (service_name, unit_price). Tolère que la caisse ait stocké
+// 3 rows séparées qty=1 au lieu d'1 row qty=3 — on agrège dans tous les cas.
+function dedupeItems(items) {
+  const map = new Map();
+  for (const it of (items || [])) {
+    const name  = String(it.service_name || 'Prestation').trim();
+    const cents = Math.round((parseFloat(it.unit_price) || 0) * 100);
+    const key   = name + '|' + cents;
+    const qty   = parseInt(it.qty, 10) || 1;
+    if (map.has(key)) map.get(key).qty += qty;
+    else map.set(key, { service_name: name, unit_price: cents / 100, qty });
+  }
+  return Array.from(map.values());
+}
+
 export function VisitDetailCard({ visit: v, th, onBack }) {
   const total   = parseFloat(v.amount || 0);
   const orig    = parseFloat(v.original_amount || 0);
@@ -13,10 +47,15 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
   const dateStr = (dateObj && !isNaN(dateObj))
     ? dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
     : (v.date || '');
-  const payLabel = ({
-    cash:'Espèces', card:'Carte', transfer:'Virement',
-    check:'Chèque', other:'Autre', multi:'Multiple',
-  })[v.payment_method] || v.payment_method || '-';
+  // Multi-paiement : si breakdown JSON présent et >= 2 entrées, on affiche
+  // les sous-lignes par moyen au lieu d'un simple badge "Multiple".
+  const breakdown = Array.isArray(v.payments_breakdown) && v.payments_breakdown.length >= 2
+    ? v.payments_breakdown
+    : null;
+  const payLabel = breakdown
+    ? `Multi (${breakdown.length})`
+    : payLabelFor(v.payment_method);
+  const dedupedItems = dedupeItems(v.items);
 
   return (
     <div style={{ animation:'fadeIn .2s ease' }}>
@@ -88,32 +127,57 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
           </div>
         )}
 
-        {/* Prestations */}
-        {Array.isArray(v.items) && v.items.length > 0 && (
+        {/* Prestations — format "Qte× Nom" (dédupliqué) cohérent avec merchant */}
+        {dedupedItems.length > 0 && (
           <div>
             <p style={{ fontSize:11, fontWeight: 500, color:th.muted, margin:'0 0 8px' }}>Prestations</p>
             <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-              {v.items.map((it, i) => (
+              {dedupedItems.map((it, i) => (
                 <div key={i} style={{ display:'flex', alignItems:'center',
                   justifyContent:'space-between', gap:10, padding:'8px 0',
-                  borderBottom: i === v.items.length - 1 ? 'none' : `1px solid ${th.border}` }}>
+                  borderBottom: i === dedupedItems.length - 1 ? 'none' : `1px solid ${th.border}` }}>
                   <p style={{ fontSize:13, color:th.text, margin:0, minWidth:0,
                     flex:1, wordBreak:'break-word' }}>
+                    <span style={{ color:th.muted, marginRight:6 }}>{it.qty}×</span>
                     {it.service_name}
-                    {(it.qty||1) > 1 && (
-                      <span style={{ marginLeft:6, fontSize:11, fontWeight: 500,
-                        padding:'1px 6px', borderRadius:99,
-                        background:th.cardAlt, color:th.muted }}>×{it.qty}</span>
-                    )}
                   </p>
                   {(it.unit_price || 0) > 0 && (
                     <p style={{ fontSize:12, color:th.muted, margin:0,
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', flexShrink:0 }}>
-                      {(parseFloat(it.unit_price) * (it.qty||1)).toFixed(2)} €
+                      {(it.unit_price * it.qty).toFixed(2)} €
                     </p>
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Breakdown multi-paiement — sous-lignes par moyen pour traçabilité.
+            Cohérent avec ce que le commerçant voit dans /caisse/historique. */}
+        {breakdown && (
+          <div>
+            <p style={{ fontSize:11, fontWeight: 500, color:th.muted, margin:'0 0 8px' }}>
+              Répartition des paiements
+            </p>
+            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+              {breakdown.map((sub, i) => {
+                const cents = parseInt(sub.amount_cents, 10) || 0;
+                return (
+                  <div key={i} style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    gap:10, padding:'6px 0',
+                  }}>
+                    <p style={{ fontSize:12, color:th.text, margin:0 }}>
+                      {payLabelFor(sub.method)}
+                    </p>
+                    <p style={{ fontSize:12, color:th.text, margin:0, fontWeight:500,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', flexShrink:0 }}>
+                      {(cents / 100).toFixed(2)} €
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
