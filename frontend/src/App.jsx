@@ -2311,9 +2311,23 @@ export default function App() {
 
   const addTx = useCallback(async (d, actingEmployeeId) => {
     const t = await api.createTransaction(d, actingEmployeeId || d?.employee_id || null);
-    setTxs(p => [t, ...p]);
+    // Le backend a 2 formes de réponse :
+    //  - Single : la transaction complète (type, date, items, ...) → push direct.
+    //  - Multi (payment_breakdown[]) : wrapper {success, payment_group_id,
+    //    transactions:[{id, method, amount}], total_amount, count} → les rows
+    //    partielles n'ont pas type/date/items donc le filtre /caisse/historique
+    //    les exclut. On refetch pour récupérer la forme complète depuis la DB.
+    if (t && Array.isArray(t.transactions) && t.success) {
+      await reloadTxs();
+    } else if (t && t.type && t.date) {
+      setTxs(p => [t, ...p]);
+    } else {
+      // Forme inattendue (changement de contrat backend) → refetch défensif
+      // pour garder le state local synchrone avec la DB.
+      await reloadTxs();
+    }
     return t;
-  }, []);
+  }, [reloadTxs]);
   const updTx  = useCallback(async (id, d) => { const t = await api.updateTransaction(id, d); setTxs(p => p.map(x => x.id === id ? t : x)); }, []);
   // State-only setter : utilisé quand on a DÉJÀ la transaction mise à jour
   // (ex: réponse d'un PATCH déjà effectué par useTransactionPatch). Ne refait
