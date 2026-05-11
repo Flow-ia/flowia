@@ -23,8 +23,9 @@ import { I } from '../../utils/icons';
 import { todayStr } from '../../utils/dates';
 import { Card, nd, fmt, PAY_KEYS } from '../settings/shared';
 import { PinAccessModal } from '../Dashboard';
-import { Icon } from '../../components/Icon';
 import { useAdminMode } from '../../contexts/AdminModeContext';
+
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 const PM_GRID_CFG = {
   cash:        { label: 'Espèces',  color: '#065f46', bg: '#f0fdf4' },
@@ -33,6 +34,57 @@ const PM_GRID_CFG = {
   transfer:    { label: 'Virement', color: '#0e7490', bg: '#ecfeff' },
   other:       { label: 'Autre',    color: '#92400e', bg: '#fffbeb' },
 };
+
+// ── SVG inline helpers (Tabler outline). Memes paths que TransactionRow.jsx
+// cote /historique pour cohérence visuelle entre les deux pages.
+const SVG_BASE = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+};
+const SvgIcon = ({ paths, size = 14, color }) => (
+  <svg {...SVG_BASE} width={size} height={size}
+       style={{ color, flexShrink: 0, display: 'block' }}
+       dangerouslySetInnerHTML={{ __html: paths }} />
+);
+
+const PATH_CASH        = '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="10" x2="3" y2="10"/><line x1="21" y1="10" x2="21" y2="10"/>';
+const PATH_BANK        = '<line x1="3" y1="21" x2="21" y2="21"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="5 6 12 3 19 6"/><line x1="4" y1="10" x2="4" y2="21"/><line x1="20" y1="10" x2="20" y2="21"/><line x1="8" y1="14" x2="8" y2="17"/><line x1="12" y1="14" x2="12" y2="17"/><line x1="16" y1="14" x2="16" y2="17"/>';
+const PATH_CARD        = '<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>';
+const PATH_CARD_PAY    = '<path d="M12 19H5a2 2 0 0 1 -2 -2V7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v6"/><path d="M3 10h18"/><path d="M16 19h6"/><path d="M19 16l3 3l-3 3"/>';
+const PATH_DOTS        = '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>';
+const PATH_SHUFFLE     = '<path d="M18 4l3 3l-3 3"/><path d="M18 20l3 -3l-3 -3"/><path d="M3 7h3a5 5 0 0 1 5 5a5 5 0 0 0 5 5h5"/><path d="M21 7h-5a4.978 4.978 0 0 0 -3 1"/><path d="M11 16a4.978 4.978 0 0 1 -3 1h-5"/>';
+const PATH_CLOCK       = '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/>';
+const PATH_ARROW_BACK  = '<path d="M9 14l-4 -4l4 -4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/>';
+
+const ICON_BY_METHOD = {
+  cash:        PATH_CASH,
+  card:        PATH_CARD,
+  card_online: PATH_CARD_PAY,
+  transfer:    PATH_BANK,
+  other:       PATH_DOTS,
+};
+function methodIcon(method) {
+  return ICON_BY_METHOD[method] || ICON_BY_METHOD.other;
+}
+
+function CaisseBadge({ label, bg, color, paths }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 7px', borderRadius: 8,
+      background: bg, color: color,
+      fontSize: 10, fontWeight: 500, lineHeight: 1.4,
+      whiteSpace: 'nowrap',
+    }}>
+      {paths && <SvgIcon paths={paths} size={10} color={color} />}
+      {label}
+    </span>
+  );
+}
 
 export default function Historique({
   transactions = [], employees = [], categories = [], theme,
@@ -167,6 +219,11 @@ export default function Historique({
       const pmCfg = (isMultiBreakdown || tx.payment_method === 'multi')
         ? { color: '#3c3489', bg: '#eeedfe' }
         : (PM_GRID_CFG[tx.payment_method] || PM_GRID_CFG.other);
+      // pmKey = méthode brute pour piocher l'icône (cf. ICON_BY_METHOD). Pour
+      // les multi, on n'utilise pas pmKey (l'icône passe à PATH_SHUFFLE).
+      const pmKey = (isMultiBreakdown || tx.payment_method === 'multi')
+        ? 'other'
+        : (PM_GRID_CFG[tx.payment_method] ? tx.payment_method : 'other');
       const hour = tx.time ? String(tx.time).slice(0, 5) : '';
 
       // Multi traçable → 1 ligne agrégée pour le groupe + breakdown sous-lignes.
@@ -182,7 +239,7 @@ export default function Historique({
           service: desc,
           qty: totalQty,
           amount: parseFloat(tx.amount) || 0,
-          emp, pmLabel, pmCfg, hour,
+          emp, pmLabel, pmCfg, pmKey, hour,
           breakdown: tx.payments_breakdown,
         });
         return;
@@ -195,7 +252,7 @@ export default function Historique({
           out.push({
             id: tx.id + '_' + i,
             service: it.service_name || 'Prestation',
-            qty, amount: unit * qty, emp, pmLabel, pmCfg, hour,
+            qty, amount: unit * qty, emp, pmLabel, pmCfg, pmKey, hour,
           });
         });
         // Défense pour les transactions antérieures au fix backend (commit
@@ -213,7 +270,7 @@ export default function Historique({
             id: tx.id + '_adj',
             service: diff > 0 ? 'Supplément' : 'Remise',
             qty: 1, amount: diff,
-            emp, pmLabel, pmCfg, hour,
+            emp, pmLabel, pmCfg, pmKey, hour,
           });
         }
       } else {
@@ -222,7 +279,7 @@ export default function Historique({
           service: tx.description || 'Prestation',
           qty: parseInt(tx.qty_total) || 1,
           amount: parseFloat(tx.amount) || 0,
-          emp, pmLabel, pmCfg, hour,
+          emp, pmLabel, pmCfg, pmKey, hour,
         });
       }
     });
@@ -381,93 +438,156 @@ export default function Historique({
             </p>
           </div>
         ) : (
-          lines.map((l, idx) => (
-            <div key={l.id} style={{
-              padding:'12px 14px',
-              borderBottom: idx < lines.length - 1 ? sep : 'none',
-            }}>
-              <div style={{
-                display:'grid', gridTemplateColumns:'1fr auto', gap:12,
-                alignItems:'center',
+          lines.map((l, idx) => {
+            const isMultiLine  = Array.isArray(l.breakdown) && l.breakdown.length >= 2;
+            const isRefundLine = (parseFloat(l.amount) || 0) < 0;
+            const totalColor   = isRefundLine ? '#E24B4A' : '#1D9E75';
+            const totalSign    = isRefundLine ? '−' : '+';
+            const absAmount    = Math.abs(parseFloat(l.amount) || 0);
+            const pmIcon       = isMultiLine ? PATH_SHUFFLE : methodIcon(l.pmKey);
+            return (
+              <div key={l.id} style={{
+                display:'flex', alignItems:'center', gap:14,
+                padding:'10px 14px',
+                borderBottom: idx < lines.length - 1 ? sep : 'none',
+                background: isRefundLine ? '#FCEBEB' : 'transparent',
+                opacity: isRefundLine ? 0.85 : 1,
               }}>
-                <div style={{ minWidth:0 }}>
-                  <p style={{ fontSize:14, fontWeight:500, color:t.text,
-                              margin:'0 0 4px',
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {/* Col 1 — Avatar 36x36 */}
+                <div style={{
+                  width:36, height:36, borderRadius:10, flexShrink:0,
+                  background: l.pmCfg.bg,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                }}>
+                  <SvgIcon paths={pmIcon} size={18} color={l.pmCfg.color} />
+                </div>
+
+                {/* Col 2 — Titre + meta (heure, employé) */}
+                <div style={{ flex:1.6, minWidth:0, display:'flex', flexDirection:'column' }}>
+                  <div style={{
+                    margin:0, fontSize:14, fontWeight:500, color:t.text,
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                    marginBottom:3,
+                  }}>
                     {l.qty > 1 && <span style={{ color:t.muted, marginRight:6 }}>{l.qty}×</span>}
                     {l.service}
+                  </div>
+                  <div style={{
+                    display:'flex', flexWrap:'wrap', alignItems:'center',
+                    gap:'0 12px', rowGap:2,
+                  }}>
                     {l.hour && (
-                      <span style={{ marginLeft:8, fontSize:11, color:t.muted,
-                                     fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                     fontWeight:400 }}>
+                      <span style={{
+                        display:'inline-flex', alignItems:'center', gap:4,
+                        fontSize:13, fontWeight:500, color:t.text,
+                        whiteSpace:'nowrap',
+                      }}>
+                        <SvgIcon paths={PATH_CLOCK} size={14} color={t.muted} />
                         {l.hour}
                       </span>
                     )}
-                  </p>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                     {l.emp && (
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <div style={{ width:18, height:18, borderRadius:6,
-                                      background: l.emp.avatar_color || t.text,
-                                      display:'flex', alignItems:'center', justifyContent:'center',
-                                      color:'#fff', fontSize:10, fontWeight:500, flexShrink:0 }}>
+                      <span style={{
+                        display:'inline-flex', alignItems:'center', gap:5,
+                        fontSize:13, fontWeight:500, color:t.text,
+                        whiteSpace:'nowrap',
+                      }}>
+                        <span style={{
+                          width:14, height:14, borderRadius:99,
+                          background: l.emp.avatar_color || t.text,
+                          display:'inline-flex', alignItems:'center', justifyContent:'center',
+                          color:'#fff', fontSize:9, fontWeight:500, flexShrink:0,
+                        }}>
                           {(l.emp.name || '?').charAt(0).toUpperCase()}
-                        </div>
-                        <span style={{ fontSize:11, color:t.muted }}>{l.emp.name}</span>
-                      </div>
+                        </span>
+                        {l.emp.name}
+                      </span>
                     )}
-                    <span style={{
-                      fontSize:11, fontWeight:500,
-                      padding:'2px 7px', borderRadius:8,
-                      background: l.pmCfg.bg, color: l.pmCfg.color,
-                      whiteSpace:'nowrap',
-                    }}>
-                      {l.pmLabel}
-                    </span>
                   </div>
                 </div>
 
+                {/* Col 3 — Badges (multi, refund) */}
                 <div style={{
-                  fontSize:16, fontWeight:500, color:t.text,
-                  fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  whiteSpace:'nowrap',
+                  display:'flex', flexDirection:'column', gap:2,
+                  alignItems:'flex-start', flexShrink:0,
                 }}>
-                  {fmt(l.amount)} €
+                  {isMultiLine && (
+                    <CaisseBadge label={'Multi (' + l.breakdown.length + ')'}
+                                 bg="#F3F4F6" color="#4B5563" paths={PATH_SHUFFLE} />
+                  )}
+                  {isRefundLine && (
+                    <CaisseBadge label="Remboursé"
+                                 bg="#FCEBEB" color="#791F1F" paths={PATH_ARROW_BACK} />
+                  )}
+                </div>
+
+                {/* Col 4 — Paiements détaillés */}
+                <div style={{
+                  flex:1.1, minWidth:0,
+                  borderLeft:'0.5px solid rgba(0,0,0,0.08)',
+                  paddingLeft:12,
+                  display:'flex', flexDirection:'column', gap:2,
+                }}>
+                  {isMultiLine ? (
+                    l.breakdown.map((sub, k) => {
+                      const subCfg = PM_GRID_CFG[sub.method] || PM_GRID_CFG.other;
+                      const subLabel = subCfg?.label || sub.method;
+                      return (
+                        <div key={k} style={{
+                          display:'flex', alignItems:'center', justifyContent:'space-between',
+                          gap:8, fontSize:12,
+                        }}>
+                          <span style={{
+                            display:'inline-flex', alignItems:'center', gap:5,
+                            color:t.muted, minWidth:0,
+                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                          }}>
+                            <SvgIcon paths={methodIcon(sub.method)} size={13} color={t.muted} />
+                            <span style={{
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                            }}>{subLabel}</span>
+                          </span>
+                          <span style={{
+                            fontWeight:500, color:t.text,
+                            fontVariantNumeric:'tabular-nums',
+                            fontFamily: MONO,
+                            flexShrink:0,
+                          }}>
+                            {fmt(sub.amount)} €
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{
+                        display:'inline-flex', alignItems:'center', gap:4,
+                        padding:'4px 9px', borderRadius:8,
+                        background: l.pmCfg.bg, color: l.pmCfg.color,
+                        fontSize:11, fontWeight:500, lineHeight:1.3,
+                        whiteSpace:'nowrap',
+                      }}>
+                        <SvgIcon paths={methodIcon(l.pmKey)} size={11} color={l.pmCfg.color} />
+                        {l.pmLabel}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Col 5 — Total */}
+                <div style={{ minWidth:90, flexShrink:0, textAlign:'right' }}>
+                  <div style={{
+                    fontSize:15, fontWeight:500,
+                    fontVariantNumeric:'tabular-nums',
+                    fontFamily: MONO,
+                    color: totalColor, lineHeight:1.2,
+                  }}>
+                    {totalSign + fmt(absAmount) + ' €'}
+                  </div>
                 </div>
               </div>
-
-              {/* Sous-lignes breakdown (multi-paiement traçable) */}
-              {Array.isArray(l.breakdown) && l.breakdown.length >= 2 && (
-                <div style={{ marginTop:6, paddingLeft:6,
-                              display:'flex', flexDirection:'column', gap:2 }}>
-                  {l.breakdown.map((sub, k) => {
-                    const subCfg = PM_GRID_CFG[sub.method] || PM_GRID_CFG.other;
-                    const subLabel = subCfg?.label || sub.method;
-                    const isLastSub = k === l.breakdown.length - 1;
-                    return (
-                      <div key={k} style={{
-                        display:'flex', alignItems:'center', gap:6,
-                        fontSize:12, color:'rgba(0,0,0,0.65)',
-                      }}>
-                        <span style={{ color:t.muted, flexShrink:0 }}>
-                          {isLastSub ? "└─" : "├─"}
-                        </span>
-                        <span style={{ flex:1, color: subCfg?.color || t.muted, fontWeight:500 }}>
-                          {subLabel}
-                        </span>
-                        <span style={{
-                          fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
-                          color: subCfg?.color || t.text,
-                        }}>
-                          {fmt(sub.amount)} €
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </Card>
     </div>
