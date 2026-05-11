@@ -144,6 +144,40 @@ function normalizeTime(value) {
   return hh + ":" + mm;
 }
 
+// Validation pure d'un form d'édition. Retourne null si OK, sinon une string FR.
+// Extrait du composant pour pouvoir être appelé depuis un useMemo (canSave)
+// sans dépendances de closure changeantes.
+function validateForm(form) {
+  if (!form) return "Données invalides";
+  const total = parseAmount(form.total_amount);
+  if (!Number.isFinite(total) || total <= 0) return "Montant invalide";
+  if (!form.date) return "Date requise";
+  if (form.is_multi) {
+    if (form.payments.length < 2) return "Au moins 2 méthodes requises";
+    if (form.payments.length > 4) return "Maximum 4 méthodes autorisées";
+    const seen = new Set();
+    let sum = 0;
+    for (const p of form.payments) {
+      if (!METHOD_META[p.method]) return "Méthode invalide";
+      if (p.method === "card_online") return "Le paiement Stripe en ligne n'est pas autorisé en multi";
+      if (seen.has(p.method)) return "Vous ne pouvez pas saisir 2 fois la même méthode";
+      seen.add(p.method);
+      const a = parseAmount(p.amount);
+      if (!Number.isFinite(a) || a <= 0) return "Montant invalide pour une méthode";
+      sum += a;
+    }
+    // Tolerance 1 centime (arrondis fr-FR).
+    if (Math.abs(sum - total) > 0.01) {
+      return "La somme des paiements doit égaler le total";
+    }
+  } else {
+    if (!form.payments[0] || !METHOD_META[form.payments[0].method]) {
+      return "Méthode invalide";
+    }
+  }
+  return null;
+}
+
 function TxDetailDrawerImpl({
   transaction,
   onClose,
@@ -237,6 +271,14 @@ function TxDetailDrawerImpl({
     return JSON.stringify(initial) !== JSON.stringify(form);
   }, [editMode, form, transaction]);
 
+  // Validation live : Save désactivé tant que validate() retourne une erreur
+  // (ex: somme(breakdown) != total). On ne masque pas l'erreur — handleSave
+  // re-vérifie et affichera errBanner si quelqu'un force le clic via clavier.
+  const canSave = useMemo(() => {
+    if (!editMode || !form) return false;
+    return validateForm(form) === null;
+  }, [editMode, form]);
+
   function tryClose() {
     if (editMode && hasUnsavedChanges) {
       setConfirmDiscard(true);
@@ -328,36 +370,7 @@ function TxDetailDrawerImpl({
   }
 
   // ── Validation locale ────────────────────────────────────────────────────
-  function validate() {
-    if (!form) return "Données invalides";
-    const total = parseAmount(form.total_amount);
-    if (!Number.isFinite(total) || total <= 0) return "Montant invalide";
-    if (!form.date) return "Date requise";
-    if (form.is_multi) {
-      if (form.payments.length < 2) return "Au moins 2 méthodes requises";
-      if (form.payments.length > 4) return "Maximum 4 méthodes autorisées";
-      const seen = new Set();
-      let sum = 0;
-      for (const p of form.payments) {
-        if (!METHOD_META[p.method]) return "Méthode invalide";
-        if (p.method === "card_online") return "Le paiement Stripe en ligne n'est pas autorisé en multi";
-        if (seen.has(p.method)) return "Vous ne pouvez pas saisir 2 fois la même méthode";
-        seen.add(p.method);
-        const a = parseAmount(p.amount);
-        if (!Number.isFinite(a) || a <= 0) return "Montant invalide pour une méthode";
-        sum += a;
-      }
-      // Tolerance 1 centime (arrondis fr-FR).
-      if (Math.abs(sum - total) > 0.01) {
-        return "La somme des paiements doit égaler le total";
-      }
-    } else {
-      if (!form.payments[0] || !METHOD_META[form.payments[0].method]) {
-        return "Méthode invalide";
-      }
-    }
-    return null;
-  }
+  function validate() { return validateForm(form); }
 
   async function handleSave() {
     if (!transaction) return;
@@ -407,44 +420,58 @@ function TxDetailDrawerImpl({
       });
     const totalChanged = Math.abs(totalCurrent - totalInitial) > 0.005;
 
+    // FIX 2026-05-11 : le backend attend `payment_breakdown` (nouveau nom) avec
+    // `amount_cents` (centimes entiers), pas `payments` avec `amount` en euros.
+    // L'ancien payload était partiellement ignoré → toast "modifié" sans réelle
+    // écriture en BDD. On envoie désormais le bon format pour les multi ;
+    // pour un single, on passe par `payment_method` + `amount` (euros) sans
+    // breakdown, ce qui dit explicitement au backend "tx simple, pas multi".
     if (paymentsChanged) {
       if (form.is_multi) {
-        body.payments = form.payments.map(p => ({
-          method: p.method,
-          amount: parseAmount(p.amount),
+        body.payment_breakdown = form.payments.map(p => ({
+          method:       p.method,
+          amount_cents: Math.round(parseAmount(p.amount) * 100),
         }));
+        // Le total du multi DOIT être renvoyé pour que le backend valide
+        // la cohérence somme(breakdown) = total. Le drawer a déjà validé
+        // localement via validate(), mais le backend re-valide.
+        body.amount = totalCurrent;
       } else {
-        body.payments = [{
-          method: form.payments[0]?.method || "cash",
-          amount: totalCurrent,
-        }];
+        // Single : pas de breakdown ; on transmet la méthode et le total.
+        body.payment_method = form.payments[0]?.method || "cash";
+        body.amount         = totalCurrent;
+        // Forcer la sortie du mode multi côté backend si on quittait un multi.
+        body.payment_breakdown = null;
       }
     } else if (totalChanged) {
       // Total modifié sans changement de breakdown ni du toggle.
       // Cas single : on re-pousse 1 paiement aligné sur le nouveau total.
-      // Cas multi sans diff dans le breakdown : impossible si le breakdown
-      // sommait à l'ancien total — l'erreur serait remontée par validate().
+      // Cas multi : le backend rejettera avec BREAKDOWN_REQUIRED si on n'envoie
+      // pas le breakdown — validate() bloque déjà ce cas en amont (sum != total).
       if (!form.is_multi) {
-        body.amount   = totalCurrent;
-        body.payments = [{
-          method: form.payments[0]?.method || "cash",
-          amount: totalCurrent,
-        }];
+        body.amount         = totalCurrent;
+        body.payment_method = form.payments[0]?.method || "cash";
       } else {
         body.amount = totalCurrent;
       }
     }
 
-    // Si rien n'a réellement changé : ne pas appeler le backend (UX silent).
+    // Si rien n'a réellement changé : warning UX (pas d'appel backend).
     if (Object.keys(body).length === 0) {
-      setEditMode(false);
+      setErrBanner("Aucun changement détecté.");
       return;
     }
 
     setSaving(true);
     try {
-      await onPatch?.(transaction.id, body);
-      setEditMode(false);
+      const result = await onPatch?.(transaction.id, body);
+      // Le hook useTransactionPatch nous renvoie l'objet réponse complet.
+      // Si rows_affected = 0 (cas edge) : on signale + on garde le drawer ouvert.
+      if (result && typeof result === "object" && result.rows_affected === 0) {
+        setErrBanner("Aucun changement détecté.");
+      } else {
+        setEditMode(false);
+      }
     } catch {
       // Le toast est gere par le hook useTransactionPatch.
     } finally {
@@ -683,7 +710,8 @@ function TxDetailDrawerImpl({
                     iconPaths={PATH_CHECK}
                     label={saving ? "Enregistrement…" : "Enregistrer"}
                     variant="primary"
-                    disabled={saving}
+                    disabled={saving || !canSave}
+                    title={!canSave ? (validateForm(form) || "") : undefined}
                   />
                 </>
               )}

@@ -882,8 +882,37 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       type, amount, description, category_id, employee_id,
       payment_method, date, time, datetime_iso, reason,
       client_email, /* client_name unused */ client_note,
-      items, payments,
+      items, payments, payment_breakdown,
     } = body;
+
+    // Accepter le nouveau nom `payment_breakdown` (avec amount_cents) en
+    // priorité, puis fallback sur l'ancien `payments` (avec amount en euros)
+    // pour rétro-compat. Normaliser en interne vers `payList` = [{method, amount}]
+    // (amount en euros) — le reste du handler n'a pas besoin de changer.
+    const hasBreakdownField = has('payment_breakdown');
+    const hasPaymentsField  = has('payments');
+    const rawBreakdownInput = hasBreakdownField
+      ? (Array.isArray(payment_breakdown) ? payment_breakdown : null)
+      : (hasPaymentsField && Array.isArray(payments) ? payments : null);
+    const hasBreakdownPayload = rawBreakdownInput !== null;
+    // payments_norm = liste normalisée {method, amount(€)} pour le reste du code.
+    const payments_norm = hasBreakdownPayload
+      ? rawBreakdownInput
+          .map(p => {
+            if (!p || typeof p.method !== 'string') return null;
+            // amount_cents prioritaire si présent ; sinon amount (euros).
+            let amt;
+            const ac = parseFloat(p.amount_cents);
+            if (Number.isFinite(ac)) {
+              amt = ac / 100;
+            } else {
+              amt = parseFloat(p.amount);
+            }
+            if (!Number.isFinite(amt) || amt <= 0) return null;
+            return { method: p.method, amount: amt };
+          })
+          .filter(Boolean)
+      : null;
 
     // Audit V : validations strictes UNIQUEMENT sur les champs envoyés.
     // PATCH semantics — un champ absent du body n'est pas validé ni écrit
@@ -949,6 +978,15 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       }
     }
 
+    // ── CAS C (suite) — amount modifié seul sur multi existant : reject ──────
+    if (has('amount') && !hasBreakdownPayload && before.payment_group_id) {
+      client.release();
+      return res.status(400).json({
+        error: "Pour modifier le total d'un paiement multiple, veuillez aussi renseigner la nouvelle répartition entre les méthodes.",
+        code:  'BREAKDOWN_REQUIRED',
+      });
+    }
+
     // ── Items normalisés (lus uniquement si items[] fourni) ───────────────────
     const hasItemsPayload = Array.isArray(items);
     const itemList = hasItemsPayload
@@ -956,14 +994,22 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       : [];
 
     // ── Paiements normalisés ──────────────────────────────────────────────────
-    // payments[] sert à 2 choses :
+    // payList sert à 2 choses :
     //   1. ré-écrire la table legacy transaction_payments (single row + N children)
     //   2. ré-écrire un groupe multi-payment payment_group_id (N rows transactions)
     // Whitelist BREAKDOWN_METHODS pour interdire 'card_online' / 'multi' / 'check'.
-    const hasPayPayload = Array.isArray(payments);
-    const payList = hasPayPayload
-      ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
-      : [];
+    // Alimenté par body.payment_breakdown (avec amount_cents) en priorité,
+    // sinon body.payments (legacy, amount en euros). Voir bloc plus haut.
+    const hasPayPayload = hasBreakdownPayload;
+    const payList = hasBreakdownPayload ? payments_norm : [];
+
+    // ── CAS C — `amount` modifié seul sur un paiement multi sans breakdown ────
+    // Pour un multi déjà existant (before.payment_group_id IS NOT NULL), changer
+    // le total sans dire COMMENT le répartir laisse les rows soeurs incohérentes.
+    // Rejet explicite avec un code dédié pour que le frontend re-demande la
+    // répartition à l'utilisateur. Ne s'applique qu'aux paiements multi pré-existants
+    // (un single peut continuer à modifier son amount tout seul).
+    // NOTE : le SELECT `before` est fait plus bas — on diffère cette vérif après.
     if (hasPayPayload && payList.length >= 2) {
       // Validation breakdown alignée admin/transactions.js (commit A backend)
       const seen = new Set();
@@ -1178,26 +1224,56 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       }
     }
 
-    // ── Rewrite multi-payment group : si payments[] >=2 fourni ────────────────
-    // La rep_row porte la 1re sous-méthode (déjà patchée plus haut). Les autres
-    // rows sœurs sont SUPPRIMÉES puis RECRÉÉES avec les méthodes/montants
-    // restants, en clonant les colonnes métier depuis la rep_row mise à jour.
+    // ── Rééquilibrage multi-payment group : UPDATE in-place ───────────────────
+    // FIX 2026-05-11 : avant on faisait DELETE + INSERT sur les rows soeurs, ce
+    // qui modifiait created_at et cassait la traçabilité. Désormais on UPDATE
+    // chaque row existante par index (ordonnée par created_at) avec sa nouvelle
+    // (méthode, montant). N'INSERT que si le nouveau breakdown contient plus
+    // d'entrées que de rows existantes. Soft-delete (deleted_at) les rows en
+    // surplus si le breakdown rétrécit. La rep_row[0] est déjà patchée plus
+    // haut via setMap — on traite ici les sister rows uniquement.
+    let mutatedSisters = 0;
     if (hasPayPayload && payList.length >= 2) {
       const finalGroupId = updatedRepRow.payment_group_id || before.payment_group_id;
-      // 1. DELETE les sister rows du groupe (sauf la rep_row).
-      if (before.payment_group_id) {
-        await client.query(
-          `DELETE FROM transactions
-             WHERE user_id=$1::uuid AND payment_group_id=$2::uuid AND id != $3::uuid`,
-          [req.user.userId, before.payment_group_id, req.params.id]
-        );
-      }
-      // 2. INSERT N-1 nouvelles rows pour entries[1..]
-      for (let i = 1; i < payList.length; i++) {
-        const p = payList[i];
+
+      // 1. Récupérer les rows soeurs ACTIVES du groupe (hors rep_row), ordonnées
+      //    par created_at puis id (même tri que la CTE historique).
+      const { rows: sisterRows } = await client.query(
+        `SELECT id FROM transactions
+           WHERE user_id=$1::uuid AND payment_group_id=$2::uuid
+             AND id != $3::uuid AND deleted_at IS NULL
+           ORDER BY created_at ASC, id ASC
+           FOR UPDATE`,
+        [req.user.userId, finalGroupId, req.params.id]
+      );
+      const sisterCount   = sisterRows.length;
+      const neededSisters = payList.length - 1; // payList[0] = rep_row
+
+      // 2. UPDATE in-place les sister rows existantes pour les indices communs.
+      for (let i = 0; i < Math.min(sisterCount, neededSisters); i++) {
+        const p = payList[i + 1];
         const pAmt = parseFloat(p.amount) || 0;
         const pCents = Math.round(pAmt * 100);
-        const newIdemKey = `edit:${finalGroupId}:${i + 1}:${Date.now()}`;
+        const { rowCount } = await client.query(
+          `UPDATE transactions
+              SET amount             = $1::numeric,
+                  payment_method     = $2::text,
+                  gross_amount_cents = $3::integer,
+                  net_amount_cents   = $3::integer
+            WHERE id      = $4::uuid
+              AND user_id = $5::uuid
+              AND deleted_at IS NULL`,
+          [pAmt, p.method, pCents, sisterRows[i].id, req.user.userId]
+        );
+        mutatedSisters += rowCount;
+      }
+
+      // 3. Si le nouveau breakdown contient plus d'entrées : INSERT les manquantes.
+      for (let i = sisterCount; i < neededSisters; i++) {
+        const p = payList[i + 1];
+        const pAmt = parseFloat(p.amount) || 0;
+        const pCents = Math.round(pAmt * 100);
+        const newIdemKey = `edit:${finalGroupId}:${i + 2}:${Date.now()}`;
         await client.query(
           `INSERT INTO transactions
              (user_id, type, amount, description, category_id, employee_id,
@@ -1217,14 +1293,32 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
              FROM transactions WHERE id=$6::uuid`,
           [pAmt, p.method, pCents, finalGroupId, newIdemKey, req.params.id]
         );
+        mutatedSisters += 1;
+      }
+
+      // 4. Si le nouveau breakdown contient moins d'entrées : soft-delete les
+      //    rows en surplus (FEC : on garde la trace en BDD avec deleted_at).
+      for (let i = neededSisters; i < sisterCount; i++) {
+        const { rowCount } = await client.query(
+          `UPDATE transactions
+              SET deleted_at = NOW()
+            WHERE id      = $1::uuid
+              AND user_id = $2::uuid
+              AND deleted_at IS NULL`,
+          [sisterRows[i].id, req.user.userId]
+        );
+        mutatedSisters += rowCount;
       }
     } else if (hasPayPayload && payList.length === 1 && before.payment_group_id) {
-      // Multi → Single : supprimer les sister rows du groupe.
-      await client.query(
-        `DELETE FROM transactions
-           WHERE user_id=$1::uuid AND payment_group_id=$2::uuid AND id != $3::uuid`,
+      // Multi → Single : soft-delete les sister rows du groupe (au lieu de DELETE).
+      const { rowCount } = await client.query(
+        `UPDATE transactions
+            SET deleted_at = NOW()
+          WHERE user_id=$1::uuid AND payment_group_id=$2::uuid AND id != $3::uuid
+            AND deleted_at IS NULL`,
         [req.user.userId, before.payment_group_id, req.params.id]
       );
+      mutatedSisters += rowCount;
     }
 
     // ── Remplacer items (si fournis) ──────────────────────────────────────────
@@ -1315,10 +1409,59 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
     const after = await getSnapshot(req.params.id);
     await audit(req.user.userId, req.params.id, 'update', before, after, reason || null);
 
-    // Enrichir la réponse avec items + payments comme sur le GET
+    // ── Recompte des mutations réelles + payload payment_group enrichi ─────────
+    // Détection "200 menteur" : si setMap était vide ET aucune écriture sur le
+    // breakdown ET pas d'items, l'appel n'a touché à rien. On signale via le
+    // code NO_CHANGE_DETECTED pour que le frontend puisse afficher un warning.
+    // Note : setMap.size > 0 ne garantit pas un vrai changement si le client
+    // a renvoyé la même valeur — mais c'est un cas bénin, la BDD reste cohérente.
+    const repMutated = setMap.size > 0 ? 1 : 0;
+    const rowsAffected = repMutated + mutatedSisters + (hasItemsPayload ? 1 : 0);
+    if (rowsAffected === 0) {
+      // Le frontend devrait normalement filtrer ce cas (diff payload vide), mais
+      // garde de sécurité côté backend pour ne JAMAIS renvoyer un 200 menteur.
+      console.log(`[TX PUT] tx=${req.params.id} NO_CHANGE_DETECTED user=${req.user.userId}`);
+      return res.status(400).json({
+        error: "Aucun changement détecté.",
+        code:  'NO_CHANGE_DETECTED',
+      });
+    }
+
+    // payment_group : si la tx est multi, re-SELECT le groupe complet pour
+    // que le frontend puisse mettre à jour sa liste sans re-fetch global.
+    const finalGroupId = updatedRepRow.payment_group_id || before.payment_group_id;
+    let paymentGroup = null;
+    if (finalGroupId) {
+      const { rows: groupRows } = await pool.query(
+        `SELECT id, amount, payment_method, gross_amount_cents, net_amount_cents,
+                time, employee_id, description, date,
+                TO_CHAR(date, 'YYYY-MM-DD') as date_str,
+                TO_CHAR(time, 'HH24:MI') as time_str,
+                created_at, deleted_at
+           FROM transactions
+          WHERE user_id=$1::uuid AND payment_group_id=$2::uuid
+            AND deleted_at IS NULL
+          ORDER BY created_at ASC, id ASC`,
+        [req.user.userId, finalGroupId]
+      );
+      paymentGroup = groupRows;
+    }
+
+    console.log(`[TX PUT] tx=${req.params.id} group=${finalGroupId || 'null'}`
+      + ` user=${req.user.userId} rows_affected=${rowsAffected}`
+      + ` rep=${repMutated} sisters=${mutatedSisters}`
+      + ` items=${hasItemsPayload ? 1 : 0}`);
+
+    // Enrichir la réponse avec items + payments comme sur le GET, plus la
+    // shape étendue (success/rows_affected/payment_group). On garde les champs
+    // de la transaction au top-level pour rétro-compat avec les anciens
+    // consumers qui lisaient `res.id`/`res.amount`.
     const out = rows[0];
     out.items    = after?.items    || [];
     out.payments = after?.payments || [];
+    out.success       = true;
+    out.rows_affected = rowsAffected;
+    out.payment_group = paymentGroup;
     if (loyaltyResync) out.loyalty_resync = loyaltyResync;
     if (emailChangedWarn) {
       out.email_changed_warning = "Email client modifié : les tampons fidélité restent sur l'ancien email. Transfert manuel nécessaire si besoin.";

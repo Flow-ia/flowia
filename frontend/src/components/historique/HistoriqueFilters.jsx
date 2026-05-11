@@ -44,6 +44,15 @@ const SOURCE_OPTIONS = [
   { value: "manual", label: "RDV Manuel" },
   { value: "walkin", label: "Walk-in" },
 ];
+// Valeurs whitelistées côté backend (SORT_MAP dans routes/historique.js).
+// L'envoi d'une valeur non listée fera fallback sur created_at_desc.
+const SORT_OPTIONS = [
+  { value: "created_at_desc", label: "Plus récent" },
+  { value: "created_at_asc",  label: "Plus ancien" },
+  { value: "amount_desc",     label: "Montant ↓ (élevé → faible)" },
+  { value: "amount_asc",      label: "Montant ↑ (faible → élevé)" },
+  { value: "employee",        label: "Par employé" },
+];
 
 function FilterSelect({ label, value, options, onChange, theme: t }) {
   const optBg    = t.mode === "dark" ? "#1e1e30" : "#ffffff";
@@ -127,6 +136,9 @@ function HistoriqueFiltersImpl({ filters, onChange, employees }) {
         <FilterSelect label="Employé"    theme={t} value={filters.employee_id || "all"}
                       options={employeeOptions}
                       onChange={(v) => update("employee_id", v === "all" ? "" : v)} />
+        <FilterSelect label="Trier par"  theme={t} value={filters.sort || "created_at_desc"}
+                      options={SORT_OPTIONS}
+                      onChange={(v) => update("sort", v)} />
       </div>
       {/* Date picker conditionnel pour period=custom */}
       {isCustom && (

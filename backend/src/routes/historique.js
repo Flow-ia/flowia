@@ -63,6 +63,18 @@ const VALID_MODES = new Set(['card_online', 'cash', 'card', 'multi', 'other', 't
 //   walkin -> payment_source = 'walkin'
 const VALID_SOURCES = new Set(['online', 'manual', 'walkin']);
 
+// Whitelist stricte des valeurs `sort` pour éviter toute injection SQL.
+// Le frontend pioche une de ces clés ; le backend mappe vers une expression
+// ORDER BY pré-validée (jamais d'interpolation directe du query param).
+const SORT_MAP = {
+  created_at_desc: 'g.group_created_at DESC NULLS LAST, g.rep_id DESC',
+  created_at_asc:  'g.group_created_at ASC NULLS LAST, g.rep_id ASC',
+  amount_desc:     'g.group_gross_cents DESC, g.group_created_at DESC NULLS LAST',
+  amount_asc:      'g.group_gross_cents ASC, g.group_created_at DESC NULLS LAST',
+  employee:        'e.name ASC NULLS LAST, g.group_created_at DESC NULLS LAST',
+};
+const DEFAULT_SORT = 'created_at_desc';
+
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -76,7 +88,11 @@ router.get('/', async (req, res) => {
       employee_id,
       page,
       per_page,
+      sort,
     } = req.query;
+    // Sort whitelist : si valeur absente / inconnue → defaut created_at_desc.
+    const sortKey = (sort && SORT_MAP[sort]) ? sort : DEFAULT_SORT;
+    const orderBy = SORT_MAP[sortKey];
 
     // ── Validation ──────────────────────────────────────────────────────────
     const range = resolvePeriodRange(period, date_from, date_to);
@@ -160,7 +176,7 @@ router.get('/', async (req, res) => {
     const where = conds.join(' AND ');
 
     // ── Cache key (5 min TTL) ───────────────────────────────────────────────
-    const cacheKey = `historique:${period}:${range.from}:${range.to}:${type||''}:${mode||''}:${source||''}:${employee_id||''}:${pageN}:${perPageN}`;
+    const cacheKey = `historique:${period}:${range.from}:${range.to}:${type||''}:${mode||''}:${source||''}:${employee_id||''}:${pageN}:${perPageN}:${sortKey}`;
     const cached = statsCacheGet(userId, cacheKey);
     if (cached) return res.json(cached);
 
@@ -236,7 +252,7 @@ router.get('/', async (req, res) => {
       JOIN transactions t   ON t.id = g.rep_id
       LEFT JOIN appointments a ON a.id = t.appointment_id
       LEFT JOIN employees    e ON e.id = t.employee_id
-      ORDER BY g.group_created_at DESC NULLS LAST, g.rep_id DESC
+      ORDER BY ${orderBy}
       LIMIT $${listParams.length - 1} OFFSET $${listParams.length}
     `, listParams);
 

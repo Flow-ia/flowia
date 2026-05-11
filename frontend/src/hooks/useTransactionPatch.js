@@ -16,6 +16,9 @@ const ERROR_MESSAGES = {
   TX_LOCKED:                    "Cette transaction ne peut pas être modifiée",
   INVALID_AMOUNT:               "Montant invalide",
   INVALID_EMPLOYEE:             "Employé non trouvé",
+  NO_CHANGE_DETECTED:           "Aucun changement détecté",
+  BREAKDOWN_REQUIRED:
+    "Pour modifier le total d'un paiement multiple, veuillez aussi renseigner la nouvelle répartition entre les méthodes",
   BREAKDOWN_SUM_MISMATCH:       "La somme des paiements doit égaler le total",
   BREAKDOWN_DUPLICATE_METHODS:  "Vous ne pouvez pas saisir 2 fois la même méthode",
   BREAKDOWN_SINGLE_ITEM:        "Au moins 2 méthodes sont requises pour un paiement multiple",
@@ -44,7 +47,15 @@ export function useTransactionPatch({ showToast, onSuccess } = {}) {
     setStatus("loading");
     try {
       const res = await api.updateTransaction(id, body);
-      if (showToast) showToast("Transaction modifiée", "ok");
+      // FIX 2026-05-11 : différencier success réel vs 200 menteur. Le backend
+      // renvoie maintenant `rows_affected` ; si 0, on signale un warning au
+      // lieu du toast vert habituel.
+      const rowsAffected = res?.rows_affected;
+      if (rowsAffected === 0) {
+        if (showToast) showToast("Aucun changement détecté", "info");
+      } else {
+        if (showToast) showToast("Modification enregistrée", "ok");
+      }
       if (onSuccess) onSuccess(res);
       setStatus("success");
       return res;

@@ -26,7 +26,14 @@ export function useTransactionDelete({ showToast, onSuccess } = {}) {
     setStatus("loading");
     try {
       const res = await api.deleteTransaction(id);
-      if (showToast) showToast("Transaction supprimée", "ok");
+      const deletedCount = res?.deleted_count;
+      if (deletedCount === 0) {
+        if (showToast) showToast("Aucune transaction à supprimer", "info");
+      } else if (deletedCount > 1) {
+        if (showToast) showToast("Paiement multiple supprimé (" + deletedCount + " lignes)", "ok");
+      } else {
+        if (showToast) showToast("Transaction supprimée", "ok");
+      }
       if (onSuccess) onSuccess(res);
       setStatus("success");
       return res;

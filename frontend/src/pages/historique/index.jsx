@@ -30,6 +30,20 @@ import { formatDateLong } from "../../utils/format";
 const PER_PAGE_OPTIONS = [20, 50, 100];
 const DEFAULT_PER_PAGE  = 20;
 const VALID_PERIODS     = new Set(["today", "week", "month", "90days", "custom"]);
+const VALID_SORTS       = new Set(["created_at_desc", "created_at_asc", "amount_desc", "amount_asc", "employee"]);
+const SORT_STORAGE_KEY  = "flowia.historique.sort";
+const DEFAULT_SORT      = "created_at_desc";
+
+function loadSortFromStorage() {
+  try {
+    const v = localStorage.getItem(SORT_STORAGE_KEY);
+    return VALID_SORTS.has(v) ? v : DEFAULT_SORT;
+  } catch { return DEFAULT_SORT; }
+}
+function saveSortToStorage(v) {
+  try { if (VALID_SORTS.has(v)) localStorage.setItem(SORT_STORAGE_KEY, v); }
+  catch { /* localStorage indisponible — préférence non sauvée, mais filtre fonctionne */ }
+}
 
 // eslint-disable-next-line no-unused-vars
 export default function HistoriqueAdmin({ employees = [], transactions, categories = [], onUpdTx, onDelTx }) {
@@ -45,28 +59,36 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
   const [refreshTick, setRefreshTick] = useState(0);
 
   // ── Etat depuis l'URL (URL = source de verite, persistance reload-safe) ─
-  const filters = useMemo(() => ({
-    period:      VALID_PERIODS.has(params.get("period")) ? params.get("period") : "today",
-    type:        params.get("type")        || "",
-    mode:        params.get("mode")        || "",
-    source:      params.get("source")      || "",
-    employee_id: params.get("employee_id") || "",
-    date_from:   params.get("date_from")   || "",
-    date_to:     params.get("date_to")     || "",
-    page:        Math.max(1, parseInt(params.get("page"), 10) || 1),
-    per_page:    PER_PAGE_OPTIONS.includes(parseInt(params.get("per_page"), 10))
-                  ? parseInt(params.get("per_page"), 10) : DEFAULT_PER_PAGE,
-  }), [params]);
+  // sort : prend l'URL en priorité, sinon localStorage, sinon défaut.
+  const filters = useMemo(() => {
+    const urlSort = params.get("sort");
+    const sort = VALID_SORTS.has(urlSort) ? urlSort : loadSortFromStorage();
+    return {
+      period:      VALID_PERIODS.has(params.get("period")) ? params.get("period") : "today",
+      type:        params.get("type")        || "",
+      mode:        params.get("mode")        || "",
+      source:      params.get("source")      || "",
+      employee_id: params.get("employee_id") || "",
+      date_from:   params.get("date_from")   || "",
+      date_to:     params.get("date_to")     || "",
+      sort:        sort,
+      page:        Math.max(1, parseInt(params.get("page"), 10) || 1),
+      per_page:    PER_PAGE_OPTIONS.includes(parseInt(params.get("per_page"), 10))
+                    ? parseInt(params.get("per_page"), 10) : DEFAULT_PER_PAGE,
+    };
+  }, [params]);
 
   // Setter qui ecrit dans l'URL (replace pour ne pas polluer l'historique).
   const setFilters = (next) => {
     const usp = new URLSearchParams();
-    const defaults = { period: "today", page: 1, per_page: DEFAULT_PER_PAGE };
+    const defaults = { period: "today", page: 1, per_page: DEFAULT_PER_PAGE, sort: DEFAULT_SORT };
     Object.entries(next).forEach(([k, v]) => {
       if (v == null || v === "" || v === "all") return;
       if (defaults[k] != null && String(defaults[k]) === String(v)) return; // skip default
       usp.set(k, String(v));
     });
+    // Persister la préférence de tri (côté localStorage) à chaque set.
+    if (next.sort) saveSortToStorage(next.sort);
     setParams(usp, { replace: true });
   };
 
