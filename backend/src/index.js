@@ -112,13 +112,35 @@ function startServer() {
   // localhost:5174) appliquée par le router admin lui-même. Bypasser le CORS
   // merchant ici évite que la regex Vercel preview merchant n'autorise par
   // accident un sous-domaine sur l'admin, et inversement.
+  function isMerchantOriginAllowed(origin) {
+    if (!origin) return true;
+    if (allowedOrigins.has(origin)) return true;
+    if (previewRegex.test(origin)) return true;
+    return false;
+  }
   const merchantCors = cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-      if (previewRegex.test(origin)) return callback(null, true);
+      if (isMerchantOriginAllowed(origin)) return callback(null, true);
       callback(new Error('CORS not allowed: ' + origin));
     },
     credentials: true,
+  });
+  // Étape 1 — sniper qui pose les headers CORS sur res AVANT que tout autre
+  // middleware (rate-limiter, auth, router) ait pu envoyer une réponse.
+  // Avantage : même si un middleware ultérieur 401/429/500 sans appeler next()
+  // proprement, les headers sont déjà sur res et restent attachés au write
+  // de la réponse. Sans ce sniper, le user voyait `No Access-Control-Allow-
+  // Origin` sur les réponses d'erreur intermittentes (cold-start, timeout
+  // proxy, deploy en cours) → preflight cassé alors que l'origin est OK.
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/admin')) return next();
+    const origin = req.headers.origin;
+    if (isMerchantOriginAllowed(origin) && origin) {
+      res.setHeader('Access-Control-Allow-Origin',      origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Vary',                              'Origin');
+    }
+    next();
   });
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/admin')) return next();
@@ -168,11 +190,16 @@ function startServer() {
     message: { error: 'Trop de tentatives de connexion, réessayez dans 5 minutes.' },
     standardHeaders: true, legacyHeaders: false,
   });
-  // Notifications : moins fréquent
+  // Notifications : poll frontend toutes les 30s + visibilitychange + multi-tabs.
+  // 60/min était trop juste : 2 onglets ouverts + 1 focus = 6/min minimum, plus
+  // les OPTIONS preflights qui doublent chaque requête en cross-origin. Cap à
+  // 300/min (cohérent avec apiLimiter) et skip explicitement les OPTIONS
+  // preflight (handled par cors() en amont, ne doivent pas peser sur la quota).
   const notifLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, max: 60,
+    windowMs: 1 * 60 * 1000, max: 300,
     message: { error: 'Trop de requêtes.' },
     standardHeaders: true, legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
   });
   // Stats : cache fort, limite basse
   const statsLimiter = rateLimit({
