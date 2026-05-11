@@ -111,6 +111,27 @@ function parseAmount(str) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Formate les items granulaires en "3× Coupe homme, 1× Coupe femme" pour
+// affichage. Dédupe par (service_name + unit_price) au cas où la caisse
+// aurait stocké N rows séparées avec qty=1 au lieu d'1 row avec qty=N.
+// Fallback sur tx.description si pas d'items en BDD (tx legacy).
+function formatItemsLabel(tx) {
+  const items = Array.isArray(tx?.items) ? tx.items : [];
+  if (items.length === 0) return tx?.description || "";
+  const map = new Map();
+  for (const it of items) {
+    const name  = String(it.service_name || "Prestation").trim();
+    const cents = Math.round((parseFloat(it.unit_price) || 0) * 100);
+    const key   = name + "|" + cents;
+    const qty   = parseInt(it.qty, 10) || 1;
+    if (map.has(key)) map.get(key).qty += qty;
+    else map.set(key, { name, qty });
+  }
+  return Array.from(map.values())
+    .map(it => it.qty + "× " + it.name)
+    .join(", ");
+}
+
 // Normalise une date BDD (DATE Postgres serialisee en ISO via node-pg, ou
 // string "YYYY-MM-DD" via TO_CHAR, ou timestamptz ISO) vers le format attendu
 // par <input type="date"> : "YYYY-MM-DD". Tolere null/undefined.
@@ -686,15 +707,10 @@ function TxDetailDrawerImpl({
               padding: "16px",
               display: "flex", flexDirection: "column", gap: 16,
             }}>
-              {errBanner && (
-                <div style={{
-                  padding: "10px 12px", borderRadius: 8,
-                  background: "#fef2f2", border: "0.5px solid #fecaca",
-                  color: "#991b1b", fontSize: 13, lineHeight: 1.4,
-                }}>
-                  {errBanner}
-                </div>
-              )}
+              {/* errBanner déplacé au bas de la section Paiement (BreakdownEdit)
+                  pour que les erreurs business (paiements/prestations/total
+                  désaccordés) s'affichent à côté du champ qui les déclenche.
+                  En mode lecture, il n'y a pas d'edit donc pas d'errBanner. */}
 
               {/* Section 1 — Recapitulatif */}
               {!editMode ? (
@@ -743,11 +759,13 @@ function TxDetailDrawerImpl({
               ) : (
                 <BreakdownEdit
                   form={form}
+                  updateForm={updateForm}
                   toggleMulti={toggleMulti}
                   setPayment={setPayment}
                   addPaymentRow={addPaymentRow}
                   removePaymentRow={removePaymentRow}
                   colors={colors}
+                  errBanner={errBanner}
                 />
               )}
 
@@ -956,7 +974,7 @@ function ViewRecap({ tx, colors, locked, isMulti, breakdownCount, isRefund, gros
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 16, fontWeight: 500, color: colors.text, lineHeight: 1.35 }}>
-        {tx.description || (src === "walkin" ? "Vente walk-in" : "Prestation")}
+        {formatItemsLabel(tx) || (src === "walkin" ? "Vente walk-in" : "Prestation")}
       </div>
       <div style={{ fontSize: 12, color: colors.muted }}>
         {dateDisplay}
@@ -1056,12 +1074,28 @@ function FeeLine({ label, value, colors, muted, bold }) {
 function MetaView({ tx, colors }) {
   const src = tx.payment_source;
   const srcLb = SOURCE_LABELS_FR[src] || src || "—";
+  // Client : nom prioritaire, sinon email, sinon "—". Évite d'afficher juste
+  // "—" quand le caissier n'a saisi qu'un email (cas fréquent identification
+  // rapide d'un client fidélité).
+  const clientDisplay =
+    (tx.client_name && tx.client_name.trim())
+      ? tx.client_name.trim()
+      : (tx.client_email && tx.client_email.trim())
+        ? tx.client_email.trim()
+        : "—";
+  // Description = formatItemsLabel (toujours format "Qte× Nom, Qte× Nom" si
+  // items présents, fallback sur tx.description sinon).
+  const descDisplay = formatItemsLabel(tx) || "—";
   return (
     <SectionCard colors={colors} title="Informations">
-      <MetaRow label="Client"   value={tx.client_name || "—"} colors={colors} />
-      <MetaRow label="Employé"  value={tx.employee_name || "—"} colors={colors} />
-      <MetaRow label="Source"   value={srcLb} colors={colors} />
-      <MetaRow label="ID Transaction" value={tx.id} colors={colors} mono small selectable />
+      <MetaRow label="Client"      value={clientDisplay}     colors={colors} />
+      {tx.client_name && tx.client_email && (
+        <MetaRow label="Email"     value={tx.client_email}   colors={colors} small />
+      )}
+      <MetaRow label="Prestations" value={descDisplay}       colors={colors} />
+      <MetaRow label="Employé"     value={tx.employee_name || "—"} colors={colors} />
+      <MetaRow label="Source"      value={srcLb}             colors={colors} />
+      <MetaRow label="ID Transaction" value={tx.id}          colors={colors} mono small selectable />
       {tx.stripe_payment_intent_id && (
         <MetaRow label="PI Stripe" value={tx.stripe_payment_intent_id}
                  colors={colors} mono small selectable />
@@ -1093,6 +1127,10 @@ function MetaRow({ label, value, colors, mono, small, selectable }) {
 // ── Edit ────────────────────────────────────────────────────────────────────
 
 function EditRecap({ form, updateForm, employees, colors }) {
+  // Note : "Montant total (€)" est désormais affiché en BAS de la section
+  // Paiement (BreakdownEdit) pour que les erreurs de validation business
+  // (somme paiements/prestations ≠ total) s'affichent juste sous ce champ
+  // qui est le pivot des calculs.
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <Field label="Description" colors={colors}>
@@ -1123,17 +1161,12 @@ function EditRecap({ form, updateForm, employees, colors }) {
           ))}
         </select>
       </Field>
-      <Field label="Montant total (€)" colors={colors}>
-        <input type="number" step="0.01" min="0"
-               value={form.total_amount}
-               onChange={e => updateForm({ total_amount: e.target.value })}
-               style={inputStyle(colors)} />
-      </Field>
     </div>
   );
 }
 
-function BreakdownEdit({ form, toggleMulti, setPayment, addPaymentRow, removePaymentRow, colors }) {
+function BreakdownEdit({ form, updateForm, toggleMulti, setPayment,
+                         addPaymentRow, removePaymentRow, colors, errBanner }) {
   const total = parseAmount(form.total_amount);
   const sum = form.payments.reduce((s, p) => s + parseAmount(p.amount), 0);
   const sumOk = Math.abs(sum - total) <= 0.01;
@@ -1237,6 +1270,40 @@ function BreakdownEdit({ form, toggleMulti, setPayment, addPaymentRow, removePay
           </div>
         </>
       )}
+
+      {/* ── Montant total — pivot des calculs ────────────────────────────
+          Positionné en BAS de la section Paiement (et non plus dans
+          EditRecap) pour que les erreurs business (somme paiements ≠ total,
+          somme prestations ≠ total, prestations ≠ paiements) s'affichent
+          directement sous le champ qui en est responsable. */}
+      <div style={{
+        marginTop: 12, paddingTop: 12,
+        borderTop: "0.5px solid " + colors.separator,
+      }}>
+        <Field label="Montant total (€)" colors={colors}>
+          <input type="number" step="0.01" min="0"
+                 value={form.total_amount}
+                 onChange={e => updateForm({ total_amount: e.target.value })}
+                 style={inputStyle(colors)} />
+        </Field>
+        {errBanner && (
+          <div role="alert" style={{
+            marginTop: 8,
+            padding: "8px 10px", borderRadius: 8,
+            background: "#fef2f2", border: "0.5px solid #fecaca",
+            color: "#991b1b", fontSize: 12, lineHeight: 1.4,
+            display: "flex", alignItems: "flex-start", gap: 8,
+          }}>
+            <span style={{
+              flexShrink: 0, width: 16, height: 16, borderRadius: 99,
+              background: "#fee2e2", color: "#991b1b",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 500,
+            }}>!</span>
+            <span style={{ flex: 1 }}>{errBanner}</span>
+          </div>
+        )}
+      </div>
     </SectionCard>
   );
 }

@@ -196,21 +196,48 @@ export default function Historique({
     return acc;
   }, [groupedTodayRevs]);
 
-  // ── Lignes ligne-par-ligne (une ligne par item ou par tx si pas d'items) ──
-  // Pour un multi-paiement traçable (commit A) : 1 SEULE ligne agrégée par
-  // groupe (pas 1 par item, pour éviter de dupliquer le breakdown sur N
-  // sous-lignes). Le breakdown s'affiche en sous-lignes dans le JSX (├─).
+  // ── Lignes ligne-par-ligne (une ligne par prestation distincte) ──────────
+  // Multi ET single → 1 ligne par groupe d'items (déduplication par
+  // service_name + unit_price). Pour un encaissement « 3 Coupe homme + 1
+  // Coupe femme » payé en multi 41€/17€, on obtient :
+  //   • « 3× Coupe homme — 45,00 € »   (avec sous-lignes breakdown attachées)
+  //   • « 1× Coupe femme — 13,00 € »
+  // Avant le fix : « 4× Coupe homme, Coupe femme — 58 € » sur une seule
+  // ligne agrégée — utilisateur ne voyait plus le détail par prestation.
+  // Le breakdown des paiements reste attaché UNIQUEMENT à la 1ère ligne du
+  // groupe pour ne pas le dupliquer.
   const empById = useMemo(() => Object.fromEntries(emps.map(e => [e.id, e])), [emps]);
+
+  // Aggregate items par (service_name + unit_price arrondi au centime). Si
+  // la caisse a stocké 3 rows séparées « Coupe homme qty=1 » au lieu d'1
+  // row « Coupe homme qty=3 », on les fusionne ici pour un affichage propre.
+  function dedupeItems(items) {
+    const map = new Map();
+    for (const it of items) {
+      const name  = (it.service_name || 'Prestation').trim();
+      const price = Math.round((parseFloat(it.unit_price) || 0) * 100); // cents
+      const key   = name + '|' + price;
+      const qty   = parseInt(it.qty) || 1;
+      if (map.has(key)) {
+        map.get(key).qty += qty;
+      } else {
+        map.set(key, { service_name: name, unit_price: price / 100, qty });
+      }
+    }
+    return Array.from(map.values());
+  }
+
   const lines = useMemo(() => {
     const out = [];
     groupedTodayRevs.forEach(tx => {
       const emp = empById[tx.employee_id];
-      const items = Array.isArray(tx.items) ? tx.items : [];
+      const rawItems = Array.isArray(tx.items) ? tx.items : [];
+      const items    = dedupeItems(rawItems);
       const isMultiBreakdown = Array.isArray(tx.payments_breakdown)
                             && tx.payments_breakdown.length >= 2;
       let pmLabel;
       if (isMultiBreakdown) {
-        pmLabel = `Multi (${tx.payments_breakdown.length})`;
+        pmLabel = 'Multi (' + tx.payments_breakdown.length + ')';
       } else if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
         pmLabel = tx.payments.map(p => PM_GRID_CFG[p.method]?.label || p.method).join(' + ');
       } else {
@@ -219,67 +246,54 @@ export default function Historique({
       const pmCfg = (isMultiBreakdown || tx.payment_method === 'multi')
         ? { color: '#3c3489', bg: '#eeedfe' }
         : (PM_GRID_CFG[tx.payment_method] || PM_GRID_CFG.other);
-      // pmKey = méthode brute pour piocher l'icône (cf. ICON_BY_METHOD). Pour
-      // les multi, on n'utilise pas pmKey (l'icône passe à PATH_SHUFFLE).
       const pmKey = (isMultiBreakdown || tx.payment_method === 'multi')
         ? 'other'
         : (PM_GRID_CFG[tx.payment_method] ? tx.payment_method : 'other');
       const hour = tx.time ? String(tx.time).slice(0, 5) : '';
-
-      // Multi traçable → 1 ligne agrégée pour le groupe + breakdown sous-lignes.
-      if (isMultiBreakdown) {
-        const totalQty = items.length > 0
-          ? items.reduce((s, it) => s + (parseInt(it.qty) || 1), 0)
-          : (parseInt(tx.qty_total) || 1);
-        const desc = items.length === 1
-          ? (items[0].service_name || tx.description || 'Prestation')
-          : (tx.description || 'Prestation');
-        out.push({
-          id: tx.id,
-          service: desc,
-          qty: totalQty,
-          amount: parseFloat(tx.amount) || 0,
-          emp, pmLabel, pmCfg, pmKey, hour,
-          breakdown: tx.payments_breakdown,
-        });
-        return;
-      }
+      const breakdownArr = isMultiBreakdown ? tx.payments_breakdown : null;
 
       if (items.length > 0) {
+        // 1 ligne par prestation. breakdown attaché UNIQUEMENT à la 1re ligne
+        // (sinon les sous-lignes paiement se dupliqueraient sur chaque item).
         items.forEach((it, i) => {
-          const qty  = parseInt(it.qty) || 1;
-          const unit = parseFloat(it.unit_price) || 0;
           out.push({
             id: tx.id + '_' + i,
-            service: it.service_name || 'Prestation',
-            qty, amount: unit * qty, emp, pmLabel, pmCfg, pmKey, hour,
+            service: it.service_name,
+            qty: it.qty,
+            amount: it.unit_price * it.qty,
+            emp, pmLabel, pmCfg, pmKey, hour,
+            breakdown: i === 0 ? breakdownArr : null,
           });
         });
-        // Défense pour les transactions antérieures au fix backend (commit
-        // d8def69) : si l'employé avait modifié le total mais que les
-        // transaction_items conservent les prix d'origine, on ajoute une
-        // ligne d'ajustement pour que la somme des lignes = tx.amount.
-        const itemsSum = items.reduce(
-          (s, it) => s + ((parseFloat(it.unit_price) || 0) * (parseInt(it.qty) || 1)),
-          0
-        );
-        const txAmt = parseFloat(tx.amount) || 0;
-        const diff = txAmt - itemsSum;
+        // Ligne d'ajustement si somme(items) != tx.amount (legacy / overrides).
+        // Pour un multi, on compare au total du groupe (tx.amount = rep_row
+        // only, donc on regarde gross_amount_cents qui contient le total).
+        const itemsSum = items.reduce((s, it) => s + it.unit_price * it.qty, 0);
+        const txTotal  = isMultiBreakdown && tx.gross_amount_cents
+          ? (parseInt(tx.gross_amount_cents, 10) / 100)
+          : (parseFloat(tx.amount) || 0);
+        const diff = txTotal - itemsSum;
         if (Math.abs(diff) > 0.01) {
           out.push({
             id: tx.id + '_adj',
             service: diff > 0 ? 'Supplément' : 'Remise',
             qty: 1, amount: diff,
             emp, pmLabel, pmCfg, pmKey, hour,
+            breakdown: null,
           });
         }
       } else {
+        // Pas d'items détaillés (tx legacy) → 1 ligne basée sur description.
+        const txTotal = isMultiBreakdown && tx.gross_amount_cents
+          ? (parseInt(tx.gross_amount_cents, 10) / 100)
+          : (parseFloat(tx.amount) || 0);
         out.push({
           id: tx.id,
           service: tx.description || 'Prestation',
           qty: parseInt(tx.qty_total) || 1,
-          amount: parseFloat(tx.amount) || 0,
+          amount: txTotal,
           emp, pmLabel, pmCfg, pmKey, hour,
+          breakdown: breakdownArr,
         });
       }
     });
