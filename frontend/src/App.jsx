@@ -2315,6 +2315,16 @@ export default function App() {
     return t;
   }, []);
   const updTx  = useCallback(async (id, d) => { const t = await api.updateTransaction(id, d); setTxs(p => p.map(x => x.id === id ? t : x)); }, []);
+  // State-only setter : utilisé quand on a DÉJÀ la transaction mise à jour
+  // (ex: réponse d'un PATCH déjà effectué par useTransactionPatch). Ne refait
+  // PAS d'appel réseau — évite le double PUT qui crashait historique/index.jsx
+  // (renvoyait la réponse enrichie {success, rows_affected, payment_group} en
+  // tant que body du 2e PUT → backend détectait amount rep_row vs items group
+  // total → 400 ITEMS_AMOUNT_MISMATCH sur de simples renames d'employé).
+  const replaceTxLocal = useCallback((id, t) => {
+    if (!id || !t) return;
+    setTxs(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+  }, []);
   const delTx  = useCallback(async id => { await api.deleteTransaction(id); setTxs(p => p.filter(x => x.id !== id)); }, []);
   const addCat = useCallback(async d => { const c = await api.createCategory(d); setCats(p => [...p, c]); }, []);
   const updCat = useCallback(async (id, d) => { const c = await api.updateCategory(id, d); setCats(p => p.map(x => x.id === id ? c : x)); }, []);
@@ -2535,7 +2545,7 @@ export default function App() {
           /caisse/historique reste lecture seule, jour courant, gate PIN
           employé. /transactions redirige vers /historique pour les anciens
           liens. */}
-      <Route path="/historique"   element={<RequireAdminMode><HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={updTx} onDelTx={delTx}/></RequireAdminMode>}/>
+      <Route path="/historique"   element={<RequireAdminMode><HistoriqueAdmin transactions={transactions} employees={employees} categories={categories} onUpdTx={replaceTxLocal} onDelTx={delTx}/></RequireAdminMode>}/>
       <Route path="/transactions" element={<Navigate to="/historique" replace/>}/>
       <Route path="/clients"      element={<ClientsPage/>}/>
       <Route path="/agenda"                   element={<EmployeeAgenda employees={employees} onTxCreated={tx => setTxs(p => [tx, ...p])}/>}/>
