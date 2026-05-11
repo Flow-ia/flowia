@@ -395,6 +395,11 @@ async function initDB() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // Index performance critique : GET /historique LEFT JOIN sur
+  // transaction_id (CTE groups, subquery items). Sans cet index, sequential
+  // scan sur toute la table à chaque page d'historique.
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_transaction_items_tx
+    ON transaction_items(transaction_id)`).catch(()=>{});
   // Migration : table transaction_payments — multi-paiement (split)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS transaction_payments (

@@ -15,6 +15,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { formatCents } from "../../utils/format";
 import { isTransactionLocked, lockReason } from "../../utils/transactionLock";
+import ServiceDropdown from "./ServiceDropdown";
 
 // ── SVG inline (memes regles que TransactionRow) ─────────────────────────────
 const SVG_BASE = {
@@ -245,6 +246,17 @@ function TxDetailDrawerImpl({
     const total = totalAmountFromTx(tx);
     const breakdown = breakdownToRows(tx);
     const isMulti = breakdown.length >= 2;
+    // Items granulaires : 1 entrée par prestation. Rétro-compat — si la tx
+    // n'a pas d'items en BDD, on garde un array vide ; l'UI bascule alors
+    // sur le fallback description (mode lecture) ou sur un message d'aide
+    // (mode édition : "Ajouter une prestation").
+    const rawItems = Array.isArray(tx?.items) ? tx.items : [];
+    const items = rawItems.map(it => ({
+      service_id:   it.service_id || null,
+      service_name: it.service_name || it.name || "Prestation",
+      qty:          String(parseInt(it.qty || 1, 10) || 1),
+      unit_price:   String(Number(it.unit_price || 0).toFixed(2)),
+    }));
     return {
       description: tx?.description || "",
       date:        normalizeDate(tx?.date || tx?.created_at),
@@ -259,6 +271,7 @@ function TxDetailDrawerImpl({
             { method: tx?.payment_method && METHOD_META[tx.payment_method] ? tx.payment_method : "cash",
               amount: total },
           ],
+      items,
     };
   }
 
@@ -338,6 +351,52 @@ function TxDetailDrawerImpl({
     setForm(f => {
       if (f.payments.length <= 2) return f;
       return { ...f, payments: f.payments.filter((_, i) => i !== idx) };
+    });
+  }
+
+  // ── Items granulaires : helpers d'édition ──────────────────────────────
+  function setItem(idx, patch) {
+    setForm(f => ({
+      ...f,
+      items: f.items.map((it, i) => i === idx ? { ...it, ...patch } : it),
+    }));
+  }
+  function addItem() {
+    setForm(f => ({
+      ...f,
+      items: [...(f.items || []), {
+        service_id:   null,
+        service_name: "Prestation",
+        qty:          "1",
+        unit_price:   "0.00",
+      }],
+    }));
+  }
+  function removeItem(idx) {
+    setForm(f => ({
+      ...f,
+      items: f.items.filter((_, i) => i !== idx),
+    }));
+  }
+  function syncTotalToItems() {
+    setForm(f => {
+      const sum = (f.items || []).reduce(
+        (s, it) => s + (parseAmount(it.qty) * parseAmount(it.unit_price)),
+        0
+      );
+      // Si la tx est en multi, on aligne aussi le 1er sous-paiement
+      // (validation backend rejette sinon avec BREAKDOWN_SUM_MISMATCH).
+      const totalStr = sum.toFixed(2);
+      if (f.is_multi) {
+        return { ...f, total_amount: totalStr };
+      }
+      return {
+        ...f,
+        total_amount: totalStr,
+        payments: f.payments.length
+          ? f.payments.map((p, i) => i === 0 ? { ...p, amount: totalStr } : p)
+          : [{ method: "cash", amount: totalStr }],
+      };
     });
   }
 
@@ -454,6 +513,36 @@ function TxDetailDrawerImpl({
       } else {
         body.amount = totalCurrent;
       }
+    }
+
+    // ── Items granulaires : diff vs initial, on n'envoie que si modifiés.
+    // Backend PUT supporte items[] : DELETE + re-INSERT sur la rep_row du
+    // groupe (cf. transactions.js lignes 1325-1335). Rétro-compat avec
+    // les transactions legacy sans items en BDD : items[] présent dans le
+    // body crée les rows pour la 1re fois (création rétroactive).
+    const itemsCurrent = (form.items || []).map(it => ({
+      service_id:   it.service_id || null,
+      service_name: String(it.service_name || "").trim() || "Prestation",
+      qty:          parseInt(it.qty, 10) || 1,
+      unit_price:   parseAmount(it.unit_price),
+    }));
+    const itemsInitial = (initial.items || []).map(it => ({
+      service_id:   it.service_id || null,
+      service_name: String(it.service_name || "").trim() || "Prestation",
+      qty:          parseInt(it.qty, 10) || 1,
+      unit_price:   parseAmount(it.unit_price),
+    }));
+    const itemsChanged = itemsCurrent.length !== itemsInitial.length
+      || itemsCurrent.some((it, i) => {
+        const init = itemsInitial[i];
+        if (!init) return true;
+        return it.service_id   !== init.service_id
+            || it.service_name !== init.service_name
+            || it.qty          !== init.qty
+            || Math.abs(it.unit_price - init.unit_price) > 0.005;
+      });
+    if (itemsChanged && itemsCurrent.length > 0) {
+      body.items = itemsCurrent;
     }
 
     // Si rien n'a réellement changé : warning UX (pas d'appel backend).
@@ -614,6 +703,20 @@ function TxDetailDrawerImpl({
                   form={form}
                   updateForm={updateForm}
                   employees={employees}
+                  colors={colors}
+                />
+              )}
+
+              {/* Section 1bis — Prestations granulaires (items) */}
+              {!editMode ? (
+                <ItemsView tx={transaction} colors={colors} grossCents={grossCents} />
+              ) : (
+                <ItemsEdit
+                  form={form}
+                  setItem={setItem}
+                  addItem={addItem}
+                  removeItem={removeItem}
+                  syncTotalToItems={syncTotalToItems}
                   colors={colors}
                 />
               )}
@@ -1210,6 +1313,215 @@ function FooterButton({ onClick, disabled, title, colors, iconPaths, label, vari
       {iconPaths && <Icon paths={iconPaths} size={13} color={fg} />}
       {label}
     </button>
+  );
+}
+
+// ── Items granulaires ───────────────────────────────────────────────────────
+// Mode lecture : liste structurée des prestations + total. Si la tx n'a pas
+// d'items en BDD (legacy), on retombe sur tx.description avec un libellé
+// explicite pour ne pas faire croire à un bug.
+function ItemsView({ tx, colors, grossCents }) {
+  const items = Array.isArray(tx?.items) ? tx.items : [];
+  if (items.length === 0) {
+    if (!tx?.description) return null;
+    return (
+      <SectionCard colors={colors} title="Description">
+        <p style={{ fontSize: 13, color: colors.text, margin: 0, lineHeight: 1.45 }}>
+          {tx.description}
+        </p>
+        <p style={{ fontSize: 11, color: colors.muted, fontStyle: "italic",
+                    margin: "6px 0 0", lineHeight: 1.4 }}>
+          {"(Transaction sans détail de prestations en base — affichage simplifié.)"}
+        </p>
+      </SectionCard>
+    );
+  }
+  return (
+    <SectionCard colors={colors} title="Prestations">
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {items.map((it, idx) => {
+          const q = parseInt(it.qty || 1, 10) || 1;
+          const unit = parseFloat(it.unit_price) || 0;
+          const lineTotal = q * unit;
+          return (
+            <div key={idx} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+              padding: "7px 0",
+              borderBottom: idx < items.length - 1
+                ? "0.5px solid " + colors.separator
+                : "none",
+              fontSize: 13, gap: 10,
+            }}>
+              <span style={{
+                color: colors.text, flex: 1, minWidth: 0,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                <span style={{ fontWeight: 500, color: colors.muted, marginRight: 4 }}>
+                  {q + "×"}
+                </span>
+                {it.service_name || "Prestation"}
+              </span>
+              <span style={{
+                color: colors.muted, fontSize: 12, flexShrink: 0,
+                fontFamily: MONO, fontVariantNumeric: "tabular-nums",
+              }}>
+                {unit.toFixed(2).replace(".", ",") + " €"}
+              </span>
+              <span style={{
+                color: colors.text, fontWeight: 500, minWidth: 64,
+                textAlign: "right", flexShrink: 0,
+                fontFamily: MONO, fontVariantNumeric: "tabular-nums",
+              }}>
+                {lineTotal.toFixed(2).replace(".", ",") + " €"}
+              </span>
+            </div>
+          );
+        })}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "baseline",
+          paddingTop: 8, marginTop: 4,
+          borderTop: "0.5px solid " + colors.border,
+          fontSize: 13, fontWeight: 500, color: colors.text,
+        }}>
+          <span>{"Total prestations"}</span>
+          <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
+            {formatCents(grossCents)}
+          </span>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+// Mode édition : inputs qty + ServiceDropdown + unit_price + bouton remove.
+// Bouton "Ajouter une prestation" + bandeau d'écart vs montant total si
+// somme(items) ≠ form.total_amount + bouton Synchroniser.
+function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, colors }) {
+  const items = form?.items || [];
+  const totalAmount = parseAmount(form?.total_amount);
+  const itemsSum = items.reduce(
+    (s, it) => s + (parseAmount(it.qty) * parseAmount(it.unit_price)),
+    0
+  );
+  const diff = itemsSum - totalAmount;
+  const mismatch = Math.abs(diff) > 0.01;
+
+  return (
+    <SectionCard colors={colors} title="Prestations">
+      {items.length === 0 ? (
+        <p style={{ fontSize: 12, color: colors.muted, fontStyle: "italic",
+                    margin: 0, lineHeight: 1.45 }}>
+          {"Aucune prestation détaillée. Ajoutez-en une pour activer l'édition fine."}
+        </p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map((it, idx) => (
+            <div key={idx} style={{
+              display: "grid",
+              gridTemplateColumns: "56px 1fr 86px auto",
+              gap: 6, alignItems: "center",
+            }}>
+              <input type="number" min="1" step="1"
+                     value={it.qty}
+                     onChange={e => setItem(idx, { qty: e.target.value })}
+                     aria-label="Quantité"
+                     style={{
+                       width: "100%", boxSizing: "border-box",
+                       padding: "8px 8px", borderRadius: 6,
+                       border: "0.5px solid " + colors.inputBorder,
+                       background: colors.inputBg, color: colors.text,
+                       fontSize: 12, fontFamily: "inherit", outline: "none",
+                       textAlign: "center",
+                     }} />
+              <ServiceDropdown
+                value={it.service_id}
+                displayName={it.service_name}
+                onChange={(svc) => setItem(idx, {
+                  service_id:   svc.id,
+                  service_name: svc.name,
+                  unit_price:   svc.price != null ? String(Number(svc.price).toFixed(2)) : it.unit_price,
+                })}
+                colors={colors}
+              />
+              <input type="number" min="0" step="0.01"
+                     value={it.unit_price}
+                     onChange={e => setItem(idx, { unit_price: e.target.value })}
+                     aria-label="Prix unitaire (€)"
+                     style={{
+                       width: "100%", boxSizing: "border-box",
+                       padding: "8px 8px", borderRadius: 6,
+                       border: "0.5px solid " + colors.inputBorder,
+                       background: colors.inputBg, color: colors.text,
+                       fontSize: 12, fontFamily: MONO, outline: "none",
+                       textAlign: "right",
+                     }} />
+              <button type="button"
+                      onClick={() => removeItem(idx)}
+                      aria-label="Supprimer cette prestation"
+                      title="Supprimer"
+                      style={{
+                        width: 30, height: 30, borderRadius: 6,
+                        border: "0.5px solid " + colors.inputBorder,
+                        background: colors.inputBg, color: "#A32D2D",
+                        cursor: "pointer", fontFamily: "inherit",
+                        fontSize: 14, lineHeight: 1,
+                      }}>
+                {"×"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button type="button" onClick={addItem}
+              style={{
+                marginTop: 8, padding: "7px 12px", borderRadius: 8,
+                border: "0.5px dashed " + colors.inputBorder,
+                background: "transparent", color: colors.text,
+                cursor: "pointer", fontFamily: "inherit",
+                fontSize: 12, fontWeight: 500, alignSelf: "flex-start",
+              }}>
+        {"+ Ajouter une prestation"}
+      </button>
+
+      {items.length > 0 && (
+        <div style={{
+          marginTop: 8, paddingTop: 8,
+          borderTop: "0.5px solid " + colors.separator,
+          display: "flex", justifyContent: "space-between", alignItems: "baseline",
+          fontSize: 13, color: colors.text, fontWeight: 500,
+        }}>
+          <span>{"Total prestations"}</span>
+          <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
+            {itemsSum.toFixed(2).replace(".", ",") + " €"}
+          </span>
+        </div>
+      )}
+
+      {mismatch && items.length > 0 && (
+        <div style={{
+          marginTop: 6, padding: "8px 10px", borderRadius: 8,
+          background: "#FAEEDA", color: "#854F0B",
+          fontSize: 11, lineHeight: 1.4,
+          display: "flex", justifyContent: "space-between",
+          alignItems: "center", gap: 8, flexWrap: "wrap",
+        }}>
+          <span>
+            {"Écart de " + Math.abs(diff).toFixed(2).replace(".", ",")
+              + " € entre le total prestations et le montant saisi."}
+          </span>
+          <button type="button" onClick={syncTotalToItems}
+                  style={{
+                    padding: "4px 10px", borderRadius: 6,
+                    background: "#854F0B", color: "#fff",
+                    border: "none", cursor: "pointer", fontFamily: "inherit",
+                    fontSize: 11, fontWeight: 500,
+                  }}>
+            {"Synchroniser"}
+          </button>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 

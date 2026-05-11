@@ -488,6 +488,21 @@ router.post('/', async (req, res) => {
           insertedRows.push({ id: r.rows[0].id, method: item.method, amount: itemAmt });
           methodsLog.push(`${item.method}:${item.amount_cents}c`);
         }
+        // ── Items granulaires : stockés UNIQUEMENT sur la 1re row du groupe
+        // (la rep_row). Une vente = 1 set d'items même si encaissée en N
+        // sous-paiements. Cohérent avec booking/checkout.js + le GET
+        // /historique qui LEFT JOIN sur la rep_row.
+        if (itemList.length && insertedRows.length) {
+          const repId = insertedRows[0].id;
+          for (const it of itemList) {
+            await dbClient.query(
+              `INSERT INTO transaction_items (transaction_id, service_id, service_name, qty, unit_price)
+               VALUES ($1::uuid, $2::uuid, $3::text, $4::integer, $5::numeric)`,
+              [repId, it.service_id || null, it.service_name,
+               parseInt(it.qty) || 1, parseFloat(it.unit_price) || 0]
+            );
+          }
+        }
         await dbClient.query('COMMIT');
       } catch (err) {
         try { await dbClient.query('ROLLBACK'); } catch {}

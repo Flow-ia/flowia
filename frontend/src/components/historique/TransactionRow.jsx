@@ -67,22 +67,19 @@ function formatTimeShort(iso) {
 }
 
 // Affiche la liste des prestations si tx.items est dispo, sinon fallback
-// sur la description. Pas d'items dans la rep_row /api/historique
-// actuellement → fallback description la quasi-totalite du temps.
+// sur la description (rétro-compat transactions legacy sans items en BDD).
+// Format : "2× Coupe homme · 1× Coupe femme". L'ellipsis CSS gère le débord.
 function formatItemsList(tx) {
   if (Array.isArray(tx.items) && tx.items.length > 0) {
     return tx.items
       .map(it => {
-        const q = parseInt(it.qty || it.quantity || 1, 10);
-        const n = it.name || it.label || it.title || "Prestation";
-        return (q > 1 ? q + "× " : "") + n;
+        const q = parseInt(it.qty || it.quantity || 1, 10) || 1;
+        const n = it.service_name || it.name || it.label || it.title || "Prestation";
+        return q + "× " + n;
       })
       .join(" · ");
   }
-  if (tx.description) {
-    const s = String(tx.description);
-    return s.length > 60 ? s.slice(0, 60) + "…" : s;
-  }
+  if (tx.description) return String(tx.description);
   return "Vente libre";
 }
 

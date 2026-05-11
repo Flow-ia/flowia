@@ -247,7 +247,21 @@ router.get('/', async (req, res) => {
         -- breakdown_payments : NULL pour les rows simples ET pour les rows
         -- legacy 'multi' (pas de payment_group_id). Le frontend affiche
         -- les sous-lignes uniquement quand cet array est non NULL.
-        CASE WHEN g.has_group_id THEN g.breakdown_raw ELSE NULL END AS breakdown_payments
+        CASE WHEN g.has_group_id THEN g.breakdown_raw ELSE NULL END AS breakdown_payments,
+        -- items granulaires : portés UNIQUEMENT par la rep_row du groupe
+        -- (single = rep_row = la row elle-même ; multi = la plus ancienne
+        -- du groupe par created_at). Fallback [] pour les transactions
+        -- legacy sans items en BDD — le frontend tombe alors sur description.
+        COALESCE((
+          SELECT json_agg(json_build_object(
+            'id',           ti.id,
+            'service_id',   ti.service_id,
+            'service_name', ti.service_name,
+            'qty',          ti.qty,
+            'unit_price',   ti.unit_price
+          ) ORDER BY ti.created_at)
+          FROM transaction_items ti WHERE ti.transaction_id = t.id
+        ), '[]'::json) AS items
       FROM groups g
       JOIN transactions t   ON t.id = g.rep_id
       LEFT JOIN appointments a ON a.id = t.appointment_id
