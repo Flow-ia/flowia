@@ -891,7 +891,8 @@ export const connectApi = {
   disconnect:        ()  => request('/stripe-connect/disconnect',     { method: 'POST' }),
   getPaymentConfig:  ()  => request('/stripe-connect/payment-config'),
   // Escrow : liste des payouts (en attente / liberes / annules) du merchant.
-  getPayouts:        (status) => request(`/stripe-connect/payouts${status ? `?status=${status}` : ''}`),
+  // Param `?debug=1` propage en permanence (filtre admin cote backend).
+  getPayouts:        (status) => request(`/stripe-connect/payouts?${status ? `status=${status}&` : ''}debug=1`),
   // Stats KPI paiements en ligne sur periode glissante (7/30/90 jours).
   // Param `?debug=1` propage en permanence : le backend l'expose seulement
   // si le user a feature_flags.ledger_debug_visible === true (admin-only).

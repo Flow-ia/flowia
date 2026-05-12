@@ -42,6 +42,89 @@ const LEDGER_FLAGS = [
 const flagsCache = new Map(); // userId -> { flags, expiresAt }
 const FLAGS_TTL_MS = 30_000;
 
+// ── METRIQUES IN-MEMORY ──────────────────────────────────────────────────
+// Compteurs reset au boot (= par deploy Render). Exposes via admin endpoint
+// GET /api/admin/ledger-metrics. Egalement loggues en stdout JSON structure
+// (prefix [LEDGER_METRIC]) pour Render Logs grep-friendly.
+const metrics = {
+  started_at: new Date().toISOString(),
+  // Map key = `${label}|${userId}` -> count
+  drift:       new Map(),
+  fallback:    new Map(),
+  ledger_error: new Map(),
+  legacy_error: new Map(),
+  // Compteurs globaux par label
+  by_label:    new Map(),  // key=label -> { calls, drift, fallback, errors }
+};
+
+function bumpCounter(map, key) {
+  map.set(key, (map.get(key) || 0) + 1);
+}
+function bumpLabel(label, field) {
+  const cur = metrics.by_label.get(label) || { calls: 0, drift: 0, fallback: 0, ledger_errors: 0, legacy_errors: 0 };
+  cur[field] = (cur[field] || 0) + 1;
+  metrics.by_label.set(label, cur);
+}
+
+function logMetric(type, payload) {
+  // Format JSON structure une ligne pour grep facile.
+  // Exemple : [LEDGER_METRIC] {"type":"drift","label":"...","user_id":"...","ts":"..."}
+  try {
+    console.log('[LEDGER_METRIC] ' + JSON.stringify({
+      type, ts: new Date().toISOString(), ...payload,
+    }));
+  } catch {
+    // si JSON.stringify fail (rare), tomber sur un log brut
+    console.log('[LEDGER_METRIC] type=' + type + ' label=' + (payload?.label || '-'));
+  }
+}
+
+function getMetricsSnapshot() {
+  const mapToObj = (m) => {
+    const out = {};
+    for (const [k, v] of m.entries()) out[k] = v;
+    return out;
+  };
+  return {
+    started_at: metrics.started_at,
+    snapshot_at: new Date().toISOString(),
+    by_label:     mapToObj(metrics.by_label),
+    drift_top:    topN(metrics.drift, 20),
+    fallback_top: topN(metrics.fallback, 20),
+    ledger_errors_top: topN(metrics.ledger_error, 20),
+    legacy_errors_top: topN(metrics.legacy_error, 20),
+    totals: {
+      drift:        sumMap(metrics.drift),
+      fallback:     sumMap(metrics.fallback),
+      ledger_error: sumMap(metrics.ledger_error),
+      legacy_error: sumMap(metrics.legacy_error),
+    },
+  };
+}
+function topN(map, n) {
+  const arr = Array.from(map.entries())
+    .map(([key, count]) => {
+      const [label, user_id] = key.split('|');
+      return { label, user_id, count };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, n);
+  return arr;
+}
+function sumMap(m) {
+  let s = 0;
+  for (const v of m.values()) s += v;
+  return s;
+}
+function resetMetrics() {
+  metrics.started_at = new Date().toISOString();
+  metrics.drift.clear();
+  metrics.fallback.clear();
+  metrics.ledger_error.clear();
+  metrics.legacy_error.clear();
+  metrics.by_label.clear();
+}
+
 async function getLedgerFlags(userId) {
   const cached = flagsCache.get(userId);
   const now = Date.now();
@@ -67,13 +150,20 @@ function invalidateLedgerFlags(userId) {
 // Compare 2 objets par champ. Retourne {detected:bool, fields:[{name, legacy, ledger, delta}]}.
 // tolerance applique uniquement aux champs numeriques. Les champs non-numeriques
 // (strings, arrays) ne sont pas compares ici (le shape doit matcher).
+// fields supporte les paths dotted (ex: 'summary.pending_cents') pour comparer
+// des champs imbriques.
+function getPath(obj, path) {
+  if (obj == null) return undefined;
+  if (!path.includes('.')) return obj[path];
+  return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
 function diffNumericFields(legacy, ledger, tolerance, fieldsToCompare) {
   if (!legacy || !ledger) return { detected: false, fields: [] };
   const drifts = [];
   const keys = fieldsToCompare || Object.keys(legacy);
   for (const k of keys) {
-    const a = legacy[k];
-    const b = ledger[k];
+    const a = getPath(legacy, k);
+    const b = getPath(ledger, k);
     if (typeof a !== 'number' || typeof b !== 'number') continue;
     const delta = a - b;
     if (Math.abs(delta) > tolerance) {
@@ -111,6 +201,9 @@ async function dualRead({
   const useLedger    = flags[flagName] === true;
   const wantsCompare = flags.ledger_dual_compare !== false; // default true
 
+  bumpLabel(label, 'calls');
+  const counterKey = `${label}|${userId}`;
+
   // Toujours lire le legacy en premier (= source de verite courante).
   let legacy = null;
   let legacyError = null;
@@ -118,7 +211,9 @@ async function dualRead({
     legacy = await legacyFn();
   } catch (e) {
     legacyError = e.message || String(e);
-    console.error('[dualRead] legacy fail label=' + label + ' user=' + userId, legacyError);
+    bumpCounter(metrics.legacy_error, counterKey);
+    bumpLabel(label, 'legacy_errors');
+    logMetric('legacy_error', { label, user_id: userId, error: legacyError });
   }
 
   // Lire le ledger UNIQUEMENT si on en a besoin (flag activé ou compare-mode).
@@ -129,15 +224,21 @@ async function dualRead({
       ledger = await ledgerFn();
     } catch (e) {
       ledgerError = e.message || String(e);
-      console.error('[dualRead] ledger fail label=' + label + ' user=' + userId, ledgerError);
+      bumpCounter(metrics.ledger_error, counterKey);
+      bumpLabel(label, 'ledger_errors');
+      logMetric('ledger_error', { label, user_id: userId, error: ledgerError });
     }
   }
 
   // Comparaison drift (uniquement si les 2 sont dispo).
   const drift = diffNumericFields(legacy, ledger, tolerance, fields);
   if (drift.detected) {
-    console.warn('[DUAL-READ DRIFT] label=' + label + ' user=' + userId
-      + ' fields=' + drift.fields.map(d => d.name + '(L=' + d.legacy + ',l=' + d.ledger + ',d=' + d.delta + ')').join(','));
+    bumpCounter(metrics.drift, counterKey);
+    bumpLabel(label, 'drift');
+    logMetric('drift', {
+      label, user_id: userId,
+      fields: drift.fields.map(f => ({ name: f.name, legacy: f.legacy, ledger: f.ledger, delta: f.delta })),
+    });
   }
 
   // Choix de la source de reponse :
@@ -151,8 +252,12 @@ async function dualRead({
     source = 'legacy';
     result = legacy;
     if (useLedger && (ledgerError || !ledger)) {
-      console.warn('[dualRead] FALLBACK TO LEGACY label=' + label + ' user=' + userId
-        + ' reason=' + (ledgerError || 'ledger_returned_null'));
+      bumpCounter(metrics.fallback, counterKey);
+      bumpLabel(label, 'fallback');
+      logMetric('fallback', {
+        label, user_id: userId,
+        reason: ledgerError || 'ledger_returned_null',
+      });
     }
   }
 
@@ -205,4 +310,6 @@ module.exports = {
   invalidateLedgerFlags,
   isDebugVisible,
   LEDGER_FLAGS,
+  getMetricsSnapshot,
+  resetMetrics,
 };

@@ -369,57 +369,78 @@ router.get('/payouts', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     const status = req.query.status || null;
-
-    const params = [userId];
-    let whereStatus = '';
     if (status) {
       const valid = ['pending', 'released', 'cancelled', 'failed'];
       if (!valid.includes(status)) {
         return res.status(400).json({ error: 'status invalide' });
       }
-      params.push(status);
-      whereStatus = ` AND ap.status = $2`;
     }
 
-    const { rows } = await pool.query(`
-      SELECT ap.id, ap.appointment_id, ap.amount_cents, ap.release_at,
-             ap.released_at, ap.status, ap.cancelled_reason, ap.created_at,
-             ap.stripe_payout_id,
-             a.client_name, a.date AS appt_date, a.start_time AS appt_time,
-             COALESCE(s.name, '') AS service_name
-        FROM appointment_payouts ap
-        LEFT JOIN appointments a ON a.id = ap.appointment_id
-        LEFT JOIN booking_services s ON s.id = a.service_id
-       WHERE ap.user_id = $1${whereStatus}
-       ORDER BY
-         CASE ap.status
-           WHEN 'pending'   THEN 1
-           WHEN 'failed'    THEN 2
-           WHEN 'released'  THEN 3
-           WHEN 'cancelled' THEN 4
-         END,
-         ap.release_at ASC
-       LIMIT 200
-    `, params);
+    // ── LEGACY : lit appointment_payouts ────────────────────────────────
+    const legacyFn = async () => {
+      const params = [userId];
+      let whereStatus = '';
+      if (status) {
+        params.push(status);
+        whereStatus = ` AND ap.status = $2`;
+      }
+      const { rows } = await pool.query(`
+        SELECT ap.id, ap.appointment_id, ap.amount_cents, ap.release_at,
+               ap.released_at, ap.status, ap.cancelled_reason, ap.created_at,
+               ap.stripe_payout_id,
+               a.client_name, a.date AS appt_date, a.start_time AS appt_time,
+               COALESCE(s.name, '') AS service_name
+          FROM appointment_payouts ap
+          LEFT JOIN appointments a ON a.id = ap.appointment_id
+          LEFT JOIN booking_services s ON s.id = a.service_id
+         WHERE ap.user_id = $1${whereStatus}
+         ORDER BY
+           CASE ap.status
+             WHEN 'pending'   THEN 1
+             WHEN 'failed'    THEN 2
+             WHEN 'released'  THEN 3
+             WHEN 'cancelled' THEN 4
+           END,
+           ap.release_at ASC
+         LIMIT 200
+      `, params);
+      const { rows: aggR } = await pool.query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN status='pending' THEN amount_cents ELSE 0 END), 0)::bigint AS pending_cents,
+          COUNT(*) FILTER (WHERE status='pending')::int AS pending_count,
+          COUNT(*) FILTER (WHERE status='released')::int AS released_count
+        FROM appointment_payouts
+        WHERE user_id = $1
+      `, [userId]);
+      return {
+        payouts: rows,
+        summary: {
+          pending_cents:  parseInt(aggR[0]?.pending_cents || 0, 10),
+          pending_count:  aggR[0]?.pending_count || 0,
+          released_count: aggR[0]?.released_count || 0,
+        },
+      };
+    };
 
-    // Agrege solde en attente (sum amount_cents WHERE status='pending').
-    const { rows: aggR } = await pool.query(`
-      SELECT
-        COALESCE(SUM(CASE WHEN status='pending' THEN amount_cents ELSE 0 END), 0)::bigint AS pending_cents,
-        COUNT(*) FILTER (WHERE status='pending')::int AS pending_count,
-        COUNT(*) FILTER (WHERE status='released')::int AS released_count
-      FROM appointment_payouts
-      WHERE user_id = $1
-    `, [userId]);
+    // ── LEDGER : meme shape depuis financial_ledger ─────────────────────
+    const { getPayoutsFromLedger } = require('../utils/ledgerReader');
+    const ledgerFn = () => getPayoutsFromLedger(pool, userId, status);
 
-    res.json({
-      payouts: rows,
-      summary: {
-        pending_cents: parseInt(aggR[0]?.pending_cents || 0, 10),
-        pending_count: aggR[0]?.pending_count || 0,
-        released_count: aggR[0]?.released_count || 0,
-      },
+    const { dualRead, isDebugVisible } = require('../utils/dualRead');
+    const debugVisible = await isDebugVisible(req, userId);
+    const result = await dualRead({
+      userId,
+      label:        'payouts',
+      flagName:     'ledger_read_payouts',
+      legacyFn,
+      ledgerFn,
+      tolerance:    0,
+      // On compare uniquement le summary (les rows individuelles ont des
+      // shapes derives differents : details affichage non comparables au cent).
+      fields:       ['summary.pending_cents', 'summary.pending_count', 'summary.released_count'],
+      debugVisible,
     });
+    res.json(result);
   } catch (e) {
     console.error('[CONNECT GET payouts ERR]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });

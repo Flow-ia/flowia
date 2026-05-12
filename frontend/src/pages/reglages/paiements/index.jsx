@@ -594,6 +594,7 @@ function EscrowPayoutsSection({ t, showToast }) {
       <div style={panelHeader}>
         <span style={dot('#10b981')}/>
         <span style={panelLabel(t)}>{"Mes reversements"}</span>
+        <LedgerDebugBadge debug={data?._ledger_debug}/>
       </div>
 
       {/* Solde Stripe live (source de verite) — refunds reflechis instantanement */}

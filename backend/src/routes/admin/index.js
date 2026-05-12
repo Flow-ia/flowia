@@ -48,5 +48,6 @@ router.use('/stripe-payouts', require('./stripe-payouts'));
 router.use('/search',         require('./search'));
 router.use('/refund-misclassified', require('./refund-misclassified'));
 router.use('/transactions',         require('./transactions'));
+router.use('/ledger-metrics',       require('./ledger-metrics'));
 
 module.exports = router;
