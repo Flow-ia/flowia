@@ -64,12 +64,17 @@ async function releasePayouts(pool) {
       // stripe.payouts.create avec stripeAccount header -> agit pour le
       // commerçant. amount = amount_cents (le montant net qui est sur le
       // balance Connect — application_fee deja preleve cote plateforme).
-      // idempotencyKey : suffixe par retry_count pour permettre le retry
-      // explicite apres echec definitif (admin reset). Sur retry transient
-      // (timeout reseau), meme key -> Stripe retourne le payout de la 1ere
-      // tentative au lieu d'en creer 2. Defense en profondeur en plus du
-      // claim atomic ci-dessus.
-      const idempotencyKey = `escrow_payout_${row.id}_attempt_${row.retry_count || 0}`;
+      // idempotencyKey : inclut retry_count ET amount_cents.
+      // - retry_count : permet le retry apres echec definitif (admin reset).
+      // - amount_cents : permet le retry apres correction du montant. Bug
+      //   observe 2026-05-12 : si le sync path inserait amount trop eleve
+      //   (manque stripe_fee), un UPDATE rectif laissait l'ancienne clef
+      //   verrouillee par Stripe -> StripeIdempotencyError 'same key,
+      //   different params'. En l'incluant dans la clef, un changement
+      //   d'amount donne une clef differente -> nouvelle tentative propre.
+      // Sur retry transient (timeout reseau, meme params) -> Stripe
+      // retourne le payout de la 1ere tentative au lieu d'en creer 2.
+      const idempotencyKey = `escrow_payout_${row.id}_attempt_${row.retry_count || 0}_amt_${row.amount_cents}`;
       const payout = await stripe.payouts.create(
         {
           amount: row.amount_cents,

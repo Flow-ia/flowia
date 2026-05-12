@@ -668,11 +668,19 @@ module.exports = function attachBookRoute(router) {
         try {
           const { scheduleAppointmentPayout } = require('../../utils/scheduleAppointmentPayout');
           const { recordLedgerEntry } = require('../../utils/ledger');
+          const { fetchStripeFeeForPI } = require('../../utils/stripeFeeForPI');
 
-          // Recupere application_fee depuis Stripe pour separer net merchant
-          // de la commission FlowIA. Best-effort : si Stripe API fail, on
-          // calcule sans (= sur-estime net mais pas critique).
+          // Recupere application_fee + stripe_fee depuis Stripe pour calculer
+          // le NET REEL sur le balance Connect (= ce que le payout pourra
+          // virer). Bug 2026-05-12 : sans soustraire stripe_fee, le payout
+          // demande plus que dispo -> balance_insufficient -> failed apres 5
+          // retries. Le helper fetchStripeFeeForPI retrieve la charge +
+          // balance_transaction. Best-effort en sync (pas de retry), si fail
+          // -> fallback amount=brut-app_fee et le webhook ensureFeesUpdated
+          // + UPDATE escrow amount_cents rectifie.
           let appFee = 0;
+          let stripeFee = 0;
+          let feeSource = null;
           try {
             const Stripe = require('stripe');
             const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -680,12 +688,26 @@ module.exports = function attachBookRoute(router) {
               payment_intent_id, undefined, { stripeAccount: stripeAccountId }
             );
             appFee = pi.application_fee_amount || 0;
+            // best-effort sans retry (latence /book) ; webhook rattrapera.
+            const feeRes = await fetchStripeFeeForPI(stripe, pi, stripeAccountId);
+            if (feeRes.source === 'bt') {
+              stripeFee = feeRes.stripeFee;
+              feeSource = 'sync_bt';
+            } else {
+              feeSource = 'sync_fallback';
+              console.warn('[BOOK escrow] stripe_fee unavailable (' + feeRes.error
+                + ') latency=' + feeRes.latencyMs + 'ms — webhook rectifiera');
+            }
           } catch (piErr) {
             console.error('[BOOK escrow PI retrieve]', piErr.message);
+            feeSource = 'sync_error';
           }
 
-          // Escrow appointment_payouts (cron releasePayouts agira plus tard).
-          const netCents = paidAmountCents - appFee;
+          // Escrow appointment_payouts. amount = net REEL sur balance Connect.
+          // Si stripeFee=0 (fallback), on insere quand meme avec amount =
+          // brut - app_fee (peut etre trop eleve de 1-3% selon le moyen
+          // paiement). UPDATE escrow plus tard dans le webhook si rectif.
+          const netCents = paidAmountCents - appFee - stripeFee;
           if (netCents > 0) {
             await scheduleAppointmentPayout(pool, {
               appointmentId: appt.id,
@@ -694,9 +716,9 @@ module.exports = function attachBookRoute(router) {
             });
           }
 
-          // Ledger entries : payment + commission (si > 0).
-          // stripe_fee est inseré plus tard par le webhook (ensureFeesUpdated
-          // qui a access au balance_transaction) — pas connu en sync ici.
+          // Ledger entries : payment + commission + (stripe_fee si dispo).
+          // Si stripeFee=0 fallback, l'entry stripe_fee sera inseree plus
+          // tard par le webhook (idempotent via UNIQUE INDEX).
           const rateSnapshot = paidAmountCents > 0
             ? Math.round((appFee / paidAmountCents) * 10000) / 100 : null;
           const paymentRes = await recordLedgerEntry(pool, {
@@ -704,7 +726,8 @@ module.exports = function attachBookRoute(router) {
             amountCents: paidAmountCents, status: 'pending',
             stripePaymentIntentId: payment_intent_id,
             commissionRateSnapshot: rateSnapshot,
-            metadata: { source: 'book_sync', is_fully_paid: !!isFullyPaid },
+            metadata: { source: 'book_sync', is_fully_paid: !!isFullyPaid,
+                        fee_source: feeSource },
           });
           if (appFee > 0) {
             await recordLedgerEntry(pool, {
@@ -712,6 +735,15 @@ module.exports = function attachBookRoute(router) {
               amountCents: -appFee, status: 'pending',
               stripePaymentIntentId: payment_intent_id,
               commissionRateSnapshot: rateSnapshot,
+              relatedLedgerId: paymentRes.id,
+              metadata: { source: 'book_sync' },
+            });
+          }
+          if (stripeFee > 0) {
+            await recordLedgerEntry(pool, {
+              userId, appointmentId: appt.id, entryType: 'stripe_fee',
+              amountCents: -stripeFee, status: 'pending',
+              stripePaymentIntentId: payment_intent_id,
               relatedLedgerId: paymentRes.id,
               metadata: { source: 'book_sync' },
             });

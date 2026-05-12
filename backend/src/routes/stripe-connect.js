@@ -812,20 +812,60 @@ router.post('/webhook', async (req, res) => {
           pi.id, '→ appt', upd.rows[0].id, upd.rows[0].paid ? '(integral)' : '(acompte)');
         // ESCROW : programme un payout futur vers l'IBAN du commerçant
         // (release_at = appointment_date + payout_hold_days). Le montant
-        // net sur le balance Connect = amount - application_fee_amount,
-        // donc on calcule depuis pi (amount_received - application_fee).
+        // net REEL sur le balance Connect = amount - application_fee
+        // - stripe_fee. Le balance_transaction.fee est dispo dans la
+        // majorite des cas au moment du webhook (~immediat). Retry 1x
+        // apres 2s si pas encore propage.
+        // Si la sync path book.js a deja insere l'escrow avec amount
+        // surevalue (cas pre-fix : pas de stripe_fee soustrait), on
+        // UPDATE l'amount ici.
         try {
           const { scheduleAppointmentPayout } = require('../utils/scheduleAppointmentPayout');
-          // application_fee_amount peut etre absent si commission=0.
+          const { fetchStripeFeeForPI } = require('../utils/stripeFeeForPI');
           const appFee = pi.application_fee_amount || 0;
-          const netCents = amt - appFee;
+          let stripeFeeForEscrow = 0;
+          try {
+            const stripeApi = getStripe();
+            const feeRes = await fetchStripeFeeForPI(
+              stripeApi, pi, event.account, { retries: 1, retryDelayMs: 2000 });
+            if (feeRes.source === 'bt') stripeFeeForEscrow = feeRes.stripeFee;
+            else console.warn('[CONNECT WEBHOOK] escrow stripe_fee unavailable ('
+              + feeRes.error + ') — amount sera brut-app_fee, rectif par cron');
+          } catch (feeErr) {
+            console.error('[CONNECT WEBHOOK] escrow fee fetch fail', feeErr.message);
+          }
+          const netCents = amt - appFee - stripeFeeForEscrow;
           if (netCents > 0) {
             await scheduleAppointmentPayout(pool, {
               appointmentId: upd.rows[0].id,
               paymentIntentId: pi.id,
               amountCents: netCents,
             });
-            console.log('[CONNECT WEBHOOK] payout scheduled for appt', upd.rows[0].id, 'net', netCents);
+            // UPDATE rectif si sync path a insere avec amount trop eleve
+            // (cas pre-fix : sync n'avait pas stripe_fee). On ne touche
+            // QUE si status='pending' (jamais released) et que le montant
+            // actuel est > netCents reel (donc trop optimiste). Aucun
+            // ledger entry a modifier (les payment/commission sont a part).
+            try {
+              const fix = await pool.query(`
+                UPDATE appointment_payouts
+                   SET amount_cents = $2, updated_at = NOW()
+                 WHERE appointment_id = $1
+                   AND status = 'pending'
+                   AND amount_cents > $2
+                RETURNING id, amount_cents
+              `, [upd.rows[0].id, netCents]);
+              if (fix.rowCount > 0) {
+                console.log('[CONNECT WEBHOOK] escrow amount RECTIFIE appt='
+                  + upd.rows[0].id + ' new_amount=' + netCents
+                  + ' (stripe_fee=' + stripeFeeForEscrow + ' fetch_source=webhook_bt)');
+              }
+            } catch (fixErr) {
+              console.error('[CONNECT WEBHOOK] escrow amount rectif fail',
+                fixErr.message);
+            }
+            console.log('[CONNECT WEBHOOK] payout scheduled for appt', upd.rows[0].id,
+              'net', netCents, 'stripe_fee', stripeFeeForEscrow);
           }
         } catch (escrowErr) {
           console.error('[CONNECT WEBHOOK] schedule payout fail', escrowErr.message);
