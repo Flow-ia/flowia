@@ -1718,6 +1718,80 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_appt_payouts_user_status
     ON appointment_payouts(user_id, status, release_at DESC)`);
 
+  // ── Ledger financier immuable (phase 1 : schema only) ───────────────────
+  // Source de vérité unique pour tout mouvement d'argent côté Stripe Connect.
+  // Convention amount_cents signé : payment = positif (encaisse merchant),
+  // commission/stripe_fee/refund = négatif (sortie merchant). SUM(amount_cents)
+  // par user_id donne le net dû/payouté trivialement.
+  // entry_type :
+  //   payment        +gross encaissé (client → merchant Connect)
+  //   stripe_fee     -frais Stripe sur le merchant Connect (négatif)
+  //   commission     -commission FlowIA = application_fee Stripe (négatif)
+  //   refund         -montant remboursé client (négatif, reverse payment)
+  //   payout_hold    mise en escrow (informationnel, lié à appointment_payout_id)
+  //   payout_release libération escrow vers payout effectif
+  //   payout_paid    payout confirmé Stripe (event payout.paid)
+  // status : pending → available → locked → paid (happy path),
+  //          ou → refunded / failed selon évènement.
+  // Snapshot critique : commission_rate_snapshot et amounts sont figés au
+  // moment de l'INSERT. Modifier users.commission_rate plus tard ne doit
+  // JAMAIS recalculer ces rows (sinon les anciens paiements changent
+  // rétroactivement = corruption comptable).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS financial_ledger (
+      id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id                   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      appointment_id            UUID REFERENCES appointments(id) ON DELETE SET NULL,
+      appointment_payout_id     UUID REFERENCES appointment_payouts(id) ON DELETE SET NULL,
+      entry_type                VARCHAR(20) NOT NULL CHECK (entry_type IN (
+        'payment','stripe_fee','commission','refund',
+        'payout_hold','payout_release','payout_paid'
+      )),
+      amount_cents              BIGINT NOT NULL,
+      currency                  VARCHAR(3) NOT NULL DEFAULT 'EUR',
+      status                    VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','available','locked','paid','refunded','failed')),
+      stripe_payment_intent_id  VARCHAR(255),
+      stripe_charge_id          VARCHAR(255),
+      stripe_refund_id          VARCHAR(255),
+      stripe_payout_id          VARCHAR(255),
+      stripe_balance_txn_id     VARCHAR(255),
+      commission_rate_snapshot  NUMERIC(5,2),
+      related_ledger_id         UUID REFERENCES financial_ledger(id) ON DELETE SET NULL,
+      occurred_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      recorded_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      metadata                  JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+  `);
+  // Agrégations UI (Performance, Transactions, Historique, Réglages paiements).
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ledger_user_type_status
+    ON financial_ledger(user_id, entry_type, status, occurred_at DESC)`);
+  // Reverse lookup par RDV (refund flow + Historique).
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ledger_appointment
+    ON financial_ledger(appointment_id) WHERE appointment_id IS NOT NULL`);
+  // Lookup par PaymentIntent (idempotence dual-write phase 2 + reconciliation).
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ledger_pi
+    ON financial_ledger(stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL`);
+  // Lookup par payout Stripe (linkage payout.paid/failed).
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_ledger_payout
+    ON financial_ledger(stripe_payout_id) WHERE stripe_payout_id IS NOT NULL`);
+  // Idempotence DB-level : un retry de webhook payment_intent.succeeded ne
+  // peut pas créer une 2e ligne payment/commission/stripe_fee pour le même PI.
+  // INSERT échoue avec 23505 → on skip (cf. processed_stripe_events pattern).
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_pi_entry
+    ON financial_ledger(stripe_payment_intent_id, entry_type)
+    WHERE stripe_payment_intent_id IS NOT NULL
+      AND entry_type IN ('payment','commission','stripe_fee')`);
+  // Idempotence refund : 1 ligne max par (refund Stripe, entry_type).
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_refund_entry
+    ON financial_ledger(stripe_refund_id, entry_type)
+    WHERE stripe_refund_id IS NOT NULL AND entry_type = 'refund'`);
+  // Idempotence payout : 1 ligne max par (payout Stripe, entry_type).
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_payout_entry
+    ON financial_ledger(stripe_payout_id, entry_type)
+    WHERE stripe_payout_id IS NOT NULL
+      AND entry_type IN ('payout_release','payout_paid')`);
+
   // ── Sync Google Agenda (sortant FlowIA → Google) ────────────────────────
   // Le merchant connecte son compte Google via OAuth (scope calendar.events)
   // pour que les RDV crees dans FlowIA apparaissent automatiquement dans
