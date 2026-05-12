@@ -396,6 +396,148 @@ input::placeholder { color: var(--fg-muted); }
 }
 .theme-toggle:hover { color: var(--fg); border-color: var(--fg); }
 
+/* ── Menu utilisateur (trigger drawer) ──────────────────────────────────── */
+.user-menu-toggle {
+  background: transparent;
+  border: 0.5px solid var(--border);
+  color: var(--fg);
+  height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+.user-menu-toggle:hover { color: var(--fg); border-color: var(--fg); }
+.user-menu-toggle[aria-expanded="true"] { border-color: var(--fg); }
+.user-menu-name {
+  color: var(--fg-muted);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Drawer actions (slide-in droite) ───────────────────────────────────── */
+.action-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 90;
+}
+.action-drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.action-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  max-width: 88vw;
+  background: var(--surface);
+  border-left: 0.5px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+.action-drawer.open { transform: translateX(0); }
+
+.action-drawer-head {
+  position: relative;
+  padding: 18px 20px 14px;
+  border-bottom: 0.5px solid var(--border);
+}
+.action-drawer-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+  padding-right: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-drawer-subtitle {
+  font-size: 11px;
+  color: var(--fg-muted);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 28px;
+}
+.action-drawer-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 0.5px solid var(--border);
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.action-drawer-close:hover { color: var(--fg); border-color: var(--fg); }
+
+.action-drawer-list {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+.action-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 0.5px solid transparent;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.action-drawer-item:hover { background: var(--surface-2); }
+.action-drawer-item-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+.action-drawer-item:hover .action-drawer-item-icon { color: var(--fg); }
+.action-drawer-item-label { flex: 1; }
+.action-drawer-item-danger { color: var(--danger, #c0392b); }
+.action-drawer-item-danger .action-drawer-item-icon { color: var(--danger, #c0392b); }
+.action-drawer-sep {
+  height: 0.5px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 /* ── Page head + filtres ───────────────────────────────────────────────── */
 
 .page-head {
@@ -675,8 +817,16 @@ a.stat-card:hover { border-color: var(--fg); background: var(--surface-2); }
   .totp-qr { padding: 12px; }
 }
 
+@media (max-width: 640px) {
+  /* Bouton menu utilisateur : avatar seul, sans le nom inline */
+  .user-menu-name { display: none; }
+  .user-menu-toggle { width: 36px; padding: 0; justify-content: center; }
+  /* Drawer plein ecran (modulo overlay) */
+  .action-drawer { width: 88vw; }
+}
+
 @media (max-width: 380px) {
   .dash-meta { gap: 6px; }
-  .theme-toggle, .nav-toggle { width: 32px; height: 32px; }
+  .theme-toggle, .nav-toggle, .user-menu-toggle { width: 32px; height: 32px; }
   .btn-ghost { padding: 5px 8px; font-size: 11px; }
 }
