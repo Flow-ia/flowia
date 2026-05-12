@@ -9,6 +9,11 @@ import { Toast, useToast, Confirm } from '../../../components/UI';
 import { PageHeader } from '../shared';
 import { connectApi, bookingApi } from '../../../utils/api';
 import { LedgerDebugBadge } from '../../../components/LedgerDebugBadge';
+import { useStatsOnlinePayments, useStatsPayouts } from '../../../hooks/useStats';
+import PayoutButton from '../../../components/payout/PayoutButton';
+import PayoutHistoryRow from '../../../components/stats/PayoutHistoryRow';
+import BarChart from '../../../components/stats/BarChart';
+import { formatCents, formatCentsSign, formatPct, formatDateWeekday } from '../../../utils/format';
 
 export default function Paiements() {
   const { theme: t } = useTheme();
@@ -241,23 +246,43 @@ export default function Paiements() {
             )}
           </section>
 
+          {/* ── PAGE CONSOLIDEE Stripe Connect (fusion 2026-05-12) ───────
+              Cette page regroupe DESORMAIS tout le hub paiements en ligne :
+              - solde + reversements (auparavant /statistiques?tab=payouts)
+              - KPI / analytics (auparavant /statistiques?tab=online-payments)
+              - config paiement RDV + politique annulation (existants)
+              Les onglets statistiques correspondants ont ete retires de
+              la TabBar (cf statistiques/index.jsx) mais leurs fichiers JSX
+              sont conserves (deprecies, non montes). */}
+
+          {/* HERO : solde + bouton reverser + prochain reversement estime */}
+          {status === 'connected' && (
+            <OnlinePaymentsHero t={t} showToast={showToast}/>
+          )}
+
+          {/* KPI brut/net + breakdown + 4 statuts + histogramme + impact */}
+          {status === 'connected' && (
+            <OnlinePaymentsAnalytics t={t} showToast={showToast}/>
+          )}
+
+          {/* Prochains reversements (escrow pending) */}
+          {status === 'connected' && (
+            <PendingPayoutsSection t={t}/>
+          )}
+
+          {/* Historique des reversements (paginé) */}
+          {status === 'connected' && (
+            <PayoutHistorySection t={t}/>
+          )}
+
           {/* Configuration des paiements RDV (Phase 4) */}
           {status === 'connected' && (
             <PaymentConfigSection t={t} showToast={showToast}/>
           )}
 
-          {/* Performances paiements en ligne (KPI 7/30/90j) */}
-          {status === 'connected' && (
-            <PerformancePaymentsSection t={t} showToast={showToast}/>
-          )}
-
-          {/* Politique annulation + delai escrow + reversements (visibles
-              meme si Stripe pas encore connecte pour que le commercant
-              voie ce qui l'attend). */}
+          {/* Politique annulation (visible meme si pas connecte pour que
+              le commercant voie ce qui l'attend). */}
           <CancellationPolicySection t={t} showToast={showToast}/>
-          {status === 'connected' && (
-            <EscrowPayoutsSection t={t} showToast={showToast}/>
-          )}
         </>
       )}
     </div>
@@ -1053,6 +1078,449 @@ function SkeletonCard({ t }) {
       <div style={{ ...skel('80%', 14), marginBottom: 8 }}/>
       <div style={{ ...skel('60%', 14), marginBottom: 18 }}/>
       <div style={skel(220, 38)}/>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PAGE CONSOLIDEE FUSION (2026-05-12) — sections importees depuis les
+// anciens onglets /statistiques?tab=online-payments et ?tab=payouts.
+// Les fonctions PerformancePaymentsSection / KpiCard / EscrowPayoutsSection
+// ci-dessus sont conservees mais ne sont plus referencees dans le JSX
+// (dead code volontaire pour rollback facile). A nettoyer dans une session
+// ulterieure si stabilite confirmee.
+// ═══════════════════════════════════════════════════════════════════════
+
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+
+// ─── HERO : solde Stripe + bouton reverser + prochain reversement estime ────
+// Source : useStatsPayouts() = balance Stripe live + historique 30j.
+// Remplace l'ancien EscrowPayoutsSection (carte solde) + TabReversements
+// (hero card).
+function OnlinePaymentsHero({ t, showToast }) {
+  const { data, loading, error } = useStatsPayouts('month', { perPage: 5 });
+
+  if (loading && !data) return <HeroSkeleton t={t}/>;
+  if (error) return null; // best-effort silencieux : si fail, autres sections OK
+
+  const balance = data?.balance || {};
+  const payoutsBlock = data?.payouts || {};
+  const payouts = payoutsBlock.payouts || [];
+  const next = balance.next_payout_estimate;
+  const bankInfo = balance.bank_account
+    ? "Sur compte bancaire ****" + (balance.bank_account.last4 || "")
+        + (balance.bank_account.bank_name ? " (" + balance.bank_account.bank_name + ")" : "")
+        + " · arrivée sous 1-3 jours ouvrés"
+    : "Compte bancaire Stripe · arrivée sous 1-3 jours ouvrés";
+
+  return (
+    <section style={{
+      background: t.card, border: '2px solid #1D9E75',
+      borderRadius: 12, padding: '1.5rem',
+    }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr auto', gap: 24,
+        alignItems: 'center', marginBottom: 12,
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 500, color: '#0F6E56',
+            textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4,
+          }}>
+            {"À reverser maintenant"}
+          </div>
+          <div style={{ fontSize: 11, color: t.muted, marginBottom: 8 }}>
+            {"Solde Stripe disponible"}
+          </div>
+          <div style={{
+            fontSize: 32, fontWeight: 500, color: t.text,
+            fontFamily: MONO, lineHeight: 1.1,
+          }}>
+            {formatCents(balance.available_cents || 0)}
+          </div>
+          <div style={{ fontSize: 12, color: t.muted, marginTop: 8 }}>
+            {bankInfo}
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+          <PayoutButton
+            variant="hero"
+            availableAmount={balance.available_cents || 0}
+            bankAccountLast4={balance.bank_account?.last4 || null}
+            bankName={balance.bank_account?.bank_name || null}
+            hasPendingPayout={payouts.some(p => p.status === 'pending' || p.status === 'in_transit')}
+            onSuccess={() => { try { window.location.reload(); } catch {} }}
+          />
+          <button type="button"
+                  onClick={() => window.open('https://dashboard.stripe.com/payouts', '_blank', 'noopener,noreferrer')}
+                  style={{
+                    background: t.cardAlt, color: t.text,
+                    border: `0.5px solid ${t.border}`, padding: '8px 12px',
+                    borderRadius: 8, fontSize: 12, fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  }}>
+            {"Voir sur Stripe ↗"}
+          </button>
+        </div>
+      </div>
+
+      {/* Prochain reversement estime */}
+      {next && (
+        <div style={{
+          background: t.cardAlt, borderRadius: 8, padding: '12px 14px',
+          display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4,
+        }}>
+          <div style={{ fontSize: 11, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            {"Prochain reversement estimé"}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: MONO }}>
+              {formatDateWeekday(next.estimated_date)}
+            </span>
+            <span style={{ fontSize: 13, color: t.muted, fontFamily: MONO }}>
+              {"~ " + formatCents(next.estimated_amount_cents || 0)}
+            </span>
+          </div>
+          {next.based_on_avg_interval_days != null && (
+            <div style={{ fontSize: 11, color: t.muted }}>
+              {"Cadence habituelle : tous les " + next.based_on_avg_interval_days + " jours."}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{
+        marginTop: 10, padding: '10px 12px', borderRadius: 8,
+        background: t.cardAlt, fontSize: 12, color: t.muted, lineHeight: 1.5,
+      }}>
+        <strong style={{ color: t.text }}>{"Mode manuel activé."}</strong>
+        {" Vous reversez vous-même quand vous voulez. Pour un reversement automatique quotidien, configurez-le sur votre dashboard Stripe."}
+      </div>
+    </section>
+  );
+}
+
+// ─── ANALYTICS : KPI brut/net + breakdown + 4 statuts + histogramme + impact ─
+// Source : useStatsOnlinePayments() = stats /api/stats/online-payments.
+// Remplace l'ancien PerformancePaymentsSection (4 KPI 7/30/90j) + le
+// TabPaiementsLigne (hero gradient + by_status + impact + histogramme).
+function OnlinePaymentsAnalytics({ t, showToast }) {
+  const [period, setPeriod] = useState('month');
+  const { data, loading, error } = useStatsOnlinePayments(period);
+
+  if (loading && !data) return <AnalyticsSkeleton t={t}/>;
+  if (error) return null;
+
+  const d = data || {};
+  const summary = d.summary || {};
+  const byStatus = d.by_status || {};
+  const policy = d.policy || {};
+  const impact = d.business_impact || {};
+  const evo = d.evolution_30j || [];
+
+  const grossCents = summary.gross_cents || 0;
+  const netCents   = summary.net_cents || 0;
+  const netPct     = grossCents > 0 ? Math.round((netCents / grossCents) * 100) : 0;
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={dot('#185FA5')}/>
+        <span style={panelLabel(t)}>{"Performances paiements en ligne"}</span>
+        <LedgerDebugBadge debug={d._ledger_debug}/>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+          {['week', 'month', '90days'].map(p => (
+            <button key={p} type="button" onClick={() => setPeriod(p)} disabled={loading}
+                    style={periodBtn(t, period === p)}>
+              {p === 'week' ? '7 j' : p === 'month' ? '30 j' : '90 j'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* HERO gradient bleu */}
+      <div style={{
+        background: 'linear-gradient(135deg, #042C53, #185FA5)',
+        borderRadius: 10, padding: '1.25rem', color: '#fff',
+      }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 24, alignItems: 'end', marginBottom: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+              {"Encaissé en ligne"}
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 500, fontFamily: MONO, lineHeight: 1.1 }}>
+              {formatCents(grossCents)}
+            </div>
+            {summary.vs_previous_pct != null && (
+              <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
+                {formatPct(summary.vs_previous_pct) + " vs période précédente"}
+              </div>
+            )}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+              {"Net pour vous"}
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 500, fontFamily: MONO, color: '#A6F4D5', lineHeight: 1.1 }}>
+              {formatCents(netCents)}
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>{netPct + "% du brut"}</div>
+          </div>
+        </div>
+        <div style={{
+          background: 'rgba(255,255,255,0.12)', padding: 14, borderRadius: 8,
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16,
+        }}>
+          <BreakdownCol label={"Brut encaissé"} value={formatCents(grossCents)} color="#fff"/>
+          <BreakdownCol label={"Frais Stripe (1,4% + 25c)"}
+                        value={formatCentsSign(-Math.abs(summary.stripe_fee_cents || 0))}
+                        color="#FFD9A6"/>
+          <BreakdownCol label={"Commission FlowIA" + (policy.commission_rate ? " (" + policy.commission_rate + "%)" : "")}
+                        value={formatCentsSign(-Math.abs(summary.platform_fee_cents || 0))}
+                        color="#FFD9A6"/>
+          <BreakdownCol label={"Net"} value={formatCents(netCents)} color="#A6F4D5"/>
+        </div>
+      </div>
+
+      {/* 4 statuts */}
+      <div style={{ marginTop: 16 }}>
+        <SubSectionTitle t={t} title="Statut des paiements"/>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10,
+        }}>
+          <StatusKPI t={t} dot="#1D9E75" label="Payouts reçus"
+                     count={byStatus.payouts_received?.count || 0} sub="arrivés en banque"
+                     amount={byStatus.payouts_received?.amount_cents || 0} valueColor="#0F6E56"/>
+          <StatusKPI t={t} dot="#BA7517" label="En attente"
+                     count={byStatus.pending_payout?.count || 0} sub="à reverser"
+                     amount={byStatus.pending_payout?.amount_cents || 0} valueColor="#BA7517"/>
+          <StatusKPI t={t} dot="#A32D2D" label="Remboursés"
+                     count={byStatus.refunded?.count || 0} sub="annulations dans délais"
+                     amount={byStatus.refunded?.amount_cents || 0} valueColor="#A32D2D" amountNeg/>
+          <StatusKPI t={t} dot="#4A1B0C" label="No-show retenus"
+                     count={byStatus.no_show_retained?.count || 0} sub="acompte conservé"
+                     amount={byStatus.no_show_retained?.amount_cents || 0} valueColor="#4A1B0C"/>
+        </div>
+      </div>
+
+      {/* Evolution 30j */}
+      {evo.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <SubSectionTitle t={t} title="Évolution 30 jours"/>
+          <div style={{
+            padding: '1rem', borderRadius: 10,
+            background: t.cardAlt, border: `0.5px solid ${t.border}`,
+          }}>
+            <BarChart data={evo} valueKey="amount_cents" color="#185FA5" height={140}/>
+          </div>
+        </div>
+      )}
+
+      {/* Impact business */}
+      {(impact.no_show_reduction_pct != null || impact.additional_revenue_cents != null) && (
+        <div style={{ marginTop: 16 }}>
+          <SubSectionTitle t={t} title="Impact business"/>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10,
+          }}>
+            <ImpactCard t={t} bg="#E1F5EE" labelColor="#0F6E56" valueColor="#04342C"
+                        label="No-show réduits"
+                        value={impact.no_show_reduction_pct != null
+                          ? formatPct(-Math.abs(impact.no_show_reduction_pct))
+                          : "—"}
+                        sub="depuis activation acompte"/>
+            <ImpactCard t={t} bg="#E6F1FB" labelColor="#185FA5" valueColor="#042C53"
+                        label="Revenu additionnel"
+                        value={impact.additional_revenue_cents != null
+                          ? "+" + formatCents(Math.abs(impact.additional_revenue_cents))
+                          : "—"}
+                        sub="acomptes conservés sur no-show 30j"/>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── PROCHAINS REVERSEMENTS : liste pending escrow ──────────────────────────
+// Source : connectApi.getPayouts() (escrow appointment_payouts).
+// Remplace la partie "Prochains reversements" de l'ancien EscrowPayoutsSection.
+function PendingPayoutsSection({ t }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    connectApi.getPayouts().then(r => { if (!cancelled) { setData(r); setLoading(false); } })
+                          .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  if (loading || !data) return null;
+  const payouts = data.payouts || [];
+  const pending = payouts.filter(p => p.status === 'pending').slice(0, 8);
+  if (pending.length === 0) return null;
+
+  const fmtDate = (iso) => {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }); }
+    catch { return iso; }
+  };
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={panelHeader}>
+        <span style={dot('#BA7517')}/>
+        <span style={panelLabel(t)}>{"Prochains reversements"}</span>
+        <LedgerDebugBadge debug={data?._ledger_debug}/>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {pending.map(p => (
+          <div key={p.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 12px', borderRadius: 8,
+            background: t.cardAlt, border: `1px solid ${t.border}`,
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text }}>
+                {p.client_name || 'Client'} — {p.service_name || 'RDV'}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+                {"RDV le " + fmtDate(p.appt_date) + (p.appt_time ? " à " + p.appt_time.slice(0, 5) : "")}
+              </p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: t.text, fontFamily: MONO }}>
+                {formatCents(p.amount_cents)}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+                {"versé le " + fmtDate(p.release_at)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── HISTORIQUE DES REVERSEMENTS : liste paginee (released/paid/failed) ─────
+// Source : useStatsPayouts() = table payouts v3 alimentee par webhook payout.*.
+// Remplace TabReversements (historique).
+function PayoutHistorySection({ t }) {
+  const [perPage, setPerPage] = useState(10);
+  const { data, loading, error } = useStatsPayouts('month', { perPage });
+  if (loading && !data) return null;
+  if (error) return null;
+  const payouts = data?.payouts?.payouts || [];
+  if (payouts.length === 0) return null;
+
+  return (
+    <section style={cardStyle(t)}>
+      <div style={panelHeader}>
+        <span style={dot('#0F6E56')}/>
+        <span style={panelLabel(t)}>{"Historique des reversements"}</span>
+      </div>
+      <div style={{
+        borderRadius: 10, background: t.cardAlt, border: `0.5px solid ${t.border}`, overflow: 'hidden',
+      }}>
+        {payouts.map((p, i, arr) => (
+          <PayoutHistoryRow key={p.id} payout={p} isLast={i === arr.length - 1}/>
+        ))}
+      </div>
+      {payouts.length >= perPage && perPage === 10 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
+          <button type="button" onClick={() => setPerPage(50)}
+                  style={{
+                    padding: '8px 18px', borderRadius: 8,
+                    background: t.cardAlt, border: `0.5px solid ${t.border}`,
+                    color: t.text, fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                  }}>
+            {"Voir tous les reversements"}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Helpers visuels partages (extrait depuis TabPaiementsLigne) ────────────
+
+function BreakdownCol({ label, value, color }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, opacity: 0.85, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 500, fontFamily: MONO, color }}>{value}</div>
+    </div>
+  );
+}
+
+function StatusKPI({ t, dot: dotColor, label, count, sub, amount, valueColor, amountNeg }) {
+  return (
+    <div style={{
+      padding: '1rem', borderRadius: 10,
+      background: t.cardAlt, border: `0.5px solid ${t.border}`,
+      display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }}/>
+        <span style={{
+          fontSize: 11, fontWeight: 500, color: t.muted,
+          textTransform: 'uppercase', letterSpacing: 0.4,
+        }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 500, color: valueColor, fontFamily: MONO, lineHeight: 1.1 }}>
+        {count}
+      </div>
+      <span style={{ fontSize: 11, color: t.muted }}>{sub}</span>
+      <div style={{
+        marginTop: 4, paddingTop: 8, borderTop: `0.5px solid ${t.border}`,
+        fontSize: 13, fontFamily: MONO, color: amountNeg ? '#A32D2D' : t.text,
+      }}>
+        {amountNeg ? formatCentsSign(-Math.abs(amount)) : formatCents(amount)}
+      </div>
+    </div>
+  );
+}
+
+function ImpactCard({ t, bg, labelColor, valueColor, label, value, sub }) {
+  return (
+    <div style={{ background: bg, borderRadius: 10, padding: '12px 14px' }}>
+      <div style={{ fontSize: 11, color: labelColor, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 500, color: valueColor, fontFamily: MONO }}>{value}</div>
+      <div style={{ fontSize: 10, color: labelColor, marginTop: 2 }}>{sub}</div>
+    </div>
+  );
+}
+
+function SubSectionTitle({ t, title }) {
+  return (
+    <h3 style={{
+      margin: '0 0 8px', fontSize: 12, fontWeight: 500,
+      color: t.muted, textTransform: 'uppercase', letterSpacing: 0.4,
+    }}>{title}</h3>
+  );
+}
+
+function HeroSkeleton({ t }) {
+  return (
+    <section style={{
+      background: t.card, border: '2px solid #1D9E75',
+      borderRadius: 12, padding: '1.5rem',
+    }}>
+      <div style={{ height: 12, width: 200, background: t.cardAlt, borderRadius: 6, marginBottom: 12 }}/>
+      <div style={{ height: 34, width: 240, background: t.cardAlt, borderRadius: 8 }}/>
+    </section>
+  );
+}
+
+function AnalyticsSkeleton({ t }) {
+  return (
+    <section style={cardStyle(t)}>
+      <div style={{ height: 12, width: 220, background: t.cardAlt, borderRadius: 6, marginBottom: 14 }}/>
+      <div style={{ height: 100, width: '100%', background: t.cardAlt, borderRadius: 10 }}/>
     </section>
   );
 }

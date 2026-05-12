@@ -2,6 +2,11 @@
 // HERO CARD VERT (border 2px #1D9E75) avec bouton "Reverser maintenant"
 // (placeholder Commit 5), estimation prochain payout, total reverse 30j,
 // historique des payouts.
+//
+// ⚠️ DEPRECIE 2026-05-12 : ce composant n'est plus monte dans
+// /statistiques/index.jsx (TABS retire). Son contenu a ete consolide dans
+// /reglages/paiements (fusion onboarding + analytics + reversements).
+// Fichier conserve pour rollback facile — supprimer apres ≥ 30j de stabilite.
 
 import { useState } from "react";
 import { useStatsPayouts } from "../../hooks/useStats";

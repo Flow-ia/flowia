@@ -13,22 +13,27 @@
 // signature pour compat avec App.jsx mais non utilisees (les donnees
 // viennent des nouveaux endpoints /api/stats/*).
 
-import { useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Toast, useToast } from "../../components/UI";
 import { useTheme } from "../../hooks/useTheme";
 import { PageHeader } from "../reglages/shared";
 
 import TabPerformance      from "../../components/stats/TabPerformance";
 import TabRDV              from "../../components/stats/TabRDV";
-import TabPaiementsLigne   from "../../components/stats/TabPaiementsLigne";
-import TabReversements     from "../../components/stats/TabReversements";
+// Fusion 2026-05-12 : les onglets `online-payments` et `payouts` ont ete
+// retires de la TabBar et leur contenu consolide dans /reglages/paiements.
+// Les fichiers TabPaiementsLigne.jsx et TabReversements.jsx restent
+// presents (deprecies, non montes) — voir leur commentaire en tete.
 
 const TABS = [
-  { id: "performance",     label: "Performance",        iconPaths: PATH_TREND_UP() },
-  { id: "rdv",             label: "RDV",                iconPaths: PATH_CAL() },
-  { id: "online-payments", label: "Paiements en ligne", iconPaths: PATH_CC() },
-  { id: "payouts",         label: "Reversements",       iconPaths: PATH_WALLET() },
+  { id: "performance", label: "Performance", iconPaths: PATH_TREND_UP() },
+  { id: "rdv",         label: "RDV",         iconPaths: PATH_CAL() },
 ];
+
+// IDs de tabs deprecies : on redirige vers /reglages/paiements pour eviter
+// les 404 sur les anciens liens ou bookmarks.
+const DEPRECATED_TABS = new Set(["online-payments", "payouts"]);
 
 const PERIODS = [
   { id: "today",  label: "Aujourd'hui" },
@@ -56,8 +61,18 @@ export default function Statistiques({ employees, transactions, categories }) {
   const { theme: t } = useTheme();
   const [toast] = useToast();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  const tabId    = TABS.find(x => x.id === params.get("tab"))?.id || "performance";
+  // Redirect deprecated tabs vers /reglages/paiements (fusion 2026-05-12).
+  // useEffect car React Router refuse les redirects pendant le render.
+  const rawTab = params.get("tab");
+  useEffect(() => {
+    if (rawTab && DEPRECATED_TABS.has(rawTab)) {
+      navigate("/reglages/paiements", { replace: true });
+    }
+  }, [rawTab, navigate]);
+
+  const tabId    = TABS.find(x => x.id === rawTab)?.id || "performance";
   const periodId = PERIODS.find(x => x.id === params.get("period"))?.id || "today";
 
   const setTab = (id) => {
@@ -143,10 +158,8 @@ export default function Statistiques({ employees, transactions, categories }) {
         </div>
 
         {/* Tab content (lazy : seul l'onglet actif est monte) */}
-        {tabId === "performance"     && <TabPerformance     period={apiPeriod} />}
-        {tabId === "rdv"             && <TabRDV             period={apiPeriod} />}
-        {tabId === "online-payments" && <TabPaiementsLigne  period={apiPeriod} />}
-        {tabId === "payouts"         && <TabReversements    period={apiPeriod} />}
+        {tabId === "performance" && <TabPerformance period={apiPeriod} />}
+        {tabId === "rdv"         && <TabRDV         period={apiPeriod} />}
       </div>
     </div>
   );

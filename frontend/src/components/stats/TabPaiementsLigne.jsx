@@ -1,6 +1,11 @@
 // components/stats/TabPaiementsLigne.jsx — Onglet "Paiements en ligne".
 // HERO GRADIENT BLEU (#042C53 -> #185FA5) en haut, 4 KPI status, policy +
 // business impact, histogramme 30j.
+//
+// ⚠️ DEPRECIE 2026-05-12 : ce composant n'est plus monte dans
+// /statistiques/index.jsx (TABS retire). Son contenu a ete consolide dans
+// /reglages/paiements (fusion onboarding + analytics + reversements).
+// Fichier conserve pour rollback facile — supprimer apres ≥ 30j de stabilite.
 
 import { useNavigate } from "react-router-dom";
 import { useStatsOnlinePayments } from "../../hooks/useStats";
