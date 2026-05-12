@@ -3,7 +3,7 @@
 // l'argent des réservations directement. Pattern Direct Charges via
 // Controller API (pas OAuth Standard, voir backend/routes/stripe-connect.js).
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../../hooks/useTheme';
 import { Toast, useToast, Confirm } from '../../../components/UI';
 import { PageHeader } from '../shared';
@@ -15,15 +15,33 @@ import PayoutHistoryRow from '../../../components/stats/PayoutHistoryRow';
 import BarChart from '../../../components/stats/BarChart';
 import { formatCents, formatCentsSign, formatPct, formatDateWeekday } from '../../../utils/format';
 
+// Tabs internes (post-fusion 2026-05-12). Permettent de decouper la page
+// en sous-vues sans creer de nouvelles routes Vercel/App.jsx. Deep-linking
+// via ?tab=reversements|stats|config. Le bloc onboarding/etat-compte reste
+// TOUJOURS visible en header (cle pour debug + suivi statut Stripe).
+const PAYMENTS_TABS = [
+  { id: 'reversements', label: 'Reversements' },
+  { id: 'stats',        label: 'Statistiques' },
+  { id: 'config',       label: 'Configuration' },
+];
+
 export default function Paiements() {
   const { theme: t } = useTheme();
   const [toast, showToast] = useToast();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null); // 'onboard' | 'dashboard' | 'disconnect'
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  const activeTab = PAYMENTS_TABS.find(x => x.id === searchParams.get('tab'))?.id || 'reversements';
+  const setTab = (id) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', id);
+    setSearchParams(next, { replace: true });
+  };
 
   const load = async () => {
     try {
@@ -247,42 +265,69 @@ export default function Paiements() {
           </section>
 
           {/* ── PAGE CONSOLIDEE Stripe Connect (fusion 2026-05-12) ───────
-              Cette page regroupe DESORMAIS tout le hub paiements en ligne :
-              - solde + reversements (auparavant /statistiques?tab=payouts)
-              - KPI / analytics (auparavant /statistiques?tab=online-payments)
-              - config paiement RDV + politique annulation (existants)
-              Les onglets statistiques correspondants ont ete retires de
-              la TabBar (cf statistiques/index.jsx) mais leurs fichiers JSX
-              sont conserves (deprecies, non montes). */}
+              Sous-vues via tabs internes (?tab=reversements|stats|config).
+              Bloc onboarding/etat compte reste TOUJOURS visible en header.
+              Si pas connecte : on n'affiche pas les tabs (juste la politique
+              annulation visible pour anticipation). */}
 
-          {/* HERO : solde + bouton reverser + prochain reversement estime */}
           {status === 'connected' && (
-            <OnlinePaymentsHero t={t} showToast={showToast}/>
+            <>
+              {/* TabBar interne */}
+              <div style={{
+                display: 'inline-flex', gap: 4, padding: 4,
+                background: t.cardAlt, borderRadius: 10,
+                border: '0.5px solid ' + t.border,
+                alignSelf: 'flex-start', maxWidth: '100%', overflowX: 'auto',
+              }}>
+                {PAYMENTS_TABS.map((tab) => {
+                  const active = tab.id === activeTab;
+                  return (
+                    <button key={tab.id} type="button"
+                            onClick={() => setTab(tab.id)}
+                            style={{
+                              padding: '8px 14px',
+                              background: active ? t.card : 'transparent',
+                              border: active ? '0.5px solid ' + t.border : '0.5px solid transparent',
+                              borderRadius: 8,
+                              color: active ? t.text : t.muted,
+                              fontSize: 13, fontWeight: 500,
+                              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                            }}>
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab "reversements" : solde + escrow + historique */}
+              {activeTab === 'reversements' && (
+                <>
+                  <OnlinePaymentsHero t={t} showToast={showToast}/>
+                  <PendingPayoutsSection t={t}/>
+                  <PayoutHistorySection t={t}/>
+                </>
+              )}
+
+              {/* Tab "stats" : KPI brut/net + 4 statuts + histogramme + impact */}
+              {activeTab === 'stats' && (
+                <OnlinePaymentsAnalytics t={t} showToast={showToast}/>
+              )}
+
+              {/* Tab "config" : paiement RDV + politique annulation */}
+              {activeTab === 'config' && (
+                <>
+                  <PaymentConfigSection t={t} showToast={showToast}/>
+                  <CancellationPolicySection t={t} showToast={showToast}/>
+                </>
+              )}
+            </>
           )}
 
-          {/* KPI brut/net + breakdown + 4 statuts + histogramme + impact */}
-          {status === 'connected' && (
-            <OnlinePaymentsAnalytics t={t} showToast={showToast}/>
+          {/* Si pas connecte : on montre quand meme la politique annulation
+              pour que le commercant voie ce qui l'attend une fois connecte. */}
+          {status !== 'connected' && (
+            <CancellationPolicySection t={t} showToast={showToast}/>
           )}
-
-          {/* Prochains reversements (escrow pending) */}
-          {status === 'connected' && (
-            <PendingPayoutsSection t={t}/>
-          )}
-
-          {/* Historique des reversements (paginé) */}
-          {status === 'connected' && (
-            <PayoutHistorySection t={t}/>
-          )}
-
-          {/* Configuration des paiements RDV (Phase 4) */}
-          {status === 'connected' && (
-            <PaymentConfigSection t={t} showToast={showToast}/>
-          )}
-
-          {/* Politique annulation (visible meme si pas connecte pour que
-              le commercant voie ce qui l'attend). */}
-          <CancellationPolicySection t={t} showToast={showToast}/>
         </>
       )}
     </div>
