@@ -203,6 +203,33 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
     if (!txRes.ok) {
       console.error('[refundAppointment] tx insert failed', txRes.error);
     }
+
+    // PHASE 2 LEDGER : INSERT refund (negatif) + chainage related_ledger_id
+    // vers le payment d'origine + UPDATE status='refunded' sur payment/
+    // commission/stripe_fee de ce PI. Idempotent : webhook charge.refunded
+    // peut re-passer ces 2 ops, UNIQUE INDEX uq_ledger_refund_entry +
+    // status NOT IN ('refunded') protege contre les doublons.
+    try {
+      const { recordLedgerEntry, markLedgerEntriesRefunded, findPaymentEntryByPi } = require('./ledger');
+      const paymentLedgerId = await findPaymentEntryByPi(pool, a.stripe_payment_intent_id);
+      await recordLedgerEntry(pool, {
+        userId: a.user_id,
+        appointmentId: a.id,
+        entryType: 'refund',
+        amountCents: -Math.abs(Number(a.paid_amount_cents) || 0),
+        status: 'refunded',
+        stripePaymentIntentId: a.stripe_payment_intent_id,
+        stripeRefundId: refundId,
+        relatedLedgerId: paymentLedgerId,
+        metadata: { reason, source: 'refundAppointment', charge_mode: chargeMode || 'direct_assumed' },
+      });
+      await markLedgerEntriesRefunded(pool, {
+        stripePaymentIntentId: a.stripe_payment_intent_id,
+      });
+    } catch (ledgerErr) {
+      console.error('[refundAppointment] ledger refund fail', ledgerErr.message || ledgerErr);
+    }
+
     return { ok: true, refunded: true, refund_id: refundId };
   }
 

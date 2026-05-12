@@ -64,7 +64,9 @@ async function scheduleAppointmentPayout(pool, { appointmentId, paymentIntentId,
   // INSERT idempotent. release_at calcule cote SQL via la timezone du
   // commerçant pour gerer DST proprement. ON CONFLICT (appointment_id) ->
   // DO NOTHING : webhook payment_intent.succeeded peut etre delivre 2x.
-  await pool.query(`
+  // RETURNING id : si rowCount=0 -> conflit (replay), on skip le ledger
+  // dual-write pour ne pas creer de doublon payout_hold.
+  const ins = await pool.query(`
     INSERT INTO appointment_payouts
       (appointment_id, user_id, stripe_account_id, payment_intent_id,
        amount_cents, release_at, status)
@@ -74,12 +76,37 @@ async function scheduleAppointmentPayout(pool, { appointmentId, paymentIntentId,
       'pending'
     )
     ON CONFLICT (appointment_id) DO NOTHING
+    RETURNING id
   `, [
     a.id, a.user_id, a.stripe_account_id, piId, amt,
     typeof a.date === 'string' ? a.date.substring(0, 10) : a.date,
     typeof a.start_time === 'string' ? a.start_time.substring(0, 8) : a.start_time,
     tz, String(safeHold)
   ]);
+
+  // PHASE 2 LEDGER : entry payout_hold (informationnel) si nouvelle row.
+  // Si conflit (rowCount=0), le payout_hold a deja ete ecrit au 1er passage,
+  // on no-op. amount=+amt (montant net attendu en escrow, positif pour
+  // s'aligner avec payout_release/payout_paid). Status='locked' tant que
+  // l'escrow n'est pas libere par le cron releasePayouts.
+  if (ins.rowCount > 0) {
+    try {
+      const { recordLedgerEntry } = require('./ledger');
+      await recordLedgerEntry(pool, {
+        userId: a.user_id,
+        appointmentId: a.id,
+        appointmentPayoutId: ins.rows[0].id,
+        entryType: 'payout_hold',
+        amountCents: amt,
+        status: 'locked',
+        stripePaymentIntentId: piId,
+        metadata: { hold_days: safeHold, stripe_account_id: a.stripe_account_id },
+      });
+    } catch (ledgerErr) {
+      console.error('[scheduleAppointmentPayout] ledger payout_hold fail',
+        ledgerErr.message || ledgerErr);
+    }
+  }
 
   return { ok: true, hold_days: safeHold };
 }

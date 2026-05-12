@@ -97,6 +97,33 @@ async function releasePayouts(pool) {
       `, [row.id, payout.id]);
       succeeded++;
       console.log(`[releasePayouts] released id=${row.id} appt=${row.appointment_id} stripe_payout=${payout.id} amount=${row.amount_cents}c account=${row.stripe_account_id}`);
+
+      // PHASE 2 LEDGER : INSERT payout_release (informationnel) +
+      // UPDATE status='locked' sur les entries payment/commission/stripe_fee
+      // de ce RDV (en cours de virement Stripe). UNIQUE INDEX
+      // uq_ledger_payout_entry garantit idempotence si appel retry.
+      try {
+        const { recordLedgerEntry, updateLedgerStatusForPayout } = require('./ledger');
+        await recordLedgerEntry(pool, {
+          userId: row.user_id,
+          appointmentId: row.appointment_id,
+          appointmentPayoutId: row.id,
+          entryType: 'payout_release',
+          amountCents: row.amount_cents,
+          status: 'locked',
+          stripePaymentIntentId: row.payment_intent_id,
+          stripePayoutId: payout.id,
+          metadata: { stripe_account_id: row.stripe_account_id, retry: row.retry_count || 0 },
+        });
+        await updateLedgerStatusForPayout(pool, {
+          appointmentId: row.appointment_id,
+          stripePayoutId: payout.id,
+          newStatus: 'locked',
+        });
+      } catch (ledgerErr) {
+        console.error('[releasePayouts] ledger payout_release fail id=' + row.id,
+          ledgerErr.message || ledgerErr);
+      }
     } catch (e) {
       const msg = e.message || String(e);
       const code = e.code || e.type || 'unknown';

@@ -889,6 +889,62 @@ router.post('/webhook', async (req, res) => {
               + ' net=' + netCents_v3
               + ' status=' + v3Status);
 
+            // PHASE 2 LEDGER : dual-write 3 entries (payment + commission +
+            // stripe_fee). Idempotent via UNIQUE INDEX uq_ledger_pi_entry sur
+            // (PI, entry_type). Si replay webhook, ON CONFLICT DO NOTHING.
+            // stripe_fee = 0 -> on n'INSERT pas la ligne (fee inconnu encore,
+            // sera retro-fille par un script phase 3). commission_rate_snapshot
+            // calcule depuis pi.application_fee_amount / gross pour figer le
+            // pourcentage au moment du paiement (immune aux changes futurs
+            // de users.commission_rate).
+            try {
+              const { recordLedgerEntry } = require('../utils/ledger');
+              const rateSnapshot = grossCents_v3 > 0
+                ? Math.round((platformFeeCents_v3 / grossCents_v3) * 10000) / 100
+                : null;
+              const paymentRes = await recordLedgerEntry(pool, {
+                userId: apptInfo[0].user_id,
+                appointmentId: upd.rows[0].id,
+                entryType: 'payment',
+                amountCents: grossCents_v3,
+                status: 'pending',
+                stripePaymentIntentId: pi.id,
+                stripeChargeId: pi.latest_charge || null,
+                commissionRateSnapshot: rateSnapshot,
+                metadata: { source: 'webhook_pi_succeeded', is_fully_paid: isFullyPaid_v3 },
+              });
+              if (platformFeeCents_v3 > 0) {
+                await recordLedgerEntry(pool, {
+                  userId: apptInfo[0].user_id,
+                  appointmentId: upd.rows[0].id,
+                  entryType: 'commission',
+                  amountCents: -platformFeeCents_v3,
+                  status: 'pending',
+                  stripePaymentIntentId: pi.id,
+                  stripeChargeId: pi.latest_charge || null,
+                  commissionRateSnapshot: rateSnapshot,
+                  relatedLedgerId: paymentRes.id,
+                  metadata: { source: 'webhook_pi_succeeded' },
+                });
+              }
+              if (stripeFeeCents_v3 > 0) {
+                await recordLedgerEntry(pool, {
+                  userId: apptInfo[0].user_id,
+                  appointmentId: upd.rows[0].id,
+                  entryType: 'stripe_fee',
+                  amountCents: -stripeFeeCents_v3,
+                  status: 'pending',
+                  stripePaymentIntentId: pi.id,
+                  stripeChargeId: pi.latest_charge || null,
+                  relatedLedgerId: paymentRes.id,
+                  metadata: { source: 'webhook_pi_succeeded' },
+                });
+              }
+            } catch (ledgerErr) {
+              console.error('[CONNECT WEBHOOK] ledger PI succeeded fail',
+                ledgerErr.message || ledgerErr);
+            }
+
             // Invalide le cache stats v3 pour ce user (5min TTL devient
             // immediat -> les routes /api/historique et /api/stats/* re-query).
             try {
@@ -995,6 +1051,33 @@ router.post('/webhook', async (req, res) => {
           } else if (!txRes.ok) {
             console.error('[CONNECT WEBHOOK] refund tx insert fail', txRes.error);
           }
+
+          // PHASE 2 LEDGER : INSERT refund + mark payment/commission/stripe_fee
+          // de ce PI en status='refunded'. Idempotent : si refundAppointment
+          // a deja ecrit le ledger (chemin sync), UNIQUE INDEX
+          // uq_ledger_refund_entry empeche le doublon ; markRefunded
+          // saute les rows deja en 'refunded'.
+          try {
+            const { recordLedgerEntry, markLedgerEntriesRefunded, findPaymentEntryByPi } = require('../utils/ledger');
+            const paymentLedgerId = await findPaymentEntryByPi(pool, piId);
+            await recordLedgerEntry(pool, {
+              userId: row.user_id,
+              appointmentId: row.id,
+              entryType: 'refund',
+              amountCents: -Math.abs(refundedCents),
+              status: 'refunded',
+              stripePaymentIntentId: piId,
+              stripeChargeId: ch.id || null,
+              stripeRefundId: refundIdFromCharge,
+              relatedLedgerId: paymentLedgerId,
+              metadata: { source: 'webhook_charge_refunded' },
+            });
+            await markLedgerEntriesRefunded(pool, { stripePaymentIntentId: piId });
+          } catch (ledgerErr) {
+            console.error('[CONNECT WEBHOOK] ledger refund fail',
+              ledgerErr.message || ledgerErr);
+          }
+
           // Refonte v3 : marquer la transaction d'origine 'rdv_online' comme
           // REFUNDED + invalider le cache stats v3.
           await pool.query(
@@ -1113,6 +1196,50 @@ router.post('/webhook', async (req, res) => {
               + ' user=' + userId + ' tx_lies=' + upd.rowCount
               + ' amount=' + ((po.amount || 0) / 100) + '€');
           }
+
+          // PHASE 2 LEDGER : INSERT payout_paid (informationnel) +
+          // UPDATE status='paid' sur entries lifecycle. 2 branches en
+          // miroir des UPDATE transactions ci-dessus.
+          try {
+            const { recordLedgerEntry, updateLedgerStatusForPayout } = require('../utils/ledger');
+            await recordLedgerEntry(pool, {
+              userId,
+              appointmentId: apptIdFromMeta,
+              entryType: 'payout_paid',
+              amountCents: po.amount || 0,
+              status: 'paid',
+              stripePayoutId: po.id,
+              metadata: {
+                source: isEscrowRelease ? 'webhook_escrow_release' : 'webhook_manual_payout',
+                arrival_date: po.arrival_date || null,
+              },
+            });
+            if (isEscrowRelease && apptIdFromMeta) {
+              await updateLedgerStatusForPayout(pool, {
+                appointmentId: apptIdFromMeta,
+                stripePayoutId: po.id,
+                newStatus: 'paid',
+              });
+            } else {
+              // Payout manuel : on update les entries de ce user avant cutoff,
+              // pas encore liees a un payout, en status 'paid' + stamp payout_id.
+              // Restrictif : seules payment/commission/stripe_fee non encore liees.
+              const cutoffTs = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
+              await pool.query(`
+                UPDATE financial_ledger
+                   SET status = 'paid',
+                       stripe_payout_id = COALESCE(stripe_payout_id, $2)
+                 WHERE user_id = $1
+                   AND occurred_at <= $3
+                   AND stripe_payout_id IS NULL
+                   AND entry_type IN ('payment','commission','stripe_fee')
+                   AND status IN ('pending','available','locked')
+              `, [userId, po.id, cutoffTs]);
+            }
+          } catch (ledgerErr) {
+            console.error('[CONNECT WEBHOOK] ledger payout.paid fail',
+              ledgerErr.message || ledgerErr);
+          }
         } else {
           const failureMsg = po.failure_message || po.failure_code || 'unknown';
           console.log('[CONNECT WEBHOOK] payout.failed: stripe_payout=' + po.id
@@ -1158,6 +1285,23 @@ router.post('/webhook', async (req, res) => {
           } catch (syncErr) {
             console.error('[CONNECT WEBHOOK] payout.failed sync appointment_payouts fail:',
               syncErr.message);
+          }
+
+          // PHASE 2 LEDGER : UPDATE status='failed' sur entries lifecycle
+          // de l'appointment (si metadata) ou via stripe_payout_id fallback.
+          // Pas d'INSERT payout_paid (logique : payout n'a PAS abouti).
+          try {
+            const { updateLedgerStatusForPayout } = require('../utils/ledger');
+            const apptIdMeta = po.metadata?.appointment_id || null;
+            await updateLedgerStatusForPayout(pool, {
+              appointmentId: apptIdMeta,
+              stripePayoutId: po.id,
+              newStatus: 'failed',
+              failureMessage: failureMsg,
+            });
+          } catch (ledgerErr) {
+            console.error('[CONNECT WEBHOOK] ledger payout.failed fail',
+              ledgerErr.message || ledgerErr);
           }
 
           // Email d'alerte au commercant. Best-effort sync (emailSender deja
