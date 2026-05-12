@@ -161,7 +161,55 @@ async function getPayoutsFromLedger(pool, userId, statusFilter) {
   };
 }
 
+/**
+ * Balance estimee depuis le ledger (= net merchant non encore payoute).
+ * Shape compatible avec GET /api/stripe-connect/balance :
+ *   { available_cents, pending_cents, currency, connected }
+ *
+ * IMPORTANT : Stripe Balance API reste la source de verite pour la balance
+ * LIVE (settlement Stripe-side, refunds reflechis immediats). Le ledger
+ * peut DIVERGER pour des raisons legitimes (timing settlement Stripe ~5-7j,
+ * fees stripe pas encore connus, etc.). C'est pourquoi le dual-read sur
+ * /balance utilise une tolerance enorme et n'emet pas de drift sur cette
+ * route — le badge sert uniquement a visualiser les 2 sources cote a cote.
+ *
+ * Mapping :
+ *   - pending_cents = net non encore payoute = SUM(net) WHERE status='pending'
+ *     net = payment + commission(-) + stripe_fee(-) + refund(-) (BIGINT signe)
+ *   - available_cents = en cours de virement = SUM(net) WHERE status='locked'
+ *     (= Stripe payout cree, pas encore confirme par webhook payout.paid)
+ */
+async function getBalanceFromLedger(pool, userId) {
+  const { rows: ur } = await pool.query(
+    'SELECT stripe_account_id FROM users WHERE id = $1 LIMIT 1',
+    [userId]
+  );
+  const connected = !!ur[0]?.stripe_account_id;
+
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(SUM(amount_cents) FILTER (
+        WHERE status = 'pending'
+          AND entry_type IN ('payment','commission','stripe_fee','refund')
+      ), 0)::bigint AS pending_cents,
+      COALESCE(SUM(amount_cents) FILTER (
+        WHERE status = 'locked'
+          AND entry_type IN ('payment','commission','stripe_fee','refund')
+      ), 0)::bigint AS locked_cents
+      FROM financial_ledger
+     WHERE user_id = $1
+  `, [userId]);
+
+  return {
+    available_cents: parseInt(rows[0]?.locked_cents || 0, 10),
+    pending_cents:   parseInt(rows[0]?.pending_cents || 0, 10),
+    currency:        'eur',
+    connected,
+  };
+}
+
 module.exports = {
   getPerformanceStatsFromLedger,
   getPayoutsFromLedger,
+  getBalanceFromLedger,
 };

@@ -603,10 +603,13 @@ function EscrowPayoutsSection({ t, showToast }) {
         background: '#f0fdf4', border: '1px solid #bbf7d0',
         marginBottom: 14,
       }}>
-        <p style={{ margin: 0, fontSize: 11, color: '#065f46',
-                    textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
-          {"Solde Stripe (en direct)"}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <p style={{ margin: 0, fontSize: 11, color: '#065f46',
+                      textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 500 }}>
+            {"Solde Stripe (en direct)"}
+          </p>
+          <LedgerDebugBadge debug={balance?._ledger_debug}/>
+        </div>
         <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 500, color: '#065f46',
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
           {fmtEur(((balance?.available_cents) || 0) + ((balance?.pending_cents) || 0))}

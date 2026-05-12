@@ -324,37 +324,56 @@ router.post('/dashboard-link', authMiddleware, async (req, res) => {
 router.get('/balance', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { rows } = await pool.query(
-      'SELECT stripe_account_id FROM users WHERE id=$1', [userId]
-    );
-    if (!rows.length || !rows[0].stripe_account_id) {
-      return res.json({ available_cents: 0, pending_cents: 0, currency: 'eur', connected: false });
-    }
-    try {
-      const stripe = getStripe();
-      // 2-arg form (params, options) : le 1-arg { stripeAccount: ... } n'est
-      // plus auto-detecte par le SDK Stripe recent et envoie 'stripeAccount'
-      // comme query param -> "Received unknown parameter: stripeAccount".
-      const balance = await stripe.balance.retrieve(
-        {},
-        { stripeAccount: rows[0].stripe_account_id }
+
+    // ── LEGACY : Stripe Balance API (source live, settlement-aware) ─────
+    const legacyFn = async () => {
+      const { rows } = await pool.query(
+        'SELECT stripe_account_id FROM users WHERE id=$1', [userId]
       );
-      // balance.available et balance.pending sont des arrays par devise.
-      // On somme tout en EUR (cas multi-devise rare en France).
-      const sumCurrency = (arr, cur) => (arr || [])
-        .filter(b => (b.currency || '').toLowerCase() === cur)
-        .reduce((s, b) => s + (b.amount || 0), 0);
-      const currency = 'eur';
-      res.json({
-        available_cents: sumCurrency(balance.available, currency),
-        pending_cents:   sumCurrency(balance.pending,   currency),
-        currency,
-        connected: true,
-      });
-    } catch (apiErr) {
-      console.warn('[CONNECT GET balance] Stripe API fail', apiErr.message);
-      res.json({ available_cents: 0, pending_cents: 0, currency: 'eur', connected: true, error: apiErr.message });
-    }
+      if (!rows.length || !rows[0].stripe_account_id) {
+        return { available_cents: 0, pending_cents: 0, currency: 'eur', connected: false };
+      }
+      try {
+        const stripe = getStripe();
+        const balance = await stripe.balance.retrieve(
+          {},
+          { stripeAccount: rows[0].stripe_account_id }
+        );
+        const sumCurrency = (arr, cur) => (arr || [])
+          .filter(b => (b.currency || '').toLowerCase() === cur)
+          .reduce((s, b) => s + (b.amount || 0), 0);
+        const currency = 'eur';
+        return {
+          available_cents: sumCurrency(balance.available, currency),
+          pending_cents:   sumCurrency(balance.pending,   currency),
+          currency,
+          connected: true,
+        };
+      } catch (apiErr) {
+        console.warn('[CONNECT GET balance] Stripe API fail', apiErr.message);
+        return { available_cents: 0, pending_cents: 0, currency: 'eur', connected: true, error: apiErr.message };
+      }
+    };
+
+    // ── LEDGER : estimation depuis financial_ledger ─────────────────────
+    // ATTENTION : Stripe Balance et ledger ne sont PAS comparables au cent
+    // (settlement timing Stripe ~5-7j). fields=[] -> aucun drift loggue ici.
+    const { getBalanceFromLedger } = require('../utils/ledgerReader');
+    const ledgerFn = () => getBalanceFromLedger(pool, userId);
+
+    const { dualRead, isDebugVisible } = require('../utils/dualRead');
+    const debugVisible = await isDebugVisible(req, userId);
+    const result = await dualRead({
+      userId,
+      label:        'balance',
+      flagName:     'ledger_read_balance',
+      legacyFn,
+      ledgerFn,
+      tolerance:    0,
+      fields:       [],   // pas de drift attendu sur cette route (sources differentes)
+      debugVisible,
+    });
+    res.json(result);
   } catch (e) {
     console.error('[CONNECT GET balance ERR]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });

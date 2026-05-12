@@ -901,7 +901,7 @@ export const connectApi = {
   // Solde live Stripe (available + pending) -- source de verite a jour
   // immediat (refunds reflechis sans attendre le cron). Complete /payouts
   // qui montre l'escrow FlowIA (release planifies sur appointment_payouts).
-  getStripeBalance:    ()       => request('/stripe-connect/balance'),
+  getStripeBalance:    ()       => request('/stripe-connect/balance?debug=1'),
   updatePaymentConfig: (b) => request('/stripe-connect/payment-config', {
     method: 'PUT', body: JSON.stringify(b),
   }),
