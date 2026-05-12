@@ -612,6 +612,12 @@ router.post('/disconnect', authMiddleware, async (req, res) => {
     }
 
     // Archive l'ancien account_id avant de NULL-ifier — permet refund retro.
+    // Note : appointment_payouts.stripe_account_id reste settle au moment de
+    // l'INSERT (snapshot) — on ne le NULL-ifie pas, ce qui permet au cron
+    // releasePayouts de payouter les fonds restants meme apres deconnexion
+    // (le compte Stripe Connect existe toujours cote Stripe, on a juste
+    // coupe le lien UI cote FlowIA). C'est volontaire : les clients ayant
+    // deja paye doivent recevoir leur prestation ou leur refund.
     await pool.query(
       `UPDATE users SET stripe_account_id_archived     = COALESCE(stripe_account_id, stripe_account_id_archived),
                         stripe_account_disconnected_at = NOW(),
@@ -623,6 +629,7 @@ router.post('/disconnect', authMiddleware, async (req, res) => {
                         online_payments_enabled        = FALSE
        WHERE id=$1`, [userId]
     );
+    console.log('[CONNECT DISCONNECT] user=' + userId + ' disconnected, kept appointment_payouts.stripe_account_id snapshot for retro refunds/releases');
     res.json({ ok: true });
   } catch (e) {
     console.error('[CONNECT DISCONNECT ERR]', e.message);
@@ -669,25 +676,36 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'invalid signature' });
   }
 
-  // Anti-replay (table partagee avec subscription webhook).
+  // Anti-replay : SELECT-then-process-then-INSERT au lieu de INSERT-early.
+  // Avant ce fix, l'INSERT processed_stripe_events arrivait avant le
+  // processing et res.json(200) etait envoye immediatement -> si le
+  // processing throw, l'event etait marque "processe" et Stripe ne
+  // retentait jamais, perte permanente. Maintenant : on check, on processe,
+  // et on marque seulement si succes. Si echec -> 500 -> Stripe retentera
+  // (jusqu'a 3 jours, exponentiel). Le processing reste idempotent via
+  // ON CONFLICT / WHERE clauses partout dans le code en aval, donc un
+  // double-process partiel ne corrompt rien.
   let alreadyProcessed = false;
   try {
-    await pool.query(
-      `INSERT INTO processed_stripe_events (event_id, event_type, source)
-       VALUES ($1, $2, 'connect')`,
-      [event.id, event.type]
+    const { rows: prevR } = await pool.query(
+      'SELECT 1 FROM processed_stripe_events WHERE event_id = $1 LIMIT 1',
+      [event.id]
     );
+    alreadyProcessed = prevR.length > 0;
   } catch (e) {
-    if (e.code === '23505') {
-      alreadyProcessed = true;
-      console.log('[CONNECT WEBHOOK] event already processed:', event.id);
-    } else {
-      console.error('[CONNECT WEBHOOK] anti-replay INSERT err:', e.message);
-    }
+    console.error('[CONNECT WEBHOOK] anti-replay SELECT err (continue without dedup):', e.message);
+  }
+  if (alreadyProcessed) {
+    console.log('[CONNECT WEBHOOK] event already processed (skip):', event.id, event.type);
+    return res.json({ received: true, already_processed: true });
   }
 
-  res.json({ received: true });
-  if (alreadyProcessed) return;
+  // Track les erreurs critiques pour decider du status code en fin de
+  // processing. Les inner try/catch existants logguent deja en console.error
+  // — on les preserve pour ne pas casser le flow inter-side-effects. Mais
+  // si l'outer try catche (= erreur non-recuperable hors des inner catches),
+  // on repond 500 pour declencher un retry Stripe.
+  let outerError = null;
 
   try {
     if (event.type === 'account.updated') {
@@ -1049,23 +1067,99 @@ router.post('/webhook', async (req, res) => {
         );
 
         if (isPaid) {
-          // Lier les transactions de ce user qui n'ont pas encore de
-          // payout_received_at et qui sont anterieures a la creation du
-          // payout. On prend les rdv_online + rdv_refund (reverses + refunds).
-          const cutoff = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
-          await pool.query(
-            `UPDATE transactions
-                SET payout_received_at = NOW(),
-                    stripe_payout_id   = $2
-              WHERE user_id = $1
-                AND payout_received_at IS NULL
-                AND created_at <= $3
-                AND source IN ('rdv_online','rdv_refund')`,
-            [userId, po.id, cutoff]
-          );
-          console.log('[CONNECT WEBHOOK] payout.paid:', po.id, 'user', userId, '+', (po.amount || 0) / 100, '€');
+          // 2 origines possibles pour ce payout :
+          // (a) Escrow release par cron releasePayouts : metadata.source =
+          //     'flowia_escrow_release' + metadata.appointment_id -> on lie
+          //     PRECISEMENT la (les) transaction(s) de cet appointment, pas
+          //     les autres (sinon attribution erronee a un mauvais payout).
+          // (b) Payout manuel par le merchant via /api/stripe/payout/create
+          //     (vide tout le balance) : pas de metadata.appointment_id
+          //     -> heuristique cutoff = toutes tx 'rdv_online'/'rdv_refund'
+          //     non encore liees, anterieures a po.created. Correct pour
+          //     un payout full-balance.
+          const isEscrowRelease = po.metadata?.source === 'flowia_escrow_release';
+          const apptIdFromMeta  = po.metadata?.appointment_id || null;
+
+          if (isEscrowRelease && apptIdFromMeta) {
+            const upd = await pool.query(
+              `UPDATE transactions
+                  SET payout_received_at = NOW(),
+                      stripe_payout_id   = $2
+                WHERE user_id = $1
+                  AND appointment_id = $3
+                  AND payout_received_at IS NULL
+                  AND source IN ('rdv_online','rdv_refund')
+                RETURNING id`,
+              [userId, po.id, apptIdFromMeta]
+            );
+            console.log('[CONNECT WEBHOOK] payout.paid escrow: stripe_payout=' + po.id
+              + ' appt=' + apptIdFromMeta + ' user=' + userId
+              + ' tx_lies=' + upd.rowCount + ' amount=' + ((po.amount || 0) / 100) + '€');
+          } else {
+            // Payout manuel : heuristique cutoff sur created_at.
+            const cutoff = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
+            const upd = await pool.query(
+              `UPDATE transactions
+                  SET payout_received_at = NOW(),
+                      stripe_payout_id   = $2
+                WHERE user_id = $1
+                  AND payout_received_at IS NULL
+                  AND created_at <= $3
+                  AND source IN ('rdv_online','rdv_refund')
+                RETURNING id`,
+              [userId, po.id, cutoff]
+            );
+            console.log('[CONNECT WEBHOOK] payout.paid manuel: stripe_payout=' + po.id
+              + ' user=' + userId + ' tx_lies=' + upd.rowCount
+              + ' amount=' + ((po.amount || 0) / 100) + '€');
+          }
         } else {
-          console.log('[CONNECT WEBHOOK] payout.failed:', po.id, 'user', userId, po.failure_message || po.failure_code);
+          const failureMsg = po.failure_message || po.failure_code || 'unknown';
+          console.log('[CONNECT WEBHOOK] payout.failed: stripe_payout=' + po.id
+            + ' user=' + userId + ' reason=' + failureMsg);
+
+          // Sync appointment_payouts : revenir a status='failed' pour
+          // alerter l'admin (sinon la row reste en 'released' alors que le
+          // virement Stripe a echoue -> divergence DB/realite).
+          // 2 chemins : (a) escrow release identifie par metadata, sinon
+          // (b) match large par stripe_payout_id (defensif).
+          try {
+            const apptIdMeta = po.metadata?.appointment_id || null;
+            if (apptIdMeta) {
+              const updAp = await pool.query(
+                `UPDATE appointment_payouts
+                    SET status = 'failed',
+                        stripe_error_message = $3,
+                        updated_at = NOW()
+                  WHERE appointment_id = $1
+                    AND stripe_payout_id = $2
+                  RETURNING id`,
+                [apptIdMeta, po.id, failureMsg]
+              );
+              console.log('[CONNECT WEBHOOK] payout.failed -> appointment_payouts.status=failed appt='
+                + apptIdMeta + ' rows=' + updAp.rowCount);
+            } else {
+              // Fallback : match par stripe_payout_id seul (cas payout
+              // manuel ou metadata corrompue).
+              const updAp = await pool.query(
+                `UPDATE appointment_payouts
+                    SET status = 'failed',
+                        stripe_error_message = $2,
+                        updated_at = NOW()
+                  WHERE stripe_payout_id = $1
+                  RETURNING id, appointment_id`,
+                [po.id, failureMsg]
+              );
+              if (updAp.rowCount > 0) {
+                console.log('[CONNECT WEBHOOK] payout.failed -> appointment_payouts.status=failed (fallback) rows='
+                  + updAp.rowCount);
+              }
+            }
+          } catch (syncErr) {
+            console.error('[CONNECT WEBHOOK] payout.failed sync appointment_payouts fail:',
+              syncErr.message);
+          }
+
           // Email d'alerte au commercant. Best-effort sync (emailSender deja
           // resilient ; pas de reject pour ne pas casser le webhook).
           try {
@@ -1101,8 +1195,39 @@ router.post('/webhook', async (req, res) => {
       }
     }
   } catch (e) {
-    console.error('[CONNECT WEBHOOK ERR]', event.type, e.message);
+    outerError = e;
+    console.error('[CONNECT WEBHOOK ERR]', event.type, 'event=' + event.id,
+      'message=' + e.message, 'stack=' + (e.stack ? e.stack.split('\n')[1] : ''));
   }
+
+  // Si processing OK : marquer event comme traite (idempotent ON CONFLICT)
+  // puis 200. Si non : 500 -> Stripe retentera (idempotent operations
+  // garantissent que le re-run ne corrompt rien).
+  if (!outerError) {
+    try {
+      await pool.query(
+        `INSERT INTO processed_stripe_events (event_id, event_type, source)
+         VALUES ($1, $2, 'connect')
+         ON CONFLICT (event_id) DO NOTHING`,
+        [event.id, event.type]
+      );
+    } catch (markErr) {
+      // Si le mark fail (deja insere par un retry parallele, ou DB transiente),
+      // on log mais on repond quand meme 200 — re-process serait idempotent.
+      console.warn('[CONNECT WEBHOOK] mark processed fail (non-blocking):',
+        event.id, markErr.message);
+    }
+    return res.json({ received: true });
+  }
+
+  // Erreur critique : on n'insert PAS dans processed_stripe_events pour
+  // permettre a Stripe de retenter (Stripe retry exponentiel jusqu'a 3j).
+  return res.status(500).json({
+    error: 'webhook processing failed',
+    event_id: event.id,
+    event_type: event.type,
+    message: outerError.message,
+  });
 });
 
 module.exports = router;

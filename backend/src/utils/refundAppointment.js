@@ -88,10 +88,12 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
   //      hypothetique destination charges) et applique alors les flags
   //      refund_application_fee + reverse_transfer.
   //
-  // Direct charges : Stripe rembourse automatiquement l'application_fee au
-  // prorata du refund (default behavior). On NE passe PAS
-  // refund_application_fee ni reverse_transfer (incompatibles avec direct
-  // charges, Stripe rejetterait).
+  // Direct charges : par defaut Stripe NE rembourse PAS l'application_fee
+  // au prorata du refund — la commission FlowIA reste acquise sur le compte
+  // plateforme et le commercant absorbe le refund complet (politique business
+  // validee 2026-05-12 : FlowIA garde la commission quoi qu'il arrive,
+  // refund_application_fee est intentionnellement omis).
+  // reverse_transfer est incompatible avec direct charges, Stripe rejetterait.
   let succeeded   = false;
   let stripeError = null;
   let refundId    = null;
@@ -138,6 +140,13 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
       },
     };
 
+    // Idempotency key par RDV : protege contre les doublons en cas de retry
+    // reseau (timeout/5xx) ou de double-clic admin. Stripe garantit que
+    // 2 calls avec la meme key retournent le meme refund au lieu d'en
+    // creer 2 (= 2x l'argent envoye au client). Suffixe avec PI car le
+    // meme appointment peut theoriquement etre paye sur 2 PI distincts
+    // (re-tentative apres echec) — on veut une key unique par (appt, pi).
+    const idempotencyKey = `refund_appt_${a.id}_pi_${a.stripe_payment_intent_id}`;
     let refund;
     if (chargeMode === 'destination') {
       // Cas hypothetique non-FlowIA : refund sur la plateforme + flags
@@ -146,14 +155,13 @@ async function refundAppointment(pool, apptId, reason = 'merchant_cancelled') {
       const hasTransfer = !!(pi && (pi.transfer_data || pi.transfer_group));
       if (hasAppFee)   refundParams.refund_application_fee = true;
       if (hasTransfer) refundParams.reverse_transfer       = true;
-      refund = await stripe.refunds.create(refundParams);
+      refund = await stripe.refunds.create(refundParams, { idempotencyKey });
     } else {
       // Direct charges (cas FlowIA standard) : refund sur le compte connecte
-      // du commercant. Pas de flag app_fee ni reverse_transfer (Stripe
-      // gere automatiquement la commission au prorata).
+      // du commercant via { stripeAccount }.
       refund = await stripe.refunds.create(
         refundParams,
-        { stripeAccount: a.stripe_account_id }
+        { stripeAccount: a.stripe_account_id, idempotencyKey }
       );
     }
     refundId  = refund?.id || null;

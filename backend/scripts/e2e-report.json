@@ -1,0 +1,128 @@
+{
+  "meta": {
+    "started_at": "2026-05-11T23:52:40.877Z",
+    "account": "acct_1TUFSaRnGbDwVdTo",
+    "slug": "saon-de-test-lille-59800",
+    "stripe_key_prefix": "sk_test_51TM",
+    "finished_at": "2026-05-11T23:52:47.657Z"
+  },
+  "steps": [
+    {
+      "name": "1. Stripe API access",
+      "ok": true,
+      "ts": "2026-05-11T23:52:41.392Z",
+      "data": {
+        "livemode": false,
+        "available_eur": [
+          0
+        ]
+      }
+    },
+    {
+      "name": "2. Compte connecte retrieve",
+      "ok": true,
+      "ts": "2026-05-11T23:52:42.202Z",
+      "data": {
+        "id": "acct_1TUFSaRnGbDwVdTo",
+        "type": "standard",
+        "country": "FR",
+        "email": "user-test@flowiapro.com",
+        "business_name": "Saon de Test",
+        "charges_enabled": true,
+        "payouts_enabled": true,
+        "details_submitted": true,
+        "payouts_schedule": "manual",
+        "currently_due": [],
+        "controller_fees_payer": "account",
+        "controller_losses": "stripe"
+      }
+    },
+    {
+      "name": "3. Balance Connect (before)",
+      "ok": true,
+      "ts": "2026-05-11T23:52:42.500Z",
+      "data": {
+        "available_cents": 0,
+        "pending_cents": 47458
+      }
+    },
+    {
+      "name": "4. PaymentIntent create + confirm",
+      "ok": true,
+      "ts": "2026-05-11T23:52:43.621Z",
+      "data": {
+        "id": "pi_3TW3ctRnGbDwVdTo15GLFEbp",
+        "status": "succeeded",
+        "amount": 5000,
+        "application_fee_amount": 250,
+        "latest_charge": "ch_3TW3ctRnGbDwVdTo10jcpBu4"
+      }
+    },
+    {
+      "name": "5. Balance transaction",
+      "ok": false,
+      "ts": "2026-05-11T23:52:43.919Z",
+      "error": "pas de balance_transaction sur charge"
+    },
+    {
+      "name": "6a. Refund #1 (partial 10€)",
+      "ok": true,
+      "ts": "2026-05-11T23:52:45.586Z",
+      "data": {
+        "id": "re_3TW3ctRnGbDwVdTo167CMiMY",
+        "amount": 1000,
+        "status": "succeeded"
+      }
+    },
+    {
+      "name": "6b. Refund #2 (same idempKey)",
+      "ok": true,
+      "ts": "2026-05-11T23:52:45.825Z",
+      "data": {
+        "id": "re_3TW3ctRnGbDwVdTo167CMiMY",
+        "amount": 1000,
+        "same_as_first": true
+      }
+    },
+    {
+      "name": "6c. IDEMPOTENCY OK",
+      "ok": true,
+      "ts": "2026-05-11T23:52:45.826Z",
+      "data": {
+        "reused_refund_id": "re_3TW3ctRnGbDwVdTo167CMiMY"
+      }
+    },
+    {
+      "name": "7. Application fee state after partial refund",
+      "ok": true,
+      "ts": "2026-05-11T23:52:47.372Z",
+      "data": {
+        "app_fee_id": "fee_1TW3cuRnGbDwVdTomewhYP34",
+        "amount": 250,
+        "amount_refunded": 0,
+        "refunded": false,
+        "policy_check": "OK FlowIA garde commission"
+      }
+    },
+    {
+      "name": "8a. Balance avant payout test",
+      "ok": true,
+      "ts": "2026-05-11T23:52:47.657Z",
+      "data": {
+        "available_cents": 0,
+        "pending_cents": 51020
+      }
+    },
+    {
+      "name": "8b. Payout idempotency",
+      "ok": true,
+      "ts": "2026-05-11T23:52:47.657Z",
+      "error": "SKIPPED (balance available < 1€ — typiquement pending sur paiements test recents)"
+    }
+  ],
+  "summary": {
+    "total_steps": 11,
+    "passed": 10,
+    "failed": 1
+  }
+}

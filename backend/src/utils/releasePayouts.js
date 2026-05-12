@@ -23,8 +23,18 @@ const MAX_RETRIES = 5;
 const BATCH_SIZE  = 50; // pour ne pas saturer Stripe en cas de gros backlog
 
 async function releasePayouts(pool) {
-  // Selectionne les payouts dus, en batch limite, le plus ancien d'abord.
-  // Filtre status='pending' AND release_at <= NOW() AND retry_count < MAX.
+  // Selectionne les payouts dus. Pas de claim intermediaire (le CHECK
+  // constraint status IN ('pending','released','cancelled','failed') ne
+  // permet pas d'etat 'processing'). La protection contre les ticks
+  // simultanees repose sur 2 couches :
+  //   (a) scheduleLocked dans index.js (worker 1, pg_try_advisory_lock)
+  //       garantit qu'1 seul cron tourne en meme temps inter-instances.
+  //   (b) idempotencyKey sur stripe.payouts.create (ci-dessous) : si un
+  //       /release-now admin tape en parallele du cron, Stripe retournera
+  //       le meme payout au lieu d'en creer 2. L'UPDATE final est
+  //       idempotent (WHERE id = $1).
+  // Worst case : 2 appels Stripe API redondants (rate-limit non touche),
+  // aucun impact financier.
   const { rows: due } = await pool.query(`
     SELECT id, user_id, stripe_account_id, payment_intent_id, amount_cents,
            retry_count, appointment_id
@@ -54,6 +64,12 @@ async function releasePayouts(pool) {
       // stripe.payouts.create avec stripeAccount header -> agit pour le
       // commerçant. amount = amount_cents (le montant net qui est sur le
       // balance Connect — application_fee deja preleve cote plateforme).
+      // idempotencyKey : suffixe par retry_count pour permettre le retry
+      // explicite apres echec definitif (admin reset). Sur retry transient
+      // (timeout reseau), meme key -> Stripe retourne le payout de la 1ere
+      // tentative au lieu d'en creer 2. Defense en profondeur en plus du
+      // claim atomic ci-dessus.
+      const idempotencyKey = `escrow_payout_${row.id}_attempt_${row.retry_count || 0}`;
       const payout = await stripe.payouts.create(
         {
           amount: row.amount_cents,
@@ -67,7 +83,7 @@ async function releasePayouts(pool) {
           // du commerçant (4-22 chars, lettres/espace).
           statement_descriptor: 'FlowIA RDV',
         },
-        { stripeAccount: row.stripe_account_id }
+        { stripeAccount: row.stripe_account_id, idempotencyKey }
       );
 
       await pool.query(`
@@ -75,13 +91,15 @@ async function releasePayouts(pool) {
            SET status = 'released',
                released_at = NOW(),
                stripe_payout_id = $2,
+               stripe_error_message = NULL,
                updated_at = NOW()
          WHERE id = $1
       `, [row.id, payout.id]);
       succeeded++;
-      console.log(`[releasePayouts] released ${row.id} -> Stripe payout ${payout.id} (${row.amount_cents}c)`);
+      console.log(`[releasePayouts] released id=${row.id} appt=${row.appointment_id} stripe_payout=${payout.id} amount=${row.amount_cents}c account=${row.stripe_account_id}`);
     } catch (e) {
       const msg = e.message || String(e);
+      const code = e.code || e.type || 'unknown';
       failed++;
       const newRetry = (row.retry_count || 0) + 1;
       const newStatus = newRetry >= MAX_RETRIES ? 'failed' : 'pending';
@@ -93,10 +111,10 @@ async function releasePayouts(pool) {
                updated_at = NOW()
          WHERE id = $1
       `, [row.id, newRetry, msg, newStatus]);
-      console.error(`[releasePayouts] FAIL ${row.id} retry=${newRetry}/${MAX_RETRIES}`, msg);
+      console.error(`[releasePayouts] FAIL id=${row.id} appt=${row.appointment_id} retry=${newRetry}/${MAX_RETRIES} status=${newStatus} stripe_code=${code} msg=${msg}`);
     }
   }
-  console.log(`[releasePayouts] done : ${succeeded} ok, ${failed} fail`);
+  console.log(`[releasePayouts] done : ${succeeded} ok, ${failed} fail (claimed ${due.length})`);
   return { processed: due.length, succeeded, failed };
 }
 

@@ -73,6 +73,11 @@ router.post('/:id/retry', async (req, res) => {
 
     let stripeErrorMessage = null;
     let succeeded = false;
+    // idempotencyKey : suffixe par retry_count pour permettre le retry apres
+    // un echec definitif (ex: le merchant a recredite Stripe). Si le retry
+    // courant timeout cote reseau et qu'on reappelle avec la meme key, Stripe
+    // retournera le refund de la 1ere tentative -> idempotent.
+    const idempotencyKey = `admin_retry_refund_${fr.id}_attempt_${fr.retry_count || 0}`;
     try {
       const stripe = getStripe();
       await stripe.refunds.create(
@@ -81,12 +86,12 @@ router.post('/:id/retry', async (req, res) => {
           reason: 'requested_by_customer',
           metadata: { admin_retry: 'true', failed_refund_id: fr.id, original_reason: fr.reason },
         },
-        { stripeAccount: accountId }
+        { stripeAccount: accountId, idempotencyKey }
       );
       succeeded = true;
     } catch (e) {
       stripeErrorMessage = e.message;
-      console.error('[ADMIN failed-refunds retry ERR]', e.message);
+      console.error('[ADMIN failed-refunds retry ERR]', 'fr=' + fr.id, 'pi=' + fr.payment_intent_id, e.message);
     }
 
     if (succeeded) {

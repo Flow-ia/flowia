@@ -167,10 +167,23 @@ module.exports = function attachPaymentRoutes(router) {
 
       // Commission FlowIA → application_fee_amount (en cents).
       // Si commission_rate=0 → pas de fee, le merchant garde 100% (- frais Stripe).
-      const commission = parseFloat(m.commission_rate || 0);
+      // Garde-fou : commission attendue dans [0, 30] (cap admin DB). Si valeur
+      // hors borne (donnees corrompues, manipulation), on log et clamp pour
+      // ne pas charger le client d'une commission abusive.
+      const commissionRaw = parseFloat(m.commission_rate || 0);
+      const commission = Math.max(0, Math.min(30, isFinite(commissionRaw) ? commissionRaw : 0));
+      if (commissionRaw !== commission) {
+        console.warn('[PUB PAYMENT-INTENT] commission hors borne user=' + m.user_id
+          + ' raw=' + commissionRaw + ' clamped=' + commission);
+      }
       const feeCents = commission > 0
         ? Math.round(amountCents * (commission / 100))
         : 0;
+      console.log('[PUB PAYMENT-INTENT] commission user=' + m.user_id
+        + ' slug=' + req.params.slug
+        + ' amount_cents=' + amountCents
+        + ' commission_rate=' + commission + '%'
+        + ' application_fee_cents=' + feeCents);
 
       const stripeOpts = { stripeAccount: m.stripe_account_id };
 

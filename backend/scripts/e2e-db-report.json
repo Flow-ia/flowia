@@ -1,0 +1,235 @@
+{
+  "meta": {
+    "tag": "E2E-TEST · 2026-05-11T23:54:55",
+    "started_at": "2026-05-11T23:54:55.754Z",
+    "finished_at": "2026-05-11T23:55:02.209Z"
+  },
+  "steps": [
+    {
+      "name": "1. Locate merchant",
+      "ok": true,
+      "ts": "2026-05-11T23:54:55.995Z",
+      "data": {
+        "user_id": "6f4d62dd-a241-48d6-a280-59eb0d1004b5",
+        "business_name": "Saon de Test",
+        "stripe_account_id": "acct_1TUFSaRnGbDwVdTo",
+        "commission_rate": "5.00",
+        "online_payments_enabled": true,
+        "payout_hold_days": 3
+      }
+    },
+    {
+      "name": "2a. Stripe PI cree (40€)",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.274Z",
+      "data": {
+        "id": "pi_3TW3f2RnGbDwVdTo0ULAZ5Kp",
+        "status": "succeeded"
+      }
+    },
+    {
+      "name": "2b. Appointment insere",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.347Z",
+      "data": {
+        "id": "bbad4f53-773e-43ba-a928-67c1b696228c"
+      }
+    },
+    {
+      "name": "3a. scheduleAppointmentPayout #1",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.414Z",
+      "data": {
+        "ok": true,
+        "hold_days": 3
+      }
+    },
+    {
+      "name": "3b. scheduleAppointmentPayout #2 (idempotent)",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.464Z",
+      "data": {
+        "ok": true,
+        "hold_days": 3
+      }
+    },
+    {
+      "name": "3c. Verif 1 seule row appointment_payouts",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.505Z",
+      "data": {
+        "id": "57df7ce9-8d58-4bf2-858e-0e6fbed6fc0f",
+        "appointment_id": "bbad4f53-773e-43ba-a928-67c1b696228c",
+        "amount_cents": 3800,
+        "release_at": "2026-05-21T12:00:00.000Z",
+        "status": "pending",
+        "cancelled_reason": null,
+        "stripe_payout_id": null,
+        "retry_count": 0,
+        "stripe_error_message": null
+      }
+    },
+    {
+      "name": "4a. cancelAppointmentPayout",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.537Z",
+      "data": {
+        "ok": true,
+        "cancelled": true
+      }
+    },
+    {
+      "name": "4b. Status = cancelled",
+      "ok": true,
+      "ts": "2026-05-11T23:54:57.567Z",
+      "data": {
+        "status": "cancelled",
+        "cancelled_reason": "e2e_test_cancellation"
+      }
+    },
+    {
+      "name": "5a. Stripe PI cree (60€)",
+      "ok": true,
+      "ts": "2026-05-11T23:54:58.585Z",
+      "data": {
+        "id": "pi_3TW3f4RnGbDwVdTo1YFo0cUY",
+        "status": "succeeded"
+      }
+    },
+    {
+      "name": "5b. Appointment insere",
+      "ok": true,
+      "ts": "2026-05-11T23:54:58.623Z",
+      "data": {
+        "id": "e1168f3d-18dc-4304-ad14-b2cf9a096538"
+      }
+    },
+    {
+      "name": "5c. Payout programme",
+      "ok": true,
+      "ts": "2026-05-11T23:54:58.679Z"
+    },
+    {
+      "name": "6a. refundAppointment",
+      "ok": true,
+      "ts": "2026-05-11T23:55:00.743Z",
+      "data": {
+        "ok": true,
+        "refunded": true,
+        "refund_id": "re_3TW3f4RnGbDwVdTo1TXniYyl"
+      }
+    },
+    {
+      "name": "6b. appointments.payment_status = refunded",
+      "ok": true,
+      "ts": "2026-05-11T23:55:00.775Z",
+      "data": {
+        "id": "e1168f3d-18dc-4304-ad14-b2cf9a096538",
+        "status": "confirmed",
+        "payment_status": "refunded",
+        "paid_amount_cents": 6000,
+        "stripe_payment_intent_id": "pi_3TW3f4RnGbDwVdTo1YFo0cUY"
+      }
+    },
+    {
+      "name": "6c. appointment_payouts.status = cancelled (auto)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:00.793Z",
+      "data": {
+        "id": "0478f499-a8a5-4cde-9d3e-25be10b0a244",
+        "appointment_id": "e1168f3d-18dc-4304-ad14-b2cf9a096538",
+        "amount_cents": 5700,
+        "release_at": "2026-05-21T12:00:00.000Z",
+        "status": "cancelled",
+        "cancelled_reason": "e2e_merchant_cancelled",
+        "stripe_payout_id": null,
+        "retry_count": 0,
+        "stripe_error_message": null
+      }
+    },
+    {
+      "name": "6d. refundAppointment retry (idempotent)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:00.813Z",
+      "data": {
+        "ok": true,
+        "refunded": false,
+        "reason": "already_refunded"
+      }
+    },
+    {
+      "name": "7a. Stripe PI cree (30€)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:01.800Z",
+      "data": {
+        "id": "pi_3TW3f7RnGbDwVdTo0aZ4Q2U3",
+        "status": "succeeded"
+      }
+    },
+    {
+      "name": "7b. Appointment passe insere (date=2026-05-09)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:01.839Z",
+      "data": {
+        "id": "9ddd54ee-f234-4066-9222-14326a05e695"
+      }
+    },
+    {
+      "name": "7c. Payout programme (release_at calcule dans le passe)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:01.877Z",
+      "data": {
+        "ok": true,
+        "hold_days": 3
+      }
+    },
+    {
+      "name": "7d. release_at dans le passe",
+      "ok": false,
+      "ts": "2026-05-11T23:55:01.906Z",
+      "data": {
+        "release_at": "2026-05-12T12:00:00.000Z",
+        "now": "2026-05-11T23:55:01.906Z"
+      }
+    },
+    {
+      "name": "7e. autoNoShow simule (UPDATE appointments)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:01.925Z"
+    },
+    {
+      "name": "7f. Payout pending preserved (le commerçant garde l'acompte)",
+      "ok": true,
+      "ts": "2026-05-11T23:55:01.946Z",
+      "data": {
+        "id": "969c11af-c88f-4479-b50f-acf06d359b10",
+        "appointment_id": "9ddd54ee-f234-4066-9222-14326a05e695",
+        "amount_cents": 2850,
+        "release_at": "2026-05-12T12:00:00.000Z",
+        "status": "pending",
+        "cancelled_reason": null,
+        "stripe_payout_id": null,
+        "retry_count": 0,
+        "stripe_error_message": null
+      }
+    },
+    {
+      "name": "7g. releasePayouts() le picaurait",
+      "ok": false,
+      "ts": "2026-05-11T23:55:01.965Z"
+    },
+    {
+      "name": "8. Aucune row appointment_payouts en failed",
+      "ok": true,
+      "ts": "2026-05-11T23:55:01.985Z",
+      "data": {
+        "count": 0
+      }
+    }
+  ],
+  "summary": {
+    "total": 23,
+    "passed": 21,
+    "failed": 2
+  }
+}
