@@ -317,7 +317,7 @@ router.get('/', async (req, res) => {
     `, params);
 
     const t = totalsRows[0] || {};
-    const payload = {
+    const legacyPayload = {
       transactions,
       totals: {
         ca_total_cents:    parseInt(t.ca_total_cents || 0, 10),
@@ -338,6 +338,42 @@ router.get('/', async (req, res) => {
       },
       period: { from: range.from, to: range.to },
     };
+
+    // ── PHASE 4.4 LEDGER DUAL-READ ──────────────────────────────────────
+    // Compare totals.en_ligne_cents / en_ligne_count / refunded_cents /
+    // refunded_count avec le ledger. Si flag on, remplace ces 4 valeurs
+    // dans totals (les autres champs caisse/walkin restent legacy car
+    // le ledger ne les couvre pas).
+    const { dualRead, isDebugVisible } = require('../utils/dualRead');
+    const { getOnlineTotalsFromLedger } = require('../utils/ledgerReader');
+    const debugVisible = await isDebugVisible(req, userId);
+    const legacyFn = async () => legacyPayload;
+    const ledgerFn = async (legacy) => {
+      const ledger = await getOnlineTotalsFromLedger(pool, userId, range.from, range.to);
+      // Merge : remplace 4 champs comparables du totals legacy par le ledger,
+      // garde tout le reste (transactions[], pagination, caisse/walkin/etc.).
+      return {
+        ...legacy,
+        totals: {
+          ...legacy.totals,
+          en_ligne_cents: ledger.en_ligne_cents,
+          en_ligne_count: ledger.en_ligne_count,
+          refunded_cents: ledger.refunded_cents,
+          refunded_count: ledger.refunded_count,
+        },
+      };
+    };
+    const payload = await dualRead({
+      userId,
+      label:    'historique',
+      flagName: 'ledger_read_historique',
+      legacyFn,
+      ledgerFn,
+      tolerance: 0,
+      fields:   ['totals.en_ligne_cents', 'totals.en_ligne_count',
+                 'totals.refunded_cents', 'totals.refunded_count'],
+      debugVisible,
+    });
 
     statsCacheSet(userId, cacheKey, payload);
     res.json(payload);

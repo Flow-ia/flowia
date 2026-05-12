@@ -5,6 +5,7 @@
 import { memo } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { formatCents } from "../../utils/format";
+import { LedgerDebugBadge } from "../LedgerDebugBadge";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
@@ -62,11 +63,20 @@ function buildCards(totals, t) {
   ];
 }
 
-function HistoriqueKPIImpl({ totals }) {
+function HistoriqueKPIImpl({ totals, ledgerDebug }) {
   const { theme: t } = useTheme();
   const cards = buildCards(totals || {}, t);
   return (
-    <div style={{
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {ledgerDebug && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {"Source totals"}
+          </span>
+          <LedgerDebugBadge debug={ledgerDebug}/>
+        </div>
+      )}
+      <div style={{
       display: "grid",
       gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
       gap: 10,
@@ -97,6 +107,7 @@ function HistoriqueKPIImpl({ totals }) {
           </span>
         </div>
       ))}
+      </div>
     </div>
   );
 }

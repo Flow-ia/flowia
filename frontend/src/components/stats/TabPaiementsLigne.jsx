@@ -8,6 +8,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { Toast, useToast } from "../../components/UI";
 import { formatCents, formatCentsSign, formatPct } from "../../utils/format";
 import BarChart from "./BarChart";
+import { LedgerDebugBadge } from "../LedgerDebugBadge";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
@@ -46,6 +47,15 @@ export default function TabPaiementsLigne({ period }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <Toast msg={toast?.msg} type={toast?.type} />
+
+      {d._ledger_debug && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            {"Source stats"}
+          </span>
+          <LedgerDebugBadge debug={d._ledger_debug}/>
+        </div>
+      )}
 
       {/* HERO GRADIENT BLEU */}
       <div style={{

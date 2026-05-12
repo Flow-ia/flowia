@@ -171,7 +171,7 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
           </p>
         </div>
 
-        <HistoriqueKPI totals={totals} />
+        <HistoriqueKPI totals={totals} ledgerDebug={data?._ledger_debug} />
 
         <HistoriqueFilters
           filters={filters}

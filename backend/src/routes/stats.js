@@ -973,7 +973,7 @@ router.get('/online-payments', async (req, res) => {
       ORDER BY d.day ASC
     `, [userId]);
 
-    const payload = {
+    const legacyPayload = {
       summary: {
         gross_cents:        curGross,
         count:              s.count || 0,
@@ -1003,6 +1003,48 @@ router.get('/online-payments', async (req, res) => {
       })),
       period: { from: range.from, to: range.to },
     };
+
+    // ── PHASE 4.6 LEDGER DUAL-READ ──────────────────────────────────────
+    // Compare summary financiers + by_status.refunded. Le reste (by_status
+    // payouts_received/pending_payout/no_show_retained, policy, evolution,
+    // vs_previous_pct) reste legacy car le ledger ne couvre pas ces fields
+    // (no-show retained = appointments.cancelled_by, payouts_received =
+    // transactions.payout_received_at, evolution_30j = serie temporelle).
+    const { dualRead, isDebugVisible } = require('../utils/dualRead');
+    const { getOnlineSummaryByDateFromLedger } = require('../utils/ledgerReader');
+    const debugVisible = await isDebugVisible(req, userId);
+    const legacyFn = async () => legacyPayload;
+    const ledgerFn = async (legacy) => {
+      const led = await getOnlineSummaryByDateFromLedger(pool, userId, range.from, range.to);
+      return {
+        ...legacy,
+        summary: {
+          ...legacy.summary,
+          gross_cents:        led.gross_cents,
+          count:              led.count,
+          stripe_fee_cents:   led.stripe_fee_cents,
+          platform_fee_cents: led.platform_fee_cents,
+          net_cents:          led.net_cents,
+        },
+        by_status: {
+          ...legacy.by_status,
+          refunded: { count: led.refunded_count, amount_cents: led.refunded_cents },
+        },
+      };
+    };
+    const payload = await dualRead({
+      userId,
+      label:    'stats-online-payments',
+      flagName: 'ledger_read_performance',  // reutilise le meme flag que /performance-stats
+      legacyFn,
+      ledgerFn,
+      tolerance: 0,
+      fields:   ['summary.gross_cents', 'summary.count',
+                 'summary.stripe_fee_cents', 'summary.platform_fee_cents',
+                 'summary.net_cents',
+                 'by_status.refunded.amount_cents', 'by_status.refunded.count'],
+      debugVisible,
+    });
     statsCacheSet(userId, cacheKey, payload);
     res.json(payload);
   } catch (e) {

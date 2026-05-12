@@ -761,12 +761,24 @@ export const statsApi = {
   // Refonte v3 (Commit 2 backend) — 4 sources / 6 statuts.
   getPerformance:    (q) => request('/stats/performance' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
   getRdv:            (q) => request('/stats/rdv' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
-  getOnlinePayments: (q) => request('/stats/online-payments' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+  getOnlinePayments: (q) => {
+    // Param debug=1 propage en permanence pour le badge LedgerDebugBadge
+    // (filtre admin cote backend via feature_flags.ledger_debug_visible).
+    const usp = new URLSearchParams(q && Object.keys(q).length ? q : {});
+    usp.set('debug', '1');
+    return request('/stats/online-payments?' + usp.toString());
+  },
 };
 
 // Refonte v3 (Commit 2 backend) — historique enrichi avec 4 sources / 6 statuts.
 export const historiqueApi = {
-  list: (q) => request('/historique' + (q && Object.keys(q).length ? '?' + new URLSearchParams(q) : '')),
+  list: (q) => {
+    // Param debug=1 propage pour le badge LedgerDebugBadge (admin-only via
+    // feature_flags.ledger_debug_visible). Phase 4.4 du refactor ledger.
+    const usp = new URLSearchParams(q && Object.keys(q).length ? q : {});
+    usp.set('debug', '1');
+    return request('/historique?' + usp.toString());
+  },
 };
 
 // Refonte v3 — payouts agreges (table payouts, distincte de appointment_payouts

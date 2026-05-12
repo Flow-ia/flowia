@@ -208,8 +208,134 @@ async function getBalanceFromLedger(pool, userId) {
   };
 }
 
+/**
+ * Totaux paiements en ligne + refunds depuis le ledger, sur fenetre date.
+ * Sert au dual-read /historique et /transactions qui retournent un
+ * shape complet legacy + des sous-totaux comparables.
+ *
+ * @returns {Promise<{
+ *   en_ligne_cents:  bigint,
+ *   en_ligne_count:  int,
+ *   refunded_cents:  bigint,
+ *   refunded_count:  int
+ * }>}
+ */
+async function getOnlineTotalsFromLedger(pool, userId, dateFrom, dateTo) {
+  // dateFrom / dateTo : DATE strings 'YYYY-MM-DD' inclusives.
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='payment'),0)::bigint AS en_ligne_cents,
+      COUNT(*) FILTER (WHERE entry_type='payment') AS en_ligne_count,
+      COALESCE(ABS(SUM(amount_cents) FILTER (WHERE entry_type='refund')),0)::bigint AS refunded_cents,
+      COUNT(*) FILTER (WHERE entry_type='refund') AS refunded_count
+      FROM financial_ledger
+     WHERE user_id = $1
+       AND occurred_at::date >= $2::date
+       AND occurred_at::date <= $3::date
+  `, [userId, dateFrom, dateTo]);
+  return {
+    en_ligne_cents: parseInt(rows[0]?.en_ligne_cents || 0, 10),
+    en_ligne_count: parseInt(rows[0]?.en_ligne_count || 0, 10),
+    refunded_cents: parseInt(rows[0]?.refunded_cents || 0, 10),
+    refunded_count: parseInt(rows[0]?.refunded_count || 0, 10),
+  };
+}
+
+/**
+ * KPI paiements en ligne globaux pour le dashboard /statistiques.
+ * Periode glissante exprimee en jours (e.g. 7, 30, 90, 365).
+ * Shape inspire de /stats/online-payments mais minimaliste : ne couvre
+ * que les champs comparables financiers. Les KPI annulations / no-show
+ * restent calcules cote legacy depuis appointments.
+ */
+async function getOnlineStatsFromLedger(pool, userId, periodDays) {
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='payment'),0)::bigint AS gross_cents,
+      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='commission'),0)::bigint AS commission_signed,
+      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='stripe_fee'),0)::bigint AS stripe_fee_signed,
+      COALESCE(SUM(amount_cents) FILTER (WHERE entry_type='refund'),0)::bigint AS refund_signed,
+      COUNT(*) FILTER (WHERE entry_type='payment') AS payment_count,
+      COUNT(*) FILTER (WHERE entry_type='refund')  AS refund_count
+      FROM financial_ledger
+     WHERE user_id = $1
+       AND occurred_at >= NOW() - ($2 || ' days')::interval
+  `, [userId, String(periodDays)]);
+  const gross   = parseInt(rows[0]?.gross_cents || 0, 10);
+  const commission = Math.abs(parseInt(rows[0]?.commission_signed || 0, 10));
+  const stripeFee  = Math.abs(parseInt(rows[0]?.stripe_fee_signed || 0, 10));
+  const refund     = Math.abs(parseInt(rows[0]?.refund_signed || 0, 10));
+  return {
+    period_days:         periodDays,
+    gross_revenue_cents: gross,
+    commission_cents:    commission,
+    stripe_fee_cents:    stripeFee,
+    refund_amount_cents: refund,
+    net_revenue_cents:   gross - refund,         // net merchant brut (avant fees)
+    net_after_fees_cents: gross - refund - commission - stripeFee,
+    payment_count:       parseInt(rows[0]?.payment_count || 0, 10),
+    refund_count:        parseInt(rows[0]?.refund_count || 0, 10),
+  };
+}
+
+/**
+ * Sous-totaux comparables pour /stats/online-payments sur fenetre date.
+ * Le legacy filtre EFFECTIVE_PAYMENT_STATUS IN ('STRIPE_100','STRIPE_ACOMPTE')
+ * = exclut REFUNDED du brut. Cote ledger, equivalent = filtrer
+ * status NOT IN ('refunded','failed') sur les payment/commission/stripe_fee.
+ *
+ * @returns {Promise<{
+ *   gross_cents:        bigint,
+ *   count:              int,
+ *   stripe_fee_cents:   bigint,
+ *   platform_fee_cents: bigint,
+ *   net_cents:          bigint,
+ *   refunded_cents:     bigint,
+ *   refunded_count:     int
+ * }>}
+ */
+async function getOnlineSummaryByDateFromLedger(pool, userId, dateFrom, dateTo) {
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(SUM(amount_cents) FILTER (
+        WHERE entry_type='payment' AND status NOT IN ('refunded','failed')
+      ),0)::bigint AS gross,
+      COUNT(*) FILTER (
+        WHERE entry_type='payment' AND status NOT IN ('refunded','failed')
+      )::int AS count,
+      COALESCE(ABS(SUM(amount_cents) FILTER (
+        WHERE entry_type='stripe_fee' AND status NOT IN ('refunded','failed')
+      )),0)::bigint AS stripe_fee,
+      COALESCE(ABS(SUM(amount_cents) FILTER (
+        WHERE entry_type='commission' AND status NOT IN ('refunded','failed')
+      )),0)::bigint AS platform_fee,
+      COALESCE(ABS(SUM(amount_cents) FILTER (WHERE entry_type='refund')),0)::bigint AS refunded_cents,
+      COUNT(*) FILTER (WHERE entry_type='refund')::int AS refunded_count
+      FROM financial_ledger
+     WHERE user_id = $1
+       AND occurred_at::date >= $2::date
+       AND occurred_at::date <= $3::date
+  `, [userId, dateFrom, dateTo]);
+  const r = rows[0] || {};
+  const gross    = parseInt(r.gross || 0, 10);
+  const stripeFee = parseInt(r.stripe_fee || 0, 10);
+  const platformFee = parseInt(r.platform_fee || 0, 10);
+  return {
+    gross_cents:        gross,
+    count:              parseInt(r.count || 0, 10),
+    stripe_fee_cents:   stripeFee,
+    platform_fee_cents: platformFee,
+    net_cents:          gross - stripeFee - platformFee,
+    refunded_cents:     parseInt(r.refunded_cents || 0, 10),
+    refunded_count:     parseInt(r.refunded_count || 0, 10),
+  };
+}
+
 module.exports = {
   getPerformanceStatsFromLedger,
   getPayoutsFromLedger,
   getBalanceFromLedger,
+  getOnlineTotalsFromLedger,
+  getOnlineStatsFromLedger,
+  getOnlineSummaryByDateFromLedger,
 };

@@ -217,11 +217,14 @@ async function dualRead({
   }
 
   // Lire le ledger UNIQUEMENT si on en a besoin (flag activé ou compare-mode).
+  // ledgerFn recoit le legacy en arg pour permettre le merge partiel
+  // (cas historique / transactions / stats global ou le ledger ne couvre
+  // qu'une partie des champs : on garde les autres champs du legacy).
   let ledger = null;
   let ledgerError = null;
   if (useLedger || wantsCompare) {
     try {
-      ledger = await ledgerFn();
+      ledger = await ledgerFn(legacy);
     } catch (e) {
       ledgerError = e.message || String(e);
       bumpCounter(metrics.ledger_error, counterKey);
