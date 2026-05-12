@@ -427,6 +427,85 @@ router.patch('/:id/features', async (req, res) => {
   }
 });
 
+// ── PATCH /:id/ledger-flags — toggle phase 4 dual-read ──────────────────────
+// Body { flag: 'ledger_read_performance', enabled: true }
+// Cle separee des FEATURES standard car semantique inverse :
+//   - flag ABSENT ou false = lecture LEGACY (defaut, safe)
+//   - flag === true        = lecture LEDGER (opt-in)
+// Si erreur ledger en runtime, le dualRead fallback automatiquement sur
+// legacy -> aucune degradation UI cote merchant.
+const LEDGER_READ_FLAGS = [
+  'ledger_read_performance',
+  'ledger_read_payouts',
+  'ledger_read_balance',
+  'ledger_read_historique',
+  'ledger_read_transactions',
+  'ledger_debug_visible',     // controle l'affichage du badge debug (admin)
+  'ledger_dual_compare',      // controle la comparaison auto (default true)
+];
+
+router.patch('/:id/ledger-flags', async (req, res) => {
+  const flag    = String(req.body?.flag || '').trim();
+  const enabled = req.body?.enabled === true;
+  const reason  = String(req.body?.reason || '').trim() || 'phase 4 dual-read';
+
+  if (!LEDGER_READ_FLAGS.includes(flag)) {
+    return res.status(400).json({ error: 'Flag ledger inconnu.', valid: LEDGER_READ_FLAGS });
+  }
+  try {
+    const { rows: before } = await pool.query(
+      `SELECT id, feature_flags FROM users WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!before.length) return res.status(404).json({ error: 'Not found' });
+    const oldFlags = before[0].feature_flags || {};
+    const newFlags = { ...oldFlags, [flag]: enabled };
+    await pool.query(
+      `UPDATE users SET feature_flags = $2 WHERE id = $1`,
+      [req.params.id, newFlags]
+    );
+    // Invalide cache du dualRead pour application immediate.
+    try {
+      const { invalidateLedgerFlags } = require('../../utils/dualRead');
+      invalidateLedgerFlags(req.params.id);
+    } catch {}
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: enabled ? 'merchant.ledger_flag.enable' : 'merchant.ledger_flag.disable',
+      targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: { [flag]: oldFlags[flag] === true },
+      payloadAfter:  { [flag]: enabled, reason },
+      req,
+    });
+    return res.json({ ok: true, flag, enabled, ledger_flags: newFlags });
+  } catch (e) {
+    console.error('[admin/merchants ledger-flags patch]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ── GET /:id/ledger-flags — etat des flags phase 4 ──────────────────────────
+router.get('/:id/ledger-flags', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT feature_flags FROM users WHERE id = $1 LIMIT 1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const stored = rows[0].feature_flags || {};
+    const out = {};
+    for (const f of LEDGER_READ_FLAGS) {
+      out[f] = stored[f] === true;
+    }
+    // ledger_dual_compare default true (absent => true)
+    if (stored.ledger_dual_compare === undefined) out.ledger_dual_compare = true;
+    return res.json({ ledger_flags: out, valid: LEDGER_READ_FLAGS });
+  } catch (e) {
+    console.error('[admin/merchants ledger-flags get]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
 // ── POST /:id/slug/force — admin impose un slug et le verrouille ────────────
 // Body { slug, lock: true } — slug normalisé/validé cote serveur, unicite
 // verifiee, audit log. lock=true => le merchant ne peut plus changer son slug.

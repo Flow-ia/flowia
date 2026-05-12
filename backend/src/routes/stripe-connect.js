@@ -448,22 +448,50 @@ router.get('/performance-stats', authMiddleware, async (req, res) => {
       ? parseInt(req.query.period, 10)
       : 30;
 
-    // Revenue + refunds depuis les transactions. amount est en EUR (numeric)
-    // -> on multiplie par 100 cote SQL pour exposer en cents au frontend
-    // (coherent avec /payouts qui expose deja amount_cents).
-    const { rows: txR } = await pool.query(`
-      SELECT
-        COALESCE(SUM(CASE WHEN source='rdv_online' THEN amount ELSE 0 END), 0)::numeric AS gross_revenue,
-        COALESCE(SUM(CASE WHEN source='rdv_refund' THEN ABS(amount) ELSE 0 END), 0)::numeric AS refund_amount,
-        COUNT(*) FILTER (WHERE source='rdv_online') AS online_paid_count,
-        COUNT(*) FILTER (WHERE source='rdv_refund') AS refund_count
-        FROM transactions
-       WHERE user_id = $1
-         AND deleted_at IS NULL
-         AND date >= (CURRENT_DATE - ($2 || ' days')::interval)
-    `, [userId, String(period)]);
+    // ── LEGACY : KPI financiers depuis transactions ─────────────────────
+    const legacyFn = async () => {
+      const { rows: txR } = await pool.query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN source='rdv_online' THEN amount ELSE 0 END), 0)::numeric AS gross_revenue,
+          COALESCE(SUM(CASE WHEN source='rdv_refund' THEN ABS(amount) ELSE 0 END), 0)::numeric AS refund_amount,
+          COUNT(*) FILTER (WHERE source='rdv_online') AS online_paid_count,
+          COUNT(*) FILTER (WHERE source='rdv_refund') AS refund_count
+          FROM transactions
+         WHERE user_id = $1
+           AND deleted_at IS NULL
+           AND date >= (CURRENT_DATE - ($2 || ' days')::interval)
+      `, [userId, String(period)]);
+      const gross  = parseFloat(txR[0]?.gross_revenue || 0);
+      const refund = parseFloat(txR[0]?.refund_amount || 0);
+      return {
+        period_days:         period,
+        online_paid_count:   parseInt(txR[0]?.online_paid_count || 0, 10),
+        gross_revenue_cents: Math.round(gross * 100),
+        refund_count:        parseInt(txR[0]?.refund_count || 0, 10),
+        refund_amount_cents: Math.round(refund * 100),
+        net_revenue_cents:   Math.round((gross - refund) * 100),
+      };
+    };
 
-    // Annulations par categorie sur la periode (cancelled_at = date effective).
+    // ── LEDGER : meme shape depuis financial_ledger ─────────────────────
+    const { getPerformanceStatsFromLedger } = require('../utils/ledgerReader');
+    const ledgerFn = () => getPerformanceStatsFromLedger(pool, userId, period);
+
+    const { dualRead, isDebugVisible } = require('../utils/dualRead');
+    const debugVisible = await isDebugVisible(req, userId);
+    const financial = await dualRead({
+      userId,
+      label:      'performance-stats',
+      flagName:   'ledger_read_performance',
+      legacyFn,
+      ledgerFn,
+      tolerance:  0,
+      fields:     ['gross_revenue_cents','refund_amount_cents','net_revenue_cents',
+                   'online_paid_count','refund_count'],
+      debugVisible,
+    });
+
+    // ── KPI annulations : appointments-based (ledger ne couvre pas) ─────
     const { rows: cxR } = await pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE cancelled_by='system')   ::int AS no_show_auto,
@@ -475,16 +503,8 @@ router.get('/performance-stats', authMiddleware, async (req, res) => {
          AND cancelled_at >= NOW() - ($2 || ' days')::interval
     `, [userId, String(period)]);
 
-    const gross  = parseFloat(txR[0]?.gross_revenue || 0);
-    const refund = parseFloat(txR[0]?.refund_amount || 0);
-
     res.json({
-      period_days: period,
-      online_paid_count:        parseInt(txR[0]?.online_paid_count || 0, 10),
-      gross_revenue_cents:      Math.round(gross * 100),
-      refund_count:             parseInt(txR[0]?.refund_count || 0, 10),
-      refund_amount_cents:      Math.round(refund * 100),
-      net_revenue_cents:        Math.round((gross - refund) * 100),
+      ...financial,
       no_show_auto_count:       cxR[0]?.no_show_auto       || 0,
       cancelled_client_count:   cxR[0]?.cancelled_client   || 0,
       cancelled_merchant_count: cxR[0]?.cancelled_merchant || 0,

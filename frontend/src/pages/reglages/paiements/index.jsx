@@ -8,6 +8,7 @@ import { useTheme } from '../../../hooks/useTheme';
 import { Toast, useToast, Confirm } from '../../../components/UI';
 import { PageHeader } from '../shared';
 import { connectApi, bookingApi } from '../../../utils/api';
+import { LedgerDebugBadge } from '../../../components/LedgerDebugBadge';
 
 export default function Paiements() {
   const { theme: t } = useTheme();
@@ -431,6 +432,7 @@ function PerformancePaymentsSection({ t, showToast }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={dot('#0891b2')}/>
           <span style={panelLabel(t)}>{"Performances paiements en ligne"}</span>
+          <LedgerDebugBadge debug={d._ledger_debug}/>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {periods.map(p => (

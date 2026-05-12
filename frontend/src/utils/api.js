@@ -893,7 +893,10 @@ export const connectApi = {
   // Escrow : liste des payouts (en attente / liberes / annules) du merchant.
   getPayouts:        (status) => request(`/stripe-connect/payouts${status ? `?status=${status}` : ''}`),
   // Stats KPI paiements en ligne sur periode glissante (7/30/90 jours).
-  getPerformanceStats: (period = 30) => request(`/stripe-connect/performance-stats?period=${period}`),
+  // Param `?debug=1` propage en permanence : le backend l'expose seulement
+  // si le user a feature_flags.ledger_debug_visible === true (admin-only).
+  // Sert au badge LedgerDebugBadge qui visualise legacy vs ledger.
+  getPerformanceStats: (period = 30) => request(`/stripe-connect/performance-stats?period=${period}&debug=1`),
   // Solde live Stripe (available + pending) -- source de verite a jour
   // immediat (refunds reflechis sans attendre le cron). Complete /payouts
   // qui montre l'escrow FlowIA (release planifies sur appointment_payouts).
