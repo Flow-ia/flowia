@@ -1210,29 +1210,42 @@ function OnlinePaymentsHero({ t, showToast }) {
       </div>
 
       {/* Prochain reversement estime */}
-      {next && (
-        <div style={{
-          background: t.cardAlt, borderRadius: 8, padding: '12px 14px',
-          display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4,
-        }}>
-          <div style={{ fontSize: 11, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-            {"Prochain reversement estimé"}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: MONO }}>
-              {formatDateWeekday(next.estimated_date)}
-            </span>
-            <span style={{ fontSize: 13, color: t.muted, fontFamily: MONO }}>
-              {"~ " + formatCents(next.estimated_amount_cents || 0)}
-            </span>
-          </div>
-          {next.based_on_avg_interval_days != null && (
-            <div style={{ fontSize: 11, color: t.muted }}>
-              {"Cadence habituelle : tous les " + next.based_on_avg_interval_days + " jours."}
-            </div>
-          )}
+      <div style={{
+        background: t.cardAlt, borderRadius: 8, padding: '12px 14px',
+        display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4,
+      }}>
+        <div style={{ fontSize: 11, color: t.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+          {"Prochain reversement estimé"}
         </div>
-      )}
+        {next ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: MONO }}>
+                {formatDateWeekday(next.estimated_date)}
+              </span>
+              <span style={{ fontSize: 13, color: t.muted, fontFamily: MONO }}>
+                {"~ " + formatCents(next.estimated_amount_cents || 0)}
+              </span>
+            </div>
+            {next.count > 0 && (
+              <div style={{ fontSize: 11, color: t.muted }}>
+                {next.count === 1
+                  ? "1 rendez-vous arrive à échéance ce jour-là."
+                  : next.count + " rendez-vous arrivent à échéance ce jour-là."}
+              </div>
+            )}
+            {next.based_on_avg_interval_days != null && (
+              <div style={{ fontSize: 11, color: t.muted }}>
+                {"Cadence habituelle : tous les " + next.based_on_avg_interval_days + " jours."}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: t.muted }}>
+            {"Aucun reversement programmé."}
+          </div>
+        )}
+      </div>
 
       <div style={{
         marginTop: 10, padding: '10px 12px', borderRadius: 8,

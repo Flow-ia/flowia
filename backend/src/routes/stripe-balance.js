@@ -91,41 +91,52 @@ router.get('/balance', async (req, res) => {
       // On continue avec available=0 etc. pour ne pas casser le dashboard.
     }
 
-    // 2) Estimation prochain payout depuis les 5 derniers completes
-    // (intervalle moyen entre payouts en jours).
-    const { rows: lastPayouts } = await pool.query(`
-      SELECT requested_at, completed_at, amount_cents
-      FROM payouts
+    // 2) Estimation prochain payout = prochain release_at futur dans
+    // appointment_payouts (status='pending'). Le montant est la somme
+    // des escrows qui se libereront a cette meme date calendaire.
+    //
+    // Pourquoi pas l'historique payouts : 2 payouts manuels lances le
+    // meme jour donnent un avgGapMs ≈ 0 -> "tous les 0 jours" et date
+    // = aujourd'hui (bug observe 2026-05-12). Et l'historique ne
+    // predit pas le prochain payout : c'est le cron releasePayouts
+    // qui declenche selon release_at, donc on lit la source amont.
+    const { rows: nextRows } = await pool.query(`
+      SELECT
+        release_at::date                       AS next_date,
+        COALESCE(SUM(amount_cents), 0)::bigint AS amount_cents,
+        COUNT(*)::int                          AS count
+      FROM appointment_payouts
       WHERE user_id = $1
-        AND status = 'paid'
-        AND completed_at IS NOT NULL
-      ORDER BY requested_at DESC
-      LIMIT 5
+        AND status = 'pending'
+        AND release_at::date >= CURRENT_DATE
+      GROUP BY release_at::date
+      ORDER BY release_at::date ASC
+      LIMIT 1
     `, [userId]);
 
     let nextPayoutEstimate = null;
-    if (lastPayouts.length >= 2) {
-      const dates = lastPayouts.map(p => new Date(p.requested_at).getTime()).sort((a, b) => b - a);
-      let totalGapMs = 0;
-      for (let i = 0; i < dates.length - 1; i++) totalGapMs += dates[i] - dates[i + 1];
-      const avgGapMs   = totalGapMs / (dates.length - 1);
-      const avgGapDays = Math.round(avgGapMs / 86400000);
-      const lastReq    = new Date(dates[0]);
-      const nextEta    = new Date(lastReq.getTime() + avgGapMs);
-      const avgAmount  = Math.round(
-        lastPayouts.reduce((s, p) => s + parseInt(p.amount_cents || 0, 10), 0) / lastPayouts.length
-      );
+    if (nextRows.length) {
+      const r = nextRows[0];
       nextPayoutEstimate = {
-        estimated_date:               nextEta.toISOString().substring(0, 10),
-        estimated_amount_cents:       avgAmount,
-        based_on_avg_interval_days:   avgGapDays,
+        estimated_date:             r.next_date instanceof Date
+                                      ? r.next_date.toISOString().substring(0, 10)
+                                      : String(r.next_date).substring(0, 10),
+        estimated_amount_cents:     parseInt(r.amount_cents || 0, 10),
+        count:                      r.count || 0,
+        // Champ conserve pour back-compat front mais toujours null : la
+        // cadence "tous les N jours" n'a pas de sens quand on lit
+        // release_at (le cron tourne tous les jours et release ce qui
+        // est du). Le front masque la ligne quand c'est null.
+        based_on_avg_interval_days: null,
       };
     } else if (available > 0) {
-      // Pas d'historique : si du available_cents existe, estime pour aujourd'hui
+      // Pas d'escrow futur mais du solde disponible : on propose un
+      // payout manuel aujourd'hui pour le solde actuel.
       nextPayoutEstimate = {
-        estimated_date:               new Date().toISOString().substring(0, 10),
-        estimated_amount_cents:       available,
-        based_on_avg_interval_days:   null,
+        estimated_date:             new Date().toISOString().substring(0, 10),
+        estimated_amount_cents:     available,
+        count:                      0,
+        based_on_avg_interval_days: null,
       };
     }
 
