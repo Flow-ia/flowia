@@ -121,7 +121,7 @@ export default function TabPerformance({ period }) {
 
       {/* Section 2 — Argent a recevoir Stripe */}
       <div>
-        <SectionTitle theme={t} title="ARGENT À RECEVOIR (STRIPE)" />
+        <SectionTitle theme={t} title="REVERSEMENTS STRIPE" />
         <div style={{
           padding: "1.25rem", borderRadius: 12,
           background: t.card, border: "0.5px solid " + t.border,
@@ -139,14 +139,14 @@ export default function TabPerformance({ period }) {
               gap: 16,
               alignItems: "end",
             }}>
-              <BalanceColumn theme={t} label="Solde disponible"
+              <BalanceColumn theme={t} label="Disponible maintenant"
                              value={formatCents(balance.available_cents || 0)}
                              color="#0F6E56" sub="Prêt à reverser" />
-              <BalanceColumn theme={t} label="En transit J+3"
+              <BalanceColumn theme={t} label="En transit vers la banque"
                              value={formatCents(balance.in_transit_cents || 0)}
                              color="#BA7517"
                              sub={(balance.in_transit_cents || 0) > 0 ? "Arrivée prochaine" : "—"} />
-              <BalanceColumn theme={t} label="Prochain payout"
+              <BalanceColumn theme={t} label="Prochain reversement estimé"
                              value={balance.next_payout_estimate
                                ? "~ " + formatCents(balance.next_payout_estimate.estimated_amount_cents || 0)
                                : "—"}
