@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../lib/auth.js';
 import { getTheme, toggleTheme } from '../lib/theme.js';
@@ -7,25 +7,39 @@ export default function AppShell({ me, children, footer }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState(getTheme());
+  const menuRef = useRef(null);
+  const triggerRef = useRef(null);
 
-  // Refermer les drawers a chaque changement de route
+  // Refermer les menus a chaque changement de route
   useEffect(() => {
     setNavOpen(false);
-    setActionsOpen(false);
+    setMenuOpen(false);
   }, [location.pathname]);
 
-  // ESC ferme le drawer actions
+  // ESC + click-outside pour fermer le dropdown
   useEffect(() => {
-    if (!actionsOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') setActionsOpen(false); };
+    if (!menuOpen) return undefined;
+    function onKey(e) { if (e.key === 'Escape') setMenuOpen(false); }
+    function onPointer(e) {
+      if (!menuRef.current || !triggerRef.current) return;
+      if (menuRef.current.contains(e.target)) return;
+      if (triggerRef.current.contains(e.target)) return;
+      setMenuOpen(false);
+    }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [actionsOpen]);
+    window.addEventListener('mousedown', onPointer);
+    window.addEventListener('touchstart', onPointer, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('touchstart', onPointer);
+    };
+  }, [menuOpen]);
 
   async function onLogout() {
-    setActionsOpen(false);
+    setMenuOpen(false);
     try { await logout(); } catch { /* noop */ }
     navigate('/login', { replace: true });
   }
@@ -38,6 +52,10 @@ export default function AppShell({ me, children, footer }) {
   function onToggleTheme() {
     setTheme(toggleTheme());
   }
+
+  const initials = (me?.name || me?.email || '?')
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(s => s[0]).join('').toUpperCase() || '?';
 
   return (
     <div className="dash-wrap">
@@ -55,17 +73,54 @@ export default function AppShell({ me, children, footer }) {
         </nav>
 
         <div className="dash-meta">
-          <button
-            className="user-menu-toggle"
-            onClick={() => setActionsOpen((o) => !o)}
-            aria-label={actionsOpen ? 'Fermer le menu' : 'Ouvrir le menu utilisateur'}
-            aria-expanded={actionsOpen}
-            aria-controls="action-drawer"
-            title={me?.name || 'Menu'}
-          >
-            <UserIcon />
-            {me?.name && <span className="user-menu-name">{me.name}</span>}
-          </button>
+          <div className="user-menu-wrap">
+            <button
+              ref={triggerRef}
+              type="button"
+              className={"user-menu-trigger " + (menuOpen ? 'open' : '')}
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-controls="user-menu"
+              title={me?.name || me?.email || 'Compte'}
+            >
+              <span className="user-menu-avatar" aria-hidden="true">{initials}</span>
+              <span className="user-menu-label">{me?.name || me?.email || 'Compte'}</span>
+              <span className="user-menu-caret" aria-hidden="true"><CaretIcon /></span>
+            </button>
+
+            <div
+              ref={menuRef}
+              id="user-menu"
+              role="menu"
+              className={"user-menu-popover " + (menuOpen ? 'open' : '')}
+              aria-hidden={!menuOpen}
+            >
+              <div className="user-menu-head">
+                <div className="user-menu-head-name">{me?.name || 'Compte'}</div>
+                {me?.email && <div className="user-menu-head-email">{me.email}</div>}
+              </div>
+              <div className="user-menu-list">
+                <button role="menuitem" type="button" className="user-menu-item" onClick={onToggleTheme}>
+                  <span className="user-menu-item-icon">
+                    {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+                  </span>
+                  <span className="user-menu-item-label">
+                    {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                  </span>
+                  <span className="user-menu-item-meta">{theme === 'dark' ? 'Sombre' : 'Clair'}</span>
+                </button>
+              </div>
+              <div className="user-menu-sep" role="separator" />
+              <div className="user-menu-list">
+                <button role="menuitem" type="button" className="user-menu-item user-menu-item-danger" onClick={onLogout}>
+                  <span className="user-menu-item-icon"><LogoutIcon /></span>
+                  <span className="user-menu-item-label">{"Deconnexion"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <button
             className="nav-toggle"
             onClick={() => setNavOpen((o) => !o)}
@@ -76,50 +131,6 @@ export default function AppShell({ me, children, footer }) {
           </button>
         </div>
       </header>
-
-      {/* Drawer lateral actions utilisateur (theme + logout) */}
-      <div
-        className={"action-drawer-overlay " + (actionsOpen ? 'open' : '')}
-        onClick={() => setActionsOpen(false)}
-        aria-hidden={!actionsOpen}
-      />
-      <aside
-        id="action-drawer"
-        className={"action-drawer " + (actionsOpen ? 'open' : '')}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Menu utilisateur"
-      >
-        <div className="action-drawer-head">
-          <div className="action-drawer-title">{me?.name || 'Compte'}</div>
-          {me?.email && <div className="action-drawer-subtitle">{me.email}</div>}
-          <button
-            className="action-drawer-close"
-            onClick={() => setActionsOpen(false)}
-            aria-label="Fermer le menu"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        <div className="action-drawer-list">
-          <button className="action-drawer-item" onClick={onToggleTheme}>
-            <span className="action-drawer-item-icon">
-              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            </span>
-            <span className="action-drawer-item-label">
-              {theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-            </span>
-          </button>
-
-          <div className="action-drawer-sep" role="separator" />
-
-          <button className="action-drawer-item action-drawer-item-danger" onClick={onLogout}>
-            <span className="action-drawer-item-icon"><LogoutIcon /></span>
-            <span className="action-drawer-item-label">{"Deconnexion"}</span>
-          </button>
-        </div>
-      </aside>
 
       <main className="dash-main">{children}</main>
 
@@ -163,11 +174,10 @@ function CloseIcon() {
   );
 }
 
-function UserIcon() {
+function CaretIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9"/>
     </svg>
   );
 }
