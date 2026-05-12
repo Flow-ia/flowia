@@ -1264,6 +1264,11 @@ router.post('/webhook', async (req, res) => {
           const apptIdFromMeta  = po.metadata?.appointment_id || null;
 
           if (isEscrowRelease && apptIdFromMeta) {
+            // Filtre elargi 2026-05-12 : on accepte aussi les rows legacy
+            // qui ont source != 'rdv_online'/'rdv_refund' (ancien chemin
+            // SMS / fix race) tant que stripe_payment_intent_id est present
+            // = preuve qu'il s'agit bien d'une tx Stripe en ligne. Evite de
+            // tagger des tx caisse (source='rdv' sans PI) comme payout.
             const upd = await pool.query(
               `UPDATE transactions
                   SET payout_received_at = NOW(),
@@ -1271,7 +1276,10 @@ router.post('/webhook', async (req, res) => {
                 WHERE user_id = $1
                   AND appointment_id = $3
                   AND payout_received_at IS NULL
-                  AND source IN ('rdv_online','rdv_refund')
+                  AND (
+                    source IN ('rdv_online','rdv_refund')
+                    OR stripe_payment_intent_id IS NOT NULL
+                  )
                 RETURNING id`,
               [userId, po.id, apptIdFromMeta]
             );
@@ -1280,6 +1288,8 @@ router.post('/webhook', async (req, res) => {
               + ' tx_lies=' + upd.rowCount + ' amount=' + ((po.amount || 0) / 100) + '€');
           } else {
             // Payout manuel : heuristique cutoff sur created_at.
+            // Meme garde-fou que la branche escrow : stripe_payment_intent_id
+            // IS NOT NULL pour ne pas balayer la caisse.
             const cutoff = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
             const upd = await pool.query(
               `UPDATE transactions
@@ -1288,7 +1298,10 @@ router.post('/webhook', async (req, res) => {
                 WHERE user_id = $1
                   AND payout_received_at IS NULL
                   AND created_at <= $3
-                  AND source IN ('rdv_online','rdv_refund')
+                  AND (
+                    source IN ('rdv_online','rdv_refund')
+                    OR stripe_payment_intent_id IS NOT NULL
+                  )
                 RETURNING id`,
               [userId, po.id, cutoff]
             );
@@ -1340,6 +1353,14 @@ router.post('/webhook', async (req, res) => {
             console.error('[CONNECT WEBHOOK] ledger payout.paid fail',
               ledgerErr.message || ledgerErr);
           }
+
+          // Invalide le cache stats v3 du user : sinon /api/stats/online-payments
+          // garde l'ancien payouts_received_count en cache 5 min apres l'arrivee
+          // du webhook -> UI Stats divergerait de la UI Reversement.
+          try {
+            const { invalidateUserStatsCache } = require('../utils/paymentV3');
+            invalidateUserStatsCache(userId);
+          } catch {}
         } else {
           const failureMsg = po.failure_message || po.failure_code || 'unknown';
           console.log('[CONNECT WEBHOOK] payout.failed: stripe_payout=' + po.id

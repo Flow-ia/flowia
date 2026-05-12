@@ -910,10 +910,25 @@ router.get('/online-payments', async (req, res) => {
       : null;
 
     // by_status pour les paiements en ligne sur la periode.
+    // 2026-05-12 : payouts_received est decouple de transactions.payout_received_at
+    // (qui depend du webhook payout.paid, peut etre NULL si webhook KO) et lit
+    // directement la table `payouts` -- meme source que la page Reversement.
+    // Garantit que Stats == Reversement, pas de contradiction UI possible.
+    // Les autres KPI (pending/refunded/no_show) restent sur transactions car
+    // ils dependent du payment_status v3, pas du payout Stripe.
     const { rows: stR } = await pool.query(`
+      WITH paid_payouts AS (
+        SELECT
+          COUNT(*)::int                          AS count,
+          COALESCE(SUM(amount_cents), 0)::bigint AS cents
+        FROM payouts
+        WHERE user_id = $1
+          AND status = 'paid'
+          AND COALESCE(completed_at, requested_at)::date BETWEEN $2 AND $3
+      )
       SELECT
-        COUNT(*) FILTER (WHERE t.payout_received_at IS NOT NULL)::int                                  AS payouts_received_count,
-        COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}) FILTER (WHERE t.payout_received_at IS NOT NULL), 0)::bigint AS payouts_received_cents,
+        (SELECT count FROM paid_payouts) AS payouts_received_count,
+        (SELECT cents FROM paid_payouts) AS payouts_received_cents,
         COUNT(*) FILTER (WHERE t.payout_received_at IS NULL AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE'))::int AS pending_payout_count,
         COALESCE(SUM(${EFFECTIVE_GROSS_CENTS_SQL}) FILTER (WHERE t.payout_received_at IS NULL AND ${EFFECTIVE_PAYMENT_STATUS_SQL} IN ('STRIPE_100','STRIPE_ACOMPTE')), 0)::bigint AS pending_payout_cents,
         COUNT(*) FILTER (WHERE ${EFFECTIVE_PAYMENT_STATUS_SQL} = 'REFUNDED')::int                       AS refunded_count,
