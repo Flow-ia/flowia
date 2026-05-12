@@ -653,6 +653,75 @@ module.exports = function attachBookRoute(router) {
           // apres) ou manuellement.
           console.error('[BOOK tx insert online]', txErr.message);
         }
+
+        // ─── ESCROW + LEDGER (sync, fix race condition webhook) ──────────
+        // Le webhook payment_intent.succeeded est cense creer
+        // appointment_payouts + financial_ledger entries, mais il peut
+        // arriver AVANT cette fonction book.js (race condition reelle
+        // observee 2026-05-12). Quand ca arrive, son UPDATE WHERE
+        // stripe_payment_intent_id=$1 retourne 0 rows -> bloc escrow+ledger
+        // du webhook saute -> appointment_payouts et financial_ledger vides
+        // alors que transaction OK.
+        // On cree donc tout en sync ici. ON CONFLICT DO NOTHING +
+        // UNIQUE indexes partiels garantissent l'idempotence si le webhook
+        // arrive apres (cas normal sans race).
+        try {
+          const { scheduleAppointmentPayout } = require('../../utils/scheduleAppointmentPayout');
+          const { recordLedgerEntry } = require('../../utils/ledger');
+
+          // Recupere application_fee depuis Stripe pour separer net merchant
+          // de la commission FlowIA. Best-effort : si Stripe API fail, on
+          // calcule sans (= sur-estime net mais pas critique).
+          let appFee = 0;
+          try {
+            const Stripe = require('stripe');
+            const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+            const pi = await stripe.paymentIntents.retrieve(
+              payment_intent_id, undefined, { stripeAccount: stripeAccountId }
+            );
+            appFee = pi.application_fee_amount || 0;
+          } catch (piErr) {
+            console.error('[BOOK escrow PI retrieve]', piErr.message);
+          }
+
+          // Escrow appointment_payouts (cron releasePayouts agira plus tard).
+          const netCents = paidAmountCents - appFee;
+          if (netCents > 0) {
+            await scheduleAppointmentPayout(pool, {
+              appointmentId: appt.id,
+              paymentIntentId: payment_intent_id,
+              amountCents: netCents,
+            });
+          }
+
+          // Ledger entries : payment + commission (si > 0).
+          // stripe_fee est inseré plus tard par le webhook (ensureFeesUpdated
+          // qui a access au balance_transaction) — pas connu en sync ici.
+          const rateSnapshot = paidAmountCents > 0
+            ? Math.round((appFee / paidAmountCents) * 10000) / 100 : null;
+          const paymentRes = await recordLedgerEntry(pool, {
+            userId, appointmentId: appt.id, entryType: 'payment',
+            amountCents: paidAmountCents, status: 'pending',
+            stripePaymentIntentId: payment_intent_id,
+            commissionRateSnapshot: rateSnapshot,
+            metadata: { source: 'book_sync', is_fully_paid: !!isFullyPaid },
+          });
+          if (appFee > 0) {
+            await recordLedgerEntry(pool, {
+              userId, appointmentId: appt.id, entryType: 'commission',
+              amountCents: -appFee, status: 'pending',
+              stripePaymentIntentId: payment_intent_id,
+              commissionRateSnapshot: rateSnapshot,
+              relatedLedgerId: paymentRes.id,
+              metadata: { source: 'book_sync' },
+            });
+          }
+        } catch (escrowErr) {
+          // Best-effort : si echec, le webhook fera le job s'il arrive
+          // apres (idempotent via ON CONFLICT). On log mais on ne bloque pas
+          // la reservation (paiement Stripe deja confirme).
+          console.error('[BOOK escrow+ledger create]', escrowErr.message);
+        }
       }
 
       // Invalide le cache slots pour ce date (memCache 30s) — sinon un autre
