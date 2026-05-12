@@ -1,30 +1,19 @@
 // components/stats/TabPerformance.jsx — Onglet "Performance" (4 KPI sources
-// + bandeau Argent a recevoir Stripe + graphique evolution 30j).
+// + graphique evolution 30j). Le bandeau Reversements Stripe a ete
+// retire 2026-05-12 : il est present sur /reglages/paiements (doublon UX).
 
-import { useStatsPerformance, useStatsBalance } from "../../hooks/useStats";
+import { useStatsPerformance } from "../../hooks/useStats";
 import { useTheme } from "../../hooks/useTheme";
 import { Toast, useToast } from "../../components/UI";
-import { formatCents, formatDateLong } from "../../utils/format";
+import { formatCents } from "../../utils/format";
 import KPICard from "./KPICard";
 import LineChart from "./LineChart";
-import PayoutButton from "../payout/PayoutButton";
-
-const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
 // Icon paths (Tabler outline)
 const PATH_CREDIT_CARD = '<rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>';
 const PATH_CASH        = '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>';
 const PATH_WALK        = '<circle cx="13" cy="4" r="1"/><path d="M7 21l3 -4"/><path d="M16 21l-2 -4l-3 -3l1 -6"/><path d="M6 12l2 -3l4 -1l3 3l3 1"/>';
 const PATH_COINS       = '<circle cx="9" cy="9" r="6"/><path d="M14.65 8.93a6 6 0 1 1 -5.72 5.72"/>';
-const PATH_SEND        = '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>';
-
-const Icon = ({ paths, size = 16, color }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size}
-       fill="none" stroke="currentColor" strokeWidth={2}
-       strokeLinecap="round" strokeLinejoin="round"
-       style={{ color, flexShrink: 0 }}
-       dangerouslySetInnerHTML={{ __html: paths }} />
-);
 
 const PALETTES = {
   stripe: { bg: "#E6F1FB", border: "#B5D4F4", footerBorder: "#B5D4F4", label: "#0C447C", accent: "#185FA5", value: "#042C53" },
@@ -35,8 +24,7 @@ const PALETTES = {
 export default function TabPerformance({ period }) {
   const { theme: t } = useTheme();
   const [toast, showToast] = useToast();
-  const { data: perf,    loading: loadingPerf,    error: errPerf }    = useStatsPerformance(period);
-  const { data: balance, loading: loadingBalance } = useStatsBalance();
+  const { data: perf, loading: loadingPerf, error: errPerf } = useStatsPerformance(period);
 
   if (loadingPerf && !perf) return <Loading />;
   if (errPerf) return <ErrorBox msg={errPerf} />;
@@ -119,56 +107,7 @@ export default function TabPerformance({ period }) {
         </div>
       </div>
 
-      {/* Section 2 — Argent a recevoir Stripe */}
-      <div>
-        <SectionTitle theme={t} title="REVERSEMENTS STRIPE" />
-        <div style={{
-          padding: "1.25rem", borderRadius: 12,
-          background: t.card, border: "0.5px solid " + t.border,
-        }}>
-          {loadingBalance && !balance ? (
-            <div style={{ padding: 12, fontSize: 12, color: t.muted }}>Chargement…</div>
-          ) : !balance?.connected ? (
-            <div style={{ padding: 12, fontSize: 12, color: t.muted }}>
-              {"Stripe Connect non configuré. Activez les paiements en ligne dans Réglages."}
-            </div>
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-              gap: 16,
-              alignItems: "end",
-            }}>
-              <BalanceColumn theme={t} label="Disponible maintenant"
-                             value={formatCents(balance.available_cents || 0)}
-                             color="#0F6E56" sub="Prêt à reverser" />
-              <BalanceColumn theme={t} label="En transit vers la banque"
-                             value={formatCents(balance.in_transit_cents || 0)}
-                             color="#BA7517"
-                             sub={(balance.in_transit_cents || 0) > 0 ? "Arrivée prochaine" : "—"} />
-              <BalanceColumn theme={t} label="Prochain reversement estimé"
-                             value={balance.next_payout_estimate
-                               ? "~ " + formatCents(balance.next_payout_estimate.estimated_amount_cents || 0)
-                               : "—"}
-                             color={t.text}
-                             sub={balance.next_payout_estimate?.estimated_date
-                               ? "Estim. " + formatDateLong(balance.next_payout_estimate.estimated_date)
-                               : "Pas d'historique"} />
-              <div style={{ textAlign: "right" }}>
-                <PayoutButton
-                  variant="primary"
-                  availableAmount={balance.available_cents || 0}
-                  bankAccountLast4={balance.bank_account?.last4 || null}
-                  bankName={balance.bank_account?.bank_name || null}
-                  onSuccess={() => { try { window.location.reload(); } catch {} }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Section 3 — Evolution 30j */}
+      {/* Section 2 — Evolution 30j */}
       <div>
         <SectionTitle theme={t} title="ÉVOLUTION SUR 30 JOURS" />
         <div style={{
@@ -199,22 +138,6 @@ function SectionTitle({ theme: t, title }) {
     }}>
       {title}
     </h2>
-  );
-}
-
-function BalanceColumn({ theme: t, label, value, color, sub }) {
-  return (
-    <div>
-      <div style={{
-        fontSize: 11, fontWeight: 500, color: t.muted,
-        textTransform: "uppercase", letterSpacing: "0.04em",
-        marginBottom: 6,
-      }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 500, color, fontFamily: MONO, lineHeight: 1.1 }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 11, color: t.muted, marginTop: 4 }}>{sub}</div>}
-    </div>
   );
 }
 
