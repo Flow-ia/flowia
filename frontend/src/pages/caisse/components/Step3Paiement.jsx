@@ -30,10 +30,10 @@ const PM_CFG_SIMPLE = {
 };
 
 // Ordre d'ajout pour le bouton "+ Ajouter une méthode" : on prend la
-// première méthode encore non utilisée dans l'ordre cash → transfer →
-// card → gift_card → other. cash et transfer sont déjà pré-remplis donc
-// l'ajout pioche d'abord card.
-const ADD_PRIORITY = ['cash', 'transfer', 'card', 'gift_card', 'other'];
+// première méthode encore non utilisée dans l'ordre card → cash →
+// transfer → gift_card → other. card et cash sont déjà pré-remplis donc
+// l'ajout pioche d'abord transfer.
+const ADD_PRIORITY = ['card', 'cash', 'transfer', 'gift_card', 'other'];
 const MAX_BREAKDOWN_LINES = 4;
 
 function fmt(n) { return Number(n || 0).toFixed(2); }
@@ -229,8 +229,8 @@ export default function Step3Paiement({
   };
   const dropBreakdownAndGoSimple = () => {
     setBreakdownLines([
-      { method: 'cash',     amount: '' },
-      { method: 'transfer', amount: '' },
+      { method: 'card', amount: '' },
+      { method: 'cash', amount: '' },
     ]);
     setSplitMode(false);
   };

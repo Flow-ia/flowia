@@ -32,12 +32,12 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
   const [payMethod, setPayMethod] = useState('cash');
   const [splitMode, setSplitMode] = useState(false);
   // Commit B — multi-paiement traçable. Liste ordonnée de lignes (chaque
-  // ligne = une méthode + un montant en €). Défaut : Espèces + Virement
-  // (méthodes les plus fréquentes hors carte en France). 4 lignes max,
-  // les 2 premières non supprimables. card_online absent (réservé Stripe).
+  // ligne = une méthode + un montant en €). Défaut : CB physique + Espèces
+  // (combo le plus fréquent en salon/barbershop). 4 lignes max, les 2
+  // premières non supprimables. card_online absent (réservé Stripe).
   const [breakdownLines, setBreakdownLines] = useState([
-    { method: 'cash',     amount: '' },
-    { method: 'transfer', amount: '' },
+    { method: 'card', amount: '' },
+    { method: 'cash', amount: '' },
   ]);
 
   const [promoCode, setPromoCode] = useState('');
@@ -54,8 +54,8 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
     setStep(1); setCart([]); setEmpId('');
     setPayMethod('cash'); setSplitMode(false);
     setBreakdownLines([
-      { method: 'cash',     amount: '' },
-      { method: 'transfer', amount: '' },
+      { method: 'card', amount: '' },
+      { method: 'cash', amount: '' },
     ]);
     setPromoCode(''); setPromoData(null); setPromoErr('');
     setClientEmail(''); setClientName(''); setClientNote('');
