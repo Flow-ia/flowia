@@ -639,20 +639,74 @@ router.post('/', async (req, res) => {
         } catch (loyErr) { console.error('[FIDELITE MULTI ERR]', loyErr.message); }
       }
 
-      // Boucle d'apprentissage IA — couvre le path multi-paiement (le bloc
-      // single au-dessous fait la même chose ligne ~858). On pointe vers la
-      // 1re row du groupe ; le LEFT JOIN dans /ai-history retombe sur cette
-      // tx pour real_revenue. Cas multi : sous-estime légèrement (cf. limite
-      // documentée — amount unique vs SUM groupe), mais conv_rate reste juste.
+      // Side-effects promo + rewards + IA — mirror du bloc single ~813-868.
+      // Le multi-paiement faisait return 201 AVANT cette logique, donc :
+      //   - promo_codes.uses_count jamais incrémenté → code max_uses=1
+      //     utilisable à l'infini en multi (faille anti-fraude)
+      //   - promo_usage_logs jamais inséré → audit incomplet
+      //   - client_rewards jamais marqué 'used' → reward réutilisable
+      //   - ai_campaign_codes.used_at jamais mis à jour → IA aveugle
+      // On exécute la même séquence ici, ciblée sur la 1re row du groupe.
       if (promo_code_id && insertedRows.length) {
+        const repTxId = insertedRows[0].id;
+
+        // 1. Décrément uses_count atomique avec garde max_uses (UPDATE
+        //    conditionnel pour anti-race).
+        await pool.query(
+          `UPDATE promo_codes
+              SET uses_count = uses_count + 1,
+                  is_active  = CASE
+                    WHEN max_uses IS NOT NULL AND (uses_count + 1) >= max_uses THEN FALSE
+                    ELSE is_active
+                  END
+            WHERE id=$1 AND user_id=$2
+              AND is_active = TRUE
+              AND (max_uses IS NULL OR uses_count < max_uses)
+            RETURNING id`,
+          [promo_code_id, req.user.userId]
+        ).then(r => {
+          if (!r.rows.length) console.warn('[PROMO COUNT race MULTI] max_uses atteint concurrent', { promo_code_id });
+        }).catch(e => console.error('[PROMO COUNT MULTI ERR]', e.message));
+
+        // 2. Log traçabilité avec montant transaction (total du groupe).
+        await pool.query(
+          `INSERT INTO promo_usage_logs
+             (user_id,promo_code_id,code_snapshot,client_email,client_name,
+              transaction_id,discount_applied,transaction_amount)
+           VALUES ($1,$2,(SELECT code FROM promo_codes WHERE id=$2),$3,$4,$5,$6,$7)`,
+          [req.user.userId, promo_code_id, clientEmailNorm, client_name || null,
+           repTxId, discount_amount || 0, original_amount || amt || 0]
+        ).catch(e => console.error('[PROMO LOG MULTI ERR]', e.message));
+
+        // 3. Non-cumulabilité : marquer client_rewards 'used' (filet anti
+        //    double-utilisation si le front n'appelle pas /rewards/:id/use).
+        await pool.query(
+          `UPDATE client_rewards
+              SET status='used', used_at=NOW()
+            WHERE user_id=$1 AND promo_code_id=$2 AND status='available'`,
+          [req.user.userId, promo_code_id]
+        ).catch(() => {});
+
+        // 4. Boucle d'apprentissage IA — pointe vers la 1re row du groupe.
         await pool.query(
           `UPDATE ai_campaign_codes
               SET used_at = NOW(),
                   used_transaction_id = $1,
                   status = 'used'
             WHERE promo_code_id = $2 AND used_at IS NULL`,
-          [insertedRows[0].id, promo_code_id]
+          [repTxId, promo_code_id]
         ).catch(e => console.error('[AI CODE USE MULTI ERR]', e.message));
+      }
+
+      // Désactivation reward sélectionnée à la caisse (cas reward directe
+      // sans promo_code_id, type "service offert"). Mirror du single ~861.
+      if (client_reward_id) {
+        await pool.query(
+          `UPDATE client_rewards
+              SET status='used', used_at=NOW()
+            WHERE id=$1 AND user_id=$2 AND status='available'`,
+          [client_reward_id, req.user.userId]
+        ).catch(e => console.error('[REWARD USE MULTI ERR]', e.message));
       }
 
       return res.status(201).json({
