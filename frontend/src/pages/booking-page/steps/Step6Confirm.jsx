@@ -70,6 +70,13 @@ export function Step6Confirm({
   const [availLoad, setAvailLoad] = useState(false);
   const [selectedDiscountId, setSelectedDiscountId] = useState(null);
 
+  // Toggles UX : note et code promo sont optionnels, on les masque par
+  // defaut derriere un bouton "Ajouter…". S'ouvre automatiquement si une
+  // valeur est deja saisie (retour arriere depuis Step6, ou pre-saisie via
+  // available discount cards).
+  const [showNote,  setShowNote]  = useState(!!(notes && notes.trim()));
+  const [showPromo, setShowPromo] = useState(!!(promoCode && promoCode.trim()));
+
   // Phase 5/5 — Stripe Connect : paiement RDV en ligne (option ou requis).
   // - mandatory : payNow force a true, pas de toggle (visible seulement)
   // - optional  : toggle visible, defaut false ("Payer en boutique")
@@ -179,6 +186,7 @@ export function Step6Confirm({
     setSelectedDiscountId(d.id);
     setPromoCode(d.code);
     setPromoData(null); setPromoErr('');
+    setShowPromo(true);
     setTimeout(() => checkPromo(d.code), 0);
   };
   const cardableList = availList.filter(d => d.source === 'birthday' || d.source === 'loyalty');
@@ -391,71 +399,135 @@ export function Step6Confirm({
 
       {selSvc?.price > 0 && (
         <div style={{marginBottom:20}}>
-          <label style={{fontSize:12,fontWeight: 500,color:th.muted,display:'block',marginBottom:4}}>
-            Code promo ou parrainage (optionnel)
-          </label>
-          <p style={{fontSize:10,color:th.dim,margin:'0 0 8px',fontStyle:'italic'}}>
-            Non cumulable avec une autre réduction (anniversaire, promo…).
-          </p>
-          <div style={{display:'flex',gap:8}}>
-            <input value={promoCode}
-              onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');setSelectedDiscountId(null);}}
-              onKeyDown={e=>e.key==='Enter'&&checkPromo()}
-              placeholder="PROMO10 ou code parrainage"
-              style={{flex:1,padding:'11px 14px',borderRadius:9,outline:'none',
-                background:th.inputBg,border: `1.5px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
-                color:th.text,fontSize:13,fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}/>
-            <button onClick={checkPromo} disabled={promoLoading||!promoCode.trim()}
-              style={{padding:'11px 18px',borderRadius:9,border: `1.5px solid ${th.border}`,
-                background:th.cardAlt,color:th.text,fontSize:13,fontWeight: 500,
-                cursor:'pointer',opacity:!promoCode.trim()?0.4:1}}>
-              {promoLoading?'...':'Valider'}
+          {!showPromo ? (
+            <button type="button"
+              onClick={() => setShowPromo(true)}
+              style={{display:'flex',alignItems:'center',gap:8,
+                padding:'10px 12px',width:'100%',borderRadius:9,
+                background:th.cardAlt,border:`0.5px dashed ${th.border}`,
+                color:th.text,fontSize:13,fontWeight:500,cursor:'pointer',
+                fontFamily:'inherit',textAlign:'left'}}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round" style={{width:14,height:14,color:th.muted}}>
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              {"Ajouter un code promo ou parrainage"}
             </button>
-          </div>
-          {promoData && (
-            <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,
-              padding:'10px 14px',borderRadius:9,
-              background: promoData.source === 'referral' ? 'rgba(139,92,246,0.08)' : 'rgba(34,197,94,0.07)',
-              border: promoData.source === 'referral' ? '1px solid rgba(139,92,246,0.28)' : '1px solid rgba(34,197,94,0.2)'}}>
-              <div style={{display:'flex',flexDirection:'column',gap:2,minWidth:0}}>
-                {promoData.source === 'referral' && (
-                  <span style={{fontSize:10,fontWeight: 500,color:'#6d28d9'}}>
-                    🎁 Parrainage appliqué
-                  </span>
-                )}
-                <span style={{fontSize:12,fontWeight: 500,color: promoData.source === 'referral' ? '#5b21b6' : '#16a34a'}}>
-                  {promoData.type==='percent'?`-${promoData.value}%`:`-${promoData.discount.toFixed(2)} €`} appliqué !
-                </span>
+          ) : (
+            <>
+              <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:4}}>
+                <label style={{fontSize:12,fontWeight:500,color:th.muted}}>
+                  Code promo ou parrainage (optionnel)
+                </label>
+                <button type="button"
+                  onClick={() => {
+                    setShowPromo(false);
+                    setPromoCode(''); setPromoData(null); setPromoErr('');
+                    setSelectedDiscountId(null);
+                  }}
+                  style={{padding:0,background:'transparent',border:'none',cursor:'pointer',
+                    fontSize:11,color:th.dim,fontFamily:'inherit'}}>
+                  {"Retirer"}
+                </button>
               </div>
-              <span style={{fontSize:13,fontWeight: 500,color: promoData.source === 'referral' ? '#4c1d95' : '#166534',fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',flexShrink:0}}>
-                {((selSvc?.price||0)-promoData.discount).toFixed(2)} €
-              </span>
-            </div>
+              <p style={{fontSize:10,color:th.dim,margin:'0 0 8px',fontStyle:'italic'}}>
+                Non cumulable avec une autre réduction (anniversaire, promo…).
+              </p>
+              <div style={{display:'flex',gap:8}}>
+                <input value={promoCode}
+                  onChange={e=>{setPromoCode(e.target.value.toUpperCase());setPromoData(null);setPromoErr('');setSelectedDiscountId(null);}}
+                  onKeyDown={e=>e.key==='Enter'&&checkPromo()}
+                  placeholder="PROMO10 ou code parrainage"
+                  autoFocus
+                  style={{flex:1,padding:'11px 14px',borderRadius:9,outline:'none',
+                    background:th.inputBg,border: `1.5px solid ${promoData?(promoData.source==='referral'?'#8b5cf6':'#22c55e'):promoErr?'#ef4444':th.inputBorder}`,
+                    color:th.text,fontSize:13,fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace'}}/>
+                <button onClick={checkPromo} disabled={promoLoading||!promoCode.trim()}
+                  style={{padding:'11px 18px',borderRadius:9,border: `1.5px solid ${th.border}`,
+                    background:th.cardAlt,color:th.text,fontSize:13,fontWeight: 500,
+                    cursor:'pointer',opacity:!promoCode.trim()?0.4:1}}>
+                  {promoLoading?'...':'Valider'}
+                </button>
+              </div>
+              {promoData && (
+                <div style={{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,
+                  padding:'10px 14px',borderRadius:9,
+                  background: promoData.source === 'referral' ? 'rgba(139,92,246,0.08)' : 'rgba(34,197,94,0.07)',
+                  border: promoData.source === 'referral' ? '1px solid rgba(139,92,246,0.28)' : '1px solid rgba(34,197,94,0.2)'}}>
+                  <div style={{display:'flex',flexDirection:'column',gap:2,minWidth:0}}>
+                    {promoData.source === 'referral' && (
+                      <span style={{fontSize:10,fontWeight: 500,color:'#6d28d9'}}>
+                        🎁 Parrainage appliqué
+                      </span>
+                    )}
+                    <span style={{fontSize:12,fontWeight: 500,color: promoData.source === 'referral' ? '#5b21b6' : '#16a34a'}}>
+                      {promoData.type==='percent'?`-${promoData.value}%`:`-${promoData.discount.toFixed(2)} €`} appliqué !
+                    </span>
+                  </div>
+                  <span style={{fontSize:13,fontWeight: 500,color: promoData.source === 'referral' ? '#4c1d95' : '#166534',fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',flexShrink:0}}>
+                    {((selSvc?.price||0)-promoData.discount).toFixed(2)} €
+                  </span>
+                </div>
+              )}
+              {promoErr && <p style={{fontSize:12,color:'#ef4444',marginTop:6,fontWeight: 500}}>{promoErr}</p>}
+            </>
           )}
-          {promoErr && <p style={{fontSize:12,color:'#ef4444',marginTop:6,fontWeight: 500}}>{promoErr}</p>}
         </div>
       )}
 
       {/* Note (anciennement Step5, deplacee sous le code promo comme demande)
-          + compteur caracteres (limite 250). */}
+          + compteur caracteres (limite 250). Toggleable : bouton "Ajouter une
+          note" par defaut, textarea + bouton "Retirer" quand ouverte. */}
       <div style={{marginBottom:16}}>
-        <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:4}}>
-          <label style={{fontSize:12,fontWeight:500,color:th.muted}}>
-            {"Note (optionnelle)"}
-          </label>
-          <span style={{fontSize:10,color:th.dim,
-            fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
-            {`${(notes||'').length}/${NOTES_MAX}`}
-          </span>
-        </div>
-        <textarea value={notes || ''}
-          onChange={e=>setNotes && setNotes(e.target.value.slice(0, NOTES_MAX))}
-          rows={2} maxLength={NOTES_MAX}
-          placeholder="Demandes particulieres..."
-          style={{width:'100%',padding:'10px 12px',borderRadius:10,outline:'none',
-            background:th.inputBg,border:`1.5px solid ${th.inputBorder}`,
-            color:th.text,fontSize:13,resize:'none',lineHeight:1.4,
-            fontFamily:'inherit'}}/>
+        {!showNote ? (
+          <button type="button"
+            onClick={() => setShowNote(true)}
+            style={{display:'flex',alignItems:'center',gap:8,
+              padding:'10px 12px',width:'100%',borderRadius:9,
+              background:th.cardAlt,border:`0.5px dashed ${th.border}`,
+              color:th.text,fontSize:13,fontWeight:500,cursor:'pointer',
+              fontFamily:'inherit',textAlign:'left'}}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" style={{width:14,height:14,color:th.muted}}>
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            {"Ajouter une note"}
+          </button>
+        ) : (
+          <>
+            <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:4}}>
+              <label style={{fontSize:12,fontWeight:500,color:th.muted}}>
+                {"Note (optionnelle)"}
+              </label>
+              <div style={{display:'flex',alignItems:'baseline',gap:10}}>
+                <span style={{fontSize:10,color:th.dim,
+                  fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
+                  {`${(notes||'').length}/${NOTES_MAX}`}
+                </span>
+                <button type="button"
+                  onClick={() => {
+                    setShowNote(false);
+                    if (setNotes) setNotes('');
+                  }}
+                  style={{padding:0,background:'transparent',border:'none',cursor:'pointer',
+                    fontSize:11,color:th.dim,fontFamily:'inherit'}}>
+                  {"Retirer"}
+                </button>
+              </div>
+            </div>
+            <textarea value={notes || ''}
+              onChange={e=>setNotes && setNotes(e.target.value.slice(0, NOTES_MAX))}
+              rows={2} maxLength={NOTES_MAX}
+              placeholder="Demandes particulieres..."
+              autoFocus
+              style={{width:'100%',padding:'10px 12px',borderRadius:10,outline:'none',
+                background:th.inputBg,border:`1.5px solid ${th.inputBorder}`,
+                color:th.text,fontSize:13,resize:'none',lineHeight:1.4,
+                fontFamily:'inherit'}}/>
+          </>
+        )}
       </div>
 
       {bookErr && <p style={{fontSize:12,color:'#ef4444',marginBottom:12,fontWeight: 500}}>{bookErr}</p>}

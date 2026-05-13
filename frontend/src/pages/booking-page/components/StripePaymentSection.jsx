@@ -433,9 +433,9 @@ function SavedCardPay({
 
   return (
     <div style={{ marginTop: 12 }}>
-      <p style={{ fontSize: 11, color: th.muted, margin: '0 0 8px' }}>
-        {`Paiement avec ${savedMethodLabel}`}
-      </p>
+      {/* Pas de label "Paiement avec X" ici : la carte est deja visible et
+          selectionnee dans la liste "Moyen de paiement" en amont (Step6),
+          repeter l'info en dessous etait redondant. */}
       {errMsg && errorBlock(errMsg)}
       <button type="button" onClick={handlePay} disabled={busy} style={payButtonStyle(th, busy)}>
         {busy
@@ -490,39 +490,18 @@ export function StripePaymentSection({
   );
 }
 
-// Wrapper SavedCardPay : recupere le label de la carte (depuis l'API) pour
-// l'afficher au-dessus du bouton, sans block sur le rendu (label optionnel).
+// Wrapper SavedCardPay : en mode carte sauvegardee, la carte selectionnee
+// est deja visible dans la liste "Moyen de paiement" rendue par Step6 (avec
+// son brand + last4 + exp). Pas besoin de re-encadrer "Paiement par carte"
+// ni d'afficher "Paiement avec Visa ****4242" -- on ne montre que le bouton
+// de paiement directement.
 function SavedCardPaySectionWrapper({ th, slug, booking, selectedPmId, onPaid }) {
-  const [label, setLabel] = useState("votre carte sauvegardee");
-  useEffect(() => {
-    let cancelled = false;
-    globalClientApi.paymentMethods()
-      .then(r => {
-        if (cancelled) return;
-        const m = (r?.methods || []).find(x => x.id === selectedPmId);
-        if (m) {
-          const brand = (m.brand || 'carte').replace(/^./, c => c.toUpperCase());
-          setLabel(`${brand} ****${m.last4 || '????'}`);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [selectedPmId]);
-
   return (
-    <div style={{
-      marginTop: 16, padding: 16, borderRadius: 12,
-      background: th.card, border: `0.5px solid ${th.border}`,
-    }}>
-      <p style={{ fontSize: 12, fontWeight: 500, color: th.text, margin: '0 0 4px' }}>
-        {"Paiement par carte"}
-      </p>
-      <SavedCardPay
-        th={th} slug={slug} booking={booking}
-        selectedPmId={selectedPmId} onPaid={onPaid}
-        savedMethodLabel={label}
-      />
-    </div>
+    <SavedCardPay
+      th={th} slug={slug} booking={booking}
+      selectedPmId={selectedPmId} onPaid={onPaid}
+      savedMethodLabel=""
+    />
   );
 }
 

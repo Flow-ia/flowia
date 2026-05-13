@@ -12,7 +12,16 @@ const {
   archiveOldSlug,
 } = require('../utils/buildSlug');
 const { isValidBusinessType } = require('../utils/businessTypes');
+const { validatePhone: validatePhoneE164 } = require('../utils/phone');
 const router = express.Router();
+
+// Adresse complete obligatoire a l'inscription / onboarding. On exige au
+// minimum 6 caracteres apres trim pour eviter qu'un commercant valide en
+// tapant "x" ou "rue". La verification fine (autocompletion BAN, lat/lng)
+// reste cote frontend ; le backend bloque uniquement le clairement invalide.
+function isValidAddress(raw) {
+  return typeof raw === 'string' && raw.trim().length >= 6;
+}
 
 const SEED_CATS = [
   { name: 'Coupe homme',  type: 'revenue', icon: 'Scissors',    color: '#3b82f6' },
@@ -137,10 +146,19 @@ router.post('/register', async (req, res) => {
     // Type de commerce obligatoire pour le filtre marketplace.
     if (!isValidBusinessType(businessType))
       return res.status(400).json({ error: 'Type de commerce invalide ou manquant.', code: 'BUSINESS_TYPE_REQUIRED' });
+    // Telephone obligatoire + format valide (libphonenumber-js E.164).
+    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'FR' });
+    if (!phoneCheck.valid) {
+      const msg = phoneCheck.error === 'PHONE_REQUIRED' ? 'Numero de telephone obligatoire.' : 'Numero de telephone invalide.';
+      return res.status(400).json({ error: msg, code: phoneCheck.error });
+    }
+    // Adresse complete obligatoire.
+    if (!isValidAddress(address))
+      return res.status(400).json({ error: 'Adresse du commerce obligatoire.', code: 'ADDRESS_REQUIRED' });
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
     if (rows.length) return res.status(409).json({ error: 'Email déjà existant, merci de changer de mail et réessayer !' });
     const code = genCode();
-    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phone||'', address: address||'', country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
+    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phoneCheck.e164, address: address.trim(), country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
     // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
     res.json({ ok: true });
     setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register').catch(e => console.error('[EMAIL register]', e.message)));
@@ -163,11 +181,21 @@ router.post('/register/confirm', async (req, res) => {
       await deleteCode(`reg_${email.toLowerCase()}`);
       return res.status(400).json({ error: 'Type de commerce invalide.', code: 'BUSINESS_TYPE_REQUIRED' });
     }
+    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'FR' });
+    if (!phoneCheck.valid) {
+      await deleteCode(`reg_${email.toLowerCase()}`);
+      const msg = phoneCheck.error === 'PHONE_REQUIRED' ? 'Numero de telephone obligatoire.' : 'Numero de telephone invalide.';
+      return res.status(400).json({ error: msg, code: phoneCheck.error });
+    }
+    if (!isValidAddress(address)) {
+      await deleteCode(`reg_${email.toLowerCase()}`);
+      return res.status(400).json({ error: 'Adresse du commerce obligatoire.', code: 'ADDRESS_REQUIRED' });
+    }
     let rows;
     try {
       ({ rows } = await pool.query(
         `INSERT INTO users (email,password_hash,business_name,business_type,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,email,business_name,business_type,phone,address,country,city,postal_code`,
-        [em, hash, businessName, businessType, phone||null, address||null, country||'FR', city||null, postalCode||null, lat||null, lng||null]
+        [em, hash, businessName, businessType, phoneCheck.e164, address.trim(), country||'FR', city||null, postalCode||null, lat||null, lng||null]
       ));
     } catch (e) {
       if (e.code === '23505') {
@@ -767,11 +795,55 @@ router.put('/profile', authMiddleware, async (req, res) => {
 
     // Snapshot AVANT update pour detecter les changements pertinents.
     const { rows: beforeRows } = await pool.query(
-      'SELECT business_name, city, postal_code FROM users WHERE id=$1',
+      'SELECT business_name, phone, address, city, postal_code, country FROM users WHERE id=$1',
       [req.user.userId]
     );
     if (!beforeRows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const before = beforeRows[0];
+
+    // ─── Telephone : INTERDIT de supprimer apres inscription ──────────────
+    // Si le compte a deja un numero (cas attendu depuis register/onboarding
+    // obligatoires), on n'accepte qu'un remplacement par un autre numero
+    // valide. `phone` absent du body = pas de changement (COALESCE).
+    // `phone` present mais vide/null = tentative de suppression = 400.
+    let phoneNext = null; // null = COALESCE → garde l'existant
+    if (phone !== undefined) {
+      const raw = typeof phone === 'string' ? phone.trim() : '';
+      if (!raw) {
+        if (before.phone) {
+          return res.status(400).json({
+            error: 'Le numero de telephone est obligatoire et ne peut pas etre supprime. Vous pouvez le modifier mais pas le retirer.',
+            code: 'PHONE_REQUIRED',
+          });
+        }
+        // Pas de phone existant ET vide → on laisse passer null (COALESCE).
+      } else {
+        const phoneCheck = validatePhoneE164(raw, { required: true, defaultCountry: before.country || 'FR' });
+        if (!phoneCheck.valid) {
+          return res.status(400).json({ error: 'Numero de telephone invalide.', code: phoneCheck.error });
+        }
+        phoneNext = phoneCheck.e164;
+      }
+    }
+
+    // ─── Adresse : INTERDIT de supprimer apres inscription ────────────────
+    let addressNext = null;
+    if (address !== undefined) {
+      const raw = typeof address === 'string' ? address.trim() : '';
+      if (!raw) {
+        if (before.address) {
+          return res.status(400).json({
+            error: 'L\'adresse du commerce est obligatoire et ne peut pas etre supprimee. Vous pouvez la modifier mais pas la retirer.',
+            code: 'ADDRESS_REQUIRED',
+          });
+        }
+      } else {
+        if (!isValidAddress(raw)) {
+          return res.status(400).json({ error: 'Adresse trop courte.', code: 'ADDRESS_INVALID' });
+        }
+        addressNext = raw;
+      }
+    }
 
     const { rows } = await pool.query(
       `UPDATE users SET
@@ -783,7 +855,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
          google_business_url = COALESCE($6, google_business_url)
        WHERE id=$7
        RETURNING id, email, business_name, phone, address, city, postal_code, google_business_url`,
-      [businessName||null, phone||null, address||null,
+      [businessName||null, phoneNext, addressNext,
        city||null, postalCode||null, googleBusinessUrl||null,
        req.user.userId]
     );
@@ -1018,11 +1090,19 @@ router.get('/google/merchant/callback', async (req, res) => {
 router.post('/onboarding', authMiddleware, async (req, res) => {
   try {
     const { firstName, lastName, businessName, businessType, phone, address, city, postalCode, country, lat, lng } = req.body;
-    if (!firstName?.trim() || !lastName?.trim() || !businessName?.trim() || !phone?.trim() || !address?.trim() || !city?.trim() || !postalCode?.trim()) {
+    if (!firstName?.trim() || !lastName?.trim() || !businessName?.trim() || !city?.trim() || !postalCode?.trim()) {
       return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
     }
     if (!isValidBusinessType(businessType)) {
       return res.status(400).json({ error: 'Type de commerce invalide ou manquant.', code: 'BUSINESS_TYPE_REQUIRED' });
+    }
+    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'FR' });
+    if (!phoneCheck.valid) {
+      const msg = phoneCheck.error === 'PHONE_REQUIRED' ? 'Numero de telephone obligatoire.' : 'Numero de telephone invalide.';
+      return res.status(400).json({ error: msg, code: phoneCheck.error });
+    }
+    if (!isValidAddress(address)) {
+      return res.status(400).json({ error: 'Adresse du commerce obligatoire.', code: 'ADDRESS_REQUIRED' });
     }
 
     const { rows } = await pool.query(
@@ -1034,7 +1114,7 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
          onboarding_completed = TRUE
        WHERE id = $12
        RETURNING id, email, business_name, business_type, first_name, last_name, phone, address, city, postal_code, onboarding_completed`,
-      [firstName.trim(), lastName.trim(), businessName.trim(), phone.trim(), address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, businessType, req.user.userId]
+      [firstName.trim(), lastName.trim(), businessName.trim(), phoneCheck.e164, address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, businessType, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];

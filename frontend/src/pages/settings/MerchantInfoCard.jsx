@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { api } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
 import { I } from '../../utils/icons';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import { Button, Label } from '../../components/primitives';
 import { getBookingUrl } from '../../utils/publicUrl';
+
+// Telephone valide = parse libphonenumber-js + isValid(). Le backend refait
+// la verification (defense in depth), mais on bloque ici pour eviter
+// l'aller-retour et donner un retour immediat au commercant.
+function isValidPhone(raw, country = 'FR') {
+  try {
+    const p = parsePhoneNumberFromString(String(raw || '').trim(), country);
+    return !!p && p.isValid();
+  } catch { return false; }
+}
 
 // Carte "Informations du commerce" (nom, telephone, adresse, code postal, ville, Google Business).
 //
@@ -60,6 +71,20 @@ export default function MerchantInfoCard({ theme, showToast }) {
   // sauvegarde directement.
   const onSaveClick = () => {
     if (!form.businessName.trim()) { setProfErr('Le nom du commerce est requis.'); return; }
+    // Le telephone est obligatoire post-inscription : on l'autorise a etre
+    // modifie, jamais supprime. L'adresse suit la meme regle.
+    if (!form.phone.trim()) {
+      setProfErr('Le numero de telephone est obligatoire. Vous pouvez le modifier mais pas le supprimer.');
+      return;
+    }
+    if (!isValidPhone(form.phone, user?.country || 'FR')) {
+      setProfErr('Numero de telephone invalide.');
+      return;
+    }
+    if (!form.address.trim()) {
+      setProfErr('L\'adresse du commerce est obligatoire. Vous pouvez la modifier mais pas la supprimer.');
+      return;
+    }
     if (slugWillChange() && user?.city && user?.postalCode) {
       setConfirm(true);
     } else {
@@ -72,8 +97,8 @@ export default function MerchantInfoCard({ theme, showToast }) {
     try {
       const r = await api.updateProfile({
         businessName:      form.businessName.trim(),
-        phone:             form.phone.trim()             || undefined,
-        address:           form.address.trim()           || undefined,
+        phone:             form.phone.trim(),
+        address:           form.address.trim(),
         city:              form.city.trim()              || undefined,
         postalCode:        form.postalCode.trim()        || undefined,
         googleBusinessUrl: form.googleBusinessUrl.trim() || undefined,
@@ -158,13 +183,16 @@ export default function MerchantInfoCard({ theme, showToast }) {
                        placeholder="Nom de votre salon" style={inp}/>
               </div>
               <div>
-                <Label>Telephone</Label>
-                <input type="tel" value={form.phone}
+                <Label>Telephone *</Label>
+                <input type="tel" value={form.phone} required
                        onChange={e => setForm(f => ({ ...f, phone:e.target.value }))}
                        placeholder="06 00 00 00 00" style={inp}/>
+                <p style={{ fontSize:11, color:t.dim, margin:'4px 0 0' }}>
+                  Modifiable, mais ne peut pas etre supprime apres inscription.
+                </p>
               </div>
               <div>
-                <Label>Adresse (tapez pour rechercher)</Label>
+                <Label>Adresse * (tapez pour rechercher)</Label>
                 <AddressAutocomplete
                   value={form.address}
                   onChange={(v) => setForm(f => ({ ...f, address: v }))}

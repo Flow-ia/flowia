@@ -1139,6 +1139,32 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
           </div>
         )}
 
+        {/* ── 4 raccourcis (deplaces du bas pour acces rapide en haut de
+            page, entre les alertes Solde SMS et les KPIs CA jour). ── */}
+        <div style={{ display:'grid',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))',
+                      gap: 8 }}>
+          {[
+            { label:"Encaisser",     icon:<I.Zap style={{ width:14, height:14 }}/>,     onClick: onAdd },
+            { label:"Nouveau RDV",   icon:<I.Calendar style={{ width:14, height:14 }}/>, onClick: () => navigate('/agenda') },
+            { label:"Créer promo",   icon:<I.Gift style={{ width:14, height:14 }}/>,     onClick: () => navigate('/marketing/promotions/create') },
+            { label:"Nouveau client", icon:<I.Users style={{ width:14, height:14 }}/>,    onClick: () => navigate('/clients') },
+          ].map((s, i) => (
+            <button key={i} onClick={s.onClick}
+                    style={{ padding:'12px 14px', borderRadius: 10,
+                             border: "0.5px solid " + t.border,
+                             background: t.card, color: t.text,
+                             cursor:'pointer', fontFamily:'inherit',
+                             fontSize: 13, fontWeight: 500,
+                             display:'flex', alignItems:'center', gap: 8,
+                             transition:'background 0.15s ease' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = t.card; }}>
+              {s.icon} {s.label}
+            </button>
+          ))}
+        </div>
+
         {/* ── 4 KPIs ── */}
         <div style={{ display:'grid',
                       gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',
@@ -1432,30 +1458,6 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
           </div>
         </div>
 
-        {/* ── 4 raccourcis ── */}
-        <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))',
-                      gap: 8 }}>
-          {[
-            { label:"Encaisser",     icon:<I.Zap style={{ width:14, height:14 }}/>,     onClick: onAdd },
-            { label:"Nouveau RDV",   icon:<I.Calendar style={{ width:14, height:14 }}/>, onClick: () => navigate('/agenda') },
-            { label:"Créer promo",   icon:<I.Gift style={{ width:14, height:14 }}/>,     onClick: () => navigate('/marketing/promotions/create') },
-            { label:"Nouveau client", icon:<I.Users style={{ width:14, height:14 }}/>,    onClick: () => navigate('/clients') },
-          ].map((s, i) => (
-            <button key={i} onClick={s.onClick}
-                    style={{ padding:'12px 14px', borderRadius: 10,
-                             border: "0.5px solid " + t.border,
-                             background: t.card, color: t.text,
-                             cursor:'pointer', fontFamily:'inherit',
-                             fontSize: 13, fontWeight: 500,
-                             display:'flex', alignItems:'center', gap: 8,
-                             transition:'background 0.15s ease' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = t.card; }}>
-              {s.icon} {s.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       <NotifModal open={showNotifs} onClose={() => setShowNotifs(false)} theme={t}/>

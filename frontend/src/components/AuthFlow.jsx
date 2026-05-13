@@ -31,9 +31,14 @@ const COUNTRY_CODES = [
   { code:'CA', flag:'\u{1F1E8}\u{1F1E6}', dial:'+1',   digits:10, pattern:/^[2-9]\d{9}$/ },
 ];
 
-function validatePhone(localNumber, countryCode) {
+function validatePhone(localNumber, countryCode, opts = {}) {
+  const required = opts.required !== false;
   const cc = COUNTRY_CODES.find(c => c.code === countryCode);
-  if (!cc || !localNumber) return { valid: true, msg: '' };
+  if (!cc) return { valid: true, msg: '' };
+  if (!localNumber || !localNumber.trim()) {
+    if (required) return { valid: false, msg: 'Numero de telephone obligatoire' };
+    return { valid: true, msg: '' };
+  }
   const digits = localNumber.replace(/\s/g, '');
   if (digits.length !== cc.digits) return { valid: false, msg: `${cc.digits} chiffres requis (ex: ${cc.dial} 6 XX XX XX XX)` };
   if (!cc.pattern.test(digits)) return { valid: false, msg: 'Format invalide' };
@@ -75,7 +80,7 @@ function fieldFocus(t) {
 function PhoneField({ country, phone, onChange, label = 'Telephone', required: isReq }) {
   const { theme: t } = useTheme();
   const cc  = COUNTRY_CODES.find(c => c.code === country) || COUNTRY_CODES[0];
-  const val = validatePhone(phone, country);
+  const val = validatePhone(phone, country, { required: !!isReq });
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -769,20 +774,22 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
     if (!f.businessType) return show('Choisissez votre type de commerce.', 'err');
     if (f.pw !== f.cpw) return show('Les mots de passe ne correspondent pas.', 'err');
     if (f.pw.length < 6) return show('Mot de passe trop court (6 min).', 'err');
-    if (f.phone) {
-      const v = validatePhone(f.phone, f.country);
-      if (!v.valid) return show(v.msg, 'err');
-    }
+    // Telephone obligatoire + format valide (libphonenumber-js cote backend
+    // refait la verif). On bloque ici pour eviter l'aller-retour.
+    const phoneCheck = validatePhone(f.phone, f.country, { required: true });
+    if (!phoneCheck.valid) return show(phoneCheck.msg, 'err');
+    // Adresse obligatoire.
+    if (!f.address.trim()) return show('Adresse du commerce obligatoire.', 'err');
     const cc = COUNTRY_CODES.find(c => c.code === f.country);
-    const fullPhone = f.phone ? `${cc.dial} ${f.phone}` : '';
+    const fullPhone = `${cc.dial} ${f.phone}`;
     setLd(true);
     try {
       await api.register({
         email: f.email, password: f.pw,
         businessName: f.biz,
         businessType: f.businessType,
-        phone: fullPhone || undefined,
-        address: f.address || undefined,
+        phone: fullPhone,
+        address: f.address.trim(),
         city: f.city || undefined,
         postalCode: f.postalCode || undefined,
         country: f.country, lat: f.lat, lng: f.lng,
@@ -907,7 +914,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
             </div>
             <PhoneField country={f.country} phone={f.phone}
                         onChange={upd => setF(prev => ({ ...prev, ...upd }))}
-                        label="Telephone du commerce"/>
+                        label="Telephone du commerce" required/>
           </>
         ))}
 
