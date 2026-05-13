@@ -55,6 +55,9 @@ export default function Step3Paiement({
   const [promoLoad, setPromoLoad] = useState(false);
   // Confirm modal lorsque l'employé bascule ON→OFF avec des montants saisis.
   const [confirmDropBreakdown, setConfirmDropBreakdown] = useState(false);
+  // Note interne masquée par défaut, affichée à la demande. Si une note
+  // existe déjà (retour depuis Step4 par exemple), on l'expose d'office.
+  const [showNote, setShowNote] = useState(() => !!clientNote);
   const [pendingRefs, setPendingRefs]   = useState([]);
   const [clientRewards, setClientRewards] = useState([]);
   const [clientCredit, setClientCredit] = useState(null);
@@ -718,46 +721,63 @@ export default function Step3Paiement({
           </div>
         )}
 
-        {/* Récap total / remise / écart. */}
-        <div style={{ marginTop:4, padding:12, borderRadius:8, background: t.cardAlt,
-                      display:'flex', flexDirection:'column', gap:4, fontSize:12 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
-            <span>{"Total panier"}</span>
-            <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(total)} €</span>
+        {/* Récap remise / écart — masqué si rien à afficher (pas de remise
+            et pas de mode multi). Le « Total panier » a été retiré car
+            redondant avec le bandeau « Total à encaisser » en bas. */}
+        {(discount > 0 || splitMode) && (
+          <div style={{ marginTop:4, padding:12, borderRadius:8, background: t.cardAlt,
+                        display:'flex', flexDirection:'column', gap:4, fontSize:12 }}>
+            {discount > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', color:'#9a3412' }}>
+                <span>{"Remise"}</span>
+                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmt(discount)} €</span>
+              </div>
+            )}
+            {splitMode && (
+              <>
+                <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
+                  <span>{"Somme actuelle"}</span>
+                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(paymentsSum)} €</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between',
+                              color: sumMatches ? '#1D9E75' : '#F59E0B' }}>
+                  <strong style={{ fontWeight:500 }}>{"Restant à répartir"}</strong>
+                  <strong style={{ fontWeight:500, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    {fmt(Math.abs(paymentsDiff))} €
+                  </strong>
+                </div>
+                {splitMode && sumMatches && breakdownActive.length < 2 && (
+                  <p style={{ margin:'2px 0 0', fontSize:11, color:'#F59E0B', fontWeight:500 }}>
+                    {"Au moins 2 méthodes avec un montant > 0 sont requises."}
+                  </p>
+                )}
+              </>
+            )}
           </div>
-          {discount > 0 && (
-            <div style={{ display:'flex', justifyContent:'space-between', color:'#9a3412' }}>
-              <span>{"Remise"}</span>
-              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmt(discount)} €</span>
-            </div>
-          )}
-          {splitMode && (
-            <>
-              <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
-                <span>{"Somme actuelle"}</span>
-                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(paymentsSum)} €</span>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between',
-                            color: sumMatches ? '#1D9E75' : '#F59E0B' }}>
-                <strong style={{ fontWeight:500 }}>{"Restant à répartir"}</strong>
-                <strong style={{ fontWeight:500, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {fmt(Math.abs(paymentsDiff))} €
-                </strong>
-              </div>
-              {splitMode && sumMatches && breakdownActive.length < 2 && (
-                <p style={{ margin:'2px 0 0', fontSize:11, color:'#F59E0B', fontWeight:500 }}>
-                  {"Au moins 2 méthodes avec un montant > 0 sont requises."}
-                </p>
-              )}
-            </>
-          )}
-        </div>
+        )}
 
-        <textarea placeholder="Note interne (optionnel)"
-                  value={clientNote}
-                  onChange={e => setClientNote(e.target.value)}
-                  rows={2}
-                  style={{ ...inp, minHeight: 56, padding: 12, resize:'vertical' }}/>
+        {/* Note interne — masquée par défaut, l'employé la révèle via le
+            bouton « Ajouter une note ». Évite un champ visuel en plus quand
+            il n'y a rien à écrire (cas majoritaire). */}
+        {showNote ? (
+          <textarea placeholder="Note interne (optionnel)"
+                    value={clientNote}
+                    onChange={e => setClientNote(e.target.value)}
+                    rows={2}
+                    autoFocus
+                    style={{ ...inp, minHeight: 56, padding: 12, resize:'vertical' }}/>
+        ) : (
+          <button onClick={() => setShowNote(true)}
+                  style={{ alignSelf:'flex-start', minHeight:32,
+                           padding:'6px 10px', borderRadius:8,
+                           border:'none', background:'transparent',
+                           color: t.muted, cursor:'pointer',
+                           fontFamily:'inherit', fontSize:12, fontWeight:500,
+                           display:'inline-flex', alignItems:'center', gap:6 }}>
+            <Icon name="plus" size={12} color={t.muted}/>
+            {"Ajouter une note interne"}
+          </button>
+        )}
 
         {/* Bandeau « Total à encaisser » sticky en bas — visible d'un coup d'œil
             même quand le formulaire est long. */}
