@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FlowIA — Paiements en ligne</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.4.0/tabler-icons.min.css">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #F5F4EE;
+    --color-background-tertiary: #FAFAF7;
+    --color-text-primary: #2C2C2A;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.1);
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1F1F1D;
+      --color-background-secondary: #28282A;
+      --color-background-tertiary: #161614;
+      --color-text-primary: #F5F4EE;
+      --color-text-secondary: #B4B2A9;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0; padding: 2rem; line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .nav-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 12px;
+    margin-bottom: 1.5rem;
+  }
+  h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
+  button {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 14px;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    cursor: pointer; font-size: 13px;
+  }
+  .tabs {
+    display: flex; gap: 4px; padding: 4px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 1.5rem;
+    max-width: fit-content;
+  }
+  .tab-btn {
+    background: transparent; border: none;
+    padding: 8px 14px; color: var(--color-text-secondary);
+    border-radius: 6px;
+  }
+  .tab-btn.active {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a href="index.html" class="nav-back"><i class="ti ti-arrow-left"></i> Retour aux mockups</a>
+
+<p style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 1rem;">📍 Statistiques › Paiements en ligne</p>
+
+<div class="tabs">
+  <a href="03-stats-performance.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Performance</a>
+  <a href="04-stats-rdv.html" class="tab-btn" style="text-decoration: none; display: inline-block;">RDV</a>
+  <button class="tab-btn active">Paiements en ligne</button>
+  <a href="06-stats-payouts.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Reversements</a>
+</div>
+
+<div style="display: flex; gap: 6px; margin-bottom: 1.5rem;">
+  <button>Aujourd'hui</button>
+  <button>7 jours</button>
+  <button style="background: var(--color-text-primary); color: white; border: none;">30 jours</button>
+  <button>90 jours</button>
+</div>
+
+<div style="background: linear-gradient(135deg, #042C53, #185FA5); border-radius: var(--border-radius-lg); padding: 1.5rem; color: white; margin-bottom: 1.5rem;">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: end; margin-bottom: 1.25rem;">
+    <div>
+      <div style="font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Encaissé en ligne · 30 derniers jours</div>
+      <div style="font-size: 32px; font-weight: 500; font-family: var(--font-mono);">170,00 €</div>
+      <div style="font-size: 12px; opacity: 0.75; margin-top: 4px;">+18% vs 30 jours précédents</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Net pour vous</div>
+      <div style="font-size: 28px; font-weight: 500; font-family: var(--font-mono);">161,50 €</div>
+      <div style="font-size: 12px; opacity: 0.75; margin-top: 4px;">95% du brut</div>
+    </div>
+  </div>
+
+  <div style="background: rgba(255,255,255,0.12); border-radius: var(--border-radius-md); padding: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+    <div>
+      <div style="font-size: 11px; opacity: 0.85; margin-bottom: 4px;">Brut encaissé</div>
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">170,00 €</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; opacity: 0.85; margin-bottom: 4px;">Frais Stripe (1,4% + 25c)</div>
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono); color: #FFD9A6;">−3,40 €</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; opacity: 0.85; margin-bottom: 4px;">Commission FlowIA (3%)</div>
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono); color: #FFD9A6;">−5,10 €</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; opacity: 0.85; margin-bottom: 4px;">Net</div>
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono); color: #A6F4D5;">161,50 €</div>
+    </div>
+  </div>
+</div>
+
+<h2>Statut des paiements en ligne</h2>
+
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem;">
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #1D9E75;"></span>
+      <span style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Payouts reçus</span>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; font-family: var(--font-mono); color: #0F6E56;">8</div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">paiements arrivés en banque</div>
+    <div style="font-size: 13px; font-family: var(--font-mono); margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--color-border-tertiary);">120,00 €</div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #BA7517;"></span>
+      <span style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">En attente</span>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; font-family: var(--font-mono); color: #BA7517;">3</div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">à reverser sur compte bancaire</div>
+    <div style="font-size: 13px; font-family: var(--font-mono); margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--color-border-tertiary);">45,00 €</div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #A32D2D;"></span>
+      <span style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Remboursés</span>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; font-family: var(--font-mono); color: #A32D2D;">2</div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">annulations dans les délais</div>
+    <div style="font-size: 13px; font-family: var(--font-mono); margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--color-border-tertiary);">−25,00 €</div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #4A1B0C;"></span>
+      <span style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">No-show retenus</span>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; font-family: var(--font-mono); color: #4A1B0C;">1</div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">acompte conservé</div>
+    <div style="font-size: 13px; font-family: var(--font-mono); margin-top: 8px; padding-top: 8px; border-top: 0.5px solid var(--color-border-tertiary);">25,00 €</div>
+  </div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <i class="ti ti-percentage" style="color: #185FA5; font-size: 16px;"></i>
+      <h3 style="font-size: 14px; font-weight: 500; margin: 0;">Politique de paiement</h3>
+    </div>
+    <div style="font-size: 12px; color: var(--color-text-secondary); line-height: 1.7;">
+      <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary);">
+        <span>Mode</span><strong style="color: var(--color-text-primary);">Optionnel</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary);">
+        <span>Acompte exigé</span><strong style="color: var(--color-text-primary);">50% du prix</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary);">
+        <span>Délai annulation gratuit</span><strong style="color: var(--color-text-primary);">2h avant le RDV</strong>
+      </div>
+      <div style="display: flex; justify-content: space-between; padding: 6px 0;">
+        <span>Délai reversement banque</span><strong style="color: var(--color-text-primary);">1 à 3 jours ouvrés</strong>
+      </div>
+    </div>
+    <button style="margin-top: 12px; width: 100%; font-size: 12px;">
+      <i class="ti ti-settings" style="margin-right: 4px;"></i>Modifier ma politique
+    </button>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <i class="ti ti-trending-up" style="color: #0F6E56; font-size: 16px;"></i>
+      <h3 style="font-size: 14px; font-weight: 500; margin: 0;">Impact business</h3>
+    </div>
+    <div style="background: #E1F5EE; border-radius: var(--border-radius-md); padding: 10px 12px; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: #0F6E56; margin-bottom: 2px;">No-show réduits</div>
+      <div style="font-size: 16px; font-weight: 500; color: #04342C; font-family: var(--font-mono);">−87%</div>
+      <div style="font-size: 10px; color: #0F6E56; margin-top: 2px;">depuis activation acompte 50%</div>
+    </div>
+    <div style="background: #E6F1FB; border-radius: var(--border-radius-md); padding: 10px 12px;">
+      <div style="font-size: 11px; color: #185FA5; margin-bottom: 2px;">Revenu additionnel</div>
+      <div style="font-size: 16px; font-weight: 500; color: #042C53; font-family: var(--font-mono);">+340 €</div>
+      <div style="font-size: 10px; color: #185FA5; margin-top: 2px;">acomptes conservés sur no-show 30j</div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Évolution des paiements en ligne · 30 jours</h2>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 1.5rem;">
+  <svg viewBox="0 0 640 160" style="width: 100%; height: 160px;" role="img">
+    <line x1="40" y1="130" x2="620" y2="130" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <line x1="40" y1="90" x2="620" y2="90" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <line x1="40" y1="50" x2="620" y2="50" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <text x="32" y="134" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">0</text>
+    <text x="32" y="94" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">25</text>
+    <text x="32" y="54" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">50 €</text>
+
+    <g fill="#185FA5" opacity="0.7">
+      <rect x="40" y="115" width="14" height="15"/>
+      <rect x="60" y="105" width="14" height="25"/>
+      <rect x="80" y="120" width="14" height="10"/>
+      <rect x="100" y="100" width="14" height="30"/>
+      <rect x="120" y="95" width="14" height="35"/>
+      <rect x="140" y="110" width="14" height="20"/>
+      <rect x="160" y="85" width="14" height="45"/>
+      <rect x="180" y="100" width="14" height="30"/>
+      <rect x="200" y="90" width="14" height="40"/>
+      <rect x="220" y="105" width="14" height="25"/>
+      <rect x="240" y="80" width="14" height="50"/>
+      <rect x="260" y="95" width="14" height="35"/>
+      <rect x="280" y="85" width="14" height="45"/>
+      <rect x="300" y="75" width="14" height="55"/>
+      <rect x="320" y="90" width="14" height="40"/>
+      <rect x="340" y="80" width="14" height="50"/>
+      <rect x="360" y="70" width="14" height="60"/>
+      <rect x="380" y="85" width="14" height="45"/>
+      <rect x="400" y="65" width="14" height="65"/>
+      <rect x="420" y="75" width="14" height="55"/>
+      <rect x="440" y="60" width="14" height="70"/>
+      <rect x="460" y="80" width="14" height="50"/>
+      <rect x="480" y="55" width="14" height="75"/>
+      <rect x="500" y="70" width="14" height="60"/>
+      <rect x="520" y="50" width="14" height="80"/>
+      <rect x="540" y="65" width="14" height="65"/>
+      <rect x="560" y="55" width="14" height="75"/>
+      <rect x="580" y="60" width="14" height="70"/>
+      <rect x="600" y="45" width="14" height="85"/>
+    </g>
+
+    <text x="40" y="150" style="font-size: 10px; fill: var(--color-text-secondary);">10 avr</text>
+    <text x="200" y="150" style="font-size: 10px; fill: var(--color-text-secondary);">20 avr</text>
+    <text x="380" y="150" style="font-size: 10px; fill: var(--color-text-secondary);">30 avr</text>
+    <text x="560" y="150" style="font-size: 10px; fill: var(--color-text-secondary);">9 mai</text>
+  </svg>
+</div>
+
+</div>
+</body>
+</html>

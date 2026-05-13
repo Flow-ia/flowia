@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FlowIA — Reversements</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.4.0/tabler-icons.min.css">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #F5F4EE;
+    --color-background-tertiary: #FAFAF7;
+    --color-text-primary: #2C2C2A;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.1);
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1F1F1D;
+      --color-background-secondary: #28282A;
+      --color-background-tertiary: #161614;
+      --color-text-primary: #F5F4EE;
+      --color-text-secondary: #B4B2A9;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0; padding: 2rem; line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .nav-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 12px;
+    margin-bottom: 1.5rem;
+  }
+  h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
+  button {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 14px;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    cursor: pointer; font-size: 13px;
+  }
+  .tabs {
+    display: flex; gap: 4px; padding: 4px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 1.5rem;
+    max-width: fit-content;
+  }
+  .tab-btn {
+    background: transparent; border: none;
+    padding: 8px 14px; color: var(--color-text-secondary);
+    border-radius: 6px;
+  }
+  .tab-btn.active {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a href="index.html" class="nav-back"><i class="ti ti-arrow-left"></i> Retour aux mockups</a>
+
+<p style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 1rem;">📍 Statistiques › Reversements</p>
+
+<div class="tabs">
+  <a href="03-stats-performance.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Performance</a>
+  <a href="04-stats-rdv.html" class="tab-btn" style="text-decoration: none; display: inline-block;">RDV</a>
+  <a href="05-stats-online-payments.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Paiements en ligne</a>
+  <button class="tab-btn active">Reversements</button>
+</div>
+
+<div style="background: var(--color-background-primary); border: 2px solid #1D9E75; border-radius: var(--border-radius-lg); padding: 1.5rem; margin-bottom: 1.5rem;">
+  <div style="display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; margin-bottom: 12px;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: #E1F5EE; display: flex; align-items: center; justify-content: center;">
+          <i class="ti ti-cash" style="color: #1D9E75; font-size: 18px;"></i>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: #0F6E56; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">À reverser maintenant</div>
+          <div style="font-size: 11px; color: var(--color-text-secondary);">Solde Stripe disponible</div>
+        </div>
+      </div>
+      <div style="font-size: 32px; font-weight: 500; color: #04342C; font-family: var(--font-mono); margin-bottom: 6px;">127,50 €</div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">
+        Sur compte bancaire <strong style="color: var(--color-text-primary);">****1234 (Crédit Agricole)</strong> · arrivée sous 1-3 jours ouvrés
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <button style="background: #1D9E75; color: white; border: none; font-weight: 500; padding: 12px 20px; font-size: 14px;">
+        <i class="ti ti-send" style="margin-right: 6px;"></i>Reverser maintenant
+      </button>
+      <button style="font-size: 12px; padding: 8px 12px;">
+        <i class="ti ti-external-link" style="margin-right: 4px;"></i>Voir sur Stripe
+      </button>
+    </div>
+  </div>
+
+  <div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary);">
+    <i class="ti ti-info-circle" style="color: #185FA5;"></i>
+    <span><strong style="color: var(--color-text-primary);">Mode manuel activé.</strong> Vous reversez vous-même quand vous voulez. Pour un reversement automatique quotidien, configurez-le sur votre dashboard Stripe.</span>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 1.5rem;">
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <i class="ti ti-clock-hour-3" style="color: #BA7517; font-size: 16px;"></i>
+      <h3 style="font-size: 14px; font-weight: 500; margin: 0;">Prochain reversement estimé</h3>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; font-family: var(--font-mono); margin-bottom: 4px;">Vendredi 16 mai</div>
+    <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 14px; font-family: var(--font-mono);">~ 162,75 €</div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; padding-top: 12px; border-top: 0.5px solid var(--color-border-tertiary);">
+      Vous reversez généralement tous les <strong style="color: var(--color-text-primary);">7 jours</strong> selon votre historique.
+    </div>
+    <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 11px;">
+      <span style="color: var(--color-text-secondary);">Solde actuel</span>
+      <span style="font-family: var(--font-mono); color: var(--color-text-primary);">127,50 €</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 11px;">
+      <span style="color: var(--color-text-secondary);">+ paiements futurs (estim.)</span>
+      <span style="font-family: var(--font-mono); color: var(--color-text-primary);">+ 35,25 €</span>
+    </div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <i class="ti ti-wallet" style="color: #0F6E56; font-size: 16px;"></i>
+      <h3 style="font-size: 14px; font-weight: 500; margin: 0;">Total reversé · 30 jours</h3>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; font-family: var(--font-mono); margin-bottom: 4px;">270,00 €</div>
+    <div style="font-size: 13px; color: var(--color-text-secondary); margin-bottom: 14px;">Sur 4 reversements</div>
+    <div style="height: 6px; background: var(--color-background-secondary); border-radius: 3px; overflow: hidden; margin-bottom: 12px;">
+      <div style="width: 65%; height: 100%; background: linear-gradient(90deg, #1D9E75, #0F6E56);"></div>
+    </div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); padding-top: 12px; border-top: 0.5px solid var(--color-border-tertiary);">
+      Moyenne · <strong style="color: var(--color-text-primary); font-family: var(--font-mono);">67,50 €</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
+      <span style="color: var(--color-text-secondary);">Min <strong style="color: var(--color-text-primary); font-family: var(--font-mono);">60 €</strong></span>
+      <span style="color: var(--color-text-secondary);">Max <strong style="color: var(--color-text-primary); font-family: var(--font-mono);">125 €</strong></span>
+    </div>
+  </div>
+
+</div>
+
+<h2>Historique des reversements</h2>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; margin-bottom: 1.5rem;">
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #E1F5EE; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-arrow-down" style="color: #0F6E56; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="font-size: 14px; font-weight: 500;">Reversement du 2 mai 2026</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">✓ Reçu</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">
+        Compte ****1234 · arrivé le 5 mai · 6 paiements groupés
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">85,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">par John</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #E1F5EE; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-arrow-down" style="color: #0F6E56; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="font-size: 14px; font-weight: 500;">Reversement du 25 avril 2026</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">✓ Reçu</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">
+        Compte ****1234 · arrivé le 28 avril · 8 paiements groupés
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">125,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">par John</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #E1F5EE; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-arrow-down" style="color: #0F6E56; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="font-size: 14px; font-weight: 500;">Reversement du 18 avril 2026</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">✓ Reçu</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">
+        Compte ****1234 · arrivé le 21 avril · 4 paiements groupés
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">60,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">par Pascal</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; display: flex; align-items: center; gap: 14px; opacity: 0.6;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: var(--color-background-secondary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-dots" style="color: var(--color-text-secondary); font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; font-size: 13px; color: var(--color-text-secondary);">1 reversement plus ancien…</div>
+    <button style="font-size: 12px; padding: 6px 12px;">Voir tout</button>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FlowIA — Statistiques RDV</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.4.0/tabler-icons.min.css">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #F5F4EE;
+    --color-background-tertiary: #FAFAF7;
+    --color-text-primary: #2C2C2A;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.1);
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1F1F1D;
+      --color-background-secondary: #28282A;
+      --color-background-tertiary: #161614;
+      --color-text-primary: #F5F4EE;
+      --color-text-secondary: #B4B2A9;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0; padding: 2rem; line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .nav-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 12px;
+    margin-bottom: 1.5rem;
+  }
+  h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
+  button {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 14px;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    cursor: pointer; font-size: 13px;
+  }
+  .tabs {
+    display: flex; gap: 4px; padding: 4px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 1.5rem;
+    max-width: fit-content;
+  }
+  .tab-btn {
+    background: transparent; border: none;
+    padding: 8px 14px; color: var(--color-text-secondary);
+    border-radius: 6px;
+  }
+  .tab-btn.active {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a href="index.html" class="nav-back"><i class="ti ti-arrow-left"></i> Retour aux mockups</a>
+
+<p style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 1rem;">📍 Statistiques › RDV</p>
+
+<div class="tabs">
+  <a href="03-stats-performance.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Performance</a>
+  <button class="tab-btn active">RDV</button>
+  <a href="05-stats-online-payments.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Paiements en ligne</a>
+  <a href="06-stats-payouts.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Reversements</a>
+</div>
+
+<div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px;">
+  <i class="ti ti-info-circle" style="color: #185FA5; font-size: 18px; flex-shrink: 0;"></i>
+  <div style="font-size: 12px; color: var(--color-text-secondary); line-height: 1.5;">
+    Cette page liste vos <strong>rendez-vous</strong> (avec ou sans paiement). Les <strong>walk-in sans RDV</strong> ne sont pas inclus ici — ils sont visibles dans <a href="02-historique.html" style="color: #185FA5; text-decoration: none;">l'historique des transactions</a>.
+  </div>
+</div>
+
+<h2>RDV par source</h2>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem;">
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+      <div style="width: 36px; height: 36px; border-radius: 10px; background: #E6F1FB; display: flex; align-items: center; justify-content: center;">
+        <i class="ti ti-world" style="color: #185FA5; font-size: 18px;"></i>
+      </div>
+      <div>
+        <div style="font-size: 14px; font-weight: 500;">Booking en ligne</div>
+        <div style="font-size: 11px; color: var(--color-text-secondary);">Page publique flowiapro.com/book/...</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+      <span style="font-size: 26px; font-weight: 500; font-family: var(--font-mono);">18</span>
+      <span style="font-size: 13px; color: var(--color-text-secondary);">RDV · 69%</span>
+    </div>
+    <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 14px;">450 € de CA potentiel</div>
+    <div style="border-top: 0.5px solid var(--color-border-tertiary); padding-top: 12px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+        <span style="color: var(--color-text-secondary);"><i class="ti ti-credit-card" style="color: #185FA5; margin-right: 4px;"></i>Stripe 100%</span>
+        <span style="font-family: var(--font-mono); font-weight: 500;">5</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+        <span style="color: var(--color-text-secondary);"><i class="ti ti-credit-card-pay" style="color: #BA7517; margin-right: 4px;"></i>Acompte Stripe</span>
+        <span style="font-family: var(--font-mono); font-weight: 500;">6</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+        <span style="color: var(--color-text-secondary);"><i class="ti ti-cash-off" style="color: var(--color-text-secondary); margin-right: 4px;"></i>Pas payé (à encaisser)</span>
+        <span style="font-family: var(--font-mono); font-weight: 500;">7</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+      <div style="width: 36px; height: 36px; border-radius: 10px; background: #EEEDFE; display: flex; align-items: center; justify-content: center;">
+        <i class="ti ti-phone" style="color: #534AB7; font-size: 18px;"></i>
+      </div>
+      <div>
+        <div style="font-size: 14px; font-weight: 500;">RDV téléphone / agenda</div>
+        <div style="font-size: 11px; color: var(--color-text-secondary);">Créé par un employé directement</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
+      <span style="font-size: 26px; font-weight: 500; font-family: var(--font-mono);">8</span>
+      <span style="font-size: 13px; color: var(--color-text-secondary);">RDV · 31%</span>
+    </div>
+    <div style="font-size: 12px; color: var(--color-text-secondary); margin-bottom: 14px;">240 € à encaisser sur place</div>
+    <div style="border-top: 0.5px solid var(--color-border-tertiary); padding-top: 12px;">
+      <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+        <span style="color: var(--color-text-secondary);"><i class="ti ti-user" style="color: #534AB7; margin-right: 4px;"></i>Pris par John</span>
+        <span style="font-family: var(--font-mono); font-weight: 500;">3</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+        <span style="color: var(--color-text-secondary);"><i class="ti ti-user" style="color: #534AB7; margin-right: 4px;"></i>Pris par Pascal</span>
+        <span style="font-family: var(--font-mono); font-weight: 500;">3</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+        <span style="color: var(--color-text-secondary);"><i class="ti ti-user" style="color: #534AB7; margin-right: 4px;"></i>Pris par Michel</span>
+        <span style="font-family: var(--font-mono); font-weight: 500;">2</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2>État de paiement (26 RDV)</h2>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 1.5rem;">
+
+  <div style="display: flex; height: 36px; border-radius: var(--border-radius-md); overflow: hidden; margin-bottom: 14px;">
+    <div style="background: #185FA5; width: 19%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 500;">5</div>
+    <div style="background: #BA7517; width: 23%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 500;">6</div>
+    <div style="background: #888780; width: 12%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 500;">3</div>
+    <div style="background: #534AB7; width: 31%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 500;">8</div>
+    <div style="background: #A32D2D; width: 8%; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 500;">2</div>
+    <div style="background: #4A1B0C; width: 4%; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 500;">1</div>
+    <div style="background: #888780; width: 4%; opacity: 0.4; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 500;">1</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; font-size: 12px;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="width: 10px; height: 10px; border-radius: 2px; background: #185FA5;"></span>
+        <strong>Payés Stripe 100%</strong>
+        <span style="margin-left: auto; font-family: var(--font-mono); color: var(--color-text-secondary);">5 RDV · 150 €</span>
+      </div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); padding-left: 16px;">Sécurisés sur Stripe · zéro risque no-show</div>
+    </div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="width: 10px; height: 10px; border-radius: 2px; background: #BA7517;"></span>
+        <strong>Acompte Stripe</strong>
+        <span style="margin-left: auto; font-family: var(--font-mono); color: var(--color-text-secondary);">6 RDV · 90 €</span>
+      </div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); padding-left: 16px;">90 € en garantie · 90 € restants caisse</div>
+    </div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="width: 10px; height: 10px; border-radius: 2px; background: #888780;"></span>
+        <strong>Pas payé (à venir)</strong>
+        <span style="margin-left: auto; font-family: var(--font-mono); color: var(--color-text-secondary);">3 RDV · 90 €</span>
+      </div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); padding-left: 16px;">À encaisser le jour du RDV · risque no-show</div>
+    </div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="width: 10px; height: 10px; border-radius: 2px; background: #534AB7;"></span>
+        <strong>Encaissé en caisse</strong>
+        <span style="margin-left: auto; font-family: var(--font-mono); color: var(--color-text-secondary);">8 RDV · 240 €</span>
+      </div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); padding-left: 16px;">RDV honoré + payé sur place</div>
+    </div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="width: 10px; height: 10px; border-radius: 2px; background: #A32D2D;"></span>
+        <strong>Annulés / remboursés</strong>
+        <span style="margin-left: auto; font-family: var(--font-mono); color: var(--color-text-secondary);">2 RDV</span>
+      </div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); padding-left: 16px;">Annulation client dans les délais</div>
+    </div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="width: 10px; height: 10px; border-radius: 2px; background: #4A1B0C;"></span>
+        <strong>No-show retenu</strong>
+        <span style="margin-left: auto; font-family: var(--font-mono); color: var(--color-text-secondary);">1 RDV · 25 €</span>
+      </div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); padding-left: 16px;">Acompte conservé (politique no-show)</div>
+    </div>
+  </div>
+</div>
+
+<h2>Performance par employé</h2>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; margin-bottom: 1.5rem;">
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 36px; height: 36px; border-radius: 50%; background: #EEEDFE; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #3C3489;">JN</div>
+    <div style="flex: 1;">
+      <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">John</div>
+      <div style="display: flex; gap: 14px; font-size: 11px; color: var(--color-text-secondary);">
+        <span><i class="ti ti-calendar"></i> 12 RDV honorés</span>
+        <span><i class="ti ti-credit-card"></i> 8 en ligne</span>
+        <span><i class="ti ti-cash"></i> 4 caisse</span>
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">300,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">CA généré</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 36px; height: 36px; border-radius: 50%; background: #E1F5EE; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #0F6E56;">PS</div>
+    <div style="flex: 1;">
+      <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Pascal</div>
+      <div style="display: flex; gap: 14px; font-size: 11px; color: var(--color-text-secondary);">
+        <span><i class="ti ti-calendar"></i> 9 RDV honorés</span>
+        <span><i class="ti ti-credit-card"></i> 5 en ligne</span>
+        <span><i class="ti ti-cash"></i> 4 caisse</span>
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">225,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">CA généré</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; display: flex; align-items: center; gap: 14px;">
+    <div style="width: 36px; height: 36px; border-radius: 50%; background: #FAECE7; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #993C1D;">MC</div>
+    <div style="flex: 1;">
+      <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Michel</div>
+      <div style="display: flex; gap: 14px; font-size: 11px; color: var(--color-text-secondary);">
+        <span><i class="ti ti-calendar"></i> 8 RDV honorés</span>
+        <span><i class="ti ti-credit-card"></i> 5 en ligne</span>
+        <span><i class="ti ti-cash"></i> 3 caisse</span>
+      </div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; font-family: var(--font-mono);">200,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">CA généré</div>
+    </div>
+  </div>
+
+</div>
+
+<div style="background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+  <i class="ti ti-bulb" style="color: #BA7517; font-size: 20px; flex-shrink: 0;"></i>
+  <div style="font-size: 12px; color: var(--color-text-secondary); line-height: 1.5;">
+    <strong style="color: var(--color-text-primary);">Conseil :</strong> les RDV avec acompte sont honorés à <strong>91%</strong> vs <strong>73%</strong> sans paiement. Activer "Paiement obligatoire" pourrait augmenter votre taux d'honneur de 18 points.
+  </div>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FlowIA — Historique</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.4.0/tabler-icons.min.css">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #F5F4EE;
+    --color-background-tertiary: #FAFAF7;
+    --color-text-primary: #2C2C2A;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.1);
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1F1F1D;
+      --color-background-secondary: #28282A;
+      --color-background-tertiary: #161614;
+      --color-text-primary: #F5F4EE;
+      --color-text-secondary: #B4B2A9;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 2rem;
+    line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .nav-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 12px;
+    margin-bottom: 1.5rem;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  .page-subtitle { font-size: 13px; color: var(--color-text-secondary); margin: 0 0 1.5rem; }
+  select, button {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 12px;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a href="index.html" class="nav-back"><i class="ti ti-arrow-left"></i> Retour aux mockups</a>
+
+<p style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 1rem;">📍 Historique — toutes transactions, y compris walk-in</p>
+
+<h1>Historique des transactions</h1>
+<p class="page-subtitle">Tous les flux d'argent : paiements en ligne, encaissements caisse, walk-in et remboursements</p>
+
+<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem;">
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 14px;">
+    <div style="font-size: 10px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">CA TOTAL</div>
+    <div style="font-size: 20px; font-weight: 500; font-family: var(--font-mono);">315,00 €</div>
+    <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 4px;">19 transactions</div>
+  </div>
+  <div style="background: #E6F1FB; border: 0.5px solid #B5D4F4; border-radius: var(--border-radius-md); padding: 14px;">
+    <div style="font-size: 10px; color: #0C447C; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">EN LIGNE</div>
+    <div style="font-size: 20px; font-weight: 500; font-family: var(--font-mono); color: #042C53;">170,00 €</div>
+    <div style="font-size: 10px; color: #185FA5; margin-top: 4px;">11 paiements</div>
+  </div>
+  <div style="background: #E1F5EE; border: 0.5px solid #9FE1CB; border-radius: var(--border-radius-md); padding: 14px;">
+    <div style="font-size: 10px; color: #085041; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">CAISSE RDV</div>
+    <div style="font-size: 20px; font-weight: 500; font-family: var(--font-mono); color: #04342C;">85,00 €</div>
+    <div style="font-size: 10px; color: #0F6E56; margin-top: 4px;">5 encaissements</div>
+  </div>
+  <div style="background: #FAEEDA; border: 0.5px solid #FAC775; border-radius: var(--border-radius-md); padding: 14px;">
+    <div style="font-size: 10px; color: #854F0B; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">WALK-IN</div>
+    <div style="font-size: 20px; font-weight: 500; font-family: var(--font-mono); color: #412402;">60,00 €</div>
+    <div style="font-size: 10px; color: #BA7517; margin-top: 4px;">3 sans RDV</div>
+  </div>
+  <div style="background: #FCEBEB; border: 0.5px solid #F7C1C1; border-radius: var(--border-radius-md); padding: 14px;">
+    <div style="font-size: 10px; color: #791F1F; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">REMBOURSÉS</div>
+    <div style="font-size: 20px; font-weight: 500; font-family: var(--font-mono); color: #501313;">−50,00 €</div>
+    <div style="font-size: 10px; color: #A32D2D; margin-top: 4px;">2 remboursés</div>
+  </div>
+</div>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px; margin-bottom: 1rem;">
+  <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+    <div>
+      <label style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Période</label>
+      <select><option>Aujourd'hui</option><option>Cette semaine</option><option>Ce mois</option></select>
+    </div>
+    <div>
+      <label style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Type</label>
+      <select><option>Tous types</option><option>Stripe (en ligne)</option><option>Caisse RDV</option><option>Walk-in (sans RDV)</option><option>Remboursements</option></select>
+    </div>
+    <div>
+      <label style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Mode</label>
+      <select><option>Tous</option><option>Stripe</option><option>Espèces</option><option>Carte</option></select>
+    </div>
+    <div>
+      <label style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Source RDV</label>
+      <select><option>Toutes</option><option>Booking en ligne</option><option>RDV téléphone</option><option>Walk-in (sans RDV)</option></select>
+    </div>
+    <div>
+      <label style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Employé</label>
+      <select><option>Tous</option><option>John</option><option>Michel</option><option>Pascal</option></select>
+    </div>
+  </div>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+  <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0;">19 transactions · 9 mai 2026</p>
+  <div style="display: flex; gap: 8px;">
+    <button style="width: auto; font-size: 12px; padding: 6px 12px;"><i class="ti ti-download" style="margin-right: 4px;"></i>Exporter CSV</button>
+    <button style="width: auto; font-size: 12px; padding: 6px 12px;"><i class="ti ti-file-text" style="margin-right: 4px;"></i>Exporter PDF</button>
+  </div>
+</div>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden;">
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #E6F1FB; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-credit-card" style="color: #185FA5; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: 500;">Coupe Homme — Karim Dupont</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E6F1FB; color: #0C447C; font-weight: 500;">Stripe 100%</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--color-background-secondary); color: var(--color-text-secondary); font-weight: 500;">Booking en ligne</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">Payout reçu</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">9 mai · 14:30 · John · brut 30 € · frais Stripe −1,18 € · commission FlowIA −0,90 €</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; color: #0F6E56; font-family: var(--font-mono);">+30,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Net : 27,92 €</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #FAEEDA; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-credit-card-pay" style="color: #BA7517; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: 500;">Acompte 50% — Sophie Bernard</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #FAEEDA; color: #854F0B; font-weight: 500;">Acompte Stripe</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--color-background-secondary); color: var(--color-text-secondary); font-weight: 500;">Booking en ligne</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">8 mai · 10:00 · John · acompte 25 € · reste 25 € à encaisser au RDV (15:30 le 9 mai)</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; color: #BA7517; font-family: var(--font-mono);">+25,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">/50,00 € total</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #E1F5EE; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-cash" style="color: #0F6E56; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: 500;">Coupe + Barbe — Marc Lefèvre</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">Espèces</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #EEEDFE; color: #3C3489; font-weight: 500;">RDV téléphone (par John)</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">9 mai · 09:30 · Pascal · encaissé en caisse · pas de frais</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; color: #0F6E56; font-family: var(--font-mono);">+45,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Net : 45,00 €</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px; background: rgba(250, 238, 218, 0.3);">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #FAEEDA; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-walk" style="color: #BA7517; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: 500;">Coupe Homme — Antoine Petit</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">Carte locale</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #FAEEDA; color: #854F0B; font-weight: 500;">⚡ Walk-in (sans RDV)</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">9 mai · 11:30 · Michel · client passé directement · aucun RDV créé · vente caisse seule</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; color: #0F6E56; font-family: var(--font-mono);">+25,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Net : 25,00 €</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px; background: rgba(250, 238, 218, 0.3);">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #FAEEDA; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-walk" style="color: #BA7517; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: 500;">Vente produit — client anonyme</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #E1F5EE; color: #085041; font-weight: 500;">Espèces</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #FAEEDA; color: #854F0B; font-weight: 500;">⚡ Walk-in (sans RDV)</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">9 mai · 12:15 · John · achat de cire coiffante · sans fiche client</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; color: #0F6E56; font-family: var(--font-mono);">+15,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Net : 15,00 €</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; align-items: center; gap: 14px;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: #FCEBEB; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-arrow-back-up" style="color: #A32D2D; font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; min-width: 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+        <span style="font-size: 14px; font-weight: 500;">Remboursement — Marie Leroy</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #FCEBEB; color: #791F1F; font-weight: 500;">Stripe remboursé</span>
+        <span style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--color-background-secondary); color: var(--color-text-secondary); font-weight: 500;">Booking en ligne</span>
+      </div>
+      <div style="font-size: 12px; color: var(--color-text-secondary);">8 mai · 16:00 · Pascal · annulation client dans les délais (>2h avant) · commission FlowIA rendue</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 16px; font-weight: 500; color: #A32D2D; font-family: var(--font-mono);">−25,00 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Impact net : 0 €</div>
+    </div>
+  </div>
+
+  <div style="padding: 14px 16px; display: flex; align-items: center; gap: 14px; opacity: 0.6;">
+    <div style="width: 40px; height: 40px; border-radius: 10px; background: var(--color-background-secondary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      <i class="ti ti-dots" style="color: var(--color-text-secondary); font-size: 20px;"></i>
+    </div>
+    <div style="flex: 1; font-size: 13px; color: var(--color-text-secondary);">13 transactions supplémentaires…</div>
+    <button style="width: auto; font-size: 12px; padding: 6px 12px;">Voir tout</button>
+  </div>
+
+</div>
+
+<div style="margin-top: 1.5rem; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 14px; font-size: 12px; color: var(--color-text-secondary);">
+  <p style="margin: 0 0 8px; font-weight: 500; color: var(--color-text-primary);">Légende des types de transaction</p>
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+    <div><i class="ti ti-credit-card" style="color: #185FA5; margin-right: 6px;"></i><strong style="color: var(--color-text-primary);">Stripe 100%</strong> · paiement en ligne intégral</div>
+    <div><i class="ti ti-credit-card-pay" style="color: #BA7517; margin-right: 6px;"></i><strong style="color: var(--color-text-primary);">Acompte Stripe</strong> · acompte en ligne, reste caisse</div>
+    <div><i class="ti ti-cash" style="color: #0F6E56; margin-right: 6px;"></i><strong style="color: var(--color-text-primary);">Caisse RDV</strong> · encaissement après prestation</div>
+    <div><i class="ti ti-walk" style="color: #BA7517; margin-right: 6px;"></i><strong style="color: var(--color-text-primary);">Walk-in</strong> · client sans RDV (vente caisse seule)</div>
+    <div><i class="ti ti-arrow-back-up" style="color: #A32D2D; margin-right: 6px;"></i><strong style="color: var(--color-text-primary);">Remboursement</strong> · annulation dans les délais</div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

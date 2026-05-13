@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FlowIA — Statistiques Performance</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.4.0/tabler-icons.min.css">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #F5F4EE;
+    --color-background-tertiary: #FAFAF7;
+    --color-text-primary: #2C2C2A;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.1);
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1F1F1D;
+      --color-background-secondary: #28282A;
+      --color-background-tertiary: #161614;
+      --color-text-primary: #F5F4EE;
+      --color-text-secondary: #B4B2A9;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 2rem;
+    line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .nav-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    font-size: 12px;
+    margin-bottom: 1.5rem;
+  }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  .page-subtitle { font-size: 13px; color: var(--color-text-secondary); margin: 0 0 1.5rem; }
+  h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px; }
+  button {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: 8px 14px;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .tabs {
+    display: flex; gap: 4px;
+    padding: 4px;
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 1.5rem;
+    max-width: fit-content;
+  }
+  .tab-btn {
+    background: transparent; border: none;
+    padding: 8px 14px; color: var(--color-text-secondary);
+    border-radius: 6px;
+  }
+  .tab-btn.active {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  .tab-btn:hover:not(.active) { color: var(--color-text-primary); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a href="index.html" class="nav-back"><i class="ti ti-arrow-left"></i> Retour aux mockups</a>
+
+<p style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 1rem;">📍 Statistiques › Performance</p>
+
+<h1>Statistiques</h1>
+<p class="page-subtitle">Performance, RDV, paiements en ligne, reversements</p>
+
+<div class="tabs">
+  <button class="tab-btn active">Performance</button>
+  <a href="04-stats-rdv.html" class="tab-btn" style="text-decoration: none; display: inline-block;">RDV</a>
+  <a href="05-stats-online-payments.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Paiements en ligne</a>
+  <a href="06-stats-payouts.html" class="tab-btn" style="text-decoration: none; display: inline-block;">Reversements</a>
+</div>
+
+<div style="display: flex; gap: 6px; margin-bottom: 1.5rem;">
+  <button>Aujourd'hui</button>
+  <button>7 jours</button>
+  <button style="background: var(--color-text-primary); color: white; border: none;">30 jours</button>
+  <button>90 jours</button>
+</div>
+
+<h2>Chiffre d'affaires par source</h2>
+
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem;">
+
+  <div style="background: #E6F1FB; border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: #0C447C; font-weight: 500;">EN LIGNE</div>
+      <i class="ti ti-credit-card" style="color: #185FA5; font-size: 16px;"></i>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; color: #042C53; font-family: var(--font-mono);">170,00 €</div>
+    <div style="font-size: 11px; color: #185FA5; margin-top: 4px;">11 paiements</div>
+    <div style="border-top: 0.5px solid #B5D4F4; margin-top: 10px; padding-top: 8px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #185FA5; margin-bottom: 2px;">
+        <span>Frais Stripe</span><span style="font-family: var(--font-mono);">−3,40 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #185FA5; margin-bottom: 4px;">
+        <span>Commission FlowIA</span><span style="font-family: var(--font-mono);">−5,10 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #042C53; font-weight: 500;">
+        <span>Net</span><span style="font-family: var(--font-mono);">161,50 €</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: #E1F5EE; border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: #085041; font-weight: 500;">CAISSE RDV</div>
+      <i class="ti ti-cash" style="color: #0F6E56; font-size: 16px;"></i>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; color: #04342C; font-family: var(--font-mono);">85,00 €</div>
+    <div style="font-size: 11px; color: #0F6E56; margin-top: 4px;">5 encaissements</div>
+    <div style="border-top: 0.5px solid #9FE1CB; margin-top: 10px; padding-top: 8px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #0F6E56; margin-bottom: 2px;">
+        <span>Espèces</span><span style="font-family: var(--font-mono);">45,00 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #0F6E56; margin-bottom: 4px;">
+        <span>Carte locale</span><span style="font-family: var(--font-mono);">40,00 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #04342C; font-weight: 500;">
+        <span>Net</span><span style="font-family: var(--font-mono);">85,00 €</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: #FAEEDA; border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: #854F0B; font-weight: 500;">WALK-IN</div>
+      <i class="ti ti-walk" style="color: #BA7517; font-size: 16px;"></i>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; color: #412402; font-family: var(--font-mono);">60,00 €</div>
+    <div style="font-size: 11px; color: #BA7517; margin-top: 4px;">3 ventes sans RDV</div>
+    <div style="border-top: 0.5px solid #FAC775; margin-top: 10px; padding-top: 8px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #BA7517; margin-bottom: 2px;">
+        <span>Espèces</span><span style="font-family: var(--font-mono);">35,00 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #BA7517; margin-bottom: 4px;">
+        <span>Carte locale</span><span style="font-family: var(--font-mono);">25,00 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: #412402; font-weight: 500;">
+        <span>Net</span><span style="font-family: var(--font-mono);">60,00 €</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-lg); padding: 1.25rem;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: var(--color-text-secondary); font-weight: 500;">TOTAL</div>
+      <i class="ti ti-coins" style="color: var(--color-text-primary); font-size: 16px;"></i>
+    </div>
+    <div style="font-size: 22px; font-weight: 500; color: var(--color-text-primary); font-family: var(--font-mono);">315,00 €</div>
+    <div style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">19 transactions</div>
+    <div style="border-top: 0.5px solid var(--color-border-tertiary); margin-top: 10px; padding-top: 8px;">
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #A32D2D; margin-bottom: 2px;">
+        <span>Total frais</span><span style="font-family: var(--font-mono);">−8,50 €</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: #0F6E56; margin-bottom: 4px;">
+        <span>vs période N-1</span><span>+12,3%</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-primary); font-weight: 500;">
+        <span>Net total</span><span style="font-family: var(--font-mono);">306,50 €</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Argent à recevoir (Stripe)</h2>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 1.5rem;">
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; align-items: center;">
+    <div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Solde disponible</div>
+      <div style="font-size: 20px; font-weight: 500; color: #0F6E56; font-family: var(--font-mono);">127,50 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Prêt à reverser</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">En transit J+3</div>
+      <div style="font-size: 20px; font-weight: 500; color: #BA7517; font-family: var(--font-mono);">35,25 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Dispo le 12 mai</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Prochain payout</div>
+      <div style="font-size: 20px; font-weight: 500; color: var(--color-text-primary); font-family: var(--font-mono);">~162 €</div>
+      <div style="font-size: 10px; color: var(--color-text-secondary); margin-top: 2px;">Estim. vendredi 16 mai</div>
+    </div>
+    <div style="text-align: right;">
+      <button style="background: var(--color-text-primary); color: white; border: none; font-weight: 500; padding: 10px 16px;">
+        <i class="ti ti-send" style="margin-right: 4px;"></i>Reverser maintenant
+      </button>
+    </div>
+  </div>
+</div>
+
+<h2>Évolution sur 30 jours</h2>
+
+<div style="background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1.25rem; margin-bottom: 1.5rem;">
+  <svg viewBox="0 0 640 200" style="width: 100%; height: 200px;" role="img">
+    <line x1="40" y1="160" x2="620" y2="160" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <line x1="40" y1="120" x2="620" y2="120" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <line x1="40" y1="80" x2="620" y2="80" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <line x1="40" y1="40" x2="620" y2="40" stroke="var(--color-border-tertiary)" stroke-width="0.5"/>
+    <text x="32" y="164" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">0</text>
+    <text x="32" y="124" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">100</text>
+    <text x="32" y="84" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">200</text>
+    <text x="32" y="44" text-anchor="end" style="font-size: 10px; fill: var(--color-text-secondary);">300 €</text>
+
+    <path d="M 40 145 L 60 138 L 80 130 L 100 125 L 120 110 L 140 115 L 160 95 L 180 100 L 200 85 L 220 90 L 240 75 L 260 80 L 280 70 L 300 65 L 320 75 L 340 60 L 360 55 L 380 65 L 400 50 L 420 60 L 440 45 L 460 55 L 480 40 L 500 50 L 520 35 L 540 45 L 560 30 L 580 40 L 600 25 L 620 35" fill="none" stroke="#185FA5" stroke-width="2"/>
+    <path d="M 40 152 L 60 150 L 80 145 L 100 142 L 120 138 L 140 142 L 160 132 L 180 138 L 200 130 L 220 132 L 240 125 L 260 130 L 280 122 L 300 118 L 320 128 L 340 115 L 360 112 L 380 120 L 400 108 L 420 118 L 440 105 L 460 115 L 480 100 L 500 110 L 520 95 L 540 108 L 560 92 L 580 105 L 600 88 L 620 100" fill="none" stroke="#0F6E56" stroke-width="2"/>
+    <path d="M 40 156 L 60 155 L 80 154 L 100 153 L 120 152 L 140 153 L 160 150 L 180 152 L 200 148 L 220 150 L 240 145 L 260 148 L 280 143 L 300 142 L 320 146 L 340 140 L 360 138 L 380 142 L 400 135 L 420 140 L 440 132 L 460 138 L 480 130 L 500 135 L 520 125 L 540 132 L 560 122 L 580 130 L 600 118 L 620 125" fill="none" stroke="#BA7517" stroke-width="2"/>
+
+    <text x="40" y="180" style="font-size: 10px; fill: var(--color-text-secondary);">10 avr</text>
+    <text x="200" y="180" style="font-size: 10px; fill: var(--color-text-secondary);">20 avr</text>
+    <text x="380" y="180" style="font-size: 10px; fill: var(--color-text-secondary);">30 avr</text>
+    <text x="560" y="180" style="font-size: 10px; fill: var(--color-text-secondary);">9 mai</text>
+  </svg>
+
+  <div style="display: flex; gap: 18px; margin-top: 8px; padding-top: 12px; border-top: 0.5px solid var(--color-border-tertiary);">
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+      <span style="width: 12px; height: 2px; background: #185FA5; display: inline-block;"></span>
+      <span style="color: var(--color-text-secondary);">En ligne (Stripe)</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+      <span style="width: 12px; height: 2px; background: #0F6E56; display: inline-block;"></span>
+      <span style="color: var(--color-text-secondary);">Caisse RDV</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px;">
+      <span style="width: 12px; height: 2px; background: #BA7517; display: inline-block;"></span>
+      <span style="color: var(--color-text-secondary);">Walk-in</span>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

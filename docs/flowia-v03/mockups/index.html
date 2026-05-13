@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>FlowIA — Mockups refonte</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.4.0/tabler-icons.min.css">
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #F5F4EE;
+    --color-background-tertiary: #FAFAF7;
+    --color-text-primary: #2C2C2A;
+    --color-text-secondary: #5F5E5A;
+    --color-text-tertiary: #888780;
+    --color-border-tertiary: rgba(0,0,0,0.1);
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1F1F1D;
+      --color-background-secondary: #28282A;
+      --color-background-tertiary: #161614;
+      --color-text-primary: #F5F4EE;
+      --color-text-secondary: #B4B2A9;
+      --color-text-tertiary: #888780;
+      --color-border-tertiary: rgba(255,255,255,0.1);
+      --color-border-secondary: rgba(255,255,255,0.2);
+    }
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background-tertiary);
+    color: var(--color-text-primary);
+    margin: 0;
+    padding: 2rem;
+    line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 500; margin: 0 0 8px; }
+  .subtitle { color: var(--color-text-secondary); font-size: 14px; margin: 0 0 2rem; }
+  .mockup-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 2rem;
+  }
+  .mockup-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .mockup-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-border-secondary);
+  }
+  .mockup-card h3 {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mockup-card p {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    margin: 0 0 12px;
+  }
+  .mockup-card .arrow {
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .docs-list {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+  }
+  .docs-list h2 {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+  .docs-list ul { list-style: none; padding: 0; margin: 0; }
+  .docs-list li {
+    padding: 8px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .docs-list li:last-child { border-bottom: none; }
+  .docs-list a { color: var(--color-text-primary); text-decoration: none; }
+  .docs-list a:hover { color: #185FA5; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--color-background-secondary);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>FlowIA — Mockups refonte</h1>
+<p class="subtitle">Aperçu des 6 écrans à implémenter pour la refonte Historique &amp; Statistiques (4 onglets)</p>
+
+<h2 style="font-size: 14px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 12px;">Écrans à implémenter</h2>
+
+<div class="mockup-grid">
+
+  <a href="01-dashboard.html" class="mockup-card">
+    <h3><i class="ti ti-home"></i> 1. Dashboard d'accueil</h3>
+    <p>KPI du jour, RDV à venir avec statut paiement, bouton Reverser maintenant.</p>
+    <span class="arrow">Voir la maquette →</span>
+  </a>
+
+  <a href="02-historique.html" class="mockup-card">
+    <h3><i class="ti ti-history"></i> 2. Historique</h3>
+    <p>Toutes transactions : en ligne, caisse RDV, walk-in, remboursements.</p>
+    <span class="arrow">Voir la maquette →</span>
+  </a>
+
+  <a href="03-stats-performance.html" class="mockup-card">
+    <h3><i class="ti ti-trending-up"></i> 3. Stats — Performance</h3>
+    <p>4 KPI sources (en ligne / caisse / walk-in / total) + bandeau Stripe + évolution 30j.</p>
+    <span class="arrow">Voir la maquette →</span>
+  </a>
+
+  <a href="04-stats-rdv.html" class="mockup-card">
+    <h3><i class="ti ti-calendar-event"></i> 4. Stats — RDV</h3>
+    <p>2 sources de RDV + barre statuts segmentée + performance employés + insight.</p>
+    <span class="arrow">Voir la maquette →</span>
+  </a>
+
+  <a href="05-stats-online-payments.html" class="mockup-card">
+    <h3><i class="ti ti-credit-card"></i> 5. Stats — Paiements en ligne</h3>
+    <p>Hero gradient bleu + 4 KPI statuts + politique paiement + impact business.</p>
+    <span class="arrow">Voir la maquette →</span>
+  </a>
+
+  <a href="06-stats-payouts.html" class="mockup-card">
+    <h3><i class="ti ti-wallet"></i> 6. Stats — Reversements</h3>
+    <p>Hero CTA vert "Reverser maintenant" + estimation prochain + historique payouts.</p>
+    <span class="arrow">Voir la maquette →</span>
+  </a>
+
+</div>
+
+<div class="docs-list">
+  <h2>Documentation technique</h2>
+  <ul>
+    <li><i class="ti ti-file-text" style="color: var(--color-text-secondary);"></i> <a href="../README.md">README.md</a> <span class="badge">À lire en premier</span></li>
+    <li><i class="ti ti-palette" style="color: #185FA5;"></i> <a href="../01-design-system.md">01-design-system.md</a></li>
+    <li><i class="ti ti-database" style="color: #0F6E56;"></i> <a href="../02-data-model.md">02-data-model.md</a></li>
+    <li><i class="ti ti-route" style="color: #BA7517;"></i> <a href="../03-implementation-roadmap.md">03-implementation-roadmap.md</a></li>
+    <li><i class="ti ti-credit-card" style="color: #185FA5;"></i> <a href="../04-stripe-config.md">04-stripe-config.md</a></li>
+  </ul>
+</div>
+
+<div class="docs-list" style="margin-top: 1rem;">
+  <h2>Prompts pour Claude Code</h2>
+  <ul>
+    <li><i class="ti ti-database" style="color: #185FA5;"></i> <a href="../prompts/commit-1-schema-bdd.md">Commit 1 — Schéma BDD</a> <span class="badge">Backend</span></li>
+    <li><i class="ti ti-api" style="color: #0F6E56;"></i> <a href="../prompts/commit-2-routes-api.md">Commit 2 — Routes API + Webhooks</a> <span class="badge">Backend</span></li>
+    <li><i class="ti ti-history" style="color: #534AB7;"></i> <a href="../prompts/commit-3-frontend-historique.md">Commit 3 — Frontend Historique</a> <span class="badge">Frontend</span></li>
+    <li><i class="ti ti-chart-bar" style="color: #BA7517;"></i> <a href="../prompts/commit-4-frontend-statistiques.md">Commit 4 — Frontend Statistiques (4 onglets)</a> <span class="badge">Frontend</span></li>
+    <li><i class="ti ti-send" style="color: #A32D2D;"></i> <a href="../prompts/commit-5-bouton-payout.md">Commit 5 — Bouton Reverser maintenant</a> <span class="badge">Backend + Frontend</span></li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>
