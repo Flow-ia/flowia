@@ -834,14 +834,29 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     // peut être acquis. Sinon log informatif et skip (autre instance fait
     // le travail). Toute erreur de fn() est loggée puis le lock est libéré
     // (try/finally interne à withLock).
-    const scheduleLocked = (intervalMs, lockKey, label, fn) => {
-      setInterval(async () => {
+    //
+    // initialDelayMs (optionnel) : tick supplémentaire planifié N ms après
+    // le boot, avant le 1er tick d'interval. Indispensable pour les crons
+    // longs (>= 1 h) sur Render free tier : sans ça, un redéploiement ou
+    // une hibernation peut retarder l'exécution au-delà de l'intervalle
+    // (24h × hibernate = jamais). Le lock applicatif Postgres garantit
+    // qu'un tick initial + un éventuel tick d'interval concurrent ne
+    // produisent qu'une seule exécution effective.
+    const scheduleLocked = (intervalMs, lockKey, label, fn, initialDelayMs = null) => {
+      const safeRun = async (origin) => {
+        console.log(`[CRON ${label}] ${origin} tick running`);
         try {
-          await withLock(lockKey, fn);
+          const r = await withLock(lockKey, fn);
+          if (r?.skipped) console.log(`[CRON ${label}] lock skipped (autre instance)`);
         } catch (e) {
           console.error(`[CRON ${label}]`, e.message);
         }
-      }, intervalMs);
+      };
+      if (initialDelayMs != null && initialDelayMs > 0) {
+        console.log(`[CRON ${label}] initial tick scheduled in ${Math.round(initialDelayMs/1000)}s`);
+        setTimeout(() => safeRun('initial'), initialDelayMs);
+      }
+      setInterval(() => safeRun('interval'), intervalMs);
     };
 
     // Décaler chaque tâche pour ne pas tout lancer en même temps.
@@ -870,13 +885,23 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     scheduleLocked(60 * 60 * 1000,      'cron:birthday:monthly',       'birthday',  runBirthdayPromos);
 
     // ESCROW : libere les payouts dus (release_at <= NOW(), status=pending)
-    // -> stripe.payouts.create vers l'IBAN du commerçant. 1x/jour suffit
-    // (la latence d'un payout n'est pas critique au minute pres). Premier
-    // tick quasi-immediat puis toutes les 24h.
+    // -> stripe.payouts.create vers l'IBAN du commerçant.
+    //
+    // Frequence 1h (et pas 24h comme avant) : la production-safety impose
+    // qu'un payout dont release_at vient de passer ne reste pas bloque
+    // toute une journee. Charge negligeable : BATCH_SIZE=50 cap les calls
+    // Stripe a 50/h max, idempotencyKey stable previent les doublons.
+    //
+    // Initial tick 60s apres le boot : sans ca, un setInterval(1h) attend
+    // 1h pleine avant le 1er tick -> si Render redemarre toutes les 30 min
+    // (free tier qui hiberne), le cron pourrait ne jamais tourner. Le
+    // delai de 60s laisse le pool DB se reveiller et evite de bombarder
+    // Stripe au boot exact (utile en cas de redeploy en chaine).
     {
       const { releasePayouts: releasePayoutsCron } = require('./utils/releasePayouts');
-      scheduleLocked(24 * 60 * 60 * 1000, 'cron:escrow:release_payouts', 'payouts',
-                     () => releasePayoutsCron(dbPool));
+      scheduleLocked(60 * 60 * 1000, 'cron:escrow:release_payouts', 'payouts',
+                     () => releasePayoutsCron(dbPool),
+                     60 * 1000);
     }
 
     // NO-SHOW AUTOMATIQUE : marque cancelled_by='system' sur les RDV passes

@@ -20,6 +20,7 @@ export default function PayoutDashboardBanner() {
   if (loading || error || !balance?.connected) return null;
 
   const available    = balance.available_cents    || 0;
+  const eligibleNow  = balance.eligible_now_cents || 0;
   const inTransit    = balance.in_transit_cents   || 0;
   const pending      = balance.pending_cents      || 0;
   const totalToRcv   = balance.total_to_receive_cents || (available + inTransit + pending);
@@ -35,15 +36,15 @@ export default function PayoutDashboardBanner() {
       gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr)) auto",
       gap: 20, alignItems: "center",
     }}>
-      <Col label="Solde disponible" value={formatCents(available)} accent="#A6F4D5" />
-      <Col label="En transit J+3"   value={formatCents(inTransit)} accent="#FFD9A6" />
-      <Col label="En attente"       value={formatCents(pending)}   accent="rgba(255,255,255,0.85)" />
-      <Col label="Total à recevoir" value={formatCents(totalToRcv)} accent="#fff" />
+      <Col label="Éligible maintenant" value={formatCents(eligibleNow)} accent="#A6F4D5" />
+      <Col label="En transit J+3"      value={formatCents(inTransit)}   accent="#FFD9A6" />
+      <Col label="En attente"          value={formatCents(pending)}     accent="rgba(255,255,255,0.85)" />
+      <Col label="Total à recevoir"    value={formatCents(totalToRcv)}  accent="#fff" />
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
         {isManual ? (
           <PayoutButton
             variant="hero"
-            availableAmount={available}
+            eligibleAmount={eligibleNow}
             bankAccountLast4={balance.bank_account?.last4 || null}
             bankName={balance.bank_account?.bank_name || null}
             onSuccess={() => { try { window.location.reload(); } catch {} }}

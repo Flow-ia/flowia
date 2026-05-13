@@ -1172,16 +1172,16 @@ function OnlinePaymentsHero({ t, showToast }) {
             fontSize: 11, fontWeight: 500, color: '#0F6E56',
             textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4,
           }}>
-            {"À reverser maintenant"}
+            {"Éligible maintenant"}
           </div>
           <div style={{ fontSize: 11, color: t.muted, marginBottom: 8 }}>
-            {"Solde Stripe disponible"}
+            {"RDV terminés depuis +3 jours"}
           </div>
           <div style={{
             fontSize: 32, fontWeight: 500, color: t.text,
             fontFamily: MONO, lineHeight: 1.1,
           }}>
-            {formatCents(balance.available_cents || 0)}
+            {formatCents(balance.eligible_now_cents || 0)}
           </div>
           <div style={{ fontSize: 12, color: t.muted, marginTop: 8 }}>
             {bankInfo}
@@ -1190,7 +1190,7 @@ function OnlinePaymentsHero({ t, showToast }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
           <PayoutButton
             variant="hero"
-            availableAmount={balance.available_cents || 0}
+            eligibleAmount={balance.eligible_now_cents || 0}
             bankAccountLast4={balance.bank_account?.last4 || null}
             bankName={balance.bank_account?.bank_name || null}
             hasPendingPayout={payouts.some(p => p.status === 'pending' || p.status === 'in_transit')}
@@ -1251,8 +1251,8 @@ function OnlinePaymentsHero({ t, showToast }) {
         marginTop: 10, padding: '10px 12px', borderRadius: 8,
         background: t.cardAlt, fontSize: 12, color: t.muted, lineHeight: 1.5,
       }}>
-        <strong style={{ color: t.text }}>{"Mode manuel activé."}</strong>
-        {" Vous reversez vous-même quand vous voulez. Pour un reversement automatique quotidien, configurez-le sur votre dashboard Stripe."}
+        <strong style={{ color: t.text }}>{"Reversement automatique à J+3."}</strong>
+        {" L'argent de chaque RDV payé en ligne est viré sur votre IBAN 3 jours après la prestation. Le bouton ci-dessus avance simplement le versement des RDV déjà passés — les RDV à venir restent bloqués pour pouvoir rembourser un client qui annule."}
       </div>
     </section>
   );

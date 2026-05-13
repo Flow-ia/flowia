@@ -1,35 +1,30 @@
-// routes/stripe-payout.js — POST /api/stripe/payout/create (Refonte v3, Commit 5)
+// routes/stripe-payout.js — POST /api/stripe/payout/create
 //
-// Declenche un payout MANUEL Stripe vers le compte bancaire du commercant.
-// Utilise par les boutons "Reverser maintenant" sur Dashboard + Statistiques
-// (onglets Performance + Reversements).
+// "Reverser maintenant" : declenche le release immediat des escrows
+// appointment_payouts ELIGIBLES (status='pending' AND release_at <= NOW())
+// du merchant. Reutilise exactement le code du cron releasePayouts (filtre
+// userId) pour garantir un seul chemin de paiement.
 //
-// Architecture FlowIA = direct charges : Stripe Connect Standard avec PI
-// crees sur le compte connecte. Donc stripe.payouts.create() doit passer
-// { stripeAccount: user.stripe_account_id } en 2e arg options.
-//
-// Anti-double-soumission : verifie qu'aucun payout 'pending'/'in_transit'
-// n'existe deja pour ce user avant de creer.
+// IMPORTANT : ce bouton ne lit PLUS le solde Stripe brut. Avant le patch,
+// il appelait stripe.payouts.create(amount=balance.available) ce qui vidait
+// AUSSI les fonds des RDV futurs encore annulables. Si le client annulait
+// ensuite, FlowIA devait refunder alors que le merchant avait deja recu
+// l'argent -> dette impossible a recuperer. Desormais le bouton ne peut
+// reverser QUE les escrows dont le release_at est passe.
 
 const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { invalidateUserStatsCache } = require('../utils/paymentV3');
+const { releasePayouts } = require('../utils/releasePayouts');
 
 const router = express.Router();
 router.use(authMiddleware);
 
-function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error('STRIPE_SECRET_KEY manquante');
-  return require('stripe')(key);
-}
-
 router.post('/create', async (req, res) => {
   const userId = req.user.userId;
-  const employeeId = req.user.employee_id || null;
   try {
-    // 1. Resoudre stripe_account_id du commercant
+    // 1. Resoudre stripe_account_id du commercant (verif basique avant tout).
     const { rows: userRows } = await pool.query(
       'SELECT stripe_account_id FROM users WHERE id = $1 LIMIT 1',
       [userId]
@@ -42,9 +37,11 @@ router.post('/create', async (req, res) => {
       });
     }
 
-    // 2. Verifier qu'aucun payout n'est deja en cours
+    // 2. Verifier qu'aucun payout n'est deja en cours pour ce user
+    //    (anti-double-clic, ne bloque pas le cron qui passe par
+    //     releasePayouts directement sans table payouts).
     const { rows: pendingRows } = await pool.query(
-      `SELECT id, stripe_payout_id, requested_at FROM payouts
+      `SELECT id, stripe_payout_id FROM payouts
         WHERE user_id = $1
           AND status IN ('pending', 'in_transit')
         ORDER BY created_at DESC
@@ -59,127 +56,144 @@ router.post('/create', async (req, res) => {
       });
     }
 
-    // 3. Recuperer la balance Stripe live
-    const stripe = getStripe();
-    let balance;
-    try {
-      balance = await stripe.balance.retrieve({}, { stripeAccount: accountId });
-    } catch (balErr) {
-      console.error('[PAYOUT CREATE] balance retrieve fail user=' + userId, balErr.message);
-      return res.status(502).json({
-        error: 'Erreur Stripe : impossible de récupérer le solde.',
-        code: 'STRIPE_BALANCE_ERROR',
-      });
-    }
+    // 3. Pre-check : a-t-on au moins une row escrow ELIGIBLE pour ce user ?
+    //    Critere strict identique a releasePayouts (status, release_at,
+    //    retry_count) pour eviter tout decalage. On expose au passage le
+    //    total eligible et la prochaine date pour le message d'erreur.
+    const { rows: eligibleRows } = await pool.query(`
+      SELECT COUNT(*)::int                        AS count,
+             COALESCE(SUM(amount_cents), 0)::bigint AS total_cents
+        FROM appointment_payouts
+       WHERE user_id = $1
+         AND status = 'pending'
+         AND release_at <= NOW()
+         AND retry_count < 5
+    `, [userId]);
+    const eligibleCount = eligibleRows[0]?.count || 0;
+    const eligibleCents = parseInt(eligibleRows[0]?.total_cents || 0, 10);
 
-    // Stripe peut retourner plusieurs devises. On prend EUR.
-    const eurAvailable = (balance.available || []).find(b => (b.currency || '').toLowerCase() === 'eur');
-    const availableCents = eurAvailable?.amount || 0;
-
-    if (availableCents <= 0) {
-      console.log('[PAYOUT CREATE] insufficient balance user=' + userId + ' available=' + availableCents);
+    if (eligibleCount === 0) {
+      // Cherche la prochaine date d'eligibilite pour expliciter le message.
+      const { rows: nextRows } = await pool.query(`
+        SELECT release_at
+          FROM appointment_payouts
+         WHERE user_id = $1
+           AND status = 'pending'
+           AND release_at > NOW()
+         ORDER BY release_at ASC
+         LIMIT 1
+      `, [userId]);
+      const nextReleaseAt = nextRows[0]?.release_at || null;
       return res.status(400).json({
-        error: "Aucun solde disponible. Vos paiements seront disponibles dans 3 jours après chaque RDV.",
-        code: 'INSUFFICIENT_BALANCE',
-        available_cents: availableCents,
+        error: nextReleaseAt
+          ? "Aucun reversement éligible pour le moment. Les fonds des RDV à venir seront disponibles après la date du RDV + 3 jours."
+          : "Aucun reversement éligible pour le moment. Vos paiements en ligne seront automatiquement reversés 3 jours après chaque RDV.",
+        code: 'NO_ELIGIBLE_PAYOUTS',
+        next_release_at: nextReleaseAt,
       });
     }
 
-    // 4. Recuperer les coordonnees bancaires (best-effort, non bloquant)
+    // 4. Best-effort : recuperer les coordonnees bancaires pour le toast UI.
+    //    Optionnel : aucun impact bloquant. La table payouts est UPSERT
+    //    par le webhook payout.paid avec les vraies infos.
     let bankLast4 = null;
     let bankName  = null;
     try {
-      const ext = await stripe.accounts.listExternalAccounts(accountId, {
-        object: 'bank_account',
-        limit: 1,
-      });
-      if (ext.data?.length) {
-        bankLast4 = ext.data[0].last4 || null;
-        bankName  = ext.data[0].bank_name || null;
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (key) {
+        const stripe = require('stripe')(key);
+        const ext = await stripe.accounts.listExternalAccounts(accountId, {
+          object: 'bank_account',
+          limit: 1,
+        });
+        if (ext.data?.length) {
+          bankLast4 = ext.data[0].last4 || null;
+          bankName  = ext.data[0].bank_name || null;
+        }
       }
     } catch (extErr) {
       console.warn('[PAYOUT CREATE] external_accounts fail (non bloquant):', extErr.message);
     }
 
-    // 5. Creer le payout Stripe
-    const currency = (eurAvailable.currency || 'eur').toLowerCase();
-    let payout;
+    // 5. Delegue le release a releasePayouts(pool, { userId }) : 1 payout
+    //    Stripe par escrow eligible (avec idempotencyKey stable). Identique
+    //    au cron quotidien, simplement filtre sur ce user. Les rows seront
+    //    inserees dans la table `payouts` par le webhook payout.paid (UPSERT,
+    //    triggered_by='stripe') -> historique UI cohérent avec le cron.
+    let summary;
     try {
-      payout = await stripe.payouts.create(
-        {
-          amount: availableCents,
-          currency,
-          metadata: {
-            flowia_user_id: userId,
-            triggered_by_employee_id: employeeId || '',
-            triggered_at: new Date().toISOString(),
-          },
-        },
-        { stripeAccount: accountId }
-      );
-    } catch (stripeErr) {
-      console.error('[PAYOUT CREATE] stripe.payouts.create fail user=' + userId, stripeErr.type, stripeErr.message);
-      const sType = stripeErr.type || stripeErr.code || '';
-      if (sType === 'StripeAuthenticationError') {
-        return res.status(502).json({ error: 'Erreur Stripe : authentification.', code: 'STRIPE_AUTH_ERROR' });
-      }
-      if (sType === 'StripeInvalidRequestError') {
-        return res.status(400).json({ error: stripeErr.message || 'Requête invalide.', code: 'STRIPE_INVALID_REQUEST' });
-      }
-      if (sType === 'StripePermissionError') {
-        return res.status(403).json({ error: 'Compte Stripe sans permission de payout.', code: 'STRIPE_PERMISSION_ERROR' });
-      }
-      return res.status(500).json({ error: 'Erreur Stripe inattendue.', code: 'STRIPE_UNKNOWN' });
+      summary = await releasePayouts(pool, { userId });
+    } catch (relErr) {
+      console.error('[PAYOUT CREATE] releasePayouts threw user=' + userId, relErr.message);
+      return res.status(500).json({
+        error: 'Erreur serveur lors du reversement.',
+        code: 'INTERNAL_ERROR',
+      });
     }
 
-    // 6. INSERT dans la table payouts (table v3, distincte d'appointment_payouts)
-    // arrival_date (Stripe = epoch seconds) -> DATE
-    const arrivalDate = payout.arrival_date
-      ? new Date(payout.arrival_date * 1000).toISOString().substring(0, 10)
-      : null;
+    const succeeded = summary?.succeeded || 0;
+    const failed    = summary?.failed    || 0;
+    const processed = summary?.processed || 0;
 
-    await pool.query(
-      `INSERT INTO payouts
-         (user_id, stripe_payout_id, amount_cents, currency, status,
-          bank_account_last4, bank_name, triggered_by, triggered_by_employee_id,
-          requested_at, arrival_date)
-       VALUES ($1, $2, $3, $4, $5,
-               $6, $7, $8, $9,
-               NOW(), $10::date)
-       ON CONFLICT (stripe_payout_id) DO NOTHING`,
-      [
-        userId,
-        payout.id,
-        payout.amount || availableCents,
-        currency,
-        payout.status || 'pending',
-        bankLast4,
-        bankName,
-        'manual',
-        employeeId,
-        arrivalDate,
-      ]
-    );
+    if (succeeded === 0 && failed > 0) {
+      // Tous les escrows ont echoue (balance Stripe insuffisante, compte
+      // deconnecte, etc.). Le retry_count a deja ete incremente dans
+      // releasePayouts pour chaque row.
+      console.error('[PAYOUT CREATE] all releases failed user=' + userId
+        + ' processed=' + processed + ' failed=' + failed);
+      return res.status(502).json({
+        error: "Le reversement a échoué côté Stripe (solde insuffisant ou compte inactif). Réessayez plus tard.",
+        code: 'STRIPE_RELEASE_FAILED',
+        eligible_count: eligibleCount,
+        eligible_cents: eligibleCents,
+        processed, succeeded, failed,
+      });
+    }
 
-    // 7. Invalider le cache stats (le solde doit passer a 0 dans /stats/payouts
-    // et la nouvelle row doit apparaitre dans l'historique)
+    if (processed === 0 && succeeded === 0) {
+      // Race avec le cron : le pre-check a vu des eligibles mais le tick
+      // releasePayouts est passe entre temps et a tout traite. Pas une erreur.
+      console.log('[PAYOUT CREATE] race with cron, nothing left user=' + userId);
+      return res.status(200).json({
+        success: true,
+        processed: 0, succeeded: 0, failed: 0,
+        eligible_count: 0,
+        released_cents: 0,
+        message: "Vos reversements éligibles viennent d'être traités par le système. Votre solde sera mis à jour dans quelques secondes.",
+      });
+    }
+
+    // Invalide le cache stats (le solde / eligible / historique vont bouger)
     try { invalidateUserStatsCache(userId); } catch {}
 
-    console.log('[PAYOUT CREATE] success user=' + userId + ' employee=' + employeeId + ' payout=' + payout.id + ' amount=' + payout.amount);
+    console.log('[PAYOUT CREATE] success user=' + userId
+      + ' processed=' + processed + ' ok=' + succeeded + ' fail=' + failed
+      + ' eligible_cents=' + eligibleCents);
+
+    // Le total reverse correspond aux escrows reellement passes a 'released'.
+    // On le recalcule pour la reponse (eligibleCents inclut potentiellement
+    // les rows qui ont fail / partial). Lecture directe DB pour fiabilite.
+    const { rows: releasedRows } = await pool.query(`
+      SELECT COALESCE(SUM(amount_cents), 0)::bigint AS released_cents
+        FROM appointment_payouts
+       WHERE user_id = $1
+         AND status = 'released'
+         AND released_at >= NOW() - INTERVAL '5 minutes'
+    `, [userId]);
+    const releasedCents = parseInt(releasedRows[0]?.released_cents || 0, 10);
 
     return res.json({
       success: true,
-      payout: {
-        id:                  payout.id,
-        amount_cents:        payout.amount || availableCents,
-        currency,
-        status:              payout.status,
-        arrival_date:        arrivalDate,
-        bank_account_last4:  bankLast4,
-        bank_name:           bankName,
-      },
-      message: `Reversement de ${(availableCents / 100).toFixed(2).replace('.', ',')} € initié.`
-             + (arrivalDate ? ` Arrivée prévue le ${arrivalDate}.` : ''),
+      processed,
+      succeeded,
+      failed,
+      eligible_count:     eligibleCount,
+      released_cents:     releasedCents,
+      bank_account_last4: bankLast4,
+      bank_name:          bankName,
+      message: failed > 0
+        ? `${succeeded} reversement(s) initié(s) (${(releasedCents / 100).toFixed(2).replace('.', ',')} €). ${failed} échec(s), retry automatique.`
+        : `${succeeded} reversement(s) initié(s) pour un total de ${(releasedCents / 100).toFixed(2).replace('.', ',')} €. Arrivée bancaire sous 1-3 jours ouvrés.`,
     });
   } catch (e) {
     console.error('[PAYOUT CREATE] unexpected error user=' + userId, e.message);

@@ -1,17 +1,23 @@
-// utils/releasePayouts.js — cron quotidien de liberation des payouts
+// utils/releasePayouts.js — cron horaire de liberation des payouts
 // commerçants. Selectionne les rows appointment_payouts dues (release_at
 // <= NOW(), status='pending') et declenche stripe.payouts.create sur le
 // compte Connect du commerçant.
 //
-// Lance via index.js startCron() avec scheduleLocked (worker 1, lock
-// applicatif Postgres pour eviter les ticks paralleles inter-instances).
-// Frequence : 1x/jour suffit (les payouts ne sont pas urgents au minute
-// pres). Premier tick au boot puis toutes les 24h.
+// Lance via index.js startCron() avec scheduleLocked + initialDelayMs=60s
+// pour garantir un 1er tick post-boot meme si Render redemarre frequemment
+// (free tier hibernation). Frequence 1h : un payout dont release_at vient
+// de passer ne doit pas attendre 24h. Lock applicatif Postgres
+// (pg_try_advisory_lock) empeche les ticks paralleles inter-instances.
 //
 // Mode degrade : si un payout Stripe echoue (compte deconnecte, fonds
 // insuffisants, holds Stripe), on incremente retry_count et on reessaye
 // au prochain tick. Apres 5 echecs, status='failed' et l'admin doit
 // intervenir (UI a venir + alerte email/slack).
+//
+// Stuck detector : a chaque tick, on log un WARN si des rows pending
+// trainent > 6h apres leur release_at sans avoir atteint MAX_RETRIES.
+// Cela permet de detecter precocement : (a) un cron qui ne tourne plus,
+// (b) des balance_insufficient repetes, (c) un compte Stripe deconnecte.
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -22,7 +28,15 @@ function getStripe() {
 const MAX_RETRIES = 5;
 const BATCH_SIZE  = 50; // pour ne pas saturer Stripe en cas de gros backlog
 
-async function releasePayouts(pool) {
+async function releasePayouts(pool, opts = {}) {
+  // opts.userId : si fourni, ne libere que les escrows de ce merchant.
+  // Utilise par POST /api/stripe/payout/create ("Reverser maintenant") pour
+  // garantir qu'un clic merchant ne libere QUE ses propres escrows eligibles,
+  // jamais le solde Stripe brut (qui pourrait contenir des RDV futurs non
+  // encore eligibles -> risque de payer le merchant avant la date du RDV,
+  // refund client devient une dette merchant impossible a recuperer).
+  const userId = opts.userId || null;
+
   // Selectionne les payouts dus. Pas de claim intermediaire (le CHECK
   // constraint status IN ('pending','released','cancelled','failed') ne
   // permet pas d'etat 'processing'). La protection contre les ticks
@@ -35,26 +49,55 @@ async function releasePayouts(pool) {
   //       idempotent (WHERE id = $1).
   // Worst case : 2 appels Stripe API redondants (rate-limit non touche),
   // aucun impact financier.
+  const params = [MAX_RETRIES, BATCH_SIZE];
+  let userFilter = '';
+  if (userId) {
+    params.push(userId);
+    userFilter = ` AND user_id = $${params.length}`;
+  }
   const { rows: due } = await pool.query(`
     SELECT id, user_id, stripe_account_id, payment_intent_id, amount_cents,
-           retry_count, appointment_id
+           retry_count, appointment_id, release_at
       FROM appointment_payouts
      WHERE status = 'pending'
        AND release_at <= NOW()
-       AND retry_count < $1
+       AND retry_count < $1${userFilter}
      ORDER BY release_at ASC
      LIMIT $2
-  `, [MAX_RETRIES, BATCH_SIZE]);
+  `, params);
+
+  // Stuck detector : log un WARN pour les rows qui trainent > 6h apres
+  // leur release_at. Bornee aux scans complets (sans userId) pour eviter
+  // de spammer sur les clics manuels du bouton "Reverser maintenant".
+  if (!userId) {
+    try {
+      const { rows: stuck } = await pool.query(`
+        SELECT COUNT(*)::int                AS n,
+               MIN(release_at)              AS oldest,
+               MAX(retry_count)             AS max_retry
+          FROM appointment_payouts
+         WHERE status = 'pending'
+           AND release_at <= NOW() - INTERVAL '6 hours'
+           AND retry_count < $1
+      `, [MAX_RETRIES]);
+      const s = stuck[0] || {};
+      if ((s.n || 0) > 0) {
+        console.warn(`[CRON payouts] STUCK: ${s.n} pending payouts > 6h overdue (oldest release_at=${s.oldest?.toISOString?.() || s.oldest}, max_retry=${s.max_retry}). Investiguer : cron tourne ? balance Stripe ? compte deconnecte ?`);
+      }
+    } catch (e) {
+      console.warn('[CRON payouts] stuck detector query fail:', e.message);
+    }
+  }
 
   if (!due.length) {
-    console.log('[releasePayouts] no payouts due');
+    console.log('[CRON payouts] no payouts due');
     return { processed: 0, succeeded: 0, failed: 0 };
   }
 
-  console.log(`[releasePayouts] processing ${due.length} due payouts`);
+  console.log(`[CRON payouts] processing ${due.length} due payouts (userId=${userId || 'ALL'})`);
   let stripe;
   try { stripe = getStripe(); } catch (e) {
-    console.error('[releasePayouts] no Stripe key', e.message);
+    console.error('[CRON payouts] no Stripe key', e.message);
     return { processed: 0, succeeded: 0, failed: 0, error: 'no_stripe' };
   }
 
@@ -101,7 +144,7 @@ async function releasePayouts(pool) {
          WHERE id = $1
       `, [row.id, payout.id]);
       succeeded++;
-      console.log(`[releasePayouts] released id=${row.id} appt=${row.appointment_id} stripe_payout=${payout.id} amount=${row.amount_cents}c account=${row.stripe_account_id}`);
+      console.log(`[CRON payouts] released id=${row.id} appt=${row.appointment_id} stripe_payout=${payout.id} amount=${row.amount_cents}c account=${row.stripe_account_id}`);
 
       // PHASE 2 LEDGER : INSERT payout_release (informationnel) +
       // UPDATE status='locked' sur les entries payment/commission/stripe_fee
@@ -126,7 +169,7 @@ async function releasePayouts(pool) {
           newStatus: 'locked',
         });
       } catch (ledgerErr) {
-        console.error('[releasePayouts] ledger payout_release fail id=' + row.id,
+        console.error('[CRON payouts] ledger payout_release fail id=' + row.id,
           ledgerErr.message || ledgerErr);
       }
     } catch (e) {
@@ -143,10 +186,10 @@ async function releasePayouts(pool) {
                updated_at = NOW()
          WHERE id = $1
       `, [row.id, newRetry, msg, newStatus]);
-      console.error(`[releasePayouts] FAIL id=${row.id} appt=${row.appointment_id} retry=${newRetry}/${MAX_RETRIES} status=${newStatus} stripe_code=${code} msg=${msg}`);
+      console.error(`[CRON payouts] FAIL id=${row.id} appt=${row.appointment_id} retry=${newRetry}/${MAX_RETRIES} status=${newStatus} stripe_code=${code} msg=${msg}`);
     }
   }
-  console.log(`[releasePayouts] done : ${succeeded} ok, ${failed} fail (claimed ${due.length})`);
+  console.log(`[CRON payouts] done : ${succeeded} ok, ${failed} fail (claimed ${due.length})`);
   return { processed: due.length, succeeded, failed };
 }
 

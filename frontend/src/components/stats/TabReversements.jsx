@@ -92,16 +92,18 @@ export default function TabReversements({ period }) {
                   fontSize: 11, fontWeight: 500, color: "#0F6E56",
                   textTransform: "uppercase", letterSpacing: "0.04em",
                 }}>
-                  À reverser maintenant
+                  Éligible maintenant
                 </div>
-                <div style={{ fontSize: 11, color: t.muted }}>Solde Stripe disponible</div>
+                <div style={{ fontSize: 11, color: t.muted }}>
+                  RDV terminés depuis +3 jours
+                </div>
               </div>
             </div>
             <div style={{
               fontSize: 32, fontWeight: 500, color: t.text,
               fontFamily: MONO, lineHeight: 1.1,
             }}>
-              {formatCents(balance.available_cents || 0)}
+              {formatCents(balance.eligible_now_cents || 0)}
             </div>
             <div style={{ fontSize: 12, color: t.muted, marginTop: 8 }}>
               {bankInfo}
@@ -110,7 +112,7 @@ export default function TabReversements({ period }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
             <PayoutButton
               variant="hero"
-              availableAmount={balance.available_cents || 0}
+              eligibleAmount={balance.eligible_now_cents || 0}
               bankAccountLast4={balance.bank_account?.last4 || null}
               bankName={balance.bank_account?.bank_name || null}
               hasPendingPayout={payouts.some(p => p.status === "pending" || p.status === "in_transit")}
@@ -139,8 +141,8 @@ export default function TabReversements({ period }) {
         }}>
           <Icon paths={PATH_INFO} size={14} color="#185FA5" />
           <div style={{ lineHeight: 1.5 }}>
-            <strong style={{ color: t.text }}>Mode manuel activé.</strong>
-            {" Vous reversez vous-même quand vous voulez. Pour un reversement automatique quotidien, configurez-le sur votre dashboard Stripe."}
+            <strong style={{ color: t.text }}>Reversement automatique à J+3.</strong>
+            {" L'argent de chaque RDV payé en ligne est viré automatiquement sur votre IBAN 3 jours après la prestation. Utilisez « Reverser les montants éligibles » uniquement pour avancer le versement des RDV déjà passés."}
           </div>
         </div>
       </div>

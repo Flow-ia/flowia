@@ -39,6 +39,8 @@ router.get('/balance', async (req, res) => {
       return res.json({
         connected:                false,
         available_cents:          0,
+        eligible_now_cents:       0,
+        eligible_now_count:       0,
         in_transit_cents:         0,
         pending_cents:            0,
         total_to_receive_cents:   0,
@@ -140,9 +142,33 @@ router.get('/balance', async (req, res) => {
       };
     }
 
+    // 3) Montant ELIGIBLE au reversement manuel maintenant. C'est cette valeur
+    // que le bouton "Reverser maintenant" doit afficher / payer, PAS le solde
+    // Stripe brut (qui inclurait des RDV futurs encore annulables -> risque
+    // de payer trop tot). Critere strict identique a releasePayouts.
+    let eligibleNowCents = 0;
+    let eligibleNowCount = 0;
+    try {
+      const { rows: er } = await pool.query(`
+        SELECT COUNT(*)::int                          AS count,
+               COALESCE(SUM(amount_cents), 0)::bigint AS total_cents
+          FROM appointment_payouts
+         WHERE user_id = $1
+           AND status = 'pending'
+           AND release_at <= NOW()
+           AND retry_count < 5
+      `, [userId]);
+      eligibleNowCount = er[0]?.count || 0;
+      eligibleNowCents = parseInt(er[0]?.total_cents || 0, 10);
+    } catch (er) {
+      console.warn('[GET /api/stripe/balance] eligible_now query fail:', er.message);
+    }
+
     res.json({
       connected:                true,
       available_cents:          available,
+      eligible_now_cents:       eligibleNowCents,
+      eligible_now_count:       eligibleNowCount,
       in_transit_cents:         inTransit,
       pending_cents:            pending,
       total_to_receive_cents:   available + inTransit + pending,

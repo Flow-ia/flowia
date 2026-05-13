@@ -1,11 +1,14 @@
 // components/payout/PayoutButton.jsx — Bouton "Reverser maintenant" avec
-// modal de confirmation + toast succes/erreur. Utilise sur Dashboard,
-// Stats Performance, Stats Reversements (variants primary / hero).
+// modal de confirmation + toast succes/erreur.
+//
+// Le montant affiche est ELIGIBLE (somme appointment_payouts dont release_at
+// est passe), PAS le solde Stripe brut. Eviter de payer un RDV futur encore
+// annulable est non-negociable cote produit.
 
 import { useEffect, useState } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { usePayoutMutation } from "../../hooks/usePayoutMutation";
-import { formatCents, formatDateLong } from "../../utils/format";
+import { formatCents } from "../../utils/format";
 
 const SKIP_CONFIRM_KEY = "flowia.payout.skipConfirm";
 const PAYOUT_CTA_GREEN = "#1D9E75";
@@ -24,6 +27,11 @@ const PATH_ALERT       = '<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2
 const PATH_LOADER      = '<line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>';
 
 export default function PayoutButton({
+  // Montant ELIGIBLE au reversement immediat (escrows release_at <= NOW()).
+  // `availableAmount` est conserve en alias pour back-compat des callers
+  // qui n'ont pas encore migre (PayoutDashboardBanner / TabReversements /
+  // pages/reglages/paiements).
+  eligibleAmount = null,
   availableAmount = 0,
   bankAccountLast4 = null,
   bankName = null,
@@ -35,6 +43,8 @@ export default function PayoutButton({
   const { mutate, reset, status, data, error } = usePayoutMutation();
   const [showModal, setShowModal] = useState(false);
   const [skipConfirm, setSkipConfirm] = useState(false);
+
+  const amount = eligibleAmount != null ? eligibleAmount : availableAmount;
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -48,9 +58,9 @@ export default function PayoutButton({
     }
   }, [status, reset, onSuccess]);
 
-  const isDisabled = availableAmount <= 0 || hasPendingPayout || status === "loading";
-  const tooltip = availableAmount <= 0
-    ? "Aucun solde disponible"
+  const isDisabled = amount <= 0 || hasPendingPayout || status === "loading";
+  const tooltip = amount <= 0
+    ? "Aucun montant éligible (les RDV à venir sont libérés 3 jours après la prestation)"
     : hasPendingPayout
       ? "Reversement déjà en cours"
       : "";
@@ -110,14 +120,14 @@ export default function PayoutButton({
           : (<>
               <Icon paths={PATH_SEND} size={variant === "hero" ? 14 : 14}
                     color={variant === "hero" ? "#fff" : t.bg} />
-              {"Reverser maintenant"}
+              {"Reverser les montants éligibles"}
             </>)}
       </button>
 
       {showModal && (
         <ConfirmModal
           theme={t}
-          amount={availableAmount}
+          amount={amount}
           last4={bankAccountLast4}
           bankName={bankName}
           skipConfirm={skipConfirm}
@@ -128,7 +138,7 @@ export default function PayoutButton({
       )}
 
       {status === "success" && (
-        <SuccessToast theme={t} payout={data?.payout} onDismiss={() => { reset(); onSuccess?.(); }} />
+        <SuccessToast theme={t} payload={data} onDismiss={() => { reset(); onSuccess?.(); }} />
       )}
       {status === "error" && (
         <ErrorToast theme={t} message={error?.message || "Erreur inconnue."} onDismiss={reset} />
@@ -154,7 +164,7 @@ function ConfirmModal({ theme: t, amount, last4, bankName, skipConfirm, onSkipCh
              background: t.card, color: t.text,
              padding: 24, borderRadius: 12,
              border: "0.5px solid " + t.border,
-             maxWidth: 420, width: "100%",
+             maxWidth: 460, width: "100%",
              display: "flex", flexDirection: "column", gap: 14,
            }}>
         <h3 style={{ margin: 0, fontSize: 18, fontWeight: 500, color: t.text }}>
@@ -165,7 +175,7 @@ function ConfirmModal({ theme: t, amount, last4, bankName, skipConfirm, onSkipCh
           <strong style={{ color: t.text, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
             {formatCents(amount)}
           </strong>
-          {" sur "}{bankLabel}{". Le virement arrivera sous 1-3 jours ouvrés."}
+          {" sur "}{bankLabel}{". Seuls les RDV passés depuis +3 jours sont inclus, les fonds des rendez-vous à venir restent bloqués pour permettre un éventuel remboursement client. Arrivée sous 1-3 jours ouvrés."}
         </p>
         <label style={{
           display: "flex", alignItems: "center", gap: 8,
@@ -222,19 +232,20 @@ function ToastBase({ children, bg, color, onDismiss }) {
   );
 }
 
-function SuccessToast({ payout, onDismiss }) {
-  if (!payout) return null;
-  const arrival = payout.arrival_date ? formatDateLong(payout.arrival_date) : null;
+function SuccessToast({ payload, onDismiss }) {
+  if (!payload) return null;
+  const released = payload.released_cents || 0;
+  const count    = payload.succeeded || 0;
   return (
     <ToastBase bg="#E1F5EE" color="#04342C" onDismiss={onDismiss}>
       <Icon paths={PATH_CIRCLE_CHECK} size={18} color="#0F6E56" />
       <span>
-        {"Reversement de "}
+        {count} {count > 1 ? "reversements initiés" : "reversement initié"}
+        {" pour "}
         <strong style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-          {formatCents(payout.amount_cents)}
+          {formatCents(released)}
         </strong>
-        {" initié."}
-        {arrival ? ` Arrivée prévue le ${arrival}.` : ""}
+        {". Arrivée sous 1-3 jours ouvrés."}
       </span>
     </ToastBase>
   );

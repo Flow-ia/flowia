@@ -1,8 +1,9 @@
 // hooks/usePayoutMutation.js — Wrapper autour de POST /api/stripe/payout/create.
 //
-// Mappe les codes d'erreur backend vers des messages utilisateur en FR.
-// Etat de transition : idle -> loading -> success | error (auto-reset apres
-// le toast pour permettre un nouveau click si solde re-disponible).
+// Le backend libere les escrows appointment_payouts ELIGIBLES uniquement
+// (release_at <= NOW()), pas le solde Stripe brut. Reponse :
+//   { success, processed, succeeded, failed, released_cents,
+//     bank_account_last4, bank_name, message }
 
 import { useState } from "react";
 import { payoutsV3Api } from "../utils/api";
@@ -12,8 +13,10 @@ const ERROR_MESSAGES = {
     "Compte Stripe non connecté. Configurez-le dans Réglages › Paiements.",
   ALREADY_IN_PROGRESS:
     "Un reversement est déjà en cours, attendez qu'il soit traité (généralement 1-3 jours ouvrés).",
-  INSUFFICIENT_BALANCE:
-    "Aucun solde disponible pour le moment. Vos paiements deviendront disponibles 3 jours après chaque RDV.",
+  NO_ELIGIBLE_PAYOUTS:
+    "Aucun montant éligible pour le moment. Les fonds des RDV à venir sont libérés automatiquement 3 jours après chaque rendez-vous.",
+  STRIPE_RELEASE_FAILED:
+    "Le reversement a échoué côté Stripe. Réessayez plus tard, un retry automatique est déjà programmé.",
   STRIPE_AUTH_ERROR:
     "Erreur d'authentification Stripe. Reconnectez votre compte dans Réglages › Paiements.",
   STRIPE_PERMISSION_ERROR:
