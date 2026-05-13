@@ -252,12 +252,60 @@ async function computeAdaptivePercentages(userId) {
   };
 }
 
-// ── Scheduling prédictif: calcule scheduled_at pour un client ───────────────
+// ── Helpers TZ Europe/Paris (aligné utils/paymentV3.js) ─────────────────────
+// Les SMS marketing sont planifiés en heure locale Paris (11h matin, 14h30
+// après-midi, 18h soir). Avant ce commit, computeScheduledAt utilisait
+// new Date() + setHours()/getDay() qui dépendent du TZ du process Node ;
+// sur Render free tier en UTC, un slot "14h30 Paris" partait à 14h30 UTC =
+// 16h30 Paris en été. Toute la stack (booking_settings, paymentV3, stats)
+// raisonne en Europe/Paris : on s'aligne.
+const PARIS_TZ = 'Europe/Paris';
+
+function parisYmd(date = new Date()) {
+  return date.toLocaleDateString('sv-SE', { timeZone: PARIS_TZ });
+}
+
+function shiftYmd(ymd, deltaDays) {
+  const d = new Date(ymd + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toLocaleDateString('sv-SE', { timeZone: PARIS_TZ });
+}
+
+function dowOfYmd(ymd) {
+  // 0=dim..6=sam, calculé sur la date Paris. Midi UTC + offset Paris (±1-2h)
+  // reste sur le même jour calendaire — robuste aux DST.
+  return new Date(ymd + 'T12:00:00Z').getUTCDay();
+}
+
+function getParisOffsetMinutes(date) {
+  // Offset Paris en minutes pour la date donnée : +60 en hiver, +120 en été.
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: PARIS_TZ,
+    timeZoneName: 'shortOffset',
+  });
+  const v = dtf.formatToParts(date).find(p => p.type === 'timeZoneName')?.value || 'GMT+1';
+  const m = /GMT([+-]?\d+)/.exec(v);
+  return m ? parseInt(m[1]) * 60 : 60;
+}
+
+function makeParisDate(ymd, hour, minute) {
+  // Construit un Date dont la projection Paris est exactement ymd hour:minute:00.
+  const naiveUtcMs = Date.UTC(
+    parseInt(ymd.slice(0, 4)),
+    parseInt(ymd.slice(5, 7)) - 1,
+    parseInt(ymd.slice(8, 10)),
+    hour, minute, 0
+  );
+  const offsetMin = getParisOffsetMinutes(new Date(naiveUtcMs));
+  return new Date(naiveUtcMs - offsetMin * 60 * 1000);
+}
+
+// ── Scheduling prédictif: calcule scheduled_at pour un client (TZ Paris) ────
 // Se base sur pref_dow et pref_slot extraits de ses RDV passés.
-// Règles: jamais dimanche (dow=0), jamais avant 9h ni après 20h.
-// Fallback: pas assez de données → mardi ou jeudi à 11h.
+// Règles: jamais dimanche (dow=0), créneaux 11h/14h30/18h Paris.
+// Fallback: pas assez de données → mardi ou jeudi à 11h Paris.
 function computeScheduledAt(client, phaseStartDay, phaseEndDay, nowRef) {
-  const base = nowRef ? new Date(nowRef) : new Date();
+  const todayPar = parisYmd(nowRef ? new Date(nowRef) : new Date());
   const hasData = (parseInt(client.visit_count) || 0) >= 2;
   let prefDow = hasData && client.pref_dow != null ? parseInt(client.pref_dow) : null;
   if (prefDow === 0) prefDow = null;
@@ -270,28 +318,21 @@ function computeScheduledAt(client, phaseStartDay, phaseEndDay, nowRef) {
   const dowsToTry = prefDow != null ? [prefDow, ...fallbackDows] : fallbackDows;
 
   for (let d = phaseStartDay; d <= phaseEndDay; d++) {
-    const date = new Date(base);
-    date.setDate(date.getDate() + d);
-    const dow = date.getDay();
+    const ymd = shiftYmd(todayPar, d);
+    const dow = dowOfYmd(ymd);
     if (dow === 0) continue;
     if (dowsToTry.includes(dow)) {
-      date.setHours(hour, minute, 0, 0);
-      return date;
+      return makeParisDate(ymd, hour, minute);
     }
   }
-  // Fallback: premier jour non-dimanche de la phase
+  // Fallback : premier jour non-dimanche de la phase, 11h Paris.
   for (let d = phaseStartDay; d <= phaseEndDay; d++) {
-    const date = new Date(base);
-    date.setDate(date.getDate() + d);
-    if (date.getDay() !== 0) {
-      date.setHours(11, 0, 0, 0);
-      return date;
+    const ymd = shiftYmd(todayPar, d);
+    if (dowOfYmd(ymd) !== 0) {
+      return makeParisDate(ymd, 11, 0);
     }
   }
-  const fallback = new Date(base);
-  fallback.setDate(fallback.getDate() + phaseStartDay);
-  fallback.setHours(11, 0, 0, 0);
-  return fallback;
+  return makeParisDate(shiftYmd(todayPar, phaseStartDay), 11, 0);
 }
 
 // ── Code personnel unique: PRENOM + 4 chars random ──────────────────────────
@@ -1088,6 +1129,10 @@ router.post('/auto-recalculate', async (req, res) => {
 router.get('/ai-history', async (req, res) => {
   try {
     const userId = req.user.userId;
+    // real_revenue : tire le CA des appointments (online_booking) OU des
+    // transactions (caisse). Avant ce commit, on ne joinait que sur
+    // appointments → le CA généré en caisse (majorité walk-in barbershop)
+    // était toujours à 0. COALESCE prend la première source disponible.
     const { rows } = await pool.query(`
       SELECT
         ac.id, ac.budget, ac.duration_days, ac.status, ac.total_sms, ac.total_cost,
@@ -1095,10 +1140,15 @@ router.get('/ai-history', async (req, res) => {
         COUNT(acc.id)::int AS codes_total,
         COUNT(acc.sent_at)::int AS codes_sent,
         COUNT(acc.used_at)::int AS codes_used,
-        COALESCE(SUM(CASE WHEN acc.used_at IS NOT NULL THEN appt.total_amount ELSE 0 END), 0)::float AS real_revenue
+        COALESCE(SUM(
+          CASE WHEN acc.used_at IS NOT NULL
+          THEN COALESCE(appt.total_amount, txn.amount, 0)
+          ELSE 0 END
+        ), 0)::float AS real_revenue
       FROM ai_campaigns ac
       LEFT JOIN ai_campaign_codes acc ON acc.ai_campaign_id = ac.id
       LEFT JOIN appointments appt ON appt.id = acc.used_appointment_id
+      LEFT JOIN transactions txn ON txn.id = acc.used_transaction_id
       WHERE ac.user_id = $1
       GROUP BY ac.id
       ORDER BY ac.created_at DESC

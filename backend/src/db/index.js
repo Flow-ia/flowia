@@ -1124,6 +1124,14 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_ai_codes_promo ON ai_campaign_codes(promo_code_id)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_ai_codes_status ON ai_campaign_codes(status, scheduled_at)`);
 
+  // Fix boucle d'apprentissage IA : avant ce commit `used_at` n'était mis à
+  // jour que par /public-booking/book.js (réservation en ligne). Les codes
+  // utilisés en caisse (typiquement barbershop walk-in) n'étaient JAMAIS
+  // marqués → conversion_rate sous-évalué + computeAdaptivePercentages
+  // n'apprenait que sur les conversions online. On ajoute used_transaction_id
+  // pour tracer les conversions caisse (UUID nullable, FK soft).
+  await runMigration(`ALTER TABLE ai_campaign_codes ADD COLUMN IF NOT EXISTS used_transaction_id UUID`);
+
   // Ajouter scheduled_at à campaign_queue pour scheduling précis à l'heure
   await runMigration(`ALTER TABLE campaign_queue ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE campaign_queue ADD COLUMN IF NOT EXISTS ai_code_id UUID`);

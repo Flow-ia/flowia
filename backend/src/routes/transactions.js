@@ -639,6 +639,22 @@ router.post('/', async (req, res) => {
         } catch (loyErr) { console.error('[FIDELITE MULTI ERR]', loyErr.message); }
       }
 
+      // Boucle d'apprentissage IA — couvre le path multi-paiement (le bloc
+      // single au-dessous fait la même chose ligne ~858). On pointe vers la
+      // 1re row du groupe ; le LEFT JOIN dans /ai-history retombe sur cette
+      // tx pour real_revenue. Cas multi : sous-estime légèrement (cf. limite
+      // documentée — amount unique vs SUM groupe), mais conv_rate reste juste.
+      if (promo_code_id && insertedRows.length) {
+        await pool.query(
+          `UPDATE ai_campaign_codes
+              SET used_at = NOW(),
+                  used_transaction_id = $1,
+                  status = 'used'
+            WHERE promo_code_id = $2 AND used_at IS NULL`,
+          [insertedRows[0].id, promo_code_id]
+        ).catch(e => console.error('[AI CODE USE MULTI ERR]', e.message));
+      }
+
       return res.status(201).json({
         success: true,
         payment_group_id: groupId,
@@ -848,6 +864,21 @@ router.post('/', async (req, res) => {
           WHERE user_id=$1 AND promo_code_id=$2 AND status='available'`,
         [req.user.userId, promo_code_id]
       ).catch(() => {});
+
+      // Boucle d'apprentissage IA : marque le code de campagne IA comme
+      // utilisé en caisse. Avant ce commit, seul /public-booking/book.js
+      // updatait ai_campaign_codes.used_at (réservation en ligne). Les
+      // conversions caisse (majorité en barbershop walk-in) étaient
+      // invisibles pour computeAdaptivePercentages → % adaptatifs biaisés
+      // par sous-représentation. used_transaction_id distingue la source.
+      await pool.query(
+        `UPDATE ai_campaign_codes
+            SET used_at = NOW(),
+                used_transaction_id = $1,
+                status = 'used'
+          WHERE promo_code_id = $2 AND used_at IS NULL`,
+        [tx.id, promo_code_id]
+      ).catch(e => console.error('[AI CODE USE ERR]', e.message));
     }
 
     // Désactivation immédiate de la reward sélectionnée à la caisse —
