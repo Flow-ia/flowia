@@ -177,6 +177,10 @@ function startServer() {
       callback(new Error('CORS not allowed: ' + origin));
     },
     credentials: true,
+    // Sliding session PIN admin : le frontend lit x-pin-session-refresh pour
+    // renouveler ff_pin_token sans re-prompt. Sans expose, le navigateur
+    // masque le header en cross-origin.
+    exposedHeaders: ['x-pin-session-refresh'],
   });
   // Étape 1 — sniper qui pose les headers CORS sur res AVANT que tout autre
   // middleware (rate-limiter, auth, router) ait pu envoyer une réponse.
@@ -191,6 +195,7 @@ function startServer() {
     if (isMerchantOriginAllowed(origin) && origin) {
       res.setHeader('Access-Control-Allow-Origin',      origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Expose-Headers',    'x-pin-session-refresh');
       res.setHeader('Vary',                              'Origin');
     }
     next();

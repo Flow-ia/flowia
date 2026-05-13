@@ -143,11 +143,16 @@ function getPinToken() {
 // Requête avec PIN admin (pour PUT/DELETE transactions, etc.).
 //
 // Refonte FDS-2026 commit 16 : si le serveur retourne 403 ACTION_ADMIN_ONLY
-// (typiquement parce que ff_pin_token a expiré, JWT 2h ≪ session admin
-// localStorage qui peut durer plusieurs heures), on ouvre la modale PIN admin
-// (registerAdminPinHandler côté App.jsx), on attend la nouvelle saisie, puis
-// on retry UNE fois la requête avec le nouveau token. Pas de bascule en mode
-// normal — l'utilisateur reste « admin », il rafraîchit juste son token.
+// (typiquement parce que ff_pin_token a expiré côté serveur), on ouvre la
+// modale PIN admin (registerAdminPinHandler côté App.jsx), on attend la
+// nouvelle saisie, puis on retry UNE fois la requête avec le nouveau token.
+// Pas de bascule en mode normal — l'utilisateur reste « admin », il
+// rafraîchit juste son token.
+//
+// Sliding session : chaque réponse admin contient `x-pin-session-refresh`
+// (JWT 8h frais), capturé ici et écrit dans ff_pin_token. Tant que l'admin
+// utilise activement l'app, son token est continuellement renouvelé ; la
+// modale PIN ne ré-apparaît qu'après 8h d'inactivité totale.
 async function adminRequest(path, options = {}) {
   const exec = async () => {
     const token    = getToken();
@@ -157,6 +162,15 @@ async function adminRequest(path, options = {}) {
     if (pinToken) headers['x-pin-session'] = pinToken;
     const res  = await fetch(`${BASE}${path}`, { ...options, headers });
     handleMerchant401(res, path);
+    // Sliding session : si le backend nous renvoie un x-pin-session-refresh,
+    // on remplace ff_pin_token avant tout traitement de la réponse. Comme ça
+    // les requêtes admin suivantes utilisent le token frais, et la modale PIN
+    // ne ré-apparaît qu'après 8h d'inactivité complète (plus à chaque borne 8h
+    // depuis la dernière saisie).
+    try {
+      const refreshed = res.headers.get('x-pin-session-refresh');
+      if (refreshed) localStorage.setItem('ff_pin_token', refreshed);
+    } catch { /* localStorage indisponible — token actuel garde sa TTL */ }
     const data = await res.json().catch(() => ({}));
     if (res.status === 403) { handleAccountBlocked(data) || handleFeatureBlocked(data); }
     return { res, data };
@@ -675,13 +689,20 @@ export const exportApi = {
   // adminRequest). Évite « Session admin expirée. Déverrouillez avec votre PIN
   // puis réessayez. » qui forçait l'utilisateur à quitter/réentrer le mode.
   downloadFile: async (url, filename) => {
-    const fetchOnce = () => {
+    const fetchOnce = async () => {
       const token    = localStorage.getItem('ff_token');
       const pinToken = localStorage.getItem('ff_pin_token');
       const headers  = {};
       if (token)    headers['Authorization'] = `Bearer ${token}`;
       if (pinToken) headers['x-pin-session'] = pinToken;
-      return fetch(url, { headers });
+      const r = await fetch(url, { headers });
+      // Sliding session : aligné avec adminRequest pour que l'export
+      // renouvelle aussi le token PIN.
+      try {
+        const refreshed = r.headers.get('x-pin-session-refresh');
+        if (refreshed) localStorage.setItem('ff_pin_token', refreshed);
+      } catch { /* localStorage indisponible */ }
+      return r;
     };
     let r = await fetchOnce();
     if (r.status === 403) {
