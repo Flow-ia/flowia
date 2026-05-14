@@ -9,6 +9,7 @@ import ClientDetailPage from './pages/ClientDetailPage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
 import SearchPage from './pages/SearchPage.jsx';
 import LegacyMultiPage from './pages/LegacyMultiPage.jsx';
+import MaintenancePage from './pages/MaintenancePage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import './styles/global.css';
 
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/search"             element={<Protected><SearchPage /></Protected>} />
         <Route path="/audit"              element={<Protected><AuditPage /></Protected>} />
         <Route path="/legacy-multi"       element={<Protected><LegacyMultiPage /></Protected>} />
+        <Route path="/maintenance"        element={<Protected><MaintenancePage /></Protected>} />
         <Route path="/settings"           element={<Protected><SettingsPage /></Protected>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

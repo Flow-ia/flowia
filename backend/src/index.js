@@ -323,6 +323,20 @@ function startServer() {
     standardHeaders: true, legacyHeaders: false,
   });
 
+  // ── Etat plateforme (public, hors maintenance guard) ─────────────────────
+  // Mounted AVANT maintenanceGuard pour que le frontend puisse lire l'etat
+  // meme quand le mode maintenance est ON.
+  app.use('/api/platform-status', require('./routes/platform-status'));
+
+  // ── Maintenance guard (kill-switch super-admin) ──────────────────────────
+  // Bloque les requetes si platform_settings.maintenance est active sur le
+  // perimetre concerne (merchant_portal / booking_public / merchant_signup).
+  // Skip : /api/admin, /api/health, /api/platform-status, webhooks Stripe,
+  // /api/auth/login. Bypass possible par user_id ou email merchant (whitelist).
+  // Cache memoire 5s + fail-open si DB KO (cf. utils/platformSettings.js).
+  const { maintenanceGuard } = require('./middleware/maintenanceGuard');
+  app.use(maintenanceGuard);
+
   // ── Routes ───────────────────────────────────────────────────────────────
   // Routes auth avec limiters spécifiques par endpoint
   const authRouter = require('./routes/auth');

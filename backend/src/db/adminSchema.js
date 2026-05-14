@@ -99,6 +99,36 @@ async function applyAdminSchema(pool) {
   await runMig(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS slug_locked     BOOLEAN     DEFAULT FALSE`);
   await runMig(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS slug_locked_at  TIMESTAMPTZ`);
   await runMig(`ALTER TABLE booking_settings ADD COLUMN IF NOT EXISTS slug_locked_by_admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL`);
+
+  // ── Commit admin 11 — platform_settings (maintenance mode + autres flags) ─
+  // Table key/value JSONB unique pour les flags plateforme. Une seule row
+  // 'maintenance' au depart, schema extensible sans migration future.
+  // Lue par middleware/maintenanceGuard.js avec cache memoire 5s.
+  await runMig(`
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key                  VARCHAR(64) PRIMARY KEY,
+      value                JSONB       NOT NULL DEFAULT '{}'::jsonb,
+      updated_at           TIMESTAMPTZ DEFAULT NOW(),
+      updated_by_admin_id  UUID REFERENCES admin_users(id) ON DELETE SET NULL
+    )
+  `);
+  // Seed row maintenance (default OFF sur les 3 perimetres). ON CONFLICT
+  // DO NOTHING : si la row existe deja (deuxieme boot, prod), on ne reset
+  // PAS les valeurs reelles. Sinon un redeploiement effacerait la
+  // configuration admin.
+  await runMig(`
+    INSERT INTO platform_settings (key, value) VALUES (
+      'maintenance',
+      '{
+        "merchant_portal":  { "enabled": false, "message": "Notre plateforme est en cours de maintenance. Merci de reessayer plus tard ou de contacter directement le support." },
+        "booking_public":   { "enabled": false, "message": "Notre plateforme est en cours de maintenance. Merci de reessayer plus tard ou de contacter directement le support." },
+        "merchant_signup":  { "enabled": false, "message": "Les nouvelles inscriptions sont temporairement suspendues. Reessayez plus tard." },
+        "bypass_emails":    [],
+        "bypass_user_ids":  []
+      }'::jsonb
+    )
+    ON CONFLICT (key) DO NOTHING
+  `);
 }
 
 module.exports = { applyAdminSchema };

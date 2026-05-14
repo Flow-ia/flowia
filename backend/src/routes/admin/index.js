@@ -49,5 +49,6 @@ router.use('/search',         require('./search'));
 router.use('/refund-misclassified', require('./refund-misclassified'));
 router.use('/transactions',         require('./transactions'));
 router.use('/ledger-metrics',       require('./ledger-metrics'));
+router.use('/maintenance',          require('./maintenance'));
 
 module.exports = router;

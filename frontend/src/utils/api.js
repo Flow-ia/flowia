@@ -266,6 +266,27 @@ async function request(path, options = {}, _attempt = 0) {
     }
     throw netErr;
   }
+  // 503 maintenance plateforme (super-admin a active le kill-switch). Le
+  // backend pose un header X-Maintenance: 1 pour distinguer d'un 503 cold-
+  // start qu'on retry. Ici on N'AUTORISE PAS le retry (c'est un etat actif
+  // pas transitoire) et on dispatch un event pour que MaintenanceOverlay
+  // s'affiche en plein ecran.
+  if (res.status === 503 && res.headers.get('X-Maintenance') === '1') {
+    let data = {};
+    try { data = await res.clone().json(); } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent('ff-maintenance-on', {
+        detail: {
+          scope:   data.scope   || res.headers.get('X-Maintenance-Scope') || 'merchant_portal',
+          message: data.message || '',
+        }
+      }));
+    } catch {}
+    const err = Object.assign(new Error(data.message || 'Plateforme en maintenance'), {
+      code: 'maintenance', status: 503, data,
+    });
+    throw err;
+  }
   // 5xx cold-start : retry uniquement pour GET (mutation pourrait avoir été
   // partiellement traitée côté backend, on évite les double-écritures).
   if (RETRY_STATUSES.has(res.status) && isReadOnly && _attempt < maxRetries) {

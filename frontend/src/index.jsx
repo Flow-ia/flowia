@@ -30,6 +30,7 @@ import LockScreen from './components/LockScreen';
 import InstallPrompt from './pwa/InstallPrompt';
 import UpdateBanner from './pwa/UpdateBanner';
 import OfflineBanner from './pwa/OfflineBanner';
+import MaintenanceOverlay from './components/MaintenanceOverlay';
 import RefreshFab from './pwa/RefreshFab';
 import { registerSW } from './pwa/registerSW';
 import './index.css';
@@ -244,6 +245,10 @@ root.render(
           <AdminProvider>
             <TabletModeProvider>
             <AdminModeProvider>
+            {/* Overlay maintenance plein ecran. Ecoute l'event 'ff-maintenance-on'
+                dispatch par utils/api.js sur un 503 + header X-Maintenance:1.
+                Rendu au plus haut niveau pour couvrir merchant + booking publique. */}
+            <MaintenanceOverlay />
             <Routes>
               {/* ── Callback OAuth (popup retour Google → ferme + broadcast) ── */}
               <Route path="/__oauth" element={<OAuthCallback />} />
