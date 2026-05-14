@@ -38,6 +38,49 @@ export default function MaintenanceOverlay() {
     return () => window.removeEventListener('ff-maintenance-on', onMaint);
   }, []);
 
+  // Check pre-emptif au boot : evite que l'utilisateur charge la page login
+  // ou booking publique sans savoir qu'elle est bloquee. Si le toggle qui
+  // s'applique au host courant est ON, on affiche l'overlay tout de suite.
+  // Le scope est devine d'apres l'URL : /book/* -> booking_public, sinon
+  // merchant_portal (le signup est englobe dans merchant_portal cote front).
+  useEffect(() => {
+    let cancelled = false;
+    // Marker pose par OAuthCallback quand Google OAuth retourne err=MAINTENANCE.
+    // Lu une seule fois puis supprime, sinon l'overlay reapparaitrait
+    // indefiniment apres correction.
+    try {
+      const raw = localStorage.getItem('ff_pending_maintenance');
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && (Date.now() - (d.at || 0) < 5 * 60 * 1000)) {
+          setScope(d.scope || 'merchant_portal');
+          setMessage(d.message || DEFAULT_MESSAGE);
+          setOpen(true);
+        }
+        localStorage.removeItem('ff_pending_maintenance');
+      }
+    } catch { /* localStorage inaccessible */ }
+
+    (async () => {
+      try {
+        const base = import.meta.env.VITE_API_URL || '/api';
+        const r = await fetch(base + '/platform-status', { cache: 'no-store' });
+        const data = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        const path = (typeof window !== 'undefined' ? window.location.pathname : '') || '';
+        const isBooking = path.startsWith('/book/') || path.startsWith('/marketplace/');
+        const detectedScope = isBooking ? 'booking_public' : 'merchant_portal';
+        const section = data[detectedScope];
+        if (section?.enabled) {
+          setScope(detectedScope);
+          setMessage(section.message || DEFAULT_MESSAGE);
+          setOpen(true);
+        }
+      } catch { /* fail-silent : l'overlay arrivera via 503 si besoin */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const retry = useCallback(async () => {
     setRetrying(true);
     try {

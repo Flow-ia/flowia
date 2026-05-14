@@ -270,16 +270,23 @@ async function request(path, options = {}, _attempt = 0) {
   // backend pose un header X-Maintenance: 1 pour distinguer d'un 503 cold-
   // start qu'on retry. Ici on N'AUTORISE PAS le retry (c'est un etat actif
   // pas transitoire) et on dispatch un event pour que MaintenanceOverlay
-  // s'affiche en plein ecran.
+  // s'affiche en plein ecran. On purge AUSSI tous les tokens locaux : un
+  // user non-whitelisted qui prend un 503 doit etre deconnecte (ses
+  // requetes futures echoueraient toutes de toute facon).
   if (res.status === 503 && res.headers.get('X-Maintenance') === '1') {
     let data = {};
     try { data = await res.clone().json(); } catch {}
+    const scope = data.scope || res.headers.get('X-Maintenance-Scope') || 'merchant_portal';
+    // Force-logout sur scope merchant uniquement (booking publique n'a pas
+    // de session a purger pour les visiteurs anonymes).
+    if (scope === 'merchant_portal' || scope === 'merchant_signup') {
+      ['ff_token','ff_pin_token','ff_oauth_merchant','ff_gc_token','ff_client_token']
+        .forEach(k => { try { localStorage.removeItem(k); } catch {} });
+      try { window.dispatchEvent(new Event('ff-auth-expired')); } catch {}
+    }
     try {
       window.dispatchEvent(new CustomEvent('ff-maintenance-on', {
-        detail: {
-          scope:   data.scope   || res.headers.get('X-Maintenance-Scope') || 'merchant_portal',
-          message: data.message || '',
-        }
+        detail: { scope, message: data.message || '' }
       }));
     } catch {}
     const err = Object.assign(new Error(data.message || 'Plateforme en maintenance'), {

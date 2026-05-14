@@ -18,6 +18,9 @@ const jwt = require('jsonwebtoken');
 const { getMaintenanceState, isBypassedUser } = require('../utils/platformSettings');
 
 // Routes toujours autorisees, peu importe le mode maintenance.
+// Le check whitelist est fait IN-ROUTE (auth.js) pour les routes auth qui
+// echangent des credentials -- sans ca, on bloquerait avant l'identification
+// et le whitelist ne pourrait pas se logger.
 function isAlwaysAllowed(req) {
   const p = req.path;
   if (req.method === 'OPTIONS') return true;
@@ -28,15 +31,27 @@ function isAlwaysAllowed(req) {
   if (p === '/api/subscriptions/webhook') return true;
   if (p === '/api/stripe-connect/webhook') return true;
   if (p === '/api/auth/login') return true;
+  // Google OAuth callbacks : routes de redirect HTML, le middleware ne peut
+  // pas renvoyer JSON 503 (browser afficherait le JSON brut). Le check
+  // whitelist est fait in-route avec un redirect propre.
+  if (p.startsWith('/api/auth/google/')) return true;
   return false;
 }
 
-// Categorisation route → quel toggle s'applique.
+// Categorisation route → quel toggle bloque cette route.
 // Retourne null si la route n'est gardee par aucun toggle (passe).
-function getToggleFor(req) {
+// Hierarchie : merchant_portal englobe merchant_signup (activer le portal
+// bloque aussi l'inscription sans avoir besoin de cocher signup separement).
+function getToggleFor(req, state) {
   const p = req.path;
-  // Inscription merchant : route dediee.
-  if (p === '/api/auth/register') return 'merchant_signup';
+  // Inscription merchant : toutes les routes /api/auth/register* (register,
+  // register/confirm, register/resend-code). Bloque par merchant_signup OU
+  // par merchant_portal si actif (un portail ferme = pas d'inscription).
+  if (p.startsWith('/api/auth/register')) {
+    if (state?.merchant_signup?.enabled) return 'merchant_signup';
+    if (state?.merchant_portal?.enabled) return 'merchant_portal';
+    return null;
+  }
   // Booking publique : toutes les routes /api/pub/* (RDV publique salon).
   if (p.startsWith('/api/pub/')) return 'booking_public';
   // Sinon, c'est le portail commercant (toutes les autres routes /api/*).
@@ -63,9 +78,8 @@ function tryDecodeUser(req) {
 async function maintenanceGuard(req, res, next) {
   if (isAlwaysAllowed(req)) return next();
 
-  const toggle = getToggleFor(req);
-  if (!toggle) return next();  // route non-API (SPA fallback, static)
-
+  // On charge state d'abord (besoin de la hierarchie merchant_portal ⊇
+  // merchant_signup pour categoriser /register).
   let state;
   try {
     state = await getMaintenanceState();
@@ -74,6 +88,9 @@ async function maintenanceGuard(req, res, next) {
     // double-ceinture pour etre 100% sur qu'un crash imprevu ne bloque pas.
     return next();
   }
+
+  const toggle = getToggleFor(req, state);
+  if (!toggle) return next();  // route non-API (SPA fallback, static)
 
   const section = state[toggle];
   if (!section || !section.enabled) return next();

@@ -54,6 +54,31 @@ export default function OAuthCallback() {
       return;
     }
 
+    // Maintenance kill-switch : le backend Google callback redirige avec
+    // error=MAINTENANCE quand l'user n'est pas dans la whitelist bypass.
+    // On pose un marker localStorage que MaintenanceOverlay lit au mount
+    // (de l'opener) pour afficher l'overlay sans dependre d'un BroadcastChannel
+    // qui pourrait avoir un timing serre.
+    if (err === 'MAINTENANCE') {
+      const scope   = params.get('maintenance_scope')   || 'merchant_portal';
+      const message = params.get('maintenance_message') || '';
+      try {
+        localStorage.setItem('ff_pending_maintenance', JSON.stringify({ scope, message, at: Date.now() }));
+      } catch {}
+      // Notifie aussi l'opener immediat si BroadcastChannel disponible.
+      try { bc && bc.postMessage({ type: 'maintenance', scope, message }); } catch {}
+      // Dispatch dans la popup elle-meme aussi (au cas ou elle ne ferme pas).
+      try {
+        window.dispatchEvent(new CustomEvent('ff-maintenance-on', { detail: { scope, message } }));
+      } catch {}
+      setTimeout(() => {
+        try { bc && bc.close(); } catch {}
+        try { window.close(); } catch {}
+        if (!window.closed) window.location.replace('/');
+      }, 400);
+      return;
+    }
+
     if (err || !token) {
       try { bc && bc.postMessage({ type: 'oauth_error', error: err || 'missing_token' }); } catch {}
       setTimeout(() => {

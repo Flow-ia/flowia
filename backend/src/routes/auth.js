@@ -3,6 +3,26 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db');
+const { getMaintenanceState, isBypassedUser } = require('../utils/platformSettings');
+
+// Helper : bloque l'access si maintenance ACTIVE sur merchant_portal et user
+// PAS dans la whitelist bypass. Utilise apres auth reussie (login form +
+// Google OAuth callback) pour empecher les non-whitelisted de se connecter.
+// Retourne true si bloque (caller doit return), false sinon.
+async function checkMaintenanceBlock(userId, email) {
+  try {
+    const state = await getMaintenanceState();
+    if (!state.merchant_portal?.enabled) return null;
+    if (isBypassedUser(state, userId, email)) return null;
+    return {
+      message: state.merchant_portal.message
+        || "Notre plateforme est en cours de maintenance. Merci de reessayer plus tard ou de contacter directement le support.",
+    };
+  } catch {
+    // Fail-open : si on ne peut pas lire l'etat, on laisse passer.
+    return null;
+  }
+}
 const { sendVerificationEmail } = require('../utils/email');
 const { authMiddleware } = require('../middleware/auth');
 const { setClientCookie } = require('../utils/clientCookies');
@@ -295,6 +315,20 @@ router.post('/login', async (req, res) => {
       code: 'ACCOUNT_DELETION_PENDING',
       deletionRequestedAt: user.deletion_requested_at,
     });
+    // Maintenance kill-switch : si merchant_portal est ON et l'user n'est PAS
+    // whitelisted, on refuse la connexion avec un 503 dedie. Le frontend
+    // detecte le code 'maintenance' et affiche l'overlay au lieu de creer
+    // une session. Whitelisted passe normalement.
+    const block = await checkMaintenanceBlock(user.id, user.email);
+    if (block) {
+      res.setHeader('X-Maintenance', '1');
+      res.setHeader('X-Maintenance-Scope', 'merchant_portal');
+      return res.status(503).json({
+        error:   'maintenance',
+        scope:   'merchant_portal',
+        message: block.message,
+      });
+    }
     const tokenExpiry = await getMerchantSessionDuration(user.id);
     const token = signMerchantJwt(
       { userId: user.id, email: user.email, businessName: user.business_name },
@@ -1045,6 +1079,19 @@ router.get('/google/merchant/callback', async (req, res) => {
     // Si compte en grace post-suppression, on refuse aussi le login Google.
     if (user.deletion_requested_at) {
       return res.redirect(`${TARGET_ORIGIN}/__oauth#error=ACCOUNT_DELETION_PENDING`);
+    }
+    // Maintenance kill-switch : si merchant_portal ON + user PAS whitelisted,
+    // on redirige vers /__oauth avec error=MAINTENANCE. OAuthCallback.jsx
+    // detecte ce code et dispatch ff-maintenance-on pour afficher l'overlay
+    // (au lieu d'afficher du JSON brut au visiteur).
+    const maintBlock = await checkMaintenanceBlock(user.id, user.email);
+    if (maintBlock) {
+      const hash = new URLSearchParams();
+      hash.set('type', 'merchant');
+      hash.set('error', 'MAINTENANCE');
+      hash.set('maintenance_scope', 'merchant_portal');
+      hash.set('maintenance_message', maintBlock.message);
+      return res.redirect(`${TARGET_ORIGIN}/__oauth#${hash.toString()}`);
     }
 
     // 5. Générer le JWT commerçant — durée configurable via user_settings.
