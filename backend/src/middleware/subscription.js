@@ -102,12 +102,39 @@ function requirePlanWrites(...allowedPlans) {
   };
 }
 
+// ── Commission FlowIA selon plan d'abonnement ───────────────────────────────
+// Regle metier : plan Decouverte (gratuit) = commission active sur chaque
+// paiement RDV en ligne (application_fee_amount). Plans payants Essentiel
+// et Equipe = 0% commission. Le taux Decouverte est configurable via ENV
+// COMMISSION_RATE_DECOUVERTE (fallback 5%). Cap dur 30% pour eviter une
+// config aberrante.
+const COMMISSION_RATE_DECOUVERTE = (() => {
+  const raw = parseFloat(process.env.COMMISSION_RATE_DECOUVERTE);
+  if (!Number.isFinite(raw) || raw < 0) return 5;
+  return Math.min(30, raw);
+})();
+
+// Retourne le taux de commission applicable (en %) au merchant donne, en
+// fonction de son plan effectif. Source de verite vs lecture brute de
+// users.commission_rate : permet de bouger la grille tarifaire sans
+// migrations.
+//  - Decouverte → COMMISSION_RATE_DECOUVERTE (defaut 5%)
+//  - Essentiel  → 0
+//  - Equipe     → 0
+async function getApplicableCommissionRate(userId) {
+  const plan = await getEffectivePlan(userId);
+  if (plan === 'essentiel' || plan === 'equipe') return 0;
+  return COMMISSION_RATE_DECOUVERTE;
+}
+
 module.exports = {
   getEffectivePlan,
   requirePlan,
   requirePlanWrites,
   requirePaidPlan,
   requireEquipePlan,
+  getApplicableCommissionRate,
+  COMMISSION_RATE_DECOUVERTE,
   PLANS,
   PLAN_RANK,
 };

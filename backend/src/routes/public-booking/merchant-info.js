@@ -3,6 +3,28 @@ const { pool } = require('../../db');
 const { resolveReferralForFilleul } = require('../referrals');
 const { getSlots, getEmployeeOpenClose } = require('./helpers');
 const { extractClientToken } = require('../../utils/clientCookies');
+const { checkQuota } = require('../../middleware/requireQuota');
+
+// Statut de blocage de reservation pour le merchant (live, hors cache).
+// Renvoie un descripteur { reason, message } a destination du client, ou
+// null si tout va bien. Le cache du business est invalidable instantanement
+// via plan upgrade -> on calcule donc ce statut a chaque appel, meme sur
+// cache hit du business info.
+async function computeBookingBlocked(userId) {
+  if (!userId) return null;
+  try {
+    const q = await checkQuota(userId, 'appointment');
+    if (!q.ok && q.payload?.code === 'QUOTA_EXCEEDED') {
+      return {
+        reason:  'quota_exceeded',
+        message: 'Le nombre de rendez-vous autorise est limite. Merci de prendre contact avec le commercant directement pour lever cette limite.',
+      };
+    }
+  } catch (e) {
+    console.error('[computeBookingBlocked]', e.message);
+  }
+  return null;
+}
 
 module.exports = function attachMerchantInfoRoutes(router) {
   // ── GET /api/pub/:slug ────────────────────────────────────────────────────
@@ -11,7 +33,12 @@ module.exports = function attachMerchantInfoRoutes(router) {
       // Cache 5 min (très haute fréquence)
       const _cKey = `biz:${req.params.slug}`;
       const _hit  = global.memCache?.get(_cKey);
-      if (_hit) return res.json(_hit);
+      if (_hit) {
+        // Recalcule le statut de blocage a chaque appel (hors cache) pour
+        // que upgrade/downgrade plan se propage immediatement cote client.
+        const bookingBlocked = await computeBookingBlocked(_hit.userId);
+        return res.json({ ..._hit, booking_blocked: bookingBlocked });
+      }
 
       const { rows } = await pool.query(
         `SELECT bs.id, bs.user_id, bs.is_enabled, bs.slug,
@@ -74,7 +101,10 @@ module.exports = function attachMerchantInfoRoutes(router) {
       };
       const _resp = { business: mergedBiz, userId: user_id };
       global.memCache?.set(_cKey, _resp, 5 * 60 * 1000);
-      res.json(_resp);
+      // Statut booking_blocked = live, jamais cache (sinon upgrade plan
+      // ne se propagerait pas avant l'expiration du TTL).
+      const bookingBlocked = await computeBookingBlocked(user_id);
+      res.json({ ..._resp, booking_blocked: bookingBlocked });
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 

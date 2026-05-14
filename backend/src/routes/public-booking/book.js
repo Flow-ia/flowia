@@ -7,6 +7,7 @@ const { associateGlobalClient } = require('../clients');
 const { validatePhone } = require('../../utils/phone');
 const { toMin, toStr, getSlots, getEmployeeRanges } = require('./helpers');
 const { extractClientToken } = require('../../utils/clientCookies');
+const { checkQuota } = require('../../middleware/requireQuota');
 
 module.exports = function attachBookRoute(router) {
   // ── POST /api/pub/:slug/book ────────────────────────────────────────────
@@ -167,6 +168,22 @@ module.exports = function attachBookRoute(router) {
             blocked: true,
           });
         }
+      }
+
+      // ── Quota mensuel RDV (plan Decouverte = 50/mois) ───────────────────
+      // Cf. requireQuota.js. Cote frontend, GET /api/pub/:slug retourne deja
+      // un flag `booking_blocked` qui declenche une popup bloquante a
+      // l'ouverture de la page — l'utilisateur ne devrait jamais arriver
+      // jusqu'ici. Ce check reste en failsafe (bypass UI / race window).
+      const quotaCheck = await checkQuota(userId, 'appointment');
+      if (!quotaCheck.ok) {
+        if (quotaCheck.payload?.code === 'QUOTA_EXCEEDED') {
+          return res.status(403).json({
+            error: 'Le nombre de rendez-vous autorise est limite. Merci de prendre contact avec le commercant directement pour lever cette limite.',
+            code: 'BOOKING_QUOTA_EXCEEDED',
+          });
+        }
+        return res.status(quotaCheck.status).json(quotaCheck.payload);
       }
 
       // AUDIT booking #5 + #6 + #7 : min_notice & advance_days via PG AT TIME ZONE

@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
+const { requireQuota } = require('../middleware/requireQuota');
 const router = express.Router();
 
 router.use(authMiddleware);
@@ -33,7 +34,8 @@ router.get('/', async (req, res) => {
 // PIN admin. Sans ça, un employé avec le JWT merchant (device partagé, XSS)
 // pouvait créer un employé avec tous les droits ou modifier ses propres
 // scopes → escalade triviale.
-router.post('/', pinAdminMiddleware, async (req, res) => {
+// Quota : Decouverte=1, Essentiel=5, Equipe=illimite. Cf. requireQuota.js.
+router.post('/', pinAdminMiddleware, requireQuota('employee'), async (req, res) => {
   try {
     const { name, role, phone, avatar_color, is_active, can_cancel, can_modify, can_encash, show_on_booking, show_in_caisse, can_use_promo, can_grant_credit, can_repay_credit } = req.body;
     if (!name) return res.status(400).json({ error: 'Nom requis.' });

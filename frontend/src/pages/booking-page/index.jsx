@@ -18,6 +18,7 @@ import { PHONE_COUNTRIES, ANCHOR_MAP, REF_RE } from './constants';
 import { formatPhone, validatePhone, parsePhone, stepToPath, groupServicesByCategory, getBookingBase } from './helpers';
 import { ReferralBanner } from './ReferralBanner';
 import { BlockedView } from './views/BlockedView';
+import { QuotaBlockedView } from './views/QuotaBlockedView';
 import { MyApptsView } from './views/MyApptsView';
 import { ParrainView } from './views/ParrainView';
 import { SuccessView } from './views/SuccessView';
@@ -467,7 +468,9 @@ export default function BookingPage({ slug }) {
       pubApi.getPaymentConfig ? pubApi.getPaymentConfig(slug).catch(() => ({ enabled: false })) : Promise.resolve({ enabled: false }),
     ])
       .then(([biz, svcs, emps, cd, payCfg]) => {
-        setBiz(biz.business);
+        // booking_blocked = descripteur de blocage (quota merchant atteint)
+        // injecte sur l'objet business pour gating cote rendu.
+        setBiz({ ...(biz.business || {}), booking_blocked: biz.booking_blocked || null });
         setSvcs(svcs);
         setEmps(emps);
         // Commit 22 : compte client TOUJOURS obligatoire pour réserver.
@@ -820,6 +823,17 @@ export default function BookingPage({ slug }) {
 
   // Vue : Client bloqué
   if (isBlocked) return <BlockedView th={th} business={business} />;
+
+  // Vue : merchant a atteint son quota de RDV (plan Decouverte = 50/mois).
+  // Bloque toute la page avec un message non-dismissable orientant vers un
+  // contact direct avec le commercant.
+  if (business?.booking_blocked) return (
+    <QuotaBlockedView
+      th={th}
+      business={business}
+      message={business.booking_blocked.message}
+    />
+  );
 
   // Overlay popup post-inscription (réutilisé dans toutes les vues).
   const postRegOverlay = showPostRegister && clientUser ? (

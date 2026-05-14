@@ -2,6 +2,7 @@
 // GET /appointments, POST /appointments, PUT /appointments/:id, DELETE /appointments/:id
 const { pool } = require('../../db');
 const { sendAppointmentConfirmation, sendAppointmentCancellation } = require('../../utils/email');
+const { requireQuota } = require('../../middleware/requireQuota');
 
 module.exports = function attachAppointmentsRoutes(router) {
   // ══════════════════════════════════════════════════════════
@@ -63,7 +64,10 @@ module.exports = function attachAppointmentsRoutes(router) {
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
   });
 
-  router.post('/appointments', async (req, res) => {
+  // Quota mensuel : Decouverte=50 RDV/mois. Essentiel/Equipe illimite.
+  // Cf. requireQuota.js. Le middleware est attache directement sur la route
+  // POST (pas via router.use) pour ne pas affecter GET/PUT/DELETE.
+  router.post('/appointments', requireQuota('appointment'), async (req, res) => {
     try {
       const { service_id, employee_id, client_name, client_email, client_phone, date, start_time, notes,
               force } = req.body;

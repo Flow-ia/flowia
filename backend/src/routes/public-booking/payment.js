@@ -19,6 +19,7 @@ const {
   clonePaymentMethodToConnected,
 } = require('../global-clients/stripe-helpers');
 const { ensureMerchantConnectedCustomer } = require('../../utils/ensureMerchantConnectedCustomer');
+const { getApplicableCommissionRate } = require('../../middleware/subscription');
 
 module.exports = function attachPaymentRoutes(router) {
   // ── POST /api/pub/:slug/booking/payment-intent ───────────────────────────
@@ -166,16 +167,13 @@ module.exports = function attachPaymentRoutes(router) {
       }
 
       // Commission FlowIA → application_fee_amount (en cents).
-      // Si commission_rate=0 → pas de fee, le merchant garde 100% (- frais Stripe).
-      // Garde-fou : commission attendue dans [0, 30] (cap admin DB). Si valeur
-      // hors borne (donnees corrompues, manipulation), on log et clamp pour
-      // ne pas charger le client d'une commission abusive.
-      const commissionRaw = parseFloat(m.commission_rate || 0);
-      const commission = Math.max(0, Math.min(30, isFinite(commissionRaw) ? commissionRaw : 0));
-      if (commissionRaw !== commission) {
-        console.warn('[PUB PAYMENT-INTENT] commission hors borne user=' + m.user_id
-          + ' raw=' + commissionRaw + ' clamped=' + commission);
-      }
+      // Source de verite : plan d'abonnement effectif (cf. middleware/subscription.js).
+      //   - Decouverte (gratuit) → COMMISSION_RATE_DECOUVERTE (ENV, defaut 5%)
+      //   - Essentiel / Equipe   → 0% (le forfait paye couvre la plateforme)
+      // La colonne users.commission_rate n'est plus consultee ici : la grille
+      // tarifaire est plan-based pour eviter une derive admin/legacy. Cap dur
+      // 30% applique cote helper pour eviter une config aberrante via ENV.
+      const commission = await getApplicableCommissionRate(m.user_id);
       const feeCents = commission > 0
         ? Math.round(amountCents * (commission / 100))
         : 0;
