@@ -13,7 +13,8 @@ export default function Pricing() {
       desc: "Pour démarrer et tester FlowIA sans risque.",
       features: [
         "Jusqu'à 50 RDV/mois", '1 employé', 'Page de réservation publique',
-        'Caisse de base', 'Export CSV', 'Support email',
+        'Caisse intégrée', 'Rappels RDV par email', 'Export CSV',
+        'Commission 5 % sur paiements en ligne', 'Support email',
       ],
       cta: 'Commencer gratuitement', highlight: false,
     },
@@ -21,19 +22,19 @@ export default function Pricing() {
       name: 'Essentiel', monthly: '24', yearly: '20', annual: '240',
       desc: "Tous les outils marketing pour fidéliser vos clients.",
       features: [
-        'RDV illimités', "Jusqu'à 5 employés", 'SMS rappels et marketing',
-        'Programme fidélité', 'Programme parrainage', 'IA marketing',
-        'Caisse complète', 'Support prioritaire',
+        'RDV illimités', "Jusqu'à 5 employés",
+        '0 % de commission sur les paiements en ligne',
+        'Campagnes SMS marketing', 'Programme fidélité',
+        'Programme parrainage', 'Marketing IA', 'Support prioritaire',
       ],
       cta: "Démarrer l'essai 14 jours", highlight: true,
     },
     {
       name: 'Équipe', monthly: '49', yearly: '40,83', annual: '490',
-      desc: "Multi-sites, IA avancée et support dédié pour les salons exigeants.",
+      desc: "Pour les salons qui veulent un accompagnement dédié.",
       features: [
-        'Tout du plan Essentiel', 'Employés illimités', 'Multi-sites',
-        'Cadeau anniversaire', 'IA avancée',
-        'API et exports avancés', 'Statistiques par employé/site',
+        'Tout du plan Essentiel', 'Employés illimités',
+        'Cadeau anniversaire automatique',
         'Support dédié + SLA 99,9 %',
       ],
       cta: 'Nous contacter', highlight: false,
@@ -44,14 +45,15 @@ export default function Pricing() {
     { feature: 'Rendez-vous mensuels',         decouverte: '50',    essentiel: 'Illimités',   equipe: 'Illimités' },
     { feature: 'Employés',                     decouverte: '1',     essentiel: '5',           equipe: 'Illimités' },
     { feature: 'Page de réservation publique', decouverte: true,    essentiel: true,          equipe: true },
-    { feature: 'Caisse complète',              decouverte: false,   essentiel: true,          equipe: true },
-    { feature: 'SMS clients',                  decouverte: false,   essentiel: true,          equipe: true },
+    { feature: 'Caisse intégrée',              decouverte: true,    essentiel: true,          equipe: true },
+    { feature: 'Rappels RDV par email',        decouverte: true,    essentiel: true,          equipe: true },
+    { feature: 'Export CSV',                   decouverte: true,    essentiel: true,          equipe: true },
+    { feature: 'Commission paiements en ligne',decouverte: '5 %',   essentiel: '0 %',         equipe: '0 %' },
+    { feature: 'Campagnes SMS marketing',      decouverte: false,   essentiel: true,          equipe: true },
     { feature: 'Programme fidélité',           decouverte: false,   essentiel: true,          equipe: true },
     { feature: 'Programme parrainage',         decouverte: false,   essentiel: true,          equipe: true },
+    { feature: 'Marketing IA',                 decouverte: false,   essentiel: true,          equipe: true },
     { feature: 'Cadeau anniversaire',          decouverte: false,   essentiel: false,         equipe: true },
-    { feature: 'Marketing IA',                 decouverte: false,   essentiel: 'Standard',    equipe: 'Avancée' },
-    { feature: 'Multi-sites',                  decouverte: false,   essentiel: false,         equipe: true },
-    { feature: 'API & exports avancés',        decouverte: false,   essentiel: false,         equipe: true },
     { feature: 'Support',                      decouverte: 'Email', essentiel: 'Prioritaire', equipe: 'Dédié SLA' },
   ];
 
@@ -197,8 +199,8 @@ export default function Pricing() {
               </tbody>
             </table>
           </div>
-          <p style={{ fontSize: 13, color: S.fgSubtle, textAlign: 'center', marginTop: 18 }}>
-            {"Tarifs hors taxes. Les SMS sont facturés à l'usage (à partir de 0,06 € l'unité), réservés aux plans Essentiel et Équipe."}
+          <p style={{ fontSize: 13, color: S.fgSubtle, textAlign: 'center', marginTop: 18, lineHeight: 1.6 }}>
+            {"Tarifs hors taxes. Les SMS marketing sont facturés à l'usage (à partir de 0,06 € l'unité), réservés aux plans Essentiel et Équipe. La commission de 5 % sur le plan Découverte ne s'applique qu'aux paiements RDV encaissés via la page de réservation en ligne ; tous les plans payants en sont exonérés."}
           </p>
         </div>
       </section>

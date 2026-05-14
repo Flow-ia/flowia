@@ -781,19 +781,19 @@ function Pricing() {
     {
       name: 'Découverte', price: '0',
       desc: "Pour démarrer.",
-      features: ["50 RDV/mois", '1 employé', 'Caisse de base', 'Support email'],
+      features: ["50 RDV/mois", '1 employé', 'Caisse intégrée', 'Commission 5 % sur paiements en ligne', 'Support email'],
       cta: 'Commencer', highlight: false,
     },
     {
       name: 'Essentiel', price: '24',
       desc: "Pour faire grandir.",
-      features: ['RDV illimités', "Jusqu'à 5 employés", 'SMS rappels & marketing', 'Fidélité & parrainage', 'IA marketing', 'Support prioritaire'],
+      features: ['RDV illimités', "Jusqu'à 5 employés", '0 % de commission', 'Campagnes SMS marketing', 'Fidélité & parrainage', 'Marketing IA', 'Support prioritaire'],
       cta: 'Essayer 14 jours', highlight: true,
     },
     {
       name: 'Équipe', price: '49',
-      desc: "Multi-sites.",
-      features: ['Tout le plan Essentiel', 'Employés illimités', 'Multi-sites', 'Cadeau anniversaire', 'IA avancée', 'Support dédié + SLA'],
+      desc: "Accompagnement dédié.",
+      features: ['Tout le plan Essentiel', 'Employés illimités', 'Cadeau anniversaire', 'Support dédié + SLA'],
       cta: 'Nous contacter', highlight: false,
     },
   ];

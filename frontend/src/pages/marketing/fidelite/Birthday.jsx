@@ -9,7 +9,7 @@ export default function Birthday({ theme, showToast }) {
     <>
       <PlanGateBanner requiredPlan="equipe"
                       feature="Le cadeau anniversaire automatique"
-                      extraBenefits="multi-sites, employés illimités et IA avancée"/>
+                      extraBenefits="employés illimités et support dédié"/>
       <TabBirthday theme={theme} showToast={showToast}/>
     </>
   );

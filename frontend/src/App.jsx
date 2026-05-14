@@ -8,6 +8,10 @@ import { useTheme } from './hooks/useTheme';
 import { useNotifications, playSound } from './hooks/useNotifications';
 import { PinSetup } from './components/PinGate';
 import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
+import MarketingHeader from './pages/site-marketing/components/Header';
+import MarketingFooter from './pages/site-marketing/components/Footer';
+import { S as MarketingS } from './pages/site-marketing/components/shadcn';
+import { LightThemeProvider } from './hooks/useTheme';
 import Dashboard from './pages/Dashboard';
 import Historique from './pages/Historique';
 import HistoriqueAdmin from './pages/historique';
@@ -2403,13 +2407,33 @@ export default function App() {
 
   // Routes explicites pour login/register/forgot-password → rafraîchir la
   // page reste sur l'écran en cours au lieu de retomber sur login.
+  //
+  // Wrappees avec Header+Footer marketing pour qu'un visiteur non
+  // authentifie sur commercant.flowiapro.com voit la meme chrome que sur
+  // flowiapro.com (coherence cross-domain). LightThemeProvider force le
+  // light mode comme sur le site marketing.
   if (!user) return (
-    <Routes>
-      <Route path="/login"           element={<AuthFlow initialScreen="login"/>}/>
-      <Route path="/register"        element={<AuthFlow initialScreen="register"/>}/>
-      <Route path="/forgot-password" element={<AuthFlow initialScreen="forgot"/>}/>
-      <Route path="*"                element={<Navigate to="/login" replace/>}/>
-    </Routes>
+    <LightThemeProvider>
+      <div style={{
+        minHeight: '100vh',
+        background: MarketingS.bg,
+        color: MarketingS.fg,
+        fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        <MarketingHeader />
+        <main style={{ flex: 1, display: 'flex' }}>
+          <Routes>
+            <Route path="/login"           element={<AuthFlow initialScreen="login"/>}/>
+            <Route path="/register"        element={<AuthFlow initialScreen="register"/>}/>
+            <Route path="/forgot-password" element={<AuthFlow initialScreen="forgot"/>}/>
+            <Route path="*"                element={<Navigate to="/login" replace/>}/>
+          </Routes>
+        </main>
+        <MarketingFooter />
+      </div>
+    </LightThemeProvider>
   );
 
   if (user.onboardingCompleted === false) {

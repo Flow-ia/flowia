@@ -144,6 +144,29 @@ function QuickJoinRedirect() {
 // La marketplace publique linke par défaut vers /marketplace/book/<slug>
 // pour préserver le contexte de navigation (cf. MerchantSearchCard).
 
+// Routes marketing partagees entre flowiapro.com (site complet) et
+// commercant.flowiapro.com (Header/Footer coherents accessibles depuis
+// l'app). Le Header marketing pointe vers /tarifs, /fonctionnalites, etc.
+// — ces routes doivent donc resoudre vers MarketingLayout aussi sur le
+// portail commercant pour que la navigation reste fonctionnelle.
+const MARKETING_ROUTE_ELEMENTS = (
+  <>
+    <Route path="/fonctionnalites"   element={<Features />} />
+    <Route path="/tarifs"            element={<Pricing />} />
+    <Route path="/pour-qui"          element={<Industries />} />
+    <Route path="/a-propos"          element={<About />} />
+    <Route path="/contact"           element={<Contact />} />
+    <Route path="/marketplace"       element={<ClientPortal />} />
+    {/* Alias historique : /portail-client a ete remplace par /marketplace
+        pour aligner avec le path API /api/pub/marketplace. Redirect 301
+        cote frontend pour ne pas casser les anciens liens partages. */}
+    <Route path="/portail-client"    element={<Navigate to="/marketplace" replace />} />
+    <Route path="/mentions-legales"  element={<LegalNotice />} />
+    <Route path="/confidentialite"   element={<Privacy />} />
+    <Route path="/cgu"               element={<Terms />} />
+  </>
+);
+
 // Catch-all : décide entre marketing site, redirect legacy ou app commerçant
 // selon le hostname courant. /book/* sont toujours accessibles avant ce switch.
 function RootSwitch() {
@@ -162,19 +185,7 @@ function RootSwitch() {
       <Routes>
         <Route element={<MarketingLayout />}>
           <Route path="/"                  element={<Landing />} />
-          <Route path="/fonctionnalites"   element={<Features />} />
-          <Route path="/tarifs"            element={<Pricing />} />
-          <Route path="/pour-qui"          element={<Industries />} />
-          <Route path="/a-propos"          element={<About />} />
-          <Route path="/contact"           element={<Contact />} />
-          <Route path="/marketplace"       element={<ClientPortal />} />
-          {/* Alias historique : /portail-client a ete remplace par /marketplace
-              pour aligner avec le path API /api/pub/marketplace. Redirect 301
-              cote frontend pour ne pas casser les anciens liens partages. */}
-          <Route path="/portail-client"    element={<Navigate to="/marketplace" replace />} />
-          <Route path="/mentions-legales"  element={<LegalNotice />} />
-          <Route path="/confidentialite"   element={<Privacy />} />
-          <Route path="/cgu"               element={<Terms />} />
+          {MARKETING_ROUTE_ELEMENTS}
           <Route path="*"                  element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -182,15 +193,27 @@ function RootSwitch() {
   }
 
   // App commerçant (commercant.flowiapro.com / localhost / preview Vercel)
+  // Les routes marketing (/tarifs, /fonctionnalites, etc.) sont aussi
+  // exposees ici pour que le Header/Footer marketing affichent une nav
+  // fonctionnelle quand un visiteur non-authentifie passe par le portail.
+  // Les routes non-marketing tombent dans le catch-all <App /> qui gere
+  // l'authentification et l'app commercante elle-meme.
   return (
-    <IdleLockProvider>
-      <App />
-      <LockScreen />
-      <InstallPrompt />
-      <UpdateBanner />
-      <OfflineBanner />
-      <RefreshFab />
-    </IdleLockProvider>
+    <Routes>
+      <Route element={<MarketingLayout />}>
+        {MARKETING_ROUTE_ELEMENTS}
+      </Route>
+      <Route path="*" element={
+        <IdleLockProvider>
+          <App />
+          <LockScreen />
+          <InstallPrompt />
+          <UpdateBanner />
+          <OfflineBanner />
+          <RefreshFab />
+        </IdleLockProvider>
+      } />
+    </Routes>
   );
 }
 
