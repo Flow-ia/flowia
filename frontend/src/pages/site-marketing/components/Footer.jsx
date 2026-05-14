@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
 import { S } from './shadcn';
+import { MarketingLink } from '../../../utils/marketingUrl';
 
 const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
@@ -69,10 +69,10 @@ export default function Footer() {
           gap: 36, marginBottom: 36,
         }}>
           <div style={{ minWidth: 200 }}>
-            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 14 }}>
+            <MarketingLink to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 14 }}>
               <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
               <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>FlowIA</span>
-            </Link>
+            </MarketingLink>
             <p style={{ fontSize: 13, color: S.fgMuted, lineHeight: 1.6, margin: 0 }}>
               {"Le logiciel tout-en-un qui simplifie la gestion des salons de beauté et de bien-être."}
             </p>
@@ -93,11 +93,11 @@ export default function Footer() {
                   {l.label}
                 </a>
               ) : (
-                <Link key={l.label} to={l.to} style={colLink}
+                <MarketingLink key={l.label} to={l.to} style={colLink}
                   onMouseEnter={(e) => { e.currentTarget.style.color = S.fg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = S.fgMuted; }}>
                   {l.label}
-                </Link>
+                </MarketingLink>
               ))}
             </div>
           ))}

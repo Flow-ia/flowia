@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { I } from '../utils/icons';
 import { Toast, useToast, CodeInput, Confirm } from './UI';
-import { ThemeToggle } from './ThemeToggle';
 import { api } from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
@@ -578,10 +577,15 @@ export default function AuthFlow({ initialScreen = 'login' }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ minHeight:'100dvh', background:t.bg,
+    // Layout flexible : prend toute la hauteur dispo du parent flex (App.jsx
+    // wrappe AuthFlow dans un <main style="flex:1; display:flex"> entre le
+    // Header marketing sticky et le Footer). minHeight de secours pour les
+    // cas standalone (preview Vercel sans shell). Le background herite du
+    // parent — pas de couleur en dur ici, sinon double couche zinc-50/blanc.
+    <div style={{ flex:1, alignSelf:'stretch',
                   display:'flex', alignItems:'center', justifyContent:'center',
-                  padding:16, position:'relative' }}>
-      <div style={{ position:'absolute', top:48, right:20 }}><ThemeToggle/></div>
+                  padding:'40px 16px', minHeight:'min(70vh, 640px)',
+                  boxSizing:'border-box', width:'100%' }}>
       <Toast msg={toast?.msg} type={toast?.type}/>
       <GoogleOAuthOverlay status={oauthStatus} errorMsg={oauthError} onRetry={() => { resetOauth(); openGoogle(); }} onClose={resetOauth}/>
       <div style={{ width:'100%', maxWidth:400 }}>

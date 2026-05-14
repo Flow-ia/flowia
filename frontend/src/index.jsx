@@ -144,28 +144,27 @@ function QuickJoinRedirect() {
 // La marketplace publique linke par défaut vers /marketplace/book/<slug>
 // pour préserver le contexte de navigation (cf. MerchantSearchCard).
 
-// Routes marketing partagees entre flowiapro.com (site complet) et
-// commercant.flowiapro.com (Header/Footer coherents accessibles depuis
-// l'app). Le Header marketing pointe vers /tarifs, /fonctionnalites, etc.
-// — ces routes doivent donc resoudre vers MarketingLayout aussi sur le
-// portail commercant pour que la navigation reste fonctionnelle.
-const MARKETING_ROUTE_ELEMENTS = (
-  <>
-    <Route path="/fonctionnalites"   element={<Features />} />
-    <Route path="/tarifs"            element={<Pricing />} />
-    <Route path="/pour-qui"          element={<Industries />} />
-    <Route path="/a-propos"          element={<About />} />
-    <Route path="/contact"           element={<Contact />} />
-    <Route path="/marketplace"       element={<ClientPortal />} />
-    {/* Alias historique : /portail-client a ete remplace par /marketplace
-        pour aligner avec le path API /api/pub/marketplace. Redirect 301
-        cote frontend pour ne pas casser les anciens liens partages. */}
-    <Route path="/portail-client"    element={<Navigate to="/marketplace" replace />} />
-    <Route path="/mentions-legales"  element={<LegalNotice />} />
-    <Route path="/confidentialite"   element={<Privacy />} />
-    <Route path="/cgu"               element={<Terms />} />
-  </>
-);
+// Liste des paths marketing : utilisee pour rediriger vers flowiapro.com
+// les hits directs sur commercant.flowiapro.com/tarifs (etc.). En usage
+// normal, le Header/Footer produisent deja des URLs absolues via
+// utils/marketingUrl.MarketingLink, donc on n'arrive ici que par typage
+// d'URL direct ou via un vieux lien externe.
+const MARKETING_PATHS = [
+  '/fonctionnalites',
+  '/tarifs',
+  '/pour-qui',
+  '/a-propos',
+  '/contact',
+  '/marketplace',
+  '/portail-client',
+  '/mentions-legales',
+  '/confidentialite',
+  '/cgu',
+];
+
+function pathIsMarketing(pathname) {
+  return MARKETING_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
+}
 
 // Catch-all : décide entre marketing site, redirect legacy ou app commerçant
 // selon le hostname courant. /book/* sont toujours accessibles avant ce switch.
@@ -185,7 +184,19 @@ function RootSwitch() {
       <Routes>
         <Route element={<MarketingLayout />}>
           <Route path="/"                  element={<Landing />} />
-          {MARKETING_ROUTE_ELEMENTS}
+          <Route path="/fonctionnalites"   element={<Features />} />
+          <Route path="/tarifs"            element={<Pricing />} />
+          <Route path="/pour-qui"          element={<Industries />} />
+          <Route path="/a-propos"          element={<About />} />
+          <Route path="/contact"           element={<Contact />} />
+          <Route path="/marketplace"       element={<ClientPortal />} />
+          {/* Alias historique : /portail-client a ete remplace par /marketplace
+              pour aligner avec le path API /api/pub/marketplace. Redirect 301
+              cote frontend pour ne pas casser les anciens liens partages. */}
+          <Route path="/portail-client"    element={<Navigate to="/marketplace" replace />} />
+          <Route path="/mentions-legales"  element={<LegalNotice />} />
+          <Route path="/confidentialite"   element={<Privacy />} />
+          <Route path="/cgu"               element={<Terms />} />
           <Route path="*"                  element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -193,27 +204,27 @@ function RootSwitch() {
   }
 
   // App commerçant (commercant.flowiapro.com / localhost / preview Vercel)
-  // Les routes marketing (/tarifs, /fonctionnalites, etc.) sont aussi
-  // exposees ici pour que le Header/Footer marketing affichent une nav
-  // fonctionnelle quand un visiteur non-authentifie passe par le portail.
-  // Les routes non-marketing tombent dans le catch-all <App /> qui gere
-  // l'authentification et l'app commercante elle-meme.
+  // Si l'URL est un path marketing tape directement (vieux bookmark,
+  // partage externe), on redirige cross-domain vers flowiapro.com pour
+  // que le contenu soit servi par le bon host. Le Header/Footer eux-memes
+  // produisent deja des URLs absolues — on n'arrive ici qu'en cas de
+  // typage manuel ou referer externe.
+  if (pathIsMarketing(location.pathname) && typeof window !== 'undefined') {
+    window.location.replace(
+      'https://flowiapro.com' + location.pathname + location.search + location.hash
+    );
+    return null;
+  }
+
   return (
-    <Routes>
-      <Route element={<MarketingLayout />}>
-        {MARKETING_ROUTE_ELEMENTS}
-      </Route>
-      <Route path="*" element={
-        <IdleLockProvider>
-          <App />
-          <LockScreen />
-          <InstallPrompt />
-          <UpdateBanner />
-          <OfflineBanner />
-          <RefreshFab />
-        </IdleLockProvider>
-      } />
-    </Routes>
+    <IdleLockProvider>
+      <App />
+      <LockScreen />
+      <InstallPrompt />
+      <UpdateBanner />
+      <OfflineBanner />
+      <RefreshFab />
+    </IdleLockProvider>
   );
 }
 

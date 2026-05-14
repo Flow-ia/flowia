@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { I } from '../../../utils/icons';
 import { S } from './shadcn';
+import { MarketingLink, navigateToMarketing } from '../../../utils/marketingUrl';
 
 const COMMERCANT_URL = 'https://commercant.flowiapro.com';
 
@@ -114,10 +115,10 @@ export default function Header() {
         maxWidth: 1200, margin: '0 auto', padding: '14px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
       }}>
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <MarketingLink to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
           <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>FlowIA</span>
-        </Link>
+        </MarketingLink>
 
         {!isMobile && (
           <nav style={{ display: 'flex', gap: 4, flex: 1, justifyContent: 'center', position: 'relative' }}>
@@ -126,7 +127,7 @@ export default function Header() {
                 onMouseEnter={openMega}
                 onMouseLeave={scheduleCloseMega}
                 style={{ position: 'relative' }}>
-                <Link to={l.to} style={linkStyle(loc.pathname === l.to || megaOpen)}
+                <MarketingLink to={l.to} style={linkStyle(loc.pathname === l.to || megaOpen)}
                   onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.color = S.fg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = (loc.pathname === l.to || megaOpen) ? S.fg : S.fgMuted; }}>
                   {l.label}
@@ -136,21 +137,21 @@ export default function Header() {
                   }}>
                     <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
-                </Link>
+                </MarketingLink>
               </div>
             ) : (
-              <Link key={l.to} to={l.to} style={linkStyle(loc.pathname === l.to)}
+              <MarketingLink key={l.to} to={l.to} style={linkStyle(loc.pathname === l.to)}
                 onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.color = S.fg; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = loc.pathname === l.to ? S.fg : S.fgMuted; }}>
                 {l.label}
-              </Link>
+              </MarketingLink>
             ))}
           </nav>
         )}
 
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Link to="/marketplace" style={{
+            <MarketingLink to="/marketplace" style={{
               fontSize: 14, fontWeight: 500, color: S.fg,
               textDecoration: 'none', padding: '9px 16px', borderRadius: S.r,
               border: `1px solid ${S.border}`, background: S.bg,
@@ -159,7 +160,7 @@ export default function Header() {
               onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.borderColor = S.borderHv; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = S.bg; e.currentTarget.style.borderColor = S.border; }}>
               Trouver un salon
-            </Link>
+            </MarketingLink>
             <a href={COMMERCANT_URL} style={{
               fontSize: 14, fontWeight: 500, color: S.fgInv,
               textDecoration: 'none', padding: '9px 16px', borderRadius: S.r,
@@ -231,7 +232,7 @@ export default function Header() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {group.items.map(it => (
                     <button key={it.id}
-                      onClick={() => { setMegaOpen(false); navigate(`/fonctionnalites#${it.id}`); }}
+                      onClick={() => { setMegaOpen(false); navigateToMarketing(navigate, `/fonctionnalites#${it.id}`); }}
                       style={{
                         display: 'flex', gap: 12, padding: '8px 10px',
                         borderRadius: S.r, border: 'none', background: 'transparent',
@@ -276,7 +277,7 @@ export default function Header() {
               <p style={{ fontSize: 13, color: S.fgMuted, margin: 0 }}>
                 {"Découvrez toutes les fonctionnalités de FlowIA en détail."}
               </p>
-              <Link to="/fonctionnalites" onClick={() => setMegaOpen(false)} style={{
+              <MarketingLink to="/fonctionnalites" onClick={() => setMegaOpen(false)} style={{
                 fontSize: 13, fontWeight: 500, color: S.fg,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 textDecoration: 'none',
@@ -285,7 +286,7 @@ export default function Header() {
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-              </Link>
+              </MarketingLink>
             </div>
           </div>
         </div>
@@ -301,23 +302,23 @@ export default function Header() {
           maxHeight: 'calc(100vh - 70px)', overflowY: 'auto',
         }}>
           {navLinks.map(l => (
-            <Link key={l.to} to={l.to} style={{
+            <MarketingLink key={l.to} to={l.to} style={{
               fontSize: 15, fontWeight: 500,
               color: loc.pathname === l.to ? S.fg : S.fg2,
               textDecoration: 'none', padding: '12px 12px', borderRadius: S.r,
               background: loc.pathname === l.to ? S.bgHover : 'transparent',
             }}>
               {l.label}
-            </Link>
+            </MarketingLink>
           ))}
           <div style={{ height: 1, background: S.border, margin: '8px 0' }} />
-          <Link to="/marketplace" style={{
+          <MarketingLink to="/marketplace" style={{
             fontSize: 15, fontWeight: 500, color: S.fg,
             textDecoration: 'none', padding: '12px 14px', borderRadius: S.r,
             border: `1px solid ${S.border}`, textAlign: 'center', background: S.bg,
           }}>
             Portail client
-          </Link>
+          </MarketingLink>
           <a href={COMMERCANT_URL} style={{
             fontSize: 15, fontWeight: 500, color: S.fgInv,
             textDecoration: 'none', padding: '12px 14px', borderRadius: S.r,
