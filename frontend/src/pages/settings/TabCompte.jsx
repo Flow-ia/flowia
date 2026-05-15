@@ -110,6 +110,8 @@ export default function TabCompte({ showToast, theme, onLock }) {
         </svg>
       </a>
 
+      <RestartSetupCard theme={theme} updateUser={updateUser} showToast={showToast}/>
+
       <DangerZone theme={theme} logout={logout}/>
 
       <button onClick={() => { logout(); if (onLock) onLock(); }}
@@ -433,6 +435,56 @@ function PasswordCard({ editing, onEdit, onClose, theme,
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Relancer le wizard de configuration guidee ─────────────────────────────
+// POST /api/auth/setup-restart repasse user.setup_completed a FALSE ;
+// updateUser() applique l'etat local pour que App.jsx re-rende FirstRunSetup
+// au prochain render (le gate `if (user.setupCompleted === false)` declenche).
+function RestartSetupCard({ theme, updateUser, showToast }) {
+  const t = theme;
+  const [loading, setLoading] = useState(false);
+
+  const restart = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await api.setupRestart();
+      updateUser({ setupCompleted: false });
+      showToast && showToast('Configuration guidee relancee', 'ok');
+    } catch (e) {
+      showToast && showToast(e.message || 'Erreur', 'error');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={restart} disabled={loading}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px', borderRadius: 12,
+              background: t.cardAlt, border: `0.5px solid ${t.border}`,
+              textAlign: 'left', cursor: loading ? 'wait' : 'pointer',
+              fontFamily: 'inherit', marginBottom: 12,
+              transition: 'background 0.15s ease',
+            }}>
+      <I.Refresh style={{ width:15, height:15, color:t.muted, flexShrink:0 }}/>
+      <div style={{ flex:1, minWidth:0 }}>
+        <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text }}>
+          Refaire la configuration guidee
+        </p>
+        <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.4 }}>
+          Re-affiche le wizard horaires + services + paiements pour ajuster en 4 etapes
+        </p>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke={t.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+           style={{ flexShrink: 0 }}>
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </button>
   );
 }
 
