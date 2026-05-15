@@ -9,6 +9,7 @@ import { useNotifications, playSound } from './hooks/useNotifications';
 import { PinSetup } from './components/PinGate';
 import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
 import { FirstRunSetup } from './components/FirstRunSetup';
+import { ProductTour } from './components/ProductTour';
 import MarketingHeader from './pages/site-marketing/components/Header';
 import MarketingFooter from './pages/site-marketing/components/Footer';
 import { S as MarketingS } from './pages/site-marketing/components/shadcn';
@@ -1247,6 +1248,7 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
     const active = activeId === it.id;
     return (
       <button onClick={() => it.to && navigate(it.to)}
+              data-tour={`nav-${it.id}`}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
                        padding:'9px 12px', borderRadius:8, border:'none',
                        background: active ? t.card : 'transparent',
@@ -1430,7 +1432,8 @@ function BottomNav({ theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuit
         {ITEMS.map(it => {
           const active = activeId === it.id;
           return (
-            <button key={it.id} onClick={() => navigate(it.to)} style={navItemStyle(active)}>
+            <button key={it.id} onClick={() => navigate(it.to)} style={navItemStyle(active)}
+                    data-tour={`nav-${it.id}`}>
               <Icon name={it.icon} size={18} color={active ? t.text : t.muted}/>
               <span style={{ fontSize:10, fontWeight: active ? 500 : 400 }}>{it.label}</span>
             </button>
@@ -2583,6 +2586,12 @@ export default function App() {
           setPinPromptMode('toggle');
         }}
       />
+
+      {/* Product tour (commit 4b) : tooltips ancres sur les nav items pour
+          guider les nouveaux comptes (user.tourCompleted === false) a
+          travers Agenda / Caisse / Clients. Skip facile via "Passer la
+          visite". Rendu en portail, n'empile pas dans le DOM principal. */}
+      {user?.tourCompleted === false && <ProductTour/>}
     </div>
     );
   };
