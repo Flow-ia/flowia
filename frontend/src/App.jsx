@@ -8,6 +8,7 @@ import { useTheme } from './hooks/useTheme';
 import { useNotifications, playSound } from './hooks/useNotifications';
 import { PinSetup } from './components/PinGate';
 import AuthFlow, { MerchantOnboarding } from './components/AuthFlow';
+import { FirstRunSetup } from './components/FirstRunSetup';
 import MarketingHeader from './pages/site-marketing/components/Header';
 import MarketingFooter from './pages/site-marketing/components/Footer';
 import { S as MarketingS } from './pages/site-marketing/components/shadcn';
@@ -2438,6 +2439,14 @@ export default function App() {
 
   if (user.onboardingCompleted === false) {
     return <MerchantOnboarding user={user} onComplete={(token, userData) => { login(token, userData); }}/>;
+  }
+
+  // Wizard "Fast Onboarding" (commit 3b) : guide les nouveaux commercants a
+  // ajuster horaires/services/paiements/perso en 4 etapes courtes avant
+  // d'entrer dans l'app. updateUser() applique le flag a TRUE optimiste,
+  // le composant POST /api/auth/setup-complete avant onComplete().
+  if (user.setupCompleted === false) {
+    return <FirstRunSetup user={user} onComplete={() => {}}/>;
   }
 
   if (dataLoading) return <Splash text="Chargement..." theme={theme}/>;
