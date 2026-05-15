@@ -34,6 +34,7 @@ const {
 const { isValidBusinessType } = require('../utils/businessTypes');
 const { validatePhone: validatePhoneE164 } = require('../utils/phone');
 const { seedMerchantDefaults, seedBusinessHours } = require('../utils/seedMerchantDefaults');
+const { exportAllUserData } = require('../utils/exportUserData');
 const router = express.Router();
 
 // Adresse complete obligatoire a l'inscription / onboarding. On exige au
@@ -640,6 +641,28 @@ router.post('/pin-lockout-notify', async (req, res) => {
     }
     res.json({ ok: true }); // réponse uniforme anti-énumération
   } catch (err) { console.error(err); res.json({ ok: true }); }
+});
+
+// ═══════════════════ EXPORT RGPD (Article 20 portabilite) ═══════════════════
+// GET /api/auth/export-data — retourne un JSON exhaustif avec toutes les
+// donnees du commerçant (profile, equipe, catalogue, clients, RDV,
+// transactions, marketing, finance, audit). Hashes / tokens techniques
+// exclus. Format machine-readable, structure, decodable hors FlowIA.
+//
+// Pour l'utilisateur : "Telecharger mes donnees" dans Reglages > Mon compte
+// (TabCompte.jsx). Conseille avant suppression de compte.
+router.get('/export-data', authMiddleware, async (req, res) => {
+  try {
+    const data = await exportAllUserData(pool, req.user.userId);
+    const today = new Date().toISOString().slice(0, 10);
+    const filename = `flowia-export-${today}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('[EXPORT DATA]', e.message);
+    res.status(500).json({ error: 'Impossible de generer l export. Reessayez ou contactez le support.' });
+  }
 });
 
 // ═══════════════════ SUPPRESSION COMPTE COMMERÇANT ══════════════════════════

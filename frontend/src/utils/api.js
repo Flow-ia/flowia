@@ -358,6 +358,31 @@ export const api = {
   // Product tour (visite guidee) : valider / re-declencher
   tourComplete:       ()  => request('/auth/tour-complete',   { method: 'POST' }),
   tourRestart:        ()  => request('/auth/tour-restart',    { method: 'POST' }),
+  // Export RGPD article 20 (portabilite) : telecharge un JSON avec toutes
+  // les donnees du commercant. Trigger download cote browser (blob URL +
+  // click sur ancre). Throw sur erreur HTTP avec message friendly.
+  exportData: async () => {
+    const token = localStorage.getItem('ff_token');
+    const base  = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+    const res = await fetch(`${base}/auth/export-data`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`;
+      try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `flowia-export-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
   merchantGoogleAuthUrl: () => {
     const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '376153951158-jm80phb46sl1fisbgeq587v83ho7ft5e.apps.googleusercontent.com';

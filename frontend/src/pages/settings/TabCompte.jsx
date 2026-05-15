@@ -114,6 +114,8 @@ export default function TabCompte({ showToast, theme, onLock }) {
 
       <RestartTourCard theme={theme} updateUser={updateUser} showToast={showToast}/>
 
+      <ExportDataCard theme={theme} showToast={showToast}/>
+
       <DangerZone theme={theme} logout={logout}/>
 
       <button onClick={() => { logout(); if (onLock) onLock(); }}
@@ -537,6 +539,55 @@ function RestartTourCard({ theme, updateUser, showToast }) {
   );
 }
 
+// ─── Export RGPD (article 20 portabilite) ───────────────────────────────────
+// Telecharge un JSON exhaustif avec toutes les donnees du commercant.
+// Conseille a tout moment, particulierement avant suppression de compte.
+function ExportDataCard({ theme, showToast }) {
+  const t = theme;
+  const [loading, setLoading] = useState(false);
+
+  const download = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await api.exportData();
+      showToast && showToast('Export telecharge', 'ok');
+    } catch (e) {
+      showToast && showToast(e.message || 'Telechargement impossible', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={download} disabled={loading}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px', borderRadius: 12,
+              background: t.cardAlt, border: `0.5px solid ${t.border}`,
+              textAlign: 'left', cursor: loading ? 'wait' : 'pointer',
+              fontFamily: 'inherit', marginBottom: 12,
+              transition: 'background 0.15s ease',
+            }}>
+      <I.Download style={{ width:15, height:15, color:t.muted, flexShrink:0 }}/>
+      <div style={{ flex:1, minWidth:0 }}>
+        <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text }}>
+          {loading ? 'Generation en cours...' : 'Telecharger mes donnees (RGPD)'}
+        </p>
+        <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.4 }}>
+          Export JSON complet (article 20 RGPD portabilite). Conseille avant suppression de compte.
+        </p>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke={t.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+           style={{ flexShrink: 0 }}>
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </button>
+  );
+}
+
 // ─── Zone danger : suppression compte ───────────────────────────────────────
 function DangerZone({ theme, logout }) {
   const t = theme;
@@ -566,15 +617,33 @@ function DangerZone({ theme, logout }) {
     </button>
   );
 
+  const doExport = async () => {
+    try { await api.exportData(); }
+    catch (e) { setErr(e.message || 'Telechargement impossible.'); }
+  };
+
   return (
     <div style={{ background:'#fef2f2', borderRadius:12, padding:20,
                   border:`0.5px solid rgba(239,68,68,0.3)` }}>
       <p style={{ margin:'0 0 6px', fontWeight:500, fontSize:14, color:'#991b1b' }}>
         Suppression definitive du compte
       </p>
-      <p style={{ margin:'0 0 14px', fontSize:12, color:'#991b1b', opacity:0.8, lineHeight:1.5 }}>
-        Toutes vos donnees seront supprimees. Les transactions sont conservees de facon anonyme pour la comptabilite. Cette action est irreversible.
+      <p style={{ margin:'0 0 12px', fontSize:12, color:'#991b1b', opacity:0.8, lineHeight:1.5 }}>
+        Vos donnees personnelles seront supprimees. Les transactions sont
+        conservees anonymement pour la comptabilite (FEC 10 ans). Periode de
+        grace de 30 jours puis purge definitive automatique.
       </p>
+      {/* Rappel RGPD article 20 : conseille fortement de telecharger les
+          donnees avant la suppression. Le bouton lance le meme export que
+          la carte au-dessus mais directement depuis la modale de confirm. */}
+      <button onClick={doExport}
+              style={{ width: '100%', padding: '10px', borderRadius: 8,
+                       border: '0.5px solid rgba(239,68,68,0.3)',
+                       background: 'transparent', color: '#991b1b',
+                       fontWeight: 500, fontSize: 12, cursor: 'pointer',
+                       fontFamily: 'inherit', marginBottom: 12 }}>
+        Telecharger d'abord mes donnees (recommande)
+      </button>
       <input placeholder="Tapez SUPPRIMER pour confirmer"
              value={confirm}
              onChange={e => { setConfirm(e.target.value.toUpperCase()); setErr(''); }}
