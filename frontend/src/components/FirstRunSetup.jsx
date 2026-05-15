@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { api, bookingApi } from '../utils/api';
+import { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { api, bookingApi, connectApi } from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { Toast, useToast } from './UI';
@@ -21,11 +22,12 @@ const STEPS = [
   { key: 'hours',    title: 'Vos horaires d\'ouverture' },
   { key: 'services', title: 'Vos prestations' },
   { key: 'payments', title: 'Paiements en ligne' },
+  { key: 'calendar', title: 'Synchronisation Google Agenda' },
   { key: 'finish',   title: 'Tout est pret' },
 ];
 
 // Wizard "Fast Onboarding" affiche apres MerchantOnboarding pour les nouveaux
-// commercants (user.setupCompleted === false). 4 etapes courtes :
+// commercants (user.setupCompleted === false). 5 etapes courtes :
 //   1. Horaires — pre-remplis (Lun-Ven 9-19, Sam 9-17, Dim ferme), editables
 //   2. Services — pre-remplis selon business_type, is_active toggle + edition
 //   3. Paiements — CTA Stripe Connect (skip facile)
@@ -34,12 +36,47 @@ const STEPS = [
 export function FirstRunSetup({ user, onComplete }) {
   const { theme: t } = useTheme();
   const { updateUser } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [hours, setHours] = useState([]);
   const [services, setServices] = useState([]);
+  const [stripeData, setStripeData] = useState(null);
+  const [calendarData, setCalendarData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [integrationBusy, setIntegrationBusy] = useState(null);
   const [toast, show] = useToast();
+
+  const loadStripeStatus = useCallback(async (silent = false) => {
+    setStripeLoading(true);
+    try {
+      const data = await connectApi.getAccount();
+      setStripeData(data);
+      return data;
+    } catch (e) {
+      if (!silent) show(e.message || 'Statut Stripe indisponible', 'error');
+      return null;
+    } finally {
+      setStripeLoading(false);
+    }
+  }, [show]);
+
+  const loadCalendarStatus = useCallback(async (silent = false) => {
+    setCalendarLoading(true);
+    try {
+      const data = await api.calendarSyncStatus();
+      setCalendarData(data);
+      return data;
+    } catch (e) {
+      if (!silent) show(e.message || 'Statut Google Agenda indisponible', 'error');
+      return null;
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [show]);
 
   // Chargement initial : les defauts ont ete seedes cote backend a
   // l'inscription, on les recupere pour permettre au commercant de les
@@ -47,7 +84,18 @@ export function FirstRunSetup({ user, onComplete }) {
   useEffect(() => {
     (async () => {
       try {
-        const [h, s] = await Promise.all([bookingApi.getHours(), bookingApi.getServices()]);
+        const [hRes, sRes, stripeRes, calendarRes] = await Promise.allSettled([
+          bookingApi.getHours(),
+          bookingApi.getServices(),
+          connectApi.getAccount(),
+          api.calendarSyncStatus(),
+        ]);
+        if (hRes.status === 'rejected') throw hRes.reason;
+        if (sRes.status === 'rejected') throw sRes.reason;
+        const h = hRes.value;
+        const s = sRes.value;
+        if (stripeRes.status === 'fulfilled') setStripeData(stripeRes.value);
+        if (calendarRes.status === 'fulfilled') setCalendarData(calendarRes.value);
         // Normaliser hours sur l'ordre semaine + caster is_open booleen
         const byDow = {};
         for (const row of h || []) byDow[row.day_of_week] = row;
@@ -75,6 +123,38 @@ export function FirstRunSetup({ user, onComplete }) {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const stripeReturn = params.get('stripe_connect');
+    const gcalReturn = params.get('gcal');
+
+    if (stripeReturn === 'return') {
+      setStep(2);
+      show('Retour Stripe recu. Verification du compte...', 'ok');
+      setTimeout(() => loadStripeStatus(true), 500);
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    if (stripeReturn === 'refresh') {
+      setStep(2);
+      show('La session Stripe a expire. Vous pouvez relancer la connexion.', 'error');
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    if (gcalReturn === 'connected') {
+      setStep(3);
+      show('Google Agenda connecte avec succes.', 'ok');
+      setTimeout(() => loadCalendarStatus(true), 500);
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    if (gcalReturn === 'error') {
+      setStep(3);
+      show(`Connexion Google echouee : ${params.get('reason') || 'unknown'}`, 'error');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [location.search, navigate, show, loadStripeStatus, loadCalendarStatus]);
 
   const finish = async () => {
     setSaving(true);
@@ -132,6 +212,30 @@ export function FirstRunSetup({ user, onComplete }) {
       show(e.message || 'Sauvegarde services impossible', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const connectStripe = async () => {
+    setIntegrationBusy('stripe');
+    try {
+      const { url } = await connectApi.onboard();
+      if (url) window.location.href = url;
+      else throw new Error('URL Stripe manquante');
+    } catch (e) {
+      show(e.message || 'Connexion Stripe impossible', 'error');
+      setIntegrationBusy(null);
+    }
+  };
+
+  const connectCalendar = async () => {
+    setIntegrationBusy('calendar');
+    try {
+      const { url } = await api.calendarSyncConnect();
+      if (url) window.location.href = url;
+      else throw new Error('URL Google manquante');
+    } catch (e) {
+      show(e.message || 'Connexion Google Agenda impossible', 'error');
+      setIntegrationBusy(null);
     }
   };
 
@@ -200,10 +304,33 @@ export function FirstRunSetup({ user, onComplete }) {
             <ServicesStep t={t} services={services} setServices={setServices}/>
           )}
           {step === 2 && (
-            <PaymentsStep t={t} user={user}/>
+            <PaymentsStep
+              t={t}
+              data={stripeData}
+              loading={stripeLoading}
+              busy={integrationBusy === 'stripe'}
+              onConnect={connectStripe}
+              onRefresh={() => loadStripeStatus()}
+            />
           )}
           {step === 3 && (
-            <FinishStep t={t} hours={hours} services={services}/>
+            <CalendarStep
+              t={t}
+              data={calendarData}
+              loading={calendarLoading}
+              busy={integrationBusy === 'calendar'}
+              onConnect={connectCalendar}
+              onRefresh={() => loadCalendarStatus()}
+            />
+          )}
+          {step === 4 && (
+            <FinishStep
+              t={t}
+              hours={hours}
+              services={services}
+              stripeData={stripeData}
+              calendarData={calendarData}
+            />
           )}
 
           {/* Footer */}
@@ -234,6 +361,11 @@ export function FirstRunSetup({ user, onComplete }) {
               </Button>
             )}
             {step === 3 && (
+              <Button type="button" variant="primary" onClick={next} disabled={saving}>
+                Continuer
+              </Button>
+            )}
+            {step === 4 && (
               <Button type="button" variant="primary" onClick={finish} disabled={saving}>
                 {saving ? '...' : 'Acceder a FlowIA'}
               </Button>
@@ -337,12 +469,9 @@ function ServicesStep({ t, services, setServices }) {
 }
 
 // ─── Step 3 — Paiements (Stripe Connect) ────────────────────────────────────
-function PaymentsStep({ t, user }) {
-  const goStripe = () => {
-    // Ouvre Reglages > Paiements dans un nouvel onglet — le commercant peut
-    // y lancer l'onboarding Stripe Connect sans perdre le wizard en cours.
-    window.open('/reglages/paiements', '_blank', 'noopener');
-  };
+function PaymentsStep({ t, data, loading, busy, onConnect, onRefresh }) {
+  const ready = !!data?.connected && !!data?.charges_enabled;
+  const pending = !!data?.connected && !data?.charges_enabled;
   return (
     <div>
       <p style={{ fontSize: 12, color: t.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
@@ -364,11 +493,26 @@ function PaymentsStep({ t, user }) {
             sur votre IBAN, gestion des remboursements depuis FlowIA.
           </p>
         </div>
-        <Button type="button" variant="ghost" onClick={goStripe} fullWidth>
-          Connecter Stripe (ouvre Reglages)
-        </Button>
+        <StatusPill
+          t={t}
+          tone={ready ? 'success' : pending ? 'warning' : 'neutral'}
+          label={loading ? 'Verification...' : ready ? 'Connecte et actif' : pending ? 'A finaliser chez Stripe' : 'Non connecte'}
+        />
+        {pending && data?.requirements_due?.length > 0 && (
+          <p style={{ fontSize: 11, color: '#92400e', margin: 0, lineHeight: 1.5 }}>
+            Stripe demande encore {data.requirements_due.length} information{data.requirements_due.length > 1 ? 's' : ''}.
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button type="button" variant="ghost" onClick={onConnect} disabled={busy} fullWidth>
+            {busy ? 'Redirection vers Stripe...' : ready ? 'Ouvrir Stripe' : pending ? 'Finaliser Stripe' : 'Connecter Stripe'}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onRefresh} disabled={loading || busy}>
+            Verifier
+          </Button>
+        </div>
         <p style={{ fontSize: 11, color: t.muted, margin: 0, fontStyle: 'italic' }}>
-          Vous pouvez aussi le faire plus tard depuis Reglages &gt; Paiements.
+          Cette etape est optionnelle : les paiements especes, CB locale et cheque restent disponibles.
         </p>
       </div>
     </div>
@@ -376,9 +520,62 @@ function PaymentsStep({ t, user }) {
 }
 
 // ─── Step 4 — Recap ─────────────────────────────────────────────────────────
-function FinishStep({ t, hours, services }) {
+function CalendarStep({ t, data, loading, busy, onConnect, onRefresh }) {
+  const connected = !!data?.connected;
+  const active = connected && data?.sync_enabled !== false;
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: t.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
+        Connectez Google Agenda pour ajouter automatiquement les rendez-vous FlowIA
+        dans votre calendrier. La synchronisation est sortante : FlowIA cree et met
+        a jour les evenements, sans lire vos autres rendez-vous.
+      </p>
+      <div style={{
+        padding: 16, borderRadius: 12,
+        background: t.cardAlt, border: `0.5px solid ${t.border}`,
+        display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 500, color: t.text, margin: 0 }}>
+            Synchronisation Google Agenda
+          </p>
+          <p style={{ fontSize: 11, color: t.muted, margin: '4px 0 0', lineHeight: 1.5 }}>
+            Vos nouveaux RDV apparaissent dans votre agenda Google, avec mise a jour
+            automatique en cas de modification ou d'annulation.
+          </p>
+        </div>
+        <StatusPill
+          t={t}
+          tone={active ? 'success' : connected ? 'warning' : 'neutral'}
+          label={loading ? 'Verification...' : active ? 'Connecte et actif' : connected ? 'Connecte, sync en pause' : 'Non connecte'}
+        />
+        {connected && (
+          <div style={{ display: 'grid', gap: 6 }}>
+            <InfoLine t={t} label="Compte Google" value={data.email || 'Non renseigne'}/>
+            <InfoLine t={t} label="Calendrier" value={data.calendar_id === 'primary' ? 'Agenda principal' : (data.calendar_id || '-')}/>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button type="button" variant="ghost" onClick={onConnect} disabled={busy} fullWidth>
+            {busy ? 'Redirection vers Google...' : connected ? 'Reconnecter Google Agenda' : 'Connecter Google Agenda'}
+          </Button>
+          <Button type="button" variant="ghost" onClick={onRefresh} disabled={loading || busy}>
+            Verifier
+          </Button>
+        </div>
+        <p style={{ fontSize: 11, color: t.muted, margin: 0, fontStyle: 'italic' }}>
+          Vous pourrez mettre en pause ou deconnecter la synchronisation depuis Reglages.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FinishStep({ t, hours, services, stripeData, calendarData }) {
   const openDays    = hours.filter(h => h.is_open).length;
   const activeServs = services.filter(s => s.is_active).length;
+  const stripeReady = !!stripeData?.connected && !!stripeData?.charges_enabled;
+  const calendarReady = !!calendarData?.connected && calendarData?.sync_enabled !== false;
   return (
     <div>
       <p style={{ fontSize: 13, color: t.text, margin: '0 0 16px', lineHeight: 1.6 }}>
@@ -390,12 +587,46 @@ function FinishStep({ t, hours, services }) {
       }}>
         <RecapItem t={t} label={`${openDays} jours d'ouverture / semaine`}/>
         <RecapItem t={t} label={`${activeServs} prestation${activeServs > 1 ? 's' : ''} active${activeServs > 1 ? 's' : ''}`}/>
+        <RecapItem t={t} label={`Stripe : ${stripeReady ? 'paiements en ligne actifs' : 'a connecter plus tard si besoin'}`}/>
+        <RecapItem t={t} label={`Google Agenda : ${calendarReady ? 'synchronisation active' : 'a connecter plus tard si besoin'}`}/>
         <RecapItem t={t} label="Caisse, agenda et reservations en ligne disponibles"/>
       </ul>
       <p style={{ fontSize: 12, color: t.muted, margin: 0, lineHeight: 1.5 }}>
         Vous pouvez tout ajuster a tout moment depuis le menu Reglages. Pour
         relancer ce parcours, allez dans Reglages &gt; Mon compte.
       </p>
+    </div>
+  );
+}
+
+function StatusPill({ t, tone, label }) {
+  const colors = {
+    success: { bg: '#ecfdf5', fg: '#047857', border: '#10b98155' },
+    warning: { bg: '#fffbeb', fg: '#92400e', border: '#f59e0b55' },
+    neutral: { bg: t.card, fg: t.muted, border: t.border },
+  };
+  const c = colors[tone] || colors.neutral;
+  return (
+    <span style={{
+      alignSelf: 'flex-start',
+      padding: '4px 9px',
+      borderRadius: 999,
+      background: c.bg,
+      color: c.fg,
+      border: `0.5px solid ${c.border}`,
+      fontSize: 11,
+      fontWeight: 600,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function InfoLine({ t, label, value }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '112px 1fr', gap: 8 }}>
+      <span style={{ fontSize: 11, color: t.muted }}>{label}</span>
+      <span style={{ fontSize: 12, color: t.text, fontWeight: 500, overflowWrap: 'anywhere' }}>{value}</span>
     </div>
   );
 }
