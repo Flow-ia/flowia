@@ -33,6 +33,7 @@ const {
 } = require('../utils/buildSlug');
 const { isValidBusinessType } = require('../utils/businessTypes');
 const { validatePhone: validatePhoneE164 } = require('../utils/phone');
+const { seedMerchantDefaults, seedBusinessHours } = require('../utils/seedMerchantDefaults');
 const router = express.Router();
 
 // Adresse complete obligatoire a l'inscription / onboarding. On exige au
@@ -230,6 +231,11 @@ router.post('/register/confirm', async (req, res) => {
         [user.id, cat.name, cat.type, cat.icon, cat.color]);
     }
 
+    // Seed horaires (Lun-Ven 9h-19h, Sam 9h-17h, Dim ferme) + services
+    // suggeres selon business_type (is_active=FALSE pour ne pas exposer dans
+    // le booking public avant validation par le wizard FirstRunSetup).
+    await seedMerchantDefaults(pool, user.id, businessType);
+
     // Creer automatiquement booking_settings avec un slug unique au format
     // nom-ville-CP. Si city/postalCode manquent encore (cas rare a ce stade),
     // le helper retombe sur le nom seul ; le slug sera reconstruit lors de
@@ -258,6 +264,8 @@ router.post('/register/confirm', async (req, res) => {
       city:              user.city,
       postalCode:        user.postal_code,
       googleBusinessUrl: null,
+      onboardingCompleted: true,
+      setupCompleted:    false,
     }});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
@@ -348,6 +356,7 @@ router.post('/login', async (req, res) => {
       lastName:          user.last_name,
       avatarUrl:         user.avatar_url,
       onboardingCompleted: user.onboarding_completed,
+      setupCompleted:    user.setup_completed,
       hasGoogle:         !!user.google_id,
     }});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -721,7 +730,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, email, business_name, phone, address, city, postal_code,
               google_business_url, created_at, first_name, last_name,
-              onboarding_completed, google_id, avatar_url,
+              onboarding_completed, setup_completed, google_id, avatar_url,
               subscription_status, subscription_plan, subscription_period,
               subscription_current_period_end, subscription_trial_ends_at,
               subscription_cancel_at_period_end, subscription_admin_grant
@@ -757,6 +766,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       postalCode:         u.postal_code,
       googleBusinessUrl:  u.google_business_url,
       onboardingCompleted: u.onboarding_completed,
+      setupCompleted:     u.setup_completed,
       hasGoogle:          !!u.google_id,
       avatarUrl:          u.avatar_url,
       subscription: grantActive ? {
@@ -1053,6 +1063,13 @@ router.get('/google/merchant/callback', async (req, res) => {
             [user.id, cat.name, cat.type, cat.icon, cat.color]);
         }
 
+        // Seed horaires d'ouverture par defaut (Lun-Ven 9h-19h, Sam 9h-17h,
+        // Dim ferme). business_type n'est pas encore connu a ce stade :
+        // les services suggeres seront seedes plus tard dans POST /onboarding
+        // quand le commercant aura choisi son type de commerce.
+        try { await seedBusinessHours(pool, user.id); }
+        catch (e) { console.error('[SEED business_hours google_oauth]', e.message); }
+
         // Creer booking_settings avec slug unique. A ce stade le compte n'a
         // ni ville ni CP : le helper retombe sur le nom seul, le slug sera
         // recalcule au format nom-ville-CP lors de l'onboarding obligatoire.
@@ -1105,6 +1122,7 @@ router.get('/google/merchant/callback', async (req, res) => {
       id: user.id, email: user.email, businessName: user.business_name,
       firstName: user.first_name, lastName: user.last_name,
       onboardingCompleted: user.onboarding_completed,
+      setupCompleted: user.setup_completed,
       avatarUrl: user.avatar_url,
     };
 
@@ -1166,6 +1184,12 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];
 
+    // Seed services suggeres selon business_type. Idempotent : no-op si le
+    // commercant a deja des services (compte recree via flow email/password
+    // ou seed deja joue). business_hours peuvent avoir ete seedees dans le
+    // callback Google : seedMerchantDefaults rejoue mais ON CONFLICT DO NOTHING.
+    await seedMerchantDefaults(pool, u.id, u.business_type);
+
     // Recalculer le slug au format nom-ville-CP. C'est l'onboarding qui
     // garantit pour la premiere fois la presence de city + postal_code,
     // donc le slug initial complet est forme ici. Si admin a verrouille
@@ -1207,10 +1231,48 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
         id: u.id, email: u.email, businessName: u.business_name,
         firstName: u.first_name, lastName: u.last_name,
         onboardingCompleted: true,
+        setupCompleted: false,
       }
     });
   } catch (e) {
     console.error('[ONBOARDING]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  POST /api/auth/setup-complete — marque le wizard FirstRunSetup termine
+//  PATCH partiel /skip pour passer le wizard sans tout configurer (le flag
+//  passe quand meme a TRUE puisque le commercant a vu le wizard).
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/setup-complete', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET setup_completed = TRUE WHERE id = $1
+       RETURNING id, setup_completed`,
+      [req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    res.json({ ok: true, setupCompleted: rows[0].setup_completed });
+  } catch (e) {
+    console.error('[SETUP COMPLETE]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// POST /api/auth/setup-restart — re-declenche le wizard depuis Reglages.
+// Repasse setup_completed=FALSE sans toucher aux donnees deja configurees.
+router.post('/setup-restart', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET setup_completed = FALSE WHERE id = $1
+       RETURNING id, setup_completed`,
+      [req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    res.json({ ok: true, setupCompleted: rows[0].setup_completed });
+  } catch (e) {
+    console.error('[SETUP RESTART]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });

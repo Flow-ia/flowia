@@ -352,6 +352,9 @@ export const api = {
   changePassword:     (b) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(b) }),
   updateProfile:      (b) => request('/auth/profile',         { method: 'PUT',  body: JSON.stringify(b) }),
   completeOnboarding: (b) => request('/auth/onboarding',      { method: 'POST', body: JSON.stringify(b) }),
+  // Wizard FirstRunSetup (post-inscription) : valider / re-declencher
+  setupComplete:      ()  => request('/auth/setup-complete',  { method: 'POST' }),
+  setupRestart:       ()  => request('/auth/setup-restart',   { method: 'POST' }),
   merchantGoogleAuthUrl: () => {
     const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '376153951158-jm80phb46sl1fisbgeq587v83ho7ft5e.apps.googleusercontent.com';

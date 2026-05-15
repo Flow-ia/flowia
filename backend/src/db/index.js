@@ -1009,6 +1009,15 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE`);
   // Les comptes existants ont TRUE par défaut ; seuls les nouveaux comptes Google auront FALSE
 
+  // Wizard "Fast Onboarding" post-inscription : guide le commercant
+  // fraichement cree a configurer ses horaires, services, paiements et logo
+  // en 4 etapes courtes. Le flag passe a TRUE quand le wizard est complete
+  // OU explicitement passe. Backfill : les comptes existants (deja
+  // onboarding_completed=TRUE) recoivent setup_completed=TRUE pour ne pas
+  // voir le wizard re-apparaitre apres deploiement.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS setup_completed BOOLEAN NOT NULL DEFAULT FALSE`);
+  await runMigration(`UPDATE users SET setup_completed = TRUE WHERE onboarding_completed = TRUE AND setup_completed = FALSE AND created_at < NOW() - INTERVAL '1 hour'`);
+
   // ── Feature SMS Campaigns + Email Marketing ──────────────────────────────────
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method VARCHAR(255)`);
