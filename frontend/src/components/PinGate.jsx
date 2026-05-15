@@ -535,24 +535,32 @@ export function PinSetup({ onDone, title = 'Creer votre code PIN' }) {
           color: err ? '#991b1b' : 'transparent',
         }}>{err || '·'}</p>
         <PinKeypad onPress={press} theme={theme} />
-        {step === 'confirm' && (
+        {/* Zone "Recommencer" : conteneur de hauteur fixe pour eviter que
+            le keypad/dots ne se decale entre l'etape 'enter' et 'confirm'.
+            En etape 'enter', le bouton existe mais est invisible (visibility
+            hidden) → meme hauteur, layout stable, le commercant retrouve
+            ses repere visuels quand il saisit son code une 2e fois. */}
+        <div style={{ height: 32, marginTop: 32, display: 'flex',
+                      justifyContent: 'center', alignItems: 'center' }}>
           <button
             type="button"
             onClick={() => { setStep('enter'); setPin1(''); setPin2(''); setErr(''); }}
+            disabled={step !== 'confirm'}
             style={{
-              marginTop: 32,
               fontSize: 13,
               color: theme.muted,
               background: 'none',
               border: 'none',
-              cursor: 'pointer',
+              cursor: step === 'confirm' ? 'pointer' : 'default',
               textDecoration: 'underline',
               fontFamily: 'inherit',
+              visibility: step === 'confirm' ? 'visible' : 'hidden',
+              padding: 0,
             }}
           >
             Recommencer
           </button>
-        )}
+        </div>
       </div>
       <style>{`
         @keyframes shake {

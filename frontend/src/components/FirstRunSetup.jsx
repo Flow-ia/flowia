@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, bookingApi } from '../utils/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { Toast, useToast } from './UI';
@@ -47,7 +47,7 @@ export function FirstRunSetup({ user, onComplete }) {
   useEffect(() => {
     (async () => {
       try {
-        const [h, s] = await Promise.all([api.getHours(), api.getServices()]);
+        const [h, s] = await Promise.all([bookingApi.getHours(), bookingApi.getServices()]);
         // Normaliser hours sur l'ordre semaine + caster is_open booleen
         const byDow = {};
         for (const row of h || []) byDow[row.day_of_week] = row;
@@ -105,7 +105,7 @@ export function FirstRunSetup({ user, onComplete }) {
   const saveHoursAndNext = async () => {
     setSaving(true);
     try {
-      await api.saveHours({ hours });
+      await bookingApi.saveHours({ hours });
       setStep(1);
     } catch (e) {
       show(e.message || 'Sauvegarde horaires impossible', 'error');
@@ -119,7 +119,7 @@ export function FirstRunSetup({ user, onComplete }) {
     try {
       for (const s of services) {
         const priceNum = s.price === '' ? null : Number(String(s.price).replace(',', '.'));
-        await api.updateService(s.id, {
+        await bookingApi.updateService(s.id, {
           name:             s.name,
           duration_minutes: Number(s.duration_minutes) || 30,
           price:            Number.isFinite(priceNum) ? priceNum : null,
