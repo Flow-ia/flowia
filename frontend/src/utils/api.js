@@ -355,6 +355,9 @@ export const api = {
   // Wizard FirstRunSetup (post-inscription) : valider / re-declencher
   setupComplete:      ()  => request('/auth/setup-complete',  { method: 'POST' }),
   setupRestart:       ()  => request('/auth/setup-restart',   { method: 'POST' }),
+  // Product tour (visite guidee) : valider / re-declencher
+  tourComplete:       ()  => request('/auth/tour-complete',   { method: 'POST' }),
+  tourRestart:        ()  => request('/auth/tour-restart',    { method: 'POST' }),
   merchantGoogleAuthUrl: () => {
     const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '376153951158-jm80phb46sl1fisbgeq587v83ho7ft5e.apps.googleusercontent.com';

@@ -1018,6 +1018,14 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS setup_completed BOOLEAN NOT NULL DEFAULT FALSE`);
   await runMigration(`UPDATE users SET setup_completed = TRUE WHERE onboarding_completed = TRUE AND setup_completed = FALSE AND created_at < NOW() - INTERVAL '1 hour'`);
 
+  // Product tour : tooltips ancres sur les routes principales (agenda /
+  // caisse / clients / reglages). S'affiche apres FirstRunSetup pour les
+  // nouveaux comptes, marque tour_completed=TRUE quand termine ou passe.
+  // Backfill TRUE pour les comptes existants (created_at < 1h) pour ne pas
+  // surcharger les utilisateurs deja installes.
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tour_completed BOOLEAN NOT NULL DEFAULT FALSE`);
+  await runMigration(`UPDATE users SET tour_completed = TRUE WHERE onboarding_completed = TRUE AND tour_completed = FALSE AND created_at < NOW() - INTERVAL '1 hour'`);
+
   // ── Feature SMS Campaigns + Email Marketing ──────────────────────────────────
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method VARCHAR(255)`);

@@ -266,6 +266,7 @@ router.post('/register/confirm', async (req, res) => {
       googleBusinessUrl: null,
       onboardingCompleted: true,
       setupCompleted:    false,
+      tourCompleted:     false,
     }});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
@@ -357,6 +358,7 @@ router.post('/login', async (req, res) => {
       avatarUrl:         user.avatar_url,
       onboardingCompleted: user.onboarding_completed,
       setupCompleted:    user.setup_completed,
+      tourCompleted:     user.tour_completed,
       hasGoogle:         !!user.google_id,
     }});
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -730,7 +732,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT id, email, business_name, phone, address, city, postal_code,
               google_business_url, created_at, first_name, last_name,
-              onboarding_completed, setup_completed, google_id, avatar_url,
+              onboarding_completed, setup_completed, tour_completed, google_id, avatar_url,
               subscription_status, subscription_plan, subscription_period,
               subscription_current_period_end, subscription_trial_ends_at,
               subscription_cancel_at_period_end, subscription_admin_grant
@@ -767,6 +769,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       googleBusinessUrl:  u.google_business_url,
       onboardingCompleted: u.onboarding_completed,
       setupCompleted:     u.setup_completed,
+      tourCompleted:      u.tour_completed,
       hasGoogle:          !!u.google_id,
       avatarUrl:          u.avatar_url,
       subscription: grantActive ? {
@@ -1123,6 +1126,7 @@ router.get('/google/merchant/callback', async (req, res) => {
       firstName: user.first_name, lastName: user.last_name,
       onboardingCompleted: user.onboarding_completed,
       setupCompleted: user.setup_completed,
+      tourCompleted: user.tour_completed,
       avatarUrl: user.avatar_url,
     };
 
@@ -1232,6 +1236,7 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
         firstName: u.first_name, lastName: u.last_name,
         onboardingCompleted: true,
         setupCompleted: false,
+        tourCompleted: false,
       }
     });
   } catch (e) {
@@ -1273,6 +1278,40 @@ router.post('/setup-restart', authMiddleware, async (req, res) => {
     res.json({ ok: true, setupCompleted: rows[0].setup_completed });
   } catch (e) {
     console.error('[SETUP RESTART]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  POST /api/auth/tour-complete — marque le product tour vu (skip ou fini)
+//  POST /api/auth/tour-restart  — re-declenche le tour depuis Reglages
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/tour-complete', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET tour_completed = TRUE WHERE id = $1
+       RETURNING id, tour_completed`,
+      [req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    res.json({ ok: true, tourCompleted: rows[0].tour_completed });
+  } catch (e) {
+    console.error('[TOUR COMPLETE]', e.message);
+    res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+router.post('/tour-restart', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET tour_completed = FALSE WHERE id = $1
+       RETURNING id, tour_completed`,
+      [req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
+    res.json({ ok: true, tourCompleted: rows[0].tour_completed });
+  } catch (e) {
+    console.error('[TOUR RESTART]', e.message);
     res.status(500).json({ error: 'Erreur serveur.' });
   }
 });
