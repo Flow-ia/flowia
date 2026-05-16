@@ -1026,6 +1026,12 @@ async function initDB() {
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tour_completed BOOLEAN NOT NULL DEFAULT FALSE`);
   await runMigration(`UPDATE users SET tour_completed = TRUE WHERE onboarding_completed = TRUE AND tour_completed = FALSE AND created_at < NOW() - INTERVAL '1 hour'`);
 
+  // Numero de rue dedie (donnee precise pour la fiche commerce, distinct du
+  // champ address libre rempli par l'autocomplete BAN). Obligatoire a
+  // l'inscription cote applicatif ; colonne nullable pour ne pas casser les
+  // comptes existants (backfill impossible sans donnee fiable).
+  await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS street_number VARCHAR(20)`);
+
   // ── Feature SMS Campaigns + Email Marketing ──────────────────────────────────
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`);
   await runMigration(`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method VARCHAR(255)`);

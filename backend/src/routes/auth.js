@@ -45,6 +45,15 @@ function isValidAddress(raw) {
   return typeof raw === 'string' && raw.trim().length >= 6;
 }
 
+// Numero de rue obligatoire (donnee precise demandee par l'exploitant). On
+// accepte les formats reels : "12", "12B", "1 bis", "12-14". Doit contenir au
+// moins un chiffre et tenir en 20 caracteres (cf. colonne users.street_number).
+function isValidStreetNumber(raw) {
+  if (typeof raw !== 'string') return false;
+  const s = raw.trim();
+  return s.length >= 1 && s.length <= 20 && /\d/.test(s);
+}
+
 const SEED_CATS = [
   { name: 'Coupe homme',  type: 'revenue', icon: 'Scissors',    color: '#3b82f6' },
   { name: 'Coupe femme',  type: 'revenue', icon: 'Sparkles',    color: '#ec4899' },
@@ -158,7 +167,7 @@ function maskEmail(email) {
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, businessName, businessType, phone, address, country, city, postalCode, lat, lng } = req.body;
+    const { email, password, businessName, businessType, phone, address, streetNumber, country, city, postalCode, lat, lng } = req.body;
     if (!email || !password || !businessName)
       return res.status(400).json({ error: 'Tous les champs sont requis.' });
     if (!isValidEmail(String(email).trim().toLowerCase()))
@@ -177,10 +186,13 @@ router.post('/register', async (req, res) => {
     // Adresse complete obligatoire.
     if (!isValidAddress(address))
       return res.status(400).json({ error: 'Adresse du commerce obligatoire.', code: 'ADDRESS_REQUIRED' });
+    // Numero de rue obligatoire (donnee precise et requetable).
+    if (!isValidStreetNumber(streetNumber))
+      return res.status(400).json({ error: 'Numero de rue obligatoire.', code: 'STREET_NUMBER_REQUIRED' });
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
     if (rows.length) return res.status(409).json({ error: 'Email déjà existant, merci de changer de mail et réessayer !' });
     const code = genCode();
-    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phoneCheck.e164, address: address.trim(), country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
+    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phoneCheck.e164, address: address.trim(), streetNumber: String(streetNumber).trim(), country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
     // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
     res.json({ ok: true });
     setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register').catch(e => console.error('[EMAIL register]', e.message)));
@@ -194,7 +206,7 @@ router.post('/register/confirm', async (req, res) => {
     const rec = await getCode(`reg_${email.toLowerCase()}`);
     if (!rec) return res.status(400).json({ error: 'Code invalide ou expiré.' });
     if (rec.code !== code.trim()) return res.status(400).json({ error: 'Code incorrect.' });
-    const { email: em, password, businessName, businessType, phone, address, country, city, postalCode, lat, lng } = rec.data;
+    const { email: em, password, businessName, businessType, phone, address, streetNumber, country, city, postalCode, lat, lng } = rec.data;
     const hash = await bcrypt.hash(password, 12);
     // Defense-in-depth : on revalide le businessType cote /confirm aussi.
     // Theoriquement deja valide cote /register, mais le payload de saveCode
@@ -213,11 +225,15 @@ router.post('/register/confirm', async (req, res) => {
       await deleteCode(`reg_${email.toLowerCase()}`);
       return res.status(400).json({ error: 'Adresse du commerce obligatoire.', code: 'ADDRESS_REQUIRED' });
     }
+    if (!isValidStreetNumber(streetNumber)) {
+      await deleteCode(`reg_${email.toLowerCase()}`);
+      return res.status(400).json({ error: 'Numero de rue obligatoire.', code: 'STREET_NUMBER_REQUIRED' });
+    }
     let rows;
     try {
       ({ rows } = await pool.query(
-        `INSERT INTO users (email,password_hash,business_name,business_type,phone,address,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,email,business_name,business_type,phone,address,country,city,postal_code`,
-        [em, hash, businessName, businessType, phoneCheck.e164, address.trim(), country||'FR', city||null, postalCode||null, lat||null, lng||null]
+        `INSERT INTO users (email,password_hash,business_name,business_type,phone,address,street_number,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id,email,business_name,business_type,phone,address,street_number,country,city,postal_code`,
+        [em, hash, businessName, businessType, phoneCheck.e164, address.trim(), String(streetNumber).trim(), country||'FR', city||null, postalCode||null, lat||null, lng||null]
       ));
     } catch (e) {
       if (e.code === '23505') {
@@ -1181,7 +1197,7 @@ router.get('/google/merchant/callback', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 router.post('/onboarding', authMiddleware, async (req, res) => {
   try {
-    const { firstName, lastName, businessName, businessType, phone, address, city, postalCode, country, lat, lng } = req.body;
+    const { firstName, lastName, businessName, businessType, phone, address, streetNumber, city, postalCode, country, lat, lng } = req.body;
     if (!firstName?.trim() || !lastName?.trim() || !businessName?.trim() || !city?.trim() || !postalCode?.trim()) {
       return res.status(400).json({ error: 'Tous les champs sont obligatoires.' });
     }
@@ -1196,17 +1212,20 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
     if (!isValidAddress(address)) {
       return res.status(400).json({ error: 'Adresse du commerce obligatoire.', code: 'ADDRESS_REQUIRED' });
     }
+    if (!isValidStreetNumber(streetNumber)) {
+      return res.status(400).json({ error: 'Numero de rue obligatoire.', code: 'STREET_NUMBER_REQUIRED' });
+    }
 
     const { rows } = await pool.query(
       `UPDATE users SET
          first_name = $1, last_name = $2, business_name = $3,
          phone = $4, address = $5, city = $6, postal_code = $7,
          country = COALESCE($8, 'FR'), lat = $9, lng = $10,
-         business_type = $11,
+         business_type = $11, street_number = $13,
          onboarding_completed = TRUE
        WHERE id = $12
-       RETURNING id, email, business_name, business_type, first_name, last_name, phone, address, city, postal_code, onboarding_completed`,
-      [firstName.trim(), lastName.trim(), businessName.trim(), phoneCheck.e164, address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, businessType, req.user.userId]
+       RETURNING id, email, business_name, business_type, first_name, last_name, phone, address, street_number, city, postal_code, onboarding_completed`,
+      [firstName.trim(), lastName.trim(), businessName.trim(), phoneCheck.e164, address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, businessType, req.user.userId, String(streetNumber).trim()]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];

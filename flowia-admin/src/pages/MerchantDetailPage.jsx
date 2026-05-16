@@ -274,6 +274,7 @@ export default function MerchantDetailPage() {
             <li><span className="k">{"Nom commerce"}</span><span className="v">{merchant.business_name || '—'}</span></li>
             <li><span className="k">Email</span><span className="v mono">{merchant.email}</span></li>
             <li><span className="k">{"Telephone"}</span><span className="v mono">{merchant.phone || '—'}</span></li>
+            <li><span className="k">{"N° de rue"}</span><span className="v">{merchant.street_number || '—'}</span></li>
             <li><span className="k">{"Adresse"}</span><span className="v">{merchant.address || '—'}</span></li>
             <li><span className="k">{"Ville"}</span><span className="v">{merchant.city || '—'} {merchant.postal_code ? `(${merchant.postal_code})` : ''}</span></li>
             <li><span className="k">{"Pays"}</span><span className="v">{merchant.country || '—'}</span></li>

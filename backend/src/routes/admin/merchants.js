@@ -134,7 +134,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.email, u.business_name, u.phone, u.address, u.city, u.country, u.postal_code,
+      `SELECT u.id, u.email, u.business_name, u.phone, u.address, u.street_number, u.city, u.country, u.postal_code,
               u.first_name, u.last_name, u.avatar_url,
               u.is_frozen, u.frozen_at, u.frozen_reason, u.frozen_by_admin_id,
               u.deletion_requested_at,

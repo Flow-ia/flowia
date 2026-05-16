@@ -763,7 +763,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
     biz:'', businessType:'',
     email:'', pw:'', cpw:'',
     phone:'', country:'FR',
-    address:'', city:'', postalCode:'',
+    streetNumber:'', address:'', city:'', postalCode:'',
     lat:null, lng:null,
   });
   const [vis, setVis]       = useState(false);
@@ -784,6 +784,10 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
     if (!phoneCheck.valid) return show(phoneCheck.msg, 'err');
     // Adresse obligatoire.
     if (!f.address.trim()) return show('Adresse du commerce obligatoire.', 'err');
+    // Numero de rue obligatoire (donnee precise — backend revalide aussi).
+    if (!f.streetNumber.trim() || !/\d/.test(f.streetNumber)) {
+      return show('Numero de rue obligatoire (ex : 12, 12B, 1 bis).', 'err');
+    }
     const cc = COUNTRY_CODES.find(c => c.code === f.country);
     const fullPhone = `${cc.dial} ${f.phone}`;
     setLd(true);
@@ -793,6 +797,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
         businessName: f.biz,
         businessType: f.businessType,
         phone: fullPhone,
+        streetNumber: f.streetNumber.trim(),
         address: f.address.trim(),
         city: f.city || undefined,
         postalCode: f.postalCode || undefined,
@@ -874,6 +879,21 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
               <p style={{ fontSize:11, color:t.muted, margin:'6px 0 0' }}>
                 Choisissez la categorie qui correspond le mieux a votre activite.
                 Vos clients pourront vous trouver via ce filtre dans la marketplace.
+              </p>
+            </div>
+
+            <div style={{ marginBottom:12 }}>
+              <Label>Numero de rue *</Label>
+              <input type="text" value={f.streetNumber}
+                     onChange={e => setF({ ...f, streetNumber: e.target.value.slice(0, 20) })}
+                     placeholder="Ex : 12, 12B, 1 bis"
+                     inputMode="text"
+                     style={fieldStyle(t, {
+                       borderColor: f.streetNumber && !/\d/.test(f.streetNumber) ? '#991b1b' : t.borderInput,
+                     })}
+                     {...fieldFocus(t)}/>
+              <p style={{ fontSize:11, color:t.muted, margin:'4px 0 0' }}>
+                Le numero exact de votre commerce (separe de la rue pour une fiche precise).
               </p>
             </div>
 
@@ -1190,7 +1210,7 @@ export function MerchantOnboarding({ user, onComplete }) {
     businessName: user?.businessName || '',
     businessType: '',
     phone:'', country:'FR',
-    address:'', city:'', postalCode:'',
+    streetNumber:'', address:'', city:'', postalCode:'',
     lat:null, lng:null,
   });
   const [ld,  setLd]  = useState(false);
@@ -1216,7 +1236,8 @@ export function MerchantOnboarding({ user, onComplete }) {
 
   const canSubmit = f.firstName.trim() && f.lastName.trim() && f.businessName.trim()
                  && f.businessType
-                 && f.phone.trim() && f.address.trim() && f.city.trim() && f.postalCode.trim();
+                 && f.phone.trim() && f.streetNumber.trim() && /\d/.test(f.streetNumber)
+                 && f.address.trim() && f.city.trim() && f.postalCode.trim();
 
   const phoneVal = validatePhone(f.phone, f.country);
 
@@ -1224,6 +1245,9 @@ export function MerchantOnboarding({ user, onComplete }) {
     e.preventDefault();
     if (!canSubmit) {
       if (!f.businessType) return setErr('Choisissez votre type de commerce.');
+      if (!f.streetNumber.trim() || !/\d/.test(f.streetNumber)) {
+        return setErr('Numero de rue obligatoire (ex : 12, 12B, 1 bis).');
+      }
       return setErr('Tous les champs sont obligatoires.');
     }
     if (f.phone && !phoneVal.valid) return setErr(phoneVal.msg);
@@ -1235,7 +1259,8 @@ export function MerchantOnboarding({ user, onComplete }) {
       const r = await api.completeOnboarding({
         firstName: f.firstName, lastName: f.lastName, businessName: f.businessName,
         businessType: f.businessType,
-        phone: fullPhone, address: f.address, city: f.city, postalCode: f.postalCode,
+        phone: fullPhone, streetNumber: f.streetNumber.trim(),
+        address: f.address, city: f.city, postalCode: f.postalCode,
         country: f.country, lat: f.lat, lng: f.lng,
       });
       onComplete(r.token, r.user);
@@ -1343,6 +1368,17 @@ export function MerchantOnboarding({ user, onComplete }) {
             <PhoneField country={f.country} phone={f.phone}
                         onChange={upd => setF(prev => ({ ...prev, ...upd }))}
                         label="Telephone" required/>
+
+            <div>
+              <Label>Numero de rue *</Label>
+              <input type="text" value={f.streetNumber}
+                     onChange={e => setF({ ...f, streetNumber: e.target.value.slice(0, 20) })}
+                     placeholder="Ex : 12, 12B, 1 bis"
+                     style={fieldStyle(t, {
+                       borderColor: f.streetNumber && !/\d/.test(f.streetNumber) ? '#991b1b' : t.borderInput,
+                     })}
+                     {...fieldFocus(t)}/>
+            </div>
 
             <AddressField address={f.address}
                           onChange={upd => setF(prev => ({ ...prev, ...upd }))}
