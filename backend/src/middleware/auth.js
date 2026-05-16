@@ -80,18 +80,18 @@ async function authMiddleware(req, res, next) {
   // Quel que soit le canal de login (formulaire, Google OAuth, session
   // ouverte avant le gel), on bloque.
   const status = await getMerchantStatus(payload.userId);
-  if (status.isFrozen) {
-    return res.status(403).json({
-      error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.',
-      code: 'ACCOUNT_FROZEN',
-    });
-  }
   if (status.deletionRequestedAt) {
     // Compte en grace 30j post-suppression. Aucune session ne doit fonctionner.
     return res.status(403).json({
       error: 'Votre compte est en cours de suppression. Pour annuler dans les 30 jours, contactez contact@flowiapro.com.',
       code: 'ACCOUNT_DELETION_PENDING',
       deletionRequestedAt: status.deletionRequestedAt,
+    });
+  }
+  if (status.isFrozen) {
+    return res.status(403).json({
+      error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.',
+      code: 'ACCOUNT_FROZEN',
     });
   }
 

@@ -6,9 +6,21 @@ const { pool } = require('../../db');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { logAuditAction } = require('../../services/adminAudit');
 const { FEATURES } = require('../../middleware/requireFeature');
+const {
+  DELETE_PHRASE,
+  collectMerchantDeletePreview,
+  scheduleMerchantDeletion,
+} = require('../../utils/merchantGdprDelete');
+const { exportAllUserData } = require('../../utils/exportUserData');
 
 const router = express.Router();
 router.use(adminAuth);
+
+function requireSuperAdmin(req, res) {
+  if (req.admin?.role === 'super_admin') return true;
+  res.status(403).json({ error: 'Action reservee au super-admin.' });
+  return false;
+}
 
 // ── GET /subscription-list — liste filtree par etat d'abonnement ─────────
 // Sert au dashboard admin pour 'drill-down' sur une carte (ex: cliquer
@@ -73,7 +85,7 @@ router.get('/', async (req, res) => {
   const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);
   const offset = Math.max(parseInt(req.query.offset) || 0, 0);
   const search = String(req.query.search || '').trim();
-  const status = String(req.query.status || 'all').toLowerCase(); // all|active|frozen
+  const status = String(req.query.status || 'all').toLowerCase(); // all|active|frozen|deletion
 
   const where = [];
   const params = [];
@@ -83,8 +95,9 @@ router.get('/', async (req, res) => {
               OR LOWER(u.email) LIKE $${params.length}
               OR LOWER(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) LIKE $${params.length})`);
   }
-  if (status === 'frozen') where.push('u.is_frozen = TRUE');
-  else if (status === 'active') where.push('u.is_frozen = FALSE OR u.is_frozen IS NULL');
+  if (status === 'deletion') where.push('u.deletion_requested_at IS NOT NULL');
+  else if (status === 'frozen') where.push('u.is_frozen = TRUE AND u.deletion_requested_at IS NULL');
+  else if (status === 'active') where.push('(u.is_frozen = FALSE OR u.is_frozen IS NULL) AND u.deletion_requested_at IS NULL');
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -98,6 +111,7 @@ router.get('/', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT u.id, u.email, u.business_name, u.phone, u.city,
               u.is_frozen, u.frozen_at, u.frozen_reason,
+              u.deletion_requested_at,
               u.created_at,
               (SELECT COUNT(*)::int FROM appointments a WHERE a.user_id = u.id) AS appointments_count,
               (SELECT COUNT(*)::int FROM client_accounts c WHERE c.user_id = u.id) AS clients_count,
@@ -123,6 +137,7 @@ router.get('/:id', async (req, res) => {
       `SELECT u.id, u.email, u.business_name, u.phone, u.address, u.city, u.country, u.postal_code,
               u.first_name, u.last_name, u.avatar_url,
               u.is_frozen, u.frozen_at, u.frozen_reason, u.frozen_by_admin_id,
+              u.deletion_requested_at,
               u.sms_balance, u.feature_flags,
               u.created_at, u.onboarding_completed,
               bs.slug                       AS slug,
@@ -292,6 +307,128 @@ router.post('/:id/unfreeze', async (req, res) => {
 // - reason obligatoire (audit)
 // - solde resultant >= 0 garanti par la contrainte DB users_sms_balance_nonneg
 //   et verifie en amont pour retourner un 409 explicite plutot qu'un 500.
+router.get('/:id/gdpr-delete/preview', async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const preview = await collectMerchantDeletePreview(pool, req.params.id);
+    if (!preview) return res.status(404).json({ error: 'Commercant introuvable.' });
+    return res.json({ ...preview, delete_phrase: DELETE_PHRASE });
+  } catch (e) {
+    console.error('[admin/merchants gdpr preview]', e.message);
+    return res.status(500).json({ error: 'Erreur serveur.' });
+  }
+});
+
+router.get('/:id/gdpr-delete/export', async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const data = await exportAllUserData(pool, req.params.id);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = String(data.profile?.business_name || 'merchant')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'merchant';
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="flowia-export-${safeName}-${today}.json"`);
+    return res.send(JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('[admin/merchants gdpr export]', e.message);
+    if (/introuvable/i.test(e.message || '')) return res.status(404).json({ error: 'Commercant introuvable.' });
+    return res.status(500).json({ error: 'Impossible de generer l export.' });
+  }
+});
+
+router.delete('/:id/gdpr-delete', async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+
+  const body = req.body || {};
+  const confirmBusinessName = String(body.confirm_business_name || '').trim();
+  const confirmPhrase = String(body.confirm_phrase || '').trim();
+  const reason = String(body.reason || '').trim();
+
+  if (confirmPhrase !== DELETE_PHRASE) {
+    return res.status(400).json({ error: `Phrase de confirmation invalide. Tapez : ${DELETE_PHRASE}` });
+  }
+  if (reason.length < 8) {
+    return res.status(400).json({ error: 'Motif requis (8 caracteres minimum).' });
+  }
+
+  try {
+    const preview = await collectMerchantDeletePreview(pool, req.params.id);
+    if (!preview) return res.status(404).json({ error: 'Commercant introuvable.' });
+
+    const expectedName = String(preview.merchant.business_name || '').trim();
+    if (!expectedName || confirmBusinessName.toLowerCase() !== expectedName.toLowerCase()) {
+      return res.status(400).json({
+        error: 'Confirmation incorrecte : tapez exactement le nom commercial du commerce.',
+      });
+    }
+
+    const result = await scheduleMerchantDeletion(pool, req.params.id, {
+      admin_id: req.admin.id,
+      reason,
+      refund_future_online_payments: body.refund_future_online_payments === true,
+      cancel_subscription: body.cancel_subscription !== false,
+      delete_stripe_customer: body.delete_stripe_customer !== false,
+      delete_connect_account: body.delete_connect_account !== false,
+    });
+
+    if (result.notFound) return res.status(404).json({ error: 'Commercant introuvable.' });
+    if (result.blocked) {
+      return res.status(409).json({
+        error: 'Suppression bloquee : obligations financieres a traiter avant suppression definitive.',
+        blockers: result.blockers || [],
+        preview: result.preview,
+        refund_results: result.refund_results || [],
+      });
+    }
+
+    await logAuditAction({
+      adminId: req.admin.id,
+      adminEmail: req.admin.email,
+      action: 'merchant.gdpr_delete_scheduled',
+      targetType: 'merchant',
+      targetId: req.params.id,
+      payloadBefore: {
+        counts: preview.counts,
+        finance: preview.finance,
+      },
+      payloadAfter: {
+        reason,
+        retention: result.retention,
+        scheduled: true,
+        warnings: result.warnings,
+        refunded_count: (result.refund_results || []).filter(r => r.refunded).length,
+      },
+      req,
+    });
+
+    return res.json({
+      ok: true,
+      scheduled: true,
+      retention: result.retention,
+      warnings: result.warnings || [],
+      refund_results: result.refund_results || [],
+    });
+  } catch (e) {
+    console.error('[admin/merchants gdpr delete]', e.message);
+    await logAuditAction({
+      adminId: req.admin.id,
+      adminEmail: req.admin.email,
+      action: 'merchant.gdpr_delete_scheduled',
+      targetType: 'merchant',
+      targetId: req.params.id,
+      payloadBefore: { reason },
+      payloadAfter: null,
+      status: 'failure',
+      errorMessage: e.message,
+      req,
+    });
+    return res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 const SMS_BALANCE_DELTA_MAX = 1000;
 
 router.post('/:id/sms-balance/adjust', async (req, res) => {

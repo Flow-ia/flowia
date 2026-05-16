@@ -1,7 +1,7 @@
 // admin.js — API helpers pour les ressources admin (merchants, clients, etc.).
 // Wrap apiJson pour fournir une surface ergonomique.
 
-import { apiJson } from './api.js';
+import { apiFetch, apiJson } from './api.js';
 
 // ── Merchants ───────────────────────────────────────────────────────────────
 export async function listMerchants({ search = '', status = 'all', limit = 50, offset = 0 } = {}) {
@@ -35,6 +35,30 @@ export async function unfreezeMerchant(id) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/unfreeze`, {
     method: 'POST',
   });
+}
+
+export async function getMerchantGdprDeletePreview(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/gdpr-delete/preview`);
+}
+
+export async function deleteMerchantGdpr(id, body) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/gdpr-delete`, {
+    method: 'DELETE',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function downloadMerchantGdprExport(id) {
+  const res = await apiFetch(`/api/admin/merchants/${encodeURIComponent(id)}/gdpr-delete/export`);
+  if (!res.ok) {
+    let data = null;
+    try { data = await res.json(); } catch { /* ignore */ }
+    throw new Error(data?.error || `HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  return { blob, filename: match?.[1] || 'flowia-export-merchant.json' };
 }
 
 export async function adjustMerchantSmsBalance(id, { delta, reason }) {

@@ -5,7 +5,60 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
-## État actuel (2026-05-08) — Stripe Connect + escrow + refunds + traçabilité Planity-like
+## État actuel (2026-05-16) — Suppression RGPD compte marchand (console super-admin)
+
+Procédure RGPD complète de fermeture/suppression d'un compte commerçant
+depuis le panel `flowia-admin`, réservée au **super-admin**, alignée sur
+le mode « grande SaaS » : fermeture immédiate + purge différée 30j, avec
+garde-fous financiers Stripe non-négociables.
+
+### Backend
+- **`backend/src/utils/merchantGdprDelete.js`** (nouveau) — service commun :
+  - `collectMerchantDeletePreview` : compte ~60 tables user-scoped + agrège
+    la finance (RDV futurs payés en ligne, payouts en attente/in-transit,
+    refunds échoués non résolus, solde Stripe Connect via API).
+  - `buildBlockers` : bloque la suppression tant qu'il reste un solde
+    Stripe, un payout en transit, un refund échoué, un RDV futur payé non
+    remboursé, ou si la clé Stripe plateforme manque.
+  - `scheduleMerchantDeletion` (chemin admin) : rembourse les RDV futurs
+    online, annule l'abonnement Stripe, révoque le token Google Calendar,
+    puis `disableOperationalAccess` (freeze + `deletion_requested_at` +
+    purge booking/push/queue, idempotent via COALESCE).
+  - `hardDeleteMerchant` (chemin cron) : refunds + cleanup média
+    (Cloudinary/FS) + cleanup Stripe (customer/Connect del-or-reject) +
+    `deleteMerchantDatabaseRows` (transaction `BEGIN/COMMIT`, `FOR UPDATE`,
+    52 DELETE ordonnés FK-safe, tolérant aux tables absentes, redaction
+    de l'audit log).
+- **`routes/admin/merchants.js`** : 3 routes super-admin —
+  `GET /:id/gdpr-delete/preview`, `GET /:id/gdpr-delete/export` (JSON
+  art. 20 portabilité), `DELETE /:id/gdpr-delete` (triple confirmation :
+  phrase `SUPPRIMER DEFINITIVEMENT` + nom commercial exact + motif ≥8
+  car., audit `merchant.gdpr_delete_scheduled` succès/échec). Filtre liste
+  `status=deletion` ajouté.
+- **`index.js`** : cron `acc-purge` (30j) réécrit — au lieu d'une liste
+  cascade figée, réutilise `hardDeleteMerchant` avec les mêmes garde-fous
+  financiers ; compte les comptes encore bloqués (retry naturel J+1).
+- **`middleware/auth.js`** : `deletion_requested_at` vérifié AVANT
+  `is_frozen` (message RGPD prioritaire sur message gel).
+- **`public-booking/index.js`** : page booking publique 403 aussi si
+  `deletion_requested_at` (pas seulement `is_frozen`).
+
+### Frontend admin (`flowia-admin`)
+- **`MerchantGdprDeleteSection.jsx`** (nouveau) — modale preview chiffrée
+  (compteurs + finance + blockers), export JSON avant suppression, cases
+  refund/annulation abonnement, triple confirmation, garde
+  `alreadyScheduled`. Mode `section` (fiche détail) + mode `button`
+  (ligne liste).
+- `lib/admin.js` / `lib/api.js` : helpers + propagation `err.data`
+  (blockers/preview renvoyés au 409). `MerchantDetailPage` /
+  `MerchantsListPage` : badge « Suppression programmee », filtre dédié.
+
+Build admin OK (57 modules, 4.3 s). Modules backend `require()` OK.
+`docs/flowia-v03.zip` laissé untracked (artefact binaire, non commité).
+
+---
+
+## État précédent (2026-05-08) — Stripe Connect + escrow + refunds + traçabilité Planity-like
 
 Gros chantier : alignement complet sur le modèle **Planity Pro** pour les
 paiements en ligne (Stripe Connect Direct Charges). Tout le flow paiement /

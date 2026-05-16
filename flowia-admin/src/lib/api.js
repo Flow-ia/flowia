@@ -85,6 +85,7 @@ export async function apiJson(path, opts = {}) {
   if (!res.ok) {
     const err = new Error(data?.error || `HTTP ${res.status}`);
     err.status = res.status;
+    err.data = data;
     // Propage le code d'erreur applicatif (ex: BREAKDOWN_SUM_MISMATCH) pour
     // que les hooks puissent traduire en messages FR sans parser err.message.
     if (data?.code) err.code = data.code;

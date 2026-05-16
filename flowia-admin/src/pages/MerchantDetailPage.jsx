@@ -6,6 +6,7 @@ import AppShell from '../components/AppShell.jsx';
 import MerchantPromoCodesSection from './MerchantPromoCodesSection.jsx';
 import MerchantResetSection from './MerchantResetSection.jsx';
 import MerchantSubscriptionSection from './MerchantSubscriptionSection.jsx';
+import MerchantGdprDeleteSection from './MerchantGdprDeleteSection.jsx';
 
 // Liste des features blocables avec libelle FR. Doit rester aligne avec la
 // constante FEATURES de backend/src/middleware/requireFeature.js.
@@ -228,7 +229,9 @@ export default function MerchantDetailPage() {
           <h1 className="dash-title">{merchant.business_name}</h1>
           <p className="page-sub">{merchant.email} {merchant.slug ? `— /${merchant.slug}` : ''}</p>
         </div>
-        {merchant.is_frozen
+        {merchant.deletion_requested_at
+          ? <span className="badge badge-frozen">{"Suppression programmee"}</span>
+          : merchant.is_frozen
           ? <span className="badge badge-frozen">{"Gele"}</span>
           : <span className="badge badge-on">{"Actif"}</span>}
       </div>
@@ -239,12 +242,22 @@ export default function MerchantDetailPage() {
       {merchant.is_frozen && (
         <section className="card card-warning">
           <div className="card-head">
-            <h2 className="card-title">{"Compte gele"}</h2>
-            <button className="btn-ghost" onClick={doUnfreeze} disabled={busy}>{"Degeler"}</button>
+            <h2 className="card-title">
+              {merchant.deletion_requested_at ? "Suppression RGPD programmee" : "Compte gele"}
+            </h2>
+            {!merchant.deletion_requested_at && (
+              <button className="btn-ghost" onClick={doUnfreeze} disabled={busy}>{"Degeler"}</button>
+            )}
           </div>
           <p className="card-sub">
             <strong>{"Motif :"}</strong> {merchant.frozen_reason || '—'}<br/>
             <strong>{"Depuis :"}</strong> {merchant.frozen_at ? new Date(merchant.frozen_at).toLocaleString('fr-FR') : '—'}<br/>
+            {merchant.deletion_requested_at && (
+              <>
+                <strong>{"Demande RGPD :"}</strong> {new Date(merchant.deletion_requested_at).toLocaleString('fr-FR')}<br/>
+                <strong>{"Purge estimee :"}</strong> {new Date(new Date(merchant.deletion_requested_at).getTime() + 30 * 86400000).toLocaleString('fr-FR')}<br/>
+              </>
+            )}
             {merchant.frozen_by && <><strong>{"Par :"}</strong> {merchant.frozen_by.name} ({merchant.frozen_by.email})</>}
           </p>
         </section>
@@ -485,6 +498,24 @@ export default function MerchantDetailPage() {
 
       {/* Réinitialisation par feature — destructif, confirmation business_name */}
       <MerchantResetSection merchant={merchant} />
+
+      <MerchantGdprDeleteSection
+        merchant={merchant}
+        isSuperAdmin={me?.role === 'super_admin'}
+        onDeleted={(_, result) => {
+          if (result?.scheduled) {
+            setMerchant(prev => prev ? {
+              ...prev,
+              is_frozen: true,
+              deletion_requested_at: result.retention?.requested_at || new Date().toISOString(),
+              frozen_reason: 'Suppression RGPD programmee',
+            } : prev);
+            setSuccess('Procedure RGPD programmee. Le compte est ferme et la purge sera traitee apres la fenetre de retention.');
+          } else {
+            navigate('/merchants', { replace: true });
+          }
+        }}
+      />
 
       {!merchant.is_frozen && (
         <section className="card card-danger">

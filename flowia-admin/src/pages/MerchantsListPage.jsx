@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
 import { listMerchants } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
+import MerchantGdprDeleteSection from './MerchantGdprDeleteSection.jsx';
 
 const PAGE_SIZE = 50;
 
@@ -39,11 +40,32 @@ export default function MerchantsListPage() {
     load();
   }
 
+  function removeDeletedMerchant(deletedId, result) {
+    if (result?.scheduled) {
+      setData(prev => ({
+        ...prev,
+        rows: prev.rows.map(row => row.id === deletedId
+          ? {
+              ...row,
+              is_frozen: true,
+              deletion_requested_at: result.retention?.requested_at || new Date().toISOString(),
+            }
+          : row),
+      }));
+      return;
+    }
+    setData(prev => ({
+      ...prev,
+      total: Math.max(0, (prev.total || 0) - 1),
+      rows: prev.rows.filter(row => row.id !== deletedId),
+    }));
+  }
+
   const totalPages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Commercants">
+    <AppShell me={me} footer="FlowIA Admin - Commercants">
       <div className="page-head">
         <h1 className="dash-title">{"Commercants"}</h1>
         <span className="page-count">{data.total} {"resultats"}</span>
@@ -60,6 +82,7 @@ export default function MerchantsListPage() {
           <option value="all">{"Tous"}</option>
           <option value="active">{"Actifs"}</option>
           <option value="frozen">{"Geles"}</option>
+          <option value="deletion">{"Suppression programmee"}</option>
         </select>
         <button type="submit" className="btn-ghost">{"Filtrer"}</button>
       </form>
@@ -77,27 +100,38 @@ export default function MerchantsListPage() {
               <th>{"Clients"}</th>
               <th>{"RDV"}</th>
               <th>{"Cree le"}</th>
+              <th>{"Actions"}</th>
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={7} className="td-loading">{"Chargement..."}</td></tr>}
-            {!loading && data.rows.length === 0 && <tr><td colSpan={7} className="td-loading">{"Aucun resultat."}</td></tr>}
+            {loading && <tr><td colSpan={8} className="td-loading">{"Chargement..."}</td></tr>}
+            {!loading && data.rows.length === 0 && <tr><td colSpan={8} className="td-loading">{"Aucun resultat."}</td></tr>}
             {!loading && data.rows.map(m => (
               <tr key={m.id} onClick={() => navigate(`/merchants/${m.id}`)} className="row-link">
                 <td>
-                  <div className="cell-primary">{m.business_name || '—'}</div>
+                  <div className="cell-primary">{m.business_name || '-'}</div>
                   {m.phone && <div className="cell-secondary">{m.phone}</div>}
                 </td>
                 <td className="mono">{m.email}</td>
-                <td>{m.city || '—'}</td>
+                <td>{m.city || '-'}</td>
                 <td>
-                  {m.is_frozen
+                  {m.deletion_requested_at
+                    ? <span className="badge badge-frozen">{"Suppression programmee"}</span>
+                    : m.is_frozen
                     ? <span className="badge badge-frozen">{"Gele"}</span>
                     : <span className="badge badge-on">{"Actif"}</span>}
                 </td>
                 <td>{m.clients_count}</td>
                 <td>{m.appointments_count}</td>
-                <td className="mono">{m.created_at ? new Date(m.created_at).toLocaleDateString('fr-FR') : '—'}</td>
+                <td className="mono">{m.created_at ? new Date(m.created_at).toLocaleDateString('fr-FR') : '-'}</td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <MerchantGdprDeleteSection
+                    merchant={m}
+                    mode="button"
+                    isSuperAdmin={me?.role === 'super_admin'}
+                    onDeleted={removeDeletedMerchant}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
