@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, bookingApi, connectApi } from '../utils/api';
+import { getBookingUrl } from '../utils/publicUrl';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { Toast, useToast } from './UI';
@@ -43,6 +44,7 @@ export function FirstRunSetup({ user, onComplete }) {
   const [services, setServices] = useState([]);
   const [stripeData, setStripeData] = useState(null);
   const [calendarData, setCalendarData] = useState(null);
+  const [bookingSlug, setBookingSlug] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -84,11 +86,12 @@ export function FirstRunSetup({ user, onComplete }) {
   useEffect(() => {
     (async () => {
       try {
-        const [hRes, sRes, stripeRes, calendarRes] = await Promise.allSettled([
+        const [hRes, sRes, stripeRes, calendarRes, settingsRes] = await Promise.allSettled([
           bookingApi.getHours(),
           bookingApi.getServices(),
           connectApi.getAccount(),
           api.calendarSyncStatus(),
+          bookingApi.getSettings(),
         ]);
         if (hRes.status === 'rejected') throw hRes.reason;
         if (sRes.status === 'rejected') throw sRes.reason;
@@ -96,6 +99,7 @@ export function FirstRunSetup({ user, onComplete }) {
         const s = sRes.value;
         if (stripeRes.status === 'fulfilled') setStripeData(stripeRes.value);
         if (calendarRes.status === 'fulfilled') setCalendarData(calendarRes.value);
+        if (settingsRes.status === 'fulfilled') setBookingSlug(settingsRes.value?.slug || '');
         // Normaliser hours sur l'ordre semaine + caster is_open booleen
         const byDow = {};
         for (const row of h || []) byDow[row.day_of_week] = row;
@@ -330,6 +334,7 @@ export function FirstRunSetup({ user, onComplete }) {
               services={services}
               stripeData={stripeData}
               calendarData={calendarData}
+              bookingSlug={bookingSlug}
             />
           )}
 
@@ -571,11 +576,12 @@ function CalendarStep({ t, data, loading, busy, onConnect, onRefresh }) {
   );
 }
 
-function FinishStep({ t, hours, services, stripeData, calendarData }) {
+function FinishStep({ t, hours, services, stripeData, calendarData, bookingSlug }) {
   const openDays    = hours.filter(h => h.is_open).length;
   const activeServs = services.filter(s => s.is_active).length;
   const stripeReady = !!stripeData?.connected && !!stripeData?.charges_enabled;
   const calendarReady = !!calendarData?.connected && calendarData?.sync_enabled !== false;
+  const bookingLink = bookingSlug ? getBookingUrl(bookingSlug) : '';
   return (
     <div>
       <p style={{ fontSize: 13, color: t.text, margin: '0 0 16px', lineHeight: 1.6 }}>
@@ -591,10 +597,67 @@ function FinishStep({ t, hours, services, stripeData, calendarData }) {
         <RecapItem t={t} label={`Google Agenda : ${calendarReady ? 'synchronisation active' : 'a connecter plus tard si besoin'}`}/>
         <RecapItem t={t} label="Caisse, agenda et reservations en ligne disponibles"/>
       </ul>
+
+      {bookingLink && (
+        <div style={{
+          padding: 16, borderRadius: 12,
+          background: t.cardAlt, border: `0.5px solid ${t.border}`,
+          marginBottom: 16,
+        }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: t.text, margin: '0 0 4px' }}>
+            Votre lien de reservation personnalise
+          </p>
+          <p style={{ fontSize: 11, color: t.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+            Partagez-le a vos clients (reseaux sociaux, vitrine, signature email).
+            Vous pourrez le personnaliser dans Reglages &gt; Reservation.
+          </p>
+          <BookingLinkRow t={t} link={bookingLink}/>
+        </div>
+      )}
+
       <p style={{ fontSize: 12, color: t.muted, margin: 0, lineHeight: 1.5 }}>
         Vous pouvez tout ajuster a tout moment depuis le menu Reglages. Pour
         relancer ce parcours, allez dans Reglages &gt; Mon compte.
       </p>
+    </div>
+  );
+}
+
+// Lien de reservation + bouton copier (feedback inline "Copie", pas d'alert
+// natif — conforme aux regles UI du projet).
+function BookingLinkRow({ t, link }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* presse-papier indisponible : le lien reste selectionnable */ }
+  };
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+      <a href={link} target="_blank" rel="noreferrer"
+         style={{
+           flex: 1, minWidth: 0, padding: '8px 10px', borderRadius: 8,
+           background: t.inputBg, border: `0.5px solid ${t.borderInput}`,
+           color: t.text, fontSize: 12, fontFamily: 'inherit',
+           textDecoration: 'none', overflow: 'hidden',
+           textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+           display: 'flex', alignItems: 'center',
+         }}>
+        {link}
+      </a>
+      <button type="button" onClick={copy}
+              style={{
+                padding: '8px 14px', borderRadius: 8, cursor: 'pointer',
+                background: copied ? '#ecfdf5' : t.text,
+                color: copied ? '#047857' : (t.invText || '#fff'),
+                border: copied ? '0.5px solid #10b98155' : 'none',
+                fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
+                whiteSpace: 'nowrap', transition: 'background 0.15s ease',
+              }}>
+        {copied ? 'Copie' : 'Copier'}
+      </button>
     </div>
   );
 }
