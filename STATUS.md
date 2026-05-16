@@ -5,6 +5,39 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
+## État actuel (2026-05-16) — Inscription précise + onboarding + commission 2% + env vars + maquette landing
+
+5 chantiers (1 commit/étape, tous poussés sur main) :
+
+1. **Inscription — numéro de rue obligatoire** (`ac9f919`). Colonne dédiée
+   `users.street_number` (migration idempotente), input dédié + validation
+   front (RegisterScreen + MerchantOnboarding) ET back (`/register`,
+   `/register/confirm`, `/onboarding`, code `STREET_NUMBER_REQUIRED`).
+   Affiché dans la fiche admin. (`business_name` était déjà obligatoire.)
+2. **Commission Découverte 2 %** (`8380d39`). Défaut backend
+   `COMMISSION_RATE_DECOUVERTE` 5→2 (toujours surchargeable ENV, cap 30%),
+   grille marketing (Pricing/Landing) + `.env.example` documenté.
+   ⚠️ Prod : retirer/MAJ la variable `COMMISSION_RATE_DECOUVERTE` si elle
+   vaut encore 5 sur Render, sinon l'ENV gagne sur le défaut.
+3. **Onboarding — lien de réservation** (`76b2752`). FinishStep affiche le
+   lien public perso (`getBookingUrl(slug)`) + bouton Copier, note
+   « modifiable dans Réglages ». Les étapes Stripe Connect + Google Agenda
+   existaient déjà dans FirstRunSetup.
+4. **Env vars centralisées** (`54a43d4`). Nouveau `utils/siteConfig.js`
+   (`COMMERCANT_URL`, `CONTACT_EMAIL`, `GOOGLE_CLIENT_ID` via
+   `import.meta.env` + fallback). ~12 fichiers dédupliqués (marketing +
+   booking + api.js). `.env`/`.env.production` mis à jour localement
+   (gitignorés → à régler aussi côté Vercel : `VITE_COMMERCANT_URL`,
+   `VITE_CONTACT_EMAIL`, `VITE_GOOGLE_CLIENT_ID`).
+5. **Maquette landing fidèle** (`d8598cc`). `HeroAgendaScreen` reconstruit
+   pour reproduire l'agenda réel (gouttière heures + 3 colonnes employés +
+   blocs RDV positionnés à la minute, tokens FDS) avec toggle Jour/Semaine
+   réellement cliquable.
+
+Builds frontend + admin OK, syntaxe backend OK à chaque étape.
+
+---
+
 ## État actuel (2026-05-16) — Export CSV/PDF page /historique
 
 Le bouton « Exporter CSV/PDF » de `/historique` affichait un placeholder
