@@ -5,6 +5,37 @@ Historique complet des sessions passées : `STATUS-archive.md`.
 
 ---
 
+## État actuel (2026-05-16) — Export CSV/PDF page /historique
+
+Le bouton « Exporter CSV/PDF » de `/historique` affichait un placeholder
+(« Export … à venir (Commit suivant) »). Implémenté pour de vrai, avec
+**source unique** : l'export réutilise STRICTEMENT le même builder de
+filtres et la même requête groupée que la liste affichée → zéro drift
+possible entre l'écran et le fichier.
+
+- **`backend/src/routes/historique.js`** refactoré : extraction de
+  `parseHistoriqueFilters(userId, query)` (validation + WHERE/params
+  partagés) et `groupedListSql(where, orderBy)` (la grosse requête CTE
+  groupée). Le handler `GET /` est identique fonctionnellement (dual-read
+  ledger préservé).
+- **`GET /api/historique/export.csv`** : CSV `;` + BOM Excel, escCsv
+  anti-injection formule, colonnes Date/Heure/Statut/Source/Mode/Employé/
+  Client/Description/Brut/Net + totaux. Labels FR alignés sur
+  `TransactionRow.jsx` (Mixte détaillé, signe négatif sur remboursements).
+- **`GET /api/historique/export.pdf`** : PDFKit A4 paysage, en-tête +
+  4 KPI (transactions / CA brut / CA net / remboursements), tableau
+  paginé, récap. Diacritiques retirés (police Helvetica, comme l'export
+  comptable existant).
+- Anti-DoS : plafond `MAX_EXPORT_GROUPS=10000` (LIMIT cap +1 pour
+  détecter la troncature, signalée dans le fichier). Hérite de
+  l'`apiLimiter` (300/min) du mount `/api/historique`.
+- **Front** : `historiqueApi.download(kind, filters)` (Authorization seul,
+  pas de PIN — route non PIN-gardée), `onExport` réel dans
+  `pages/historique/index.jsx` (toast ok/erreur, double-clic bloqué,
+  garde dates custom). Build frontend OK.
+
+---
+
 ## État actuel (2026-05-16) — Suppression RGPD compte marchand (console super-admin)
 
 Procédure RGPD complète de fermeture/suppression d'un compte commerçant

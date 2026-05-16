@@ -859,6 +859,42 @@ export const historiqueApi = {
     usp.set('debug', '1');
     return request('/historique?' + usp.toString());
   },
+  // Export CSV / PDF : reutilise EXACTEMENT les memes filtres que la liste
+  // (source unique cote backend). kind = 'csv' | 'pdf'. Telecharge un blob
+  // (ancre + click). Throw avec message backend sur erreur HTTP. La route
+  // /api/historique n'est PAS PIN-gardee : Authorization seul (pas de
+  // x-pin-session, pas de prompt PIN sur 403).
+  download: async (kind, q) => {
+    const ext = kind === 'pdf' ? 'pdf' : 'csv';
+    const usp = new URLSearchParams();
+    Object.entries(q || {}).forEach(([k, v]) => {
+      if (v == null || v === '' || v === 'all') return;
+      usp.set(k, String(v));
+    });
+    const token = localStorage.getItem('ff_token');
+    const base  = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+    const qs    = usp.toString();
+    const res = await fetch(`${base}/historique/export.${ext}` + (qs ? `?${qs}` : ''), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`;
+      try { const j = await res.json(); if (j.error) msg = j.error; } catch {}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const disp = res.headers.get('Content-Disposition') || '';
+    const match = disp.match(/filename="([^"]+)"/);
+    const fallback = `historique-${new Date().toISOString().slice(0, 10)}.${ext}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = match?.[1] || fallback;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
 
 // Refonte v3 — payouts agreges (table payouts, distincte de appointment_payouts

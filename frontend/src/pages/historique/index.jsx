@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTheme } from "../../hooks/useTheme";
 import { useHistorique } from "../../hooks/useHistorique";
+import { historiqueApi } from "../../utils/api";
 import { useTransactionPatch } from "../../hooks/useTransactionPatch";
 import { useTransactionDelete } from "../../hooks/useTransactionDelete";
 import { Toast, useToast } from "../../components/UI";
@@ -120,8 +121,33 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
   const totalPages = Math.max(1, Math.ceil((pagination.total || 0) / (pagination.per_page || DEFAULT_PER_PAGE)));
   const currentPage = Math.min(filters.page, totalPages);
 
-  const onExport = (kind) => {
-    showToast("Export " + kind + " à venir (Commit suivant)", "info");
+  // Export CSV / PDF : memes filtres que la liste affichee (pagination
+  // exclue — l'export couvre toute la periode filtree, pas la page courante).
+  const [exporting, setExporting] = useState(false);
+  const onExport = async (kind) => {
+    if (exporting) return;
+    if (filters.period === "custom" && (!filters.date_from || !filters.date_to)) {
+      showToast("Choisissez 2 dates avant d'exporter", "error");
+      return;
+    }
+    setExporting(true);
+    try {
+      await historiqueApi.download(kind, {
+        period:      filters.period,
+        type:        filters.type,
+        mode:        filters.mode,
+        source:      filters.source,
+        employee_id: filters.employee_id,
+        date_from:   filters.date_from,
+        date_to:     filters.date_to,
+        sort:        filters.sort,
+      });
+      showToast("Export " + kind.toUpperCase() + " généré", "ok");
+    } catch (e) {
+      showToast(e?.message || "Export impossible", "error");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // ── PATCH / DELETE transaction (Commit F) ──────────────────────────────────
@@ -193,8 +219,10 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <ExportButton label="Exporter CSV" onClick={() => onExport("CSV")} theme={t} />
-            <ExportButton label="Exporter PDF" onClick={() => onExport("PDF")} theme={t} />
+            <ExportButton label={exporting ? "Export…" : "Exporter CSV"}
+                          onClick={() => onExport("csv")} disabled={exporting} theme={t} />
+            <ExportButton label={exporting ? "Export…" : "Exporter PDF"}
+                          onClick={() => onExport("pdf")} disabled={exporting} theme={t} />
           </div>
         </div>
 
@@ -278,15 +306,15 @@ export default function HistoriqueAdmin({ employees = [], transactions, categori
   );
 }
 
-function ExportButton({ label, onClick, theme: t }) {
+function ExportButton({ label, onClick, disabled, theme: t }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} disabled={disabled}
             style={{
               padding: "8px 14px", borderRadius: 8,
               background: t.cardAlt, border: "0.5px solid " + t.border,
               color: t.text, fontSize: 12, fontWeight: 500,
-              cursor: "pointer", fontFamily: "inherit",
-              whiteSpace: "nowrap",
+              cursor: disabled ? "default" : "pointer", fontFamily: "inherit",
+              whiteSpace: "nowrap", opacity: disabled ? 0.5 : 1,
             }}>
       {label}
     </button>
