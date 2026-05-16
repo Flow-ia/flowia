@@ -106,11 +106,11 @@ function requirePlanWrites(...allowedPlans) {
 // Regle metier : plan Decouverte (gratuit) = commission active sur chaque
 // paiement RDV en ligne (application_fee_amount). Plans payants Essentiel
 // et Equipe = 0% commission. Le taux Decouverte est configurable via ENV
-// COMMISSION_RATE_DECOUVERTE (fallback 5%). Cap dur 30% pour eviter une
+// COMMISSION_RATE_DECOUVERTE (fallback 2%). Cap dur 30% pour eviter une
 // config aberrante.
 const COMMISSION_RATE_DECOUVERTE = (() => {
   const raw = parseFloat(process.env.COMMISSION_RATE_DECOUVERTE);
-  if (!Number.isFinite(raw) || raw < 0) return 5;
+  if (!Number.isFinite(raw) || raw < 0) return 2;
   return Math.min(30, raw);
 })();
 
@@ -118,7 +118,7 @@ const COMMISSION_RATE_DECOUVERTE = (() => {
 // fonction de son plan effectif. Source de verite vs lecture brute de
 // users.commission_rate : permet de bouger la grille tarifaire sans
 // migrations.
-//  - Decouverte → COMMISSION_RATE_DECOUVERTE (defaut 5%)
+//  - Decouverte → COMMISSION_RATE_DECOUVERTE (defaut 2%)
 //  - Essentiel  → 0
 //  - Equipe     → 0
 async function getApplicableCommissionRate(userId) {

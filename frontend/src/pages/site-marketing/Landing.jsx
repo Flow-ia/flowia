@@ -781,7 +781,7 @@ function Pricing() {
     {
       name: 'Découverte', price: '0',
       desc: "Pour démarrer.",
-      features: ["50 RDV/mois", '1 employé', 'Caisse intégrée', 'Commission 5 % sur paiements en ligne', 'Support email'],
+      features: ["50 RDV/mois", '1 employé', 'Caisse intégrée', 'Commission 2 % sur paiements en ligne', 'Support email'],
       cta: 'Commencer', highlight: false,
     },
     {

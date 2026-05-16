@@ -14,7 +14,7 @@ export default function Pricing() {
       features: [
         "Jusqu'à 50 RDV/mois", '1 employé', 'Page de réservation publique',
         'Caisse intégrée', 'Rappels RDV par email', 'Export CSV',
-        'Commission 5 % sur paiements en ligne', 'Support email',
+        'Commission 2 % sur paiements en ligne', 'Support email',
       ],
       cta: 'Commencer gratuitement', highlight: false,
     },
@@ -48,7 +48,7 @@ export default function Pricing() {
     { feature: 'Caisse intégrée',              decouverte: true,    essentiel: true,          equipe: true },
     { feature: 'Rappels RDV par email',        decouverte: true,    essentiel: true,          equipe: true },
     { feature: 'Export CSV',                   decouverte: true,    essentiel: true,          equipe: true },
-    { feature: 'Commission paiements en ligne',decouverte: '5 %',   essentiel: '0 %',         equipe: '0 %' },
+    { feature: 'Commission paiements en ligne',decouverte: '2 %',   essentiel: '0 %',         equipe: '0 %' },
     { feature: 'Campagnes SMS marketing',      decouverte: false,   essentiel: true,          equipe: true },
     { feature: 'Programme fidélité',           decouverte: false,   essentiel: true,          equipe: true },
     { feature: 'Programme parrainage',         decouverte: false,   essentiel: true,          equipe: true },
@@ -200,7 +200,7 @@ export default function Pricing() {
             </table>
           </div>
           <p style={{ fontSize: 13, color: S.fgSubtle, textAlign: 'center', marginTop: 18, lineHeight: 1.6 }}>
-            {"Tarifs hors taxes. Les SMS marketing sont facturés à l'usage (à partir de 0,06 € l'unité), réservés aux plans Essentiel et Équipe. La commission de 5 % sur le plan Découverte ne s'applique qu'aux paiements RDV encaissés via la page de réservation en ligne ; tous les plans payants en sont exonérés."}
+            {"Tarifs hors taxes. Les SMS marketing sont facturés à l'usage (à partir de 0,06 € l'unité), réservés aux plans Essentiel et Équipe. La commission de 2 % sur le plan Découverte ne s'applique qu'aux paiements RDV encaissés via la page de réservation en ligne ; tous les plans payants en sont exonérés."}
           </p>
         </div>
       </section>

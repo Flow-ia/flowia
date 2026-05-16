@@ -168,7 +168,7 @@ module.exports = function attachPaymentRoutes(router) {
 
       // Commission FlowIA → application_fee_amount (en cents).
       // Source de verite : plan d'abonnement effectif (cf. middleware/subscription.js).
-      //   - Decouverte (gratuit) → COMMISSION_RATE_DECOUVERTE (ENV, defaut 5%)
+      //   - Decouverte (gratuit) → COMMISSION_RATE_DECOUVERTE (ENV, defaut 2%)
       //   - Essentiel / Equipe   → 0% (le forfait paye couvre la plateforme)
       // La colonne users.commission_rate n'est plus consultee ici : la grille
       // tarifaire est plan-based pour eviter une derive admin/legacy. Cap dur
