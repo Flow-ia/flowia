@@ -4,8 +4,7 @@ import { I } from '../../utils/icons';
 import { PageHero, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { FEATURE_GROUPS } from './components/Header';
 import { S, CheckPill } from './components/shadcn';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../utils/siteConfig';
 
 // Détail riche pour chaque feature, indexé par id (les ids matchent ceux du
 // mega-menu Header pour que /fonctionnalites#<id> scrolle au bon endroit).

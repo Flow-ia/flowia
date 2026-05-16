@@ -1,4 +1,5 @@
 import { PageHero, Container, Prose, ProseH2 } from './components/Shared';
+import { CONTACT_EMAIL } from '../../utils/siteConfig';
 
 export default function Terms() {
   return (
@@ -70,7 +71,7 @@ export default function Terms() {
           <ProseH2>12. Contact</ProseH2>
           <p>
             {"Pour toute question relative aux CGU : "}
-            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
         </Prose>
       </Container>

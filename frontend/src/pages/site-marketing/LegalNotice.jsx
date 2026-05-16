@@ -1,4 +1,5 @@
 import { PageHero, Container, Prose, ProseH2 } from './components/Shared';
+import { CONTACT_EMAIL } from '../../utils/siteConfig';
 
 export default function LegalNotice() {
   return (
@@ -16,14 +17,14 @@ export default function LegalNotice() {
           </p>
           <p>
             <strong>Adresse :</strong> Marseille, France<br/>
-            <strong>Email :</strong> contact@flowiapro.com<br/>
+            <strong>Email :</strong> {CONTACT_EMAIL}<br/>
             <strong>Directeur de la publication :</strong> Représentant légal de FlowIA SAS
           </p>
 
           <ProseH2>Hébergement</ProseH2>
           <p>
             {"Le site et l'application sont hébergés chez des prestataires cloud de référence, en région européenne, conformes RGPD. Les coordonnées des hébergeurs sont communiquées sur simple demande à "}
-            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
 
           <ProseH2>Propriété intellectuelle</ProseH2>
@@ -34,7 +35,7 @@ export default function LegalNotice() {
           <ProseH2>Contact</ProseH2>
           <p>
             {"Pour toute question relative au site ou à l'application, contactez-nous à "}
-            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
         </Prose>
       </Container>

@@ -1,7 +1,6 @@
 import { S } from './shadcn';
 import { MarketingLink } from '../../../utils/marketingUrl';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL, CONTACT_EMAIL } from '../../../utils/siteConfig';
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -77,8 +76,8 @@ export default function Footer() {
               {"Le logiciel tout-en-un qui simplifie la gestion des salons de beauté et de bien-être."}
             </p>
             <p style={{ fontSize: 13, marginTop: 14, marginBottom: 0 }}>
-              <a href="mailto:contact@flowiapro.com" style={{ color: S.fg2, textDecoration: 'none' }}>
-                contact@flowiapro.com
+              <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: S.fg2, textDecoration: 'none' }}>
+                {CONTACT_EMAIL}
               </a>
             </p>
           </div>

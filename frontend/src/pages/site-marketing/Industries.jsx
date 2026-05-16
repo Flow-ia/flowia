@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { PageHero, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { S, CheckPill } from './components/shadcn';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../utils/siteConfig';
 
 const ITEMS = [
   {

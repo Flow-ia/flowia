@@ -1,5 +1,6 @@
 // src/utils/api.js
 import { requestAdminPin } from './adminPinPrompt';
+import { GOOGLE_CLIENT_ID } from './siteConfig';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -385,7 +386,6 @@ export const api = {
   },
   merchantGoogleAuthUrl: () => {
     const BACKEND = (import.meta.env.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
-    const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '376153951158-jm80phb46sl1fisbgeq587v83ho7ft5e.apps.googleusercontent.com';
     const redirectUri = `${BACKEND || window.location.origin}/api/auth/google/merchant/callback`;
     // On transmet l'origine de l'opener via `state` pour que le callback
     // route le postMessage vers le bon sous-domaine (validation allowlist

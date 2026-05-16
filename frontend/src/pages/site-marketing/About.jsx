@@ -1,7 +1,6 @@
 import { PageHero, Container, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { S } from './components/shadcn';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../utils/siteConfig';
 
 export default function About() {
   const values = [

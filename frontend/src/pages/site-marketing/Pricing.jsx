@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { PageHero, Container } from './components/Shared';
 import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, CheckPill } from './components/shadcn';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../utils/siteConfig';
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);

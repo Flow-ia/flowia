@@ -1,4 +1,5 @@
 import { PageHero, Container, Prose, ProseH2 } from './components/Shared';
+import { CONTACT_EMAIL } from '../../utils/siteConfig';
 
 export default function Privacy() {
   return (
@@ -48,9 +49,9 @@ export default function Privacy() {
           <ProseH2>6. Vos droits</ProseH2>
           <p>
             {"Conformément au RGPD, vous disposez des droits d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Pour les exercer, écrivez-nous à "}
-            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
             {". Vous pouvez aussi supprimer votre compte directement depuis l'application (Réglages → Compte → Supprimer le compte). Cette action déclenche immédiatement la suppression des données Google associées et bloque l'accès au compte. L'ensemble des données métier est ensuite purgé définitivement après une période de grâce de 30 jours, durant laquelle vous pouvez nous écrire à "}
-            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
             {" pour annuler la suppression."}
           </p>
 
@@ -68,7 +69,7 @@ export default function Privacy() {
           </ul>
           <p>
             {"La liste nominative et à jour des sous-traitants est disponible sur simple demande à "}
-            <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>.
+            <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
 
           <ProseH2>8. Sécurité</ProseH2>
@@ -228,7 +229,7 @@ export default function Privacy() {
               {"Pendant cette période de 30 jours, vous pouvez "}
               <strong>{"annuler la suppression"}</strong>
               {" en nous écrivant à "}
-              <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               {". Au-delà, la suppression est irréversible."}
             </li>
             <li>
@@ -251,7 +252,7 @@ export default function Privacy() {
             <li>
               <strong>{"Demande explicite de suppression : "}</strong>
               {"écrivez à "}
-              <a href="mailto:contact@flowiapro.com">contact@flowiapro.com</a>
+              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               {" — nous traitons les demandes de suppression de données Google sous 30 jours conformément au RGPD."}
             </li>
           </ul>

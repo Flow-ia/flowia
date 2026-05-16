@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, cardHover, CheckIcon, CaretDown } from './components/shadcn';
 import HeroSocialBg from './components/HeroSocialBg';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../utils/siteConfig';
 
 export default function Landing() {
   return (

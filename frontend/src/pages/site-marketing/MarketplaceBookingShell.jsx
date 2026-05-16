@@ -23,8 +23,7 @@ import { LightThemeProvider } from '../../hooks/useTheme';
 import { S } from './components/shadcn';
 import Footer from './components/Footer';
 import { globalClientApi } from '../../utils/api';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../utils/siteConfig';
 
 // Header marketplace dédié — logo gauche, "Portail pro" + "Mon compte
 // client" / profil connecté à droite. Sticky comme le Header marketing.

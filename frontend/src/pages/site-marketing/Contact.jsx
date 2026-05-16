@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PageHero } from './components/Shared';
 import { S, primaryBtnStyle, primaryHover, CheckPill } from './components/shadcn';
+import { CONTACT_EMAIL } from '../../utils/siteConfig';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -13,7 +14,7 @@ const TOPICS = [
 ];
 
 const CONTACTS = [
-  { label: 'Email',     value: 'contact@flowiapro.com', href: 'mailto:contact@flowiapro.com' },
+  { label: 'Email',     value: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` },
   { label: 'Téléphone', value: 'Lun-Dim · 8h-22h',      href: null },
   { label: 'Chat live', value: 'Réponse en < 5 min',    href: null },
   { label: 'Adresse',   value: 'France',                href: null },
@@ -133,7 +134,7 @@ export default function Contact() {
                 </h3>
                 <p style={{ fontSize: 14, color: S.fgMuted, margin: 0, lineHeight: 1.6 }}>
                   {"Notre équipe vous répond sous 24h ouvrées (souvent plus vite). Si urgent, vous pouvez aussi écrire à "}
-                  <a href="mailto:contact@flowiapro.com" style={{ color: S.fg, fontWeight: 500 }}>contact@flowiapro.com</a>.
+                  <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: S.fg, fontWeight: 500 }}>{CONTACT_EMAIL}</a>.
                 </p>
               </div>
             ) : (

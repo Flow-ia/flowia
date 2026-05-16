@@ -3,8 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { I } from '../../../utils/icons';
 import { S } from './shadcn';
 import { MarketingLink, navigateToMarketing } from '../../../utils/marketingUrl';
-
-const COMMERCANT_URL = 'https://commercant.flowiapro.com';
+import { COMMERCANT_URL } from '../../../utils/siteConfig';
 
 // Liste centrale — réutilisée dans Features.jsx (chaque entry a un anchor #id
 // qui doit exister dans Features.jsx pour que la nav scrolle au bon endroit).
