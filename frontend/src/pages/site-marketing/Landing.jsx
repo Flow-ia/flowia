@@ -277,14 +277,44 @@ function SocialIntegrationPill() {
   );
 }
 
+// Maquette fidele de l'agenda reel (employee-agenda/MultiColumnAgenda) :
+// gouttiere d'heures + 1 colonne par employe + blocs RDV positionnes a la
+// minute, et bascule Jour / Semaine reellement cliquable. Donnees fictives
+// mais structure et tokens alignes sur l'app pour un rendu "vrai SaaS".
+const HERO_EMPLOYEES = [
+  { id: 'k', name: 'Karim',  role: 'Barbier',   ax: 'emerald' },
+  { id: 's', name: 'Sofia',  role: 'Coloriste', ax: 'violet'  },
+  { id: 'y', name: 'Yanis',  role: 'Barbier',   ax: 'blue'    },
+];
+// start = minutes depuis 09:00, dur = minutes.
+const HERO_DAY_APPTS = {
+  k: [
+    { start: 0,   dur: 45, name: 'Karim B.', service: 'Coupe + barbe' },
+    { start: 75,  dur: 30, name: 'Lucas P.', service: 'Dégradé' },
+    { start: 150, dur: 30, name: 'Yanis D.', service: 'Coupe homme' },
+  ],
+  s: [
+    { start: 30,  dur: 90, name: 'Sofia M.', service: 'Couleur' },
+    { start: 150, dur: 45, name: 'Léa T.',   service: 'Brushing' },
+  ],
+  y: [
+    { start: 15,  dur: 20, name: 'Adam K.',  service: 'Barbe' },
+    { start: 60,  dur: 30, name: 'Noah R.',  service: 'Coupe homme' },
+    { start: 180, dur: 45, name: 'Ethan V.', service: 'Coupe + soin' },
+  ],
+};
+const HERO_WEEK = [
+  { d: 'Lun', n: 12, today: true  }, { d: 'Mar', n: 9 }, { d: 'Mer', n: 14 },
+  { d: 'Jeu', n: 8 }, { d: 'Ven', n: 16 }, { d: 'Sam', n: 19 }, { d: 'Dim', n: 0 },
+];
+
 function HeroAgendaScreen() {
-  const appts = [
-    { time: '09:00', name: 'Karim B.',  service: 'Coupe + barbe', dur: '45 min', accent: S.ax.emerald, accentBg: S.ax.emeraldBg, tag: 'Confirmé' },
-    { time: '10:00', name: 'Sofia M.',  service: 'Couleur',       dur: '90 min', accent: S.ax.violet,  accentBg: S.ax.violetBg,  tag: 'Confirmé' },
-    { time: '11:30', name: 'Yanis D.',  service: 'Coupe homme',   dur: '30 min', accent: S.ax.blue,    accentBg: S.ax.blueBg,    tag: 'Confirmé' },
-    { time: '12:15', name: 'Léa T.',    service: 'Brushing',      dur: '30 min', accent: S.ax.amber,   accentBg: S.ax.amberBg,   tag: 'En attente' },
-    { time: '13:00', name: 'Adam K.',   service: 'Barbe',         dur: '20 min', accent: S.ax.cyan,    accentBg: S.ax.cyanBg,    tag: 'Nouveau' },
-  ];
+  const [view, setView] = useState('day'); // 'day' | 'week'
+  const HOURS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
+  const HOUR_H = 64;
+  const axc = (k) => S.ax[k];
+  const axb = (k) => S.ax[k + 'Bg'];
+
   return (
     <div style={{
       maxWidth: 980, margin: '0 auto',
@@ -293,8 +323,9 @@ function HeroAgendaScreen() {
       boxShadow: S.shadowXl,
       overflow: 'hidden',
     }}>
-      <BrowserChrome url="commercant.flowiapro.com" />
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', minHeight: 440 }}>
+      <BrowserChrome url={COMMERCANT_URL.replace(/^https?:\/\//, '')} />
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', minHeight: 470 }}>
+        {/* Sidebar — identique a la chrome app */}
         <div style={{ borderRight: `1px solid ${S.border}`, padding: '14px 10px', background: S.bgMuted }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 6px 14px', borderBottom: `1px solid ${S.border}`, marginBottom: 12 }}>
             <span style={{ width: 22, height: 22, borderRadius: 6, background: S.fg }} />
@@ -313,37 +344,136 @@ function HeroAgendaScreen() {
             }}>{it.l}</div>
           ))}
         </div>
-        <div style={{ padding: 20 }}>
+
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
+          {/* Header : date + stats + toggle Jour/Semaine cliquable */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <p style={{ fontSize: 16, fontWeight: 500, color: S.fg, margin: 0, letterSpacing: '-0.01em' }}>{"Lundi 12 mai"}</p>
-              <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0' }}>{"5 rendez-vous · 312 € prévus"}</p>
+              <p style={{ fontSize: 16, fontWeight: 500, color: S.fg, margin: 0, letterSpacing: '-0.01em' }}>
+                {view === 'day' ? 'Lundi 12 mai' : 'Semaine du 12 au 18 mai'}
+              </p>
+              <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0' }}>
+                {view === 'day' ? '8 rendez-vous · 312 € prévus' : '78 rendez-vous · 2 940 € prévus'}
+              </p>
             </div>
-            <span style={{ fontSize: 11, padding: '4px 10px', background: S.ax.emeraldBg, color: S.ax.emerald, borderRadius: 99, fontWeight: 500, border: `1px solid ${S.ax.emerald}33` }}>
-              {"+12 RDV cette semaine"}
-            </span>
+            <div style={{
+              display: 'inline-flex', padding: 3, gap: 2, borderRadius: 99,
+              background: S.bgMuted, border: `1px solid ${S.border}`,
+            }}>
+              {[{ v: 'day', l: 'Jour' }, { v: 'week', l: 'Semaine' }].map(o => {
+                const on = view === o.v;
+                return (
+                  <button key={o.v} type="button" onClick={() => setView(o.v)}
+                          style={{
+                            border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 12, fontWeight: 500, padding: '5px 14px', borderRadius: 99,
+                            background: on ? S.fg : 'transparent',
+                            color: on ? S.bg : S.fgMuted,
+                            transition: 'background 0.15s ease, color 0.15s ease',
+                          }}>
+                    {o.l}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {appts.map((a, i) => (
-              <div key={i} style={{
-                display: 'grid', gridTemplateColumns: '64px 4px 1fr auto', gap: 12, alignItems: 'center',
-                padding: '12px 14px', borderRadius: S.r,
-                border: `1px solid ${S.border}`, background: S.bg,
-              }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: S.fg, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{a.time}</span>
-                <span style={{ width: 4, height: 28, borderRadius: 2, background: a.accent }} />
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0 }}>{a.name}</p>
-                  <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0' }}>{a.service + ' · ' + a.dur}</p>
-                </div>
-                <span style={{
-                  fontSize: 11, padding: '3px 8px', borderRadius: S.rSm,
-                  background: a.accentBg, color: a.accent, fontWeight: 500,
-                  border: `1px solid ${a.accent}33`,
-                }}>{a.tag}</span>
+
+          {view === 'day' ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '46px repeat(3, 1fr)', flex: 1 }}>
+              {/* Gouttiere heures */}
+              <div style={{ paddingTop: 36 }}>
+                {HOURS.map(h => (
+                  <div key={h} style={{ height: HOUR_H, position: 'relative' }}>
+                    <span style={{
+                      position: 'absolute', top: -7, right: 8, fontSize: 10,
+                      color: S.fgSubtle, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    }}>{h}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              {/* Colonnes employes */}
+              {HERO_EMPLOYEES.map(emp => (
+                <div key={emp.id} style={{ borderLeft: `1px solid ${S.border}` }}>
+                  <div style={{
+                    height: 36, display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '0 8px', borderBottom: `1px solid ${S.border}`,
+                  }}>
+                    <span style={{
+                      width: 20, height: 20, borderRadius: 99, flexShrink: 0,
+                      background: axb(emp.ax), color: axc(emp.ax),
+                      fontSize: 10, fontWeight: 600,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>{emp.name[0]}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: S.fg, margin: 0, lineHeight: 1.2 }}>{emp.name}</p>
+                      <p style={{ fontSize: 10, color: S.fgSubtle, margin: 0, lineHeight: 1.2 }}>{emp.role}</p>
+                    </div>
+                  </div>
+                  <div style={{ position: 'relative', height: HOURS.length * HOUR_H }}>
+                    {HOURS.map((_, i) => (
+                      <div key={i} style={{
+                        position: 'absolute', left: 0, right: 0, top: i * HOUR_H,
+                        height: HOUR_H, borderBottom: `1px solid ${S.border}`,
+                      }} />
+                    ))}
+                    {HERO_DAY_APPTS[emp.id].map((a, i) => {
+                      const hh = String(9 + Math.floor(a.start / 60)).padStart(2, '0');
+                      const mm = String(a.start % 60).padStart(2, '0');
+                      return (
+                        <div key={i} style={{
+                          position: 'absolute', left: 5, right: 5,
+                          top: (a.start / 60) * HOUR_H + 3,
+                          height: (a.dur / 60) * HOUR_H - 6,
+                          background: axb(emp.ax),
+                          borderLeft: `3px solid ${axc(emp.ax)}`,
+                          borderRadius: S.rSm,
+                          padding: '5px 8px', overflow: 'hidden',
+                        }}>
+                          <p style={{ fontSize: 11, fontWeight: 500, color: S.fg, margin: 0, lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {a.name}
+                          </p>
+                          <p style={{ fontSize: 10, color: S.fgMuted, margin: '1px 0 0', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {`${hh}:${mm} · ${a.service}`}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, flex: 1 }}>
+              {HERO_WEEK.map((d, i) => (
+                <div key={d.d} style={{
+                  border: `1px solid ${d.today ? S.fg : S.border}`,
+                  borderRadius: S.r, background: d.today ? S.bgHover : S.bg,
+                  padding: 8, display: 'flex', flexDirection: 'column', gap: 5,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: d.today ? S.fg : S.fgMuted }}>{d.d}</span>
+                    <span style={{ fontSize: 11, color: S.fgSubtle }}>{12 + i}</span>
+                  </div>
+                  {d.n === 0 ? (
+                    <span style={{ fontSize: 10, color: S.fgSubtle, fontStyle: 'italic' }}>Fermé</span>
+                  ) : (
+                    <>
+                      {Array.from({ length: Math.min(4, Math.ceil(d.n / 4)) }).map((_, k) => {
+                        const ax = HERO_EMPLOYEES[k % HERO_EMPLOYEES.length].ax;
+                        return (
+                          <div key={k} style={{
+                            height: 16, borderRadius: 4,
+                            background: axb(ax), borderLeft: `2px solid ${axc(ax)}`,
+                          }} />
+                        );
+                      })}
+                      <span style={{ fontSize: 10, color: S.fgMuted, marginTop: 'auto' }}>{`${d.n} RDV`}</span>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
