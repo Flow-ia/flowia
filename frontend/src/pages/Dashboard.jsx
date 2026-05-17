@@ -6,8 +6,32 @@ import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
 import { useEmployeePin } from '../hooks/useEmployeePin';
 import { bookingApi, notifApi, paymentsApi, userSettingsApi } from '../utils/api';
-import { StatusBadge } from '../components/primitives/StatusBadge';
 import { I } from '../utils/icons';
+
+// Refonte maquette dashboard (docs/maquette-dashboard.html) — accent violet
+// LOCAL a cette page (pas le theme global). FDS-2026 : pas d'emoji, fw<=500,
+// bordures 0.5px, pas de gradient. Logique inchangee (stats reelles, PIN,
+// notifs, filtre employe). Couleurs pastel issues de la maquette.
+const VIO   = '#7F77DD';
+const VIOD  = '#534AB7';
+const VIOBG = '#eeedfe';
+// Paires pastel (bg + texte/accent meme famille) reprises de la maquette.
+const TONE = {
+  green:  { bg: '#EAF3DE', c: '#3B6D11' },
+  violet: { bg: '#EEEDFE', c: '#534AB7' },
+  teal:   { bg: '#E1F5EE', c: '#0F6E56' },
+  amber:  { bg: '#FAEEDA', c: '#854F0B' },
+  grey:   { bg: '#F1EFE8', c: '#5F5E5A' },
+  redUp:  { bg: '#EAF3DE', c: '#3B6D11' },
+  redDn:  { bg: '#FCEBEB', c: '#A32D2D' },
+};
+
+// Initiales (2 lettres max) pour les pastilles client / employe.
+const initials = (s = '') => {
+  const parts = String(s).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+};
 
 const nd   = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
 const fmt  = n => Number(n || 0).toFixed(2);
@@ -550,7 +574,7 @@ function NotifModal({ open, onClose, theme: t }) {
 // (fusionnés dans /historique) et le bloc Tile* (remplacé par des boutons inline)
 // ont été retirés : code mort non rendu, non exporté.
 export default function Dashboard({ transactions, employees, onAdd, onNavigate, unreadNotifCount = 0 }) {
-  const { theme: t } = useTheme();
+  const { theme: t, toggle, isLight } = useTheme();
   const { user }     = useAuth();
   const navigate     = useNavigate();
 
@@ -578,7 +602,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
   }, [today]);
 
   // ── Calculs dérivés depuis `transactions` (déjà scoped user_id côté back).
-  const { caToday, nbSales, byPM, ca7j, maxCA7, empActivity, todayTxAll } = useMemo(() => {
+  const { caToday, nbSales, byPM, pmTxCount, ca7j, maxCA7, empActivity, todayTxAll, caYest, ySales } = useMemo(() => {
     const todayTxAll = transactions.filter(tx => nd(tx.date) === today && tx.type === 'revenue');
     const todayTx = todayTxAll;
     const caToday = todayTx.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
@@ -586,16 +610,22 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
     // Ventilation par moyen de paiement : 'multi' éclaté par sous-ligne.
     // 'card_online' inclus pour comptabiliser les paiements Stripe Connect
     // (acompte ou intégral) — sans cette clé, ils tombaient dans 'other'.
-    const byPM = { cash:0, card:0, card_online:0, transfer:0, other:0, multi:0 };
+    const byPM      = { cash:0, card:0, card_online:0, transfer:0, other:0, multi:0 };
+    // Nombre de transactions par moyen de paiement (au niveau ligne, le
+    // 'multi' compte 1 fois — affiche "{n} tx" sous chaque carte maquette).
+    const pmTxCount = { cash:0, card:0, card_online:0, transfer:0, other:0, multi:0 };
     todayTx.forEach(tx => {
       if (tx.payment_method === 'multi' && Array.isArray(tx.payments) && tx.payments.length) {
+        pmTxCount.multi += 1;
         tx.payments.forEach(p => {
           const k = p.payment_method || 'other';
           byPM[k in byPM ? k : 'other'] += parseFloat(p.amount) || 0;
         });
       } else {
         const k = tx.payment_method || 'other';
-        byPM[k in byPM ? k : 'other'] += parseFloat(tx.amount) || 0;
+        const kk = k in byPM ? k : 'other';
+        byPM[kk]      += parseFloat(tx.amount) || 0;
+        pmTxCount[kk] += 1;
       }
     });
 
@@ -611,6 +641,12 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
     }
     const maxCA7 = Math.max(1, ...ca7j.map(d => d.amount));
 
+    // Hier (J-1) : CA + nb ventes — pour les pastilles de variation "vs hier".
+    const yKey  = ca7j.length >= 2 ? ca7j[ca7j.length - 2].date : null;
+    const yTx   = yKey ? transactions.filter(tx => nd(tx.date) === yKey && tx.type === 'revenue') : [];
+    const caYest = yTx.reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0);
+    const ySales = yTx.length;
+
     // Activité équipe (tx aujourd'hui par employé actif, tri CA desc).
     const empActivity = employees
       .filter(e => e.is_active !== false)
@@ -620,7 +656,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
       })
       .sort((a, b) => b.ca - a.ca);
 
-    return { caToday, nbSales: todayTx.length, byPM, ca7j, maxCA7, empActivity, todayTxAll };
+    return { caToday, nbSales: todayTx.length, byPM, pmTxCount, ca7j, maxCA7, empActivity, todayTxAll, caYest, ySales };
   }, [transactions, today, employees]);
 
   // Prochains RDV aujourd'hui (heure > maintenant, non annulés).
@@ -669,142 +705,330 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
   }
 
   const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+  const activeEmps = (employees || []).filter(e => e.is_active !== false);
+  const empNames   = activeEmps.map(e => e.name).filter(Boolean).join(', ');
+  const empById    = id => (employees || []).find(e => e.id === id);
 
-  // ── Styles partagés ─────────────────────────────────────────────────────
-  const card = { borderRadius: 12, background: t.card, border: "0.5px solid " + t.border, padding: 16 };
+  // Montants façon maquette : entier + séparateur milliers ("1 179 €").
+  const eur = n => Number(n || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+
+  // KPIs maquette : ticket moyen + RDV terminés/restants.
+  const ticket     = nbSales  ? caToday / nbSales : 0;
+  const ticketYest = ySales   ? caYest  / ySales  : 0;
+  const rdvDone    = todayAppts.filter(a => a.status === 'completed').length;
+  const rdvLeft    = todayAppts.filter(a => a.status !== 'completed' && a.status !== 'cancelled').length;
+  const smsLow     = smsBalance !== null && smsBalance < smsThreshold;
+  const total7j    = ca7j.reduce((s, d) => s + d.amount, 0);
+
+  // ── Styles partagés (maquette : carte blanche, radius 10, bordure 0.5px) ──
+  const card  = { borderRadius: 10, background: t.card, border: "0.5px solid " + t.border, padding: 14 };
+  const label = { margin: 0, fontSize: 10, fontWeight: 500, color: t.muted,
+                  textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5 };
+
+  // Pastille de variation "vs hier" (vert si hausse, rouge si baisse).
+  const Pill = ({ cur, prev }) => {
+    if (!prev || prev <= 0) return null;
+    const pct = Math.round(((cur - prev) / prev) * 100);
+    const up  = pct >= 0;
+    const tn  = up ? TONE.redUp : TONE.redDn;
+    const Ic  = up ? I.TrendUp : I.TrendDown;
+    return (
+      <span style={{ display:'inline-flex', alignItems:'center', gap: 3,
+                     marginTop: 6, fontSize: 10, fontWeight: 500,
+                     borderRadius: 99, padding:'2px 8px',
+                     background: tn.bg, color: tn.c }}>
+        <Ic style={{ width: 10, height: 10 }}/>
+        {(up ? "+" : "") + pct + "% vs hier"}
+      </span>
+    );
+  };
+
+  // 4 moyens de paiement maquette + Autre/Multi ajoutés seulement si > 0
+  // (zéro perte de visibilité sur les montants encaissés).
+  const pmCards = [
+    { id:'cash',        tone: TONE.green,  Icon: I.Wallet },
+    { id:'card',        tone: TONE.violet, Icon: I.CreditCard },
+    { id:'card_online', tone: TONE.teal,   Icon: I.Wifi },
+    { id:'transfer',    tone: TONE.amber,  Icon: I.Refresh },
+  ];
+  if ((byPM.other || 0) > 0) pmCards.push({ id:'other', tone: TONE.grey,   Icon: I.MoreH });
+  if ((byPM.multi || 0) > 0) pmCards.push({ id:'multi', tone: TONE.violet, Icon: I.Wallet });
+
+  // Grille de navigation 4×2 (routes réelles, protégées RequireAdminMode).
+  const navItems = [
+    { label:'Agenda',     Icon: I.Calendar, to:'/agenda',       badge: todayAppts.length ? todayAppts.length + " RDV" : null },
+    { label:'Caisse',     Icon: I.Wallet,   to:'/caisse'      },
+    { label:'Clients',    Icon: I.Users,    to:'/clients'     },
+    { label:'Marketing',  Icon: I.Send,     to:'/marketing'   },
+    { label:'Historique', Icon: I.Clock,    to:'/historique'  },
+    { label:'Stats',      Icon: I.BarCh,    to:'/statistiques', lock: true },
+    { label:'Abonnement', Icon: I.Star,     to:'/abonnement'  },
+    { label:'Réglages',   Icon: I.Settings, to:'/reglages'    },
+  ];
+
+  // Sparkline CA 7j (SVG polyline + aire). Repère maquette : 580×52.
+  const SW = 580, SH = 52, TOP = 6, BOT = 46;
+  const pts = ca7j.map((d, i) => {
+    const x = ca7j.length > 1 ? (i * SW) / (ca7j.length - 1) : 0;
+    const y = BOT - (d.amount / maxCA7) * (BOT - TOP);
+    return [Math.round(x), Math.round(y)];
+  });
+  const line = pts.map(p => p.join(',')).join(' ');
+  const area = "0," + SH + " " + line + " " + SW + "," + SH;
+  const last = pts[pts.length - 1] || [SW, TOP];
 
   return (
     <div style={{ minHeight:'100vh', background: t.bg, paddingBottom: 32 }}>
-      <div style={{ maxWidth: 1120, margin:'0 auto', padding:'20px 16px',
-                    display:'flex', flexDirection:'column', gap: 14 }}>
-
-        {/* ── TopBar page : identité + date + cloche + Encaisser ── */}
-        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between',
-                      gap: 12, flexWrap:'wrap' }}>
+      {/* ── TopBar sticky : avatar salon + date/équipe + cloche + thème + Encaisser ── */}
+      <div style={{ position:'sticky', top: 0, zIndex: 10,
+                    background: t.card, borderBottom: "0.5px solid " + t.border,
+                    padding:'12px 16px', display:'flex', alignItems:'center',
+                    justifyContent:'space-between', gap: 10, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', alignItems:'center', gap: 10, minWidth: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                        background: VIO, color:'#fff', fontWeight: 500, fontSize: 14,
+                        display:'flex', alignItems:'center', justifyContent:'center' }}>
+            {(user?.businessName || 'F').charAt(0).toUpperCase()}
+          </div>
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin:0, fontSize: 11, color: t.muted, textTransform:'uppercase',
-                        letterSpacing:'0.05em', fontWeight: 500 }}>{"Dashboard"}</p>
-            <h1 style={{ margin:'2px 0 4px', fontSize: 22, fontWeight: 500, color: t.text,
-                         letterSpacing:'-0.01em' }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: t.text,
+                        lineHeight: 1.2, overflow:'hidden', textOverflow:'ellipsis',
+                        whiteSpace:'nowrap' }}>
               {user?.businessName || "Tableau de bord"}
-            </h1>
-            <p style={{ margin: 0, fontSize: 12, color: t.muted, textTransform:'capitalize' }}>
-              {dateStr}
+            </p>
+            <p style={{ margin:'2px 0 0', fontSize: 11, color: t.muted,
+                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {dateCap}{empNames ? " · " + empNames : ""}
             </p>
           </div>
-          <div style={{ display:'flex', gap: 8, alignItems:'center' }}>
-            <button onClick={() => setShowNotifs(true)}
-                    aria-label="Notifications"
-                    style={{ position:'relative', padding:'8px 10px', borderRadius: 8,
-                             border: "0.5px solid " + t.border, background: t.cardAlt,
-                             color: t.text, cursor:'pointer', fontFamily:'inherit' }}>
-              <I.Bell style={{ width: 14, height: 14 }}/>
-              {unreadNotifCount > 0 && (
-                <span style={{ position:'absolute', top: -4, right: -4,
-                               background:'#ef4444', color:'#fff',
-                               fontSize: 9, fontWeight: 500,
-                               padding:'1px 5px', borderRadius: 99, minWidth: 14 }}>
-                  {unreadNotifCount}
-                </span>
-              )}
-            </button>
-            <button onClick={onAdd}
-                    style={{ display:'inline-flex', alignItems:'center', gap: 6,
-                             padding:'9px 14px', borderRadius: 8, border:'none',
-                             background:'#10b981', color:'#fff',
-                             cursor:'pointer', fontFamily:'inherit',
-                             fontSize: 13, fontWeight: 500 }}>
-              <I.Zap style={{ width: 13, height: 13 }}/> {"Encaisser"}
-            </button>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap: 8, flexShrink: 0 }}>
+          <button onClick={() => setShowNotifs(true)} aria-label="Notifications"
+                  style={{ position:'relative', width: 34, height: 34, borderRadius: 8,
+                           border: "0.5px solid " + t.border, background: t.card,
+                           color: t.muted, cursor:'pointer', fontFamily:'inherit',
+                           display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <I.Bell style={{ width: 16, height: 16 }}/>
+            {unreadNotifCount > 0 && (
+              <span style={{ position:'absolute', top: -4, right: -4,
+                             background:'#E24B4A', color:'#fff', fontSize: 9,
+                             fontWeight: 500, padding:'1px 5px', borderRadius: 99,
+                             border: "2px solid " + t.card }}>
+                {unreadNotifCount}
+              </span>
+            )}
+          </button>
+          <button onClick={toggle} aria-label="Changer de thème"
+                  style={{ width: 34, height: 34, borderRadius: 8,
+                           border: "0.5px solid " + t.border, background: t.card,
+                           color: t.muted, cursor:'pointer', fontFamily:'inherit',
+                           display:'flex', alignItems:'center', justifyContent:'center' }}>
+            {isLight ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                   strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+            )}
+          </button>
+          <button onClick={onAdd}
+                  style={{ display:'inline-flex', alignItems:'center', gap: 5,
+                           padding:'8px 14px', borderRadius: 8, border:'none',
+                           background: VIO, color:'#fff', cursor:'pointer',
+                           fontFamily:'inherit', fontSize: 13, fontWeight: 500 }}>
+            <I.Zap style={{ width: 13, height: 13 }}/> {"Encaisser"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1120, margin:'0 auto', padding:'14px 16px',
+                    display:'flex', flexDirection:'column', gap: 12 }}>
+
+        {/* ── Bannières alertes (maquette : pastel ambre / violet) ── */}
+        {alerts.map(a => {
+          const warn = a.level === 'warn';
+          return (
+            <div key={a.id}
+                 style={{ display:'flex', alignItems:'center', gap: 8,
+                          borderRadius: 8, padding:'8px 12px',
+                          background: warn ? '#FAEEDA' : VIOBG,
+                          border: "0.5px solid " + (warn ? '#EF9F27' : '#AFA9EC') }}>
+              {warn
+                ? <svg viewBox="0 0 24 24" fill="none" stroke="#854F0B" strokeWidth="2"
+                       strokeLinecap="round" strokeLinejoin="round"
+                       style={{ width: 15, height: 15, flexShrink: 0 }}>
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                : <I.Bell style={{ width: 15, height: 15, color: VIOD, flexShrink: 0 }}/>}
+              <span style={{ flex: 1, fontSize: 12, color: warn ? '#633806' : VIOD }}>
+                {a.label}
+              </span>
+              <button onClick={a.onClick}
+                      style={{ border:'none', background:'transparent', cursor:'pointer',
+                               fontFamily:'inherit', fontSize: 11, fontWeight: 500,
+                               textDecoration:'underline',
+                               color: warn ? '#854F0B' : VIOD }}>
+                {warn ? "Recharger" : "Voir"}
+              </button>
+            </div>
+          );
+        })}
+
+        {/* ── Encaissements du jour (4 cartes moyen de paiement) ── */}
+        <div>
+          <p style={label}>{"Encaissements du jour"}</p>
+          <div style={{ display:'grid',
+                        gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))',
+                        gap: 8 }}>
+            {pmCards.map(({ id, tone, Icon }) => (
+              <div key={id} style={{ ...card, padding:'11px 10px',
+                                      display:'flex', flexDirection:'column', gap: 4 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6,
+                              background: tone.bg, marginBottom: 2,
+                              display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <Icon style={{ width: 14, height: 14, color: tone.c }}/>
+                </div>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 500, color: t.muted }}>
+                  {id === 'multi' ? "Multi" : PM_CFG[id]?.label}
+                </p>
+                <p style={{ margin: 0, fontSize: 17, fontWeight: 500, color: t.text,
+                            lineHeight: 1 }}>
+                  {eur(byPM[id] || 0)} €
+                </p>
+                <p style={{ margin: 0, fontSize: 10, color: t.muted }}>
+                  {(pmTxCount[id] || 0) + " tx"}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* ── Alertes proactives ── */}
-        {alerts.length > 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap: 6 }}>
-            {alerts.map(a => (
-              <button key={a.id} onClick={a.onClick}
-                      style={{ textAlign:'left', padding:'10px 14px', borderRadius: 10,
-                               border: "0.5px solid " + (a.level === 'warn' ? '#fed7aa' : '#e0e7ff'),
-                               borderLeft: "2px solid " + (a.level === 'warn' ? '#f97316' : '#4338ca'),
-                               background: a.level === 'warn' ? '#fff7ed' : '#eef2ff',
-                               color: a.level === 'warn' ? '#9a3412' : '#3c3489',
-                               fontSize: 12, fontWeight: 500, cursor:'pointer',
-                               fontFamily:'inherit',
-                               display:'flex', alignItems:'center', gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: 99,
-                               background: a.level === 'warn' ? '#f97316' : '#4338ca' }}/>
-                {a.label}
+        {/* ── Navigation rapide 4×2 ── */}
+        <div>
+          <p style={label}>{"Navigation rapide"}</p>
+          <div style={{ display:'grid',
+                        gridTemplateColumns:'repeat(auto-fit, minmax(84px, 1fr))',
+                        gap: 8 }}>
+            {navItems.map(n => (
+              <button key={n.to} onClick={() => navigate(n.to)}
+                      style={{ ...card, padding:'11px 6px', cursor:'pointer',
+                               fontFamily:'inherit', display:'flex',
+                               flexDirection:'column', alignItems:'center', gap: 5,
+                               transition:'background 0.15s ease' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = t.card; }}>
+                <n.Icon style={{ width: 20, height: 20, color: t.muted }}/>
+                <span style={{ fontSize: 10, fontWeight: 500, color: t.muted,
+                               textAlign:'center', lineHeight: 1.2,
+                               display:'inline-flex', alignItems:'center', gap: 3 }}>
+                  {n.label}
+                  {n.lock && <I.Lock style={{ width: 10, height: 10 }}/>}
+                </span>
+                {n.badge && (
+                  <span style={{ background: VIOBG, color: VIOD, fontSize: 9,
+                                 fontWeight: 500, borderRadius: 99, padding:'2px 7px' }}>
+                    {n.badge}
+                  </span>
+                )}
               </button>
             ))}
           </div>
-        )}
-
-        {/* ── 4 raccourcis (deplaces du bas pour acces rapide en haut de
-            page, entre les alertes Solde SMS et les KPIs CA jour). ── */}
-        <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))',
-                      gap: 8 }}>
-          {[
-            { label:"Encaisser",     icon:<I.Zap style={{ width:14, height:14 }}/>,     onClick: onAdd },
-            { label:"Nouveau RDV",   icon:<I.Calendar style={{ width:14, height:14 }}/>, onClick: () => navigate('/agenda') },
-            { label:"Créer promo",   icon:<I.Gift style={{ width:14, height:14 }}/>,     onClick: () => navigate('/marketing/promotions/create') },
-            { label:"Nouveau client", icon:<I.Users style={{ width:14, height:14 }}/>,    onClick: () => navigate('/clients') },
-          ].map((s, i) => (
-            <button key={i} onClick={s.onClick}
-                    style={{ padding:'12px 14px', borderRadius: 10,
-                             border: "0.5px solid " + t.border,
-                             background: t.card, color: t.text,
-                             cursor:'pointer', fontFamily:'inherit',
-                             fontSize: 13, fontWeight: 500,
-                             display:'flex', alignItems:'center', gap: 8,
-                             transition:'background 0.15s ease' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = t.cardAlt; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = t.card; }}>
-              {s.icon} {s.label}
-            </button>
-          ))}
         </div>
 
-        {/* ── 4 KPIs ── */}
-        <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(170px, 1fr))',
-                      gap: 10 }}>
-          {[
-            { label:"CA jour",     value: fmt(caToday) + " €", color:'#065f46', bg:'#f0fdf4' },
-            { label:"RDV jour",    value: String(todayAppts.length), color:'#4338ca', bg:'#eef2ff' },
-            { label:"Ventes caisse", value: String(nbSales), color:'#0e7490', bg:'#ecfeff' },
-            { label:"SMS restants",  value: smsBalance === null ? "…" : fmt(smsBalance) + " €",
-              color: (smsBalance !== null && smsBalance < smsThreshold) ? '#9a3412' : '#92400e',
-              bg:   (smsBalance !== null && smsBalance < smsThreshold) ? '#fff7ed' : '#fffbeb' },
-          ].map((k, i) => (
-            <div key={i} style={{ ...card, padding:'14px 16px',
-                                  borderLeft: "2px solid " + k.color }}>
-              <p style={{ margin: 0, fontSize: 10, color: k.color, textTransform:'uppercase',
-                          letterSpacing:'0.04em', fontWeight: 500 }}>{k.label}</p>
-              <p style={{ margin:'6px 0 0', fontSize: 20, fontWeight: 500,
-                          color: t.text, fontFamily:'monospace' }}>{k.value}</p>
+        {/* ── KPIs du jour 2×2 ── */}
+        <div>
+          <p style={label}>{"KPIs du jour"}</p>
+          <div style={{ display:'grid',
+                        gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))',
+                        gap: 8 }}>
+            <div style={{ ...card }}>
+              <p style={{ ...label, marginBottom: 5 }}>{"CA total"}</p>
+              <p style={{ margin: 0, fontSize: 21, fontWeight: 500, color: t.text,
+                          lineHeight: 1 }}>{eur(caToday)} €</p>
+              <Pill cur={caToday} prev={caYest}/>
             </div>
-          ))}
+            <div style={{ ...card }}>
+              <p style={{ ...label, marginBottom: 5 }}>{"Ticket moyen"}</p>
+              <p style={{ margin: 0, fontSize: 21, fontWeight: 500, color: t.text,
+                          lineHeight: 1 }}>{eur(ticket)} €</p>
+              <Pill cur={ticket} prev={ticketYest}/>
+            </div>
+            <div style={{ ...card }}>
+              <p style={{ ...label, marginBottom: 5 }}>{"RDV du jour"}</p>
+              <p style={{ margin: 0, fontSize: 21, fontWeight: 500, color: t.text,
+                          lineHeight: 1 }}>{todayAppts.length}</p>
+              <p style={{ margin:'4px 0 0', fontSize: 11, color: t.muted }}>
+                {rdvDone + " terminés · " + rdvLeft + " restants"}
+              </p>
+            </div>
+            <div style={{ ...card }}>
+              <p style={{ ...label, marginBottom: 5,
+                          color: smsLow ? '#A32D2D' : t.muted }}>{"SMS restants"}</p>
+              <p style={{ margin: 0, fontSize: 21, fontWeight: 500,
+                          color: smsLow ? '#A32D2D' : t.text, lineHeight: 1 }}>
+                {smsBalance === null ? "…" : fmt(smsBalance) + " €"}
+              </p>
+              <p style={{ margin:'4px 0 0', fontSize: 11, color: t.muted }}>
+                {"seuil alerte : " + smsThreshold + " €"}
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* ── UX commit 7d : chips filtre employé (commun aux 3 blocs). ── */}
-        {(employees || []).filter(e => e.is_active !== false).length > 1 && (
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {[
-              { id: 'all', label: 'Tous', color: t.text },
-              ...employees.filter(e => e.is_active !== false)
-                          .map(e => ({ id: e.id, label: e.name, color: e.avatar_color || t.text })),
-            ].map(chip => {
-              const active = empFilter === chip.id;
+        {/* ── Sparkline CA · 7 derniers jours ── */}
+        <div style={{ ...card }}>
+          <div style={{ display:'flex', justifyContent:'space-between',
+                        alignItems:'baseline', marginBottom: 8 }}>
+            <span style={{ ...label, marginBottom: 0 }}>{"CA · 7 derniers jours"}</span>
+            <span style={{ fontSize: 12, fontWeight: 500, color: t.text }}>
+              {"Total : " + eur(total7j) + " €"}
+            </span>
+          </div>
+          <svg width="100%" height="52" viewBox={"0 0 " + SW + " " + SH}
+               preserveAspectRatio="none">
+            <polyline points={area} fill={VIOBG} stroke="none" opacity="0.6"/>
+            <polyline points={line} fill="none" stroke={VIO} strokeWidth="1.5"
+                      strokeLinejoin="round" strokeLinecap="round"/>
+            <circle cx={last[0]} cy={last[1]} r="3" fill={VIO}/>
+          </svg>
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop: 5 }}>
+            {ca7j.map((d, i) => {
+              const isToday = d.date === today;
+              return (
+                <span key={d.date}
+                      style={{ fontSize: 10, textTransform:'capitalize',
+                               fontWeight: isToday ? 500 : 400,
+                               color: isToday ? VIOD : t.muted }}>
+                  {isToday ? "Auj." : d.day}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Chips filtre employé (commun RDV / équipe / historique) ── */}
+        {activeEmps.length > 1 && (
+          <div style={{ display:'flex', gap: 6, flexWrap:'wrap' }}>
+            {[{ id:'all', label:'Tous' },
+              ...activeEmps.map(e => ({ id: e.id, label: e.name }))].map(chip => {
+              const on = empFilter === chip.id;
               return (
                 <button key={chip.id} onClick={() => setEmpFilter(chip.id)}
                         style={{ padding:'6px 12px', borderRadius: 99, border:'none',
-                                 background: active ? '#111827' : t.cardAlt,
-                                 color: active ? '#fff' : t.muted,
-                                 fontSize: 11, fontWeight: active ? 500 : 400,
-                                 cursor:'pointer', fontFamily:'inherit',
-                                 whiteSpace:'nowrap' }}>
+                                 background: on ? VIO : t.cardAlt,
+                                 color: on ? '#fff' : t.muted,
+                                 fontSize: 11, fontWeight: 500, cursor:'pointer',
+                                 fontFamily:'inherit', whiteSpace:'nowrap' }}>
                   {chip.label}
                 </button>
               );
@@ -812,95 +1036,114 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
           </div>
         )}
 
-        {/* ── 2 colonnes : Prochains RDV / Activité équipe ── */}
-        <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))',
-                      gap: 12 }}>
-          <div style={card}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                          marginBottom: 10 }}>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: t.text }}>
-                {"Prochains RDV"}
-              </p>
-              <button onClick={() => navigate('/agenda')}
-                      style={{ border:'none', background:'transparent', cursor:'pointer',
-                               fontSize: 11, color: t.muted, fontFamily:'inherit' }}>
-                {"Voir l'agenda →"}
-              </button>
-            </div>
+        {/* ── Prochains RDV ── */}
+        <div>
+          <p style={label}>{"Prochains RDV"}</p>
+          <div style={{ ...card, padding: 0, overflow:'hidden' }}>
             {upcoming.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
+              <p style={{ margin: 0, padding:'16px 14px', fontSize: 12, color: t.muted }}>
                 {"Aucun RDV restant aujourd'hui."}
               </p>
-            ) : upcoming.map(a => (
-              <div key={a.id}
-                   style={{ display:'grid', gridTemplateColumns:'auto 1fr auto', gap: 10,
-                            padding:'8px 0',
-                            borderBottom: "0.5px solid " + t.separator,
-                            alignItems:'center' }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: t.text,
-                               fontFamily:'monospace' }}>
-                  {String(a.start_time || '').substring(0, 5)}
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, color: t.text,
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {a.client_name || a.client_email || "Sans nom"}
-                  </p>
-                  <p style={{ margin:'1px 0 0', fontSize: 11, color: t.muted,
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {a.service_name || ""}
-                  </p>
-                </div>
-                <StatusBadge
-                  status={a.status === 'confirmed' ? 'success' : (a.status === 'pending' ? 'warning' : 'info')}
-                  label={a.status}/>
-              </div>
-            ))}
+            ) : (
+              <>
+                {upcoming.map(a => {
+                  const emp   = empById(a.employee_id);
+                  const tone  = emp?.avatar_color || VIO;
+                  const cName = a.client_name || a.client_email || "Sans nom";
+                  const price = parseFloat(a.total_amount) || parseFloat(a.service_price) || 0;
+                  return (
+                    <div key={a.id}
+                         style={{ display:'flex', alignItems:'center', gap: 10,
+                                  padding:'10px 12px',
+                                  borderBottom: "0.5px solid " + t.separator }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: t.muted,
+                                     minWidth: 36, fontFamily:'monospace' }}>
+                        {String(a.start_time || '').substring(0, 5)}
+                      </span>
+                      <span style={{ width: 6, height: 6, borderRadius:'50%',
+                                     background: tone, flexShrink: 0 }}/>
+                      <span style={{ width: 30, height: 30, borderRadius:'50%',
+                                     background: tone, color:'#fff', flexShrink: 0,
+                                     display:'flex', alignItems:'center',
+                                     justifyContent:'center', fontSize: 11,
+                                     fontWeight: 500 }}>
+                        {initials(cName)}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: t.text,
+                                    overflow:'hidden', textOverflow:'ellipsis',
+                                    whiteSpace:'nowrap' }}>
+                          {cName}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 10, color: t.muted,
+                                    overflow:'hidden', textOverflow:'ellipsis',
+                                    whiteSpace:'nowrap' }}>
+                          {(a.service_name || "RDV") + (emp ? " · " + emp.name : "")}
+                        </p>
+                      </div>
+                      {price > 0 && (
+                        <span style={{ fontSize: 12, fontWeight: 500, color: t.text,
+                                       flexShrink: 0 }}>
+                          {eur(price)} €
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+                <button onClick={() => navigate('/agenda')}
+                        style={{ width:'100%', padding:'12px 14px', border:'none',
+                                 background:'transparent', cursor:'pointer',
+                                 fontFamily:'inherit', fontSize: 12, color: t.muted }}>
+                  {"Voir l'agenda complet →"}
+                </button>
+              </>
+            )}
           </div>
+        </div>
 
-          <div style={card}>
-            <p style={{ margin:'0 0 10px', fontSize: 14, fontWeight: 500, color: t.text }}>
-              {"Activité équipe"}
-            </p>
+        {/* ── Équipe · CA du jour ── */}
+        <div>
+          <p style={label}>{"Équipe · CA du jour"}</p>
+          <div style={{ ...card, padding: 0, overflow:'hidden' }}>
             {empActivityFiltered.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
+              <p style={{ margin: 0, padding:'16px 14px', fontSize: 12, color: t.muted }}>
                 {"Aucun employé actif."}
               </p>
             ) : empActivityFiltered.slice(0, 6).map(e => (
               <div key={e.id}
-                   style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap: 10,
-                            padding:'8px 0',
-                            borderBottom: "0.5px solid " + t.separator,
-                            alignItems:'center' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 99,
-                               background: e.avatar_color || '#6b7280' }}/>
-                <p style={{ margin: 0, fontSize: 13, color: t.text,
-                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {e.name}
-                </p>
-                <span style={{ fontSize: 11, color: t.muted }}>
-                  {e.count} {e.count === 1 ? "tx" : "tx"}
+                   style={{ display:'flex', alignItems:'center', gap: 10,
+                            padding:'9px 12px',
+                            borderBottom: "0.5px solid " + t.separator }}>
+                <span style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                               background: e.avatar_color || VIO, color:'#fff',
+                               display:'flex', alignItems:'center',
+                               justifyContent:'center', fontSize: 11, fontWeight: 500 }}>
+                  {(e.name || '?').charAt(0).toUpperCase()}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 500, color: t.text,
-                               fontFamily:'monospace' }}>
-                  {fmt(e.ca)} €
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: t.text,
+                               overflow:'hidden', textOverflow:'ellipsis',
+                               whiteSpace:'nowrap' }}>
+                  {e.name}
+                </span>
+                <span style={{ fontSize: 10, color: t.muted, minWidth: 40,
+                               textAlign:'right' }}>
+                  {e.count + " tx"}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: t.text }}>
+                  {eur(e.ca)} €
                 </span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ── UX commit 7d : Historique du jour · ligne par ligne
-            (filtrable par empFilter, multi éclatés en badges pastel §15). ── */}
-        <div style={{ ...card, padding: 16, borderRadius: 10 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                        marginBottom: 10 }}>
+        {/* ── Historique du jour · ligne par ligne (multi éclatés §15) ── */}
+        <div>
+          <div style={{ display:'flex', alignItems:'flex-end',
+                        justifyContent:'space-between', marginBottom: 5 }}>
             <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: t.text }}>
-                {"Historique du jour"}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
+              <p style={label}>{"Historique du jour"}</p>
+              <p style={{ margin:'-3px 0 0', fontSize: 11, color: t.muted }}>
                 {todayTxFiltered.length + (todayTxFiltered.length > 1 ? ' encaissements' : ' encaissement')
                   + (empFilter !== 'all' ? ' · filtré' : '')}
               </p>
@@ -911,151 +1154,80 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
               {"Détail complet →"}
             </button>
           </div>
-          {todayTxFiltered.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: t.muted }}>
-              {"Aucun encaissement aujourd'hui."}
-            </p>
-          ) : (
-            <div>
-              {todayTxFiltered.slice(0, 12).map(tx => {
-                const emp = employees.find(e => e.id === tx.employee_id);
-                const empColor = emp?.avatar_color || '#6b7280';
-                const empInitial = (emp?.name || '?').charAt(0).toUpperCase();
-                const svc = Array.isArray(tx.items) && tx.items[0]
-                              ? tx.items[0].service_name
-                              : (tx.description || '—');
-                // Multi éclaté : si plusieurs paiements, plusieurs badges pastel.
-                const isMulti = tx.payment_method === 'multi'
-                  && Array.isArray(tx.payments) && tx.payments.length > 0;
-                return (
-                  <div key={tx.id}
-                       style={{ display:'grid',
-                                gridTemplateColumns:'60px 1fr auto auto auto',
-                                gap: 10, padding:'8px 0',
-                                borderBottom: "0.5px solid " + t.separator,
-                                alignItems:'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: t.text,
-                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                      {String(tx.time || '').substring(0, 5) || '—'}
-                    </span>
-                    <div style={{ minWidth:0 }}>
-                      <p style={{ margin: 0, fontSize: 13, color: t.text, fontWeight: 500,
-                                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {svc}
-                      </p>
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', gap: 6, minWidth: 0 }}>
-                      <span style={{ width: 18, height: 18, borderRadius: 99,
-                                     background: empColor, color: '#fff',
-                                     display:'flex', alignItems:'center', justifyContent:'center',
-                                     fontSize: 9, fontWeight: 500, flexShrink: 0 }}>
-                        {empInitial}
-                      </span>
-                      <span style={{ fontSize: 11, color: t.muted,
-                                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {emp?.name || '—'}
-                      </span>
-                    </div>
-                    <div style={{ display:'flex', gap: 4, flexShrink: 0 }}>
-                      {isMulti ? tx.payments.map((p, i) => {
-                        const cfg = PM_CFG[p.payment_method] || PM_CFG.other;
-                        return (
-                          <span key={i}
-                                style={{ fontSize: 10, fontWeight: 500,
-                                         padding: '2px 7px', borderRadius: 99,
-                                         background: cfg.bg, color: cfg.color,
-                                         whiteSpace: 'nowrap' }}>
-                            {cfg.label.substring(0, 3)} {fmt(p.amount)}
-                          </span>
-                        );
-                      }) : (() => {
-                        const cfg = PM_CFG[tx.payment_method] || PM_CFG.other;
-                        return (
-                          <span style={{ fontSize: 10, fontWeight: 500,
-                                         padding: '2px 7px', borderRadius: 99,
-                                         background: cfg.bg, color: cfg.color,
-                                         whiteSpace: 'nowrap' }}>
-                            {cfg.label}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: t.text, textAlign: 'right',
-                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                      {fmt(tx.amount)} €
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── 2 colonnes : Moyens paiement / CA 7j ── */}
-        <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))',
-                      gap: 12 }}>
-          <div style={card}>
-            <p style={{ margin:'0 0 10px', fontSize: 14, fontWeight: 500, color: t.text }}>
-              {"Encaissements du jour"}
-            </p>
-            <div style={{ display:'grid',
-                          gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))',
-                          gap: 6 }}>
-              {Object.entries(PM_CFG).map(([id, cfg]) => (
-                <div key={id}
-                     style={{ padding:'10px 12px', borderRadius: 8,
-                              background: cfg.bg,
-                              border:'0.5px solid rgba(0,0,0,0.04)' }}>
-                  <p style={{ margin: 0, fontSize: 10, color: cfg.color,
-                              fontWeight: 500, textTransform:'uppercase',
-                              letterSpacing:'0.04em' }}>{cfg.label}</p>
-                  <p style={{ margin:'3px 0 0', fontSize: 15, fontWeight: 500,
-                              color: cfg.color, fontFamily:'monospace' }}>
-                    {fmt(byPM[id] || 0)} €
+          <div style={{ ...card, padding: 0, overflow:'hidden' }}>
+            {todayTxFiltered.length === 0 ? (
+              <p style={{ margin: 0, padding:'16px 14px', fontSize: 12, color: t.muted }}>
+                {"Aucun encaissement aujourd'hui."}
+              </p>
+            ) : todayTxFiltered.slice(0, 12).map(tx => {
+              const emp = employees.find(e => e.id === tx.employee_id);
+              const empColor = emp?.avatar_color || VIO;
+              const empInitial = (emp?.name || '?').charAt(0).toUpperCase();
+              const svc = Array.isArray(tx.items) && tx.items[0]
+                            ? tx.items[0].service_name
+                            : (tx.description || '—');
+              const isMulti = tx.payment_method === 'multi'
+                && Array.isArray(tx.payments) && tx.payments.length > 0;
+              return (
+                <div key={tx.id}
+                     style={{ display:'grid',
+                              gridTemplateColumns:'46px 1fr auto auto auto',
+                              gap: 8, padding:'9px 12px', alignItems:'center',
+                              borderBottom: "0.5px solid " + t.separator }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: t.muted,
+                                 fontFamily:'monospace' }}>
+                    {String(tx.time || '').substring(0, 5) || '—'}
+                  </span>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: t.text,
+                              minWidth: 0, overflow:'hidden', textOverflow:'ellipsis',
+                              whiteSpace:'nowrap' }}>
+                    {svc}
                   </p>
-                </div>
-              ))}
-              <div style={{ padding:'10px 12px', borderRadius: 8,
-                            background:'#eeedfe',
-                            border:'0.5px solid rgba(0,0,0,0.04)' }}>
-                <p style={{ margin: 0, fontSize: 10, color:'#3c3489',
-                            fontWeight: 500, textTransform:'uppercase',
-                            letterSpacing:'0.04em' }}>{"Multi"}</p>
-                <p style={{ margin:'3px 0 0', fontSize: 15, fontWeight: 500,
-                            color:'#3c3489', fontFamily:'monospace' }}>
-                  {fmt(byPM.multi || 0)} €
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div style={card}>
-            <p style={{ margin:'0 0 14px', fontSize: 14, fontWeight: 500, color: t.text }}>
-              {"Évolution CA · 7 derniers jours"}
-            </p>
-            <div style={{ display:'flex', alignItems:'flex-end', gap: 6, height: 120 }}>
-              {ca7j.map(d => {
-                const h = Math.max(2, Math.round((d.amount / maxCA7) * 100));
-                const isToday = d.date === today;
-                return (
-                  <div key={d.date}
-                       style={{ flex: 1, display:'flex', flexDirection:'column',
-                                alignItems:'center', gap: 4 }}>
-                    <div style={{ width:'100%', height: h + '%', borderRadius: 4,
-                                  background: isToday ? t.text : t.borderInput,
-                                  transition:'height 0.3s' }}
-                         title={fmt(d.amount) + " € · " + d.date}/>
-                    <span style={{ fontSize: 10, color: t.muted, textTransform:'capitalize' }}>
-                      {d.day}
+                  <div style={{ display:'flex', alignItems:'center', gap: 6, minWidth: 0 }}>
+                    <span style={{ width: 18, height: 18, borderRadius: 99,
+                                   background: empColor, color:'#fff',
+                                   display:'flex', alignItems:'center',
+                                   justifyContent:'center', fontSize: 9,
+                                   fontWeight: 500, flexShrink: 0 }}>
+                      {empInitial}
+                    </span>
+                    <span style={{ fontSize: 11, color: t.muted,
+                                   overflow:'hidden', textOverflow:'ellipsis',
+                                   whiteSpace:'nowrap' }}>
+                      {emp?.name || '—'}
                     </span>
                   </div>
-                );
-              })}
-            </div>
-            <p style={{ margin:'10px 0 0', fontSize: 11, color: t.muted }}>
-              {"Max : " + fmt(maxCA7) + " € · Aujourd'hui : " + fmt(caToday) + " €"}
-            </p>
+                  <div style={{ display:'flex', gap: 4, flexShrink: 0 }}>
+                    {isMulti ? tx.payments.map((p, i) => {
+                      const cfg = PM_CFG[p.payment_method] || PM_CFG.other;
+                      return (
+                        <span key={i}
+                              style={{ fontSize: 10, fontWeight: 500,
+                                       padding:'2px 7px', borderRadius: 99,
+                                       background: cfg.bg, color: cfg.color,
+                                       whiteSpace:'nowrap' }}>
+                          {cfg.label.substring(0, 3)} {fmt(p.amount)}
+                        </span>
+                      );
+                    }) : (() => {
+                      const cfg = PM_CFG[tx.payment_method] || PM_CFG.other;
+                      return (
+                        <span style={{ fontSize: 10, fontWeight: 500,
+                                       padding:'2px 7px', borderRadius: 99,
+                                       background: cfg.bg, color: cfg.color,
+                                       whiteSpace:'nowrap' }}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: t.text,
+                                 textAlign:'right', fontFamily:'monospace' }}>
+                    {fmt(tx.amount)} €
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
