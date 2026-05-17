@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette Marketing — FlowIA</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f1f3f8;--card:#ffffff;--border:rgba(0,0,0,0.07);
+  --text:#1e293b;--muted:#9ca3af;--accent:#7F77DD;--accent-dark:#534AB7;
+  --font:'Inter',system-ui,sans-serif;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px}
+
+/* TOPBAR */
+.topbar{background:var(--card);border-bottom:0.5px solid var(--border);padding:14px 20px}
+.page-title{font-size:18px;font-weight:600;color:var(--text)}
+.page-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ONGLETS PRIMAIRES */
+.tabs-primary{display:flex;background:var(--card);border-bottom:0.5px solid var(--border);padding:0 16px;gap:0;overflow-x:auto}
+.tab-p{padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0}
+.tab-p.active{color:#534AB7;border-bottom-color:#534AB7}
+.tab-p:hover:not(.active){color:var(--text)}
+
+/* CONTENT */
+.content{padding:14px;display:flex;flex-direction:column;gap:12px}
+
+/* ONGLETS SECONDAIRES */
+.tabs-secondary{display:flex;background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:3px;gap:3px}
+.tab-s{flex:1;padding:7px 10px;font-size:12px;font-weight:600;text-align:center;border-radius:7px;cursor:pointer;color:var(--muted);border:none;background:transparent}
+.tab-s.active{background:#f1f3f8;color:var(--text)}
+
+/* SECTION LABEL */
+.section-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px}
+
+/* STATS */
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px}
+.stat-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px}
+.stat-val{font-size:20px;font-weight:600;color:var(--text)}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:3px}
+
+/* CARDS GÉNÉRIQUES */
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;overflow:hidden}
+.card-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:0.5px solid var(--border)}
+.card-row:last-child{border-bottom:none}
+.card-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.card-info{flex:1;min-width:0}
+.card-title{font-size:13px;font-weight:600;color:var(--text)}
+.card-sub{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* BOUTONS */
+.btn-sm{border:0.5px solid var(--border);background:var(--card);color:var(--text);border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-primary{background:#7F77DD;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+
+/* TOGGLE */
+.toggle{width:36px;height:20px;border-radius:99px;position:relative;cursor:pointer;flex-shrink:0;border:none;display:inline-block}
+.toggle.on{background:#7F77DD}
+.toggle.off{background:#d1d5db}
+.toggle::after{content:'';position:absolute;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left 0.15s}
+.toggle.on::after{left:18px}
+.toggle.off::after{left:2px}
+
+/* UPSELL */
+.upsell{background:#EEEDFE;border:0.5px solid #AFA9EC;border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px}
+.upsell-title{font-size:11px;font-weight:600;color:#534AB7;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px}
+.upsell-desc{font-size:12px;color:#3C3489;line-height:1.5}
+.upsell-btn{background:#7F77DD;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;margin-top:2px}
+
+/* SEARCH */
+.search-bar{display:flex;align-items:center;gap:8px;background:var(--card);border:0.5px solid var(--border);border-radius:8px;padding:8px 12px}
+.search-input{flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none}
+
+/* CLIENTS FIDÉLITÉ */
+.client-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid var(--border)}
+.client-row:last-child{border-bottom:none}
+.client-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.stamps-row{display:flex;gap:3px}
+.stamp{width:14px;height:14px;border-radius:50%;border:0.5px solid var(--border)}
+.stamp.filled{background:#7F77DD;border-color:#534AB7}
+
+/* CAMPAGNES */
+.campaign-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:13px 14px;display:flex;align-items:flex-start;gap:12px}
+.camp-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.camp-info{flex:1;min-width:0}
+.camp-title{font-size:13px;font-weight:600;color:var(--text)}
+.camp-sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.camp-meta{font-size:10px;color:var(--muted);margin-top:5px}
+.badge-pill{display:inline-flex;align-items:center;font-size:9px;font-weight:600;border-radius:99px;padding:2px 8px}
+.badge-active{background:#EAF3DE;color:#3B6D11}
+.badge-draft{background:#F1EFE8;color:#5F5E5A}
+.badge-sent{background:#EEEDFE;color:#534AB7}
+.badge-planned{background:#FAEEDA;color:#633806}
+
+/* IA */
+.ia-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:13px 14px}
+.ia-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ia-icon{width:36px;height:36px;border-radius:10px;background:#EEEDFE;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ia-title{font-size:13px;font-weight:600;color:var(--text)}
+.ia-sub{font-size:11px;color:var(--muted)}
+.ia-textarea{width:100%;border:0.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--muted);font-style:italic;line-height:1.5;margin-bottom:8px;background:#f8f9fa;resize:none;font-family:var(--font);min-height:60px}
+.ia-actions{display:flex;gap:8px}
+
+/* SMS */
+.sms-balance{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--card);border:0.5px solid var(--border);border-radius:10px}
+.sms-count{font-size:20px;font-weight:600;color:var(--text)}
+.sms-label{font-size:11px;color:var(--muted)}
+
+/* SECTION ACTIVE PAR DEFAUT = RÉCOMPENSES */
+.tab-content{display:none}
+.tab-content.active{display:flex;flex-direction:column;gap:12px}
+
+@media(max-width:480px){
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .tabs-primary{gap:0}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="page-title">Marketing</div>
+  <div class="page-sub">Fidélité, campagnes, IA et SMS</div>
+</div>
+
+<!-- ONGLETS PRIMAIRES -->
+<div class="tabs-primary">
+  <div class="tab-p active" onclick="showTab('recompenses',this)">
+    <i class="ti ti-gift" style="font-size:15px"></i> Récompenses
+  </div>
+  <div class="tab-p" onclick="showTab('campagnes',this)">
+    <i class="ti ti-speakerphone" style="font-size:15px"></i> Campagnes
+  </div>
+  <div class="tab-p" onclick="showTab('ia',this)">
+    <i class="ti ti-robot" style="font-size:15px"></i> IA
+  </div>
+  <div class="tab-p" onclick="showTab('sms',this)">
+    <i class="ti ti-message" style="font-size:15px"></i> SMS
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ===== ONGLET RÉCOMPENSES ===== -->
+  <div id="tab-recompenses" class="tab-content active">
+
+    <div class="tabs-secondary">
+      <div class="tab-s active">Fidélité</div>
+      <div class="tab-s">Anniversaires</div>
+      <div class="tab-s">Parrainage</div>
+    </div>
+
+    <div>
+      <div class="section-label">Statistiques fidélité</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Clients fidèles</div>
+          <div class="stat-val">0</div>
+          <div class="stat-sub">inscrits au programme</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tampons offerts</div>
+          <div class="stat-val">0</div>
+          <div class="stat-sub">ce mois</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Récompenses</div>
+          <div class="stat-val">0</div>
+          <div class="stat-sub">utilisées</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Programme actif</div>
+      <div class="card">
+        <div class="card-row">
+          <div class="card-icon" style="background:#EEEDFE">
+            <i class="ti ti-gift" style="color:#534AB7"></i>
+          </div>
+          <div class="card-info">
+            <div class="card-title">Programme fidélité</div>
+            <div class="card-sub">10 tampons → Prestation offerte</div>
+          </div>
+          <button class="toggle on"></button>
+          <button class="btn-sm">Modifier</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <div class="section-label" style="margin:0">Clients inscrits</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-primary">+ Tampon</button>
+          <button class="btn-sm">Traçabilité</button>
+        </div>
+      </div>
+      <div class="search-bar" style="margin-bottom:8px">
+        <i class="ti ti-search" style="font-size:15px;color:var(--muted)"></i>
+        <input class="search-input" placeholder="Rechercher un client...">
+      </div>
+      <div class="card">
+        <div class="client-row">
+          <div class="client-av" style="background:#EEEDFE;color:#534AB7">KA</div>
+          <span style="font-size:12px;font-weight:600;flex:1">Karim Achour</span>
+          <div class="stamps-row">
+            <div class="stamp filled"></div><div class="stamp filled"></div><div class="stamp filled"></div>
+            <div class="stamp filled"></div><div class="stamp filled"></div><div class="stamp filled"></div>
+            <div class="stamp filled"></div><div class="stamp"></div><div class="stamp"></div><div class="stamp"></div>
+          </div>
+          <span style="font-size:11px;color:var(--muted);margin-left:4px">7/10</span>
+        </div>
+        <div class="client-row">
+          <div class="client-av" style="background:#E1F5EE;color:#085041">MB</div>
+          <span style="font-size:12px;font-weight:600;flex:1">Marc Beaumont</span>
+          <div class="stamps-row">
+            <div class="stamp filled"></div><div class="stamp filled"></div><div class="stamp filled"></div>
+            <div class="stamp"></div><div class="stamp"></div><div class="stamp"></div>
+            <div class="stamp"></div><div class="stamp"></div><div class="stamp"></div><div class="stamp"></div>
+          </div>
+          <span style="font-size:11px;color:var(--muted);margin-left:4px">3/10</span>
+        </div>
+        <div style="padding:12px 14px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer">
+          <i class="ti ti-plus" style="font-size:14px;vertical-align:-2px"></i> Ajouter une prestation client
+        </div>
+      </div>
+    </div>
+
+    <div class="upsell">
+      <i class="ti ti-stars" style="font-size:20px;color:#7F77DD;flex-shrink:0;margin-top:1px"></i>
+      <div style="flex:1">
+        <div class="upsell-title">Plan Essentiel requis</div>
+        <div class="upsell-desc">Programme anniversaires, parrainage et campagnes SMS inclus à partir de 24 €/mois.</div>
+      </div>
+      <button class="upsell-btn">Passer à Essentiel</button>
+    </div>
+
+  </div>
+
+  <!-- ===== ONGLET CAMPAGNES ===== -->
+  <div id="tab-campagnes" class="tab-content">
+
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="section-label" style="margin:0">Campagnes</div>
+      <button class="btn-primary">+ Nouvelle campagne</button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+
+      <div class="campaign-card">
+        <div class="camp-icon" style="background:#FAEEDA">
+          <i class="ti ti-mail" style="color:#854F0B"></i>
+        </div>
+        <div class="camp-info">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="camp-title">Promo printemps — 15% coupe</span>
+            <span class="badge-pill badge-sent">Envoyée</span>
+          </div>
+          <div class="camp-sub">Email · 148 destinataires · 23 ouvertures</div>
+          <div class="camp-meta">Envoyée le 2 mai 2026</div>
+        </div>
+        <button class="btn-sm">Voir</button>
+      </div>
+
+      <div class="campaign-card">
+        <div class="camp-icon" style="background:#E1F5EE">
+          <i class="ti ti-message" style="color:#0F6E56"></i>
+        </div>
+        <div class="camp-info">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="camp-title">Rappel clients inactifs</span>
+            <span class="badge-pill badge-active">Active</span>
+          </div>
+          <div class="camp-sub">SMS · Automatique · 90 jours sans RDV</div>
+          <div class="camp-meta">Déclencheur automatique</div>
+        </div>
+        <button class="btn-sm">Modifier</button>
+      </div>
+
+      <div class="campaign-card">
+        <div class="camp-icon" style="background:#F1EFE8">
+          <i class="ti ti-pencil" style="color:#5F5E5A"></i>
+        </div>
+        <div class="camp-info">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="camp-title">Campagne été — brouillon</span>
+            <span class="badge-pill badge-draft">Brouillon</span>
+          </div>
+          <div class="camp-sub">Email + SMS · Non planifiée</div>
+          <div class="camp-meta">Modifiée il y a 2 jours</div>
+        </div>
+        <button class="btn-primary">Finaliser</button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ===== ONGLET IA ===== -->
+  <div id="tab-ia" class="tab-content">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0">
+      <div class="section-label" style="margin:0">IA Marketing</div>
+      <span style="font-size:10px;background:#EEEDFE;color:#534AB7;padding:2px 8px;border-radius:99px;font-weight:600">Bêta</span>
+    </div>
+
+    <div class="ia-card">
+      <div class="ia-header">
+        <div class="ia-icon"><i class="ti ti-wand" style="color:#534AB7;font-size:18px"></i></div>
+        <div>
+          <div class="ia-title">Générer un message SMS</div>
+          <div class="ia-sub">Campagne personnalisée par l'IA</div>
+        </div>
+      </div>
+      <textarea class="ia-textarea" placeholder="Ex : Relance clients inactifs depuis 2 mois, ton chaleureux, 160 car. max, langage barbershop"></textarea>
+      <div class="ia-actions">
+        <button class="btn-primary" style="flex:1">Générer</button>
+        <button class="btn-sm">Exemples</button>
+      </div>
+    </div>
+
+    <div class="ia-card">
+      <div class="ia-header">
+        <div class="ia-icon"><i class="ti ti-mail-forward" style="color:#534AB7;font-size:18px"></i></div>
+        <div>
+          <div class="ia-title">Générer un email de campagne</div>
+          <div class="ia-sub">Objet + corps personnalisés</div>
+        </div>
+      </div>
+      <textarea class="ia-textarea" placeholder="Ex : Email pour promouvoir notre nouvelle prestation 'Soin barbe premium' avec code promo BARBE10"></textarea>
+      <div class="ia-actions">
+        <button class="btn-primary" style="flex:1">Générer</button>
+        <button class="btn-sm">Exemples</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== ONGLET SMS ===== -->
+  <div id="tab-sms" class="tab-content">
+
+    <div>
+      <div class="section-label">Solde SMS</div>
+      <div class="sms-balance">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;border-radius:9px;background:#FAEEDA;display:flex;align-items:center;justify-content:center">
+            <i class="ti ti-message" style="color:#854F0B;font-size:18px"></i>
+          </div>
+          <div>
+            <div class="sms-count" style="color:#E24B4A">0 SMS</div>
+            <div class="sms-label">restants · seuil alerte : 20</div>
+          </div>
+        </div>
+        <button class="btn-primary">Recharger</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Paramètres SMS</div>
+      <div class="card">
+        <div class="card-row">
+          <div class="card-icon" style="background:#F1EFE8">
+            <i class="ti ti-history" style="color:#5F5E5A"></i>
+          </div>
+          <div class="card-info">
+            <div class="card-title">Historique des recharges</div>
+            <div class="card-sub">Voir les achats de SMS passés</div>
+          </div>
+          <button class="btn-sm">Afficher</button>
+        </div>
+        <div class="card-row">
+          <div class="card-icon" style="background:#FAEEDA">
+            <i class="ti ti-bell" style="color:#854F0B"></i>
+          </div>
+          <div class="card-info">
+            <div class="card-title">Alerte solde bas</div>
+            <div class="card-sub">Notification quand solde &lt; 20 SMS</div>
+          </div>
+          <button class="toggle on"></button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Campagnes SMS actives</div>
+      <div class="campaign-card">
+        <div class="camp-icon" style="background:#E1F5EE">
+          <i class="ti ti-message" style="color:#0F6E56"></i>
+        </div>
+        <div class="camp-info">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="camp-title">Rappel clients inactifs</span>
+            <span class="badge-pill badge-active">Active</span>
+          </div>
+          <div class="camp-sub">Automatique · 90 jours sans RDV</div>
+          <div class="camp-meta">Déclencheur automatique</div>
+        </div>
+        <button class="btn-sm">Modifier</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+function showTab(id, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-p').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette Dashboard — FlowIA</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f1f3f8;--card:#ffffff;--border:rgba(0,0,0,0.07);
+  --text:#1e293b;--muted:#9ca3af;--accent:#7F77DD;--accent-dark:#534AB7;
+  --font:'Inter',system-ui,sans-serif;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px}
+
+/* TOPBAR */
+.topbar{background:var(--card);border-bottom:0.5px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:10}
+.salon-row{display:flex;align-items:center;gap:8px}
+.salon-avatar{width:30px;height:30px;border-radius:8px;background:#7F77DD;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex-shrink:0}
+.salon-name{font-size:14px;font-weight:600;color:var(--text);line-height:1.2}
+.salon-date{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.icon-btn{position:relative;width:34px;height:34px;border-radius:8px;border:0.5px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:17px}
+.badge{position:absolute;top:-4px;right:-4px;background:#E24B4A;color:#fff;font-size:9px;font-weight:600;border-radius:99px;padding:1px 5px;border:2px solid var(--card)}
+.encaisser-btn{background:#7F77DD;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px}
+
+/* CONTENT */
+.content{padding:14px;display:flex;flex-direction:column;gap:12px}
+
+/* BANNER */
+.banner{background:#FAEEDA;border:0.5px solid #EF9F27;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px}
+.banner-text{font-size:12px;color:#633806;flex:1}
+.banner-action{font-size:11px;font-weight:600;color:#854F0B;cursor:pointer;text-decoration:underline}
+
+/* SECTION LABEL */
+.section-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px}
+
+/* ENCAISSEMENTS — 4 cartes */
+.pm-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pm-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:11px 10px;display:flex;flex-direction:column;gap:4px}
+.pm-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;margin-bottom:2px}
+.pm-label{font-size:10px;color:var(--muted);font-weight:600}
+.pm-val{font-size:17px;font-weight:600;color:var(--text);line-height:1}
+.pm-count{font-size:10px;color:var(--muted)}
+
+/* NAVIGATION 4×2 */
+.nav-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.nav-btn{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:11px 6px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer}
+.nav-btn:hover{background:#f8f8ff}
+.nav-icon{font-size:20px;color:var(--muted)}
+.nav-label{font-size:10px;font-weight:600;color:var(--muted);text-align:center;line-height:1.2}
+.nav-badge{background:#EEEDFE;color:#534AB7;font-size:9px;font-weight:600;border-radius:99px;padding:2px 7px;margin-top:1px}
+
+/* KPIs 2×2 */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px}
+.kpi-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px}
+.kpi-value{font-size:21px;font-weight:600;color:var(--text);line-height:1}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.pill{display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:600;border-radius:99px;padding:2px 7px;margin-top:5px}
+.pill-up{background:#EAF3DE;color:#3B6D11}
+.pill-dn{background:#FCEBEB;color:#A32D2D}
+
+/* SPARKLINE */
+.spark-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:13px 14px}
+.spark-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.spark-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em}
+.spark-total{font-size:12px;font-weight:600;color:var(--text)}
+
+/* RDV */
+.rdv-card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;overflow:hidden}
+.rdv-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:0.5px solid var(--border)}
+.rdv-row:last-child{border-bottom:none}
+.rdv-time{font-size:11px;font-weight:600;color:var(--muted);min-width:36px}
+.rdv-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.rdv-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.rdv-info{flex:1;min-width:0}
+.rdv-client{font-size:12px;font-weight:600;color:var(--text)}
+.rdv-meta{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rdv-price{font-size:12px;font-weight:600;color:var(--text);flex-shrink:0}
+
+/* EQUIPE */
+.emp-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:0.5px solid var(--border)}
+.emp-row:last-child{border-bottom:none}
+.emp-av{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.emp-name{font-size:12px;font-weight:600;color:var(--text);flex:1}
+.emp-ca{font-size:12px;font-weight:600;color:var(--text)}
+.emp-tx{font-size:10px;color:var(--muted);min-width:40px;text-align:right}
+
+/* RESPONSIVE */
+@media(max-width:480px){
+  .pm-grid{grid-template-columns:repeat(2,1fr)}
+  .nav-grid{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="salon-row">
+    <div class="salon-avatar">H</div>
+    <div>
+      <div class="salon-name">Hair Coif Lille</div>
+      <div class="salon-date">Samedi 16 mai · John, Michel, Pascal</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="icon-btn">
+      <i class="ti ti-bell"></i>
+      <span class="badge">3</span>
+    </div>
+    <div class="icon-btn"><i class="ti ti-moon"></i></div>
+    <button class="encaisser-btn">
+      <i class="ti ti-bolt"></i> Encaisser
+    </button>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- BANNER SMS -->
+  <div class="banner">
+    <i class="ti ti-alert-triangle" style="font-size:15px;color:#854F0B;flex-shrink:0"></i>
+    <span class="banner-text">Solde SMS bas — 0 SMS restants (seuil 20)</span>
+    <span class="banner-action">Recharger</span>
+  </div>
+
+  <!-- ENCAISSEMENTS DU JOUR -->
+  <div>
+    <div class="section-label">Encaissements du jour</div>
+    <div class="pm-grid">
+      <div class="pm-card">
+        <div class="pm-icon" style="background:#EAF3DE"><i class="ti ti-cash" style="color:#3B6D11"></i></div>
+        <div class="pm-label">Espèces</div>
+        <div class="pm-val">420 €</div>
+        <div class="pm-count">6 tx</div>
+      </div>
+      <div class="pm-card">
+        <div class="pm-icon" style="background:#EEEDFE"><i class="ti ti-credit-card" style="color:#534AB7"></i></div>
+        <div class="pm-label">Carte</div>
+        <div class="pm-val">640 €</div>
+        <div class="pm-count">5 tx</div>
+      </div>
+      <div class="pm-card">
+        <div class="pm-icon" style="background:#E1F5EE"><i class="ti ti-world" style="color:#0F6E56"></i></div>
+        <div class="pm-label">En ligne</div>
+        <div class="pm-val">119 €</div>
+        <div class="pm-count">3 tx</div>
+      </div>
+      <div class="pm-card">
+        <div class="pm-icon" style="background:#FAEEDA"><i class="ti ti-arrows-exchange" style="color:#854F0B"></i></div>
+        <div class="pm-label">Virement</div>
+        <div class="pm-val">0 €</div>
+        <div class="pm-count">0 tx</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAVIGATION 4×2 -->
+  <div>
+    <div class="section-label">Navigation rapide</div>
+    <div class="nav-grid">
+      <div class="nav-btn">
+        <i class="ti ti-calendar nav-icon"></i>
+        <span class="nav-label">Agenda</span>
+        <span class="nav-badge">3 RDV</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-receipt nav-icon"></i>
+        <span class="nav-label">Caisse</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-users nav-icon"></i>
+        <span class="nav-label">Clients</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-speakerphone nav-icon"></i>
+        <span class="nav-label">Marketing</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-history nav-icon"></i>
+        <span class="nav-label">Historique</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-chart-bar nav-icon"></i>
+        <span class="nav-label">Stats 🔐</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-diamond nav-icon"></i>
+        <span class="nav-label">Abonnement</span>
+      </div>
+      <div class="nav-btn">
+        <i class="ti ti-settings nav-icon"></i>
+        <span class="nav-label">Réglages</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs 2×2 -->
+  <div>
+    <div class="section-label">KPIs du jour</div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">CA total</div>
+        <div class="kpi-value">1 179 €</div>
+        <div class="pill pill-up">↑ +12% vs hier</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Ticket moyen</div>
+        <div class="kpi-value">84 €</div>
+        <div class="pill pill-dn">↓ −3% vs hier</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">RDV du jour</div>
+        <div class="kpi-value">8</div>
+        <div class="kpi-sub">5 terminés · 3 restants</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Nouveaux clients</div>
+        <div class="kpi-value">2</div>
+        <div class="kpi-sub">ce mois : 14</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPARKLINE -->
+  <div class="spark-card">
+    <div class="spark-header">
+      <span class="spark-title">CA · 7 derniers jours</span>
+      <span class="spark-total">Total : 6 240 €</span>
+    </div>
+    <svg width="100%" height="52" viewBox="0 0 580 52" preserveAspectRatio="none">
+      <polyline points="0,42 83,36 166,46 249,26 332,32 415,18 498,10 580,6"
+        fill="none" stroke="#7F77DD" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <polyline points="0,52 0,42 83,36 166,46 249,26 332,32 415,18 498,10 580,6 580,52"
+        fill="#EEEDFE" stroke="none" opacity="0.6"/>
+      <circle cx="580" cy="6" r="3" fill="#7F77DD"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;margin-top:5px">
+      <span style="font-size:10px;color:var(--muted)">Lun</span>
+      <span style="font-size:10px;color:var(--muted)">Mar</span>
+      <span style="font-size:10px;color:var(--muted)">Mer</span>
+      <span style="font-size:10px;color:var(--muted)">Jeu</span>
+      <span style="font-size:10px;color:var(--muted)">Ven</span>
+      <span style="font-size:10px;color:var(--muted)">Sam</span>
+      <span style="font-size:10px;color:#534AB7;font-weight:600">Auj.</span>
+    </div>
+  </div>
+
+  <!-- PROCHAINS RDV -->
+  <div>
+    <div class="section-label">Prochains RDV</div>
+    <div class="rdv-card">
+      <div class="rdv-row">
+        <span class="rdv-time">14:00</span>
+        <div class="rdv-dot" style="background:#BA7517"></div>
+        <div class="rdv-av" style="background:#FAEEDA;color:#633806">KA</div>
+        <div class="rdv-info">
+          <div class="rdv-client">Karim Achour</div>
+          <div class="rdv-meta">Coupe + barbe · John</div>
+        </div>
+        <span class="rdv-price">35 €</span>
+      </div>
+      <div class="rdv-row">
+        <span class="rdv-time">15:30</span>
+        <div class="rdv-dot" style="background:#639922"></div>
+        <div class="rdv-av" style="background:#EAF3DE;color:#27500A">MB</div>
+        <div class="rdv-info">
+          <div class="rdv-client">Marc Beaumont</div>
+          <div class="rdv-meta">Coupe homme · Michel</div>
+        </div>
+        <span class="rdv-price">22 €</span>
+      </div>
+      <div class="rdv-row">
+        <span class="rdv-time">16:15</span>
+        <div class="rdv-dot" style="background:#B4B2A9"></div>
+        <div class="rdv-av" style="background:#F1EFE8;color:#444441">TD</div>
+        <div class="rdv-info">
+          <div class="rdv-client">Thomas Dupont</div>
+          <div class="rdv-meta">Dégradé américain · Pascal</div>
+        </div>
+        <span class="rdv-price">28 €</span>
+      </div>
+      <div style="padding:12px 14px;text-align:center;font-size:12px;color:var(--muted)">
+        Voir l'agenda complet →
+      </div>
+    </div>
+  </div>
+
+  <!-- EQUIPE -->
+  <div>
+    <div class="section-label">Équipe · CA du jour</div>
+    <div class="rdv-card">
+      <div class="emp-row">
+        <div class="emp-av" style="background:#EEEDFE;color:#534AB7">J</div>
+        <span class="emp-name">John</span>
+        <span class="emp-tx">5 tx</span>
+        <span class="emp-ca">480 €</span>
+      </div>
+      <div class="emp-row">
+        <div class="emp-av" style="background:#E1F5EE;color:#085041">M</div>
+        <span class="emp-name">Michel</span>
+        <span class="emp-tx">4 tx</span>
+        <span class="emp-ca">380 €</span>
+      </div>
+      <div class="emp-row">
+        <div class="emp-av" style="background:#FAEEDA;color:#633806">P</div>
+        <span class="emp-name">Pascal</span>
+        <span class="emp-tx">5 tx</span>
+        <span class="emp-ca">319 €</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
