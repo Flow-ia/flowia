@@ -71,6 +71,20 @@ function methodIcon(method) {
   return ICON_BY_METHOD[method] || ICON_BY_METHOD.other;
 }
 
+// Breakpoint mobile (aligne sur TransactionRow /historique). Sous 768px la
+// ligne dense 6 colonnes deborde -> layout empile 2 niveaux.
+function useNarrow(bp = 768) {
+  const [m, setM] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < bp : false
+  );
+  useEffect(() => {
+    const onResize = () => setM(window.innerWidth < bp);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [bp]);
+  return m;
+}
+
 function CaisseBadge({ label, bg, color, paths }) {
   return (
     <span style={{
@@ -91,6 +105,7 @@ export default function Historique({
 }) {
   const t = theme;
   const today = todayStr();
+  const narrow = useNarrow();
 
   // Coercion défensive des arrays (props peuvent transiter undefined entre
   // deux renders d'App.jsx — protège PinAccessModal et tous les .filter()).
@@ -438,6 +453,119 @@ export default function Historique({
             const totalSign    = isRefundLine ? '−' : '+';
             const absAmount    = Math.abs(parseFloat(l.amount) || 0);
             const pmIcon       = isMultiLine ? PATH_SHUFFLE : methodIcon(l.pmKey);
+
+            // ── Mobile : layout empile 2 niveaux (zero chevauchement) ──────
+            if (narrow) {
+              return (
+                <div key={l.id} style={{
+                  display:'flex', flexDirection:'column', gap:8,
+                  padding:'12px 14px',
+                  borderBottom: idx < lines.length - 1 ? sep : 'none',
+                  background: isRefundLine ? '#FCEBEB' : 'transparent',
+                  opacity: isRefundLine ? 0.85 : 1,
+                }}>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                    <div style={{
+                      width:34, height:34, borderRadius:10, flexShrink:0,
+                      background: l.pmCfg.bg,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                    }}>
+                      <SvgIcon paths={pmIcon} size={17} color={l.pmCfg.color} />
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{
+                        margin:0, fontSize:14, fontWeight:500, color:t.text,
+                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                      }}>
+                        {l.qty > 1 && <span style={{ color:t.muted, marginRight:6 }}>{l.qty}×</span>}
+                        {l.service}
+                      </div>
+                      <div style={{
+                        display:'flex', flexWrap:'wrap', alignItems:'center',
+                        gap:'2px 10px', marginTop:3,
+                      }}>
+                        {l.hour && (
+                          <span style={{
+                            display:'inline-flex', alignItems:'center', gap:4,
+                            fontSize:12, fontWeight:500, color:t.text, whiteSpace:'nowrap',
+                          }}>
+                            <SvgIcon paths={PATH_CLOCK} size={13} color={t.muted} />
+                            {l.hour}
+                          </span>
+                        )}
+                        {l.emp && (
+                          <span style={{
+                            display:'inline-flex', alignItems:'center', gap:5,
+                            fontSize:12, fontWeight:500, color:t.text, whiteSpace:'nowrap',
+                          }}>
+                            <span style={{
+                              width:14, height:14, borderRadius:99,
+                              background: l.emp.avatar_color || t.text,
+                              display:'inline-flex', alignItems:'center', justifyContent:'center',
+                              color:'#fff', fontSize:9, fontWeight:500, flexShrink:0,
+                            }}>
+                              {(l.emp.name || '?').charAt(0).toUpperCase()}
+                            </span>
+                            {l.emp.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{
+                      flexShrink:0, textAlign:'right',
+                      fontSize:15, fontWeight:500,
+                      fontVariantNumeric:'tabular-nums', fontFamily: MONO,
+                      color: totalColor, lineHeight:1.2,
+                    }}>
+                      {totalSign + fmt(absAmount) + ' €'}
+                    </div>
+                  </div>
+
+                  <div style={{
+                    display:'flex', flexWrap:'wrap', alignItems:'center', gap:6,
+                  }}>
+                    {isMultiLine && (
+                      <CaisseBadge label={'Multi (' + l.breakdown.length + ')'}
+                                   bg="#F3F4F6" color="#4B5563" paths={PATH_SHUFFLE} />
+                    )}
+                    {isRefundLine && (
+                      <CaisseBadge label="Remboursé"
+                                   bg="#FCEBEB" color="#791F1F" paths={PATH_ARROW_BACK} />
+                    )}
+                    {isMultiLine ? (
+                      l.breakdown.map((sub, k) => {
+                        const subCfg = PM_GRID_CFG[sub.method] || PM_GRID_CFG.other;
+                        return (
+                          <span key={k} style={{
+                            display:'inline-flex', alignItems:'center', gap:4,
+                            padding:'3px 8px', borderRadius:8,
+                            background: subCfg.bg, color: subCfg.color,
+                            fontSize:11, fontWeight:500, whiteSpace:'nowrap',
+                          }}>
+                            <SvgIcon paths={methodIcon(sub.method)} size={11} color={subCfg.color} />
+                            {subCfg.label || sub.method}
+                            <span style={{ fontFamily: MONO, fontVariantNumeric:'tabular-nums' }}>
+                              {fmt(sub.amount)} €
+                            </span>
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <span style={{
+                        display:'inline-flex', alignItems:'center', gap:4,
+                        padding:'3px 8px', borderRadius:8,
+                        background: l.pmCfg.bg, color: l.pmCfg.color,
+                        fontSize:11, fontWeight:500, whiteSpace:'nowrap',
+                      }}>
+                        <SvgIcon paths={methodIcon(l.pmKey)} size={11} color={l.pmCfg.color} />
+                        {l.pmLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={l.id} style={{
                 display:'flex', alignItems:'center', gap:14,

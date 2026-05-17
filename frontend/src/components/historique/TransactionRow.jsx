@@ -2,9 +2,23 @@
 // Layout horizontal compact (~64px de haut) : avatar + titre/meta + badges
 // + paiements detailles + total/net + chevron. Cliquable → TxDetailDrawer.
 
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { formatCents } from "../../utils/format";
+
+// Breakpoint mobile (meme idiome que useIsMobile de TxDetailDrawer). Sous
+// 768px la ligne dense 6 colonnes deborde -> layout empile (2 niveaux).
+function useNarrow(bp = 768) {
+  const [m, setM] = useState(
+    typeof window !== "undefined" ? window.innerWidth < bp : false
+  );
+  useEffect(() => {
+    const onResize = () => setM(window.innerWidth < bp);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [bp]);
+  return m;
+}
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 const NBSP = " ";
@@ -212,6 +226,7 @@ function MetaItem({ paths, iconSize = 14, color, weight = 500, fontSize = 13, te
 function TransactionRowImpl({ transaction: tx, isLast, onOpenDetail }) {
   const { theme: t } = useTheme();
   const [hover, setHover] = useState(false);
+  const narrow = useNarrow();
 
   const src       = getSourceMeta(tx);
   const refund    = isRefundTx(tx);
@@ -262,6 +277,139 @@ function TransactionRowImpl({ transaction: tx, isLast, onOpenDetail }) {
     : (t.cardAlt || "rgba(0,0,0,0.03)");
 
   const clickable = typeof onOpenDetail === "function";
+
+  // ── Mobile : layout empile 2 niveaux (zero chevauchement) ───────────────
+  // Niveau 1 : avatar + titre/meta (flex:1, ellipsis) + total a droite.
+  // Niveau 2 : badges source/multi/verrou + paiement, le tout en flex-wrap.
+  if (narrow) {
+    return (
+      <div
+        onClick={clickable ? () => onOpenDetail(tx) : undefined}
+        role={clickable ? "button" : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onKeyDown={clickable ? (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenDetail(tx); }
+        } : undefined}
+        style={{
+          display: "flex", flexDirection: "column", gap: 8,
+          padding: "12px 14px",
+          background: baseBg, opacity: src.rowOpacity,
+          borderBottom: isLast ? "none" : "0.5px solid " + t.separator,
+          borderLeft: src.rowBorder ? "0.5px solid " + t.border : "0.5px solid transparent",
+          borderRight: src.rowBorder ? "0.5px solid " + t.border : "0.5px solid transparent",
+          cursor: clickable ? "pointer" : "default",
+          outline: "none",
+        }}>
+
+        {/* Niveau 1 : avatar + titre/meta + total */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+            background: src.avatarBg,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Icon paths={src.avatarPaths || src.paths} size={17} color={src.avatarColor} />
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              margin: 0, fontSize: 14, fontWeight: 500, color: t.text,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {formatItemsList(tx)}
+            </div>
+            <div style={{
+              display: "flex", flexWrap: "wrap", alignItems: "center",
+              gap: "2px 10px", marginTop: 3,
+            }}>
+              {dateStr && (
+                <MetaItem paths={PATH_CAL} iconSize={13} color={t.muted}
+                          fontSize={12} weight={500} textColor={t.text} text={dateStr} />
+              )}
+              {timeStr && (
+                <MetaItem paths={PATH_CLOCK} iconSize={13} color={t.muted}
+                          fontSize={12} weight={500} textColor={t.text} text={timeStr} />
+              )}
+              {tx.employee_name && (
+                <MetaItem paths={PATH_USER} iconSize={12} color={t.muted}
+                          fontSize={12} weight={500} textColor={t.text} text={tx.employee_name} />
+              )}
+              {showClient && (
+                <MetaItem paths={PATH_USER_CIRCLE} iconSize={12} color={t.muted}
+                          fontSize={11} weight={400} textColor={t.muted} text={tx.client_name} />
+              )}
+            </div>
+          </div>
+
+          <div style={{ flexShrink: 0, textAlign: "right" }}>
+            <div style={{
+              fontSize: 15, fontWeight: 500, fontVariantNumeric: "tabular-nums",
+              fontFamily: MONO, color: totalColor, lineHeight: 1.2,
+            }}>
+              {totalSign + formatCents(grossCents)}
+            </div>
+            {showNetLine && (
+              <div style={{
+                fontSize: 10, color: t.dim, fontVariantNumeric: "tabular-nums",
+                fontFamily: MONO, marginTop: 1,
+              }}>
+                {"Net" + NBSP + formatCents(netCents)}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Niveau 2 : badges + paiement (flex-wrap, jamais de chevauchement) */}
+        <div style={{
+          display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6,
+        }}>
+          <Badge label={src.label} bg={src.badgeBg} color={src.badgeColor} paths={src.paths} />
+          {isMulti && (
+            <Badge label={"Multi (" + breakdown.length + ")"}
+                   bg="#F3F4F6" color="#4B5563" paths={PATH_SHUFFLE} />
+          )}
+          {locked && (
+            <Badge label="Verrouillé" bg="#FCEBEB" color="#791F1F" paths={PATH_LOCK} />
+          )}
+          {isMulti ? (
+            breakdown.map((sub, i) => {
+              const meta = getMethodMeta(sub.method);
+              const subCents = Math.abs(parseInt(sub.amount_cents || 0, 10));
+              return (
+                <span key={i} style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "3px 8px", borderRadius: 8,
+                  background: meta.bg, color: meta.color,
+                  fontSize: 11, fontWeight: 500, whiteSpace: "nowrap",
+                }}>
+                  <Icon paths={meta.paths} size={11} color={meta.color} />
+                  {meta.label}
+                  <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
+                    {formatCents(subCents)}
+                  </span>
+                </span>
+              );
+            })
+          ) : (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", borderRadius: 8,
+              background: getMethodMeta(singleMethod).bg,
+              color: getMethodMeta(singleMethod).color,
+              fontSize: 11, fontWeight: 500, whiteSpace: "nowrap",
+            }}>
+              <Icon paths={getMethodMeta(singleMethod).paths} size={11}
+                    color={getMethodMeta(singleMethod).color} />
+              {getMethodMeta(singleMethod).label}
+              <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
+                {formatCents(grossCents)}
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
