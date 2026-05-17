@@ -1,9 +1,16 @@
-// components/historique/HistoriqueFilters.jsx — 5 selects (Periode / Type /
-// Mode / Source / Employe). Cliquer met a jour `filters` via onChange.
+// components/historique/HistoriqueFilters.jsx — 6 selects (Periode / Type /
+// Mode / Source / Employe / Tri). Cliquer met a jour `filters` via onChange.
 // Pas de debounce ici (pas d'input texte). Le hook useHistorique re-fetch
 // automatiquement quand l'objet filters change.
+//
+// Mobile-first : sous 1024px (= shell mobile avec BottomNav), les filtres
+// n'occupent plus 6 lignes empilees. On affiche une barre compacte
+// "Filtres" (compteur de filtres actifs + chip periode + Reinitialiser) qui
+// ouvre un bottom-sheet (meme idiome que le menu "Plus" de la BottomNav).
+// Desktop : grille inline inchangee. La logique de filtrage est identique
+// dans les deux cas (les selects ecrivent directement dans `filters`).
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { I } from "../../utils/icons";
 
@@ -54,6 +61,22 @@ const SORT_OPTIONS = [
   { value: "employee",        label: "Par employé" },
 ];
 
+const DEFAULT_SORT = "created_at_desc";
+
+// Breakpoint = shell mobile (BottomNav visible). Meme idiome que
+// useIsMobile() de TxDetailDrawer, seuil aligne sur Tailwind `lg`.
+function useNarrow(bp = 1024) {
+  const [m, setM] = useState(
+    typeof window !== "undefined" ? window.innerWidth < bp : false
+  );
+  useEffect(() => {
+    const onResize = () => setM(window.innerWidth < bp);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [bp]);
+  return m;
+}
+
 function FilterSelect({ label, value, options, onChange, theme: t }) {
   const optBg    = t.mode === "dark" ? "#1e1e30" : "#ffffff";
   const optColor = t.mode === "dark" ? "rgba(255,255,255,0.9)" : "#0c0c10";
@@ -94,6 +117,9 @@ function FilterSelect({ label, value, options, onChange, theme: t }) {
 
 function HistoriqueFiltersImpl({ filters, onChange, employees }) {
   const { theme: t } = useTheme();
+  const isNarrow = useNarrow(1024);
+  const [open, setOpen] = useState(false);
+
   const update = (key, value) => onChange({ ...filters, [key]: value, page: 1 });
   const updateMany = (patch) => onChange({ ...filters, ...patch, page: 1 });
 
@@ -109,21 +135,35 @@ function HistoriqueFiltersImpl({ filters, onChange, employees }) {
   const dateTo   = filters.date_to   || "";
   const customIncomplete = isCustom && (!dateFrom || !dateTo);
 
-  return (
-    <div style={{
-      padding: 14, borderRadius: 12,
-      background: t.card, border: "0.5px solid " + t.border,
-      display: "flex", flexDirection: "column", gap: 10,
-    }}>
+  // Nombre de filtres actifs (hors periode "today" par defaut) — affiche
+  // dans le badge du bouton mobile + conditionne le bouton Reinitialiser.
+  const activeCount =
+    (filters.period && filters.period !== "today" ? 1 : 0) +
+    (filters.type ? 1 : 0) +
+    (filters.mode ? 1 : 0) +
+    (filters.source ? 1 : 0) +
+    (filters.employee_id ? 1 : 0) +
+    (filters.sort && filters.sort !== DEFAULT_SORT ? 1 : 0);
+
+  const periodLabel =
+    (PERIOD_OPTIONS.find(p => p.value === filters.period) || PERIOD_OPTIONS[0]).label;
+
+  const resetAll = () => onChange({
+    ...filters, period: "today", type: "", mode: "", source: "",
+    employee_id: "", date_from: "", date_to: "", sort: DEFAULT_SORT, page: 1,
+  });
+
+  // Champs partages desktop / sheet mobile (memes selects, meme logique).
+  const fields = (
+    <>
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
         gap: 10,
       }}>
         <FilterSelect label="Période"    theme={t} value={filters.period} options={PERIOD_OPTIONS}
                       onChange={(v) => updateMany({
                         period: v,
-                        // Reset date_from/date_to si on quitte custom (evite filtre fantome)
                         date_from: v === "custom" ? dateFrom : "",
                         date_to:   v === "custom" ? dateTo   : "",
                       })} />
@@ -136,18 +176,14 @@ function HistoriqueFiltersImpl({ filters, onChange, employees }) {
         <FilterSelect label="Employé"    theme={t} value={filters.employee_id || "all"}
                       options={employeeOptions}
                       onChange={(v) => update("employee_id", v === "all" ? "" : v)} />
-        <FilterSelect label="Trier par"  theme={t} value={filters.sort || "created_at_desc"}
+        <FilterSelect label="Trier par"  theme={t} value={filters.sort || DEFAULT_SORT}
                       options={SORT_OPTIONS}
                       onChange={(v) => update("sort", v)} />
       </div>
-      {/* Date picker conditionnel pour period=custom */}
       {isCustom && (
         <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-          alignItems: "end",
-          paddingTop: 10,
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10,
+          alignItems: "end", paddingTop: 10,
           borderTop: "0.5px solid " + t.separator,
         }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -188,7 +224,139 @@ function HistoriqueFiltersImpl({ filters, onChange, employees }) {
           )}
         </div>
       )}
-    </div>
+    </>
+  );
+
+  // ── Desktop : grille inline (comportement historique inchange) ──────────
+  if (!isNarrow) {
+    return (
+      <div style={{
+        padding: 14, borderRadius: 12,
+        background: t.card, border: "0.5px solid " + t.border,
+        display: "flex", flexDirection: "column", gap: 10,
+      }}>
+        {fields}
+      </div>
+    );
+  }
+
+  // ── Mobile : barre compacte + bottom-sheet ──────────────────────────────
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" onClick={() => setOpen(true)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 7,
+                  padding: "9px 14px", borderRadius: 8,
+                  background: t.card, border: "0.5px solid " + t.border,
+                  color: t.text, fontSize: 13, fontWeight: 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}>
+          <I.Sliders style={{ width: 15, height: 15, color: t.muted }} />
+          {"Filtres"}
+          {activeCount > 0 && (
+            <span style={{
+              minWidth: 18, height: 18, padding: "0 5px", borderRadius: 99,
+              background: t.text, color: t.bg, fontSize: 10, fontWeight: 500,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {activeCount}
+            </span>
+          )}
+        </button>
+
+        <span style={{
+          fontSize: 12, color: t.muted, fontWeight: 500,
+          padding: "5px 10px", borderRadius: 99, background: t.cardAlt,
+          whiteSpace: "nowrap",
+        }}>
+          {periodLabel}
+        </span>
+
+        {activeCount > 0 && (
+          <button type="button" onClick={resetAll}
+                  style={{
+                    marginLeft: "auto", border: "none", background: "transparent",
+                    color: t.muted, fontSize: 12, fontWeight: 500,
+                    cursor: "pointer", fontFamily: "inherit",
+                    textDecoration: "underline",
+                  }}>
+            {"Réinitialiser"}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div onClick={() => setOpen(false)}
+             style={{
+               position: "fixed", inset: 0, zIndex: 80,
+               background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)",
+               display: "flex", alignItems: "flex-end",
+             }}>
+          <div onClick={(e) => e.stopPropagation()}
+               style={{
+                 width: "100%", maxHeight: "85vh", display: "flex",
+                 flexDirection: "column", background: t.canvas || t.card,
+                 borderTopLeftRadius: 16, borderTopRightRadius: 16,
+                 borderTop: "0.5px solid " + t.border,
+               }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 16px", borderBottom: "0.5px solid " + t.separator,
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 500, color: t.text }}>
+                {"Filtres"}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {activeCount > 0 && (
+                  <button type="button" onClick={resetAll}
+                          style={{
+                            border: "none", background: t.cardAlt, color: t.text,
+                            fontSize: 12, fontWeight: 500, cursor: "pointer",
+                            padding: "6px 10px", borderRadius: 8, fontFamily: "inherit",
+                          }}>
+                    {"Réinitialiser"}
+                  </button>
+                )}
+                <button type="button" onClick={() => setOpen(false)}
+                        aria-label="Fermer les filtres"
+                        style={{
+                          width: 30, height: 30, borderRadius: 8, border: "none",
+                          background: t.cardAlt, color: t.muted, cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontFamily: "inherit",
+                        }}>
+                  <I.X style={{ width: 15, height: 15 }} />
+                </button>
+              </div>
+            </div>
+
+            <div style={{
+              overflowY: "auto", padding: 16,
+              display: "flex", flexDirection: "column", gap: 12,
+            }}>
+              {fields}
+            </div>
+
+            <div style={{
+              padding: "12px 16px",
+              paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+              borderTop: "0.5px solid " + t.separator,
+            }}>
+              <button type="button" onClick={() => setOpen(false)}
+                      style={{
+                        width: "100%", padding: "12px", borderRadius: 10,
+                        border: "none", background: t.text, color: t.bg,
+                        fontSize: 14, fontWeight: 500, cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}>
+                {"Voir les résultats"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

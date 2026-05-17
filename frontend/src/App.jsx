@@ -1546,9 +1546,12 @@ function BottomNav({ theme: t, toggle, isLight, onLogout, onRequestAdmin, onQuit
 // ── TopBar ──────────────────────────────────────────────────────────────────
 function TopBar({ onHome, onLogout, theme: t, toggle, isLight }) {
   return (
-    <div style={{ position:'sticky', top:0, zIndex:40,
+    <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:40,
+                  height:'calc(52px + env(safe-area-inset-top, 0px))',
+                  boxSizing:'border-box',
                   display:'flex', alignItems:'center', justifyContent:'space-between',
-                  padding:'10px 14px',
+                  padding:'8px 14px',
+                  paddingTop:'calc(8px + env(safe-area-inset-top, 0px))',
                   background:t.stickyBg,
                   backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)',
                   borderBottom:`0.5px solid ${t.separator}` }}>
@@ -2517,10 +2520,16 @@ export default function App() {
           pour rétro-compatibilité si besoin futur. */}
 
       {/* Mobile */}
-      <div className="lg:hidden" style={{ minHeight:'100vh' }}>
+      <div className="lg:hidden" style={{ minHeight:'100dvh' }}>
         <TopBar onHome={() => { handleTab('dashboard'); navigate('/dashboard'); }}
                 onLogout={handleLogout} theme={theme} toggle={toggle} isLight={isLight}/>
-        <div style={{ paddingBottom: 64 }}>{content}</div>
+        {/* Header fixe : on compense sa hauteur (52px + encoche) pour que le
+            contenu ne passe pas dessous. BottomNav etant fixe aussi, on
+            reserve l'espace bas (+ safe-area iOS home indicator). */}
+        <div style={{ paddingTop:'calc(52px + env(safe-area-inset-top, 0px))',
+                       paddingBottom:'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+          {content}
+        </div>
         <BottomNav theme={theme} toggle={toggle} isLight={isLight} onLogout={handleLogout}
                    onRequestAdmin={() => setTabletAdminPinOpen(true)}
                    onQuitAdmin={handleQuitAdminMode}/>
