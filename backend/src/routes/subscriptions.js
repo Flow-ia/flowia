@@ -690,34 +690,37 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'invalid signature' });
   }
 
-  // ANTI-REPLAY : on claim l'event_id en DB. Si conflict UNIQUE (23505),
-  // c'est un retry/replay et on skip le traitement. La signature Stripe
-  // a deja un timestamp 5min mais ce check est defense-in-depth contre
-  // un attaquant qui capturerait/rejouerait une requete signée.
+  // C3 — Anti-replay : SELECT-then-process-then-INSERT (cf. stripe-connect.js).
+  // AVANT : INSERT-early dans processed_stripe_events + res.json(200) AVANT
+  // le processing -> si le processing throw, l'event etait deja marque
+  // "traite" et Stripe (ayant recu 200) ne retentait JAMAIS : perte
+  // definitive d'un event d'abonnement = etat desynchronise (marchand
+  // facture mais plan non applique / resiliation non propagee = revenus
+  // plateforme). MAINTENANT : check -> process -> mark seulement si succes
+  // -> 200 ; sinon 500 -> Stripe retente (jusqu'a 3j, exponentiel). Les
+  // UPDATE sont idempotents (par stripe_customer_id / stripe_subscription_id),
+  // un re-run ne corrompt rien.
   let alreadyProcessed = false;
   try {
-    await pool.query(
-      `INSERT INTO processed_stripe_events (event_id, event_type, source)
-       VALUES ($1, $2, 'subscription')`,
-      [event.id, event.type]
+    const { rows: prevR } = await pool.query(
+      'SELECT 1 FROM processed_stripe_events WHERE event_id = $1 LIMIT 1',
+      [event.id]
     );
+    alreadyProcessed = prevR.length > 0;
   } catch (e) {
-    if (e.code === '23505') {
-      alreadyProcessed = true;
-      console.log('[SUB WEBHOOK] event already processed (replay):', event.id);
-    } else {
-      // Autre erreur DB (connexion, etc.) : on log mais on continue —
-      // mieux vaut traiter 2x un event idempotent que perdre un event.
-      console.error('[SUB WEBHOOK] anti-replay INSERT error:', e.message);
-    }
+    console.error('[SUB WEBHOOK] anti-replay SELECT err (continue without dedup):', e.message);
+  }
+  if (alreadyProcessed) {
+    console.log('[SUB WEBHOOK] event already processed (skip):', event.id, event.type);
+    return res.json({ received: true, already_processed: true });
   }
 
-  // Acquitter Stripe TOUJOURS (200 OK) — meme si replay, sinon Stripe retry.
-  res.json({ received: true });
-
-  if (alreadyProcessed) return;
-
+  // Processing isole dans une IIFE : les `return;` internes (early-exit par
+  // type d'event) sortent du traitement, PAS de la route -> on garde la main
+  // sur le status code final (200 si OK, 500 si echec -> retry Stripe).
+  let outerError = null;
   try {
+    await (async () => {
     // ── checkout.session.completed : souscription initiale finalisée ─────
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
@@ -871,10 +874,33 @@ router.post('/webhook', async (req, res) => {
       console.log('[SUB WEBHOOK] save_card OK:', globalClientId, platformPmId,
         card.brand || '?', card.last4 || '????');
     }
+    })();
   } catch (e) {
-    // Stripe est déjà acquitté ; pas de 500. Log pour investigation.
-    console.error('[SUB WEBHOOK ERR]', event.type, e.message);
+    outerError = e;
+    console.error('[SUB WEBHOOK ERR]', event.type, 'event=' + event.id, e.message);
   }
+
+  // Processing OK : marquer l'event traite (idempotent ON CONFLICT) puis 200.
+  // Sinon : 500 -> Stripe retente (operations idempotentes -> re-run sain).
+  if (!outerError) {
+    try {
+      await pool.query(
+        `INSERT INTO processed_stripe_events (event_id, event_type, source)
+         VALUES ($1, $2, 'subscription')
+         ON CONFLICT (event_id) DO NOTHING`,
+        [event.id, event.type]
+      );
+    } catch (markErr) {
+      console.warn('[SUB WEBHOOK] mark processed fail (non-blocking):', event.id, markErr.message);
+    }
+    return res.json({ received: true });
+  }
+  return res.status(500).json({
+    error: 'webhook processing failed',
+    event_id: event.id,
+    event_type: event.type,
+    message: outerError.message,
+  });
 });
 
 // ── POST /api/subscriptions/portal ───────────────────────────────────────────
