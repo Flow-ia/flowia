@@ -30,6 +30,13 @@ router.get('/', async (req, res) => {
          AND t.user_id=$1 AND t.type='revenue'
          AND t.deleted_at IS NULL
          AND t.date BETWEEN $2 AND $3
+         -- Exclut les remboursements : la row 'rdv_refund' (type='revenue',
+         -- montant POSITIF par design) ET la vente d'origine passee
+         -- REFUNDED. Sinon l'employe touchait une commission sur des
+         -- prestations remboursees (sur-paiement). payment_status NULL
+         -- (caisse) reste compte (IS DISTINCT FROM).
+         AND t.source IS DISTINCT FROM 'rdv_refund'
+         AND t.payment_status IS DISTINCT FROM 'REFUNDED'
        WHERE e.user_id=$1 AND e.is_active=TRUE
        GROUP BY e.id, e.name, e.avatar_color, e.commission_pct
        ORDER BY commission_due DESC`,
