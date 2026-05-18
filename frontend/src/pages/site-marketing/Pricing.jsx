@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PageHero, Container } from './components/Shared';
 import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, CheckPill } from './components/shadcn';
 import { COMMERCANT_URL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
@@ -58,6 +59,11 @@ export default function Pricing() {
 
   return (
     <>
+      <Seo
+        path="/tarifs"
+        title="Tarifs FlowIA — Logiciel salon sans commission, essai gratuit"
+        description="Tarification simple et sans engagement pour votre salon ou barbershop. 14 jours d'essai gratuit, sans commission sur vos réservations. Annulez à tout moment."
+      />
       <PageHero
         label="Tarifs"
         title="Une tarification simple, sans surprise"

@@ -1,9 +1,15 @@
 import { PageHero, Container, Prose, ProseH2 } from './components/Shared';
 import { CONTACT_EMAIL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 export default function Privacy() {
   return (
     <>
+      <Seo
+        path="/confidentialite"
+        title="Politique de confidentialité | FlowIA"
+        description="Comment FlowIA collecte, utilise et protège vos données personnelles (RGPD)."
+      />
       <PageHero
         label="Confidentialité"
         title="Politique de confidentialité"

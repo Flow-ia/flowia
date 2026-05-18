@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, useParams, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
 import BookingPage from './pages/BookingPage';
 import { pubApi } from './utils/api';
@@ -239,6 +240,7 @@ if (!isLegacyBookingHost() && !isMarketingHost()) {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
+    <HelmetProvider>
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
@@ -318,5 +320,6 @@ root.render(
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
+    </HelmetProvider>
   </React.StrictMode>
 );

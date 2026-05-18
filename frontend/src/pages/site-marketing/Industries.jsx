@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PageHero, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { S, CheckPill } from './components/shadcn';
 import { COMMERCANT_URL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 const ITEMS = [
   {
@@ -104,6 +105,11 @@ const ITEMS = [
 export default function Industries() {
   return (
     <>
+      <Seo
+        path="/pour-qui"
+        title="FlowIA pour coiffeurs, barbiers, esthétique & spa"
+        description="Coiffeurs, barbershops, manucure, esthétique, spa : FlowIA s'adapte à votre métier. Plus de 500 salons l'utilisent au quotidien."
+      />
       <PageHero
         label="Pour qui"
         title="FlowIA s'adapte à votre métier"

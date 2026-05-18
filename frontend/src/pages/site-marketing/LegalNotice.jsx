@@ -1,9 +1,15 @@
 import { PageHero, Container, Prose, ProseH2 } from './components/Shared';
 import { CONTACT_EMAIL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 export default function LegalNotice() {
   return (
     <>
+      <Seo
+        path="/mentions-legales"
+        title="Mentions légales | FlowIA"
+        description="Mentions légales du site et du service FlowIA."
+      />
       <PageHero
         label="Mentions légales"
         title="Mentions légales"

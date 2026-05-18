@@ -5,6 +5,7 @@ import { PageHero, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { FEATURE_GROUPS } from './components/Header';
 import { S, CheckPill } from './components/shadcn';
 import { COMMERCANT_URL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 // Détail riche pour chaque feature, indexé par id (les ids matchent ceux du
 // mega-menu Header pour que /fonctionnalites#<id> scrolle au bon endroit).
@@ -276,6 +277,11 @@ export default function Features() {
 
   return (
     <>
+      <Seo
+        path="/fonctionnalites"
+        title="Fonctionnalités — Agenda, caisse, SMS, fidélité & IA | FlowIA"
+        description="Agenda en ligne, caisse, encaissement, marketing IA, fidélité, parrainage et SMS de rappel : toutes les fonctionnalités FlowIA pour gérer votre salon."
+      />
       <PageHero
         label="Fonctionnalités"
         title="Tout ce qu'il faut pour faire tourner votre salon"

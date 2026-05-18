@@ -11,6 +11,7 @@ import { pubApi } from '../../utils/api';
 import { I } from '../../utils/icons';
 import { S, primaryBtnStyle, primaryHover, ghostBtnStyle, ghostHover } from './components/shadcn';
 import { PageHero } from './components/Shared';
+import Seo from './components/Seo';
 import MerchantSearchCard from './components/MerchantSearchCard';
 import { BUSINESS_TYPES } from '../../utils/businessTypes';
 
@@ -129,6 +130,11 @@ export default function ClientPortal() {
 
   return (
     <>
+      <Seo
+        path="/marketplace"
+        title="Trouvez votre salon et réservez en ligne | FlowIA"
+        description="Découvrez les salons de coiffure et barbershops près de chez vous, profitez des programmes fidélité, parrainage et codes promo, et réservez en ligne en quelques secondes."
+      />
       <PageHero
         label="Marketplace"
         title="Trouvez votre salon et reservez en ligne"

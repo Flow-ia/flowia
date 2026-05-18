@@ -1,6 +1,7 @@
 import { PageHero, Container, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { S } from './components/shadcn';
 import { COMMERCANT_URL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 export default function About() {
   const values = [
@@ -24,6 +25,11 @@ export default function About() {
 
   return (
     <>
+      <Seo
+        path="/a-propos"
+        title="À propos de FlowIA — Le logiciel des salons et barbershops"
+        description="L'histoire de FlowIA : un logiciel pensé par des passionnés de la beauté et du bien-être, pour faciliter le quotidien des salons et barbershops."
+      />
       <PageHero
         label="À propos"
         title="L'histoire derrière FlowIA"

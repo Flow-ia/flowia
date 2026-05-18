@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PageHero } from './components/Shared';
 import { S, primaryBtnStyle, primaryHover, CheckPill } from './components/shadcn';
 import { CONTACT_EMAIL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -77,6 +78,11 @@ export default function Contact() {
 
   return (
     <>
+      <Seo
+        path="/contact"
+        title="Contact & démo FlowIA — Réponse sous 24h"
+        description="Une question, une démo ou un devis pour équiper votre salon avec FlowIA ? Notre équipe vous répond sous 24h ouvrées, souvent en moins d'une heure."
+      />
       <PageHero
         label="Contact"
         title="Parlons de votre salon"

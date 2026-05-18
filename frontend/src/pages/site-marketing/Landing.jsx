@@ -3,10 +3,16 @@ import { Link } from 'react-router-dom';
 import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, cardHover, CheckIcon, CaretDown } from './components/shadcn';
 import HeroSocialBg from './components/HeroSocialBg';
 import { COMMERCANT_URL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 export default function Landing() {
   return (
     <>
+      <Seo
+        path="/"
+        title="FlowIA — Logiciel de réservation & gestion pour salon et barbershop"
+        description="Réservation en ligne 24/7, caisse, SMS de rappel, fidélité, parrainage et IA pour salons de coiffure et barbershops. Sans commission. Essai gratuit."
+      />
       <Hero />
       <Stats />
       <Integrations />

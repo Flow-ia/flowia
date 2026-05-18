@@ -1,9 +1,15 @@
 import { PageHero, Container, Prose, ProseH2 } from './components/Shared';
 import { CONTACT_EMAIL } from '../../utils/siteConfig';
+import Seo from './components/Seo';
 
 export default function Terms() {
   return (
     <>
+      <Seo
+        path="/cgu"
+        title="Conditions générales d'utilisation | FlowIA"
+        description="Conditions générales d'utilisation du service FlowIA."
+      />
       <PageHero
         label="CGU"
         title="Conditions générales d'utilisation"
