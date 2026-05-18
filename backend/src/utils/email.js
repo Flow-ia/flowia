@@ -823,6 +823,37 @@ async function getGlobalEmailCount() {
     return 0;
   }
 }
+/**
+ * M2r — Réservation ATOMIQUE d'un slot du quota global (anti-dépassement).
+ * Le pattern getGlobalEmailCount() >= cap PUIS incrGlobalEmailCount() est un
+ * check-then-act : sous concurrence (cron + campagnes), N process lisaient
+ * 299 et envoyaient tous -> dépassement du quota Brevo 300/j (rejets / IP).
+ * Ici l'INSERT/UPDATE conditionnel réserve le slot ET incrémente en une
+ * seule requête atomique. Retourne true si un slot a été réservé (=> on
+ * peut envoyer, ne PAS rappeler incrGlobalEmailCount ensuite), false si le
+ * cap est atteint (=> ne pas envoyer). En cas d'échec d'envoi en aval on
+ * accepte une légère sous-utilisation (slot consommé) plutôt que de risquer
+ * un sur-envoi : c'est le comportement protecteur voulu pour l'IP Brevo.
+ */
+async function reserveGlobalEmail(cap = 300) {
+  try {
+    const { rows } = await _emailPool.query(
+      `INSERT INTO email_global_daily (date, count) VALUES (CURRENT_DATE, 1)
+       ON CONFLICT (date) DO UPDATE SET count = email_global_daily.count + 1
+         WHERE email_global_daily.count < $1
+       RETURNING count`,
+      [cap]
+    );
+    return rows.length > 0;
+  } catch (e) {
+    // Fail-safe : si la DB du compteur est indisponible, on NE bloque PAS
+    // les emails (mieux vaut un risque de léger dépassement qu'un arrêt
+    // total des envois). Comportement identique à l'ancien getGlobalEmailCount
+    // qui renvoyait 0 sur erreur.
+    console.error('[EMAIL reserveGlobal]', e.message);
+    return true;
+  }
+}
 /** Incrémente de 1 le compteur global du jour (atomique, upsert) */
 async function incrGlobalEmailCount() {
   try {
@@ -1083,6 +1114,7 @@ module.exports = {
   sendOptInInvite,
   sendNewAppointmentMerchant,
   getGlobalEmailCount,
+  reserveGlobalEmail,
   incrGlobalEmailCount,
   incrUserEmailCount,
   checkUserEmailQuota,

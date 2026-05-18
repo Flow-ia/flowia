@@ -532,7 +532,7 @@ function startServer() {
   // ligne par date = reset automatique à minuit sans setInterval).
 
   // ── Cron — uniquement sur le worker 1 pour éviter les doublons ───────────
-  const { sendEmail, getGlobalEmailCount, incrGlobalEmailCount, incrUserEmailCount } = require('./utils/email');
+  const { sendEmail, getGlobalEmailCount, reserveGlobalEmail, incrGlobalEmailCount, incrUserEmailCount } = require('./utils/email');
   const { pool: dbPool } = require('./db');
   const { sleep: cronSleep } = require('./utils/messenger');
 
@@ -586,8 +586,11 @@ function startServer() {
       if (!rows.length) return;
       for (const item of rows) {
         try {
-          const already = await getGlobalEmailCount();
-          if (already >= 300) {
+          // M2r — réservation atomique du slot AVANT envoi (anti-dépassement
+          // du quota Brevo sous concurrence). reserveGlobalEmail incrémente
+          // déjà le compteur : ne pas rappeler incrGlobalEmailCount ensuite.
+          const reserved = await reserveGlobalEmail(300);
+          if (!reserved) {
             console.log('[CRON queue] Limite email marketing atteinte, arret');
             break;
           }
@@ -614,8 +617,7 @@ function startServer() {
           });
           await dbPool.query(`UPDATE campaign_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [item.id]);
           await incrUserEmailCount(item.user_id);
-          await incrGlobalEmailCount();
-          if (already + 1 > 250) console.warn('[EMAIL] Warning: > 250 emails aujourd\'hui !');
+          // slot global déjà réservé+incrémenté par reserveGlobalEmail
           await cronSleep(500);
         } catch (e) {
           await dbPool.query(`UPDATE campaign_queue SET status='failed', error=$2 WHERE id=$1`, [item.id, e.message]);
@@ -1131,12 +1133,6 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
             );
             if (already.length) continue;
 
-            // Garde-fou cluster : on conserve un cap global 300/jour pour
-            // proteger l'IP Brevo (rate-limiting plateforme). Si atteint,
-            // on stop tout (pas juste ce commercant) jusqu'au lendemain.
-            const sentToday = await getGlobalEmailCount();
-            if (sentToday >= 300) { console.log('[CRON birthday] cap global cluster atteint'); return; }
-
             // Re-check quota commercant a chaque iteration (peut avoir change
             // entre temps si campagne manuelle envoyee en parallele).
             const liveQuota = await checkUserEmailQuota(camp.user_id);
@@ -1144,6 +1140,16 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
               console.log(`[CRON birthday] ${camp.business_name} : quota epuise live, stop`);
               break;
             }
+
+            // M2r — Garde-fou cluster Brevo (300/j) en RÉSERVATION ATOMIQUE.
+            // L'ancien getGlobalEmailCount()>=300 puis incrGlobalEmailCount()
+            // post-envoi etait un check-then-act : sous concurrence (cron +
+            // campagnes) le cap etait depasse. reserveGlobalEmail reserve ET
+            // incremente le slot en une requete ; place ici (apres dedup
+            // client + quota marchand) pour ne pas gaspiller de slot. Si le
+            // cap est atteint on stop tout le cron (comme avant).
+            const gReserved = await reserveGlobalEmail(300);
+            if (!gReserved) { console.log('[CRON birthday] cap global cluster atteint'); return; }
 
             // Format code : BDAY-{client_id_short}-{year}.
             // Brief 24b : "BDAY-A1B2-2026". client_id_short = 4 premiers chars
@@ -1238,7 +1244,7 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                   WHERE user_id=$1 AND LOWER(email)=$2`,
                 [camp.user_id, emailLow]
               );
-              await incrGlobalEmailCount();
+              // slot global déjà réservé+incrémenté par reserveGlobalEmail (M2r)
               await incrUserEmailCount(camp.user_id);
               totalSent++;
               await cronSleep(300);
