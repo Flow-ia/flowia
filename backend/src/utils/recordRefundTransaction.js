@@ -69,8 +69,19 @@ async function recordRefundTransaction(pool, { appointmentId, refundedCents, str
   const desc      = `Remboursement RDV — ${clientName || 'client'}`;
   const now       = new Date();
 
+  // M2f — INSERT rdv_refund + UPDATE rdv_online dans UNE SEULE transaction.
+  // Avant : 2 pool.query separes + UPDATE en catch SILENCIEUX -> si l'UPDATE
+  // echouait, la row rdv_online restait STRIPE_100 et etait comptee dans le
+  // CA brut alors que l'argent etait rembourse (CA surevalue, regle "ops
+  // financieres jamais fail-safe"). Desormais atomique : si l'UPDATE echoue,
+  // tout rollback et on renvoie ok=false. Backstop : le webhook
+  // charge.refunded rejouera (recordRefundTransaction idempotent via
+  // ON CONFLICT) et completera les 2 ops.
+  const client = await pool.connect();
+  let inserted = false;
   try {
-    const ins = await pool.query(
+    await client.query('BEGIN');
+    const ins = await client.query(
       `INSERT INTO transactions
          (user_id, type, amount, description, employee_id, payment_method,
           date, time, datetime_iso, appointment_id, source, locked, qty_total,
@@ -87,32 +98,37 @@ async function recordRefundTransaction(pool, { appointmentId, refundedCents, str
        now.toISOString(), appointmentId,
        cents, stripeRefundId]
     );
+    inserted = ins.rowCount > 0;
     // Met aussi a jour la transaction d'origine 'rdv_online' pour qu'elle
-    // refletre le statut REFUNDED (les KPIs en ligne passent du brut au net).
-    if (ins.rowCount > 0) {
-      try {
-        await pool.query(
-          `UPDATE transactions
-              SET payment_status   = 'REFUNDED',
-                  refunded_at      = COALESCE(refunded_at, NOW()),
-                  stripe_refund_id = COALESCE(stripe_refund_id, $2)
-            WHERE appointment_id = $1
-              AND source = 'rdv_online'`,
-          [appointmentId, stripeRefundId]
-        );
-      } catch (e) {
-        // Best-effort : ne casse pas l'insert principal si update fail
-      }
-      // Invalide le cache stats v3 du user (refund visible immediat dans /historique)
-      try {
-        const { invalidateUserStatsCache } = require('./paymentV3');
-        invalidateUserStatsCache(userId);
-      } catch {}
+    // reflete le statut REFUNDED (les KPIs en ligne passent du brut au net).
+    // PLUS de catch silencieux : un echec ici rollback l'insert refund.
+    if (inserted) {
+      await client.query(
+        `UPDATE transactions
+            SET payment_status   = 'REFUNDED',
+                refunded_at      = COALESCE(refunded_at, NOW()),
+                stripe_refund_id = COALESCE(stripe_refund_id, $2)
+          WHERE appointment_id = $1
+            AND source = 'rdv_online'`,
+        [appointmentId, stripeRefundId]
+      );
     }
-    return { ok: true, inserted: ins.rowCount > 0 };
+    await client.query('COMMIT');
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
     return { ok: false, error: e.message };
+  } finally {
+    client.release();
   }
+  if (inserted) {
+    // Invalide le cache stats v3 du user (refund visible immediat dans
+    // /historique). Side-effect non-DB -> apres COMMIT.
+    try {
+      const { invalidateUserStatsCache } = require('./paymentV3');
+      invalidateUserStatsCache(userId);
+    } catch {}
+  }
+  return { ok: true, inserted };
 }
 
 module.exports = { recordRefundTransaction };
