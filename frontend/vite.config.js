@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import prerender from '@prerenderer/rollup-plugin';
@@ -13,7 +14,27 @@ const MARKETING_ROUTES = [
 ];
 const PRERENDER_ENABLED = process.env.PRERENDER !== 'false';
 
-export default defineConfig(({ command }) => ({
+// Options de lancement de Chromium pour le prerender.
+//  - Linux (Vercel = Amazon Linux) : le Chromium bundle par puppeteer manque
+//    des libs systeme (libnss3.so) → build casse. @sparticuz/chromium fournit
+//    un binaire autonome concu pour les environnements serverless Linux.
+//  - Windows/macOS (dev local) : le Chromium bundle par puppeteer fonctionne.
+async function puppeteerLaunchOptions() {
+  if (os.platform() === 'linux') {
+    const { default: chromium } = await import('@sparticuz/chromium');
+    return {
+      args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    };
+  }
+  return {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  };
+}
+
+export default defineConfig(async ({ command }) => ({
   plugins: [
     react(),
     ...(command === 'build' && PRERENDER_ENABLED
@@ -25,10 +46,7 @@ export default defineConfig(({ command }) => ({
             // L'app monte React + react-helmet-async applique les meta au
             // <head> apres le mount : on laisse le temps avant la capture.
             renderAfterTime: 7000,
-            headless: true,
-            launchOptions: {
-              args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            },
+            launchOptions: await puppeteerLaunchOptions(),
             // Lu par isMarketingHost() (index.jsx) pour forcer le rendu du
             // site marketing pendant le build (pas de vrai hostname ici).
             inject: { isPrerender: true },

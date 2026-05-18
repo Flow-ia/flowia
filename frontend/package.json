@@ -23,6 +23,7 @@
   "devDependencies": {
     "@prerenderer/renderer-puppeteer": "^1.2.4",
     "@prerenderer/rollup-plugin": "^0.3.12",
+    "@sparticuz/chromium": "^131.0.1",
     "@vitejs/plugin-react": "^5.1.4",
     "puppeteer": "^23.11.1",
     "terser": "^5.46.1",
