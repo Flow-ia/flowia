@@ -414,13 +414,37 @@ module.exports = function attachAppointmentsRoutes(router) {
 
   router.delete('/appointments/:id', async (req, res) => {
     try {
-      // Recupere google_event_id avant DELETE pour pouvoir nettoyer cote
-      // Google Calendar ensuite (le RDV ne sera plus en DB).
+      // Recupere google_event_id + etat paiement avant DELETE.
+      // - google_event_id : pour nettoyer Google Calendar apres (RDV plus en DB)
+      // - payment_status / stripe_payment_intent_id : C1 — un RDV paye en ligne
+      //   NE DOIT PAS etre supprime. Le DELETE cascade detruit la row escrow
+      //   (appointment_payouts ON DELETE CASCADE) et orpheline le ledger
+      //   (financial_ledger.appointment_id ON DELETE SET NULL) : le client
+      //   ne serait jamais rembourse + trou comptable. Le bon chemin de
+      //   remboursement est l'annulation (PUT status='cancelled' ->
+      //   refundAppointment), pas la suppression.
       const { rows: gcalMeta } = await pool.query(
-        `SELECT google_event_id, google_calendar_id
+        `SELECT google_event_id, google_calendar_id,
+                payment_status, stripe_payment_intent_id
            FROM appointments WHERE id=$1 AND user_id=$2`,
         [req.params.id, req.user.userId]
       );
+      if (!gcalMeta.length) return res.status(404).json({ error: 'RDV introuvable.' });
+      if (gcalMeta[0].stripe_payment_intent_id) {
+        const ps = gcalMeta[0].payment_status;
+        if (ps === 'paid') {
+          return res.status(409).json({
+            error: "Ce RDV a ete paye en ligne. Annulez-le (le remboursement client est automatique) au lieu de le supprimer.",
+            code: 'PAID_ONLINE_NO_DELETE',
+          });
+        }
+        // refunded / autre statut avec PI : on conserve le RDV pour la
+        // tracabilite comptable (lien ledger / transaction / payout).
+        return res.status(409).json({
+          error: "Ce RDV est lie a un paiement en ligne et est conserve pour la tracabilite comptable. Il ne peut pas etre supprime.",
+          code: 'ONLINE_PAYMENT_KEEP',
+        });
+      }
       // Cascade parrainage : révoquer les referral_uses liés AVANT le DELETE
       // (ON DELETE SET NULL sur appointment_id sinon on perd la trace).
       const { rows: refs } = await pool.query(
