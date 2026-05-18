@@ -1287,27 +1287,45 @@ router.post('/webhook', async (req, res) => {
               + ' appt=' + apptIdFromMeta + ' user=' + userId
               + ' tx_lies=' + upd.rowCount + ' amount=' + ((po.amount || 0) / 100) + '€');
           } else {
-            // Payout manuel : heuristique cutoff sur created_at.
-            // Meme garde-fou que la branche escrow : stripe_payment_intent_id
-            // IS NOT NULL pour ne pas balayer la caisse.
-            const cutoff = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
+            // M1f — Fallback SANS balayage cutoff en masse.
+            // L'ancien code marquait TOUTES les tx 'rdv_online' du user
+            // anterieures a po.created comme payees par CE seul payout :
+            // si un escrow arrivait sans appointment_id (metadata
+            // tronquee/corrompue) ou un payout externe residuel, des RDV
+            // encore en escrow non liberes etaient sur-attribues (payout_
+            // received_at + ledger 'paid') => divergence comptable, fonds
+            // bloques affiches "recus". On reconcilie desormais PRECISEMENT
+            // via le lien autoritatif appointment_payouts.stripe_payout_id
+            // (stampe par releasePayouts a la creation du payout). Si aucun
+            // lien (payout vraiment externe) -> 0 mutation + WARN, jamais
+            // de balayage aveugle.
             const upd = await pool.query(
               `UPDATE transactions
                   SET payout_received_at = NOW(),
                       stripe_payout_id   = $2
                 WHERE user_id = $1
                   AND payout_received_at IS NULL
-                  AND created_at <= $3
+                  AND appointment_id IN (
+                    SELECT appointment_id FROM appointment_payouts
+                     WHERE user_id = $1 AND stripe_payout_id = $2
+                  )
                   AND (
                     source IN ('rdv_online','rdv_refund')
                     OR stripe_payment_intent_id IS NOT NULL
                   )
                 RETURNING id`,
-              [userId, po.id, cutoff]
+              [userId, po.id]
             );
-            console.log('[CONNECT WEBHOOK] payout.paid manuel: stripe_payout=' + po.id
-              + ' user=' + userId + ' tx_lies=' + upd.rowCount
-              + ' amount=' + ((po.amount || 0) / 100) + '€');
+            if (upd.rowCount === 0) {
+              console.warn('[CONNECT WEBHOOK] payout.paid fallback: AUCUN lien '
+                + 'appointment_payouts pour stripe_payout=' + po.id + ' user=' + userId
+                + ' amount=' + ((po.amount || 0) / 100) + '€ (payout externe ? '
+                + 'aucune mutation comptable)');
+            } else {
+              console.log('[CONNECT WEBHOOK] payout.paid fallback reconcilie: stripe_payout='
+                + po.id + ' user=' + userId + ' tx_lies=' + upd.rowCount
+                + ' amount=' + ((po.amount || 0) / 100) + '€');
+            }
           }
 
           // PHASE 2 LEDGER : INSERT payout_paid (informationnel) +
@@ -1334,20 +1352,23 @@ router.post('/webhook', async (req, res) => {
                 newStatus: 'paid',
               });
             } else {
-              // Payout manuel : on update les entries de ce user avant cutoff,
-              // pas encore liees a un payout, en status 'paid' + stamp payout_id.
-              // Restrictif : seules payment/commission/stripe_fee non encore liees.
-              const cutoffTs = new Date((po.created || Math.floor(Date.now() / 1000)) * 1000);
+              // M1f — Fallback ledger reconcilie PRECISEMENT via le lien
+              // autoritatif appointment_payouts.stripe_payout_id (cf. branche
+              // transactions ci-dessus). Plus de balayage occurred_at<=cutoff
+              // qui marquait 'paid' des entries d'escrow non libere.
               await pool.query(`
                 UPDATE financial_ledger
                    SET status = 'paid',
                        stripe_payout_id = COALESCE(stripe_payout_id, $2)
                  WHERE user_id = $1
-                   AND occurred_at <= $3
                    AND stripe_payout_id IS NULL
                    AND entry_type IN ('payment','commission','stripe_fee')
                    AND status IN ('pending','available','locked')
-              `, [userId, po.id, cutoffTs]);
+                   AND appointment_id IN (
+                     SELECT appointment_id FROM appointment_payouts
+                      WHERE user_id = $1 AND stripe_payout_id = $2
+                   )
+              `, [userId, po.id]);
             }
           } catch (ledgerErr) {
             console.error('[CONNECT WEBHOOK] ledger payout.paid fail',
