@@ -120,9 +120,25 @@ module.exports = function attachAppointmentsRoutes(router) {
 
       // Commit 25 — source='admin' : créé par le commerçant en mode admin
       // (req.user.userId, JWT scope merchant). created_by_employee_id NULL.
+      //
+      // M1r — Anti double-booking : le check conflit ci-dessus (SELECT) et
+      // l'INSERT etaient 2 requetes separees -> 2 creations concurrentes
+      // (merchant + employe sur tablette partagee, double-clic) passaient
+      // toutes le SELECT puis inseraient => double-booking. On rend l'INSERT
+      // atomique via WHERE NOT EXISTS (overlap), modele public-booking/book.js.
+      // Le pre-check SELECT est conserve : il donne le message detaille dans
+      // le cas non-concurrent ; le WHERE NOT EXISTS ne couvre que la fenetre
+      // de course. Le bypass { force:true } reste honore (insert direct).
+      const guardSlot = !force && !!employee_id;
       const { rows } = await pool.query(
         `INSERT INTO appointments (user_id, service_id, employee_id, client_name, client_email, client_phone, date, start_time, end_time, duration_minutes, notes, status, source, created_by_employee_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'confirmed','admin',NULL)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'confirmed','admin',NULL
+         ${guardSlot ? `WHERE NOT EXISTS (
+             SELECT 1 FROM appointments
+              WHERE user_id=$1 AND employee_id=$3 AND date=$7
+                AND status NOT IN ('cancelled','no_show')
+                AND NOT (end_time <= $8::time OR start_time >= $9::time)
+           )` : ''}
          RETURNING id, user_id, service_id, employee_id,
            client_name, client_email, client_phone,
            TO_CHAR(date, 'YYYY-MM-DD') as date,
@@ -133,6 +149,12 @@ module.exports = function attachAppointmentsRoutes(router) {
          client_name, client_email || null, client_phone || null,
          date, start_time, end_time, duration, notes || null]
       );
+      if (guardSlot && !rows.length) {
+        return res.status(409).json({
+          error: "Ce créneau vient d'être pris par un autre RDV. Rafraîchissez l'agenda.",
+          code: 'SLOT_CONFLICT',
+        });
+      }
       const appt = rows[0];
 
       // Lier le RDV au client_accounts (chercher par email, téléphone ou nom)
