@@ -8,9 +8,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <!-- Title/description/canonical/OG/Twitter sont gérés PAR PAGE via le
+       composant <Seo> (react-helmet-async). Ne pas remettre de meta SEO
+       statiques ici : elles ne seraient pas dédupliquées par Helmet et
+       apparaîtraient en double dans le HTML prerendu. -->
   <title>FlowIA — Logiciel de réservation, caisse & fidélité pour salon de coiffure et barbershop</title>
-  <link rel="canonical" href="https://flowiapro.com/" />
-  <meta name="robots" content="index, follow" />
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
@@ -18,23 +20,6 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="application-name" content="FlowIA" />
   <meta name="apple-mobile-web-app-title" content="FlowIA" />
-  <meta name="description" content="FlowIA : le logiciel tout-en-un pour salon de coiffure et barbershop. Réservation en ligne 24/7, caisse, SMS de rappel, fidélité, parrainage et IA. Sans commission, essai gratuit." />
-
-  <!-- Open Graph (aperçu des liens partagés : WhatsApp, Instagram, Facebook…) -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="FlowIA" />
-  <meta property="og:locale" content="fr_FR" />
-  <meta property="og:title" content="FlowIA — Logiciel de réservation & gestion pour salon de coiffure et barbershop" />
-  <meta property="og:description" content="Réservation en ligne 24/7, caisse, SMS de rappel, fidélité, parrainage et IA. Sans commission, essai gratuit." />
-  <meta property="og:url" content="https://flowiapro.com/" />
-  <meta property="og:image" content="https://flowiapro.com/images/logo-app.png" />
-
-  <!-- Twitter / X Card -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="FlowIA — Logiciel de réservation & gestion pour salon et barbershop" />
-  <meta name="twitter:description" content="Réservation en ligne 24/7, caisse, SMS, fidélité et IA. Sans commission, essai gratuit." />
-  <meta name="twitter:image" content="https://flowiapro.com/images/logo-app.png" />
-
   <!-- Données structurées Schema.org : aide Google à comprendre que FlowIA
        est un logiciel SaaS (rich results / panneau de connaissances). -->
   <script type="application/ld+json">

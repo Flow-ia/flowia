@@ -1,8 +1,41 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import prerender from '@prerenderer/rollup-plugin';
 
-export default defineConfig({
-  plugins: [react()],
+// ── Prerendering SEO ─────────────────────────────────────────────────────────
+// Genere un HTML statique par page marketing pour que Google/Bing et les
+// apercus de liens (WhatsApp/Insta) voient le contenu reel (et les meta
+// <Seo>) sans executer le JS. Actif uniquement au `vite build` ; on peut le
+// desactiver avec PRERENDER=false (utile si Chromium indisponible en CI).
+const MARKETING_ROUTES = [
+  '/', '/fonctionnalites', '/tarifs', '/pour-qui', '/a-propos',
+  '/contact', '/marketplace', '/mentions-legales', '/confidentialite', '/cgu',
+];
+const PRERENDER_ENABLED = process.env.PRERENDER !== 'false';
+
+export default defineConfig(({ command }) => ({
+  plugins: [
+    react(),
+    ...(command === 'build' && PRERENDER_ENABLED
+      ? [prerender({
+          routes: MARKETING_ROUTES,
+          renderer: '@prerenderer/renderer-puppeteer',
+          rendererOptions: {
+            maxConcurrentRoutes: 1,
+            // L'app monte React + react-helmet-async applique les meta au
+            // <head> apres le mount : on laisse le temps avant la capture.
+            renderAfterTime: 7000,
+            headless: true,
+            launchOptions: {
+              args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            },
+            // Lu par isMarketingHost() (index.jsx) pour forcer le rendu du
+            // site marketing pendant le build (pas de vrai hostname ici).
+            inject: { isPrerender: true },
+          },
+        })]
+      : []),
+  ],
 
   server: {
     port: 3000,
@@ -61,4 +94,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom'],
   },
-});
+}));

@@ -60,6 +60,14 @@ function isLegacyBookingHost() {
 }
 
 function isMarketingHost() {
+  // Pendant le prerender (build), il n'y a pas de vrai hostname : le plugin
+  // injecte window.__PRERENDER_INJECTED.isPrerender pour forcer le rendu du
+  // site marketing (sinon on prerendrait le shell de l'app commercant).
+  if (typeof window !== 'undefined' &&
+      window.__PRERENDER_INJECTED &&
+      window.__PRERENDER_INJECTED.isPrerender) {
+    return true;
+  }
   const h = hostname();
   return h === 'flowiapro.com' || h === 'www.flowiapro.com';
 }
