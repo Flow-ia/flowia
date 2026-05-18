@@ -9,6 +9,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import { paymentsApi } from '../utils/api';
+import { Confirm } from './UI';
 
 // ── Cle publique Stripe (env Vite) ──────────────────────────────────────────
 const STRIPE_PK = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
@@ -154,6 +155,7 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]           = useState(null);
   const [result, setResult]         = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const reload = useCallback(async () => {
     setLoadingPm(true);
@@ -232,8 +234,11 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
     } finally { setSubmitting(false); }
   }
 
-  async function deleteCard(id) {
-    if (!confirm('Supprimer cette carte ?')) return;
+  function deleteCard(id) { setConfirmDeleteId(id); }
+  async function doDeleteCard() {
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
+    if (!id) return;
     try { await paymentsApi.deletePaymentMethod(id); await reload(); showToast?.('Carte supprimee'); }
     catch (e) { showToast?.(e.message, 'error'); }
   }
@@ -245,6 +250,15 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
   return (
     <ModalShell theme={theme} onClose={onClose}>
       <StepBar step={step} theme={theme} />
+      <Confirm
+        open={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={doDeleteCard}
+        title="Supprimer la carte"
+        message="Cette carte enregistree sera definitivement supprimee."
+        danger
+        theme={theme}
+      />
 
       {step === 'success' && result ? (
         <SuccessView theme={theme} info={result} onClose={onClose} />

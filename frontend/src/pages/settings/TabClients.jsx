@@ -3,6 +3,7 @@ import { clientsApi } from '../../utils/api';
 import QRCard from './QRCard';
 import { I } from '../../utils/icons';
 import { Button, Label, SegmentedControl, StatusBadge } from '../../components/primitives';
+import { Confirm } from '../../components/UI';
 
 const PAGE_SIZE = 5;
 
@@ -25,6 +26,7 @@ export default function TabClients({ theme, showToast }) {
   const [noteLoad,   setNoteLoad]   = useState(false);
   const [inviting,   setInviting]   = useState(false);
   const [busy,       setBusy]       = useState(false);
+  const [confirmDelId, setConfirmDelId] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -82,8 +84,11 @@ export default function TabClients({ theme, showToast }) {
     finally { setBusy(false); }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Supprimer cette fiche client ?')) return;
+  const handleDelete = (id) => { setConfirmDelId(id); };
+  const doDelete = async () => {
+    const id = confirmDelId;
+    setConfirmDelId(null);
+    if (!id) return;
     try {
       await clientsApi.remove(id);
       setSelected(null); setFiche(null);
@@ -155,6 +160,15 @@ export default function TabClients({ theme, showToast }) {
   if (selected) {
     return (
       <div style={{ maxWidth:700, margin:'0 auto' }}>
+        <Confirm
+          open={!!confirmDelId}
+          onClose={() => setConfirmDelId(null)}
+          onConfirm={doDelete}
+          title="Supprimer la fiche client"
+          message="Cette fiche client et ses notes seront supprimees. Cette action est irreversible."
+          danger
+          theme={theme}
+        />
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20 }}>
           <Button variant="secondary" size="small" type="button"
                   onClick={() => { setSelected(null); setFiche(null); setEditMode(false); }}>
