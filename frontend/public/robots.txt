@@ -1,0 +1,19 @@
+# FlowIA — https://flowiapro.com
+# Le site marketing doit etre indexe ; les sous-routes privees (auth, espace
+# client, API, OAuth) sont exclues du crawl pour eviter le bruit d'index.
+
+User-agent: *
+Allow: /
+Disallow: /__oauth
+Disallow: /api/
+Disallow: /book/*/auth
+Disallow: /book/*/login
+Disallow: /book/*/register
+Disallow: /book/*/client/
+Disallow: /book/*/parrain
+Disallow: /marketplace/book/*/auth
+Disallow: /marketplace/book/*/login
+Disallow: /marketplace/book/*/register
+Disallow: /marketplace/book/*/client/
+
+Sitemap: https://flowiapro.com/sitemap.xml
