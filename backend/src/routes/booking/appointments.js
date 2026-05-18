@@ -309,6 +309,25 @@ module.exports = function attachAppointmentsRoutes(router) {
           return res.status(409).json({ error: 'Employé en absence sur cette date.', code: 'EMPLOYEE_ABSENT' });
         }
       }
+      // C2 — Claim atomique de la transition vers 'cancelled'. Deux PUT
+      // concurrents (double-clic, retry reseau, merchant+employe simultanes)
+      // lisent tous appt.status='confirmed' AVANT l'UPDATE : sans claim
+      // atomique ils passent tous isCancellingTransition=true et appellent
+      // tous refundAppointment + envoient tous l'email d'annulation.
+      // L'UPDATE conditionnel WHERE status<>'cancelled' garantit qu'UNE
+      // SEULE requete "possede" la transition (rowCount=1) et porte donc le
+      // refund + l'email. Les autres no-op proprement.
+      let ownsCancelTransition = false;
+      if (status === 'cancelled' && appt.status !== 'cancelled') {
+        const claim = await pool.query(
+          `UPDATE appointments SET status='cancelled', cancelled_by='merchant',
+                  cancelled_at=NOW(), updated_at=NOW()
+             WHERE id=$1 AND user_id=$2 AND status<>'cancelled'
+             RETURNING id`,
+          [req.params.id, req.user.userId]
+        );
+        ownsCancelTransition = claim.rowCount > 0;
+      }
       // Si transition vers 'cancelled', on enregistre QUI a annule (ici =
        // commercant, car endpoint authMiddleware merchant) + le timestamp.
       const isCancellingTransitionA = status === 'cancelled' && appt.status !== 'cancelled';
@@ -344,7 +363,9 @@ module.exports = function attachAppointmentsRoutes(router) {
       // d'argent quand le salon ferme. Si Stripe echoue, le row est cree
       // dans failed_refunds pour retry admin (audit Phase 5).
       let refundResult = null;
-      const isCancellingTransition = status === 'cancelled' && appt.status !== 'cancelled';
+      // C2 — refund declenche UNIQUEMENT par la requete qui possede la
+      // transition (claim atomique ci-dessus), jamais par les concurrentes.
+      const isCancellingTransition = ownsCancelTransition;
       if (isCancellingTransition
           && appt.payment_status === 'paid'
           && appt.stripe_payment_intent_id) {
@@ -357,8 +378,9 @@ module.exports = function attachAppointmentsRoutes(router) {
         }
       }
 
-      // Mail annulation si status passe à 'cancelled' et client a un email
-      if (status === 'cancelled' && updated.client_email) {
+      // Mail annulation : seulement la requete qui possede la transition
+      // (C2) -> pas de double email sur double-clic / retry concurrent.
+      if (ownsCancelTransition && updated.client_email) {
         try {
           const [svcR, usrR] = await Promise.all([
             pool.query('SELECT name FROM booking_services WHERE id=$1', [updated.service_id]),
