@@ -122,6 +122,56 @@ module.exports = function attachAccountRoutes(router) {
                client_name='[Compte supprimé]'
              WHERE LOWER(client_email)=LOWER($1)`, [email]
           );
+
+          // C-RGPD — Anonymisation de la PII residuelle. L'ancien code
+          // laissait l'email/nom du client EN CLAIR dans 7 tables
+          // denormalisees apres une demande de suppression (violation
+          // Art.17). On les traite ici, dans la meme transaction, scopees
+          // par email (= la personne physique, cross-merchant). Colonnes
+          // NOT NULL / UNIQUE : placeholder base sur le gid (unique par
+          // client, pas de collision UNIQUE inter-suppressions) ; sinon NULL.
+          const sup = `[supprime:${gid}]`;
+          // client_rewards.client_email NOT NULL -> placeholder
+          await dbClient.query(
+            `UPDATE client_rewards SET client_email=$2
+               WHERE LOWER(client_email)=LOWER($1)`, [email, sup]
+          );
+          // promo_codes.owner_client_email nullable
+          await dbClient.query(
+            `UPDATE promo_codes SET owner_client_email=NULL
+               WHERE LOWER(owner_client_email)=LOWER($1)`, [email]
+          );
+          // promo_usage_logs : email + nom nullable
+          await dbClient.query(
+            `UPDATE promo_usage_logs SET client_email=NULL, client_name=NULL
+               WHERE LOWER(client_email)=LOWER($1)`, [email]
+          );
+          // referral_codes.owner_client_email NOT NULL + UNIQUE(user_id,owner_client_email)
+          await dbClient.query(
+            `UPDATE referral_codes SET owner_client_email=$2
+               WHERE LOWER(owner_client_email)=LOWER($1)`, [email, sup]
+          );
+          // referral_uses.filleul_email NOT NULL -> placeholder (toutes les
+          // lignes, pas seulement les pending deja annulees plus haut)
+          await dbClient.query(
+            `UPDATE referral_uses SET filleul_email=$2
+               WHERE LOWER(filleul_email)=LOWER($1)`, [email, sup]
+          );
+          // campaign_queue : PII nullable + annulation des envois en attente
+          await dbClient.query(
+            `UPDATE campaign_queue
+                SET client_email=NULL, client_phone=NULL, client_name=NULL,
+                    status = CASE WHEN COALESCE(status,'pending') IN ('pending','scheduled')
+                                  THEN 'cancelled' ELSE status END
+              WHERE LOWER(client_email)=LOWER($1)`, [email]
+          );
+          // message_log : email + phone nullable
+          await dbClient.query(
+            `UPDATE message_log SET email=NULL, phone=NULL
+               WHERE LOWER(email)=LOWER($1)
+                  OR ($2::text IS NOT NULL AND phone=$2)`,
+            [email, phone || null]
+          );
         }
 
         // 4. Supprimer le compte global
