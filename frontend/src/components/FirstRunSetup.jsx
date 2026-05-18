@@ -24,6 +24,7 @@ const STEPS = [
   { key: 'services', title: 'Vos prestations' },
   { key: 'payments', title: 'Paiements en ligne' },
   { key: 'calendar', title: 'Synchronisation Google Agenda' },
+  { key: 'booking',  title: 'Votre site de reservation' },
   { key: 'finish',   title: 'Tout est pret' },
 ];
 
@@ -45,6 +46,8 @@ export function FirstRunSetup({ user, onComplete }) {
   const [stripeData, setStripeData] = useState(null);
   const [calendarData, setCalendarData] = useState(null);
   const [bookingSlug, setBookingSlug] = useState('');
+  const [bookingEnabled, setBookingEnabled] = useState(false);
+  const [bookingBusy, setBookingBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
@@ -99,7 +102,10 @@ export function FirstRunSetup({ user, onComplete }) {
         const s = sRes.value;
         if (stripeRes.status === 'fulfilled') setStripeData(stripeRes.value);
         if (calendarRes.status === 'fulfilled') setCalendarData(calendarRes.value);
-        if (settingsRes.status === 'fulfilled') setBookingSlug(settingsRes.value?.slug || '');
+        if (settingsRes.status === 'fulfilled') {
+          setBookingSlug(settingsRes.value?.slug || '');
+          setBookingEnabled(settingsRes.value?.is_enabled === true);
+        }
         // Normaliser hours sur l'ordre semaine + caster is_open booleen
         const byDow = {};
         for (const row of h || []) byDow[row.day_of_week] = row;
@@ -243,6 +249,25 @@ export function FirstRunSetup({ user, onComplete }) {
     }
   };
 
+  // Active / desactive le site public de reservation (booking_settings.is_enabled).
+  // Optimiste avec rollback si l'API echoue.
+  const toggleBooking = async (value) => {
+    if (bookingBusy) return;
+    setBookingBusy(true);
+    const prevVal = bookingEnabled;
+    setBookingEnabled(value);
+    try {
+      const r = await bookingApi.saveSettings({ is_enabled: value });
+      if (r && typeof r.slug === 'string' && !bookingSlug) setBookingSlug(r.slug);
+      show(value ? 'Site de reservation active' : 'Site de reservation desactive', 'ok');
+    } catch (e) {
+      setBookingEnabled(prevVal);
+      show(e.message || 'Impossible de mettre a jour le site', 'error');
+    } finally {
+      setBookingBusy(false);
+    }
+  };
+
   const next = () => setStep(s => Math.min(STEPS.length - 1, s + 1));
   const prev = () => setStep(s => Math.max(0, s - 1));
 
@@ -328,6 +353,15 @@ export function FirstRunSetup({ user, onComplete }) {
             />
           )}
           {step === 4 && (
+            <BookingSiteStep
+              t={t}
+              enabled={bookingEnabled}
+              busy={bookingBusy}
+              slug={bookingSlug}
+              onToggle={toggleBooking}
+            />
+          )}
+          {step === 5 && (
             <FinishStep
               t={t}
               hours={hours}
@@ -335,6 +369,7 @@ export function FirstRunSetup({ user, onComplete }) {
               stripeData={stripeData}
               calendarData={calendarData}
               bookingSlug={bookingSlug}
+              bookingEnabled={bookingEnabled}
             />
           )}
 
@@ -371,6 +406,11 @@ export function FirstRunSetup({ user, onComplete }) {
               </Button>
             )}
             {step === 4 && (
+              <Button type="button" variant="primary" onClick={next} disabled={saving || bookingBusy}>
+                Continuer
+              </Button>
+            )}
+            {step === 5 && (
               <Button type="button" variant="primary" onClick={finish} disabled={saving}>
                 {saving ? '...' : 'Acceder a FlowIA'}
               </Button>
@@ -576,7 +616,113 @@ function CalendarStep({ t, data, loading, busy, onConnect, onRefresh }) {
   );
 }
 
-function FinishStep({ t, hours, services, stripeData, calendarData, bookingSlug }) {
+// ─── Step 5 — Site de reservation ───────────────────────────────────────────
+// Active/desactive le site public, montre le lien, et explique ou modifier
+// les prestations & categories (Caisse + Reservation en ligne).
+function BookingSiteStep({ t, enabled, busy, slug, onToggle }) {
+  const link = slug ? getBookingUrl(slug) : '';
+  const guides = [
+    {
+      title: 'Reservation en ligne',
+      path: 'Reglages > Reservation en ligne',
+      desc: 'Choisissez les prestations visibles par vos clients, leur prix et leur duree, et personnalisez votre lien public.',
+    },
+    {
+      title: 'Caisse (boutique)',
+      path: 'Reglages > Caisse',
+      desc: 'Gerez les categories et les prestations vendues sur place, ainsi que le QR code de votre boutique.',
+    },
+  ];
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: t.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
+        {"Activez votre site de reservation pour permettre a vos clients de prendre rendez-vous en ligne 24h/24. Vous pourrez le desactiver a tout moment."}
+      </p>
+
+      {/* Activation */}
+      <div style={{
+        padding: 16, borderRadius: 12,
+        background: t.cardAlt, border: `0.5px solid ${t.border}`,
+        display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: t.text, margin: 0 }}>
+              Site de reservation en ligne
+            </p>
+            <p style={{ fontSize: 11, color: t.muted, margin: '4px 0 0', lineHeight: 1.5 }}>
+              {"Une page publique a votre nom ou les clients reservent selon vos horaires et prestations."}
+            </p>
+          </div>
+          <ToggleSwitch checked={enabled} onChange={v => !busy && onToggle(v)}/>
+        </div>
+        <StatusPill
+          t={t}
+          tone={enabled ? 'success' : 'neutral'}
+          label={busy ? 'Mise a jour...' : enabled ? 'Site actif' : 'Site desactive'}
+        />
+
+        {enabled && link && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 11, color: t.muted }}>Votre lien public</span>
+            <BookingLinkRow t={t} link={link}/>
+          </div>
+        )}
+        {enabled && !slug && (
+          <p style={{ fontSize: 11, color: '#92400e', margin: 0, lineHeight: 1.5 }}>
+            {"Definissez votre lien personnalise dans Reglages > Reservation en ligne."}
+          </p>
+        )}
+      </div>
+
+      {/* Guide : ou modifier prestations & categories */}
+      <p style={{ fontSize: 12, fontWeight: 500, color: t.text, margin: '20px 0 10px' }}>
+        Modifier vos prestations et categories
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {guides.map((g, i) => (
+          <div key={g.title} style={{
+            display: 'flex', gap: 12, alignItems: 'flex-start',
+            padding: 12, borderRadius: 10,
+            border: `0.5px solid ${t.border}`, background: t.card,
+          }}>
+            <span style={{
+              flexShrink: 0,
+              width: 22, height: 22, borderRadius: '50%',
+              background: t.cardAlt, border: `0.5px solid ${t.border}`,
+              color: t.text, fontSize: 11, fontWeight: 500,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {i + 1}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 500, color: t.text, margin: 0 }}>
+                {g.title}
+              </p>
+              <p style={{
+                fontSize: 11, color: t.text, margin: '3px 0 4px',
+                fontFamily: 'inherit',
+              }}>
+                {g.path}
+              </p>
+              <p style={{ fontSize: 11, color: t.muted, margin: 0, lineHeight: 1.5 }}>
+                {g.desc}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 11, color: t.muted, margin: '14px 0 0', lineHeight: 1.5 }}>
+        {"Astuce : une prestation peut etre vendue en caisse, en ligne, ou les deux. Les categories organisent votre catalogue dans les deux espaces."}
+      </p>
+    </div>
+  );
+}
+
+function FinishStep({ t, hours, services, stripeData, calendarData, bookingSlug, bookingEnabled }) {
   const openDays    = hours.filter(h => h.is_open).length;
   const activeServs = services.filter(s => s.is_active).length;
   const stripeReady = !!stripeData?.connected && !!stripeData?.charges_enabled;
@@ -595,6 +741,7 @@ function FinishStep({ t, hours, services, stripeData, calendarData, bookingSlug 
         <RecapItem t={t} label={`${activeServs} prestation${activeServs > 1 ? 's' : ''} active${activeServs > 1 ? 's' : ''}`}/>
         <RecapItem t={t} label={`Stripe : ${stripeReady ? 'paiements en ligne actifs' : 'a connecter plus tard si besoin'}`}/>
         <RecapItem t={t} label={`Google Agenda : ${calendarReady ? 'synchronisation active' : 'a connecter plus tard si besoin'}`}/>
+        <RecapItem t={t} label={`Site de reservation : ${bookingEnabled ? 'actif' : 'desactive (activable dans Reglages)'}`}/>
         <RecapItem t={t} label="Caisse, agenda et reservations en ligne disponibles"/>
       </ul>
 
@@ -608,8 +755,9 @@ function FinishStep({ t, hours, services, stripeData, calendarData, bookingSlug 
             Votre lien de reservation personnalise
           </p>
           <p style={{ fontSize: 11, color: t.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
-            Partagez-le a vos clients (reseaux sociaux, vitrine, signature email).
-            Vous pourrez le personnaliser dans Reglages &gt; Reservation.
+            {bookingEnabled
+              ? 'Partagez-le a vos clients (reseaux sociaux, vitrine, signature email). Vous pourrez le personnaliser dans Reglages > Reservation en ligne.'
+              : 'Votre site est actuellement desactive. Activez-le dans Reglages > Reservation en ligne pour que ce lien soit accessible.'}
           </p>
           <BookingLinkRow t={t} link={bookingLink}/>
         </div>
