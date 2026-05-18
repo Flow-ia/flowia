@@ -285,6 +285,46 @@ module.exports = function attachAccountRoutes(router) {
         [gc.email]
       );
 
+      // Art.20 — portabilite COMPLETE : credits/dettes, recompenses,
+      // parrainages, usages de codes promo, historique d'achats, notes.
+      // allSettled : un dataset optionnel indisponible ne casse pas l'export.
+      const email = gc.email;
+      const [creditsR, rewardsR, refUsesR, promoLogsR, txR, notesR] =
+        await Promise.allSettled([
+          pool.query(
+            `SELECT cc.balance, cc.total_granted, cc.total_repaid, cc.created_at,
+                    u.business_name
+               FROM client_credits cc JOIN users u ON u.id=cc.user_id
+              WHERE LOWER(cc.client_email)=LOWER($1)
+              ORDER BY cc.created_at DESC LIMIT 200`, [email]),
+          pool.query(
+            `SELECT reward_type, status, created_at, expires_at
+               FROM client_rewards
+              WHERE LOWER(client_email)=LOWER($1)
+              ORDER BY created_at DESC LIMIT 200`, [email]),
+          pool.query(
+            `SELECT status, created_at
+               FROM referral_uses
+              WHERE LOWER(filleul_email)=LOWER($1)
+              ORDER BY created_at DESC LIMIT 200`, [email]),
+          pool.query(
+            `SELECT code_snapshot, discount_applied, used_at
+               FROM promo_usage_logs
+              WHERE LOWER(client_email)=LOWER($1)
+              ORDER BY used_at DESC LIMIT 200`, [email]),
+          pool.query(
+            `SELECT t.date, t.amount, t.description, u.business_name
+               FROM transactions t JOIN users u ON u.id=t.user_id
+              WHERE LOWER(t.client_email)=LOWER($1) AND t.deleted_at IS NULL
+              ORDER BY t.date DESC LIMIT 200`, [email]),
+          pool.query(
+            `SELECT note_text, created_by_name, created_at
+               FROM client_notes
+              WHERE LOWER(client_email)=LOWER($1)
+              ORDER BY created_at DESC LIMIT 200`, [email]),
+        ]);
+      const pick = (r) => (r.status === 'fulfilled' ? r.value.rows : []);
+
       const exportData = {
         export_date: new Date().toISOString(),
         account: {
@@ -294,8 +334,14 @@ module.exports = function attachAccountRoutes(router) {
           phone:      gc.phone,
           created_at: gc.created_at,
         },
-        appointments: appts,
+        appointments:  appts,
         loyalty_cards: loyalty,
+        credits:       pick(creditsR),
+        rewards:       pick(rewardsR),
+        referrals:     pick(refUsesR),
+        promo_usages:  pick(promoLogsR),
+        purchases:     pick(txR),
+        notes:         pick(notesR),
         note: 'Export RGPD — Article 20 du Règlement Général sur la Protection des Données',
       };
 
