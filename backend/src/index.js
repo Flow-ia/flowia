@@ -462,21 +462,6 @@ function startServer() {
     });
   });
 
-  // ── Route de test email — À SUPPRIMER APRÈS TEST ─────────────────────────
-  app.get('/api/test-email', async (req, res) => {
-    try {
-      const { sendEmail } = require('./utils/email');
-      await sendEmail({
-        to: 'gacinoufel@gmail.com',
-        subject: 'Test email FlowIA',
-        html: '<p>Test email depuis FlowIA backend</p>'
-      });
-      res.json({ ok: true, message: 'Email envoyé' });
-    } catch(e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
   // ── Métriques cache + stats détaillées ─────────────────────────────────
   app.get('/api/health/cache', (req, res) => {
     const now = Date.now();
@@ -489,7 +474,10 @@ function startServer() {
   });
 
   // ── Purge manuelle du cache (admin seulement) ─────────────────────────────
-  app.delete('/api/health/cache', (req, res) => {
+  // Securise par adminAuth : sans auth, un tiers pouvait invalider le cache
+  // en boucle (cache stampede = degradation perf).
+  const { adminAuth: _adminAuthCache } = require('./middleware/adminAuth');
+  app.delete('/api/health/cache', _adminAuthCache, (req, res) => {
     const before = memCache.size;
     memCache.clear();
     res.json({ ok: true, cleared: before });
