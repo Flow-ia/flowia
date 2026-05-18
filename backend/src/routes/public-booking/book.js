@@ -786,16 +786,27 @@ module.exports = function attachBookRoute(router) {
       // Marquer le code promo comme utilisé (uses_count + is_active si max_uses atteint)
       if (promoCodeId) {
         try {
-          await pool.query(
+          // M3r — garde atomique anti-sur-utilisation. Sans
+          // `AND (max_uses IS NULL OR uses_count < max_uses)`, 2 reservations
+          // concurrentes avec un code max_uses=1 (parrainage/fidelite/anniv)
+          // l'incrementaient toutes deux -> code use 2x. Le UPDATE
+          // conditionnel borne uses_count a max_uses ; RETURNING + warn
+          // tracent la course perdue (meme pattern que transactions.js).
+          const { rows: pcU } = await pool.query(
             `UPDATE promo_codes
                SET uses_count = uses_count + 1,
                    is_active  = CASE
                      WHEN max_uses IS NOT NULL AND (uses_count + 1) >= max_uses THEN FALSE
                      ELSE is_active
                    END
-             WHERE id=$1`,
+             WHERE id=$1
+               AND (max_uses IS NULL OR uses_count < max_uses)
+             RETURNING id`,
             [promoCodeId]
           );
+          if (!pcU.length) {
+            console.warn('[PROMO COUNT race BOOK] max_uses atteint concurrent', { promoCodeId });
+          }
           // Log traçabilité
           await pool.query(
             `INSERT INTO promo_usage_logs
