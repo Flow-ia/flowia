@@ -70,7 +70,7 @@ input[type=time]::-webkit-calendar-picker-indicator { opacity: 0.4; }
 
 /* Gradient text */
 .grad-text {
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: #6366f1;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

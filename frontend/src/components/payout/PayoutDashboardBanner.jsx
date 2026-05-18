@@ -29,7 +29,7 @@ export default function PayoutDashboardBanner() {
 
   return (
     <div style={{
-      background: "linear-gradient(135deg, #042C53, #185FA5)",
+      background: "#185FA5",
       borderRadius: 12, padding: "1.25rem 1.5rem",
       color: "#fff",
       display: "grid",

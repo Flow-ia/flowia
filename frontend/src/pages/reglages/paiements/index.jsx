@@ -1296,9 +1296,9 @@ function OnlinePaymentsAnalytics({ t, showToast }) {
         </div>
       </div>
 
-      {/* HERO gradient bleu */}
+      {/* HERO bleu (aplat — FDS no-gradient) */}
       <div style={{
-        background: 'linear-gradient(135deg, #042C53, #185FA5)',
+        background: '#185FA5',
         borderRadius: 10, padding: '1.25rem', color: '#fff',
       }}>
         <div style={{

@@ -229,7 +229,7 @@ export default function TabReversements({ period }) {
           }}>
             <div style={{
               width: progPct + "%", height: "100%",
-              background: "linear-gradient(90deg, #1D9E75, #0F6E56)",
+              background: "#0F6E56",
             }} />
           </div>
           <div style={{
