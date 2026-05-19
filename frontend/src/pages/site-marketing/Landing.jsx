@@ -4,6 +4,7 @@ import { S, primaryBtnStyle, ghostBtnStyle, primaryHover, ghostHover, cardHover,
 import HeroSocialBg from './components/HeroSocialBg';
 import { COMMERCANT_URL } from '../../utils/siteConfig';
 import Seo from './components/Seo';
+import OfferForm from './components/OfferForm';
 
 export default function Landing() {
   return (
@@ -1046,10 +1047,16 @@ function FinalCTA() {
   return (
     <Section bg={S.bgMuted} paddingY={88} borderTop>
       <div style={{ textAlign: 'center', maxWidth: 640, margin: '0 auto' }}>
-        <H2 align="center">{"Prêt à digitaliser votre salon ?"}</H2>
-        <Lede align="center">{"14 jours d'essai. Sans carte. Sans engagement."}</Lede>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-          <PrimaryCta href={COMMERCANT_URL + '/register?plan=essentiel&period=monthly'}>{"Essayer gratuitement"}</PrimaryCta>
+        <H2 align="center">{"1 mois gratuit du plan Essentiel"}</H2>
+        <Lede align="center">{"Laissez vos coordonnées, on vous envoie votre accès. Sans carte, sans engagement."}</Lede>
+        <div style={{ marginTop: 28 }}>
+          <OfferForm />
+        </div>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 22, fontSize: 13 }}>
+          <a href={COMMERCANT_URL + '/register?plan=essentiel&period=monthly'}
+            style={{ color: S.fgMuted, textDecoration: 'underline' }}>
+            {"Déjà décidé ? Créer mon compte"}
+          </a>
           <SecondaryCta to="/contact">{"Parler à un conseiller"}</SecondaryCta>
         </div>
       </div>
