@@ -12,6 +12,10 @@ require('./marketing')(router);
 //   commercant.
 require('./contact')(router);
 
+// ─ Capture lead inbound (offre "1 mois gratuit Essentiel", site marketing).
+//   Doit etre monte AVANT le gate /:slug : 'inbound-lead' n'est pas un slug.
+require('./inbound-lead')(router);
+
 // ─ Marketplace : recherche publique de commercants (page /recherche).
 //   Doit etre monte AVANT le gate /:slug : 'marketplace' n'est pas un slug.
 require('./marketplace')(router);

@@ -362,6 +362,14 @@ function startServer() {
     standardHeaders: true, legacyHeaders: false,
   });
   app.use('/api/pub/contact', contactLimiter);
+  // Capture lead inbound (offre "1 mois gratuit Essentiel") — cap strict
+  // anti-spam, monte AVANT le pubLimiter general (ordre d'evaluation express).
+  const inboundLeadLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 5,
+    message: { error: 'Trop de demandes envoyees. Reessayez dans quelques minutes.' },
+    standardHeaders: true, legacyHeaders: false,
+  });
+  app.use('/api/pub/inbound-lead', inboundLeadLimiter);
   app.use('/api/pub',            pubLimiter,  require('./routes/public-booking'));
   app.use('/api/categories',     apiLimiter,  require('./routes/categories'));
   app.use('/api/employees',      apiLimiter,  require('./routes/employees'));
