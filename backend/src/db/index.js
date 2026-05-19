@@ -2376,6 +2376,52 @@ async function initDB() {
   `);
   await runMigration(`DROP INDEX IF EXISTS idx_transactions_appointment_active`);
 
+  // ── Machine inbound : acquisition commercants OPT-IN ──────────────────────
+  // Leads qui ont LAISSE leur contact via le formulaire public (offre
+  // "1 mois gratuit Essentiel"). Donnees plateforme (pas multi-tenant : pas
+  // de user_id). consent_at = preuve d'opt-in RGPD. unsubscribed_at non NULL
+  // = ne JAMAIS recontacter (verifie avant chaque envoi). Email dedoublonne
+  // en insensible a la casse via index unique sur lower(email).
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS inbound_leads (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email VARCHAR(255) NOT NULL,
+      salon_name VARCHAR(255),
+      city VARCHAR(120),
+      source VARCHAR(60) DEFAULT 'landing',
+      consent_at TIMESTAMPTZ,
+      status VARCHAR(24) DEFAULT 'nouveau',
+      offer_code VARCHAR(60),
+      notes TEXT,
+      last_email_at TIMESTAMPTZ,
+      unsubscribed_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_leads_email_lc ON inbound_leads (lower(email))`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_inbound_leads_status ON inbound_leads(status, created_at DESC)`);
+
+  // Log de la sequence de relance + GARANTIE D'IDEMPOTENCE : l'index unique
+  // (lead_id, step_key) empeche structurellement tout double-envoi d'une
+  // meme etape a un meme lead (retry-safe, cron-replay-safe). Le cron pioche
+  // les lignes 'queued' dont scheduled_at est echu.
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS inbound_lead_emails (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      lead_id UUID NOT NULL REFERENCES inbound_leads(id) ON DELETE CASCADE,
+      step_key VARCHAR(32) NOT NULL,
+      status VARCHAR(20) DEFAULT 'queued',
+      provider_message_id VARCHAR(120),
+      error TEXT,
+      scheduled_at TIMESTAMPTZ,
+      sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_emails_uniq ON inbound_lead_emails(lead_id, step_key)`);
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_inbound_emails_due ON inbound_lead_emails(status, scheduled_at) WHERE status = 'queued'`);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─
