@@ -192,10 +192,27 @@ module.exports = function attachMarketingRoutes(router) {
            WHERE unsubscribe_token = $1`, [token]
       );
 
-      const totalUpdated = c1 + c2;
+      // Leads inbound (acquisition opt-in). Idempotent : unsubscribed_at posé
+      // une seule fois ; les relances en file sont marquées 'skipped' pour ne
+      // plus jamais partir (RGPD), retry/replay-safe.
+      const { rows: ilRows } = await pool.query(
+        `SELECT id, email FROM inbound_leads WHERE unsubscribe_token = $1 LIMIT 1`, [token]
+      );
+      const { rowCount: c3 } = await pool.query(
+        `UPDATE inbound_leads SET unsubscribed_at = NOW(), status = 'desinscrit', updated_at = NOW()
+           WHERE unsubscribe_token = $1 AND unsubscribed_at IS NULL`, [token]
+      );
+      if (ilRows[0]) {
+        await pool.query(
+          `UPDATE inbound_lead_emails SET status = 'skipped'
+             WHERE lead_id = $1 AND status = 'queued'`, [ilRows[0].id]
+        );
+      }
+
+      const totalUpdated = c1 + c2 + c3;
       const ip = req.ip || req.headers['x-forwarded-for'] || null;
       const userAgent = req.get('user-agent') || null;
-      const email = caRows[0]?.email || gcRows[0]?.email || null;
+      const email = caRows[0]?.email || gcRows[0]?.email || ilRows[0]?.email || null;
       const businessName = caRows[0]?.business_name || null;
 
       // Audit RGPD : log uniquement si on a trouvé un client (token valide).

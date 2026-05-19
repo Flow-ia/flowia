@@ -2422,6 +2422,12 @@ async function initDB() {
   await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_emails_uniq ON inbound_lead_emails(lead_id, step_key)`);
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_inbound_emails_due ON inbound_lead_emails(status, scheduled_at) WHERE status = 'queued'`);
 
+  // Token de desinscription 1-clic (RGPD obligatoire dans chaque email).
+  // Reutilise l'entrypoint public existant GET /api/pub/unsubscribe/:token.
+  await runMigration(`ALTER TABLE inbound_leads ADD COLUMN IF NOT EXISTS unsubscribe_token UUID DEFAULT gen_random_uuid()`);
+  await runMigration(`UPDATE inbound_leads SET unsubscribe_token = gen_random_uuid() WHERE unsubscribe_token IS NULL`);
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_leads_unsub ON inbound_leads(unsubscribe_token)`);
+
   await applyAdminSchema(pool);
 
   // ── Migration one-shot : reformater les slugs existants en nom-ville-CP ─

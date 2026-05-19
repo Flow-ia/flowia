@@ -884,6 +884,12 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
     scheduleLocked(60 * 60 * 1000,      'worker:campaign:queue',       'queue',     processCampaignQueue);
     // File d'attente SMS — toutes les 30 min (campagnes IA planifiées par phase)
     scheduleLocked(30 * 60 * 1000,      'worker:sms:queue',            'sms',       processSmsQueue);
+    // Séquence email acquisition (leads inbound opt-in) — toutes les 30 min.
+    // Quota subordonné au transactionnel (cf. inboundSequence.js).
+    scheduleLocked(30 * 60 * 1000,      'worker:inbound:sequence',     'inbound',   async () => {
+      const { processInboundSequence } = require('./utils/inboundSequence');
+      await processInboundSequence(dbPool);
+    });
     // Rappels email RDV — toutes les heures
     scheduleLocked(60 * 60 * 1000,      'cron:reminders:appointment',  'reminders', processAppointmentReminders);
     // Nettoyer les transactions pending depuis plus de 2h (paiement abandonné)
