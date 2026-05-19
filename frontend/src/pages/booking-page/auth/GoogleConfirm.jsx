@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { pubApi } from '../../../utils/api';
-import { getBookingBase } from '../helpers';
+import { getBookingBase, getBookingResume, clearBookingResume } from '../helpers';
 import { ConsentCheckboxes } from '../../../components/ConsentCheckboxes';
 import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 import { Icon } from '../../../components/Icon';
@@ -103,8 +103,14 @@ export default function GoogleConfirm() {
       // ne stocke plus que l'objet client (non sensible) en localStorage.
       localStorage.setItem('ff_client_info', JSON.stringify(res.client));
       try { localStorage.removeItem('ff_oauth_pre_register'); } catch {}
-      // Redirect vers la page de réservation du commerce — onAuth-équivalent.
-      window.location.assign(`${base}`);
+      // Restaure la sélection de réservation en cours stashée avant le départ
+      // Google (AuthPanel.loginWithGoogle). Sans ça, on retombait sur la racine
+      // /book/:slug = étape 1, l'utilisateur devait re-choisir prestation +
+      // créneau. Avec stash → on revient sur l'URL `.../confirmation` exacte
+      // et index.jsx restaure svc/employé/date/créneau + step=6.
+      const resume = getBookingResume(slug);
+      clearBookingResume(slug);
+      window.location.assign(resume || `${base}`);
     } catch (e) {
       // Côté back : 400 CGU_REQUIRED, 401 OAUTH_PRE_TOKEN_INVALID,
       // 410 OAUTH_PRE_TOKEN_EXPIRED. On mappe vers l'écran approprié.
@@ -126,6 +132,9 @@ export default function GoogleConfirm() {
 
   const cancel = () => {
     try { localStorage.removeItem('ff_oauth_pre_register'); } catch {}
+    // Annulation explicite : on purge le stash pour ne pas réintroduire la
+    // sélection sur le prochain lancement (l'utilisateur a abandonné).
+    clearBookingResume(slug);
     window.location.assign(`${base}/login`);
   };
 

@@ -12,6 +12,7 @@
 // 3. Ferme la popup. Si close() échoue (popup ouverte dans un onglet),
 //    redirige vers l'accueil — l'app reprend avec l'utilisateur connecté.
 import { useEffect } from 'react';
+import { getBookingResume } from './booking-page/helpers';
 
 export default function OAuthCallback() {
   useEffect(() => {
@@ -121,7 +122,13 @@ export default function OAuthCallback() {
       if (!window.closed) {
         if (type === 'client') {
           const slug = params.get('slug') || '';
-          window.location.replace(slug ? `/book/${slug}` : '/');
+          // Sur mobile/tablette, window.close() échoue souvent (l'onglet OAuth
+          // n'a pas été ouvert comme popup script-closable). Au lieu de
+          // retomber sur /book/:slug racine (étape 1, sélection perdue), on
+          // restaure l'URL de la réservation en cours stashée par AuthPanel
+          // avant le départ Google. Robuste à toutes les plateformes.
+          const resume = slug ? getBookingResume(slug) : null;
+          window.location.replace(resume || (slug ? `/book/${slug}` : '/'));
         } else {
           window.location.replace('/');
         }

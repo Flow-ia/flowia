@@ -59,6 +59,55 @@ export const stepToPath = (base, s, svcId, empId, dateStr, slot) => {
   return base;
 };
 
+// Stash de la sélection de réservation en cours pendant le round-trip OAuth
+// Google (popup desktop OU nouvel onglet mobile/tablette). Le code OAuth backend
+// est intouchable (CLAUDE.md règle 5) ; on véhicule le retour côté frontend
+// via localStorage (partagé cross-tabs same-origin).
+//
+// Cycle de vie :
+//   - setBookingResume(slug, path) → appelé juste avant `loginWithGoogle`,
+//     capture `pathname + search` du booking en cours (étape 6 typiquement).
+//   - getBookingResume(slug) → lu par GoogleConfirm après finalize, par
+//     OAuthCallback dans le fallback type=client (mobile new-tab non fermable),
+//     et par index.jsx en filet de sécurité.
+//   - clearBookingResume(slug) → après restauration ou annulation.
+//
+// TTL 10 min : aligné sur la durée de vie du pre_token OAuth.
+const RESUME_KEY = (slug) => `ff_booking_resume_${slug}`;
+const RESUME_TTL_MS = 10 * 60 * 1000;
+
+export const setBookingResume = (slug, path) => {
+  try {
+    if (!slug || !path) return;
+    // Refuse les paths d'auth/confirm — on ne stocke que des URLs réservation.
+    if (/\/auth\/google-confirm/.test(path)) return;
+    if (/\/(login|register|auth)(\?|$)/.test(path)) return;
+    localStorage.setItem(RESUME_KEY(slug), JSON.stringify({ path, ts: Date.now() }));
+  } catch {}
+};
+
+export const getBookingResume = (slug) => {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY(slug));
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj?.path || typeof obj.path !== 'string') return null;
+    // Stash périmé → nettoyer + ignorer.
+    if (!obj.ts || (Date.now() - obj.ts) > RESUME_TTL_MS) {
+      localStorage.removeItem(RESUME_KEY(slug));
+      return null;
+    }
+    // Garde-fou anti open-redirect : path doit pointer dans /book/<slug>/...
+    // ou /marketplace/book/<slug>/... uniquement.
+    if (!/^\/(marketplace\/)?book\/[^/?#]+/.test(obj.path)) return null;
+    return obj.path;
+  } catch { return null; }
+};
+
+export const clearBookingResume = (slug) => {
+  try { localStorage.removeItem(RESUME_KEY(slug)); } catch {}
+};
+
 // Grouper services par catégorie booking (booking_category_name prioritaire,
 // fallback category_name). Retourne { svcGroups, svcNoCat }.
 export const groupServicesByCategory = (services) => {

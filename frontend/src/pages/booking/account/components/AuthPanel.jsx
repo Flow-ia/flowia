@@ -7,6 +7,7 @@ import { GoogleOAuthOverlay } from '../../../../components/AuthFlow';
 import { ConsentCheckboxes } from '../../../../components/ConsentCheckboxes';
 import { PhoneInput, isValidPhoneNumber } from '../../../../components/PhoneInput';
 import BirthMonthYearPicker from '../../../../components/BirthMonthYearPicker';
+import { setBookingResume } from '../../../booking-page/helpers';
 
 // ── Panneau Auth client ───────────────────────────────────────────────────────
 export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEmail = '', initialMode = 'login', referralCode = '', quickMode = false, onModeChange }) {
@@ -98,6 +99,16 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
     // la création (commit 19) ; on le passe par compat tokens en cache.
     cleanupGoogle();
     setGError(''); setGStatus('loading');
+    // Stash de la sélection booking en cours : le round-trip OAuth Google
+    // (popup desktop OU nouvel onglet mobile/tablette) peut atterrir n'importe
+    // où, on véhicule le retour via localStorage same-origin. Sans ça, après
+    // inscription Google nouveau client (handlePreRegister → GoogleConfirm)
+    // OU sur mobile (OAuthCallback fallback `window.close()` impossible), on
+    // retombait sur /book/:slug racine = étape 1, sélection perdue.
+    try {
+      const cur = window.location.pathname + (window.location.search || '');
+      setBookingResume(slug, cur);
+    } catch {}
     const url = pubApi.googleAuthUrl(slug, referralCode || undefined, marketingOptIn);
     gPopupRef.current = window.open(url, 'google_auth',
       'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=' +
@@ -128,6 +139,12 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
       // Seules les infos utilisateur (non sensibles) restent en localStorage
       // pour servir d'indicateur "connecté" aux composants.
       localStorage.setItem('ff_client_info', JSON.stringify(client));
+      // ATTENTION : ne PAS clearBookingResume(slug) ici. Sur mobile/tablette,
+      // l'OAuth se passe dans un nouvel onglet ; OAuthCallback dans cet onglet
+      // lit la stash ~500ms après pour le fallback `window.location.replace`
+      // (window.close() échoue). Si l'opener (ici) clearait la stash avant,
+      // l'onglet OAuth retomberait sur /book/:slug racine. Le stash expire
+      // tout seul (TTL 10 min) — laisser passer.
       cleanupGoogle();
       setGStatus('success');
       onAuth(client);

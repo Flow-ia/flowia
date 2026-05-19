@@ -21,8 +21,48 @@ export function Step6Confirm({
   paymentConfig, referralCode,
   navigate, setMyApptsInitTab, setView, handleAuth,
 }) {
+  // Réhydratation défensive : le marker `ff_client_info` (écrit au login,
+  // register, OAuth Google, register rapide) est la source de vérité côté
+  // navigateur pour "session active" (le JWT lui-même est en cookie HttpOnly
+  // invisible au JS). Si Step6 monte avec clientUser=null MAIS que ce marker
+  // existe (timing au retour OAuth, multi-onglets mobile, navigation interne
+  // depuis un autre composant qui n'a pas propagé le state), on réinjecte la
+  // session via handleAuth — au lieu de redemander une connexion à tort.
+  useEffect(() => {
+    if (clientUser) return;
+    try {
+      const stored = localStorage.getItem('ff_client_info');
+      if (!stored) return;
+      const info = JSON.parse(stored);
+      if (info && info.id && typeof handleAuth === 'function') {
+        handleAuth(info);
+      } else if (info && info.id) {
+        setClientUser(info);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Si pas connecte, on affiche l'AuthPanel inline (anciennement Step5).
   if (!clientUser) {
+    // Mais si une session existe (marker localStorage) → on est en cours
+    // d'hydratation via l'effect ci-dessus, on affiche un placeholder neutre
+    // au lieu du formulaire de connexion (Bug : "redemande de se connecter
+    // alors que le compte est bien connecté").
+    let hasSessionMarker = false;
+    try { hasSessionMarker = !!localStorage.getItem('ff_client_info'); } catch {}
+    if (hasSessionMarker) {
+      return (
+        <div style={{ padding:'24px 0', textAlign:'center' }}>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <div style={{ width:22, height:22, margin:'0 auto', borderRadius:'50%',
+            border:`2px solid ${th.border}`, borderTopColor:th.accent,
+            animation:'spin .7s linear infinite' }}/>
+          <p style={{ marginTop:12, fontSize:13, color:th.muted }}>
+            {"Restauration de votre session..."}
+          </p>
+        </div>
+      );
+    }
     return (
       <div>
         <h2 style={{fontSize:18,fontWeight:500,color:th.text,margin:'0 0 12px',letterSpacing:'-0.02em'}}>
