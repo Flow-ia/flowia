@@ -214,7 +214,7 @@ router.post('/checkout', authMiddleware, async (req, res) => {
 
     // Bloque si abonnement déjà actif → utiliser portail pour changer.
     const { rows } = await pool.query(
-      'SELECT subscription_status FROM users WHERE id=$1', [userId]
+      'SELECT subscription_status, email FROM users WHERE id=$1', [userId]
     );
     const status = rows[0]?.subscription_status;
     if (status && ['active', 'trialing', 'past_due'].includes(status)) {
@@ -222,6 +222,25 @@ router.post('/checkout', authMiddleware, async (req, res) => {
         error: 'Abonnement déjà actif',
         action: 'use_portal',
       });
+    }
+
+    // Offre "1 mois gratuit Essentiel" : si l'email du marchand a ete capture
+    // via le formulaire d'acquisition (present dans inbound_leads), on porte
+    // l'essai a 30 jours au lieu de 14. Lookup read-only insensible a la casse
+    // (index unique sur lower(email)). FAIL-SAFE : toute erreur de ce lookup
+    // (non-critique, hors chaine financiere) retombe sur 14j -> un abonnement
+    // ne doit JAMAIS etre bloque par la table de prospection.
+    let trialDays = 14;
+    try {
+      const mEmail = (rows[0]?.email || '').trim().toLowerCase();
+      if (mEmail) {
+        const il = await pool.query(
+          'SELECT 1 FROM inbound_leads WHERE lower(email) = $1 LIMIT 1', [mEmail]
+        );
+        if (il.rows.length) trialDays = 30;
+      }
+    } catch (e) {
+      console.error('[SUB CHECKOUT] inbound trial lookup', e.message);
     }
 
     const customerId = await ensureStripeCustomer(userId);
@@ -232,14 +251,15 @@ router.post('/checkout', authMiddleware, async (req, res) => {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      // Essai gratuit 14 jours sur Essentiel uniquement (pas Équipe).
+      // Essai gratuit sur Essentiel uniquement (pas Équipe) : 14 jours par
+      // défaut, 30 jours si le marchand vient de l'offre inbound (trialDays).
       // payment_method_collection: 'if_required' → CB NON demandée pendant
       // le trial (rien à payer immédiatement). Aligne avec le claim site
       // marketing 'sans carte bancaire'. Stripe demandera la CB avant fin
       // d'essai via email 'trial_will_end' (J-3) puis l'email automatique
       // 'invoice.payment_failed' si le client n'a pas ajouté de CB.
       ...(plan === 'essentiel' && {
-        subscription_data: { trial_period_days: 14 },
+        subscription_data: { trial_period_days: trialDays },
         payment_method_collection: 'if_required',
       }),
       success_url: `${frontUrl}/abonnement?status=success&session_id={CHECKOUT_SESSION_ID}`,

@@ -20,7 +20,6 @@ const { sendEmail, reserveGlobalEmail } = require('./email');
 
 const API_URL        = (process.env.API_PUBLIC_URL || 'https://api.flowiapro.com').replace(/\/$/, '');
 const COMMERCANT_URL = (process.env.COMMERCANT_URL  || 'https://commercant.flowiapro.com').replace(/\/$/, '');
-const OFFER_CODE     = (process.env.INBOUND_OFFER_PROMO_CODE || '').trim();
 // Cap global inbound < 300 (cap transactionnel) : garde une reserve
 // exclusive au transactionnel. Surchargeable, jamais >= 300.
 const INBOUND_GLOBAL_CAP = Math.min(
@@ -36,15 +35,12 @@ function esc(s) {
 
 const registerUrl = `${COMMERCANT_URL}/register?plan=essentiel&period=monthly`;
 
-// Bloc offre : code promo si configure cote env, sinon CTA seul (jamais de
-// promesse de code en dur si l'env n'est pas pret).
-function offerBlock() {
-  if (OFFER_CODE) {
-    return `<p style="font-size:14px;color:#374151;margin:0 0 10px;">Votre code pour <b>1 mois offert</b> sur le plan Essentiel :</p>
-    <p style="font-size:20px;font-weight:500;letter-spacing:1px;color:#111827;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:12px 18px;text-align:center;margin:0 0 18px;">${esc(OFFER_CODE)}</p>
-    <p style="font-size:13px;color:#6b7280;margin:0 0 18px;">A saisir lors de la creation de votre compte (champ code promo).</p>`;
-  }
-  return `<p style="font-size:14px;color:#374151;margin:0 0 18px;">Creez votre compte et profitez d'<b>1 mois offert</b> sur le plan Essentiel, sans carte et sans engagement.</p>`;
+// Bloc offre : aucun code a saisir. Le mois offert s'applique
+// AUTOMATIQUEMENT au checkout si le compte est cree avec la meme adresse
+// email que celle captheuree ici (cf. subscriptions.js : lookup
+// inbound_leads -> trial 30j au lieu de 14j).
+function offerBlock(email) {
+  return `<p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 18px;">Creez votre compte avec cette adresse email (<b>${esc(email)}</b>) : votre <b>mois offert</b> sur le plan Essentiel s'applique automatiquement, sans code, sans carte bancaire et sans engagement.</p>`;
 }
 
 function shell(inner, token) {
@@ -66,19 +62,19 @@ const TEMPLATES = {
     subject: `Votre mois gratuit FlowIA pour ${lead.salon_name || 'votre salon'}`,
     html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Bienvenue chez FlowIA</h2>
 <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">Bonjour,<br/>FlowIA reunit agenda en ligne, caisse, SMS de rappel, fidelite et parrainage en une seule application — sans commission sur vos reservations, et moins cher que Planity.</p>
-${offerBlock()}`, lead.unsubscribe_token),
+${offerBlock(lead.email)}`, lead.unsubscribe_token),
   }),
   relance1: (lead) => ({
     subject: `${lead.salon_name || 'Votre salon'} — votre acces FlowIA vous attend`,
     html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Vous y avez pense ?</h2>
 <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">Votre mois gratuit du plan Essentiel est toujours disponible. La mise en route prend moins de 15 minutes, et vos clients reservent en ligne 24/7 des le premier jour.</p>
-${offerBlock()}`, lead.unsubscribe_token),
+${offerBlock(lead.email)}`, lead.unsubscribe_token),
   }),
   relance2: (lead) => ({
     subject: `Dernier rappel — 1 mois offert sur FlowIA`,
     html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Derniere relance</h2>
 <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">On ne vous recontactera plus apres cet email. Si gerer agenda, caisse et fidelite au meme endroit (sans commission) vous interesse, c'est le moment d'activer votre mois offert.</p>
-${offerBlock()}`, lead.unsubscribe_token),
+${offerBlock(lead.email)}`, lead.unsubscribe_token),
   }),
 };
 
