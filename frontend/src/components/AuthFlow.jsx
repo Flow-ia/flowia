@@ -872,10 +872,13 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
       <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
         {/* Desktop : 2 colonnes (Votre commerce | Identite + Securite empiles)
-            Mobile  : 1 colonne (auto-fit avec minmax 360 retombe naturellement
-            quand la largeur dispo passe sous ~740px). Pas de media query. */}
+            Mobile  : 1 colonne. Pattern auto-fit + minmax(min(360px, 100%), 1fr)
+            empeche tout overflow horizontal sur un conteneur etroit : la
+            largeur min des items s'ajuste a 100% du grid quand le conteneur
+            est < 360px (cas mobile, conteneur ~232-312px). Pas de media
+            query — comportement natif CSS. */}
         <div style={{ display:'grid',
-                      gridTemplateColumns:'repeat(auto-fit, minmax(360px, 1fr))',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(min(360px, 100%), 1fr))',
                       gap:14, alignItems:'start' }}>
 
         {section('Votre commerce', (
