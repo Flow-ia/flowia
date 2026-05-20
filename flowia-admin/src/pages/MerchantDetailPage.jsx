@@ -141,6 +141,16 @@ export default function MerchantDetailPage() {
     }
   }
 
+  // Concatene message + code + detail backend (l'API renvoie { error, code, detail }
+  // sur les 500 — sans le detail, impossible de diagnostiquer en prod).
+  function formatErr(err, fallback) {
+    if (!err) return fallback;
+    const parts = [err.message || fallback];
+    if (err.data?.code  && err.data.code !== 'UNKNOWN') parts.push(`(${err.data.code})`);
+    if (err.data?.detail) parts.push(`— ${err.data.detail}`);
+    return parts.join(' ');
+  }
+
   async function doForceSlug(e) {
     e.preventDefault();
     const slug = slugInput.trim().toLowerCase();
@@ -152,7 +162,7 @@ export default function MerchantDetailPage() {
       setSlugOpen(false); setSlugInput(''); setSlugLockInput(true);
       await load();
     } catch (err) {
-      setError(err && err.message ? err.message : 'Erreur.');
+      setError(formatErr(err, 'Erreur.'));
     } finally {
       setBusy(false);
     }
@@ -167,7 +177,7 @@ export default function MerchantDetailPage() {
       setSuccess(`Slug deverrouille : /${r.slug}.`);
       await load();
     } catch (err) {
-      setError(err && err.message ? err.message : 'Erreur.');
+      setError(formatErr(err, 'Erreur.'));
     } finally {
       setBusy(false);
     }
