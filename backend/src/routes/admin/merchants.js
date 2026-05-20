@@ -692,13 +692,16 @@ router.post('/:id/slug/force', async (req, res) => {
 
       if (before.length) {
         await pool.query(
+          // Casts ::uuid obligatoires : node-pg envoie les params en text par
+          // defaut, et dans un CASE avec NULL, PG infere le resultat en text
+          // → datatype_mismatch sur colonnes UUID (PG 42804).
           `UPDATE booking_settings
               SET slug = $2,
                   slug_locked = $3,
                   slug_locked_at = CASE WHEN $3 THEN NOW() ELSE NULL END,
-                  slug_locked_by_admin_id = CASE WHEN $3 THEN $4 ELSE NULL END,
+                  slug_locked_by_admin_id = CASE WHEN $3 THEN $4::uuid ELSE NULL END,
                   updated_at = NOW()
-            WHERE user_id = $1`,
+            WHERE user_id = $1::uuid`,
           [req.params.id, slug, lock, req.admin.id]
         );
       } else {
@@ -706,9 +709,9 @@ router.post('/:id/slug/force', async (req, res) => {
         await pool.query(
           `INSERT INTO booking_settings
              (user_id, is_enabled, slug, slug_locked, slug_locked_at, slug_locked_by_admin_id)
-           VALUES ($1, FALSE, $2, $3,
+           VALUES ($1::uuid, FALSE, $2, $3,
                    CASE WHEN $3 THEN NOW() ELSE NULL END,
-                   CASE WHEN $3 THEN $4 ELSE NULL END)`,
+                   CASE WHEN $3 THEN $4::uuid ELSE NULL END)`,
           [req.params.id, slug, lock, req.admin.id]
         );
       }
