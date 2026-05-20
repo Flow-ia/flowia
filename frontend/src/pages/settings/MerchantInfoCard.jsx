@@ -35,11 +35,10 @@ export default function MerchantInfoCard({ theme, showToast }) {
   const [profOk,   setProfOk]   = useState('');
   const [slugInfo, setSlugInfo] = useState(null); // { oldSlug, newSlug }
   const [confirm,  setConfirm]  = useState(false); // boolean : modale ouverte ou non
-  const [refreshing, setRefreshing] = useState(false);
 
   // Helper : extrait les champs metier d'un user vers la forme du formulaire.
-  // Centralise pour eviter toute divergence entre les 3 endroits qui font la
-  // bascule user -> form (init, useEffect, onModifierClick).
+  // Centralise pour eviter toute divergence entre les endroits qui font la
+  // bascule user -> form (init, useEffect, startEditing).
   const userToForm = (u) => ({
     businessName:      u?.businessName      || '',
     address:           u?.address           || '',
@@ -59,29 +58,16 @@ export default function MerchantInfoCard({ theme, showToast }) {
     if (!editing) setForm(userToForm(user));
   }, [user, editing]);
 
-  // Resync au moment d'entrer en edition. Defense contre :
-  //  - user incomplet a l'init du composant (cas race-condition rare ou
-  //    l'AuthProvider a setUser depuis le login response, qui contient
-  //    tous les champs, mais avant l'appel /me defensif).
-  //  - user reset par un re-mount (changement de route) ou re-render
-  //    React qui aurait laisse form fige sur des valeurs vides.
-  // Refetch /me en parallele pour garantir que user reflete la BDD
-  // (utile si un onglet voisin a modifie le profil — peu probable mais
-  // robuste). Le form prend les valeurs LOCALES de user immediatement,
-  // puis sera re-syncronise par le useEffect quand /me repondra.
+  // Resync au moment d'entrer en edition. Defense contre user partiellement
+  // charge dans le contexte Auth au moment du clic — force le form a
+  // adopter immediatement toutes les valeurs courantes de user (les
+  // donnees BDD sont deja garanties presentes via le boot api.me()
+  // declenche par AuthProvider derriere un Splash gate).
   const startEditing = () => {
     setForm(userToForm(user));
     setEditing(true);
     setProfErr('');
     setProfOk('');
-    // Background refresh — non bloquant. Si la requete echoue (offline,
-    // 500 transitoire), on garde simplement les donnees locales : c'est
-    // un "best effort", le commercant peut quand meme editer.
-    setRefreshing(true);
-    api.me()
-      .then(d => { if (d?.user) updateUser(d.user); })
-      .catch(() => {})
-      .finally(() => setRefreshing(false));
   };
 
   // Detecte si le save va declencher un recalcul du slug (nom/ville/CP).
@@ -162,23 +148,7 @@ export default function MerchantInfoCard({ theme, showToast }) {
   return (
     <div style={{ borderRadius:12, overflow:'hidden',
                   background:t.card, border:`0.5px solid ${t.border}` }}>
-      <button type="button"
-              onClick={() => {
-                const next = !open;
-                setOpen(next);
-                // Refetch /me a l'ouverture pour rafraichir la vue read-only
-                // (et le form si l'utilisateur clique ensuite sur Modifier).
-                // Background, non bloquant : la vue s'affiche immediatement
-                // avec les donnees deja en cache. Tant qu'on n'edite pas, le
-                // useEffect [user, editing] propagera les nouvelles valeurs.
-                if (next && !editing && !refreshing) {
-                  setRefreshing(true);
-                  api.me()
-                    .then(d => { if (d?.user) updateUser(d.user); })
-                    .catch(() => {})
-                    .finally(() => setRefreshing(false));
-                }
-              }}
+      <button type="button" onClick={() => setOpen(o => !o)}
               style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
                        padding:'12px 14px', border:'none', cursor:'pointer', textAlign:'left',
                        background:t.cardAlt, fontFamily:'inherit' }}>
@@ -208,13 +178,7 @@ export default function MerchantInfoCard({ theme, showToast }) {
       {open && (
         <div style={{ borderTop:`0.5px solid ${t.separator}` }}>
           {!editing && (
-            <div style={{ padding:'10px 14px 4px', display:'flex',
-                          justifyContent:'flex-end', alignItems:'center', gap:8 }}>
-              {refreshing && (
-                <span style={{ fontSize:11, color:t.muted }}>
-                  Actualisation...
-                </span>
-              )}
+            <div style={{ padding:'10px 14px 4px', display:'flex', justifyContent:'flex-end' }}>
               <Button variant="secondary" size="small" type="button"
                       onClick={startEditing}>
                 <I.Edit style={{ width:12, height:12, marginRight:5 }}/>
