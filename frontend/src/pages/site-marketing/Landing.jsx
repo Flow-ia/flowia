@@ -224,8 +224,8 @@ function Hero() {
         </p>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-          <PrimaryCta href={COMMERCANT_URL + '/register?plan=essentiel&period=monthly'}>{"Essayer 14 jours"}</PrimaryCta>
-          <SecondaryCta to="/fonctionnalites">{"Voir la démo"}</SecondaryCta>
+          <PrimaryCta href={COMMERCANT_URL + '/register?plan=essentiel&period=monthly'}>{"Essayer 1 mois gratuit"}</PrimaryCta>
+          <SecondaryCta to="/contact?topic=demo">{"Réserver une démo"}</SecondaryCta>
         </div>
         <p style={{ fontSize: 13, color: S.fgSubtle, margin: '0 0 18px' }}>
           {"Sans carte bancaire · Sans engagement · Installation immédiate"}
@@ -924,7 +924,7 @@ function Pricing() {
       name: 'Essentiel', price: '24',
       desc: "Pour faire grandir.",
       features: ['RDV illimités', "Jusqu'à 5 employés", '0 % de commission', 'Campagnes SMS marketing', 'Fidélité & parrainage', 'Marketing IA', 'Support prioritaire'],
-      cta: 'Essayer 14 jours', highlight: true,
+      cta: 'Essayer 1 mois gratuit', highlight: true,
     },
     {
       name: 'Équipe', price: '49',
@@ -938,7 +938,7 @@ function Pricing() {
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
         <Eyebrow>Tarifs</Eyebrow>
         <H2 align="center">{"Simple, sans engagement"}</H2>
-        <Lede align="center">{"14 jours d'essai gratuit. Annulez quand vous voulez."}</Lede>
+        <Lede align="center">{"1 mois d'essai gratuit. Annulez quand vous voulez."}</Lede>
       </div>
       <div style={{
         display: 'grid', gap: 16,
@@ -999,7 +999,7 @@ function Pricing() {
 function Faq() {
   const items = [
     { q: "Puis-je essayer FlowIA gratuitement ?",
-      a: "Oui. Plan Découverte gratuit à vie. Plan Essentiel offert 14 jours sans carte bancaire." },
+      a: "Oui. Plan Découverte gratuit à vie. Plan Essentiel offert 1 mois sans carte bancaire." },
     { q: "Mes données sont-elles en sécurité ?",
       a: "Hébergement Europe, chiffrement, conforme RGPD. Export et suppression à tout moment." },
     { q: "Migration depuis mon ancien outil ?",

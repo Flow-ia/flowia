@@ -101,7 +101,7 @@ export default function DashboardPage() {
             </div>
             <ClickableStatCard label="Essais gratuits en cours"
                                value={fmt(stats.subscriptions?.trialing)}
-                               meta="Essai 14 jours · sans CB"
+                               meta="Essai 1 mois · sans CB"
                                onClick={() => openDrill('trialing', 'Essais gratuits en cours')}/>
             <ClickableStatCard label="Plans offerts (admin)"
                                value={fmt(stats.subscriptions?.admin_granted)}

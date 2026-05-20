@@ -224,24 +224,12 @@ router.post('/checkout', authMiddleware, async (req, res) => {
       });
     }
 
-    // Offre "1 mois gratuit Essentiel" : si l'email du marchand a ete capture
-    // via le formulaire d'acquisition (present dans inbound_leads), on porte
-    // l'essai a 30 jours au lieu de 14. Lookup read-only insensible a la casse
-    // (index unique sur lower(email)). FAIL-SAFE : toute erreur de ce lookup
-    // (non-critique, hors chaine financiere) retombe sur 14j -> un abonnement
-    // ne doit JAMAIS etre bloque par la table de prospection.
-    let trialDays = 14;
-    try {
-      const mEmail = (rows[0]?.email || '').trim().toLowerCase();
-      if (mEmail) {
-        const il = await pool.query(
-          'SELECT 1 FROM inbound_leads WHERE lower(email) = $1 LIMIT 1', [mEmail]
-        );
-        if (il.rows.length) trialDays = 30;
-      }
-    } catch (e) {
-      console.error('[SUB CHECKOUT] inbound trial lookup', e.message);
-    }
+    // Offre standard : 1 mois (30 jours) d'essai gratuit Essentiel pour tous
+    // les nouveaux marchands. Aligne avec la promesse du site marketing
+    // ("1 mois d'essai gratuit, sans carte bancaire"). La table inbound_leads
+    // est conservee pour usages futurs (segmentation, attribution) mais ne
+    // module plus la duree d'essai.
+    const trialDays = 30;
 
     const customerId = await ensureStripeCustomer(userId);
     const stripe = getStripe();
@@ -251,8 +239,8 @@ router.post('/checkout', authMiddleware, async (req, res) => {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      // Essai gratuit sur Essentiel uniquement (pas Équipe) : 14 jours par
-      // défaut, 30 jours si le marchand vient de l'offre inbound (trialDays).
+      // Essai gratuit sur Essentiel uniquement (pas Équipe) : 30 jours (1 mois)
+      // pour tous les nouveaux marchands.
       // payment_method_collection: 'if_required' → CB NON demandée pendant
       // le trial (rien à payer immédiatement). Aligne avec le claim site
       // marketing 'sans carte bancaire'. Stripe demandera la CB avant fin

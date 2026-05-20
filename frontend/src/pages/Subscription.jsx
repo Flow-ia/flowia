@@ -4,7 +4,7 @@
 // - Free user : 3 cartes plein format pour comparer + bouton 'S'abonner'.
 // - Subscribed user : 4 sections flat empilees (Plan / Cartes / Coordonnees /
 //   Factures) — TOUT inline, AUCUNE redirection vers le portail Stripe.
-// - 14 jours d'essai gratuit sur Essentiel uniquement (sans CB requise).
+// - 1 mois (30 jours) d'essai gratuit sur Essentiel uniquement (sans CB requise).
 // - "2 mois offerts" en annuel (= 16,67% de réduction).
 import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -52,7 +52,7 @@ const PLANS = [
     ],
     canSubscribe: true,
     highlight: true,
-    trial: '14 jours d\'essai · sans carte bancaire',
+    trial: '1 mois d\'essai · sans carte bancaire',
   },
   {
     id: 'equipe',

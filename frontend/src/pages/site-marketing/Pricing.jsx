@@ -27,7 +27,7 @@ export default function Pricing() {
         'Campagnes SMS marketing', 'Programme fidélité',
         'Programme parrainage', 'Marketing IA', 'Support prioritaire',
       ],
-      cta: "Démarrer l'essai 14 jours", highlight: true,
+      cta: "Démarrer l'essai 1 mois", highlight: true,
     },
     {
       name: 'Équipe', monthly: '49', yearly: '40,83', annual: '490',
@@ -62,12 +62,12 @@ export default function Pricing() {
       <Seo
         path="/tarifs"
         title="Tarifs FlowIA — Logiciel salon sans commission, essai gratuit"
-        description="Tarification simple et sans engagement pour votre salon ou barbershop. 14 jours d'essai gratuit, sans commission sur vos réservations. Annulez à tout moment."
+        description="Tarification simple et sans engagement pour votre salon ou barbershop. 1 mois d'essai gratuit, sans commission sur vos réservations. Annulez à tout moment."
       />
       <PageHero
         label="Tarifs"
         title="Une tarification simple, sans surprise"
-        subtitle="Sans engagement. Annulez à tout moment. 14 jours d'essai gratuit sur le plan Essentiel."
+        subtitle="Sans engagement. Annulez à tout moment. 1 mois d'essai gratuit sur le plan Essentiel."
       />
 
       <Container paddingY={56}>
@@ -218,7 +218,7 @@ export default function Pricing() {
 // - Essentiel  → /register?plan=essentiel&period=monthly|yearly
 //                AuthFlow capture l'intent en sessionStorage. Après confirmation
 //                email, App.jsx redirige vers /abonnement?autostart=1 → Stripe
-//                Checkout déclenché auto avec trial 14j sans CB.
+//                Checkout déclenché auto avec trial 30j sans CB.
 // - Équipe     → /contact (devis personnalisé, pas de checkout direct)
 function ctaHref(plan, yearly) {
   if (plan.name === 'Équipe') return '/contact';

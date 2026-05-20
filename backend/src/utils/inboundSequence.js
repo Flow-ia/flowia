@@ -35,10 +35,9 @@ function esc(s) {
 
 const registerUrl = `${COMMERCANT_URL}/register?plan=essentiel&period=monthly`;
 
-// Bloc offre : aucun code a saisir. Le mois offert s'applique
-// AUTOMATIQUEMENT au checkout si le compte est cree avec la meme adresse
-// email que celle captheuree ici (cf. subscriptions.js : lookup
-// inbound_leads -> trial 30j au lieu de 14j).
+// Bloc offre : aucun code a saisir. Le mois offert (30j) est applique
+// AUTOMATIQUEMENT au checkout a tout nouveau marchand sur le plan
+// Essentiel, sans condition (cf. subscriptions.js : trialDays = 30).
 function offerBlock(email) {
   return `<p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 18px;">Creez votre compte avec cette adresse email (<b>${esc(email)}</b>) : votre <b>mois offert</b> sur le plan Essentiel s'applique automatiquement, sans code, sans carte bancaire et sans engagement.</p>`;
 }

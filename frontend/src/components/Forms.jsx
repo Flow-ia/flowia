@@ -57,7 +57,7 @@ function CancelBtn({ onClick }) {
 }
 
 // ─── CategoryForm — categorie ou produit/service ─────────────────────────────
-export function CategoryForm({ open, onClose, onSubmit, init, allCategories = [], defaultMode = 'product' }) {
+export function CategoryForm({ open, onClose, onSubmit, init, allCategories = [], defaultMode = 'product', defaultParent = null }) {
   const { theme } = useTheme();
   const t = theme;
 
@@ -77,10 +77,14 @@ export function CategoryForm({ open, onClose, onSubmit, init, allCategories = []
       const priceVal = init.is_free_price ? 'FREE' : (init.price != null ? String(init.price) : '');
       setF({ name:init.name||'', type:init.type||'revenue', icon:init.icon||'Tag',
              color:init.color||PAL[0], parent_id:init.parent_id||'', price: priceVal });
+    } else if (m === 'product' && defaultParent) {
+      // Pre-selectionner la categorie parente (clic sur "+Ajouter dans «X»")
+      const parentCat = allCategories.find(c => c.id === defaultParent);
+      setF({ ...blankProd, parent_id: defaultParent, type: parentCat?.type || 'revenue' });
     } else {
       setF(m === 'category' ? blankCat : blankProd);
     }
-  }, [open, init?.id]);
+  }, [open, init?.id, defaultParent]);
 
   useEffect(() => {
     if (!init) setF(mode === 'category' ? blankCat : blankProd);

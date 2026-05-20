@@ -339,7 +339,7 @@ export default function Features() {
             Prêt à tout réunir dans une seule application ?
           </h2>
           <p style={{ fontSize: 15, color: S.fgMuted, margin: 0, marginBottom: 24, lineHeight: 1.6 }}>
-            {"14 jours d'essai gratuit. Sans carte bancaire."}
+            {"1 mois d'essai gratuit. Sans carte bancaire."}
           </p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <PrimaryBtn href={COMMERCANT_URL + '/register'}>Essayer gratuitement</PrimaryBtn>

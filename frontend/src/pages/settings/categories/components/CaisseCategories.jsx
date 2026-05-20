@@ -379,7 +379,8 @@ export default function CaisseCategories({ categories, transactions, onAdd, onUp
         onSubmit={handleSubmit}
         init={formInit}
         allCategories={categories}
-        defaultMode={formMode}/>
+        defaultMode={formMode}
+        defaultParent={formParent}/>
       <Confirm open={!!delId} onClose={() => setDelId(null)}
                onConfirm={() => { onDel(delId); setDelId(null); showToast('Supprime'); }}
                title="Supprimer cet element ?"
