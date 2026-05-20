@@ -588,7 +588,7 @@ export default function AuthFlow({ initialScreen = 'login' }) {
                   boxSizing:'border-box', width:'100%' }}>
       <Toast msg={toast?.msg} type={toast?.type}/>
       <GoogleOAuthOverlay status={oauthStatus} errorMsg={oauthError} onRetry={() => { resetOauth(); openGoogle(); }} onClose={resetOauth}/>
-      <div style={{ width:'100%', maxWidth:400 }}>
+      <div style={{ width:'100%', maxWidth: screen === 'register' ? 920 : 400 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
           <img src="/images/logo-app.png" alt="FlowIA"
                style={{ width:56, height:56, borderRadius:12, display:'block',
@@ -820,7 +820,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
   );
 
   return (
-    <AuthCard maxHeight="90vh">
+    <AuthCard>
       <BackButton onClick={onBack}/>
       <h2 style={{ fontSize:18, fontWeight:500, color:t.text, margin:'0 0 4px' }}>
         Creer un compte
@@ -833,6 +833,13 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
       <Divider/>
 
       <form onSubmit={sub} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+
+        {/* Desktop : 2 colonnes (Votre commerce | Identite + Securite empiles)
+            Mobile  : 1 colonne (auto-fit avec minmax 360 retombe naturellement
+            quand la largeur dispo passe sous ~740px). Pas de media query. */}
+        <div style={{ display:'grid',
+                      gridTemplateColumns:'repeat(auto-fit, minmax(360px, 1fr))',
+                      gap:14, alignItems:'start' }}>
 
         {section('Votre commerce', (
           <>
@@ -920,6 +927,9 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
           </>
         ))}
 
+        {/* Colonne 2 desktop : Identite + Securite empiles dans un wrapper flex */}
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+
         {section('Votre identite', (
           <>
             <div style={{ position:'relative', marginBottom:12 }}>
@@ -985,6 +995,9 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
             </div>
           </>
         ))}
+
+        </div>{/* /col 2 (Identite + Securite) */}
+        </div>{/* /grille 2 colonnes desktop */}
 
         {/* Consentement CGU */}
         <div style={{ display:'flex', alignItems:'flex-start', gap:10,
