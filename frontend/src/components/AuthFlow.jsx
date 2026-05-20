@@ -771,6 +771,20 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
   const [consent, setConsent]     = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
 
+  // Plan choisi sur le site marketing (capture par AuthFlow parent dans
+  // sessionStorage). Permet d'afficher un rappel de l'offre + adapter le
+  // bouton de soumission pour rassurer le marchand (essai gratuit, sans CB).
+  const [planIntent, setPlanIntent] = useState(null);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('ff_subscribe_intent');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && (p.plan === 'essentiel' || p.plan === 'equipe')) setPlanIntent(p);
+      }
+    } catch {}
+  }, []);
+
   const sub = async e => {
     e.preventDefault();
     // Type de commerce obligatoire (defense en profondeur — backend rejette
@@ -823,11 +837,34 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
     <AuthCard>
       <BackButton onClick={onBack}/>
       <h2 style={{ fontSize:18, fontWeight:500, color:t.text, margin:'0 0 4px' }}>
-        Creer un compte
+        {planIntent?.plan === 'essentiel' ? 'Demarrer mon essai gratuit' : 'Creer un compte'}
       </h2>
       <p style={{ fontSize:12, color:t.muted, margin:'0 0 16px' }}>
-        Ces informations seront visibles par vos clients
+        {planIntent?.plan === 'essentiel'
+          ? "Vous activerez votre essai juste apres la creation du compte"
+          : 'Ces informations seront visibles par vos clients'}
       </p>
+
+      {/* Badge offre Essentiel — visible uniquement si l'utilisateur vient du
+          site marketing avec ?plan=essentiel. Rappelle les 3 reassurances
+          principales (gratuit, sans CB, sans engagement) pour reduire
+          l'abandon en cours de remplissage. */}
+      {planIntent?.plan === 'essentiel' && (
+        <div style={{ display:'flex', alignItems:'center', gap:8,
+                      padding:'10px 12px', borderRadius:8, marginBottom:14,
+                      background:'#ecfdf5',
+                      border:`0.5px solid #a7f3d0` }}>
+          <span style={{ width:8, height:8, borderRadius:4, background:'#10b981',
+                         flexShrink:0 }}/>
+          <p style={{ fontSize:12, fontWeight:500, color:'#065f46',
+                      margin:0, lineHeight:1.4 }}>
+            {"1 mois Essentiel offert "}
+            <span style={{ color:'#047857', fontWeight:400 }}>
+              {"· Sans carte bancaire · Sans engagement"}
+            </span>
+          </p>
+        </div>
+      )}
 
       <GoogleButton onClick={openGoogle} label={"S'inscrire avec Google"}/>
       <Divider/>
@@ -1022,7 +1059,9 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
         </div>
 
         <Button type="submit" variant="primary" disabled={ld || !consent} fullWidth>
-          {ld ? 'Creation en cours...' : 'Creer mon compte'}
+          {ld ? 'Creation en cours...'
+              : planIntent?.plan === 'essentiel' ? 'Demarrer mon essai gratuit'
+              : 'Creer mon compte'}
         </Button>
       </form>
 
