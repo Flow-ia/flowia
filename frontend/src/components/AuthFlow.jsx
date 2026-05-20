@@ -93,7 +93,10 @@ function PhoneField({ country, phone, onChange, label = 'Telephone', required: i
   return (
     <div>
       <Label>{label}{isReq ? ' *' : ''}</Label>
-      <div style={{ display:'flex', gap:6 }}>
+      {/* minWidth:0 sur le flex row ET sur l'input — sans ca, l'input garde
+          sa min-width:auto intrinseque (~160-200px lie au placeholder), refuse
+          de retrecir et debordo du formulaire sur mobile etroit. */}
+      <div style={{ display:'flex', gap:6, minWidth:0 }}>
         <div ref={ref} style={{ position:'relative', flexShrink:0 }}>
           <button type="button" onClick={() => setOpen(!open)}
                   style={{ display:'flex', alignItems:'center', gap:5, padding:'10px 10px',
@@ -134,7 +137,7 @@ function PhoneField({ country, phone, onChange, label = 'Telephone', required: i
                onChange={e => onChange({ phone: e.target.value.replace(/[^\d\s]/g, '') })}
                placeholder={`Ex: 6 30 04 67 18 (${cc.digits} chiffres)`}
                style={fieldStyle(t, {
-                 flex:1, width:'auto',
+                 flex:'1 1 0%', width:'auto', minWidth:0,
                  borderColor: phone && !val.valid ? '#991b1b' : t.borderInput,
                })}
                {...fieldFocus(t)}/>
