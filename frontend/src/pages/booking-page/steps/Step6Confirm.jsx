@@ -42,65 +42,6 @@ export function Step6Confirm({
     } catch {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Si pas connecte, on affiche l'AuthPanel inline (anciennement Step5).
-  if (!clientUser) {
-    // Mais si une session existe (marker localStorage) → on est en cours
-    // d'hydratation via l'effect ci-dessus, on affiche un placeholder neutre
-    // au lieu du formulaire de connexion (Bug : "redemande de se connecter
-    // alors que le compte est bien connecté").
-    let hasSessionMarker = false;
-    try { hasSessionMarker = !!localStorage.getItem('ff_client_info'); } catch {}
-    if (hasSessionMarker) {
-      return (
-        <div style={{ padding:'24px 0', textAlign:'center' }}>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          <div style={{ width:22, height:22, margin:'0 auto', borderRadius:'50%',
-            border:`2px solid ${th.border}`, borderTopColor:th.accent,
-            animation:'spin .7s linear infinite' }}/>
-          <p style={{ marginTop:12, fontSize:13, color:th.muted }}>
-            {"Restauration de votre session..."}
-          </p>
-        </div>
-      );
-    }
-    return (
-      <div>
-        <h2 style={{fontSize:18,fontWeight:500,color:th.text,margin:'0 0 12px',letterSpacing:'-0.02em'}}>
-          {"Connectez-vous pour reserver"}
-        </h2>
-        <div style={{background:th.cardAlt,borderRadius:10,border:`0.5px solid ${th.border}`,
-          padding:'10px 12px',marginBottom:12}}>
-          <p style={{fontSize:13,fontWeight:500,color:th.text,margin:'0 0 2px',letterSpacing:'-0.01em'}}>
-            {selSvc?.name}
-          </p>
-          <p style={{fontSize:11,color:th.muted,margin:0,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:8}}>
-            <span>
-              {[
-                selEmp?._anyEmployee ? 'Premier dispo' : selEmp?.name,
-                selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}),
-                selSlot,
-              ].filter(Boolean).join(' · ')}
-            </span>
-            {selSvc?.price && Number(selSvc.price) > 0 && (
-              <span style={{fontWeight:500,color:th.text,
-                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
-                {`${Number(selSvc.price).toFixed(2)} €`}
-              </span>
-            )}
-          </p>
-        </div>
-        <AuthPanel
-          slug={slug} th={th}
-          requireAccount={true}
-          initialMode="login"
-          referralCode={referralCode}
-          onAuth={handleAuth}
-          onClose={null}
-        />
-      </div>
-    );
-  }
-
   // Commit 24c — réductions disponibles pour le client connecté chez ce
   // commerce. Cards cliquables, pré-remplit le promoCode + déclenche le
   // checkPromo. No cumul : sélectionner une card écrase la précédente
@@ -266,6 +207,69 @@ export function Step6Confirm({
     return p;
   })();
 
+  // Si pas connecte, on affiche l'AuthPanel inline (anciennement Step5).
+  // IMPORTANT : ce return conditionnel doit rester APRES tous les hooks
+  // (useState/useEffect ci-dessus) — sinon le passage clientUser null -> set
+  // (retour OAuth Google) change le nombre de hooks rendus entre deux renders
+  // et React crashe en page blanche (Minified React error #310).
+  if (!clientUser) {
+    // Mais si une session existe (marker localStorage) → on est en cours
+    // d'hydratation via l'effect ci-dessus, on affiche un placeholder neutre
+    // au lieu du formulaire de connexion (Bug : "redemande de se connecter
+    // alors que le compte est bien connecté").
+    let hasSessionMarker = false;
+    try { hasSessionMarker = !!localStorage.getItem('ff_client_info'); } catch {}
+    if (hasSessionMarker) {
+      return (
+        <div style={{ padding:'24px 0', textAlign:'center' }}>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+          <div style={{ width:22, height:22, margin:'0 auto', borderRadius:'50%',
+            border:`2px solid ${th.border}`, borderTopColor:th.accent,
+            animation:'spin .7s linear infinite' }}/>
+          <p style={{ marginTop:12, fontSize:13, color:th.muted }}>
+            {"Restauration de votre session..."}
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div>
+        <h2 style={{fontSize:18,fontWeight:500,color:th.text,margin:'0 0 12px',letterSpacing:'-0.02em'}}>
+          {"Connectez-vous pour reserver"}
+        </h2>
+        <div style={{background:th.cardAlt,borderRadius:10,border:`0.5px solid ${th.border}`,
+          padding:'10px 12px',marginBottom:12}}>
+          <p style={{fontSize:13,fontWeight:500,color:th.text,margin:'0 0 2px',letterSpacing:'-0.01em'}}>
+            {selSvc?.name}
+          </p>
+          <p style={{fontSize:11,color:th.muted,margin:0,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:8}}>
+            <span>
+              {[
+                selEmp?._anyEmployee ? 'Premier dispo' : selEmp?.name,
+                selDate?.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}),
+                selSlot,
+              ].filter(Boolean).join(' · ')}
+            </span>
+            {selSvc?.price && Number(selSvc.price) > 0 && (
+              <span style={{fontWeight:500,color:th.text,
+                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
+                {`${Number(selSvc.price).toFixed(2)} €`}
+              </span>
+            )}
+          </p>
+        </div>
+        <AuthPanel
+          slug={slug} th={th}
+          requireAccount={true}
+          initialMode="login"
+          referralCode={referralCode}
+          onAuth={handleAuth}
+          onClose={null}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 style={{fontSize:18,fontWeight:500,color:th.text,margin:'0 0 12px',letterSpacing:'-0.02em'}}>
@@ -325,8 +329,12 @@ export function Step6Confirm({
         </button>
       </div>
 
-      {/* Telephone obligatoire si manquant (ex: apres OAuth Google). */}
-      {!clientPhone?.trim() && (
+      {/* Telephone obligatoire si manquant sur le profil (ex: apres OAuth
+          Google). On se base sur clientUser.phone (profil) et NON sur la
+          saisie en cours `clientPhone` : sinon le bloc — et donc l'input —
+          disparaitrait des le premier caractere tape, laissant le bouton
+          grise sans moyen de corriger le numero. */}
+      {clientUser && !clientUser.phone && (
         <div style={{background:'rgba(245,158,11,0.06)',border:'0.5px solid rgba(245,158,11,0.25)',
           borderRadius:10,padding:'10px 12px',marginBottom:14}}>
           <p style={{fontSize:12,fontWeight:500,color:'#d97706',margin:'0 0 6px'}}>
