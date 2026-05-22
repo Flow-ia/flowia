@@ -32,6 +32,7 @@ import InstallPrompt from './pwa/InstallPrompt';
 import UpdateBanner from './pwa/UpdateBanner';
 import OfflineBanner from './pwa/OfflineBanner';
 import MaintenanceOverlay from './components/MaintenanceOverlay';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import RefreshFab from './pwa/RefreshFab';
 import { registerSW } from './pwa/registerSW';
 import './index.css';
@@ -259,6 +260,7 @@ root.render(
                 dispatch par utils/api.js sur un 503 + header X-Maintenance:1.
                 Rendu au plus haut niveau pour couvrir merchant + booking publique. */}
             <MaintenanceOverlay />
+            <ErrorBoundary>
             <Routes>
               {/* ── Callback OAuth (popup retour Google → ferme + broadcast) ── */}
               <Route path="/__oauth" element={<OAuthCallback />} />
@@ -322,6 +324,7 @@ root.render(
               {/* ── Catch-all : marketing, redirect legacy ou app commerçant selon hostname ── */}
               <Route path="/*" element={<RootSwitch />} />
             </Routes>
+            </ErrorBoundary>
             </AdminModeProvider>
             </TabletModeProvider>
           </AdminProvider>

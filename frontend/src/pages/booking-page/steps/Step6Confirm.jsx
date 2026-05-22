@@ -330,11 +330,16 @@ export function Step6Confirm({
       </div>
 
       {/* Telephone obligatoire si manquant sur le profil (ex: apres OAuth
-          Google). On se base sur clientUser.phone (profil) et NON sur la
-          saisie en cours `clientPhone` : sinon le bloc — et donc l'input —
-          disparaitrait des le premier caractere tape, laissant le bouton
-          grise sans moyen de corriger le numero. */}
-      {clientUser && !clientUser.phone && (
+          Google) OU si le numero effectif n'est pas un E.164 valide (ex: tel
+          stocke au mauvais format sur un ancien compte). On garde !clientUser.phone
+          comme 1er critere pour NE PAS masquer le bloc des le premier caractere
+          tape quand le profil est vide (sinon l'input disparaitrait en cours de
+          saisie, laissant le bouton grise sans moyen de corriger). Le 2e critere
+          (!phoneOk) couvre le cas ou un numero existe mais reste invalide : sans
+          lui, le bouton resterait bloque "Telephone requis" SANS input pour le
+          corriger. Un numero partiel/en cours de frappe etant invalide, le bloc
+          reste affiche pendant la saisie. */}
+      {clientUser && (!clientUser.phone || !phoneOk) && (
         <div style={{background:'rgba(245,158,11,0.06)',border:'0.5px solid rgba(245,158,11,0.25)',
           borderRadius:10,padding:'10px 12px',marginBottom:14}}>
           <p style={{fontSize:12,fontWeight:500,color:'#d97706',margin:'0 0 6px'}}>
