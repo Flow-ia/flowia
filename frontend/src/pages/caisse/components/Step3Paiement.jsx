@@ -50,6 +50,7 @@ export default function Step3Paiement({
   clientEmail, setClientEmail,
   clientName, setClientName,
   clientPhone, setClientPhone,
+  clientPhoneConfirmed, setClientPhoneConfirmed,
   clientNote, setClientNote,
   selectedRewardId, setSelectedRewardId,
   onBack, onContinue, showToast,
@@ -107,26 +108,36 @@ export default function Step3Paiement({
                  || c.name || c.client_name || '';
     setClientName(display);
     setClientEmail(c.email || '');
-    // Pre-remplit le telephone du client existant (E.164 prioritaire) : s'il
-    // en a deja un valide, le gate passe sans ressaisie ; sinon il faudra
-    // le completer avant d'encaisser.
-    setClientPhone?.(c.phone_e164 || c.phone || '');
+    // Pre-remplit le telephone du client existant (E.164 prioritaire). S'il en
+    // a deja un valide, il est considere DEJA enregistre (carte verte, pas de
+    // ressaisie). Sinon il faudra le saisir + cliquer "Enregistrer".
+    const prefill = c.phone_e164 || c.phone || '';
+    setClientPhone?.(prefill);
+    setClientPhoneConfirmed?.(isValidPhoneNumber((prefill || '').trim()));
     setClientSearch(display || c.email || c.phone || '');
     setSuggestsOpen(false);
   };
 
   const clearClient = () => {
-    setClientName(''); setClientEmail(''); setClientPhone?.('');
+    setClientName(''); setClientEmail(''); setClientPhone?.(''); setClientPhoneConfirmed?.(false);
     setClientSearch(''); setClientSuggests([]);
     setSuggestsOpen(false);
   };
 
+  // Saisie/edition du numero -> on annule la confirmation (le merchant devra
+  // re-cliquer "Enregistrer"). Evite l'enregistrement automatique d'un numero
+  // modifie sans relecture.
+  const onPhoneChange = (v) => {
+    setClientPhone?.(v || '');
+    setClientPhoneConfirmed?.(false);
+  };
+
   // Un client est "rattache" des qu'un nom OU un email est renseigne. Dans ce
-  // cas le telephone valide (E.164) devient obligatoire avant d'encaisser
-  // (decision produit). Vente anonyme (aucun nom/email) -> pas de telephone.
+  // cas un telephone valide (E.164) ET enregistre (bouton) est obligatoire
+  // avant d'encaisser. Vente anonyme (aucun nom/email) -> pas de telephone.
   const clientAttached = !!((clientName || '').trim() || (clientEmail || '').trim());
   const phoneValid     = isValidPhoneNumber((clientPhone || '').trim());
-  const phoneGateOk    = !clientAttached || phoneValid;
+  const phoneGateOk    = !clientAttached || (phoneValid && !!clientPhoneConfirmed);
 
   // Crédit client dispo + rewards (rechargé à chaque changement d'email).
   useEffect(() => {
@@ -361,12 +372,19 @@ export default function Step3Paiement({
           </div>
 
           {/* Telephone obligatoire des qu'un client est rattache (nom/email).
-              Vente anonyme = champ masque (pas de client = pas de telephone). */}
+              Vente anonyme = champ masque (pas de client = pas de telephone).
+              Carte ORANGE tant que non enregistre, VERTE une fois le numero
+              valide explicitement enregistre (bouton -> pas d'auto-save). */}
           {clientAttached && (
-            <div>
+            <div style={{
+              padding: 11, borderRadius: 10,
+              border: `0.5px solid ${clientPhoneConfirmed ? '#10b981' : '#f59e0b'}`,
+              background: clientPhoneConfirmed ? '#f0fdf4' : '#fffbeb',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
               <PhoneInput
                 value={clientPhone || ''}
-                onChange={(v) => setClientPhone?.(v || '')}
+                onChange={onPhoneChange}
                 required
                 defaultCountry="FR"
                 label="Téléphone (obligatoire)"
@@ -375,9 +393,26 @@ export default function Step3Paiement({
                   border: t.border, inputBg: t.inputBg, inputBorder: t.borderInput,
                 }}
               />
-              {!phoneValid && (
-                <p style={{ margin:'6px 0 0', fontSize:11, color:'#92400e' }}>
-                  {"Un numéro de téléphone valide est requis pour encaisser un client."}
+              {clientPhoneConfirmed ? (
+                <p style={{ margin:0, fontSize:12, fontWeight:500, color:'#065f46',
+                            display:'inline-flex', alignItems:'center', gap:6 }}>
+                  <Icon name="checkCircle" size={15} color="#10b981" strokeWidth={2}/>
+                  {"Numéro enregistré"}
+                </p>
+              ) : phoneValid ? (
+                <button type="button"
+                        onClick={() => setClientPhoneConfirmed?.(true)}
+                        style={{ alignSelf:'flex-start', minHeight:40,
+                                 padding:'9px 14px', borderRadius:8, border:'none',
+                                 background:'#10b981', color:'#fff', cursor:'pointer',
+                                 fontFamily:'inherit', fontSize:13, fontWeight:500,
+                                 display:'inline-flex', alignItems:'center', gap:6 }}>
+                  <Icon name="check" size={14} color="#fff" strokeWidth={2.5}/>
+                  {"Enregistrer le numéro"}
+                </button>
+              ) : (
+                <p style={{ margin:0, fontSize:11, fontWeight:500, color:'#92400e' }}>
+                  {"Saisissez un numéro de téléphone valide, puis enregistrez-le pour encaisser."}
                 </p>
               )}
             </div>

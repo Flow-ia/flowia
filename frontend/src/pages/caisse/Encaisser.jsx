@@ -47,6 +47,10 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
   const [clientEmail, setClientEmail] = useState('');
   const [clientName,  setClientName]  = useState('');
   const [clientPhone, setClientPhone] = useState(''); // E.164, requis si client rattache
+  // Confirmation manuelle du numero (bouton "Enregistrer") -> evite
+  // l'enregistrement automatique d'un numero non verifie. true quand le
+  // numero a ete explicitement enregistre (ou deja connu d'une fiche existante).
+  const [clientPhoneConfirmed, setClientPhoneConfirmed] = useState(false);
   const [clientNote,  setClientNote]  = useState('');
 
   const [selectedRewardId, setSelectedRewardId] = useState(null);
@@ -59,7 +63,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
       { method: 'cash', amount: '' },
     ]);
     setPromoCode(''); setPromoData(null); setPromoErr('');
-    setClientEmail(''); setClientName(''); setClientPhone(''); setClientNote('');
+    setClientEmail(''); setClientName(''); setClientPhone(''); setClientPhoneConfirmed(false); setClientNote('');
     setSelectedRewardId(null);
   };
 
@@ -142,6 +146,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
           clientEmail={clientEmail} setClientEmail={setClientEmail}
           clientName={clientName}   setClientName={setClientName}
           clientPhone={clientPhone} setClientPhone={setClientPhone}
+          clientPhoneConfirmed={clientPhoneConfirmed} setClientPhoneConfirmed={setClientPhoneConfirmed}
           clientNote={clientNote}   setClientNote={setClientNote}
           selectedRewardId={selectedRewardId} setSelectedRewardId={setSelectedRewardId}
           showToast={showToast}
