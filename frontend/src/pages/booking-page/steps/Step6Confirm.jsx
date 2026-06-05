@@ -340,10 +340,25 @@ export function Step6Confirm({
           corriger. Un numero partiel/en cours de frappe etant invalide, le bloc
           reste affiche pendant la saisie. */}
       {clientUser && (!clientUser.phone || !phoneOk) && (
-        <div style={{background:'rgba(245,158,11,0.06)',border:'0.5px solid rgba(245,158,11,0.25)',
-          borderRadius:10,padding:'10px 12px',marginBottom:14}}>
-          <p style={{fontSize:12,fontWeight:500,color:'#d97706',margin:'0 0 6px'}}>
-            {"Telephone requis pour finaliser la reservation"}
+        <div style={{
+          background: phoneOk ? 'rgba(16,185,129,0.07)' : 'rgba(245,158,11,0.06)',
+          border: `0.5px solid ${phoneOk ? 'rgba(16,185,129,0.40)' : 'rgba(245,158,11,0.25)'}`,
+          borderRadius:10, padding:'10px 12px', marginBottom:14,
+        }}>
+          <p style={{ fontSize:12, fontWeight:500, margin:'0 0 6px',
+            color: phoneOk ? '#065f46' : '#d97706',
+            display:'inline-flex', alignItems:'center', gap:6 }}>
+            {phoneOk && (
+              <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{ width:15, height:15, flexShrink:0 }}>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            )}
+            {phoneOk
+              ? "Numéro valide — il sera enregistré à la réservation"
+              : "Telephone requis pour finaliser la reservation"}
           </p>
           <PhoneInput value={clientPhone || ''} onChange={setCP}
             label="Telephone *" required
