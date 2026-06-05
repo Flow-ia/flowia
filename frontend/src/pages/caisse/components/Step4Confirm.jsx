@@ -18,6 +18,7 @@ import { referralsApi } from '../../../utils/api';
 import { useEmployeePinGate } from '../../../components/EmployeePinModal';
 import { todayStr, nowStr } from '../../../utils/dates';
 import { Icon } from '../../../components/Icon';
+import { isValidPhoneNumber } from '../../../components/PhoneInput';
 import { useMultiPaymentMutation } from '../../../hooks/useMultiPaymentMutation';
 
 const PM_CFG = {
@@ -34,7 +35,7 @@ function fmt(n) { return Number(n || 0).toFixed(2); }
 export default function Step4Confirm({
   theme: t, cart, employees,
   empId, payMethod, splitMode, breakdownLines,
-  promoCode, promoData, clientEmail, clientName, clientNote,
+  promoCode, promoData, clientEmail, clientName, clientPhone, clientNote,
   selectedRewardId, onAdd, onBack, onSuccess, showToast,
 }) {
   const { requestPin, PinModalNode } = useEmployeePinGate();
@@ -66,6 +67,11 @@ export default function Step4Confirm({
     : [{ method: payMethod, amount: finalTotal }];
 
   const emp = employees?.find(e => e.id === empId) || null;
+
+  // Garde defensive (le gate principal est au Step3) : si un client est
+  // rattache, un telephone valide est requis avant d'encaisser.
+  const clientAttached = !!((clientName || '').trim() || (clientEmail || '').trim());
+  const phoneGateOk    = !clientAttached || isValidPhoneNumber((clientPhone || '').trim());
 
   const doConfirm = async () => {
     if (cart.length === 0 || busy) return;
@@ -120,6 +126,7 @@ export default function Step4Confirm({
         client_note:     (clientNote  || '').trim() || null,
         client_email:    (clientEmail || '').trim() || null,
         client_name:     (clientName  || '').trim() || null,
+        client_phone:    (clientPhone || '').trim() || null,
         idempotency_key: idemKey,
       });
 
@@ -433,14 +440,15 @@ export default function Step4Confirm({
               <Icon name="chevronLeft" size={13} color={t.text}/>
               {"Retour"}
             </button>
-            <button onClick={confirm} disabled={busy || cart.length === 0 || !empId}
+            <button onClick={confirm} disabled={busy || cart.length === 0 || !empId || !phoneGateOk}
+                    title={!phoneGateOk ? "Téléphone client valide requis avant d'encaisser" : undefined}
                     style={{ padding:'12px 18px', borderRadius:8, border:'none',
-                             background: busy ? t.cardAlt : '#10b981',
-                             color: busy ? t.muted : '#fff',
-                             cursor: busy ? 'wait' : 'pointer',
+                             background: (busy || !phoneGateOk) ? t.cardAlt : '#10b981',
+                             color: (busy || !phoneGateOk) ? t.muted : '#fff',
+                             cursor: busy ? 'wait' : (!phoneGateOk ? 'not-allowed' : 'pointer'),
                              fontFamily:'inherit', fontSize:13, fontWeight:500,
                              display:'inline-flex', alignItems:'center', gap:6 }}>
-              <Icon name="zap" size={13} color={busy ? t.muted : '#fff'}/>
+              <Icon name="zap" size={13} color={(busy || !phoneGateOk) ? t.muted : '#fff'}/>
               {busy ? 'Enregistrement…' : 'Valider ' + fmt(finalTotal) + ' €'}
             </button>
           </div>

@@ -4,6 +4,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { pinAdminMiddleware } = require('../middleware/pinAdmin');
 const { incrementStamps } = require('../utils/loyalty-utils');
 const { upsertLocalClient } = require('./clients');
+const { validatePhone } = require('../utils/phone');
 const { resolveReferralForFilleul, validateReferralUse } = require('./referrals');
 const { employeePinOptional } = require('../middleware/employeePinOptional');
 const { canCreateCashTransaction } = require('../services/transactionValidator');
@@ -181,7 +182,7 @@ router.post('/', async (req, res) => {
   try {
     const { type, amount, description, category_id, employee_id, payment_method,
             date, time, datetime_iso, appointment_id, source,
-            client_email, client_name,
+            client_email, client_name, client_phone,
             promo_code_id, discount_amount, original_amount,
             client_note, items, payments, referral_code,
             client_reward_id,
@@ -252,6 +253,20 @@ router.post('/', async (req, res) => {
     const clientEmailNorm = (typeof client_email === 'string' && client_email.trim())
       ? client_email.trim().toLowerCase()
       : null;
+    // Telephone client (caisse) : exige obligatoire cote front quand un client
+    // est rattache (decision produit "si un client est rattache"). Cote back :
+    // defense in depth -- si un numero est fourni, il DOIT etre valide E.164.
+    // required:false pour ne pas casser les flux sans client / lies a un RDV
+    // (le RDV porte deja le telephone collecte au booking en ligne).
+    const clientPhoneChk = validatePhone(client_phone, { required: false });
+    if (!clientPhoneChk.valid) {
+      return res.status(400).json({
+        error: 'Numéro de téléphone invalide pour le pays.',
+        code:  clientPhoneChk.error,
+      });
+    }
+    const clientPhoneRaw  = clientPhoneChk.raw  || null;
+    const clientPhoneE164 = clientPhoneChk.e164 || null;
     if (idemKey) {
       const { rows: ex } = await pool.query(
         `SELECT id, type, amount, description, category_id, employee_id,
@@ -633,8 +648,22 @@ router.post('/', async (req, res) => {
                 email: cEmail,
                 first_name: parts[0] || '',
                 last_name: parts.slice(1).join(' ') || '',
+                phone:      clientPhoneRaw  || undefined,
+                phone_e164: clientPhoneE164 || undefined,
               });
             } catch (e2) { console.warn('[AUTO-CLIENT MULTI]', e2.message); }
+          } else if (clientPhoneE164) {
+            // Client rattache par nom + telephone (sans email) : on enregistre
+            // quand meme la fiche pour conserver le numero (telephone obligatoire).
+            try {
+              const parts = (cName || '').split(' ');
+              await upsertLocalClient(req.user.userId, {
+                first_name: parts[0] || '',
+                last_name: parts.slice(1).join(' ') || '',
+                phone:      clientPhoneRaw  || undefined,
+                phone_e164: clientPhoneE164 || undefined,
+              });
+            } catch (e2) { console.warn('[AUTO-CLIENT MULTI/phone]', e2.message); }
           }
         } catch (loyErr) { console.error('[FIDELITE MULTI ERR]', loyErr.message); }
       }
@@ -1007,8 +1036,22 @@ router.post('/', async (req, res) => {
               email: clientEmail,
               first_name: parts[0] || '',
               last_name: parts.slice(1).join(' ') || '',
+              phone:      clientPhoneRaw  || undefined,
+              phone_e164: clientPhoneE164 || undefined,
             });
           } catch(e2) { console.warn('[AUTO-CLIENT]', e2.message); }
+        } else if (clientPhoneE164) {
+          // Client rattache par nom + telephone (sans email) : on enregistre
+          // quand meme la fiche pour conserver le numero (telephone obligatoire).
+          try {
+            const parts = (clientName || '').split(' ');
+            await upsertLocalClient(req.user.userId, {
+              first_name: parts[0] || '',
+              last_name: parts.slice(1).join(' ') || '',
+              phone:      clientPhoneRaw  || undefined,
+              phone_e164: clientPhoneE164 || undefined,
+            });
+          } catch(e2) { console.warn('[AUTO-CLIENT/phone]', e2.message); }
         }
       } catch(loyErr) {
         console.error('[FIDELITE ERR]', loyErr.message);

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { promoApi, referralsApi, creditsApi, clientsApi } from '../../../utils/api';
 import { Icon } from '../../../components/Icon';
 import { Confirm } from '../../../components/UI';
+import { PhoneInput, isValidPhoneNumber } from '../../../components/PhoneInput';
 
 // Commit B — méthodes valides en breakdown (whitelist alignée backend
 // BREAKDOWN_METHODS). card_online JAMAIS proposé : réservé aux paiements
@@ -48,6 +49,7 @@ export default function Step3Paiement({
   promoErr, setPromoErr,
   clientEmail, setClientEmail,
   clientName, setClientName,
+  clientPhone, setClientPhone,
   clientNote, setClientNote,
   selectedRewardId, setSelectedRewardId,
   onBack, onContinue, showToast,
@@ -105,15 +107,26 @@ export default function Step3Paiement({
                  || c.name || c.client_name || '';
     setClientName(display);
     setClientEmail(c.email || '');
+    // Pre-remplit le telephone du client existant (E.164 prioritaire) : s'il
+    // en a deja un valide, le gate passe sans ressaisie ; sinon il faudra
+    // le completer avant d'encaisser.
+    setClientPhone?.(c.phone_e164 || c.phone || '');
     setClientSearch(display || c.email || c.phone || '');
     setSuggestsOpen(false);
   };
 
   const clearClient = () => {
-    setClientName(''); setClientEmail('');
+    setClientName(''); setClientEmail(''); setClientPhone?.('');
     setClientSearch(''); setClientSuggests([]);
     setSuggestsOpen(false);
   };
+
+  // Un client est "rattache" des qu'un nom OU un email est renseigne. Dans ce
+  // cas le telephone valide (E.164) devient obligatoire avant d'encaisser
+  // (decision produit). Vente anonyme (aucun nom/email) -> pas de telephone.
+  const clientAttached = !!((clientName || '').trim() || (clientEmail || '').trim());
+  const phoneValid     = isValidPhoneNumber((clientPhone || '').trim());
+  const phoneGateOk    = !clientAttached || phoneValid;
 
   // Crédit client dispo + rewards (rechargé à chaque changement d'email).
   useEffect(() => {
@@ -346,6 +359,29 @@ export default function Step3Paiement({
             <input type="email" placeholder="email@exemple.fr" value={clientEmail}
                    onChange={e => setClientEmail(e.target.value)} style={inp}/>
           </div>
+
+          {/* Telephone obligatoire des qu'un client est rattache (nom/email).
+              Vente anonyme = champ masque (pas de client = pas de telephone). */}
+          {clientAttached && (
+            <div>
+              <PhoneInput
+                value={clientPhone || ''}
+                onChange={(v) => setClientPhone?.(v || '')}
+                required
+                defaultCountry="FR"
+                label="Téléphone (obligatoire)"
+                theme={{
+                  text: t.text, muted: t.muted, dim: t.dim || t.muted,
+                  border: t.border, inputBg: t.inputBg, inputBorder: t.borderInput,
+                }}
+              />
+              {!phoneValid && (
+                <p style={{ margin:'6px 0 0', fontSize:11, color:'#92400e' }}>
+                  {"Un numéro de téléphone valide est requis pour encaisser un client."}
+                </p>
+              )}
+            </div>
+          )}
           {clientCredit && (
             <div style={{ padding:11, borderRadius:10,
                           background:'#f0fdf4',
@@ -807,17 +843,18 @@ export default function Step3Paiement({
             <Icon name="chevronLeft" size={14} color={t.text}/>
             {"Retour"}
           </button>
-          <button onClick={onContinue} disabled={!paymentsOk}
+          <button onClick={onContinue} disabled={!paymentsOk || !phoneGateOk}
+                  title={!phoneGateOk ? "Téléphone client valide requis avant d'encaisser" : undefined}
                   style={{ flex:1, minHeight:50, padding:'14px 20px',
                            borderRadius:8, border:'none',
-                           background: paymentsOk ? '#10b981' : t.cardAlt,
-                           color: paymentsOk ? '#fff' : t.muted,
-                           cursor: paymentsOk ? 'pointer' : 'not-allowed',
+                           background: (paymentsOk && phoneGateOk) ? '#10b981' : t.cardAlt,
+                           color: (paymentsOk && phoneGateOk) ? '#fff' : t.muted,
+                           cursor: (paymentsOk && phoneGateOk) ? 'pointer' : 'not-allowed',
                            fontFamily:'inherit', fontSize:15, fontWeight:500,
                            display:'inline-flex', alignItems:'center',
                            justifyContent:'center', gap:6 }}>
             {"Continuer"}
-            <Icon name="chevronRight" size={15} color={paymentsOk ? '#fff' : t.muted}/>
+            <Icon name="chevronRight" size={15} color={(paymentsOk && phoneGateOk) ? '#fff' : t.muted}/>
           </button>
         </div>
       </div>

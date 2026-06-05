@@ -46,6 +46,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
 
   const [clientEmail, setClientEmail] = useState('');
   const [clientName,  setClientName]  = useState('');
+  const [clientPhone, setClientPhone] = useState(''); // E.164, requis si client rattache
   const [clientNote,  setClientNote]  = useState('');
 
   const [selectedRewardId, setSelectedRewardId] = useState(null);
@@ -58,7 +59,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
       { method: 'cash', amount: '' },
     ]);
     setPromoCode(''); setPromoData(null); setPromoErr('');
-    setClientEmail(''); setClientName(''); setClientNote('');
+    setClientEmail(''); setClientName(''); setClientPhone(''); setClientNote('');
     setSelectedRewardId(null);
   };
 
@@ -140,6 +141,7 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
           promoErr={promoErr}   setPromoErr={setPromoErr}
           clientEmail={clientEmail} setClientEmail={setClientEmail}
           clientName={clientName}   setClientName={setClientName}
+          clientPhone={clientPhone} setClientPhone={setClientPhone}
           clientNote={clientNote}   setClientNote={setClientNote}
           selectedRewardId={selectedRewardId} setSelectedRewardId={setSelectedRewardId}
           showToast={showToast}
@@ -154,7 +156,8 @@ export default function Encaisser({ theme, employees = [], categories = [], onAd
           empId={empId}
           payMethod={payMethod} splitMode={splitMode} breakdownLines={breakdownLines}
           promoCode={promoCode} promoData={promoData}
-          clientEmail={clientEmail} clientName={clientName} clientNote={clientNote}
+          clientEmail={clientEmail} clientName={clientName}
+          clientPhone={clientPhone} clientNote={clientNote}
           selectedRewardId={selectedRewardId}
           onAdd={onAdd}
           showToast={showToast}

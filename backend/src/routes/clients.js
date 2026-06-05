@@ -311,7 +311,7 @@ router.get('/search', async (req, res) => {
         ca.id, ca.email,
         ca.first_name, ca.last_name,
         TRIM(BOTH ' ' FROM COALESCE(ca.first_name,'')||' '||COALESCE(ca.last_name,'')) AS name,
-        ca.phone, ca.global_client_id,
+        ca.phone, ca.phone_e164, ca.global_client_id,
         CASE WHEN ca.global_client_id IS NOT NULL THEN 'platform' ELSE 'internal' END AS source,
         cl.stamps, cl.points, cl.total_stamps_ever
       FROM client_accounts ca
