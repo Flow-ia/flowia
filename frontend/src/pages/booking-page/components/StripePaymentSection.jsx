@@ -204,10 +204,21 @@ function DirectPayForm({ th, amountCents, onPaid, busy, setBusy,
   const stripe   = useStripe();
   const elements = useElements();
   const [errMsg, setErrMsg] = useState('');
+  // Etat de montage du PaymentElement. Tant qu'il n'est pas `ready`, le
+  // bouton Payer reste desactive : confirmPayment exige un PaymentElement
+  // monte, sinon Stripe leve "elements should have a mounted payment element".
+  const [pmReady, setPmReady] = useState(false);
+  const [loadErr, setLoadErr] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!stripe || !elements || busy) return;
+    // Garde-fou : ne jamais appeler confirmPayment si le PaymentElement
+    // n'est pas reellement monte (sinon erreur Stripe cryptique cote client).
+    if (!pmReady || !elements.getElement(PaymentElement)) {
+      setErrMsg("Le formulaire de carte n'est pas encore pret. Patientez un instant puis reessayez.");
+      return;
+    }
     setBusy(true); setErrMsg('');
     try {
       const { error, paymentIntent } = await runStripeWithWatchdog(
@@ -236,13 +247,27 @@ function DirectPayForm({ th, amountCents, onPaid, busy, setBusy,
 
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
-      <PaymentElement options={{ layout: 'tabs' }} />
+      <PaymentElement
+        options={{ layout: 'tabs' }}
+        onReady={() => { setPmReady(true); setLoadErr(''); }}
+        onLoadError={(ev) => {
+          setPmReady(false);
+          setLoadErr(ev?.error?.message
+            || "Le formulaire de paiement n'a pas pu se charger. Rechargez la page ou reessayez.");
+        }}
+      />
+      {!pmReady && !loadErr && (
+        <p style={{ fontSize: 12, color: th.muted, marginTop: 8 }}>
+          {"Chargement du formulaire de carte…"}
+        </p>
+      )}
+      {loadErr && errorBlock(loadErr)}
       {showSaveCheckbox && (
         <SaveCardCheckbox th={th} checked={saveCard} disabled={busy}
                           onChange={onSaveCardChange} />
       )}
       {errMsg && errorBlock(errMsg)}
-      <button type="submit" disabled={!stripe || busy} style={payButtonStyle(th, busy)}>
+      <button type="submit" disabled={!stripe || !pmReady || busy} style={payButtonStyle(th, busy || !pmReady)}>
         {busy ? <>{spinner()}{"Paiement en cours…"}</> : `Payer ${amountStr} et reserver`}
       </button>
     </form>
@@ -259,6 +284,12 @@ function SaveCardForm({
   const platformStripe = useStripe(); // instance plateforme via Elements parent
   const elements       = useElements();
   const [errMsg, setErrMsg] = useState('');
+  // Etat de montage du PaymentElement. confirmSetup exige un PaymentElement
+  // monte -- sans ce gating, un clic premature leve "elements should have a
+  // mounted payment element". onLoadError remonte la vraie cause (cle
+  // publishable/secret incoherentes, regle d'apparence invalide, etc.).
+  const [pmReady, setPmReady] = useState(false);
+  const [loadErr, setLoadErr] = useState('');
   // saveCard est lu au moment du submit (pas en deps de l'effect -- pas de
   // remount). On capture la valeur dans une ref pour l'avoir a jour dans
   // handleSubmit meme si elle change pendant le confirmSetup async.
@@ -268,6 +299,12 @@ function SaveCardForm({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!platformStripe || !elements || busy) return;
+    // Garde-fou : ne jamais appeler confirmSetup si le PaymentElement n'est
+    // pas reellement monte dans le DOM.
+    if (!pmReady || !elements.getElement(PaymentElement)) {
+      setErrMsg("Le formulaire de carte n'est pas encore pret. Patientez un instant puis reessayez.");
+      return;
+    }
     setBusy(true); setErrMsg('');
 
     try {
@@ -354,13 +391,27 @@ function SaveCardForm({
 
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
-      <PaymentElement options={{ layout: 'tabs' }} />
+      <PaymentElement
+        options={{ layout: 'tabs' }}
+        onReady={() => { setPmReady(true); setLoadErr(''); }}
+        onLoadError={(ev) => {
+          setPmReady(false);
+          setLoadErr(ev?.error?.message
+            || "Le formulaire de paiement n'a pas pu se charger. Rechargez la page ou reessayez.");
+        }}
+      />
+      {!pmReady && !loadErr && (
+        <p style={{ fontSize: 12, color: th.muted, marginTop: 8 }}>
+          {"Chargement du formulaire de carte…"}
+        </p>
+      )}
+      {loadErr && errorBlock(loadErr)}
       {showSaveCheckbox && (
         <SaveCardCheckbox th={th} checked={saveCard} disabled={busy}
                           onChange={onSaveCardChange} />
       )}
       {errMsg && errorBlock(errMsg)}
-      <button type="submit" disabled={!platformStripe || busy} style={payButtonStyle(th, busy)}>
+      <button type="submit" disabled={!platformStripe || !pmReady || busy} style={payButtonStyle(th, busy || !pmReady)}>
         {busy
           ? <>{spinner()}{"Paiement en cours…"}</>
           : (amountCents > 0
@@ -456,16 +507,22 @@ export function StripePaymentSection({
   selectedPmId, saveCard, onSaveCardChange,
   isLoggedGlobal, onSavedNewCard,
 }) {
-  // Effective mode -- DECIDE UNIQUEMENT par selectedPmId et isLoggedGlobal,
-  // PAS par saveCard. Cocher/decocher la checkbox ne doit JAMAIS remonter
-  // le PaymentElement (sinon perte de la saisie carte). saveCard sert
-  // uniquement a decider de garder ou detach le PM apres paiement.
-  //   - 'saved' si le client a choisi une carte sauvegardee deja en DB
-  //   - 'save'  si client connecte global (SetupIntent + clone vers connected)
-  //   - 'direct' sinon (PaymentIntent direct, pas de save)
-  const mode = selectedPmId
-    ? 'saved'
-    : (isLoggedGlobal ? 'save' : 'direct');
+  // Effective mode :
+  //   - 'saved'  si le client a choisi une carte sauvegardee deja en DB
+  //              (paiement 1-clic, montant confirme cote serveur)
+  //   - 'direct' sinon (PaymentIntent direct sur le connected account, au
+  //              VRAI montant -> Google Pay / Apple Pay / carte affichent et
+  //              debitent le bon total)
+  //
+  // Le mode 'save' (SetupIntent plateforme a 0 EUR + clone vers connected)
+  // n'est PLUS utilise au checkout : un SetupIntent n'a pas de montant, donc
+  // les wallets (Google Pay) y affichaient 0 EUR. La sauvegarde de carte
+  // cross-FlowIA se fait desormais via la page "Mes cartes" du compte client
+  // (SetupIntent dedie, hors paiement). Contrainte Direct Charges : on ne
+  // peut pas combiner wallet-au-bon-montant ET save plateforme dans la meme
+  // transaction. Les cartes deja sauvegardees restent payables en 1-clic
+  // (mode 'saved').
+  const mode = selectedPmId ? 'saved' : 'direct';
 
   // ── Mode SAVED : pas d'Elements, juste un bouton 1-clic. ───────────────
   if (mode === 'saved') {
@@ -483,7 +540,10 @@ export function StripePaymentSection({
       th={th} slug={slug} booking={booking} mode={mode}
       onPaid={onPaid} bookingError={bookingError}
       onSavedNewCard={onSavedNewCard}
-      showSaveCheckbox={isLoggedGlobal}
+      // Plus de case "Sauvegarder cette carte" au checkout : la sauvegarde
+      // cross-FlowIA se fait via la page "Mes cartes" du compte (SetupIntent
+      // dedie). Au checkout on privilegie le paiement direct au bon montant.
+      showSaveCheckbox={false}
       saveCard={saveCard}
       onSaveCardChange={onSaveCardChange}
     />
