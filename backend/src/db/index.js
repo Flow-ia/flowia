@@ -637,6 +637,12 @@ async function initDB() {
   await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_business_url TEXT`);
   await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)`);
   await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng NUMERIC(10,7)`);
+  // Horodatage de l'enregistrement du "payment method domain" (flowiapro.com)
+  // sur le compte connecte Stripe du salon. Cache : tant que NULL, on (re)tente
+  // l'enregistrement au prochain paiement ; une fois pose, on skip l'appel API.
+  // Sans cet enregistrement, Stripe masque Google Pay / Apple Pay / Link dans
+  // le PaymentElement servi en Direct Charge sur le compte connecte.
+  await runMig(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_pm_domain_registered_at TIMESTAMPTZ`);
   // Rappels multiples
   await runMig(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS reminder_delays TEXT DEFAULT '1440'`);
   await runMig(`ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS employee_reminder_enabled BOOLEAN DEFAULT FALSE`);

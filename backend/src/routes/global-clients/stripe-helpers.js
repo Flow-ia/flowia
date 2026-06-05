@@ -218,6 +218,91 @@ async function clonePaymentMethodToConnected({
   return cloned.id;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Payment Method Domains : Google Pay / Apple Pay / Link sur compte connecte
+// ─────────────────────────────────────────────────────────────────────────
+// En Direct Charge, le PaymentElement est servi sur le compte CONNECTE du
+// salon. Stripe n'y affiche Google Pay / Apple Pay / Link que si le domaine
+// de la page (flowiapro.com) est enregistre comme "payment method domain"
+// SUR CE compte connecte. La plateforme l'a deja (d'ou l'affichage passe en
+// mode SetupIntent plateforme), mais pas les comptes connectes -> wallets
+// masques. On l'enregistre donc automatiquement, par salon.
+//
+// Domaine configurable via BOOKING_PUBLIC_DOMAIN (defaut flowiapro.com).
+// Nettoye d'un eventuel schema/chemin (https://, /book...).
+const BOOKING_PUBLIC_DOMAIN = (process.env.BOOKING_PUBLIC_DOMAIN || 'flowiapro.com')
+  .replace(/^https?:\/\//i, '')
+  .replace(/\/.*$/, '')
+  .trim()
+  .toLowerCase();
+
+// Enregistre (idempotent) le domaine sur un compte connecte. Liste d'abord
+// pour ne pas dupliquer ; (re)valide si trouve mais desactive. Retourne
+// { ok, id, existed }. Leve si l'API Stripe echoue (l'appelant decide quoi
+// faire -- en pratique fail-safe : on ne casse jamais le paiement).
+async function registerPaymentMethodDomainForAccount(connectedAccountId) {
+  if (!connectedAccountId) return { ok: false, reason: 'no_account' };
+  if (!BOOKING_PUBLIC_DOMAIN) return { ok: false, reason: 'no_domain' };
+  const opts = { stripeAccount: connectedAccountId };
+  // 1. Existe deja sur ce compte ?
+  const list = await stripeFetch(
+    'GET',
+    `/payment_method_domains?domain_name=${encodeURIComponent(BOOKING_PUBLIC_DOMAIN)}&limit=1`,
+    null, opts
+  );
+  if (list && Array.isArray(list.data) && list.data.length) {
+    const dom = list.data[0];
+    // Si cree mais pas encore actif, tenter une (re)validation best-effort.
+    if (dom.enabled === false) {
+      try { await stripeFetch('POST', `/payment_method_domains/${dom.id}/validate`, {}, opts); }
+      catch (e) { console.warn('[pmDomain/validate]', connectedAccountId, e.message); }
+    }
+    return { ok: true, id: dom.id, existed: true };
+  }
+  // 2. Creer (Stripe auto-valide ; Google Pay/Link s'activent sans fichier,
+  //    Apple Pay necessite en plus le fichier de verif hoste -- non bloquant).
+  const created = await stripeFetch(
+    'POST', '/payment_method_domains',
+    { domain_name: BOOKING_PUBLIC_DOMAIN }, opts
+  );
+  return { ok: true, id: created.id, existed: false };
+}
+
+// Version cachee par salon (users.stripe_pm_domain_registered_at). Skip
+// l'appel API si deja pose. Pose le flag apres succes. 100% fail-safe :
+// toute erreur est avalee (le paiement carte fonctionne sans wallet). A
+// appeler avant de renvoyer le client_secret pour que le PaymentElement
+// voie les wallets des le 1er montage.
+async function ensurePaymentMethodDomain(userId, connectedAccountId) {
+  if (!connectedAccountId) return { ok: false, reason: 'no_account' };
+  try {
+    if (userId) {
+      const { rows } = await pool.query(
+        'SELECT stripe_pm_domain_registered_at FROM users WHERE id=$1',
+        [userId]
+      );
+      if (rows[0]?.stripe_pm_domain_registered_at) return { ok: true, cached: true };
+    }
+  } catch (e) {
+    // Colonne absente (migration pas encore passee) ou DB hs -> on tente
+    // quand meme l'enregistrement (sans cache).
+    console.warn('[pmDomain/cacheRead]', e.message);
+  }
+  try {
+    const r = await registerPaymentMethodDomainForAccount(connectedAccountId);
+    if (r.ok && userId) {
+      pool.query(
+        'UPDATE users SET stripe_pm_domain_registered_at=NOW() WHERE id=$1',
+        [userId]
+      ).catch(() => { /* flag best-effort */ });
+    }
+    return r;
+  } catch (e) {
+    console.warn('[pmDomain/register]', connectedAccountId, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 module.exports = {
   getStripe,
   getStripeForAccount,
@@ -225,4 +310,6 @@ module.exports = {
   ensurePlatformCustomer,
   ensureConnectedCustomer,
   clonePaymentMethodToConnected,
+  registerPaymentMethodDomainForAccount,
+  ensurePaymentMethodDomain,
 };

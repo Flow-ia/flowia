@@ -17,6 +17,7 @@ const { extractClientToken } = require('../../utils/clientCookies');
 const {
   stripeFetch,
   clonePaymentMethodToConnected,
+  ensurePaymentMethodDomain,
 } = require('../global-clients/stripe-helpers');
 const { ensureMerchantConnectedCustomer } = require('../../utils/ensureMerchantConnectedCustomer');
 const { getApplicableCommissionRate } = require('../../middleware/subscription');
@@ -384,6 +385,13 @@ module.exports = function attachPaymentRoutes(router) {
       } else {
         // Carte saisie cote PaymentElement (flow standard).
         piParams.automatic_payment_methods = { enabled: true };
+        // Garantit que flowiapro.com est enregistre comme payment method
+        // domain sur CE compte connecte AVANT de renvoyer le client_secret,
+        // pour que le PaymentElement affiche Google Pay / Apple Pay / Link
+        // des son montage. Idempotent + cache DB (1 appel API/salon).
+        // Fail-safe : ne casse jamais le paiement carte si l'enregistrement
+        // echoue (helper avale ses propres erreurs et retourne {ok:false}).
+        await ensurePaymentMethodDomain(m.user_id, m.stripe_account_id);
       }
 
       // ── Reuse PI existant (Planity-style) ──────────────────────────────

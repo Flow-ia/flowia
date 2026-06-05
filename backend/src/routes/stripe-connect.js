@@ -770,16 +770,29 @@ router.post('/webhook', async (req, res) => {
   try {
     if (event.type === 'account.updated') {
       const acc = event.data.object;
-      await pool.query(
+      const { rows: urows } = await pool.query(
         `UPDATE users SET stripe_charges_enabled=$1,
                           stripe_payouts_enabled=$2,
                           stripe_account_connected_at = COALESCE(stripe_account_connected_at,
                             CASE WHEN $1 = TRUE THEN NOW() ELSE NULL END)
-         WHERE stripe_account_id=$3`,
+         WHERE stripe_account_id=$3
+         RETURNING id`,
         [!!acc.charges_enabled, !!acc.payouts_enabled, acc.id]
       );
       console.log('[CONNECT WEBHOOK] account.updated:', acc.id,
         acc.charges_enabled ? 'charges_OK' : 'charges_pending');
+      // Des que le compte peut encaisser, on enregistre le payment method
+      // domain (flowiapro.com) sur ce compte connecte -> Google Pay / Apple
+      // Pay / Link dans le PaymentElement Direct Charge. Idempotent + cache
+      // DB, fail-safe (n'impacte pas le traitement du webhook).
+      if (acc.charges_enabled && urows[0]?.id) {
+        try {
+          const { ensurePaymentMethodDomain } = require('./global-clients/stripe-helpers');
+          await ensurePaymentMethodDomain(urows[0].id, acc.id);
+        } catch (e) {
+          console.warn('[CONNECT WEBHOOK/pmDomain]', acc.id, e.message);
+        }
+      }
     }
 
     // AUDIT Phase 5 : pour les events payment_intent.* / charge.refunded sur
