@@ -89,11 +89,19 @@ module.exports = function attachPaymentRoutes(router) {
             clientId = dec.clientId || null;
             globalClientId = dec.globalClientId || null;
             const { rows: cli } = await pool.query(
-              'SELECT email, first_name, last_name FROM client_accounts WHERE id=$1 AND user_id=$2',
+              'SELECT email, first_name, last_name, global_client_id FROM client_accounts WHERE id=$1 AND user_id=$2',
               [clientId, m.user_id]
             );
             clientEmail = cli[0]?.email || null;
             clientName  = [cli[0]?.first_name, cli[0]?.last_name].filter(Boolean).join(' ') || null;
+            // Le JWT client est emis au login : son globalClientId est FIGE a
+            // cet instant. Si le compte a ete lie au global FlowIA APRES le
+            // login (ou si une carte a ete sauvegardee depuis), le token porte
+            // encore globalClientId=null -> la carte sauvegardee (clef
+            // global_client_id) devenait inutilisable ("Connexion requise"
+            // alors que le client EST connecte). On resout donc le lien FRAIS
+            // en DB, scope au client de CE commercant (multi-tenant safe).
+            if (!globalClientId) globalClientId = cli[0]?.global_client_id || null;
           } else if (dec.scope === 'global_client' && dec.globalClientId) {
             globalClientId = dec.globalClientId;
             const { rows: gc } = await pool.query(
