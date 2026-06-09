@@ -114,14 +114,30 @@ const COMMISSION_RATE_DECOUVERTE = (() => {
   return Math.min(30, raw);
 })();
 
-// Retourne le taux de commission applicable (en %) au merchant donne, en
-// fonction de son plan effectif. Source de verite vs lecture brute de
-// users.commission_rate : permet de bouger la grille tarifaire sans
-// migrations.
-//  - Decouverte → COMMISSION_RATE_DECOUVERTE (defaut 2%)
-//  - Essentiel  → 0
-//  - Equipe     → 0
+// Retourne le taux de commission applicable (en %) au merchant donne.
+//
+// Ordre de priorite :
+//  1. OVERRIDE super-admin : si users.commission_rate > 0 a ete pose
+//     explicitement en super-admin, il PRIME sur la grille plan-based. C'est
+//     le cas particulier voulu (ex : abonnement Equipe offert a vie MAIS
+//     commission negociee de 2% conservee). Cap dur 30%.
+//  2. Sinon grille plan-based (commission_rate = 0 = "pas d'override") :
+//       - Decouverte → COMMISSION_RATE_DECOUVERTE (defaut 2%)
+//       - Essentiel / Equipe → 0%
+//
+// Note : commission_rate = 0 signifie "laisse la grille plan-based decider",
+// donc on ne peut pas forcer 0% sur un Decouverte via ce champ (il retomberait
+// sur 2%). Pour un Decouverte a 0%, octroyer un plan payant. C'est un compromis
+// assume (la colonne est NOT NULL DEFAULT 0, 0 = sentinelle "non defini").
 async function getApplicableCommissionRate(userId) {
+  const { rows } = await pool.query(
+    'SELECT commission_rate FROM users WHERE id=$1',
+    [userId]
+  );
+  const override = rows.length ? parseFloat(rows[0].commission_rate) : 0;
+  if (Number.isFinite(override) && override > 0) {
+    return Math.min(30, override);
+  }
   const plan = await getEffectivePlan(userId);
   if (plan === 'essentiel' || plan === 'equipe') return 0;
   return COMMISSION_RATE_DECOUVERTE;
