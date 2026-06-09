@@ -1265,7 +1265,11 @@ export function MerchantOnboarding({ user, onComplete }) {
   const [f, setF] = useState({
     firstName: user?.firstName || '',
     lastName:  user?.lastName  || '',
-    businessName: user?.businessName || '',
+    // Nom du commerce JAMAIS pre-rempli : le commercant doit le saisir
+    // lui-meme (professionnalisme + surete). Aucun nom predefini type
+    // "Commerce de X" n'est propose, meme via inscription Google. Le champ
+    // est obligatoire (canSubmit exige businessName.trim()).
+    businessName: '',
     businessType: '',
     phone:'', country:'FR',
     streetNumber:'', address:'', city:'', postalCode:'',

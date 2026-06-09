@@ -236,7 +236,7 @@ export default function MerchantDetailPage() {
 
       <div className="page-head" style={{ marginTop: 16 }}>
         <div>
-          <h1 className="dash-title">{merchant.business_name}</h1>
+          <h1 className="dash-title">{merchant.business_name || 'Onboarding en cours'}</h1>
           <p className="page-sub">{merchant.email} {merchant.slug ? `— /${merchant.slug}` : ''}</p>
         </div>
         {merchant.deletion_requested_at

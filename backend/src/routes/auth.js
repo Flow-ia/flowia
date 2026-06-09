@@ -1092,10 +1092,18 @@ router.get('/google/merchant/callback', async (req, res) => {
           [googleId, picture || null, user.id]);
       } else {
         // 4. Créer un nouveau commerçant (onboarding NON complété)
+        // business_name reste VIDE volontairement : on n'invente JAMAIS un nom
+        // predefini type "Commerce de X". Le commercant DOIT saisir lui-meme
+        // le vrai nom de son etablissement a l'etape onboarding obligatoire
+        // (MerchantOnboarding -> POST /onboarding, qui valide name non vide).
+        // Tant que l'onboarding n'est pas fini, l'app est gatee cote front et
+        // le booking public est desactive (is_enabled=false). Cote admin, un
+        // nom vide s'affiche en "—" (onboarding "En cours"), ce qui est plus
+        // honnete et professionnel qu'un faux nom.
         const { rows: created } = await pool.query(
           `INSERT INTO users (email, password_hash, business_name, google_id, first_name, last_name, avatar_url, onboarding_completed)
-           VALUES (LOWER($1), '', $2, $3, $4, $5, $6, FALSE) RETURNING *`,
-          [emailLow, `Commerce de ${given_name || 'Nouveau'}`, googleId, given_name || '', family_name || '', picture || null]
+           VALUES (LOWER($1), '', '', $2, $3, $4, $5, FALSE) RETURNING *`,
+          [emailLow, googleId, given_name || '', family_name || '', picture || null]
         );
         user = created[0];
 
