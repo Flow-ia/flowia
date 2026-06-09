@@ -1097,26 +1097,28 @@ async function sendNewAppointmentMerchant({
 }
 
 // ── Email d'accompagnement commerçant (outreach admin / super-admin) ─────────
-// Mail chaleureux envoyé manuellement depuis le portail admin pour relancer un
-// commerçant dont l'onboarding n'est pas finalisé : on l'accompagne, on lui
-// offre quelques mois sur l'abonnement Équipe, et on l'oriente vers WhatsApp.
+// Mail court, scannable et droit au but pour relancer un commerçant dont
+// l'onboarding n'est pas finalisé. Objectif : maximiser la lecture jusqu'au CTA
+// ET la délivrabilité (inbox, pas spam).
 //
-// REGLE STRICTE : aucun placeholder type "[prénom]" ne doit JAMAIS apparaître.
-// Si le prénom est inconnu, on utilise un "Bonjour," neutre. La signature est
-// toujours "L'équipe FlowIA" (jamais un "[Prénom]" non rempli).
+// Anti-spam (signaux côté contenu — la base reste l'auth domaine SPF/DKIM/DMARC
+// configurée dans Brevo) :
+//   - Sujet TRANSACTIONNEL, sans mot déclencheur ("cadeau", "gratuit", "gagnez",
+//     pas de MAJUSCULES ni de "!").
+//   - Un SEUL CTA principal + un lien WhatsApp sobre (peu de liens).
+//   - Version texte alignée sur le HTML (multipart obligatoire).
+//   - Header List-Unsubscribe + Reply-To réel (Gmail/Outlook adorent).
+//   - Mention de l'offre une seule fois, sobrement, jamais dans le sujet.
 //
-// Params :
-//   to        : email destinataire (obligatoire)
-//   firstName : prénom du commerçant (optionnel — fallback "Bonjour,")
-//   loginUrl  : lien vers l'espace commerçant pour finaliser (optionnel)
-//   whatsappNumber : numéro WhatsApp équipe au format international sans "+"
-//                    (défaut 33780827458)
+// REGLE STRICTE : aucun placeholder type "[prénom]". Prénom inconnu -> "Bonjour,".
+// Signature toujours "L'équipe FlowIA".
+//
+// Params : { to (obligatoire), firstName?, loginUrl?, whatsappNumber? }
 async function sendMerchantOnboardingNudge({ to, firstName, loginUrl, whatsappNumber } = {}) {
   if (!to) throw new Error('Destinataire manquant');
 
   const clean = String(firstName || '').trim();
-  // On ne salue par le prénom que s'il est réellement présent ET propre
-  // (lettres/espaces/traits d'union). Sinon "Bonjour," neutre — jamais "[prénom]".
+  // Salutation par prénom seulement s'il est présent ET propre. Sinon "Bonjour,".
   const safeName = clean && /^[\p{L}\p{M}\s'-]{1,40}$/u.test(clean) ? clean : '';
   const greeting = safeName ? `Bonjour ${escapeHtml(safeName)},` : 'Bonjour,';
 
@@ -1128,70 +1130,95 @@ async function sendMerchantOnboardingNudge({ to, firstName, loginUrl, whatsappNu
   const waDisplay = '+33 7 80 82 74 58';
 
   const portalUrl = loginUrl || 'https://commercant.flowiapro.com';
-  const subject = 'Votre espace FlowIA vous attend — un cadeau pour démarrer';
+  const replyTo = process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@flowiapro.com';
 
+  // Sujet transactionnel, neutre — passe les filtres et reste clair.
+  const subject = 'Il reste une étape pour activer votre espace FlowIA';
+
+  // Intro : 2 phrases max, on dit POURQUOI et QUOI tout de suite.
   const intro =
     `<p style="margin:0 0 12px;">${greeting}</p>` +
-    `<p style="margin:0 0 12px;">Vous avez commencé à créer votre espace commerçant sur ` +
-    `<strong style="font-weight:500;">FlowIA</strong> — et nous serions ravis de vous compter parmi nous.</p>` +
-    `<p style="margin:0;">Il vous reste seulement quelques informations à compléter ` +
-    `(nom de votre établissement, adresse, téléphone) pour activer votre page de réservation ` +
-    `en ligne. Moins de 3 minutes, et notre équipe vous accompagne à chaque étape si besoin.</p>`;
+    `<p style="margin:0;">Votre espace <strong style="font-weight:500;">FlowIA</strong> est presque prêt. ` +
+    `Il reste <strong style="font-weight:500;">une étape</strong> : compléter le nom, l'adresse et le ` +
+    `téléphone de votre établissement pour mettre votre page de réservation en ligne. Moins de 3 minutes.</p>`;
 
-  const giftNotice = renderNotice({
-    tone: 'success',
-    text: `<strong style="font-weight:500;">Cadeau de bienvenue :</strong> nous vous offrons ` +
-          `plusieurs mois sur l'abonnement <strong style="font-weight:500;">Équipe</strong> ` +
-          `(notre offre la plus complète) pour démarrer sereinement, sans aucun engagement.`,
-  });
+  // Bénéfices : 3 items courts, scannables — on donne envie d'aller au bout.
+  const benefit = (txt) =>
+    `<tr><td style="padding:6px 10px 6px 0;color:#15803d;font-weight:500;vertical-align:top;">·</td>` +
+    `<td style="padding:6px 0;color:#374151;font-size:14px;line-height:1.5;">${txt}</td></tr>`;
+  const benefits =
+    renderHeading('Ce que vous activez') +
+    `<table style="width:100%;border-collapse:collapse;margin:0 0 4px;">` +
+    benefit('Réservations en ligne 24h/24, sans appel à gérer') +
+    benefit('Agenda, fiches clients et rappels automatiques au même endroit') +
+    benefit('Paiements encaissés directement, en toute sécurité') +
+    `</table>`;
 
-  const cta = renderCta({ href: portalUrl, label: 'Finaliser mon inscription' });
+  const cta = renderCta({ href: portalUrl, label: 'Activer mon espace (3 min)' });
 
+  // Offre : une seule mention, sobre, après le CTA.
+  const offer =
+    `<p style="margin:0 0 4px;font-size:13px;line-height:1.55;color:#374151;text-align:center;">` +
+    `Pour bien démarrer, plusieurs mois sur l'offre <strong style="font-weight:500;">Équipe</strong> ` +
+    `vous sont inclus, sans engagement.</p>`;
+
+  // WhatsApp : bouton sobre (contour vert sur fond blanc), 1 seul lien.
   const whatsappBlock =
-    `<div style="margin:24px 0;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;` +
-    `border-radius:6px;text-align:center;">` +
-    `<div style="font-size:13px;color:#14532d;margin:0 0 10px;">` +
-    `Une question, un blocage&nbsp;? Écrivez-nous, on vous répond en direct.</div>` +
-    `<a href="${escapeHtml(waHref)}" style="display:inline-block;background:#25D366;color:#fff;` +
-    `padding:11px 20px;font-size:13px;font-weight:500;text-decoration:none;border-radius:4px;` +
-    `font-family:${"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"};">` +
-    `Discuter sur WhatsApp</a>` +
-    `<div style="font-size:12px;color:#374151;margin:8px 0 0;">${escapeHtml(waDisplay)}</div>` +
+    `<div style="margin:22px 0 0;text-align:center;">` +
+    `<div style="font-size:13px;color:#374151;margin:0 0 10px;">Une question&nbsp;? Réponse en direct&nbsp;:</div>` +
+    `<a href="${escapeHtml(waHref)}" style="display:inline-block;background:#fff;color:#15803d;` +
+    `border:1px solid #15803d;padding:10px 18px;font-size:13px;font-weight:500;text-decoration:none;` +
+    `border-radius:4px;">WhatsApp ${escapeHtml(waDisplay)}</a>` +
     `</div>`;
 
   const outro =
-    `<p style="margin:20px 0 0;font-size:14px;line-height:1.6;color:#374151;">` +
-    `Au plaisir de vous accompagner,<br/>` +
-    `<strong style="font-weight:500;">L'équipe FlowIA</strong></p>`;
+    `<p style="margin:22px 0 0;font-size:14px;line-height:1.6;color:#374151;">` +
+    `À très vite,<br/><strong style="font-weight:500;">L'équipe FlowIA</strong></p>`;
 
-  const sections = giftNotice + cta + whatsappBlock + outro;
+  const sections = benefits + cta + offer + whatsappBlock + outro;
 
   const html = renderShell({
-    preheader: 'Finalisez votre inscription FlowIA et profitez de plusieurs mois offerts.',
-    kicker: 'FlowIA · Bienvenue',
-    title: 'Finalisons votre inscription ensemble',
+    preheader: 'Activez votre page de réservation en ligne en moins de 3 minutes.',
+    kicker: 'FlowIA',
+    title: 'Activez votre espace en 3 minutes',
     intro,
     sections,
-    footerNote: `© ${new Date().getFullYear()} FlowIA · Vous recevez cet email car une inscription commerçant a été initiée avec cette adresse.`,
+    footerNote: `FlowIA · ${replyTo} · Vous recevez cet email car une inscription commerçant a été initiée avec cette adresse. Pour ne plus en recevoir, répondez « STOP ».`,
   });
 
   const text = [
     greeting, '',
-    'Vous avez commencé à créer votre espace commerçant sur FlowIA.',
-    'Il vous reste quelques informations à compléter (nom de l\'établissement, adresse, téléphone)',
-    'pour activer votre page de réservation. Moins de 3 minutes, on vous accompagne.',
+    'Votre espace FlowIA est presque prêt. Il reste une étape : compléter le nom,',
+    "l'adresse et le téléphone de votre établissement pour mettre votre page de",
+    'réservation en ligne (moins de 3 minutes).',
     '',
-    'Cadeau de bienvenue : plusieurs mois offerts sur l\'abonnement Équipe, sans engagement.',
+    'Ce que vous activez :',
+    '- Réservations en ligne 24h/24, sans appel à gérer',
+    '- Agenda, fiches clients et rappels automatiques au même endroit',
+    '- Paiements encaissés directement, en toute sécurité',
     '',
-    `Finaliser mon inscription : ${portalUrl}`,
+    `Activer mon espace : ${portalUrl}`,
     '',
-    `Une question ? WhatsApp : ${waHref} (${waDisplay})`,
+    "Pour bien démarrer, plusieurs mois sur l'offre Équipe vous sont inclus, sans engagement.",
     '',
-    "Au plaisir de vous accompagner,",
+    `Une question ? WhatsApp ${waDisplay} : ${waHref}`,
+    '',
+    'À très vite,',
     "L'équipe FlowIA",
+    '',
+    'Pour ne plus recevoir ce type d\'email, répondez « STOP ».',
   ].join('\n');
 
-  return sendEmail({ to, subject, html, text, toName: safeName || undefined });
+  // Reply-To réel + List-Unsubscribe : signaux de légitimité majeurs (Gmail).
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text,
+    toName: safeName || undefined,
+    replyTo,
+    headers: { 'List-Unsubscribe': `<mailto:${replyTo}?subject=STOP>` },
+  });
 }
 
 module.exports = {
