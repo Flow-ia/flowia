@@ -37,6 +37,14 @@ export async function unfreezeMerchant(id) {
   });
 }
 
+// Envoie au commerçant l'email d'accompagnement (Brevo) : finalisation
+// onboarding + mois offerts + lien WhatsApp. Reserve super-admin cote backend.
+export async function sendMerchantOnboardingEmail(id) {
+  return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/send-onboarding-email`, {
+    method: 'POST',
+  });
+}
+
 export async function getMerchantGdprDeletePreview(id) {
   return await apiJson(`/api/admin/merchants/${encodeURIComponent(id)}/gdpr-delete/preview`);
 }

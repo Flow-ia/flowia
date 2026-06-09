@@ -295,6 +295,44 @@ router.post('/:id/unfreeze', async (req, res) => {
   }
 });
 
+// ── POST /:id/send-onboarding-email — relance d'accompagnement via Brevo ─────
+// Geste commercial / outreach : envoie au commerçant un email chaleureux pour
+// finaliser son inscription (offre quelques mois Équipe + lien WhatsApp).
+// Reserve super-admin. Aucun placeholder "[prénom]" : si first_name absent, le
+// template salue "Bonjour," et signe "L'équipe FlowIA".
+router.post('/:id/send-onboarding-email', async (req, res) => {
+  if (!requireSuperAdmin(req, res)) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, first_name, business_name, onboarding_completed FROM users WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const m = rows[0];
+    if (!m.email) return res.status(400).json({ error: 'Ce commerçant n\'a pas d\'email.' });
+
+    const { sendMerchantOnboardingNudge } = require('../../utils/email');
+    await sendMerchantOnboardingNudge({
+      to:        m.email,
+      firstName: m.first_name,
+      loginUrl:  process.env.MERCHANT_APP_URL || 'https://commercant.flowiapro.com',
+    });
+
+    await logAuditAction({
+      adminId: req.admin.id, adminEmail: req.admin.email,
+      action: 'merchant.onboarding_email', targetType: 'merchant', targetId: req.params.id,
+      payloadBefore: null,
+      payloadAfter:  { to: m.email, onboarding_completed: m.onboarding_completed },
+      req,
+    });
+
+    return res.json({ ok: true, sentTo: m.email });
+  } catch (e) {
+    console.error('[admin/merchants send-onboarding-email]', e.message);
+    return res.status(500).json({ error: e.message || 'Envoi impossible.' });
+  }
+});
+
 // ── POST /:id/sms-balance/adjust — ajout ou retrait manuel solde SMS ─────────
 // Usage admin : compensation, geste commercial, correction bug Stripe.
 // Body : { delta: number, reason: string }

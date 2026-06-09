@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { getMe } from '../lib/auth.js';
-import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance, getMerchantFeatures, setMerchantFeature, forceMerchantSlug } from '../lib/admin.js';
+import { getMerchant, updateMerchant, freezeMerchant, unfreezeMerchant, adjustMerchantSmsBalance, getMerchantFeatures, setMerchantFeature, forceMerchantSlug, sendMerchantOnboardingEmail } from '../lib/admin.js';
 import AppShell from '../components/AppShell.jsx';
 import MerchantPromoCodesSection from './MerchantPromoCodesSection.jsx';
 import MerchantResetSection from './MerchantResetSection.jsx';
@@ -141,6 +141,22 @@ export default function MerchantDetailPage() {
     }
   }
 
+  // Envoi de l'email d'accompagnement Brevo (relance onboarding + mois offerts
+  // + WhatsApp). Confirmation legere avant envoi pour eviter le double-clic.
+  async function doSendOnboardingEmail() {
+    if (!merchant?.email) { setError('Ce commercant n\'a pas d\'email.'); return; }
+    if (!confirm(`Envoyer l'email d'accompagnement a ${merchant.email} ?`)) return;
+    setBusy(true); setError(''); setSuccess('');
+    try {
+      const r = await sendMerchantOnboardingEmail(id);
+      setSuccess(`Email d'accompagnement envoye a ${r.sentTo || merchant.email}.`);
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Envoi impossible.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Concatene message + code + detail backend (l'API renvoie { error, code, detail }
   // sur les 500 — sans le detail, impossible de diagnostiquer en prod).
   function formatErr(err, fallback) {
@@ -248,6 +264,45 @@ export default function MerchantDetailPage() {
 
       {error   && <div className="login-error">{error}</div>}
       {success && <div className="login-success">{success}</div>}
+
+      {/* Accompagnement commercant : relance email Brevo + contact WhatsApp.
+          Utile surtout pour les inscriptions Google a l'onboarding inacheve. */}
+      <section className="card">
+        <div className="card-head">
+          <h2 className="card-title">{"Accompagnement"}</h2>
+          {!merchant.onboarding_completed && (
+            <span className="badge badge-off">{"Onboarding en cours"}</span>
+          )}
+        </div>
+        <p className="card-sub" style={{ marginBottom: 12 }}>
+          {"Relancez le commercant pour finaliser son inscription : email chaleureux (mois offerts sur l'abonnement Equipe) ou contact direct sur WhatsApp."}
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button className="btn-primary" onClick={doSendOnboardingEmail} disabled={busy || !merchant.email}>
+            {busy ? "Envoi..." : "Envoyer l'email d'accompagnement"}
+          </button>
+          {(() => {
+            const digits = String(merchant.phone || '').replace(/\D/g, '');
+            if (!digits) {
+              return (
+                <button className="btn-ghost" disabled title="Aucun numero renseigne pour ce commercant">
+                  {"WhatsApp (pas de numero)"}
+                </button>
+              );
+            }
+            const waMsg = encodeURIComponent(
+              `Bonjour, c'est l'equipe FlowIA. On vous accompagne pour finaliser votre inscription.`
+            );
+            return (
+              <a className="btn-ghost" href={`https://wa.me/${digits}?text=${waMsg}`}
+                 target="_blank" rel="noopener noreferrer"
+                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+                {"Contacter sur WhatsApp"}
+              </a>
+            );
+          })()}
+        </div>
+      </section>
 
       {merchant.is_frozen && (
         <section className="card card-warning">
