@@ -927,6 +927,19 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
                      60 * 1000);
     }
 
+    // PAIEMENTS ORPHELINS : client debite par Stripe (confirmPayment OK)
+    // mais POST /book jamais abouti (navigateur ferme, crash). Le webhook
+    // payment_intent.succeeded a trace la row orphan_online_payments ; ce
+    // cron re-verifie apres 45 min de grace puis rembourse automatiquement
+    // le client si le RDV n'existe toujours pas. Initial tick 90s post-boot
+    // (meme logique anti-hibernation Render que le cron payouts).
+    {
+      const { reconcileOrphanPayments } = require('./utils/reconcileOrphanPayments');
+      scheduleLocked(60 * 60 * 1000, 'cron:orphan:payments', 'orphans',
+                     () => reconcileOrphanPayments(dbPool),
+                     90 * 1000);
+    }
+
     // NO-SHOW AUTOMATIQUE : marque cancelled_by='system' sur les RDV passes
     // depuis +24h non encaisses. Acompte conserve (pas de refund). Le cron
     // releasePayouts libere ensuite les fonds vers le commercant a J+3.

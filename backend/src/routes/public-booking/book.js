@@ -403,9 +403,14 @@ module.exports = function attachBookRoute(router) {
         }
         try {
           const { stripeFetch } = require('../global-clients/stripe-helpers');
+          // expand latest_charge : un PI rembourse GARDE status='succeeded'
+          // cote Stripe. Sans inspection du charge, un PI auto-refund
+          // (SLOT_TAKEN race, reconciliation orphan) pouvait etre rejoue
+          // pour creer un RDV 'paid' alors que l'argent a ete rendu au
+          // client -> perte seche pour le commercant.
           const pi = await stripeFetch(
             'GET',
-            `/payment_intents/${payment_intent_id}`,
+            `/payment_intents/${payment_intent_id}?expand[]=latest_charge`,
             null,
             { stripeAccount: stripeAccountId }
           );
@@ -414,6 +419,15 @@ module.exports = function attachBookRoute(router) {
               error: 'Le paiement n\'est pas confirme.',
               code:  'PAYMENT_NOT_SUCCEEDED',
               pi_status: pi.status,
+            });
+          }
+          const latestCharge = (pi.latest_charge && typeof pi.latest_charge === 'object')
+            ? pi.latest_charge : null;
+          if (latestCharge
+              && (latestCharge.refunded || (Number(latestCharge.amount_refunded) || 0) > 0)) {
+            return res.status(400).json({
+              error: 'Ce paiement a deja ete rembourse. Merci de refaire un paiement pour reserver.',
+              code:  'PAYMENT_REFUNDED',
             });
           }
           // Verifie que le PI a ete cree pour CETTE reservation (anti-rejeu

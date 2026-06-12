@@ -1072,6 +1072,44 @@ router.post('/webhook', async (req, res) => {
         }
       } else {
         console.log('[CONNECT WEBHOOK] payment_intent.succeeded sans RDV (ok si confirme cote front):', pi.id);
+        // FILET DE SECURITE : si ce PI vient bien du flow booking FlowIA
+        // (metadata.source) mais qu'aucun RDV ne lui est lie, on enregistre
+        // un "paiement orphelin". Cas reel : le client est debite par
+        // confirmPayment mais POST /book n'arrive jamais (navigateur ferme,
+        // crash, reseau coupe). Sans cette row, l'argent du client restait
+        // pris sans RDV ni remboursement ni trace. Le cron
+        // reconcileOrphanPayments re-verifie apres un delai de grace
+        // (le /book peut encore aboutir juste apres ce webhook) puis
+        // rembourse automatiquement si le RDV n'existe toujours pas.
+        // INSERT idempotent (UNIQUE payment_intent_id, replay-safe).
+        if (pi.metadata?.source === 'flowia_booking') {
+          try {
+            const md = pi.metadata || {};
+            // user_id valide UUID sinon NULL (la colonne est uuid ; une
+            // metadata corrompue ne doit pas faire perdre la row orphan).
+            const mdUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+              .test(String(md.user_id || '')) ? md.user_id : null;
+            await pool.query(
+              `INSERT INTO orphan_online_payments
+                 (payment_intent_id, stripe_account_id, user_id, amount_cents,
+                  client_email, pi_metadata)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               ON CONFLICT (payment_intent_id) DO NOTHING`,
+              [
+                pi.id,
+                event.account || '',
+                mdUserId,
+                amt || null,
+                md.client_email || pi.receipt_email || null,
+                JSON.stringify(md),
+              ]
+            );
+            console.log('[CONNECT WEBHOOK] orphan payment enregistre pour reconciliation:', pi.id);
+          } catch (orphanErr) {
+            console.error('[CONNECT WEBHOOK] orphan payment insert fail', pi.id,
+              orphanErr.message);
+          }
+        }
       }
 
       // Race-safe fees update : tourne TOUJOURS, meme si le block ci-dessus

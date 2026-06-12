@@ -380,8 +380,15 @@ module.exports = function attachPaymentRoutes(router) {
         piParams.payment_method = clonedPmId;
         piParams.confirm        = true;
         piParams.off_session    = true;
+        // return_url : utilise uniquement si la banque force un 3DS avec
+        // redirection full-page (rare, le flow normal passe par
+        // handleNextAction en modal). Pointe vers la page de booking du
+        // salon — route reelle du routeur React (l'ancienne
+        // /payment-return n'existait pas -> 404 apres redirect 3DS).
+        // Le pi_id persiste en sessionStorage permet au client de
+        // reprendre/verifier sa reservation.
         piParams.return_url = (process.env.FRONTEND_URL || '').split(',')[0]?.replace(/\/$/, '')
-                              + `/book/${req.params.slug}/payment-return`;
+                              + `/book/${req.params.slug}`;
       } else {
         // Carte saisie cote PaymentElement (flow standard).
         piParams.automatic_payment_methods = { enabled: true };
@@ -458,7 +465,13 @@ module.exports = function attachPaymentRoutes(router) {
           };
           const updateParams = {
             amount: amountCents,
-            ...(feeCents > 0 ? { application_fee_amount: feeCents } : {}),
+            // feeCents=0 : si le PI portait deja une application_fee
+            // (commission passee a 0 entre 2 updates de la session), on
+            // l'efface explicitement ('' = unset cote API Stripe). Sinon
+            // l'ancienne commission resterait facturee au commercant.
+            ...(feeCents > 0
+              ? { application_fee_amount: feeCents }
+              : (existing.application_fee_amount ? { application_fee_amount: '' } : {})),
             ...(connectedCustomerId ? { customer: connectedCustomerId } : {}),
             ...(clientEmail ? { receipt_email: clientEmail } : {}),
             metadata: updateMetadata,

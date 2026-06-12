@@ -1755,6 +1755,43 @@ async function initDB() {
   await runMigration(`CREATE INDEX IF NOT EXISTS idx_appt_payouts_user_status
     ON appointment_payouts(user_id, status, release_at DESC)`);
 
+  // ── Paiements orphelins (client debite, RDV jamais cree) ────────────────
+  // Cas : confirmPayment reussit cote Stripe mais POST /book n'aboutit
+  // jamais (navigateur ferme, crash, reseau). Le webhook
+  // payment_intent.succeeded ne trouve aucun appointment lie -> il INSERT
+  // ici (source de detection unique). Le cron reconcileOrphanPayments
+  // re-verifie apres un delai de grace : si le RDV existe entre-temps
+  // (retry client) -> resolved ; sinon refund automatique du client.
+  // status : pending -> resolved (RDV finalement cree)
+  //                  -> refunded (client rembourse automatiquement)
+  //                  -> failed   (refund Stripe KO apres MAX_RETRIES,
+  //                               un row failed_refunds est cree pour l'admin)
+  await runMigration(`
+    CREATE TABLE IF NOT EXISTS orphan_online_payments (
+      id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      payment_intent_id    VARCHAR(255) NOT NULL,
+      stripe_account_id    VARCHAR(255) NOT NULL,
+      user_id              UUID REFERENCES users(id) ON DELETE SET NULL,
+      amount_cents         INT,
+      client_email         VARCHAR(255),
+      pi_metadata          JSONB,
+      status               VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','resolved','refunded','failed')),
+      retry_count          INT NOT NULL DEFAULT 0,
+      stripe_refund_id     VARCHAR(255),
+      stripe_error_message TEXT,
+      resolved_at          TIMESTAMPTZ,
+      created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  // 1 row max par PI (idempotence webhook replay).
+  await runMigration(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orphan_payments_pi
+    ON orphan_online_payments(payment_intent_id)`);
+  // Cron : scan rapide des orphans en attente.
+  await runMigration(`CREATE INDEX IF NOT EXISTS idx_orphan_payments_pending
+    ON orphan_online_payments(created_at) WHERE status = 'pending'`);
+
   // ── Ledger financier immuable (phase 1 : schema only) ───────────────────
   // Source de vérité unique pour tout mouvement d'argent côté Stripe Connect.
   // Convention amount_cents signé : payment = positif (encaisse merchant),
