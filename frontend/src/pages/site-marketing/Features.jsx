@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { I } from '../../utils/icons';
 import { PageHero, PrimaryBtn, SecondaryBtn } from './components/Shared';
 import { FEATURE_GROUPS } from './components/Header';
 import { S, CheckPill } from './components/shadcn';
@@ -13,9 +12,12 @@ import Seo from './components/Seo';
 // Chaque feature a :
 //  - label : pill 'eyebrow' au-dessus du titre
 //  - title, desc, bullets : contenu
-//  - cta : libellé du bouton CTA personnalisé
-//  - img : photo Unsplash illustrant la fonctionnalité (fallback gradient si erreur)
-const IMG = (id) => `https://images.unsplash.com/${id}?w=1200&q=80&auto=format&fit=crop`;
+//  - cta : libellé du lien CTA personnalisé
+//  - img : photo illustrant la fonctionnalité (fallback icône si erreur)
+//
+// Les photos sont toutes des scènes de salon (coiffure, barbier, manucure,
+// esthétique) choisies une par une pour coller au contenu de la carte.
+const IMG = (id) => `https://images.unsplash.com/${id}?w=760&q=75&auto=format&fit=crop`;
 
 const DETAILS = {
   ia: {
@@ -30,7 +32,8 @@ const DETAILS = {
       "Pas de configuration : ça marche dès la première semaine",
     ],
     cta: "Découvrir notre IA",
-    img: IMG('photo-1487412947147-5cebf100ffc2'),
+    // Barbier et client : la relation que les campagnes entretiennent.
+    img: IMG('photo-1605497788044-5a32c7078486'),
   },
   previsions: {
     label: 'IA',
@@ -43,7 +46,8 @@ const DETAILS = {
       "Recommandations d'actions (campagnes, promotions)",
     ],
     cta: "Voir les prévisions",
-    img: IMG('photo-1620331317932-4d7e7f73af32'),
+    // Fauteuils vides : le creux d'agenda qu'on veut anticiper.
+    img: IMG('photo-1585747860715-2ba37e788b70'),
   },
   reservation: {
     label: 'Site',
@@ -57,7 +61,8 @@ const DETAILS = {
       "Connexion Google ou compte simple en 30 secondes",
     ],
     cta: "Découvrir la personnalisation",
-    img: IMG('photo-1492106087820-71f1a00d2b11'),
+    // Intérieur de salon soigné : la vitrine que reflète la page publique.
+    img: IMG('photo-1633681926022-84c23e8cb2d6'),
   },
   annonce: {
     label: 'Site',
@@ -70,7 +75,8 @@ const DETAILS = {
       "Aperçu en direct avant publication",
     ],
     cta: "Activer une annonce",
-    img: IMG('photo-1560066984-138dadb4c035'),
+    // Devanture de barbershop avec enseigne lumineuse : l'annonce affichée.
+    img: IMG('photo-1678356164573-9a534fe43958'),
   },
   tarifs: {
     label: 'Configuration',
@@ -83,7 +89,8 @@ const DETAILS = {
       "Tarifs spécifiques par employé (optionnel)",
     ],
     cta: "Configurer mes tarifs",
-    img: IMG('photo-1571781926291-c477ebfd024b'),
+    // Coupe aux ciseaux : la prestation qu'on tarifie.
+    img: IMG('photo-1700760934268-8aa0ef52ce0a'),
   },
   employes: {
     label: 'Configuration',
@@ -96,7 +103,8 @@ const DETAILS = {
       "PIN court par employé pour la tablette partagée",
     ],
     cta: "Gérer mon équipe",
-    img: IMG('photo-1522337360788-8b13dee7a37e'),
+    // Coiffeuse au travail : le membre d'équipe et son agenda.
+    img: IMG('photo-1562322140-8baeececf3df'),
   },
   sms: {
     label: 'Marketing',
@@ -110,7 +118,8 @@ const DETAILS = {
       "Quotas et budget contrôlés",
     ],
     cta: "Lancer mes campagnes SMS",
-    img: IMG('photo-1605497788044-5a32c7078486'),
+    // Cliente sur son téléphone dans le salon : le SMS qui arrive.
+    img: IMG('photo-1636990490461-b98d2302b9fb'),
   },
   email: {
     label: 'Marketing',
@@ -124,7 +133,8 @@ const DETAILS = {
       "Statistiques d'ouverture et de clic",
     ],
     cta: "Envoyer mes emails",
-    img: IMG('photo-1503951914875-452162b0f3f1'),
+    // Salon vivant, échange à l'accueil : garder le lien entre deux visites.
+    img: IMG('photo-1695527081874-b674c46f40fb'),
   },
   fidelite: {
     label: 'Marketing',
@@ -138,7 +148,8 @@ const DETAILS = {
       "Activation/désactivation par catégorie",
     ],
     cta: "Activer la fidélité",
-    img: IMG('photo-1559599101-f09722fb4948'),
+    // Manucure « love » : l'attachement de la cliente au salon.
+    img: IMG('photo-1519014816548-bf5fe059798b'),
   },
   parrainage: {
     label: 'Marketing',
@@ -152,7 +163,8 @@ const DETAILS = {
       "Suivi des parrainages dans l'admin",
     ],
     cta: "Configurer le parrainage",
-    img: IMG('photo-1570172619644-dfd03ed5d881'),
+    // Deux clientes en soin côte à côte : le duo parrain / filleul.
+    img: IMG('photo-1647004692483-c5d942fe1137'),
   },
   anniversaire: {
     label: 'Marketing',
@@ -166,7 +178,8 @@ const DETAILS = {
       "Offre paramétrable (% ou €)",
     ],
     cta: "Activer les anniversaires",
-    img: IMG('photo-1530653333484-13e7e8eaa3c7'),
+    // Nail art coloré et festif : l'offre anniversaire.
+    img: IMG('photo-1571290274554-6a2eaa771e5f'),
   },
   rappels: {
     label: 'Marketing',
@@ -179,7 +192,8 @@ const DETAILS = {
       "Désactivable par client si demandé",
     ],
     cta: "Activer les rappels",
-    img: IMG('photo-1599387737005-7787e8d0a2dd'),
+    // Le fauteuil occupé : le RDV honoré grâce au rappel.
+    img: IMG('photo-1629397685944-7073f5589754'),
   },
   caisse: {
     label: 'Caisse',
@@ -193,7 +207,8 @@ const DETAILS = {
       "Verrouillage par PIN administrateur",
     ],
     cta: "Découvrir la caisse",
-    img: IMG('photo-1604654894610-df63bc536371'),
+    // Paiement par carte au comptoir du salon.
+    img: IMG('photo-1746201175390-3e02c20b890b'),
   },
   clients: {
     label: 'Gestion',
@@ -207,7 +222,8 @@ const DETAILS = {
       "Export RGPD complet à la demande",
     ],
     cta: "Voir mon fichier clients",
-    img: IMG('photo-1521590832167-7bcbfaa6381f'),
+    // Cliente accueillie au comptoir : la fiche qu'on ouvre à l'arrivée.
+    img: IMG('photo-1556740758-90de374c12ad'),
   },
   credits: {
     label: 'Caisse',
@@ -221,7 +237,8 @@ const DETAILS = {
       "Audit trail des opérations",
     ],
     cta: "Suivre mes crédits",
-    img: IMG('photo-1556228720-195a672e8a03'),
+    // Terminal affichant le montant : le solde qu'on encaisse ou rembourse.
+    img: IMG('photo-1750263160670-42be92c0eaf0'),
   },
   exports: {
     label: 'Comptabilité',
@@ -235,7 +252,8 @@ const DETAILS = {
       "Verrouillé par PIN admin",
     ],
     cta: "Configurer mes exports",
-    img: IMG('photo-1544161515-4ab6ce6db874'),
+    // Le comptoir d'accueil où se tient la compta du salon.
+    img: IMG('photo-1634449862841-8c6e970117e5'),
   },
   statistiques: {
     label: 'Pilotage',
@@ -249,7 +267,8 @@ const DETAILS = {
       "Verrouillage par PIN admin",
     ],
     cta: "Voir mes statistiques",
-    img: IMG('photo-1487412947147-5cebf100ffc2'),
+    // Vue d'ensemble du salon : ce que le tableau de bord met en chiffres.
+    img: IMG('photo-1706629504952-ab5e50f5c179'),
   },
 };
 
@@ -295,19 +314,20 @@ export default function Features() {
         <section key={group.slug}
           id={`group-${group.slug}`}
           style={{
-            padding: '56px 24px 16px',
+            padding: '40px 24px 8px',
             scrollMarginTop: 120,
             borderTop: gi === 0 ? `1px solid ${S.border}` : 'none',
           }}>
-          <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 22 }}>
+          <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <span style={{
-                width: 28, height: 28, borderRadius: S.rSm,
+                width: 26, height: 26, borderRadius: S.rSm,
                 background: group.color + '14',
                 border: `1px solid ${group.color}22`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
               }}>
-                <group.Ic style={{ width: 14, height: 14, color: group.color }} />
+                <group.Ic style={{ width: 13, height: 13, color: group.color }} />
               </span>
               <p style={{
                 fontSize: 11, fontWeight: 500, color: S.fgSubtle,
@@ -317,19 +337,21 @@ export default function Features() {
                 {group.label}
               </p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {group.items.map((it, idx) => {
+            <div style={{
+              display: 'grid', gap: 14,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(296px, 1fr))',
+              alignItems: 'stretch',
+            }}>
+              {group.items.map(it => {
                 const d = DETAILS[it.id];
-                return d ? (
-                  <FeatureCard key={it.id} item={it} detail={d} flipped={idx % 2 === 1} />
-                ) : null;
+                return d ? <FeatureCard key={it.id} item={it} detail={d} /> : null;
               })}
             </div>
           </div>
         </section>
       ))}
 
-      <section style={{ padding: '64px 24px 80px', borderTop: `1px solid ${S.border}`, marginTop: 32, background: S.bgMuted }}>
+      <section style={{ padding: '56px 24px 72px', borderTop: `1px solid ${S.border}`, marginTop: 32, background: S.bgMuted }}>
         <div style={{ maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
           <h2 style={{
             fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 500,
@@ -364,7 +386,7 @@ function CategoryNav({ activeGroup }) {
       WebkitBackdropFilter: 'saturate(160%) blur(10px)',
     }}>
       <div style={{
-        maxWidth: 1100, margin: '0 auto', padding: '12px 24px',
+        maxWidth: 1120, margin: '0 auto', padding: '12px 24px',
         display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap',
       }}>
         {FEATURE_GROUPS.map(g => {
@@ -392,63 +414,64 @@ function CategoryNav({ activeGroup }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-function FeatureCard({ item, detail, flipped }) {
+// Carte compacte : visuel 16/9 en tête, contenu dessous. En grille 3 colonnes
+// sur desktop — la page tient en ~3 écrans au lieu de 8 avec l'ancien format
+// pleine largeur alterné.
+function FeatureCard({ item, detail }) {
+  const [hover, setHover] = useState(false);
   return (
-    <div id={item.id} style={{
-      scrollMarginTop: 130,
-      borderRadius: S.rXl,
-      background: S.bg,
-      border: `1px solid ${S.border}`,
-      overflow: 'hidden',
-      display: 'grid', gap: 0,
-      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-      alignItems: 'stretch',
-      boxShadow: S.shadowSm,
-    }}>
-      <div style={{ order: flipped ? 1 : 0, padding: 32, display: 'flex', flexDirection: 'column' }}>
+    <div id={item.id}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        scrollMarginTop: 130,
+        borderRadius: S.rLg,
+        background: S.bg,
+        border: `1px solid ${hover ? S.borderHv : S.border}`,
+        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: hover ? S.shadowMd : S.shadowSm,
+        transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
+      }}>
+      <FeatureVisual color={item.color} Ic={item.Ic} img={detail.img} alt={detail.title} zoom={hover} />
+      <div style={{ padding: '16px 18px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
         <FeatureLabel color={item.color} Ic={item.Ic} text={detail.label} />
         <h3 style={{
-          fontSize: 'clamp(20px, 2.6vw, 26px)', fontWeight: 500,
-          color: S.fg, lineHeight: 1.25, letterSpacing: '-0.025em',
-          margin: 0, marginBottom: 12,
+          fontSize: 17, fontWeight: 500,
+          color: S.fg, lineHeight: 1.3, letterSpacing: '-0.015em',
+          margin: 0, marginBottom: 7,
         }}>
           {detail.title}
         </h3>
-        <p style={{ fontSize: 15, color: S.fgMuted, lineHeight: 1.65, margin: 0, marginBottom: 18 }}>
+        <p style={{ fontSize: 13, color: S.fgMuted, lineHeight: 1.55, margin: 0, marginBottom: 13 }}>
           {detail.desc}
         </p>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginBottom: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
           {detail.bullets.map(b => (
-            <li key={b} style={{ display: 'flex', gap: 10, fontSize: 14, color: S.fg2, alignItems: 'flex-start', lineHeight: 1.55 }}>
-              <span style={{ marginTop: 3 }}><CheckPill /></span>
+            <li key={b} style={{ display: 'flex', gap: 8, fontSize: 12.5, color: S.fg2, alignItems: 'flex-start', lineHeight: 1.45 }}>
+              <span style={{ marginTop: 2 }}><CheckPill /></span>
               {b}
             </li>
           ))}
         </ul>
         {detail.cta && (
-          <div style={{ marginTop: 'auto' }}>
+          <div style={{ marginTop: 'auto', paddingTop: 16 }}>
             <Link to="/tarifs" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 14, fontWeight: 500,
-              color: S.fg,
-              textDecoration: 'none',
-              padding: '10px 16px', borderRadius: S.r,
-              background: S.bg,
-              border: `1px solid ${S.border}`,
-              transition: 'background 0.15s ease, border-color 0.15s ease',
-              fontFamily: 'inherit',
-            }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = S.bgHover; e.currentTarget.style.borderColor = S.borderHv; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = S.bg; e.currentTarget.style.borderColor = S.border; }}>
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              fontSize: 12.5, fontWeight: 500,
+              color: S.fg, textDecoration: 'none',
+            }}>
               {detail.cta}
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{
+                transform: hover ? 'translateX(2px)' : 'none',
+                transition: 'transform 0.15s ease',
+              }}>
                 <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </Link>
           </div>
         )}
       </div>
-      <FeatureVisual color={item.color} Ic={item.Ic} img={detail.img} alt={detail.title} />
     </div>
   );
 }
@@ -458,49 +481,57 @@ function FeatureCard({ item, detail, flipped }) {
 function FeatureLabel({ color, Ic, text }) {
   return (
     <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
       width: 'fit-content',
-      fontSize: 10, fontWeight: 500,
-      padding: '4px 10px', borderRadius: 99,
+      fontSize: 9.5, fontWeight: 500,
+      padding: '3px 8px', borderRadius: 99,
       background: color + '0d',
-      color, letterSpacing: 0.8,
+      color, letterSpacing: 0.7,
       border: `1px solid ${color}33`,
       textTransform: 'uppercase',
-      marginBottom: 14,
+      marginBottom: 11,
     }}>
-      {Ic && <Ic style={{ width: 11, height: 11 }} />}
+      {Ic && <Ic style={{ width: 10, height: 10 }} />}
       {text}
     </div>
   );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Image illustrative avec fallback neutre si erreur de chargement.
-function FeatureVisual({ color, Ic, img, alt }) {
+// Visuel 16/9 avec fallback icône si l'image ne charge pas.
+function FeatureVisual({ color, Ic, img, alt, zoom }) {
   const [errored, setErrored] = useState(false);
   if (!img || errored) {
     return (
       <div style={{
+        aspectRatio: '16 / 9',
         background: S.bgMuted,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        minHeight: 260,
-        borderLeft: `1px solid ${S.border}`,
+        borderBottom: `1px solid ${S.border}`,
       }}>
         <div style={{
-          width: 80, height: 80, borderRadius: S.rLg,
+          width: 52, height: 52, borderRadius: S.rLg,
           background: S.bg, boxShadow: S.shadowSm,
           border: `1px solid ${S.border}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Ic style={{ width: 32, height: 32, color }} />
+          <Ic style={{ width: 22, height: 22, color }} />
         </div>
       </div>
     );
   }
   return (
-    <div style={{ minHeight: 260, overflow: 'hidden', borderLeft: `1px solid ${S.border}` }}>
+    <div style={{
+      aspectRatio: '16 / 9', overflow: 'hidden',
+      borderBottom: `1px solid ${S.border}`,
+      background: S.bgMuted,
+    }}>
       <img src={img} alt={alt} loading="lazy" onError={() => setErrored(true)}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        style={{
+          width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+          transform: zoom ? 'scale(1.03)' : 'none',
+          transition: 'transform 0.35s ease',
+        }} />
     </div>
   );
 }
