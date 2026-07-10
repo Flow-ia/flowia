@@ -190,14 +190,14 @@ export default function BookingPolitique({ slug }) {
             <P th={th}>{name + (address ? " (" + address + ")" : "") + (phone ? " — téléphone " + phone : "") + "."}</P>
             <H3 th={th}>{"Données collectées"}</H3>
             <P th={th}>{"Nom, prénom, email, téléphone, date de naissance (facultative), adresse postale (facultative)."}</P>
-            <H3 th={th}>{"Finalités du traitement"}</H3>
-            <P th={th}>{"Gestion des réservations et des rendez-vous (base contractuelle), programme de fidélité (base contractuelle), envois marketing — offres anniversaire, parrainage, notifications fidélité — uniquement si le client a coché la case d'opt-in à l'inscription (base : consentement libre et révocable), statistiques anonymisées du salon."}</P>
+            <H3 th={th}>{"Finalités et bases légales"}</H3>
+            <P th={th}>{"Gestion des rendez-vous et programme de fidélité (exécution du contrat). Envois marketing (consentement, révocable à tout moment). Statistiques anonymisées."}</P>
             <H3 th={th}>{"Durée de conservation"}</H3>
-            <P th={th}>{"3 ans à compter de la dernière visite. Au-delà, les données personnelles (email, nom, prénom) sont anonymisées, tandis que l'historique des transactions est conservé sous forme anonyme pour les obligations comptables et fiscales."}</P>
+            <P th={th}>{"3 ans à compter de la dernière visite, puis anonymisation. L'historique des transactions est conservé sous forme anonyme au titre des obligations comptables et fiscales."}</P>
             <H3 th={th}>{"Destinataires"}</H3>
-            <P th={th}>{"Les données sont transmises uniquement aux prestataires nécessaires au fonctionnement du service : envoi des emails et notifications, paiement en ligne, hébergement des images. Chacun est encadré par un contrat conforme au RGPD. Aucune donnée n'est revendue ni transmise à des tiers à des fins commerciales."}</P>
+            <P th={th}>{"Des sous-traitants encadrés par contrat conforme au RGPD interviennent pour l'envoi des emails et notifications, le paiement en ligne et l'hébergement des images. Aucune donnée n'est revendue ni transmise à des tiers à des fins commerciales."}</P>
             <H3 th={th}>{"Droits du client"}</H3>
-            <P th={th}>{"Conformément au RGPD, le client dispose d'un droit d'accès, de rectification, d'effacement, de portabilité, d'opposition et de réclamation auprès de la CNIL. Ces droits peuvent être exercés directement depuis l'espace client, ou par contact direct avec le salon."}</P>
+            <P th={th}>{"Droits d'accès, de rectification, d'effacement, de portabilité et d'opposition, exerçables depuis l'espace client ou auprès du salon. Réclamation possible auprès de la CNIL."}</P>
           </Section>
 
           {/* Fidélité */}
@@ -251,11 +251,11 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Demande de suppression"}</H3>
             <P th={th}>{"La suppression du compte est accessible depuis l'espace client : « Mon profil » > « Supprimer mon compte ». Une confirmation est demandée pour éviter toute suppression accidentelle."}</P>
             <H3 th={th}>{"Procédure"}</H3>
-            <P th={th}>{"À la demande, le compte est désactivé pendant 30 jours (réversible sur simple demande au salon). Au terme de cette période, les données personnelles (email, nom, prénom, téléphone) sont définitivement anonymisées. L'historique des transactions est conservé sous forme anonyme pour les obligations comptables et fiscales."}</P>
+            <P th={th}>{"Le compte est désactivé pendant 30 jours, délai pendant lequel la suppression reste annulable auprès du salon. Au terme de ce délai, les données personnelles sont définitivement anonymisées."}</P>
             <H3 th={th}>{"Export des données"}</H3>
-            <P th={th}>{"Avant toute demande de suppression, le client peut exporter l'intégralité de ses données depuis son espace client (« Exporter mes données »). Cet export comprend l'identité, l'historique des rendez-vous, les transactions, et les codes promotionnels obtenus."}</P>
+            <P th={th}>{"Le client peut exporter l'intégralité de ses données depuis son espace client (« Exporter mes données ») : identité, rendez-vous, transactions et codes promotionnels."}</P>
             <H3 th={th}>{"Conformité RGPD"}</H3>
-            <P th={th}>{"L'anonymisation garantit le respect du droit à l'effacement (article 17 du RGPD) tout en respectant les obligations comptables (article L123-22 du Code de commerce) qui imposent la conservation des écritures comptables pendant 10 ans."}</P>
+            <P th={th}>{"L'anonymisation satisfait le droit à l'effacement (article 17 du RGPD) tout en respectant l'obligation de conservation des écritures comptables pendant 10 ans (article L123-22 du Code de commerce)."}</P>
           </Section>
 
         </div>
