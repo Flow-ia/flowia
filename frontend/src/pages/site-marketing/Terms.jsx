@@ -17,7 +17,7 @@ export default function Terms() {
       />
       <Container maxWidth={760}>
         <Prose>
-          <p><em>{"Dernière mise à jour : 2 mai 2026."}</em></p>
+          <p><em>{"Dernière mise à jour : 10 juillet 2026."}</em></p>
 
           <ProseH2>1. Objet</ProseH2>
           <p>
@@ -36,7 +36,7 @@ export default function Terms() {
 
           <ProseH2>4. Compte utilisateur</ProseH2>
           <p>
-            {"L'Utilisateur est responsable de la confidentialité de ses identifiants. Toute action effectuée sur son compte est réputée effectuée par lui. Les sessions employés sont sécurisées par PIN paramétrable."}
+            {"L'Utilisateur est responsable de la confidentialité de ses identifiants. Toute action effectuée sur son compte est réputée effectuée par lui."}
           </p>
 
           <ProseH2>5. Tarification</ProseH2>

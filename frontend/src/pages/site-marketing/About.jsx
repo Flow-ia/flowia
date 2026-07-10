@@ -11,7 +11,7 @@ export default function About() {
     },
     {
       title: 'Données respectées',
-      desc: "Hébergement européen, RGPD-compliant, code auditable. Vos données restent les vôtres — vous pouvez exporter ou supprimer à tout moment.",
+      desc: "Hébergement européen, conforme au RGPD. Vos données restent les vôtres — vous pouvez les exporter ou les supprimer à tout moment.",
     },
     {
       title: 'Simplicité avant tout',

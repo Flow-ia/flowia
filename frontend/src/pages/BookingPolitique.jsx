@@ -193,9 +193,9 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Finalités du traitement"}</H3>
             <P th={th}>{"Gestion des réservations et des rendez-vous (base contractuelle), programme de fidélité (base contractuelle), envois marketing — offres anniversaire, parrainage, notifications fidélité — uniquement si le client a coché la case d'opt-in à l'inscription (base : consentement libre et révocable), statistiques anonymisées du salon."}</P>
             <H3 th={th}>{"Durée de conservation"}</H3>
-            <P th={th}>{"3 ans à compter de la dernière visite. Au-delà, les données personnelles (email, nom, prénom) sont anonymisées (mises à NULL), tandis que l'historique des transactions est conservé sous forme anonyme pour les obligations comptables et fiscales."}</P>
+            <P th={th}>{"3 ans à compter de la dernière visite. Au-delà, les données personnelles (email, nom, prénom) sont anonymisées, tandis que l'historique des transactions est conservé sous forme anonyme pour les obligations comptables et fiscales."}</P>
             <H3 th={th}>{"Destinataires"}</H3>
-            <P th={th}>{"Les données sont transmises uniquement aux prestataires techniques nécessaires au fonctionnement du service : Brevo (envoi d'emails), Stripe (paiements et SMS si activés), Cloudinary (hébergement des photos d'employés). Aucune donnée n'est revendue ni transmise à des tiers à des fins commerciales."}</P>
+            <P th={th}>{"Les données sont transmises uniquement aux prestataires nécessaires au fonctionnement du service : envoi des emails et notifications, paiement en ligne, hébergement des images. Chacun est encadré par un contrat conforme au RGPD. Aucune donnée n'est revendue ni transmise à des tiers à des fins commerciales."}</P>
             <H3 th={th}>{"Droits du client"}</H3>
             <P th={th}>{"Conformément au RGPD, le client dispose d'un droit d'accès, de rectification, d'effacement, de portabilité, d'opposition et de réclamation auprès de la CNIL. Ces droits peuvent être exercés directement depuis l'espace client, ou par contact direct avec le salon."}</P>
           </Section>
@@ -217,8 +217,8 @@ export default function BookingPolitique({ slug }) {
             <P th={th}>{"Le salon offre à chaque client ayant renseigné sa date de naissance ET ayant accepté les notifications marketing à son inscription un code promotionnel personnel le jour de son anniversaire."}</P>
             <H3 th={th}>{"Modalités"}</H3>
             <P th={th}>{"Le code est envoyé automatiquement par email (et SMS si configuré) le jour J. Il offre une remise de -20 % sur la prochaine prestation et reste valable 30 jours à compter de sa génération."}</P>
-            <H3 th={th}>{"Anti-fraude"}</H3>
-            <P th={th}>{"Une protection « rolling 330 jours » empêche la réception d'un code anniversaire plus d'une fois par an, même en cas de modification de la date de naissance dans le profil. Le code n'est généré qu'une seule fois par an et par client."}</P>
+            <H3 th={th}>{"Limite"}</H3>
+            <P th={th}>{"Le code anniversaire est attribué une seule fois par an et par client, y compris en cas de modification de la date de naissance dans le profil."}</P>
             <H3 th={th}>{"Sans opt-in marketing"}</H3>
             <P th={th}>{"Si le client n'a pas coché la case d'opt-in marketing à son inscription, aucun code anniversaire ne lui est envoyé. Cette règle est conforme au RGPD : un envoi marketing automatique nécessite un consentement explicite préalable."}</P>
           </Section>
@@ -230,7 +230,7 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Récompenses"}</H3>
             <P th={th}>{"À la première visite validée du filleul, le parrain et le filleul reçoivent chacun un code promotionnel de -10 % utilisable en boutique. Les codes sont valables 60 jours."}</P>
             <H3 th={th}>{"Limites anti-abus"}</H3>
-            <P th={th}>{"Maximum 10 filleuls par an et par parrain. Une seule récompense par couple parrain-filleul (un filleul ne peut pas être parrainé par plusieurs personnes). Une normalisation des emails est appliquée pour empêcher les alias (ex : utilisateur+1@gmail.com et utilisateur@gmail.com sont considérés comme identiques)."}</P>
+            <P th={th}>{"Maximum 10 filleuls par an et par parrain. Une seule récompense par couple parrain-filleul (un filleul ne peut pas être parrainé par plusieurs personnes). La création de plusieurs comptes à partir d'une même adresse email pour contourner cette limite n'ouvre droit à aucune récompense."}</P>
             <H3 th={th}>{"Validation"}</H3>
             <P th={th}>{"La validation du parrainage est effectuée par le salon après la 1re visite du filleul. Sans cette validation manuelle, aucune récompense n'est émise. Le salon se réserve le droit de refuser un parrainage en cas de fraude suspectée."}</P>
             <H3 th={th}>{"Sans opt-in marketing"}</H3>
@@ -251,11 +251,11 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Demande de suppression"}</H3>
             <P th={th}>{"La suppression du compte est accessible depuis l'espace client : « Mon profil » > « Supprimer mon compte ». Une confirmation est demandée pour éviter toute suppression accidentelle."}</P>
             <H3 th={th}>{"Procédure"}</H3>
-            <P th={th}>{"À la demande, le compte passe en mode « soft delete » pendant 30 jours (réversible sur simple demande au salon). Au terme de cette période, les champs personnels (email, nom, prénom, téléphone) sont anonymisés (mis à NULL). L'historique des transactions est conservé sous forme anonyme pour les obligations comptables et fiscales."}</P>
+            <P th={th}>{"À la demande, le compte est désactivé pendant 30 jours (réversible sur simple demande au salon). Au terme de cette période, les données personnelles (email, nom, prénom, téléphone) sont définitivement anonymisées. L'historique des transactions est conservé sous forme anonyme pour les obligations comptables et fiscales."}</P>
             <H3 th={th}>{"Export des données"}</H3>
-            <P th={th}>{"Avant toute demande de suppression, le client peut exporter l'intégralité de ses données au format JSON depuis son espace client (« Exporter mes données »). Cet export comprend l'identité, l'historique des rendez-vous, les transactions, et les codes promotionnels obtenus."}</P>
+            <P th={th}>{"Avant toute demande de suppression, le client peut exporter l'intégralité de ses données depuis son espace client (« Exporter mes données »). Cet export comprend l'identité, l'historique des rendez-vous, les transactions, et les codes promotionnels obtenus."}</P>
             <H3 th={th}>{"Conformité RGPD"}</H3>
-            <P th={th}>{"L'anonymisation par mise à NULL — sans suppression de la ligne en base — garantit le respect du droit à l'effacement (RGPD article 17) tout en respectant les obligations comptables (Code du commerce article L123-22) qui imposent la conservation des écritures comptables pendant 10 ans."}</P>
+            <P th={th}>{"L'anonymisation garantit le respect du droit à l'effacement (article 17 du RGPD) tout en respectant les obligations comptables (article L123-22 du Code de commerce) qui imposent la conservation des écritures comptables pendant 10 ans."}</P>
           </Section>
 
         </div>
