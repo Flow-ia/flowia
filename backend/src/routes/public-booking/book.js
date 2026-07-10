@@ -441,9 +441,56 @@ module.exports = function attachBookRoute(router) {
               || md.date !== date
               || md.start_time !== start_time
               || (md.slug && md.slug !== req.params.slug)) {
+            // Le PI (deja paye : status='succeeded' verifie plus haut) ne
+            // correspond pas au creneau demande. Deux cas a distinguer :
+            //   (a) PI orphelin, jamais consomme par un RDV -> le client a paye
+            //       sans obtenir de reservation (ex : metadata figee sur un
+            //       ancien creneau). On rembourse automatiquement, comme pour
+            //       SLOT_TAKEN, afin de ne jamais le laisser debite.
+            //   (b) Rejeu d'un PI DEJA utilise pour un autre RDV -> surtout PAS
+            //       de refund : on annulerait le paiement d'un RDV legitime.
+            // Discriminant : existence d'un appointment portant ce PI. La
+            // colonne stripe_payment_intent_id est UNIQUE (globale), donc pas
+            // de filtre user_id ici -> on detecte toute consommation, meme
+            // cross-merchant, avant d'oser rembourser.
+            const { rows: consumed } = await pool.query(
+              `SELECT 1 FROM appointments WHERE stripe_payment_intent_id=$1 LIMIT 1`,
+              [payment_intent_id]
+            );
+            let refunded = false;
+            if (!consumed.length && stripeAccountId) {
+              try {
+                const { stripeFetch } = require('../global-clients/stripe-helpers');
+                await stripeFetch('POST', '/refunds', {
+                  payment_intent: payment_intent_id,
+                  reason: 'requested_by_customer',
+                  metadata: { reason: 'payment_mismatch', user_id: userId, slug: req.params.slug },
+                }, { stripeAccount: stripeAccountId });
+                refunded = true;
+              } catch (refErr) {
+                console.error('[BOOK PAYMENT_MISMATCH auto-refund ERR]', refErr.message);
+                // AUDIT : persiste l'echec pour retry admin + notification client.
+                try {
+                  await pool.query(
+                    `INSERT INTO failed_refunds
+                       (user_id, stripe_account_id, payment_intent_id, amount_cents,
+                        slug, reason, stripe_error_message)
+                     VALUES ($1,$2,$3,$4,$5,'payment_mismatch',$6)
+                     ON CONFLICT (payment_intent_id) WHERE resolved_at IS NULL DO NOTHING`,
+                    [userId, stripeAccountId, payment_intent_id,
+                     (pi.amount_received || pi.amount || null), req.params.slug, refErr.message]
+                  );
+                } catch (logErr) {
+                  console.error('[BOOK PAYMENT_MISMATCH failed_refunds log ERR]', logErr.message);
+                }
+              }
+            }
             return res.status(400).json({
-              error: 'Le paiement ne correspond pas a cette reservation.',
-              code:  'PAYMENT_MISMATCH',
+              error: refunded
+                ? 'Le paiement ne correspondait pas a cette reservation ; il a ete rembourse automatiquement. Merci de refaire votre reservation.'
+                : 'Le paiement ne correspond pas a cette reservation.',
+              code:     'PAYMENT_MISMATCH',
+              refunded,
             });
           }
           // Verifie aussi que le PI a un marker source FlowIA (defense

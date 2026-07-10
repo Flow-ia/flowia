@@ -438,9 +438,33 @@ module.exports = function attachPaymentRoutes(router) {
         } catch (retrErr) {
           console.warn('[PUB PAYMENT-INTENT/retrieve]', retrErr.message);
         }
-        const updatable = existing
+        // Identite du PI existant : service_id / date / start_time sont FIGES
+        // dans la metadata ET dans la description ('RDV-{REF8} · ... · DD/MM
+        // HH:MM') des la creation, jamais modifies ensuite. Si le client a
+        // change de creneau / service / date depuis (retour arriere, ou reuse
+        // cross-session via localStorage TTL 1h), on ne DOIT PAS reutiliser ce
+        // PI : sa metadata identite resterait sur l'ancien creneau, et book.js
+        // rejetterait ensuite le RDV en PAYMENT_MISMATCH alors que le client a
+        // deja paye. Dans ce cas on cree un PI neuf (identite correcte) et on
+        // annule l'ancien. La reutilisation ne sert plus qu'aux changements
+        // VOLATILES a creneau constant (promo, parrainage, montant, login).
+        const exMd = (existing && existing.metadata) || {};
+        const sameIdentity = !!existing
+          && exMd.service_id === String(service_id)
+          && exMd.date       === date
+          && exMd.start_time === start_time
+          && exMd.user_id    === m.user_id
+          && exMd.slug       === req.params.slug;
+        const inReuseState = !!existing
           && (existing.status === 'requires_payment_method'
             || existing.status === 'requires_confirmation');
+        const updatable = inReuseState && sameIdentity;
+
+        // PI ouvert mais sur un AUTRE creneau/service -> on l'annule pour ne
+        // pas laisser d'orphelin 'Incomplet', puis CREATE neuf ci-dessous.
+        if (inReuseState && !sameIdentity) {
+          oldPiToCancel = pi_id;
+        }
 
         if (updatable) {
           // Update params : on ne touche PAS a `description` ni
