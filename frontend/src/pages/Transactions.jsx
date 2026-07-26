@@ -227,12 +227,17 @@ function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
                     background:'rgba(0,0,0,0.4)',
                     opacity: visible ? 1 : 0,
                     transition:'opacity 200ms ease' }}/>
-      {/* Panel (slide in/out depuis la droite) */}
+      {/* Panel (slide in/out depuis la droite).
+          height:100% (parent fixed inset:0) et non 100vh : sur mobile, 100vh
+          depasse le viewport visible (barre URL / nav systeme Android) et
+          coupait le bas du panneau. Safe-areas : le contenu ne passe plus
+          sous la status bar ni la barre de navigation systeme du telephone. */}
       <div role="dialog" aria-label="Detail transaction"
-           style={{ position:'relative', width:450, maxWidth:'100vw', height:'100vh',
+           style={{ position:'relative', width:450, maxWidth:'100vw', height:'100%',
                     background:t.card,
                     borderLeft:`0.5px solid ${t.border}`,
                     display:'flex', flexDirection:'column',
+                    paddingTop:'env(safe-area-inset-top, 0px)',
                     transform: visible ? 'translateX(0)' : 'translateX(100%)',
                     transition:'transform 200ms ease',
                     boxShadow: visible ? '-12px 0 40px rgba(0,0,0,0.18)' : 'none' }}>
@@ -255,6 +260,7 @@ function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
 
         {/* Content scrollable */}
         <div style={{ flex:1, overflowY:'auto', padding:20,
+                      paddingBottom:'calc(20px + env(safe-area-inset-bottom, 0px))',
                       display:'flex', flexDirection:'column', gap:18 }}>
 
           {/* Recapitulatif */}

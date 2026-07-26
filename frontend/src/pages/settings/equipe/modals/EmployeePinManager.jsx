@@ -133,6 +133,7 @@ export default function EmployeePinManager({ emp, onClose, showToast, theme }) {
          onClick={e => { if (e.target === e.currentTarget) onClose(); }}
          className="sm:items-center">
       <div style={{ width:'100%', maxWidth:400, padding:'20px 20px 28px',
+                    paddingBottom:'calc(28px + env(safe-area-inset-bottom, 0px))',
                     borderRadius:'16px 16px 0 0', position:'relative',
                     background:t.elevated,
                     border:`0.5px solid ${t.border}`,

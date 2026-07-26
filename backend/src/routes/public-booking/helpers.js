@@ -69,6 +69,21 @@ function intersectRanges(rangesA, rangesB) {
   return result.sort((a,b) => a.openMin - b.openMin);
 }
 
+// ── Soustraction de fenêtres (absences partielles) d'un ensemble de plages ──
+function subtractWindows(ranges, windows) {
+  let result = ranges;
+  for (const w of windows) {
+    const next = [];
+    for (const r of result) {
+      if (w.endMin <= r.openMin || w.startMin >= r.closeMin) { next.push(r); continue; }
+      if (w.startMin > r.openMin) next.push({ openMin: r.openMin, closeMin: w.startMin });
+      if (w.endMin < r.closeMin)  next.push({ openMin: w.endMin,  closeMin: r.closeMin });
+    }
+    result = next;
+  }
+  return result;
+}
+
 // ── Plages horaires effectives d'un employé pour une date ───────────────────
 // Retourne tableau de plages [{ openMin, closeMin }] ou [] si absent/fermé
 // Prend en compte : absences, plages multiples (employee_time_slots),
@@ -77,15 +92,23 @@ async function getEmployeeRanges(userId, employeeId, date) {
   const [y, m, d] = date.split('-').map(Number);
   const dayOfWeek = new Date(y, m - 1, d).getDay();
 
-  // 1. Vérifier absences ponctuelles (uniquement les non-annulées)
+  // 1. Vérifier absences ponctuelles (uniquement les non-annulées).
+  // start_time/end_time NULL = journée entière → aucun créneau.
+  // Renseignées = absence PARTIELLE : la fenêtre est soustraite des plages
+  // finales (elle s'applique à chaque jour de la période de l'absence).
   const { rows: abs } = await pool.query(
-    `SELECT id FROM employee_absences
+    `SELECT start_time, end_time FROM employee_absences
      WHERE employee_id=$1
        AND $2::date BETWEEN start_date AND end_date
        AND cancelled_at IS NULL`,
     [employeeId, date]
   );
-  if (abs.length) return [];
+  const partialAbs = [];
+  for (const a of abs) {
+    if (!a.start_time || !a.end_time) return []; // journée entière
+    partialAbs.push({ startMin: toMin(a.start_time), endMin: toMin(a.end_time) });
+  }
+  const minusAbs = (ranges) => partialAbs.length ? subtractWindows(ranges, partialAbs) : ranges;
 
   const { rows: avail } = await pool.query(
     `SELECT is_available FROM employee_availability WHERE employee_id=$1 AND date=$2`,
@@ -114,7 +137,7 @@ async function getEmployeeRanges(userId, employeeId, date) {
     const empSlots = allEmpSlots.filter(s => Number(s.day_of_week) === dayOfWeek);
     if (!empSlots.length) return []; // jour de repos explicite
     const empRanges = empSlots.map(s => ({ openMin: toMin(s.slot_start), closeMin: toMin(s.slot_end) }));
-    return intersectRanges(empRanges, bizRanges);
+    return minusAbs(intersectRanges(empRanges, bizRanges));
   }
 
   // 4. Ancien système : employee_hours (1 plage par jour)
@@ -130,11 +153,11 @@ async function getEmployeeRanges(userId, employeeId, date) {
 
   if (empH.length && !empH[0].use_biz) {
     const empRange = [{ openMin: toMin(empH[0].open_time), closeMin: toMin(empH[0].close_time) }];
-    return intersectRanges(empRange, bizRanges);
+    return minusAbs(intersectRanges(empRange, bizRanges));
   }
 
   // 5. Pas de config spécifique → suit les horaires du commerce
-  return bizRanges;
+  return minusAbs(bizRanges);
 }
 
 // ── Compatibilité avec l'ancien code ────────────────────────────────────────

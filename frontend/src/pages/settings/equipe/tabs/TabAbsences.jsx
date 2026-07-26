@@ -13,6 +13,7 @@ export default function TabAbsences({ employees, theme }) {
   const [cancelId, setCancelId] = useState(null);
   const [form, setForm] = useState({
     employee_id:'', type:'conges', start_date:'', end_date:'', reason:'',
+    all_day:true, start_time:'', end_time:'',
   });
   const today = new Date().toLocaleDateString('sv-SE');
 
@@ -35,11 +36,21 @@ export default function TabAbsences({ employees, theme }) {
     if (!form.employee_id || !form.start_date || !form.end_date) {
       setError('Employe, date debut et date fin requis.'); return;
     }
+    if (!form.all_day) {
+      if (!form.start_time || !form.end_time) {
+        setError('Heure de debut et de fin requises pour une absence partielle.'); return;
+      }
+      if (form.start_time >= form.end_time) {
+        setError("L'heure de debut doit preceder l'heure de fin."); return;
+      }
+    }
     setSaving(true); setError('');
     try {
-      await absencesApi.create(form);
+      const { all_day, start_time, end_time, ...rest } = form;
+      await absencesApi.create(all_day ? rest : { ...rest, start_time, end_time });
       setShowForm(false);
-      setForm({ employee_id:'', type:'conges', start_date:'', end_date:'', reason:'' });
+      setForm({ employee_id:'', type:'conges', start_date:'', end_date:'', reason:'',
+                all_day:true, start_time:'', end_time:'' });
       load();
     } catch (e) { setError(e.message || 'Erreur'); }
     finally { setSaving(false); }
@@ -125,6 +136,39 @@ export default function TabAbsences({ employees, theme }) {
                      style={inp}/>
             </div>
           </div>
+          <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer',
+                          padding:'10px 12px', borderRadius:8, background:t.cardAlt }}>
+            <input type="checkbox" checked={form.all_day}
+                   onChange={e => setForm(f => ({ ...f, all_day:e.target.checked }))}
+                   style={{ width:15, height:15 }}/>
+            <span style={{ fontSize:13, color:t.text }}>Toute la journee</span>
+            <span style={{ fontSize:11, color:t.muted }}>
+              — decochez pour une absence sur une plage horaire
+            </span>
+          </label>
+          {!form.all_day && (
+            <>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                <div>
+                  <Label>Absent de *</Label>
+                  <input type="time" value={form.start_time}
+                         onChange={e => setForm(f => ({ ...f, start_time:e.target.value }))}
+                         style={inp}/>
+                </div>
+                <div>
+                  <Label>{"Jusqu'a *"}</Label>
+                  <input type="time" value={form.end_time}
+                         onChange={e => setForm(f => ({ ...f, end_time:e.target.value }))}
+                         style={inp}/>
+                </div>
+              </div>
+              <p style={{ fontSize:11, color:t.muted, margin:0 }}>
+                {"La plage horaire s'applique a CHAQUE jour de la periode choisie."}
+                {" Les creneaux correspondants sont retires de la reservation en ligne"}
+                {" et proteges contre les RDV manuels."}
+              </p>
+            </>
+          )}
           <div>
             <Label>Motif (optionnel)</Label>
             <input value={form.reason}
@@ -164,6 +208,11 @@ export default function TabAbsences({ employees, theme }) {
                   </p>
                   <p style={{ fontSize:12, color:t.muted, margin:0 }}>
                     {fmtDate(a.start_date)} → {fmtDate(a.end_date)} · {nbJours(String(a.start_date).substring(0, 10), String(a.end_date).substring(0, 10))} jour(s)
+                    {a.start_time && a.end_time && (
+                      <span style={{ color:'#9a3412', fontWeight:500 }}>
+                        {' '}· de {String(a.start_time).substring(0, 5)} a {String(a.end_time).substring(0, 5)}
+                      </span>
+                    )}
                   </p>
                   {a.reason && <p style={{ fontSize:11, color:t.dim, margin:'2px 0 0' }}>{a.reason}</p>}
                 </div>

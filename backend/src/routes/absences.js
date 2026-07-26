@@ -15,6 +15,24 @@ function isValidDate(s) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
+// Absence partielle : fenêtre horaire optionnelle (les DEUX heures ou aucune).
+// NULL/NULL = journée entière. La fenêtre s'applique à chaque jour de la
+// période start_date→end_date (ex : "de 10:00 à 14:00 du 3 au 7 août").
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+function validateTimeWindow(start_time, end_time) {
+  const has = v => v !== undefined && v !== null && v !== '';
+  if (!has(start_time) && !has(end_time)) return { ok: true, start: null, end: null };
+  if (!has(start_time) || !has(end_time))
+    return { ok: false, error: "Heure de début ET de fin requises pour une absence partielle (ou aucune pour la journée entière)." };
+  const s = String(start_time).substring(0, 5);
+  const e = String(end_time).substring(0, 5);
+  if (!TIME_RE.test(s) || !TIME_RE.test(e))
+    return { ok: false, error: 'Format horaire invalide (HH:MM).' };
+  if (s >= e)
+    return { ok: false, error: "L'heure de début doit précéder l'heure de fin." };
+  return { ok: true, start: s, end: e };
+}
+
 // Calcule le nombre de jours calendaires inclusifs entre deux dates
 function countDays(start, end) {
   const s = new Date(start + 'T12:00:00');
@@ -99,7 +117,7 @@ router.get('/stats', async (req, res) => {
 // ── POST /api/absences — créer une absence ────────────────────────────────────
 router.post('/', async (req, res) => {
   try {
-    const { employee_id, start_date, end_date, type, label, reason } = req.body;
+    const { employee_id, start_date, end_date, type, label, reason, start_time, end_time } = req.body;
 
     // Validation obligatoire
     if (!employee_id) return res.status(400).json({ error: 'Employé obligatoire.' });
@@ -111,6 +129,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'La date de fin doit être égale ou postérieure à la date de début.' });
     if (!VALID_TYPES.includes(type))
       return res.status(400).json({ error: `Type invalide. Types valides: ${VALID_TYPES.join(', ')}` });
+    const win = validateTimeWindow(start_time, end_time);
+    if (!win.ok) return res.status(400).json({ error: win.error });
 
     // Vérifier ownership employé
     const { rows: empCheck } = await pool.query(
@@ -118,9 +138,9 @@ router.post('/', async (req, res) => {
     if (!empCheck.length) return res.status(403).json({ error: 'Employé introuvable.' });
 
     const { rows } = await pool.query(
-      `INSERT INTO employee_absences (employee_id, user_id, start_date, end_date, type, label, reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [employee_id, req.user.userId, start_date, end_date, type, label||null, reason||null]
+      `INSERT INTO employee_absences (employee_id, user_id, start_date, end_date, type, label, reason, start_time, end_time)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [employee_id, req.user.userId, start_date, end_date, type, label||null, reason||null, win.start, win.end]
     );
     res.status(201).json({ ...rows[0], days: countDays(start_date, end_date) });
   } catch(e) { console.error('[ABS POST]', e.message); res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -129,7 +149,7 @@ router.post('/', async (req, res) => {
 // ── PUT /api/absences/:id — modifier une absence ──────────────────────────────
 router.put('/:id', async (req, res) => {
   try {
-    const { start_date, end_date, type, label, reason } = req.body;
+    const { start_date, end_date, type, label, reason, start_time, end_time } = req.body;
 
     if (!start_date) return res.status(400).json({ error: 'Date de début obligatoire.' });
     if (!end_date)   return res.status(400).json({ error: 'Date de fin obligatoire.' });
@@ -139,10 +159,14 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'La date de fin doit être égale ou postérieure à la date de début.' });
     if (type && !VALID_TYPES.includes(type))
       return res.status(400).json({ error: 'Type invalide.' });
+    const win = validateTimeWindow(start_time, end_time);
+    if (!win.ok) return res.status(400).json({ error: win.error });
 
     // COALESCE($3, type) : si le client ne renvoie pas `type`, on conserve
     // la valeur existante. Avant, `type||'conges'` écrasait silencieusement
     // un arrêt maladie en congés si l'UI ne renvoyait pas le champ.
+    // start_time/end_time : écrasés à chaque PUT (NULL = journée entière),
+    // comme label/reason — le formulaire renvoie toujours l'état complet.
     const { rows } = await pool.query(
       `UPDATE employee_absences
           SET start_date  = $1,
@@ -150,12 +174,14 @@ router.put('/:id', async (req, res) => {
               type        = COALESCE($3, type),
               label       = $4,
               reason      = $5,
+              start_time  = $6,
+              end_time    = $7,
               updated_at  = NOW(),
               cancelled_at = NULL,
               cancelled_reason = NULL
-        WHERE id = $6 AND user_id = $7
+        WHERE id = $8 AND user_id = $9
         RETURNING *`,
-      [start_date, end_date, type || null, label||null, reason||null, req.params.id, req.user.userId]
+      [start_date, end_date, type || null, label||null, reason||null, win.start, win.end, req.params.id, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Absence introuvable.' });
     res.json({ ...rows[0], days: countDays(rows[0].start_date, rows[0].end_date) });

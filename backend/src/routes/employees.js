@@ -138,11 +138,15 @@ router.post('/:id/smart-delete', pinAdminMiddleware, async (req, res) => {
 
       // Tenter de trouver un employé disponible
       for (const emp of otherEmps) {
-        // Vérifier absence
+        // Vérifier absence (partielle : bloque seulement si chevauchement
+        // avec le créneau du RDV ; annulées ignorées)
         const { rows: absRows } = await client.query(
           `SELECT 1 FROM employee_absences
-           WHERE employee_id=$1 AND $2 BETWEEN start_date AND end_date`,
-          [emp.id, appt.date]
+           WHERE employee_id=$1 AND $2 BETWEEN start_date AND end_date
+             AND cancelled_at IS NULL
+             AND (start_time IS NULL OR end_time IS NULL
+                  OR (start_time < $4::time AND end_time > $3::time))`,
+          [emp.id, appt.date, appt.start_time, appt.end_time]
         );
         if (absRows.length > 0) continue;
 

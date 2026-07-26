@@ -107,14 +107,19 @@ module.exports = function attachAppointmentsRoutes(router) {
           });
         }
         // AUDIT #11 : absences.cancelled_at filtré (corrigé ici et sur booking.js:712).
+        // Absence partielle (start_time/end_time renseignées) : ne bloque que
+        // si le créneau du RDV chevauche la fenêtre d'absence.
         const { rows: abs } = await pool.query(
           `SELECT 1 FROM employee_absences
             WHERE employee_id=$1 AND cancelled_at IS NULL
-              AND $2::date BETWEEN start_date AND end_date LIMIT 1`,
-          [employee_id, date]
+              AND $2::date BETWEEN start_date AND end_date
+              AND (start_time IS NULL OR end_time IS NULL
+                   OR (start_time < $4::time AND end_time > $3::time))
+            LIMIT 1`,
+          [employee_id, date, start_time, end_time]
         );
         if (abs.length) {
-          return res.status(409).json({ error: 'Employé en absence sur cette date.', code: 'EMPLOYEE_ABSENT' });
+          return res.status(409).json({ error: 'Employé absent sur ce créneau.', code: 'EMPLOYEE_ABSENT' });
         }
       }
 
@@ -320,15 +325,19 @@ module.exports = function attachAppointmentsRoutes(router) {
             conflict_id: conflict[0].id,
           });
         }
-        // Check absence (AUDIT #11)
+        // Check absence (AUDIT #11) — partielle : bloque seulement en cas de
+        // chevauchement créneau/fenêtre d'absence.
         const { rows: abs } = await pool.query(
           `SELECT 1 FROM employee_absences
             WHERE employee_id=$1 AND cancelled_at IS NULL
-              AND $2::date BETWEEN start_date AND end_date LIMIT 1`,
-          [newEmployeeId, newDate]
+              AND $2::date BETWEEN start_date AND end_date
+              AND (start_time IS NULL OR end_time IS NULL
+                   OR (start_time < $4::time AND end_time > $3::time))
+            LIMIT 1`,
+          [newEmployeeId, newDate, st, end_time]
         );
         if (abs.length) {
-          return res.status(409).json({ error: 'Employé en absence sur cette date.', code: 'EMPLOYEE_ABSENT' });
+          return res.status(409).json({ error: 'Employé absent sur ce créneau.', code: 'EMPLOYEE_ABSENT' });
         }
       }
       // C2 — Claim atomique de la transition vers 'cancelled'. Deux PUT

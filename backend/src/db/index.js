@@ -874,6 +874,10 @@ async function initDB() {
   await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
   await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ`);
   await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS cancelled_reason TEXT`);
+  // Absences partielles : NULL/NULL = journée entière ; sinon la fenêtre
+  // horaire s'applique à CHAQUE jour de la période start_date→end_date.
+  await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS start_time TIME`);
+  await runMigration(`ALTER TABLE employee_absences ADD COLUMN IF NOT EXISTS end_time TIME`);
   // Nouveaux types d'absence
   await runMigration(`ALTER TABLE employee_absences DROP CONSTRAINT IF EXISTS employee_absences_type_check`);
   await runMigration(`ALTER TABLE employee_absences ADD CONSTRAINT employee_absences_type_check CHECK (type IN ('conges','maladie','formation','autre','accident_travail','maternite','paternite','sans_solde'))`);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { bookingApi } from '../../../../utils/api';
 import Toggle from './Toggle';
-import { isSlotInBizRanges } from '../helpers';
+import { getBizOpenRangesClient, clampSlotToBiz, toMinClient, minToStr } from '../helpers';
 import { Button } from '../../../../components/primitives';
 
 const DAYS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
@@ -34,19 +34,22 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
     setDirty(dirtyRef.current);
   };
 
+  // Plages par défaut = plages RÉELLEMENT ouvertes du commerce (pauses déjà
+  // soustraites). Avant : une seule plage open→close par jour, qui chevauchait
+  // la pause déjeuner → la validation refusait la sauvegarde alors que
+  // l'utilisateur n'avait rien modifié.
   const buildDefaultSlots = useCallback(() => {
     const slots = [];
     businessHours.forEach(bh => {
       if (bh.is_open !== false) {
-        slots.push({
-          day_of_week: bh.day_of_week ?? 0,
-          slot_start:  String(bh.open_time  || '09:00').substring(0, 5),
-          slot_end:    String(bh.close_time || '18:00').substring(0, 5),
+        const day = bh.day_of_week ?? 0;
+        getBizOpenRangesClient(businessHours, bizBreaks, day).forEach(r => {
+          slots.push({ day_of_week: day, slot_start: minToStr(r.start), slot_end: minToStr(r.end) });
         });
       }
     });
     return slots;
-  }, [businessHours]);
+  }, [businessHours, bizBreaks]);
 
   // Préchargement : 1 requête pour TOUS les employés (nouveau système + legacy).
   // Avant : chaque en-tête affichait "Suit le commerce" tant que son accordéon
@@ -147,27 +150,66 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
     setEmpSlots(p => ({ ...p, [empId]: getSlots(empId).map((s, i) => i === idx ? { ...s, [key]: val } : s) }));
   };
 
+  // Prépare les plages à sauvegarder : chaque plage est AJUSTÉE aux plages
+  // ouvertes du commerce (découpée autour des pauses, bornée aux horaires
+  // d'ouverture) — exactement ce que fait le moteur de réservation. On ne
+  // bloque QUE si une plage sur un jour ouvert n'a aucun recouvrement
+  // possible (vraie erreur de saisie). Les plages sur un jour où le commerce
+  // est fermé sont ignorées (aucun RDV n'y est possible de toute façon).
+  const prepareSlots = (empId) => {
+    const blockedDays = [];
+    const clamped = [];
+    for (const s of getSlots(empId)) {
+      const day = s.day_of_week;
+      const bizRanges = getBizOpenRangesClient(businessHours, bizBreaks, day);
+      if (!bizRanges.length) continue; // commerce fermé ce jour
+      if (toMinClient(s.slot_start) >= toMinClient(s.slot_end)) {
+        blockedDays.push(`${DAYS_SHORT[day] || '?'} (début après fin)`);
+        continue;
+      }
+      const segs = clampSlotToBiz(s.slot_start, s.slot_end, businessHours, bizBreaks, day);
+      if (!segs.length) {
+        const bounds = `${minToStr(bizRanges[0].start)}-${minToStr(bizRanges[bizRanges.length - 1].end)}`;
+        blockedDays.push(`${DAYS_SHORT[day] || '?'} (commerce ouvert ${bounds})`);
+        continue;
+      }
+      segs.forEach(g => clamped.push({ day_of_week: day, slot_start: minToStr(g.start), slot_end: minToStr(g.end) }));
+    }
+    // Dédoublonnage (deux plages qui se réduisent au même segment) + tri.
+    const seen = new Set();
+    const unique = clamped.filter(s => {
+      const k = `${s.day_of_week}|${s.slot_start}|${s.slot_end}`;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    }).sort((a, b) => a.day_of_week - b.day_of_week || a.slot_start.localeCompare(b.slot_start));
+    return { slots: unique, blockedDays };
+  };
+
   const save = async (empId) => {
     if (saving[empId]) return;
+    let toSave = null;
     if (useCustom[empId]) {
-      const slots = getSlots(empId);
-      if (slots.length === 0) {
+      if (getSlots(empId).length === 0) {
         showToast('Ajoutez au moins une plage, ou désactivez les horaires personnalisés.', 'error');
         return;
       }
-      const invalid = slots.filter(s => !isSlotInBizRanges(s.slot_start, s.slot_end, businessHours, bizBreaks, s.day_of_week));
-      if (invalid.length) {
-        const days = [...new Set(invalid.map(s => DAYS_SHORT[s.day_of_week] || '?'))].join(', ');
-        showToast(`Plages hors horaires du commerce ou sur une pause : ${days}.`, 'error');
+      const { slots, blockedDays } = prepareSlots(empId);
+      if (blockedDays.length) {
+        showToast(`Plage impossible : ${[...new Set(blockedDays)].join(', ')}.`, 'error');
         return;
       }
+      if (slots.length === 0) {
+        showToast('Toutes les plages tombent sur des jours de fermeture du commerce.', 'error');
+        return;
+      }
+      toSave = slots;
     }
     setSaving(p => ({ ...p, [empId]: true }));
     const seqAtSave = editSeqRef.current[empId] || 0;
     const untouched = () => (editSeqRef.current[empId] || 0) === seqAtSave;
     try {
       if (useCustom[empId]) {
-        const fresh = await bookingApi.saveEmpSlots({ employee_id: empId, slots: getSlots(empId) });
+        const fresh = await bookingApi.saveEmpSlots({ employee_id: empId, slots: toSave });
         // Reset du système legacy pour que seul employee_time_slots fasse foi.
         await bookingApi.saveEmpHours({ employee_id: empId, hours: Array.from({ length: 7 }, (_, i) => ({
           day_of_week: i, open_time: '09:00', close_time: '18:00', is_open: true, use_business_hours: true,
@@ -343,14 +385,26 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
                                       Absent ce jour — cliquez "+ Plage" pour ajouter
                                     </p>
                                   ) : daySlots.map(s => {
-                                    const valid = isSlotInBizRanges(s.slot_start, s.slot_end, businessHours, bizBreaks, dayIdx);
+                                    // 3 états : ✓ plage exacte · ≈ sera ajustée aux
+                                    // horaires/pauses du commerce · ! aucun créneau possible
+                                    const sMin = toMinClient(s.slot_start);
+                                    const eMin = toMinClient(s.slot_end);
+                                    const segs = clampSlotToBiz(s.slot_start, s.slot_end, businessHours, bizBreaks, dayIdx);
+                                    const state = !segs.length ? 'none'
+                                      : (segs.length === 1 && segs[0].start === sMin && segs[0].end === eMin) ? 'ok'
+                                      : 'adjust';
+                                    const ui = state === 'ok'
+                                      ? { bg:'#f0fdf4', border:'rgba(16,185,129,0.3)', color:'#065f46', mark:'✓' }
+                                      : state === 'adjust'
+                                        ? { bg:'#fffbeb', border:'rgba(245,158,11,0.35)', color:'#92400e', mark:'≈' }
+                                        : { bg:'#fef2f2', border:'rgba(239,68,68,0.3)',  color:'#991b1b', mark:'!' };
                                     return (
                                       <div key={s._idx}
                                            style={{ display:'flex', alignItems:'center', gap:8, padding:8, borderRadius:8,
-                                                    background: valid ? '#f0fdf4' : '#fef2f2',
-                                                    border:`0.5px solid ${valid ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-                                        <span style={{ fontSize:12, flexShrink:0, color: valid ? '#065f46' : '#991b1b' }}>
-                                          {valid ? '✓' : '!'}
+                                                    background: ui.bg,
+                                                    border:`0.5px solid ${ui.border}` }}>
+                                        <span style={{ fontSize:12, flexShrink:0, color: ui.color }}>
+                                          {ui.mark}
                                         </span>
                                         <input type="time" value={s.slot_start}
                                                onChange={e => updateSlot(emp.id, s._idx, 'slot_start', e.target.value)}
@@ -389,7 +443,8 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
                           );
                         })}
                         <p style={{ fontSize:11, color:t.dim, padding:'0 4px', margin:0 }}>
-                          ✓ = plage valide · ! = hors horaires commerce ou chevauchement pause
+                          ✓ = plage valide · ≈ = sera ajustee automatiquement aux horaires/pauses du commerce
+                          {' '}· ! = aucun creneau possible (corrigez la plage)
                         </p>
                       </div>
                     )}

@@ -74,11 +74,15 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
       );
       if (!empR.length) return res.status(403).json({ error: 'Employé introuvable.' });
 
-      // Vérifier que l'employé n'est pas absent ce jour-là — AUDIT #11 filtre cancelled_at
+      // Vérifier que l'employé n'est pas absent JOURNÉE ENTIÈRE ce jour-là
+      // (AUDIT #11 filtre cancelled_at). Les absences PARTIELLES (fenêtre
+      // horaire) sont contrôlées plus bas, après calcul de l'heure de fin,
+      // pour ne bloquer qu'en cas de chevauchement réel.
       const { rows: absR } = await pool.query(
         `SELECT id FROM employee_absences
           WHERE employee_id=$1 AND cancelled_at IS NULL
-            AND $2::date BETWEEN start_date AND end_date`,
+            AND $2::date BETWEEN start_date AND end_date
+            AND (start_time IS NULL OR end_time IS NULL)`,
         [employee_id, date]
       );
       if (absR.length) return res.status(409).json({ error: "L'employé est absent ce jour-là." });
@@ -96,6 +100,24 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
       const [hh, mm] = start_time.split(':').map(Number);
       const endMinCalc = hh*60 + mm + duration;
       const end_time_calc = `${String(Math.floor(endMinCalc/60)).padStart(2,'0')}:${String(endMinCalc%60).padStart(2,'0')}`;
+
+      // Absence PARTIELLE : bloque uniquement si le créneau chevauche la
+      // fenêtre d'absence (ex : absent 14:00-16:00 → RDV 10:00 OK).
+      const { rows: partialAbsR } = await pool.query(
+        `SELECT TO_CHAR(start_time,'HH24:MI') as st, TO_CHAR(end_time,'HH24:MI') as et
+          FROM employee_absences
+          WHERE employee_id=$1 AND cancelled_at IS NULL
+            AND $2::date BETWEEN start_date AND end_date
+            AND start_time IS NOT NULL AND end_time IS NOT NULL
+            AND start_time < $3::time AND end_time > $4::time
+          LIMIT 1`,
+        [employee_id, date, end_time_calc, start_time]
+      );
+      if (partialAbsR.length) {
+        return res.status(409).json({
+          error: `L'employé est absent de ${partialAbsR[0].st} à ${partialAbsR[0].et} ce jour-là.`
+        });
+      }
 
       // Vérification conflit : l'employé a-t-il déjà un RDV qui chevauche ce créneau ?
       const { rows: conflicts } = await pool.query(

@@ -679,6 +679,9 @@ function TxDetailDrawerImpl({
           transform: open ? "translateX(0)" : "translateX(110%)",
           transition: "transform 200ms ease-out",
           display: "flex", flexDirection: "column",
+          // Safe-area : en plein ecran mobile (PWA/standalone), le header ne
+          // passe plus sous la status bar du telephone (croix cliquable).
+          paddingTop: "env(safe-area-inset-top, 0px)",
           fontFamily: "inherit",
         }}>
         {transaction ? (
@@ -813,10 +816,12 @@ function TxDetailDrawerImpl({
               )}
             </div>
 
-            {/* Footer */}
+            {/* Footer — safe-area bas : boutons au-dessus de la barre de
+                navigation systeme Android/iOS, donc toujours cliquables. */}
             <div style={{
               flexShrink: 0,
               padding: "12px 16px",
+              paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
               borderTop: "0.5px solid " + colors.separator,
               display: "flex", gap: 8, alignItems: "center",
               background: colors.drawerBg,

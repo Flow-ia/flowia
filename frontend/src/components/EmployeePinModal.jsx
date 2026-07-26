@@ -183,7 +183,7 @@ export function EmployeePinModal({ open, employee, actionLabel, onSuccess, onCan
           maxWidth: 380,
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
-          paddingBottom: 28,
+          paddingBottom: 'calc(28px + env(safe-area-inset-bottom, 0px))',
           paddingTop: 18,
           paddingLeft: 20,
           paddingRight: 20,

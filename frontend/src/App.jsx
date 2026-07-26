@@ -454,6 +454,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                     borderRadius:'16px 16px 0 0',
                     background:t.elevated,
                     border:`0.5px solid ${t.border}`,
+                    paddingBottom:'env(safe-area-inset-bottom, 0px)',
                     boxShadow:t.shadowModal }}>
 
         {/* Header */}
