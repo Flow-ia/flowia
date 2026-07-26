@@ -284,6 +284,27 @@ async function initDB() {
       END IF;
     END $$;
 
+    -- Le POST /booking/employee-hours repose sur ON CONFLICT (employee_id, day_of_week).
+    -- Les bases créées avant l'ajout de UNIQUE(employee_id, day_of_week) dans le
+    -- CREATE TABLE n'ont pas cette contrainte (IF NOT EXISTS ne modifie pas une
+    -- table existante) → chaque sauvegarde d'horaires employé échouait en 500.
+    -- Dédup (garde la ligne la plus récente par ctid) puis index unique idempotent.
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid='employee_hours'::regclass AND contype='u'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE tablename='employee_hours' AND indexname='uq_employee_hours_emp_day'
+      ) THEN
+        DELETE FROM employee_hours a USING employee_hours b
+         WHERE a.employee_id=b.employee_id AND a.day_of_week=b.day_of_week
+           AND a.ctid < b.ctid;
+        CREATE UNIQUE INDEX uq_employee_hours_emp_day
+          ON employee_hours(employee_id, day_of_week);
+      END IF;
+    END $$;
+
 
     ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
     DO $x$ BEGIN

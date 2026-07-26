@@ -868,6 +868,23 @@ function PaymentConfigSection({ t, showToast }) {
         {enabled && (
           <span style={pill('#10b981', '#ecfdf5')}>actif</span>
         )}
+        {/* Etat ACTUELLEMENT APPLIQUÉ (= sauvegardé, cfg), pas l'édition en cours.
+            Répond à "quelle option est activée en ce moment ?" d'un coup d'oeil. */}
+        {cfg?.enabled ? (
+          <>
+            <span style={pill('#4338ca', '#eef2ff')}>
+              {cfg.policy === 'mandatory' ? 'Paiement obligatoire' : 'Paiement optionnel'}
+            </span>
+            <span style={pill('#4338ca', '#eef2ff')}>
+              {(cfg.percentage || 100) === 100 ? 'Montant total (100 %)' : `Acompte ${cfg.percentage} %`}
+            </span>
+          </>
+        ) : (
+          <span style={pill('#6b7280', t.cardAlt)}>{"désactivé"}</span>
+        )}
+        {dirty && (
+          <span style={pill('#92400e', '#fffbeb')}>{"modifications non enregistrées"}</span>
+        )}
       </div>
 
       {/* Toggle activer/desactiver */}
@@ -893,34 +910,48 @@ function PaymentConfigSection({ t, showToast }) {
       {/* Options visibles uniquement si enabled */}
       {enabled && (
         <>
-          {/* Politique de paiement */}
+          {/* Politique de paiement — sélection marquée par un indicateur radio
+              dessiné (cercle plein), une bordure nette et un badge sur l'option
+              actuellement appliquée (état sauvegardé serveur). */}
           <div style={{ marginBottom: 14 }}>
             <p style={{ ...panelLabel(t), marginBottom: 8 }}>{"Politique de paiement"}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label style={radioCard(t, policy === 'optional')}>
-                <input type="radio" name="policy" value="optional"
-                       checked={policy === 'optional'}
-                       onChange={() => onPolicyChange('optional')}
-                       style={{ marginTop: 2 }}/>
-                <span>
-                  <strong style={{ color: t.text }}>{"Optionnel"}</strong>
-                  <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 2 }}>
-                    {"Le client choisit : payer en ligne maintenant ou payer sur place lors du RDV."}
-                  </span>
-                </span>
-              </label>
-              <label style={radioCard(t, policy === 'mandatory')}>
-                <input type="radio" name="policy" value="mandatory"
-                       checked={policy === 'mandatory'}
-                       onChange={() => onPolicyChange('mandatory')}
-                       style={{ marginTop: 2 }}/>
-                <span>
-                  <strong style={{ color: t.text }}>{"Obligatoire"}</strong>
-                  <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 2 }}>
-                    {"Le RDV ne peut être réservé qu'après paiement en ligne. Réduit fortement les no-shows."}
-                  </span>
-                </span>
-              </label>
+              {[
+                { value: 'optional',  label: 'Optionnel',
+                  desc: 'Le client choisit : payer en ligne maintenant ou payer sur place lors du RDV.' },
+                { value: 'mandatory', label: 'Obligatoire',
+                  desc: "Le RDV ne peut être réservé qu'après paiement en ligne. Réduit fortement les no-shows." },
+              ].map(opt => {
+                const selected = policy === opt.value;
+                const applied  = !!cfg?.enabled && (cfg?.policy || 'optional') === opt.value;
+                return (
+                  <label key={opt.value} style={radioCard(t, selected)}>
+                    <input type="radio" name="policy" value={opt.value}
+                           checked={selected}
+                           onChange={() => onPolicyChange(opt.value)}
+                           style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}/>
+                    <span aria-hidden style={radioDot(t, selected)}>
+                      {selected && <span style={radioDotInner(t)}/>}
+                    </span>
+                    <span style={{ flex: 1 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <strong style={{ color: t.text, fontWeight: 500 }}>{opt.label}</strong>
+                        {applied && (
+                          <span style={pill('#065f46', '#ecfdf5')}>{"Appliqué actuellement"}</span>
+                        )}
+                        {selected && !applied && (
+                          <span style={pill('#92400e', '#fffbeb')}>
+                            {"Sélectionné — enregistrez pour appliquer"}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 12, color: t.muted, marginTop: 2 }}>
+                        {opt.desc}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </div>
 
@@ -975,13 +1006,31 @@ function PaymentConfigSection({ t, showToast }) {
 
 function radioCard(t, active) {
   return {
+    position: 'relative',
     display: 'flex', alignItems: 'flex-start', gap: 10,
     padding: '12px 14px', borderRadius: 10,
     border: active ? `1px solid ${t.text}` : `1px solid ${t.border}`,
+    // Double la bordure visuelle de l'option sélectionnée sans changer la
+    // géométrie (pas de saut de layout) : la sélection se voit immédiatement.
+    boxShadow: active ? `inset 0 0 0 1px ${t.text}` : 'none',
     background: active ? t.cardAlt : 'transparent',
     cursor: 'pointer', fontSize: 13, color: t.text, lineHeight: 1.4,
-    transition: 'border-color 0.15s, background 0.15s',
+    transition: 'border-color 0.15s, background 0.15s, box-shadow 0.15s',
   };
+}
+// Indicateur radio dessiné (remplace le rendu natif, trop discret selon les
+// navigateurs/mobiles) : cercle vide = non sélectionné, point plein = sélectionné.
+function radioDot(t, active) {
+  return {
+    width: 16, height: 16, borderRadius: 99, flexShrink: 0, marginTop: 1,
+    border: active ? `1px solid ${t.text}` : `1px solid ${t.borderInput || t.border}`,
+    background: t.card,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxSizing: 'border-box',
+  };
+}
+function radioDotInner(t) {
+  return { width: 8, height: 8, borderRadius: 99, background: t.text };
 }
 function presetBtn(t, active) {
   return {

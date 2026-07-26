@@ -1,17 +1,40 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { bookingApi } from '../../../../utils/api';
 import Toggle from './Toggle';
 import { isSlotInBizRanges } from '../helpers';
 import { Button } from '../../../../components/primitives';
+
+const DAYS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+
+const normSlot = (s) => ({
+  day_of_week: s.day_of_week,
+  slot_start:  String(s.slot_start).substring(0, 5),
+  slot_end:    String(s.slot_end).substring(0, 5),
+});
 
 export default function TeamTab({ employees, businessHours, bizBreaks, showToast, theme: t }) {
   const [selId, setSelId]         = useState(null);
   const [empSlots, setEmpSlots]   = useState({});
   const [useCustom, setUseCustom] = useState({});
   const [loading, setLoading]     = useState({});
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving]       = useState({});   // par employé — sauvegarder A ne bloque pas B
+  const [dirty, setDirty]         = useState({});   // éditions non sauvegardées par employé
+  const [preloaded, setPreloaded] = useState(false);
 
-  const buildDefaultSlots = useCallback((empId) => {
+  // Miroir ref de `dirty` : les callbacks async (loadEmp) doivent lire l'état
+  // À JOUR pour ne jamais écraser une édition en cours (course réseau/clic).
+  // editSeqRef : compteur d'éditions par employé — une sauvegarde ne nettoie
+  // le flag (et ne remplace les plages par la réponse serveur) que si AUCUNE
+  // édition n'est intervenue pendant l'appel réseau.
+  const dirtyRef   = useRef({});
+  const editSeqRef = useRef({});
+  const markDirty = (empId, val = true) => {
+    if (val) editSeqRef.current[empId] = (editSeqRef.current[empId] || 0) + 1;
+    dirtyRef.current = { ...dirtyRef.current, [empId]: val };
+    setDirty(dirtyRef.current);
+  };
+
+  const buildDefaultSlots = useCallback(() => {
     const slots = [];
     businessHours.forEach(bh => {
       if (bh.is_open !== false) {
@@ -25,23 +48,63 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
     return slots;
   }, [businessHours]);
 
+  // Préchargement : 1 requête pour TOUS les employés (nouveau système + legacy).
+  // Avant : chaque en-tête affichait "Suit le commerce" tant que son accordéon
+  // n'avait pas été ouvert → impossible de VOIR les horaires sauvegardés.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const d = await bookingApi.getAllEmpSlots();
+        if (!alive) return;
+        const bySlots  = {};
+        (d?.slots || []).forEach(s => {
+          (bySlots[s.employee_id] = bySlots[s.employee_id] || []).push(normSlot(s));
+        });
+        const byLegacy = {};
+        (d?.legacy || []).forEach(r => {
+          if (r.is_open === false) return;
+          (byLegacy[r.employee_id] = byLegacy[r.employee_id] || []).push({
+            day_of_week: r.day_of_week,
+            slot_start:  String(r.open_time).substring(0, 5),
+            slot_end:    String(r.close_time).substring(0, 5),
+          });
+        });
+        const slotsMap = {}, customMap = {};
+        employees.forEach(e => {
+          if (dirtyRef.current[e.id]) return; // ne jamais écraser une édition
+          const s = bySlots[e.id] || byLegacy[e.id] || [];
+          slotsMap[e.id]  = s;
+          customMap[e.id] = s.length > 0;
+        });
+        setEmpSlots(p => ({ ...p, ...slotsMap }));
+        setUseCustom(p => ({ ...p, ...customMap }));
+        setPreloaded(true);
+      } catch {
+        // Backend indisponible ou version sans la route collection : on
+        // retombe sur le chargement paresseux par employé (loadEmp).
+        if (alive) setPreloaded(true);
+      }
+    })();
+    return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees.map(e => e.id).join(',')]);
+
   // force=true → ignore le cache (utilisé après save pour rafraîchir).
-  // Sans force, le 1er load d'un accordéon utilise le cache pour ne pas
-  // refaire d'appels réseau à chaque ouverture/fermeture.
   const loadEmp = async (empId, force = false) => {
     if (!force && empSlots[empId] !== undefined) return;
     setLoading(p => ({ ...p, [empId]: true }));
     try {
       const slots = await bookingApi.getEmpSlots(empId);
+      // Une édition a démarré pendant le chargement → on ne touche à rien
+      // (sauf force=true, qui suit toujours une sauvegarde réussie).
+      if (!force && dirtyRef.current[empId]) return;
       if (slots && slots.length > 0) {
-        setEmpSlots(p => ({ ...p, [empId]: slots.map(s => ({
-          day_of_week: s.day_of_week,
-          slot_start:  String(s.slot_start).substring(0, 5),
-          slot_end:    String(s.slot_end).substring(0, 5),
-        })) }));
+        setEmpSlots(p => ({ ...p, [empId]: slots.map(normSlot) }));
         setUseCustom(p => ({ ...p, [empId]: true }));
       } else {
         const rows = await bookingApi.getEmpHours(empId);
+        if (!force && dirtyRef.current[empId]) return;
         const hasCustom = rows.length > 0 && rows.some(r => !r.use_business_hours);
         if (hasCustom) {
           const converted = rows
@@ -57,8 +120,10 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
         }
       }
     } catch {
-      setEmpSlots(p => ({ ...p, [empId]: [] }));
-      setUseCustom(p => ({ ...p, [empId]: false }));
+      if (empSlots[empId] === undefined) {
+        setEmpSlots(p => ({ ...p, [empId]: [] }));
+        setUseCustom(p => ({ ...p, [empId]: false }));
+      }
     } finally { setLoading(p => ({ ...p, [empId]: false })); }
   };
 
@@ -68,45 +133,60 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
     const bh = businessHours.find(h => (h.day_of_week ?? 0) === dayOfWeek);
     const defStart = bh ? String(bh.open_time  || '09:00').substring(0, 5) : '09:00';
     const defEnd   = bh ? String(bh.close_time || '18:00').substring(0, 5) : '18:00';
+    markDirty(empId);
     setEmpSlots(p => ({ ...p, [empId]: [...getSlots(empId), { day_of_week: dayOfWeek, slot_start: defStart, slot_end: defEnd }] }));
   };
 
-  const removeSlot = (empId, idx) =>
+  const removeSlot = (empId, idx) => {
+    markDirty(empId);
     setEmpSlots(p => ({ ...p, [empId]: getSlots(empId).filter((_, i) => i !== idx) }));
+  };
 
-  const updateSlot = (empId, idx, key, val) =>
+  const updateSlot = (empId, idx, key, val) => {
+    markDirty(empId);
     setEmpSlots(p => ({ ...p, [empId]: getSlots(empId).map((s, i) => i === idx ? { ...s, [key]: val } : s) }));
+  };
 
   const save = async (empId) => {
-    setSaving(true);
+    if (saving[empId]) return;
+    if (useCustom[empId]) {
+      const slots = getSlots(empId);
+      if (slots.length === 0) {
+        showToast('Ajoutez au moins une plage, ou désactivez les horaires personnalisés.', 'error');
+        return;
+      }
+      const invalid = slots.filter(s => !isSlotInBizRanges(s.slot_start, s.slot_end, businessHours, bizBreaks, s.day_of_week));
+      if (invalid.length) {
+        const days = [...new Set(invalid.map(s => DAYS_SHORT[s.day_of_week] || '?'))].join(', ');
+        showToast(`Plages hors horaires du commerce ou sur une pause : ${days}.`, 'error');
+        return;
+      }
+    }
+    setSaving(p => ({ ...p, [empId]: true }));
+    const seqAtSave = editSeqRef.current[empId] || 0;
+    const untouched = () => (editSeqRef.current[empId] || 0) === seqAtSave;
     try {
       if (useCustom[empId]) {
-        const slots = getSlots(empId);
-        const invalid = slots.filter(s => !isSlotInBizRanges(s.slot_start, s.slot_end, businessHours, bizBreaks, s.day_of_week));
-        if (invalid.length) {
-          showToast('Certaines plages sont hors des horaires du commerce ou chevauchent une pause.', 'err');
-          setSaving(false); return;
-        }
-        await bookingApi.saveEmpSlots({ employee_id: empId, slots });
+        const fresh = await bookingApi.saveEmpSlots({ employee_id: empId, slots: getSlots(empId) });
+        // Reset du système legacy pour que seul employee_time_slots fasse foi.
         await bookingApi.saveEmpHours({ employee_id: empId, hours: Array.from({ length: 7 }, (_, i) => ({
           day_of_week: i, open_time: '09:00', close_time: '18:00', is_open: true, use_business_hours: true,
         })) });
+        // La réponse du POST EST l'état serveur : affichage immédiat, aucun
+        // cache ni F5 nécessaire pour voir le résultat.
+        if (Array.isArray(fresh) && untouched()) setEmpSlots(p => ({ ...p, [empId]: fresh.map(normSlot) }));
       } else {
         await bookingApi.deleteEmpSlots(empId);
         await bookingApi.saveEmpHours({ employee_id: empId, hours: Array.from({ length: 7 }, (_, i) => ({
           day_of_week: i, open_time: '09:00', close_time: '18:00', is_open: true, use_business_hours: true,
         })) });
+        if (untouched()) setEmpSlots(p => ({ ...p, [empId]: [] }));
       }
-      showToast('Horaires sauvegardes');
-      // Reload depuis le backend en bypassant le cache → les plages
-      // mises à jour s'affichent immédiatement (avant : cache rendait
-      // obligatoire un F5 pour voir le résultat).
-      await loadEmp(empId, true);
-    } catch (e) { showToast(e.message || 'Erreur', 'err'); }
-    finally { setSaving(false); }
+      if (untouched()) markDirty(empId, false);
+      showToast('Horaires sauvegardés.', 'ok');
+    } catch (e) { showToast(e.message || 'Erreur lors de la sauvegarde.', 'error'); }
+    finally { setSaving(p => ({ ...p, [empId]: false })); }
   };
-
-  const DAYS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:12, paddingBottom:32 }}>
@@ -116,6 +196,7 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
           Par defaut chaque employe suit les horaires du commerce (pauses comprises).
           {' '}Activez <strong style={{ fontWeight:500 }}>Horaires personnalises</strong> pour definir
           des plages specifiques — elles doivent rester dans les horaires d'ouverture.
+          {' '}Un jour laisse sans plage = jour de repos (non reservable en ligne).
         </p>
       </div>
       {employees.length === 0 ? (
@@ -129,6 +210,9 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
         const open = selId === emp.id;
         const slots = getSlots(emp.id);
         const hasCustom = !!useCustom[emp.id];
+        const known = preloaded || empSlots[emp.id] !== undefined;
+        const isDirty = !!dirty[emp.id];
+        const isSaving = !!saving[emp.id];
         return (
           <div key={emp.id}
                style={{ borderRadius:12, overflow:'hidden',
@@ -148,11 +232,25 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
                 <p style={{ fontSize:13, fontWeight:500, color:t.text, margin:0 }}>{emp.name}</p>
                 <p style={{ fontSize:12, color:t.muted, margin:'2px 0 0' }}>
                   {emp.role && <>{emp.role} · </>}
-                  {hasCustom
-                    ? `${slots.length} plage${slots.length > 1 ? 's' : ''} personnalisee${slots.length > 1 ? 's' : ''}`
-                    : 'Suit le commerce'}
+                  {!known
+                    ? 'Chargement…'
+                    : hasCustom
+                      ? `${slots.length} plage${slots.length > 1 ? 's' : ''} personnalisee${slots.length > 1 ? 's' : ''}`
+                      : 'Suit le commerce'}
                 </p>
               </div>
+              {known && hasCustom && !open && (
+                <span style={{ fontSize:10, fontWeight:500, padding:'2px 8px', borderRadius:99,
+                               background:'#eef2ff', color:'#4338ca', flexShrink:0 }}>
+                  Personnalise
+                </span>
+              )}
+              {isDirty && (
+                <span style={{ fontSize:10, fontWeight:500, padding:'2px 8px', borderRadius:99,
+                               background:'#fffbeb', color:'#92400e', flexShrink:0 }}>
+                  Non enregistre
+                </span>
+              )}
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                    strokeLinecap="round" strokeLinejoin="round"
                    style={{ width:14, height:14, color:t.muted,
@@ -165,7 +263,7 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
             {open && (
               <div style={{ padding:14, display:'flex', flexDirection:'column', gap:14,
                             borderTop:`0.5px solid ${t.separator}` }}>
-                {loading[emp.id] ? (
+                {loading[emp.id] && empSlots[emp.id] === undefined ? (
                   <div style={{ display:'flex', justifyContent:'center', padding:'24px 0' }}>
                     <svg className="animate-spin" width="22" height="22" viewBox="0 0 24 24" style={{ color:t.text }}>
                       <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" strokeOpacity="0.2"/>
@@ -187,10 +285,10 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
                               colorOn={t.text}
                               onChange={() => {
                                 const n = !hasCustom;
+                                markDirty(emp.id);
                                 setUseCustom(p => ({ ...p, [emp.id]: n }));
-                                if (n && !empSlots[emp.id]) loadEmp(emp.id);
-                                if (n && empSlots[emp.id]?.length === 0) {
-                                  setEmpSlots(p => ({ ...p, [emp.id]: buildDefaultSlots(emp.id) }));
+                                if (n && getSlots(emp.id).length === 0) {
+                                  setEmpSlots(p => ({ ...p, [emp.id]: buildDefaultSlots() }));
                                 }
                               }}/>
                     </div>
@@ -296,9 +394,15 @@ export default function TeamTab({ employees, businessHours, bizBreaks, showToast
                       </div>
                     )}
 
+                    {isDirty && (
+                      <p style={{ fontSize:11, color:'#92400e', margin:0, padding:'0 4px' }}>
+                        Modifications non enregistrees — cliquez sur Sauvegarder pour les appliquer
+                        (page de reservation mise a jour automatiquement).
+                      </p>
+                    )}
                     <Button variant="primary" fullWidth type="button"
-                            onClick={() => save(emp.id)} disabled={saving}>
-                      {saving ? 'Enregistrement...' : `Sauvegarder — ${emp.name}`}
+                            onClick={() => save(emp.id)} disabled={isSaving}>
+                      {isSaving ? 'Enregistrement...' : `Sauvegarder — ${emp.name}`}
                     </Button>
                   </>
                 )}

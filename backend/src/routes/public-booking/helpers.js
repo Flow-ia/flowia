@@ -97,15 +97,22 @@ async function getEmployeeRanges(userId, employeeId, date) {
   const bizRanges = await getBusinessOpenRanges(userId, dayOfWeek);
   if (!bizRanges.length) return [];
 
-  // 3. Vérifier nouveau système : plages multiples employee_time_slots
-  const { rows: empSlots } = await pool.query(
-    `SELECT slot_start, slot_end FROM employee_time_slots
-     WHERE employee_id=$1 AND user_id=$2 AND day_of_week=$3
+  // 3. Vérifier nouveau système : plages multiples employee_time_slots.
+  // On charge la SEMAINE entière (pas seulement le jour demandé) : un employé
+  // qui utilise ce système et n'a AUCUNE plage sur un jour donné est ABSENT ce
+  // jour-là ("Absent ce jour" côté réglages Équipe). Avant, la requête filtrée
+  // par jour renvoyait [] et on retombait sur les horaires du commerce → un
+  // employé restait réservable son jour de repos.
+  const { rows: allEmpSlots } = await pool.query(
+    `SELECT day_of_week, slot_start, slot_end FROM employee_time_slots
+     WHERE employee_id=$1 AND user_id=$2
      ORDER BY slot_start`,
-    [employeeId, userId, dayOfWeek]
+    [employeeId, userId]
   );
 
-  if (empSlots.length) {
+  if (allEmpSlots.length) {
+    const empSlots = allEmpSlots.filter(s => Number(s.day_of_week) === dayOfWeek);
+    if (!empSlots.length) return []; // jour de repos explicite
     const empRanges = empSlots.map(s => ({ openMin: toMin(s.slot_start), closeMin: toMin(s.slot_end) }));
     return intersectRanges(empRanges, bizRanges);
   }

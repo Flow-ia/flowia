@@ -542,6 +542,9 @@ export const bookingApi = {
   getBreaks:      ()        => request('/booking/breaks'),
   saveBreaks:     (b)       => request('/booking/breaks',                   { method: 'POST', body: JSON.stringify(b) }),
   // Plages horaires multiples employés
+  // Collection : { slots: [...], legacy: [...] } pour TOUS les employés du
+  // commerçant — précharge le statut réel de chaque employé en 1 requête.
+  getAllEmpSlots: ()        => request('/booking/employee-slots'),
   getEmpSlots:    (empId)   => request(`/booking/employee-slots/${empId}`),
   saveEmpSlots:   (b)       => request('/booking/employee-slots',           { method: 'POST', body: JSON.stringify(b) }),
   deleteEmpSlots: (empId)   => request(`/booking/employee-slots/${empId}`, { method: 'DELETE' }),
