@@ -9,7 +9,7 @@ export default function AddressAutocomplete({
   value,
   onChange,       // (textValue) => void — appelé à chaque frappe
   onSelect,       // ({address, city, postalCode, lat, lng}) => void — quand un résultat est choisi
-  placeholder = '12 rue de la Paix, Paris',
+  placeholder = '12 rue Didouche Mourad, Alger',
   theme,
   inputStyle = {},
 }) {

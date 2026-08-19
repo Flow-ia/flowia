@@ -50,7 +50,7 @@ router.put('/', pinAdminMiddleware, async (req, res) => {
     if (discount_type === 'percent' && v > 100)
       return res.status(400).json({ error: 'Pour une remise en %, le max est 100.' });
     if (discount_type === 'fixed' && v > 10000)
-      return res.status(400).json({ error: 'Montant trop élevé (max 10000€).' });
+      return res.status(400).json({ error: 'Montant trop élevé (max 10000 DA).' });
     // Validity : entier > 0 (min 1 jour, max 365). Evite promo mort-nee avec
     // value=0 ou negative + UX coherente (>1 an n'a pas de sens pour un anniv).
     const validRaw = parseInt(validity_days);

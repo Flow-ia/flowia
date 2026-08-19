@@ -43,7 +43,7 @@ const FEATURES = [
   {
     key: 'clients',
     label: 'Fichier clients (factory reset)',
-    desc: "SUPPRIME TOUTES les fiches clients de ce commercant + les notes + la fidelite + les credits + le registre Creances. Les transactions/RDV passes sont anonymises (montants conserves pour la compta, coordonnees personnelles effacees). Les comptes plateforme FlowIA des clients (qui leur permettent de reserver chez d'autres commercants) restent intacts.",
+    desc: "SUPPRIME TOUTES les fiches clients de ce commercant + les notes + la fidelite + les credits + le registre Creances. Les transactions/RDV passes sont anonymises (montants conserves pour la compta, coordonnees personnelles effacees). Les comptes plateforme Salon DZ des clients (qui leur permettent de reserver chez d'autres commercants) restent intacts.",
   },
 ];
 
@@ -186,7 +186,7 @@ export default function MerchantResetSection({ merchant }) {
               )}
               {feature === 'clients' && (
                 <div style={{ marginTop: 6, fontSize: 12 }}>
-                  {"Apres cette action : le fichier clients sera vide. Les comptes plateforme FlowIA des clients (qui leur permettent de reserver chez d'autres commercants) restent intacts. L'historique transactions/RDV est conserve pour la compta mais anonymise."}
+                  {"Apres cette action : le fichier clients sera vide. Les comptes plateforme Salon DZ des clients (qui leur permettent de reserver chez d'autres commercants) restent intacts. L'historique transactions/RDV est conserve pour la compta mais anonymise."}
                 </div>
               )}
               <div style={{ marginTop: 6, fontSize: 12 }}>

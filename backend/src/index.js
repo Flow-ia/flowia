@@ -771,7 +771,7 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
 <p style="color:#64748b;font-size:13px;">A bientot chez <strong>${r.business_name || 'votre commerce'}</strong> !</p>
 </div>
 <div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
-<p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
+<p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} Salon DZ</p>
 </div></div></body></html>`,
           });
           await dbPool.query(`UPDATE appointments SET reminder_24h_sent=TRUE WHERE id=$1`, [r.id]);
@@ -820,7 +820,7 @@ ${r.business_address ? `<p style="margin:6px 0;font-size:14px;"><strong>Adresse 
 <p style="color:#64748b;font-size:13px;">A tout de suite !</p>
 </div>
 <div style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
-<p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} FlowIA</p>
+<p style="color:#cbd5e1;font-size:11px;margin:0;">© ${new Date().getFullYear()} Salon DZ</p>
 </div></div></body></html>`,
           });
           await dbPool.query(`UPDATE appointments SET reminder_2h_sent=TRUE WHERE id=$1`, [r.id]);

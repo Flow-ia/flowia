@@ -370,7 +370,7 @@ export default function FicheView({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
             {[
               { val: fiche.total_visits || fiche.tx_count || 0, label: 'Visites' },
-              { val: `${Number(fiche.total_spent || 0).toFixed(0)} €`, label: 'Depense' },
+              { val: `${Number(fiche.total_spent || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DA`, label: 'Depense' },
               { val: fiche.loyalty_mode === 'points' ? Math.floor(fiche.points || 0) : (fiche.stamps || 0), label: fiche.loyalty_mode === 'points' ? 'Points' : 'Tampons' },
               { val: fiche.rewards_earned || 0, label: 'Recomp.' },
             ].map((kpi) => (

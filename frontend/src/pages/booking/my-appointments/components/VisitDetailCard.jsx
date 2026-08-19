@@ -94,17 +94,17 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
             {hasDisc && (
               <p style={{ fontSize:12, color:th.dim, margin:'0 0 2px',
                 textDecoration:'line-through', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {orig.toFixed(2)} €
+                {orig.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
               </p>
             )}
             <p style={{ fontSize:22, fontWeight: 500, color:'#10b981',
               margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-              {total.toFixed(2)} €
+              {total.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
             </p>
             {hasDisc && (
               <p style={{ fontSize:10, fontWeight: 500, color:'#10b981',
                 margin:'2px 0 0' }}>
-                − {disc.toFixed(2)} € remise
+                − {disc.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA remise
               </p>
             )}
           </div>
@@ -144,7 +144,7 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
                   {(it.unit_price || 0) > 0 && (
                     <p style={{ fontSize:12, color:th.muted, margin:0,
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', flexShrink:0 }}>
-                      {(it.unit_price * it.qty).toFixed(2)} €
+                      {(it.unit_price * it.qty).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                     </p>
                   )}
                 </div>
@@ -173,7 +173,7 @@ export function VisitDetailCard({ visit: v, th, onBack }) {
                     </p>
                     <p style={{ fontSize:12, color:th.text, margin:0, fontWeight:500,
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', flexShrink:0 }}>
-                      {(cents / 100).toFixed(2)} €
+                      {(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                     </p>
                   </div>
                 );

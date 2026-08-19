@@ -57,7 +57,7 @@ router.put('/program', pinAdminMiddleware, async (req, res) => {
     if (rewardType === 'percent' && rv > MAX_REWARD_PCT)
       return res.status(400).json({ error: `Récompense ≤ ${MAX_REWARD_PCT} %.` });
     if (rewardType === 'fixed' && rv > MAX_REWARD_FIXED)
-      return res.status(400).json({ error: `Récompense ≤ ${MAX_REWARD_FIXED} €.` });
+      return res.status(400).json({ error: `Récompense ≤ ${MAX_REWARD_FIXED} DA.` });
 
     // Label : borne anti-DB-bloat (aligné V)
     if (typeof reward_label === 'string' && reward_label.length > 200)

@@ -32,6 +32,10 @@ const PM_CFG = {
 
 function fmt(n) { return Number(n || 0).toFixed(2); }
 
+// Affichage marche DZ : "1 500" (espace milliers, pas de decimales terminales).
+// fmt() ci-dessus reste utilise pour les valeurs envoyees a l'API (parseFloat).
+function fmtDA(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+
 export default function Step4Confirm({
   theme: t, cart, employees,
   empId, payMethod, splitMode, breakdownLines,
@@ -214,7 +218,7 @@ export default function Step4Confirm({
                 {"Encaissement enregistré"}
               </p>
               <p style={{ margin:'6px 0 0', fontSize:13, color:'#6b7280' }}>
-                {fmt(done.finalTotal) + " € · " + done.methodLabel + " · " + done.empName}
+                {fmtDA(done.finalTotal) + " DA · " + done.methodLabel + " · " + done.empName}
               </p>
             </div>
 
@@ -232,7 +236,7 @@ export default function Step4Confirm({
                   </span>
                   <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                                  color: t.muted, flexShrink:0 }}>
-                    {fmt((it.price || 0) * (it.qty || 1)) + " €"}
+                    {fmtDA((it.price || 0) * (it.qty || 1)) + " DA"}
                   </span>
                 </div>
               ))}
@@ -242,7 +246,7 @@ export default function Step4Confirm({
                             fontSize:13, fontWeight:500, color:t.text }}>
                 <span>{"Total"}</span>
                 <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {fmt(done.finalTotal) + " €"}
+                  {fmtDA(done.finalTotal) + " DA"}
                 </span>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between',
@@ -332,12 +336,12 @@ export default function Step4Confirm({
                     {it.name}
                   </p>
                   <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
-                    {"× " + it.qty + " · " + fmt(it.price) + " €"}
+                    {"× " + it.qty + " · " + fmtDA(it.price) + " DA"}
                   </p>
                 </div>
                 <span style={{ color:t.text, fontWeight:500,
                                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {fmt(it.price * it.qty) + " €"}
+                  {fmtDA(it.price * it.qty) + " DA"}
                 </span>
               </div>
             ))}
@@ -399,7 +403,7 @@ export default function Step4Confirm({
                 <span style={{ fontSize:12, fontWeight:500, color: cfg.text }}>{cfg.label}</span>
                 <span style={{ fontSize:13, fontWeight:500, color: cfg.text,
                                fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {fmt(p.amount) + " €"}
+                  {fmtDA(p.amount) + " DA"}
                 </span>
               </div>
             );
@@ -409,19 +413,19 @@ export default function Step4Confirm({
                         display:'flex', flexDirection:'column', gap:4, fontSize:11 }}>
             <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
               <span>{"Total panier"}</span>
-              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(total)} €</span>
+              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmtDA(total)} DA</span>
             </div>
             {discount > 0 && (
               <div style={{ display:'flex', justifyContent:'space-between', color:'#9a3412' }}>
                 <span>{"Remise" + (promoCode ? ' · ' + promoCode : '')}</span>
-                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmt(discount)} €</span>
+                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmtDA(discount)} DA</span>
               </div>
             )}
             <div style={{ display:'flex', justifyContent:'space-between',
                           fontSize:15, fontWeight:500, color:t.text,
                           borderTop:`0.5px solid ${t.separator}`, paddingTop:6, marginTop:4 }}>
               <span>{"À encaisser"}</span>
-              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(finalTotal)} €</span>
+              <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmtDA(finalTotal)} DA</span>
             </div>
           </div>
 
@@ -449,7 +453,7 @@ export default function Step4Confirm({
                              fontFamily:'inherit', fontSize:13, fontWeight:500,
                              display:'inline-flex', alignItems:'center', gap:6 }}>
               <Icon name="zap" size={13} color={(busy || !phoneGateOk) ? t.muted : '#fff'}/>
-              {busy ? 'Enregistrement…' : 'Valider ' + fmt(finalTotal) + ' €'}
+              {busy ? 'Enregistrement…' : 'Valider ' + fmtDA(finalTotal) + ' DA'}
             </button>
           </div>
         </div>

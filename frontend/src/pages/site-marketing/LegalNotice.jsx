@@ -7,35 +7,35 @@ export default function LegalNotice() {
     <>
       <Seo
         path="/mentions-legales"
-        title="Mentions légales | FlowIA"
-        description="Mentions légales du site et du service FlowIA."
+        title="Mentions légales | Salon DZ"
+        description="Mentions légales du site et du service Salon DZ."
       />
       <PageHero
         label="Mentions légales"
         title="Mentions légales"
-        subtitle="Informations sur l'éditeur du site et l'hébergement, conformément à la loi pour la confiance dans l'économie numérique."
+        subtitle="Informations sur l'éditeur du site et l'hébergement."
       />
       <Container maxWidth={760}>
         <Prose>
           <ProseH2>Éditeur du site</ProseH2>
           <p>
-            {"Le site flowiapro.com et l'application FlowIA sont édités par FlowIA, immatriculée au registre du commerce et des sociétés."}
+            {"Le site flowiapro.com et l'application Salon DZ sont édités par Salon DZ, immatriculée au registre du commerce (RC)."}
           </p>
           <p>
-            <strong>Adresse :</strong> Marseille, France<br/>
+            <strong>Adresse :</strong> Alger, Algérie<br/>
             <strong>Email :</strong> {CONTACT_EMAIL}<br/>
-            <strong>Directeur de la publication :</strong> Représentant légal de FlowIA SAS
+            <strong>Directeur de la publication :</strong> Représentant légal de Salon DZ
           </p>
 
           <ProseH2>Hébergement</ProseH2>
           <p>
-            {"Le site et l'application sont hébergés chez des prestataires cloud de référence, en région européenne, conformes RGPD. Les coordonnées des hébergeurs sont communiquées sur simple demande à "}
+            {"Le site et l'application sont hébergés chez des prestataires cloud de référence, sur un hébergement cloud sécurisé, dans le respect de la loi 18-07. Les coordonnées des hébergeurs sont communiquées sur simple demande à "}
             <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
           </p>
 
           <ProseH2>Propriété intellectuelle</ProseH2>
           <p>
-            {"L'ensemble des contenus présents sur le site (textes, illustrations, logos, code source) est la propriété exclusive de FlowIA SAS ou de ses partenaires. Toute reproduction, représentation, modification ou exploitation, totale ou partielle, sans autorisation écrite préalable est interdite."}
+            {"L'ensemble des contenus présents sur le site (textes, illustrations, logos, code source) est la propriété exclusive de Salon DZ ou de ses partenaires. Toute reproduction, représentation, modification ou exploitation, totale ou partielle, sans autorisation écrite préalable est interdite."}
           </p>
 
           <ProseH2>Contact</ProseH2>

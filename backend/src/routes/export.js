@@ -58,7 +58,7 @@ router.get('/csv', pinAdminMiddleware, async (req, res) => {
 
     const { rows: biz } = await pool.query(
       'SELECT business_name FROM users WHERE id=$1', [req.user.userId]);
-    const businessName = biz[0]?.business_name || 'FlowIA';
+    const businessName = biz[0]?.business_name || 'Salon DZ';
 
     // Pour les transactions multi-paiement, on construit un libellé détaillé
     // (ex : "Especes 20€ + Carte 25€ + Virement 5€") à partir de transaction_payments.
@@ -91,7 +91,7 @@ router.get('/csv', pinAdminMiddleware, async (req, res) => {
             WHEN 'cash' THEN 'Espèces'
             WHEN 'card' THEN 'Carte bancaire'
             WHEN 'transfer' THEN 'Virement'
-            ELSE 'Autre' END) || ' ' || TO_CHAR(tp.amount,'FM999999999.00') || '€',
+            ELSE 'Autre' END) || ' ' || RTRIM(RTRIM(TO_CHAR(tp.amount,'FM999999999.00'),'0'),'.') || ' DA',
           ' + ' ORDER BY tp.amount DESC
         ) as label
         FROM transaction_payments tp WHERE tp.transaction_id = t.id
@@ -271,7 +271,7 @@ router.get('/pdf', pinAdminMiddleware, async (req, res) => {
 
     const { rows: biz } = await pool.query(
       'SELECT business_name, email FROM users WHERE id=$1', [req.user.userId]);
-    const businessName = biz[0]?.business_name || 'FlowIA';
+    const businessName = biz[0]?.business_name || 'Salon DZ';
     const bizEmail     = biz[0]?.email || '';
 
     // ── Requête transactions ──────────────────────────────────────────────────
@@ -374,11 +374,11 @@ router.get('/pdf', pinAdminMiddleware, async (req, res) => {
       info: {
         Title: `Export comptable ${fromD} au ${toD}`,
         Author: businessName,
-        Subject: `Export FlowIA`,
+        Subject: `Export Salon DZ`,
       },
     });
 
-    const filename = `export-FlowIA_${fromD}_${toD}.pdf`;
+    const filename = `export-SalonDZ_${fromD}_${toD}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     doc.pipe(res);
@@ -419,7 +419,7 @@ router.get('/pdf', pinAdminMiddleware, async (req, res) => {
       doc.rect(0, fy - 8, PAGE_W, MB + 18).fillColor('#f3f4f6').fill();
       doc.fill(GRAY).font('Helvetica').fontSize(7)
          .text(
-           `${process.env.APP_NAME || 'FlowIA'}  ·  ${businessName}  ·  ${bizEmail}  ·  Export du ${new Date().toLocaleDateString('fr-FR')}`,
+           `${process.env.APP_NAME || 'Salon DZ'}  ·  ${businessName}  ·  ${bizEmail}  ·  Export du ${new Date().toLocaleDateString('fr-FR')}`,
            ML, fy, { width: W, align: 'center' }
          );
       doc.restore();

@@ -1,4 +1,4 @@
-# FlowIA — https://flowiapro.com
+# Salon DZ — https://flowiapro.com
 # Le site marketing doit etre indexe ; les sous-routes privees (auth, espace
 # client, API, OAuth) sont exclues du crawl pour eviter le bruit d'index.
 

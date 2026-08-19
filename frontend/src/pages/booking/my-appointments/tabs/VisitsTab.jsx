@@ -125,7 +125,7 @@ export function VisitsTab({
                       <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
                         <p style={{ fontSize:15, fontWeight: 500, color:'#10b981',
                           margin:0, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                          {total.toFixed(2)} €
+                          {total.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                         </p>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                           strokeWidth="2.5" style={{width:14,height:14,color:th.muted}}>

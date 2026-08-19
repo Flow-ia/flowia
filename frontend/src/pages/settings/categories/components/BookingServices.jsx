@@ -302,7 +302,7 @@ export default function BookingServices({ theme, showToast }) {
                         <p style={{ fontSize:11, color:t.muted, margin:0 }}>
                           {durLabel}
                           {svc.price != null && !svc.is_free_price
-                            ? ` · ${fmt(svc.price)} €`
+                            ? ` · ${fmt(svc.price)} DA`
                             : svc.is_free_price ? ' · Prix libre' : ''}
                         </p>
                       </div>
@@ -377,7 +377,7 @@ export default function BookingServices({ theme, showToast }) {
                   <p style={{ fontSize:11, color:t.muted, margin:0 }}>
                     {durLabel}
                     {svc.price != null && !svc.is_free_price
-                      ? ` · ${fmt(svc.price)} €`
+                      ? ` · ${fmt(svc.price)} DA`
                       : svc.is_free_price ? ' · Prix libre' : ''}
                   </p>
                 </div>

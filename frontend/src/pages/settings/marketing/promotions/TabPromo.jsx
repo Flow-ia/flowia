@@ -83,8 +83,8 @@ export default function TabPromo({ theme, showToast }) {
             return (
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
                 {[
-                  { l:'CA genere',         v:`${Number(totalCA).toFixed(2)} €`,      c:'#065f46', bg:'#f0fdf4' },
-                  { l:'Remises utilisees', v:`${Number(totalUtilise).toFixed(2)} €`, c:'#991b1b', bg:'#fef2f2' },
+                  { l:'CA genere',         v:`${Number(totalCA).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`,      c:'#065f46', bg:'#f0fdf4' },
+                  { l:'Remises utilisees', v:`${Number(totalUtilise).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`, c:'#991b1b', bg:'#fef2f2' },
                   { l:'Codes actifs',      v: statsData.filter(p => p.is_active).length, c:t.text, bg:t.cardAlt },
                 ].map(({ l, v, c, bg }) => (
                   <div key={l} style={{ borderRadius:8, padding:'10px 8px', textAlign:'center', background:bg }}>
@@ -119,15 +119,15 @@ export default function TabPromo({ theme, showToast }) {
                     )}
                   </div>
                   <span style={{ fontWeight:500, fontSize:13, color:t.muted }}>
-                    {p.type === 'percent' ? `${p.value}%` : `${Number(p.value).toFixed(2)} €`}
+                    {p.type === 'percent' ? `${p.value}%` : `${Number(p.value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                   </span>
                 </div>
                 <div style={{ display:'flex', gap:16, marginTop:8, fontSize:11 }}>
                   <span style={{ color:'#991b1b' }}>
-                    Utilise : <strong style={{ fontWeight:500 }}>{Number(p.total_discount_used || 0).toFixed(2)} €</strong>
+                    Utilise : <strong style={{ fontWeight:500 }}>{Number(p.total_discount_used || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</strong>
                   </span>
                   <span style={{ color:'#065f46' }}>
-                    CA : <strong style={{ fontWeight:500 }}>{Number(p.total_revenue_generated || 0).toFixed(2)} €</strong>
+                    CA : <strong style={{ fontWeight:500 }}>{Number(p.total_revenue_generated || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</strong>
                   </span>
                   <span style={{ color:t.muted }}>
                     {p.usage_count || 0} fois{p.max_uses ? ` / ${p.max_uses}` : ''}
@@ -176,7 +176,7 @@ export default function TabPromo({ theme, showToast }) {
                     <span style={{ padding:'3px 8px', borderRadius:99, fontSize:11, fontWeight:500,
                                    background: p.type === 'percent' ? t.cardAlt : '#f0fdf4',
                                    color: p.type === 'percent' ? t.text : '#065f46' }}>
-                      {p.type === 'percent' ? `-${p.value}%` : `-${Number(p.value).toFixed(2)} €`}
+                      {p.type === 'percent' ? `-${p.value}%` : `-${Number(p.value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                     </span>
                     {!p.is_active && (
                       <span style={{ padding:'2px 8px', borderRadius:99, fontSize:10, fontWeight:500,

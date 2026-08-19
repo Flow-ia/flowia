@@ -35,16 +35,16 @@ const ERROR_MESSAGES = {
     "Maximum 4 méthodes de paiement autorisées.",
 };
 
-function fmt(n) { return Number(n || 0).toFixed(2).replace('.', ','); }
+function fmt(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
 
 function buildSuccessToast(payload) {
   const bd = payload?.payment_breakdown;
   if (!Array.isArray(bd) || bd.length < 2) return "Encaissement enregistré";
   const total = bd.reduce((s, it) => s + (it.amount_cents || 0), 0) / 100;
   const detail = bd
-    .map(it => (PM_LABELS[it.method] || it.method) + " " + fmt(it.amount_cents / 100) + " €")
+    .map(it => (PM_LABELS[it.method] || it.method) + " " + fmt(it.amount_cents / 100) + " DA")
     .join(', ');
-  return "Paiement enregistré : " + fmt(total) + " € (" + bd.length
+  return "Paiement enregistré : " + fmt(total) + " DA (" + bd.length
        + " méthodes : " + detail + ")";
 }
 
@@ -67,7 +67,7 @@ export function useMultiPaymentMutation({ onAdd, showToast }) {
         // que le message générique. Fallback générique si message vide.
         msg = e?.message
           || ("La somme des paiements doit égaler "
-              + fmt(payload?.amount || 0) + " €.");
+              + fmt(payload?.amount || 0) + " DA.");
       } else if (code && ERROR_MESSAGES[code]) {
         msg = ERROR_MESSAGES[code];
       } else if (status >= 500) {

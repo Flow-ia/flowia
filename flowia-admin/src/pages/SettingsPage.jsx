@@ -70,7 +70,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Reglages">
+    <AppShell me={me} footer="Salon DZ Admin — Reglages">
       <h1 className="dash-title">{"Reglages compte"}</h1>
 
         <section className="card">

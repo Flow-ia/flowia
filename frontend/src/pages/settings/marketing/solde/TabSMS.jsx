@@ -82,7 +82,7 @@ export default function TabSMS({ showToast, theme }) {
         <p style={{ fontSize:12, color:t.muted, margin:'0 0 14px' }}>Solde SMS</p>
         <div style={{ textAlign:'center', marginBottom:18 }}>
           <span style={{ fontSize:34, fontWeight:500, color:t.text, fontFamily:'var(--mono)' }}>
-            {parseFloat(balance?.balance || 0).toFixed(2)} €
+            {parseFloat(balance?.balance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
           </span>
           <p style={{ fontSize:13, color:t.muted, margin:'6px 0 0' }}>
             Environ {balance?.estimated_sms || 0} SMS disponibles
@@ -181,7 +181,7 @@ export default function TabSMS({ showToast, theme }) {
                       {(c.sent_sms || 0) + (c.sent_email || 0)}
                     </td>
                     <td style={{ padding:'7px 6px', color:t.text }}>
-                      {Number(c.sms_cost || 0).toFixed(2)} €
+                      {Number(c.sms_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                     </td>
                     <td style={{ padding:'7px 6px' }}>
                       <span style={{ fontSize:10, fontWeight:500, padding:'2px 8px', borderRadius:99,
@@ -224,7 +224,7 @@ export default function TabSMS({ showToast, theme }) {
                 </div>
                 <span style={{ fontSize:13, fontWeight:500,
                                color: tx.type === 'credit' ? '#065f46' : '#991b1b' }}>
-                  {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount || 0).toFixed(2)} €
+                  {tx.type === 'credit' ? '+' : '-'}{Number(tx.amount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                 </span>
               </div>
             ))}

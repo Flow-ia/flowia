@@ -320,12 +320,12 @@ function RechargeInner({ theme, onClose, onSuccess, showToast }) {
             {submitting
               ? 'Traitement...'
               : !amountOk
-                ? 'Montant minimum : 5 EUR'
+                ? 'Montant minimum : 5 DA'
                 : isNew && !cardAllMounted
                   ? 'Chargement du formulaire...'
                   : isNew && !cardComplete
                     ? 'Completez les infos de carte'
-                    : `Payer ${numAmt.toFixed(2)} EUR`}
+                    : `Payer ${Number(numAmt || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
           </button>
           <p style={{
             margin: '10px 0 0',
@@ -435,7 +435,7 @@ function AmountField({ theme, amount, setAmount }) {
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
           }}
         />
-        <span style={{ fontWeight: 500, color: theme.muted, fontSize: 14 }}>EUR</span>
+        <span style={{ fontWeight: 500, color: theme.muted, fontSize: 14 }}>DA</span>
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
         {[10, 20, 50, 100].map(v => {
@@ -458,7 +458,7 @@ function AmountField({ theme, amount, setAmount }) {
                 fontFamily: 'inherit',
               }}
             >
-              {v} €
+              {v} DA
             </button>
           );
         })}
@@ -768,7 +768,7 @@ function SuccessView({ theme, info, onClose }) {
             fontWeight: 500,
             color: '#065f46',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}>{info.new_balance} €</p>
+          }}>{Number(info.new_balance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</p>
         </div>
         <div style={{
           flex: 1,

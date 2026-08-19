@@ -96,7 +96,7 @@ export function ProfileTab({
                 </label>
                 <input type="text" value={editPostal}
                   onChange={e=>setEditPostal(e.target.value.replace(/[^\d\s-]/g,'').slice(0,10))}
-                  placeholder="75001" inputMode="numeric" style={inpStyle}/>
+                  placeholder="16000" inputMode="numeric" style={inpStyle}/>
               </div>
               <div>
                 <label style={{ display:'block', fontSize:11, fontWeight: 500,
@@ -104,7 +104,7 @@ export function ProfileTab({
                   Ville
                 </label>
                 <input type="text" value={editCity} onChange={e=>setEditCity(e.target.value.slice(0,120))}
-                  placeholder="Paris" style={inpStyle}/>
+                  placeholder="Alger" style={inpStyle}/>
               </div>
             </div>
             <p style={{ fontSize:11, color:th.muted, margin:0, lineHeight:1.5 }}>

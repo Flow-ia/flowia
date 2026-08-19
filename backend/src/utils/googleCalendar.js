@@ -101,7 +101,7 @@ function buildEventBody({ appt, businessName, serviceName, employeeName, timezon
   if (appt.client_email) lines.push(`Email : ${appt.client_email}`);
   if (appt.client_phone) lines.push(`Telephone : ${appt.client_phone}`);
   if (appt.notes) lines.push(`\nNotes : ${appt.notes}`);
-  lines.push('\n— RDV synchronise depuis FlowIA');
+  lines.push('\n— RDV synchronise depuis Salon DZ');
 
   return {
     summary,
@@ -112,7 +112,7 @@ function buildEventBody({ appt, businessName, serviceName, employeeName, timezon
     // Evite que Google envoie un mail au client (le merchant a deja FlowIA pour ca)
     reminders: { useDefault: true },
     // Source : visible cote Google Calendar (link cliquable retour FlowIA).
-    source: { title: 'FlowIA', url: 'https://flowiapro.com' },
+    source: { title: 'Salon DZ', url: 'https://flowiapro.com' },
     // Etat selon status RDV.
     status: appt.status === 'cancelled' ? 'cancelled' : 'confirmed',
   };

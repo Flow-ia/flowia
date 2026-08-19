@@ -82,7 +82,7 @@ export default function TabCompte({ showToast, theme, onLock }) {
           Le detail des dispositifs (consentement, portabilite, effacement,
           securite) est documente sur le site public et dans la page Politique
           de confidentialite, pas besoin de le repeter ici. */}
-      <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on"
+      <a href="https://anpdp.dz"
          target="_blank" rel="noopener noreferrer"
          style={{
            display: 'flex', alignItems: 'center', gap: 12,
@@ -96,10 +96,10 @@ export default function TabCompte({ showToast, theme, onLock }) {
         <I.Lock style={{ width:15, height:15, color:t.muted, flexShrink:0 }}/>
         <div style={{ flex:1, minWidth:0 }}>
           <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text }}>
-            {"Donnees & RGPD"}
+            {"Donnees personnelles & loi 18-07"}
           </p>
           <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.4 }}>
-            {"Guide CNIL — RGPD pour les TPE/PME"}
+            {"ANPDP — protection des donnees personnelles"}
           </p>
         </div>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -573,10 +573,10 @@ function ExportDataCard({ theme, showToast }) {
       <I.Download style={{ width:15, height:15, color:t.muted, flexShrink:0 }}/>
       <div style={{ flex:1, minWidth:0 }}>
         <p style={{ margin:0, fontWeight:500, fontSize:13, color:t.text }}>
-          {loading ? 'Generation en cours...' : 'Telecharger mes donnees (RGPD)'}
+          {loading ? 'Generation en cours...' : 'Telecharger mes donnees (loi 18-07)'}
         </p>
         <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.4 }}>
-          Export JSON complet (article 20 RGPD portabilite). Conseille avant suppression de compte.
+          Export JSON complet (portabilite de vos donnees, loi 18-07). Conseille avant suppression de compte.
         </p>
       </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -630,7 +630,7 @@ function DangerZone({ theme, logout }) {
       </p>
       <p style={{ margin:'0 0 12px', fontSize:12, color:'#991b1b', opacity:0.8, lineHeight:1.5 }}>
         Vos donnees personnelles seront supprimees. Les transactions sont
-        conservees anonymement pour la comptabilite (FEC 10 ans). Periode de
+        conservees anonymement pour la comptabilite (10 ans). Periode de
         grace de 30 jours puis purge definitive automatique.
       </p>
       {/* Rappel RGPD article 20 : conseille fortement de telecharger les

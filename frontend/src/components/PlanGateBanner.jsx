@@ -12,8 +12,8 @@ import { useAuth } from '../hooks/useAuth';
 const PLAN_RANK = { decouverte: 0, essentiel: 1, equipe: 2 };
 
 const PLAN_INFO = {
-  essentiel: { name: 'Essentiel', priceMonthly: 24 },
-  equipe:    { name: 'Équipe',    priceMonthly: 49 },
+  essentiel: { name: 'Essentiel', priceMonthly: 2400 },
+  equipe:    { name: 'Équipe',    priceMonthly: 4900 },
 };
 
 export default function PlanGateBanner({ requiredPlan, feature, extraBenefits, theme }) {
@@ -49,7 +49,7 @@ export default function PlanGateBanner({ requiredPlan, feature, extraBenefits, t
         </p>
         <p style={{ fontSize: 13, color: palette.textHi, margin: '4px 0 0', lineHeight: 1.5,
                     fontWeight: 500 }}>
-          {`${feature || 'Cette fonctionnalité'} est inclus(e) à partir du plan ${info.name} (${info.priceMonthly} €/mois).${benefitsLine}`}
+          {`${feature || 'Cette fonctionnalité'} est inclus(e) à partir du plan ${info.name} (${Number(info.priceMonthly).toLocaleString('fr-FR')} DA/mois).${benefitsLine}`}
         </p>
       </div>
       <button onClick={() => navigate(`/abonnement?plan=${requiredPlan}&period=monthly`)}

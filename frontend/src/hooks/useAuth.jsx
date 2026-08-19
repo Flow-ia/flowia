@@ -88,7 +88,7 @@ export function AuthProvider({ children }) {
     const onAccountBlocked = (ev) => {
       const msg = ev?.detail?.message
         || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ff_account_blocked_msg') : null)
-        || 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+        || 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.';
       setBlockedMsg(msg);
     };
     window.addEventListener('ff-account-blocked', onAccountBlocked);

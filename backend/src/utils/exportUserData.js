@@ -170,9 +170,9 @@ async function exportAllUserData(pool, userId) {
     exported_at: new Date().toISOString(),
     merchant_id: userId,
     legal_notice: "Cet export contient l'integralite de vos donnees personnelles "
-      + "et professionnelles stockees sur FlowIA. Article 20 RGPD (portabilite). "
+      + "et professionnelles stockees sur Salon DZ. Loi 18-07 (portabilite). "
       + "Hashes (passwords, PINs), tokens OAuth et cles cryptographiques sont "
-      + "exclus car techniques et non reutilisables hors FlowIA.",
+      + "exclus car techniques et non reutilisables hors Salon DZ.",
     profile,
     settings: {
       user_settings:         data.user_settings,

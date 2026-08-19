@@ -90,21 +90,21 @@ export default function OfferForm() {
         <input id="of-salon" style={inp('salon')} value={salon}
           onChange={(e) => setSalon(e.target.value)}
           onFocus={() => setFocused('salon')} onBlur={() => setFocused('')}
-          maxLength={200} placeholder="Hair Coiff Lille" />
+          maxLength={200} placeholder="Barber Shop El Bahdja" />
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={label} htmlFor="of-city">{"Ville"}</label>
         <input id="of-city" style={inp('city')} value={city}
           onChange={(e) => setCity(e.target.value)}
           onFocus={() => setFocused('city')} onBlur={() => setFocused('')}
-          maxLength={120} placeholder="Lille" />
+          maxLength={120} placeholder="Alger" />
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={label} htmlFor="of-email">{"Email professionnel"}</label>
         <input id="of-email" type="email" style={inp('email')} value={email}
           onChange={(e) => setEmail(e.target.value)}
           onFocus={() => setFocused('email')} onBlur={() => setFocused('')}
-          maxLength={254} placeholder="contact@votresalon.fr" />
+          maxLength={254} placeholder="contact@votresalon.dz" />
       </div>
 
       {/* Honeypot : invisible pour un humain, rempli par les bots. */}
@@ -122,7 +122,7 @@ export default function OfferForm() {
           onChange={(e) => setConsent(e.target.checked)}
           style={{ marginTop: 2, flexShrink: 0 }} />
         <span>
-          {"J'accepte d'être recontacté par FlowIA au sujet de cette offre. "}
+          {"J'accepte d'être recontacté par Salon DZ au sujet de cette offre. "}
           <Link to="/confidentialite" style={{ color: S.fg, textDecoration: 'underline' }}>
             {"Politique de confidentialité"}
           </Link>

@@ -165,7 +165,7 @@ router.post('/:id/migrate-breakdown', async (req, res) => {
     if (sumCents !== originalCents) {
       await dbClient.query('ROLLBACK');
       return res.status(400).json({
-        error: `La somme du breakdown (${(sumCents / 100).toFixed(2)} €) ne correspond pas au total (${(originalCents / 100).toFixed(2)} €).`,
+        error: `La somme du breakdown (${(sumCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA) ne correspond pas au total (${(originalCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA).`,
         code: 'BREAKDOWN_SUM_MISMATCH',
       });
     }

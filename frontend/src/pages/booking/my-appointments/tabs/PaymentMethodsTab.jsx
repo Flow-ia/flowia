@@ -74,7 +74,7 @@ export function PaymentMethodsTab({ th }) {
         {"Mes moyens de paiement"}
       </h2>
       <p style={{ fontSize: 12, color: th.muted, margin: '0 0 20px', lineHeight: 1.5 }}>
-        {"Ces cartes sont chiffrees par Stripe et reutilisables sur tous les salons FlowIA. "}
+        {"Ces cartes sont chiffrees par Stripe et reutilisables sur tous les salons Salon DZ. "}
         {"Pour ajouter une carte, cochez « Sauvegarder cette carte » lors d'une prochaine reservation."}
       </p>
 
@@ -171,7 +171,7 @@ export function PaymentMethodsTab({ th }) {
         onConfirm={handleDelete}
         title="Supprimer cette carte ?"
         message={confirmDel
-          ? `La carte ${(confirmDel.brand || 'carte').replace(/^./, c => c.toUpperCase())} ···· ${confirmDel.last4 || '????'} sera supprimee. Vous devrez la ressaisir pour vos prochaines reservations FlowIA.`
+          ? `La carte ${(confirmDel.brand || 'carte').replace(/^./, c => c.toUpperCase())} ···· ${confirmDel.last4 || '????'} sera supprimee. Vous devrez la ressaisir pour vos prochaines reservations Salon DZ.`
           : ''}
         danger
       />

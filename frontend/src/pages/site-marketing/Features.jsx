@@ -23,7 +23,7 @@ const DETAILS = {
   ia: {
     label: 'IA',
     title: 'Marketing IA — laissez l\'intelligence artificielle travailler pour vous',
-    desc: "FlowIA analyse votre fichier client et propose les bonnes campagnes au bon moment. Plus besoin de réfléchir à qui contacter, ni quand, ni avec quel message.",
+    desc: "Salon DZ analyse votre fichier client et propose les bonnes campagnes au bon moment. Plus besoin de réfléchir à qui contacter, ni quand, ni avec quel message.",
     bullets: [
       "Suggestions de campagnes basées sur votre historique de RDV",
       "Génération automatique du texte (SMS et email)",
@@ -38,7 +38,7 @@ const DETAILS = {
   previsions: {
     label: 'IA',
     title: 'Prévisions et insights — anticipez votre activité',
-    desc: "Visualisez votre chiffre d'affaires prévisionnel, vos creux et vos pics. FlowIA détecte les tendances et vous propose des actions concrètes.",
+    desc: "Visualisez votre chiffre d'affaires prévisionnel, vos creux et vos pics. Salon DZ détecte les tendances et vous propose des actions concrètes.",
     bullets: [
       "Prévisions de CA sur 4 semaines",
       "Alertes sur les creux d'agenda",
@@ -109,12 +109,12 @@ const DETAILS = {
   sms: {
     label: 'Marketing',
     title: 'Marketing SMS — 95 % de taux d\'ouverture',
-    desc: "Le canal le plus efficace pour faire revenir vos clients. Campagnes ciblées par segments, rappels automatiques 24h avant, opt-in RGPD géré.",
+    desc: "Le canal le plus efficace pour faire revenir vos clients. Campagnes ciblées par segments, rappels automatiques 24h avant, opt-in conforme loi 18-07 géré.",
     bullets: [
       "Campagnes SMS ciblées par segments",
       "Rappels automatiques 24h avant le RDV",
-      "Désinscription en 1 clic conforme RGPD",
-      "Tarif transparent à l'usage (à partir de 0,06 €/SMS)",
+      "Désinscription en 1 clic conforme loi 18-07",
+      "Tarif transparent à l'usage (à partir de 6 DA/SMS)",
       "Quotas et budget contrôlés",
     ],
     cta: "Lancer mes campagnes SMS",
@@ -124,11 +124,11 @@ const DETAILS = {
   email: {
     label: 'Marketing',
     title: 'Marketing email — restez en contact',
-    desc: "Emails transactionnels (confirmation, rappel) et campagnes ciblées. Templates pro, opt-in/désinscription RGPD-compliant, statistiques détaillées.",
+    desc: "Emails transactionnels (confirmation, rappel) et campagnes ciblées. Templates pro, opt-in/désinscription conformes à la loi 18-07, statistiques détaillées.",
     bullets: [
       "Confirmations et rappels automatiques",
       "Campagnes ciblées avec templates pro",
-      "Opt-in RGPD à l'inscription",
+      "Opt-in conforme loi 18-07 à l'inscription",
       "Désinscription 1 clic dans chaque email",
       "Statistiques d'ouverture et de clic",
     ],
@@ -139,10 +139,10 @@ const DETAILS = {
   fidelite: {
     label: 'Marketing',
     title: 'Fidélité — faites revenir vos clients sans y penser',
-    desc: "Programme de points 100 % paramétrable. Cumul automatique à chaque passage, récompenses configurables (€ ou %), caps anti-fraude.",
+    desc: "Programme de points 100 % paramétrable. Cumul automatique à chaque passage, récompenses configurables (DA ou %), caps anti-fraude.",
     bullets: [
       "Cumul de points configurable par prestation",
-      "Récompenses en euros ou en pourcentage",
+      "Récompenses en dinars ou en pourcentage",
       "Caps mensuels/annuels personnalisables",
       "Solde et historique visibles côté client",
       "Activation/désactivation par catégorie",
@@ -175,7 +175,7 @@ const DETAILS = {
       "Étalement automatique sur le mois",
       "Quota par commerçant et retry safe",
       "Anti-fraude rolling 330 jours",
-      "Offre paramétrable (% ou €)",
+      "Offre paramétrable (% ou DA)",
     ],
     cta: "Activer les anniversaires",
     // Nail art coloré et festif : l'offre anniversaire.
@@ -198,12 +198,12 @@ const DETAILS = {
   caisse: {
     label: 'Caisse',
     title: 'Caisse intégrée — encaissez en quelques secondes',
-    desc: "Catégories prestations et produits, paiements multiples (espèces, carte, virement), avoirs, crédits clients, remboursements RGPD-conformes.",
+    desc: "Catégories prestations et produits, paiements multiples (espèces, carte, virement), avoirs, crédits clients, remboursements conformes à la loi 18-07.",
     bullets: [
       "Espèces, carte, virement, multi-paiements",
       "Avoirs et crédits clients",
       "Suivi des dettes et créances",
-      "Remboursements RGPD-conformes",
+      "Remboursements conformes loi 18-07",
       "Verrouillage par PIN administrateur",
     ],
     cta: "Découvrir la caisse",
@@ -219,7 +219,7 @@ const DETAILS = {
       "Recherche instantanée",
       "Segments personnalisables",
       "Notes et tags par client",
-      "Export RGPD complet à la demande",
+      "Export complet des données à la demande",
     ],
     cta: "Voir mon fichier clients",
     // Cliente accueillie au comptoir : la fiche qu'on ouvre à l'arrivée.
@@ -228,7 +228,7 @@ const DETAILS = {
   credits: {
     label: 'Caisse',
     title: 'Crédits, avoirs et créances',
-    desc: "Suivez les soldes clients en temps réel : avoirs, dettes, créances. Encaissez ou remboursez en quelques clics. Anti-fuite intégré (RGPD-conforme).",
+    desc: "Suivez les soldes clients en temps réel : avoirs, dettes, créances. Encaissez ou remboursez en quelques clics. Anti-fuite intégré (conforme loi 18-07).",
     bullets: [
       "Avoirs et crédits clients",
       "Registre des créances avec relances",
@@ -298,13 +298,13 @@ export default function Features() {
     <>
       <Seo
         path="/fonctionnalites"
-        title="Fonctionnalités — Agenda, caisse, SMS, fidélité & IA | FlowIA"
-        description="Agenda en ligne, caisse, encaissement, marketing IA, fidélité, parrainage et SMS de rappel : toutes les fonctionnalités FlowIA pour gérer votre salon."
+        title="Fonctionnalités — Agenda, caisse, SMS, fidélité & IA | Salon DZ"
+        description="Agenda en ligne, caisse, encaissement, marketing IA, fidélité, parrainage et SMS de rappel : toutes les fonctionnalités Salon DZ pour gérer votre salon."
       />
       <PageHero
         label="Fonctionnalités"
         title="Tout ce qu'il faut pour faire tourner votre salon"
-        subtitle="FlowIA réunit en une seule application l'agenda, la caisse, le marketing IA, la fidélité et bien plus encore."
+        subtitle="Salon DZ réunit en une seule application l'agenda, la caisse, le marketing IA, la fidélité et bien plus encore."
       />
 
       {/* Nav rapide sticky par groupe (4 pills) */}

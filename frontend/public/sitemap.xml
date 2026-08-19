@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Sitemap statique des pages marketing FlowIA. Mettre a jour lastmod a
+<!-- Sitemap statique des pages marketing Salon DZ. Mettre a jour lastmod a
      chaque refonte de contenu. Les pages booking (/book/:slug) sont
      dynamiques par commercant et ne figurent pas ici (sitemap separe a
      generer cote backend depuis la DB si besoin SEO local par salon). -->

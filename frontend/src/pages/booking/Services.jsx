@@ -56,7 +56,7 @@ export function AccordionGroup({ label, svcs, th, isLast, onSelect }) {
                   </p>
                   <p style={{ fontSize:12, color:th.muted, margin:0 }}>
                     {durLabel}
-                    {s.price != null && !s.is_free_price ? ` · ${Number(s.price).toFixed(2)} €` : ''}
+                    {s.price != null && !s.is_free_price ? ` · ${Number(s.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : ''}
                   </p>
                   {s.description && (
                     <p style={{ fontSize:11, color:th.dim, margin:'3px 0 0',
@@ -149,7 +149,7 @@ export function ServiceCard({ s, th, onClick, catColor }) {
           <p style={{ fontWeight: 500, fontSize:14, color:th.text, margin:'0 0 2px',
             overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</p>
           <p style={{ fontSize:12, color:th.muted, margin:0 }}>
-            ⏱ {durLabel}{s.price != null ? ` · ${Number(s.price).toFixed(2)} €` : ''}
+            ⏱ {durLabel}{s.price != null ? ` · ${Number(s.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : ''}
           </p>
           {s.description && <p style={{ fontSize:11, color:th.dim, margin:'3px 0 0',
             overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.description}</p>}

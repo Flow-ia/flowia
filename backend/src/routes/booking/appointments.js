@@ -243,14 +243,14 @@ module.exports = function attachAppointmentsRoutes(router) {
           pool.query('SELECT name FROM booking_services WHERE id=$1', [service_id]),
           employee_id ? pool.query('SELECT name FROM employees WHERE id=$1', [employee_id]) : Promise.resolve({ rows: [] }),
           pool.query('SELECT business_name FROM users WHERE id=$1', [req.user.userId]),
-          pool.query("SELECT COALESCE(timezone, 'Europe/Paris') as tz FROM booking_settings WHERE user_id=$1", [req.user.userId]),
+          pool.query("SELECT COALESCE(timezone, 'Africa/Algiers') as tz FROM booking_settings WHERE user_id=$1", [req.user.userId]),
         ]);
         const { pushAppointment } = require('../../utils/googleCalendar');
         pushAppointment(req.user.userId, { ...appt, status: 'confirmed' }, {
           businessName: uR.rows[0]?.business_name,
           serviceName:  sR.rows[0]?.name,
           employeeName: eR.rows[0]?.name || null,
-          timezone:     bsR.rows[0]?.tz || 'Europe/Paris',
+          timezone:     bsR.rows[0]?.tz || 'Africa/Algiers',
         }).catch(err => console.warn('[gcal push merchant]', err.message));
       } catch (gcErr) { console.warn('[gcal lookup]', gcErr.message); }
     } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -434,7 +434,7 @@ module.exports = function attachAppointmentsRoutes(router) {
           `SELECT a.google_event_id, a.google_calendar_id,
                   bs.name AS service_name, e.name AS employee_name,
                   u.business_name,
-                  COALESCE(bset.timezone, 'Europe/Paris') AS tz
+                  COALESCE(bset.timezone, 'Africa/Algiers') AS tz
              FROM appointments a
              LEFT JOIN booking_services bs ON bs.id = a.service_id
              LEFT JOIN employees e ON e.id = a.employee_id

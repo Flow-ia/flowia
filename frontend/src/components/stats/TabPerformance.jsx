@@ -64,7 +64,7 @@ export default function TabPerformance({ period }) {
             sub={(enLigne.count || 0) + (enLigne.count > 1 ? " paiements" : " paiement")}
             footer={[
               { label: "Frais Stripe",      cents: enLigne.stripe_fee_cents,   isNeg: true },
-              { label: "Commission FlowIA", cents: enLigne.platform_fee_cents, isNeg: true },
+              { label: "Commission Salon DZ", cents: enLigne.platform_fee_cents, isNeg: true },
               { label: "Net",               cents: enLigne.net_cents,          isMain: true },
             ]}
           />

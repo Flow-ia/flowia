@@ -353,7 +353,7 @@ module.exports = function attachClientAuthRoutes(router) {
       // FlowIA. Le blocage est cross-merchant (table global_clients), donc ce
       // client ne peut se connecter sur AUCUN salon FlowIA.
       if (gc?.is_blocked) return res.status(403).json({
-        error: 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.',
+        error: 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.',
         code: 'ACCOUNT_BLOCKED',
       });
 
@@ -553,7 +553,7 @@ module.exports = function attachClientAuthRoutes(router) {
         // Symétrique au check du login formulaire ligne 339.
         if (gc.is_blocked) {
           return res.status(403).json({
-            error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.',
+            error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs Salon DZ pour plus de détails.',
             code: 'ACCOUNT_BLOCKED',
           });
         }

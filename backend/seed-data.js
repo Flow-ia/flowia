@@ -111,7 +111,7 @@ async function seed() {
   const [user] = await q(
     `INSERT INTO users (email, password_hash, business_name)
      VALUES ($1, $2, $3) RETURNING id`,
-    [EMAIL, hash, 'Salon Élite Coiffure']
+    [EMAIL, hash, 'Barber Shop El Bahdja']
   );
   const uid = user.id;
   console.log(`✅  Commerçant : ${EMAIL}  /  mdp : ${PASSWORD}`);
@@ -137,14 +137,14 @@ async function seed() {
 
   // ── 3. SERVICES (sous-catégories liées aux catégories) ────────────────────
   const serviceItems = [
-    { name: 'Coupe simple',       parent: 'Coiffure Homme', price: 18, color: '#7c6af7', sort_order: 0 },
-    { name: 'Coupe + Barbe',      parent: 'Coiffure Homme', price: 28, color: '#7c6af7', sort_order: 1 },
-    { name: 'Barbe seule',        parent: 'Coiffure Homme', price: 12, color: '#7c6af7', sort_order: 2 },
-    { name: 'Coupe femme',        parent: 'Coiffure Femme', price: 35, color: '#ec4899', sort_order: 0 },
-    { name: 'Couleur / Mèches',   parent: 'Coiffure Femme', price: 75, color: '#ec4899', sort_order: 1 },
-    { name: 'Brushing',           parent: 'Coiffure Femme', price: 25, color: '#ec4899', sort_order: 2 },
-    { name: 'Soin kératine',      parent: 'Soins & Beauté', price: 95, color: '#10b981', sort_order: 0 },
-    { name: 'Masque hydratant',   parent: 'Soins & Beauté', price: 20, color: '#10b981', sort_order: 1 },
+    { name: 'Coupe simple',       parent: 'Coiffure Homme', price: 500,  color: '#7c6af7', sort_order: 0 },
+    { name: 'Coupe + Barbe',      parent: 'Coiffure Homme', price: 700,  color: '#7c6af7', sort_order: 1 },
+    { name: 'Barbe seule',        parent: 'Coiffure Homme', price: 300,  color: '#7c6af7', sort_order: 2 },
+    { name: 'Coupe femme',        parent: 'Coiffure Femme', price: 1500, color: '#ec4899', sort_order: 0 },
+    { name: 'Couleur / Mèches',   parent: 'Coiffure Femme', price: 3500, color: '#ec4899', sort_order: 1 },
+    { name: 'Brushing',           parent: 'Coiffure Femme', price: 1000, color: '#ec4899', sort_order: 2 },
+    { name: 'Soin kératine',      parent: 'Soins & Beauté', price: 4500, color: '#10b981', sort_order: 0 },
+    { name: 'Masque hydratant',   parent: 'Soins & Beauté', price: 800,  color: '#10b981', sort_order: 1 },
   ];
   const services = {};
   for (const s of serviceItems) {
@@ -154,7 +154,7 @@ async function seed() {
       [uid, s.name, s.color, cats[s.parent], s.price, s.sort_order]
     );
     services[s.name] = row.id;
-    console.log(`   💈  Service : ${s.name} (${s.price}€)`);
+    console.log(`   💈  Service : ${s.name} (${s.price} DA)`);
   }
 
   // ── 4. EMPLOYÉS ───────────────────────────────────────────────────────────
@@ -179,28 +179,28 @@ async function seed() {
   // ── 5. BOOKING SETTINGS + HORAIRES ────────────────────────────────────────
   await q(
     `INSERT INTO booking_settings (user_id, is_enabled, slug, business_description, advance_booking_days, min_notice_hours)
-     VALUES ($1, TRUE, 'salon-elite-coiffure', 'Salon de coiffure haut de gamme au cœur de la ville.', 30, 1)
-     ON CONFLICT (user_id) DO UPDATE SET is_enabled=TRUE, slug='salon-elite-coiffure'`,
+     VALUES ($1, TRUE, 'barber-shop-el-bahdja-alger-16000', 'Barbershop haut de gamme au cœur d''Alger.', 30, 1)
+     ON CONFLICT (user_id) DO UPDATE SET is_enabled=TRUE, slug='barber-shop-el-bahdja-alger-16000'`,
     [uid]
   );
 
-  // Horaires lun-sam 9h-19h, dim fermé
+  // Horaires sam-jeu 9h-19h, ven fermé (semaine algérienne)
   for (let d = 0; d <= 6; d++) {
     await q(
       `INSERT INTO business_hours (user_id, day_of_week, open_time, close_time, is_open)
        VALUES ($1,$2,'09:00','19:00',$3) ON CONFLICT (user_id, day_of_week) DO NOTHING`,
-      [uid, d, d !== 0]
+      [uid, d, d !== 5]
     );
   }
-  console.log('   🕐  Horaires salon configurés (lun-sam 9h-19h)');
+  console.log('   🕐  Horaires salon configurés (sam-jeu 9h-19h, ven fermé)');
 
   // ── 6. SERVICES DE RÉSERVATION ────────────────────────────────────────────
   const bookingServices = [
-    { name: 'Coupe Homme',    dur: 30,  price: 18, empKey: 'Karim Benali',   catKey: 'Coiffure Homme' },
-    { name: 'Coupe + Barbe',  dur: 45,  price: 28, empKey: 'Karim Benali',   catKey: 'Coiffure Homme' },
-    { name: 'Coupe Femme',    dur: 45,  price: 35, empKey: 'Sophie Martin',  catKey: 'Coiffure Femme' },
-    { name: 'Couleur/Mèches', dur: 120, price: 75, empKey: 'Sophie Martin',  catKey: 'Coiffure Femme' },
-    { name: 'Soin kératine',  dur: 90,  price: 95, empKey: 'Léa Dubois',     catKey: 'Soins & Beauté' },
+    { name: 'Coupe Homme',    dur: 30,  price: 500,  empKey: 'Karim Benali',   catKey: 'Coiffure Homme' },
+    { name: 'Coupe + Barbe',  dur: 45,  price: 700,  empKey: 'Karim Benali',   catKey: 'Coiffure Homme' },
+    { name: 'Coupe Femme',    dur: 45,  price: 1500, empKey: 'Sophie Martin',  catKey: 'Coiffure Femme' },
+    { name: 'Couleur/Mèches', dur: 120, price: 3500, empKey: 'Sophie Martin',  catKey: 'Coiffure Femme' },
+    { name: 'Soin kératine',  dur: 90,  price: 4500, empKey: 'Léa Dubois',     catKey: 'Soins & Beauté' },
   ];
   const bsIds = {};
   for (const s of bookingServices) {
@@ -210,7 +210,7 @@ async function seed() {
       [uid, cats[s.catKey], s.name, s.dur, s.price]
     );
     bsIds[s.name] = row.id;
-    console.log(`   🗓  Service résa : ${s.name} (${s.dur}min, ${s.price}€)`);
+    console.log(`   🗓  Service résa : ${s.name} (${s.dur}min, ${s.price} DA)`);
   }
 
   // ── 7. RENDEZ-VOUS ────────────────────────────────────────────────────────
@@ -243,10 +243,10 @@ async function seed() {
 
   // ── 8. CLIENTS ────────────────────────────────────────────────────────────
   const clientData = [
-    { first: 'Mohamed', last: 'Ait',      email: 'client1@test.fr', phone: '0612345678' },
-    { first: 'Marie',   last: 'Lambert',  email: 'client3@test.fr', phone: '0687654321' },
-    { first: 'Julie',   last: 'Renard',   email: 'client4@test.fr', phone: '0698765432' },
-    { first: 'Sarah',   last: 'Dupont',   email: 'client5@test.fr', phone: '0611223344' },
+    { first: 'Mohamed', last: 'Ait',      email: 'client1@test.fr', phone: '+213550123456' },
+    { first: 'Marie',   last: 'Lambert',  email: 'client3@test.fr', phone: '+213661234567' },
+    { first: 'Julie',   last: 'Renard',   email: 'client4@test.fr', phone: '+213770987654' },
+    { first: 'Sarah',   last: 'Dupont',   email: 'client5@test.fr', phone: '+213551122334' },
   ];
   for (const c of clientData) {
     await q(
@@ -259,14 +259,14 @@ async function seed() {
 
   // ── 9. TRANSACTIONS CAISSE — aujourd'hui ──────────────────────────────────
   const txToday = [
-    { type:'revenue', amount:18.00, desc:'Coupe simple',      cat:'Coiffure Homme', emp:'Karim Benali',  method:'cash',     time:'09:30', catKey: services['Coupe simple'] },
-    { type:'revenue', amount:28.00, desc:'Coupe + Barbe',     cat:'Coiffure Homme', emp:'Karim Benali',  method:'card',     time:'10:45', catKey: services['Coupe + Barbe'] },
-    { type:'revenue', amount:35.00, desc:'Coupe femme',       cat:'Coiffure Femme', emp:'Sophie Martin', method:'card',     time:'10:15', catKey: services['Coupe femme'] },
-    { type:'revenue', amount:75.00, desc:'Couleur / Mèches',  cat:'Coiffure Femme', emp:'Sophie Martin', method:'card',     time:'13:00', catKey: services['Couleur / Mèches'] },
-    { type:'revenue', amount:95.00, desc:'Soin kératine',     cat:'Soins & Beauté', emp:'Léa Dubois',    method:'transfer', time:'11:30', catKey: services['Soin kératine'] },
-    { type:'revenue', amount:12.00, desc:'Barbe seule',       cat:'Coiffure Homme', emp:'Karim Benali',  method:'cash',     time:'14:00', catKey: services['Barbe seule'] },
-    { type:'revenue', amount:20.00, desc:'Masque hydratant',  cat:'Soins & Beauté', emp:'Léa Dubois',    method:'cash',     time:'15:00', catKey: services['Masque hydratant'] },
-    { type:'expense', amount:45.00, desc:'Fournitures salon', cat:'Charges du salon', emp:'Thomas Girard', method:'transfer', time:'08:30' },
+    { type:'revenue', amount:500,  desc:'Coupe simple',      cat:'Coiffure Homme', emp:'Karim Benali',  method:'cash',     time:'09:30', catKey: services['Coupe simple'] },
+    { type:'revenue', amount:700,  desc:'Coupe + Barbe',     cat:'Coiffure Homme', emp:'Karim Benali',  method:'card',     time:'10:45', catKey: services['Coupe + Barbe'] },
+    { type:'revenue', amount:1500, desc:'Coupe femme',       cat:'Coiffure Femme', emp:'Sophie Martin', method:'card',     time:'10:15', catKey: services['Coupe femme'] },
+    { type:'revenue', amount:3500, desc:'Couleur / Mèches',  cat:'Coiffure Femme', emp:'Sophie Martin', method:'card',     time:'13:00', catKey: services['Couleur / Mèches'] },
+    { type:'revenue', amount:4500, desc:'Soin kératine',     cat:'Soins & Beauté', emp:'Léa Dubois',    method:'transfer', time:'11:30', catKey: services['Soin kératine'] },
+    { type:'revenue', amount:300,  desc:'Barbe seule',       cat:'Coiffure Homme', emp:'Karim Benali',  method:'cash',     time:'14:00', catKey: services['Barbe seule'] },
+    { type:'revenue', amount:800,  desc:'Masque hydratant',  cat:'Soins & Beauté', emp:'Léa Dubois',    method:'cash',     time:'15:00', catKey: services['Masque hydratant'] },
+    { type:'expense', amount:2000, desc:'Fournitures salon', cat:'Charges du salon', emp:'Thomas Girard', method:'transfer', time:'08:30' },
   ];
 
   for (const tx of txToday) {
@@ -278,19 +278,19 @@ async function seed() {
        tx.catKey || cats[tx.cat], emps[tx.emp],
        tx.method, today, tx.time]
     );
-    console.log(`   💰  TX aujourd'hui : ${tx.desc} — ${tx.amount}€ (${tx.method})`);
+    console.log(`   💰  TX aujourd'hui : ${tx.desc} — ${tx.amount} DA (${tx.method})`);
   }
 
   // ── 10. TRANSACTIONS CAISSE — semaine passée ──────────────────────────────
   const txPast = [
-    { type:'revenue', amount:110.00, desc:'Mèches & Balayage',    cat:'Coiffure Femme',  emp:'Sophie Martin', method:'card',     date:lastWeek1, time:'10:00' },
-    { type:'revenue', amount:28.00,  desc:'Coupe + Barbe',        cat:'Coiffure Homme',  emp:'Karim Benali',  method:'cash',     date:lastWeek1, time:'11:30' },
-    { type:'revenue', amount:35.00,  desc:'Coupe femme',          cat:'Coiffure Femme',  emp:'Léa Dubois',    method:'card',     date:lastWeek2, time:'09:00' },
-    { type:'revenue', amount:95.00,  desc:'Soin kératine',        cat:'Soins & Beauté',  emp:'Léa Dubois',    method:'transfer', date:lastWeek2, time:'14:30' },
-    { type:'expense', amount:78.50,  desc:'Produits Schwarzkopf', cat:'Charges du salon',emp:'Thomas Girard', method:'transfer', date:lastWeek2, time:'08:00' },
-    { type:'revenue', amount:18.00,  desc:'Coupe simple',         cat:'Coiffure Homme',  emp:'Karim Benali',  method:'cash',     date:yesterday, time:'10:00' },
-    { type:'revenue', amount:75.00,  desc:'Couleur complète',     cat:'Coiffure Femme',  emp:'Sophie Martin', method:'card',     date:yesterday, time:'13:00' },
-    { type:'expense', amount:32.00,  desc:'Café & snacks équipe', cat:'Charges du salon',emp:'Thomas Girard', method:'cash',     date:yesterday, time:'12:00' },
+    { type:'revenue', amount:4000, desc:'Mèches & Balayage',    cat:'Coiffure Femme',  emp:'Sophie Martin', method:'card',     date:lastWeek1, time:'10:00' },
+    { type:'revenue', amount:700,  desc:'Coupe + Barbe',        cat:'Coiffure Homme',  emp:'Karim Benali',  method:'cash',     date:lastWeek1, time:'11:30' },
+    { type:'revenue', amount:1500, desc:'Coupe femme',          cat:'Coiffure Femme',  emp:'Léa Dubois',    method:'card',     date:lastWeek2, time:'09:00' },
+    { type:'revenue', amount:4500, desc:'Soin kératine',        cat:'Soins & Beauté',  emp:'Léa Dubois',    method:'transfer', date:lastWeek2, time:'14:30' },
+    { type:'expense', amount:3500, desc:'Produits Schwarzkopf', cat:'Charges du salon',emp:'Thomas Girard', method:'transfer', date:lastWeek2, time:'08:00' },
+    { type:'revenue', amount:500,  desc:'Coupe simple',         cat:'Coiffure Homme',  emp:'Karim Benali',  method:'cash',     date:yesterday, time:'10:00' },
+    { type:'revenue', amount:3500, desc:'Couleur complète',     cat:'Coiffure Femme',  emp:'Sophie Martin', method:'card',     date:yesterday, time:'13:00' },
+    { type:'expense', amount:1000, desc:'Café & snacks équipe', cat:'Charges du salon',emp:'Thomas Girard', method:'cash',     date:yesterday, time:'12:00' },
   ];
 
   for (const tx of txPast) {
@@ -302,7 +302,7 @@ async function seed() {
        cats[tx.cat], emps[tx.emp],
        tx.method, tx.date, tx.time]
     );
-    console.log(`   📆  TX (${tx.date}) : ${tx.desc} — ${tx.amount}€`);
+    console.log(`   📆  TX (${tx.date}) : ${tx.desc} — ${tx.amount} DA`);
   }
 
   // ── 11. NOTIFICATION SETTINGS ─────────────────────────────────────────────
@@ -340,11 +340,11 @@ async function seed() {
   console.log(`       👤  ${empData.length} employés`);
   console.log(`       📁  ${catData.length} catégories + ${serviceItems.length} services`);
   console.log(`       📅  ${rdvData.length} rendez-vous`);
-  console.log(`       💰  ${txToday.length} tx aujourd'hui  → CA: ${totToday}€`);
-  console.log(`       📆  ${txPast.length} tx semaine passée → CA: ${totWeek}€`);
+  console.log(`       💰  ${txToday.length} tx aujourd'hui  → CA: ${totToday} DA`);
+  console.log(`       📆  ${txPast.length} tx semaine passée → CA: ${totWeek} DA`);
   console.log(`       👥  ${clientData.length} clients`);
   console.log('');
-  console.log('  🌐  BOOKING PUBLIC : /booking/salon-elite-coiffure');
+  console.log('  🌐  BOOKING PUBLIC : /booking/barber-shop-el-bahdja-alger-16000');
   console.log('═'.repeat(58) + '\n');
 
   await pool.end();

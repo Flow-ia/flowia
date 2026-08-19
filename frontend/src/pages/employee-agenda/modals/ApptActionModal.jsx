@@ -10,6 +10,9 @@ import Spin from '../components/Spin';
 import Toggle from '../components/Toggle';
 import InfoRow from '../components/InfoRow';
 
+// Affichage marche DZ : "1 500" (espace milliers, pas de decimales terminales).
+const fmtDA = (n) => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
 export default function ApptActionModal({ appt: initAppt, employee, services, onUpdated, onClose, onTxCreated, theme: t }) {
   const [appt, setAppt]     = useState(initAppt);
   const [tab, setTab]       = useState('detail');
@@ -136,7 +139,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       // upd.refund = { ok, refunded?, error? }).
       if (upd?.refund) {
         if (upd.refund.refunded) {
-          showToast(`RDV annule. Remboursement de ${paidAmount.toFixed(2)} € envoye au client.`, 'ok');
+          showToast(`RDV annule. Remboursement de ${fmtDA(paidAmount)} DA envoye au client.`, 'ok');
         } else if (upd.refund.ok === false) {
           showToast(`RDV annule mais le remboursement a echoue : ${upd.refund.error || 'erreur Stripe'}. Le support va le traiter.`, 'error');
         }
@@ -208,7 +211,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
       onConfirm={performCancel}
       title="Annuler ce rendez-vous ?"
       message={wasPaidOnline
-        ? `Le client a payé ${paidAmount.toFixed(2)} € en ligne — un remboursement automatique de ce montant sera émis. Cette action est définitive.`
+        ? `Le client a payé ${fmtDA(paidAmount)} DA en ligne — un remboursement automatique de ce montant sera émis. Cette action est définitive.`
         : "Cette action est définitive."}
       danger
       theme={t}/>
@@ -344,7 +347,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                     </div>
                     {(it.unit_price || 0) > 0 && (
                       <span style={{ fontSize:13, fontWeight:500, color:'#065f46' }}>
-                        {(parseFloat(it.unit_price) * (it.qty||1)).toFixed(2)} €
+                        {fmtDA(parseFloat(it.unit_price) * (it.qty||1))} DA
                       </span>
                     )}
                   </div>
@@ -367,8 +370,8 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                   }}>
                     {parseFloat(appt.total_amount || 0) > 0
-                      ? parseFloat(appt.total_amount).toFixed(2)
-                      : appt.items.reduce((s,it)=>s+parseFloat(it.unit_price||0)*(it.qty||1),0).toFixed(2)} €
+                      ? fmtDA(parseFloat(appt.total_amount))
+                      : fmtDA(appt.items.reduce((s,it)=>s+parseFloat(it.unit_price||0)*(it.qty||1),0))} DA
                   </p>
                 </div>
                 {appt.discount_amount > 0 && (
@@ -404,7 +407,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                       background: '#fef2f2',
                       padding: '3px 10px',
                       borderRadius: 8,
-                    }}>-{parseFloat(appt.discount_amount).toFixed(2)} €</span>
+                    }}>-{fmtDA(parseFloat(appt.discount_amount))} DA</span>
                   </div>
                 )}
               </>
@@ -412,7 +415,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
               <InfoRow
                 icon={null}
                 label="Service"
-                value={`${appt.service_name||'-'} · ${appt.total_duration||appt.duration_minutes}min${basePrice>0?' · '+basePrice.toFixed(2)+' €':''}`}
+                value={`${appt.service_name||'-'} · ${appt.total_duration||appt.duration_minutes}min${basePrice>0?' · '+fmtDA(basePrice)+' DA':''}`}
                 t={t}
                 border
               />
@@ -528,7 +531,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                   : null;
             const cancelDateLabel = fmtDateTime(appt.cancelled_at) || fmtDateTime(appt.updated_at);
             const cents = Number(appt.paid_amount_cents || 0);
-            const eur = (cents / 100).toFixed(2).replace('.', ',');
+            const eur = fmtDA(cents / 100);
             const wasRefunded = appt.payment_status === 'refunded';
             const wasPaidNotRefunded = appt.payment_status === 'paid' && cents > 0;
 
@@ -554,13 +557,13 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                 {/* Ligne 2 : statut refund / acompte conserve */}
                 {wasRefunded && cents > 0 && (
                   <p style={{ margin:0, fontSize:13, color:'#065f46', fontWeight:500 }}>
-                    Remboursement intégral de {eur} € effectué
+                    Remboursement intégral de {eur} DA effectué
                     {cancelDateLabel && <> le {cancelDateLabel}</>}
                   </p>
                 )}
                 {wasPaidNotRefunded && (
                   <p style={{ margin:0, fontSize:13, color:'#92400e', fontWeight:500 }}>
-                    Acompte de {eur} € conservé par le salon (politique no-show)
+                    Acompte de {eur} DA conservé par le salon (politique no-show)
                   </p>
                 )}
                 {!wasRefunded && !wasPaidNotRefunded && (
@@ -586,7 +589,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
           {appt.status !== 'cancelled' && appt.paid && (() => {
             const isOnline = appt.payment_status === 'paid' && !!appt.stripe_payment_intent_id;
             const cents = Number(appt.paid_amount_cents || 0);
-            const eur = cents > 0 ? (cents / 100).toFixed(2) : null;
+            const eur = cents > 0 ? fmtDA(cents / 100) : null;
             const methodLabel = appt.paid_method
               ? (PAY_OPTIONS.find(p => p.id === appt.paid_method)?.label || appt.paid_method)
               : null;
@@ -603,10 +606,10 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                   </p>
                   <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
                     {isOnline
-                      ? `Stripe${eur ? ` · ${eur} €` : ''}`
+                      ? `Stripe${eur ? ` · ${eur} DA` : ''}`
                       : methodLabel
-                        ? `${methodLabel}${eur ? ` · ${eur} €` : ''} · Source : RDV`
-                        : `Source : RDV${eur ? ` · ${eur} €` : ''}`}
+                        ? `${methodLabel}${eur ? ` · ${eur} DA` : ''} · Source : RDV`
+                        : `Source : RDV${eur ? ` · ${eur} DA` : ''}`}
                   </p>
                 </div>
               </div>
@@ -624,10 +627,10 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             }}>
               <div>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#1e3a8a' }}>
-                  {`Acompte payé · ${(Number(appt.paid_amount_cents) / 100).toFixed(2)} €`}
+                  {`Acompte payé · ${fmtDA(Number(appt.paid_amount_cents) / 100)} DA`}
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: 11, color: t.muted }}>
-                  {`Reste à encaisser : ${Math.max(0, Number(appt.total_amount || 0) - Number(appt.paid_amount_cents)/100).toFixed(2)} € · Stripe`}
+                  {`Reste à encaisser : ${fmtDA(Math.max(0, Number(appt.total_amount || 0) - Number(appt.paid_amount_cents)/100))} DA · Stripe`}
                 </p>
               </div>
             </div>
@@ -703,7 +706,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
               <Label>Telephone</Label>
-              <input value={editForm.client_phone} onChange={e=>setE('client_phone',e.target.value)} placeholder="06…" style={inputStyle} />
+              <input value={editForm.client_phone} onChange={e=>setE('client_phone',e.target.value)} placeholder="05…" style={inputStyle} />
             </div>
             <div>
               <Label>Email</Label>
@@ -756,7 +759,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                 Remboursement automatique
               </p>
               <p style={{ margin:0, fontSize:12, color:'#92400e', lineHeight:1.55 }}>
-                Le client a payé <strong style={{ fontWeight:500 }}>{paidAmount.toFixed(2)} €</strong> en
+                Le client a payé <strong style={{ fontWeight:500 }}>{fmtDA(paidAmount)} DA</strong> en
                 ligne. Comme l&apos;annulation vient du salon, un remboursement
                 intégral sera émis automatiquement vers la carte du client
                 depuis votre compte Stripe.
@@ -849,7 +852,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                     </div>
                     {(it.unit_price || 0) > 0 && (
                       <span style={{ fontSize:13, fontWeight:500, color:'#065f46' }}>
-                        {(parseFloat(it.unit_price) * (it.qty||1)).toFixed(2)} €
+                        {fmtDA(parseFloat(it.unit_price) * (it.qty||1))} DA
                       </span>
                     )}
                   </div>
@@ -869,7 +872,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                     fontWeight: 500,
                     color: '#065f46',
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  }}>{basePrice.toFixed(2)} €</span>
+                  }}>{fmtDA(basePrice)} DA</span>
                 </div>
               </>
             ) : (
@@ -899,7 +902,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                     fontFamily: 'inherit',
                   }}
                 >
-                  Reset {basePrice.toFixed(2)} €
+                  Reset {fmtDA(basePrice)} DA
                 </button>
               )}
             </div>
@@ -910,7 +913,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                 min="0"
                 value={checkAmt}
                 onChange={e=>setCheckAmt(e.target.value)}
-                placeholder="0.00"
+                placeholder="0"
                 style={{
                   width: '100%',
                   padding: '20px 48px 20px 20px',
@@ -935,11 +938,11 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                 fontWeight: 500,
                 color: 'rgba(16,185,129,0.5)',
                 pointerEvents: 'none',
-              }}>€</span>
+              }}>DA</span>
             </div>
             {checkAmt !== '' && basePrice > 0 && parseFloat(checkAmt) !== basePrice && (
               <p style={{ margin:'6px 0 0', fontSize:11, textAlign:'center', color:'#92400e' }}>
-                Montant modifié — base : {basePrice.toFixed(2)} € · ce nouveau montant sera utilisé pour la fidélité et l'historique du client.
+                Montant modifié — base : {fmtDA(basePrice)} DA · ce nouveau montant sera utilisé pour la fidélité et l'historique du client.
               </p>
             )}
           </div>
@@ -1022,12 +1025,12 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                     <input type="number" step="0.01" min="0"
                       value={row.state.amount}
                       onChange={e => row.set(p => ({ ...p, amount: e.target.value }))}
-                      placeholder="0.00"
+                      placeholder="0"
                       style={{ ...inputStyle, paddingRight:28, textAlign:'right',
                         fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}/>
                     <span style={{ position:'absolute', right:10, top:'50%',
                       transform:'translateY(-50%)', fontSize:13, color:t.muted,
-                      pointerEvents:'none' }}>€</span>
+                      pointerEvents:'none' }}>DA</span>
                   </div>
                 </div>
               ))}
@@ -1037,11 +1040,11 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
                 border: `0.5px solid ${splitMatches && splitDistinct ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
                 <span style={{ color: splitMatches ? '#065f46' : '#92400e', fontWeight:500 }}>
                   {!splitDistinct ? 'Choisissez 2 méthodes différentes' :
-                   splitMatches ? 'Total OK' : `Écart : ${(splitTotal - finalAmt).toFixed(2)} €`}
+                   splitMatches ? 'Total OK' : `Écart : ${fmtDA(splitTotal - finalAmt)} DA`}
                 </span>
                 <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                   color: splitMatches ? '#065f46' : '#92400e', fontWeight:500 }}>
-                  {splitTotal.toFixed(2)} / {finalAmt.toFixed(2)} €
+                  {fmtDA(splitTotal)} / {fmtDA(finalAmt)} DA
                 </span>
               </div>
             </div>
@@ -1065,7 +1068,7 @@ export default function ApptActionModal({ appt: initAppt, employee, services, on
             disabled={!canCheckout}
             style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}
           >
-            {saving ? (<><Spin size={18}/>Encaissement…</>) : `Encaisser${finalAmt > 0 ? ' - ' + finalAmt.toFixed(2) + ' €' : ''}`}
+            {saving ? (<><Spin size={18}/>Encaissement…</>) : `Encaisser${finalAmt > 0 ? ' - ' + fmtDA(finalAmt) + ' DA' : ''}`}
           </Button>
         </div>
       )}

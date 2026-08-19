@@ -317,7 +317,7 @@ function useGoogleMerchantAuth(onSuccess) {
       if (msg === 'ACCOUNT_FROZEN' || msg === 'ACCOUNT_BLOCKED') {
         setStatus('idle');
         setErrorMsg('');
-        const text = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+        const text = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.';
         try { sessionStorage.setItem('ff_account_blocked_msg', text); } catch {}
         try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: text } })); } catch {}
         return;
@@ -414,7 +414,7 @@ export function GoogleOAuthOverlay({ status, errorMsg, onRetry, onClose }) {
   const MESSAGES = {
     loading:   'Validez vos informations dans la fenêtre Google. Ne fermez pas cette page.',
     error:     isAccountBlocked
-      ? 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.'
+      ? 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs Salon DZ pour plus de détails.'
       : (errorMsg || 'Une erreur est survenue. Vérifiez votre connexion et réessayez.'),
     cancelled: 'Vous avez fermé la fenêtre Google avant la fin. Réessayez quand vous êtes prêt.',
     timeout:   'La connexion a pris trop de temps. Vérifiez votre connexion internet et réessayez.',
@@ -566,7 +566,7 @@ export default function AuthFlow({ initialScreen = 'login' }) {
         // Admin commit 7 — gel compte detecte cote backend OAuth Google :
         // declenche l'overlay (meme UI que tous les autres canaux), pas le toast.
         if (code === 'ACCOUNT_FROZEN' || code === 'ACCOUNT_BLOCKED') {
-          const msg = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+          const msg = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.';
           try { sessionStorage.setItem('ff_account_blocked_msg', msg); } catch {}
           try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: msg } })); } catch {}
         } else {
@@ -593,10 +593,10 @@ export default function AuthFlow({ initialScreen = 'login' }) {
       <GoogleOAuthOverlay status={oauthStatus} errorMsg={oauthError} onRetry={() => { resetOauth(); openGoogle(); }} onClose={resetOauth}/>
       <div style={{ width:'100%', maxWidth: screen === 'register' ? 920 : 400 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
-          <img src="/images/logo-app.png" alt="FlowIA"
+          <img src="/images/logo-app.png" alt="Salon DZ"
                style={{ width:56, height:56, borderRadius:12, display:'block',
                         margin:'0 auto 12px', objectFit:'contain' }}/>
-          <h1 style={{ fontSize:26, fontWeight:500, color:t.text, margin:0 }}>FlowIA</h1>
+          <h1 style={{ fontSize:26, fontWeight:500, color:t.text, margin:0 }}>Salon DZ</h1>
           <p style={{ fontSize:13, color:t.muted, margin:'4px 0 0' }}>
             Gerez votre commerce facilement
           </p>
@@ -765,7 +765,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
   const [f, setF] = useState({
     biz:'', businessType:'',
     email:'', pw:'', cpw:'',
-    phone:'', country:'FR',
+    phone:'', country:'DZ',
     streetNumber:'', address:'', city:'', postalCode:'',
     lat:null, lng:null,
   });
@@ -962,7 +962,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
                   <Label>Ville</Label>
                   <input type="text" value={f.city}
                          onChange={e => setF({ ...f, city:e.target.value })}
-                         placeholder="Paris"
+                         placeholder="Alger"
                          style={fieldStyle(t)} {...fieldFocus(t)}/>
                 </div>
               </div>
@@ -1271,7 +1271,7 @@ export function MerchantOnboarding({ user, onComplete }) {
     // est obligatoire (canSubmit exige businessName.trim()).
     businessName: '',
     businessType: '',
-    phone:'', country:'FR',
+    phone:'', country:'DZ',
     streetNumber:'', address:'', city:'', postalCode:'',
     lat:null, lng:null,
   });
@@ -1337,7 +1337,7 @@ export function MerchantOnboarding({ user, onComplete }) {
       <Toast msg={toast?.msg} type={toast?.type}/>
       <div style={{ width:'100%', maxWidth:460 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/images/logo-app.png" alt="FlowIA"
+          <img src="/images/logo-app.png" alt="Salon DZ"
                style={{ width:52, height:52, borderRadius:12, display:'block',
                         margin:'0 auto 10px', objectFit:'contain' }}/>
           <h1 style={{ fontSize:22, fontWeight:500, color:t.text, margin:0 }}>
@@ -1458,7 +1458,7 @@ export function MerchantOnboarding({ user, onComplete }) {
                 <Label>Ville *</Label>
                 <input type="text" value={f.city}
                        onChange={e => setF({ ...f, city:e.target.value })}
-                       placeholder="Paris"
+                       placeholder="Alger"
                        style={fieldStyle(t)} {...fieldFocus(t)}/>
               </div>
             </div>
@@ -1470,7 +1470,7 @@ export function MerchantOnboarding({ user, onComplete }) {
             )}
 
             <Button type="submit" variant="primary" disabled={ld || !canSubmit} fullWidth>
-              {ld ? 'Enregistrement...' : 'Valider et acceder a FlowIA'}
+              {ld ? 'Enregistrement...' : 'Valider et acceder a Salon DZ'}
             </Button>
           </form>
 

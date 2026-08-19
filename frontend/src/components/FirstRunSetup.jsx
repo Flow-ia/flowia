@@ -412,7 +412,7 @@ export function FirstRunSetup({ user, onComplete }) {
             )}
             {step === 5 && (
               <Button type="button" variant="primary" onClick={finish} disabled={saving}>
-                {saving ? '...' : 'Acceder a FlowIA'}
+                {saving ? '...' : 'Acceder a Salon DZ'}
               </Button>
             )}
           </div>
@@ -500,7 +500,7 @@ function ServicesStep({ t, services, setServices }) {
                        style={timeInput(t)}/>
               </div>
               <div>
-                <Label>Prix (EUR)</Label>
+                <Label>Prix (DA)</Label>
                 <input type="text" inputMode="decimal" value={s.price}
                        onChange={e => upd(idx, { price: e.target.value.replace(/[^\d.,]/g, '') })}
                        style={timeInput(t)}/>
@@ -521,7 +521,7 @@ function PaymentsStep({ t, data, loading, busy, onConnect, onRefresh }) {
     <div>
       <p style={{ fontSize: 12, color: t.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
         Par defaut, vous acceptez deja especes, CB locale (terminal) et cheque
-        dans la caisse FlowIA. Pour accepter les paiements en ligne lors des
+        dans la caisse Salon DZ. Pour accepter les paiements en ligne lors des
         reservations, connectez votre compte Stripe.
       </p>
       <div style={{
@@ -535,7 +535,7 @@ function PaymentsStep({ t, data, loading, busy, onConnect, onRefresh }) {
           </p>
           <p style={{ fontSize: 11, color: t.muted, margin: '4px 0 0', lineHeight: 1.5 }}>
             Acompte ou paiement total a la reservation, virement automatique
-            sur votre IBAN, gestion des remboursements depuis FlowIA.
+            sur votre IBAN, gestion des remboursements depuis Salon DZ.
           </p>
         </div>
         <StatusPill
@@ -571,8 +571,8 @@ function CalendarStep({ t, data, loading, busy, onConnect, onRefresh }) {
   return (
     <div>
       <p style={{ fontSize: 12, color: t.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
-        Connectez Google Agenda pour ajouter automatiquement les rendez-vous FlowIA
-        dans votre calendrier. La synchronisation est sortante : FlowIA cree et met
+        Connectez Google Agenda pour ajouter automatiquement les rendez-vous Salon DZ
+        dans votre calendrier. La synchronisation est sortante : Salon DZ cree et met
         a jour les evenements, sans lire vos autres rendez-vous.
       </p>
       <div style={{
@@ -731,7 +731,7 @@ function FinishStep({ t, hours, services, stripeData, calendarData, bookingSlug,
   return (
     <div>
       <p style={{ fontSize: 13, color: t.text, margin: '0 0 16px', lineHeight: 1.6 }}>
-        Votre compte FlowIA est configure. Voici ce qui est pret :
+        Votre compte Salon DZ est configure. Voici ce qui est pret :
       </p>
       <ul style={{
         listStyle: 'none', padding: 0, margin: '0 0 18px',

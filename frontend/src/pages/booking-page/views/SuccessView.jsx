@@ -70,7 +70,7 @@ export function SuccessView({
                   strokeLinecap="round" strokeLinejoin="round" style={{ width: 11, height: 11 }}>
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                {`Paye ${(bookedAppt.paid_amount_cents / 100).toFixed(2)} €`}
+                {`Paye ${(bookedAppt.paid_amount_cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
               </span>
             )}
           </div>
@@ -98,15 +98,15 @@ export function SuccessView({
                 {bookedAppt?.discount_amount > 0 ? (
                   <>
                     <span style={{ textDecoration:'line-through', color:th.dim, marginRight:6 }}>
-                      {`${Number(selSvc.price).toFixed(2)} €`}
+                      {`${Number(selSvc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                     </span>
                     <span style={{ fontWeight:500, color:'#16a34a' }}>
-                      {`${(Number(selSvc.price||0) - Number(bookedAppt.discount_amount||0)).toFixed(2)} €`}
+                      {`${(Number(selSvc.price||0) - Number(bookedAppt.discount_amount||0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                     </span>
                   </>
                 ) : (
                   <span style={{ fontWeight:500, color:th.text }}>
-                    {`${Number(selSvc.price).toFixed(2)} €`}
+                    {`${Number(selSvc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                   </span>
                 )}
               </p>

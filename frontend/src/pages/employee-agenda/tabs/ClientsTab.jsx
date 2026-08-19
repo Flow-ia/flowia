@@ -91,7 +91,7 @@ export default function ClientsTab({ employee, theme: t }) {
     if (!d) return '';
     return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' });
   };
-  const fmtMoney = v => Number(v||0).toFixed(2);
+  const fmtMoney = v => Number(v||0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   const inputStyle = {
     width: '100%',
@@ -296,7 +296,7 @@ export default function ClientsTab({ employee, theme: t }) {
                         </p>
                         <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
                           {appt.employee_name || 'Employe inconnu'}
-                          {appt.total_amount ? ' · ' + fmtMoney(appt.total_amount) + ' €' : ''}
+                          {appt.total_amount ? ' · ' + fmtMoney(appt.total_amount) + ' DA' : ''}
                         </p>
                       </div>
                       <span style={{
@@ -314,7 +314,7 @@ export default function ClientsTab({ employee, theme: t }) {
                         {appt.services && appt.services.filter(s => s.service_name).map((s, j) => (
                           <p key={j} style={{ margin:'3px 0', fontSize:12, color:t.text }}>
                             • {s.service_name}{s.qty > 1 ? ' ×' + s.qty : ''}
-                            {s.unit_price ? ' - ' + fmtMoney(s.unit_price) + ' €' : ''}
+                            {s.unit_price ? ' - ' + fmtMoney(s.unit_price) + ' DA' : ''}
                           </p>
                         ))}
                         {appt.appt_notes && (

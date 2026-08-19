@@ -48,7 +48,7 @@ const PM_CFG = {
   transfer: { label:'Virement', color:'#0e7490', bg:'#ecfeff', Ic:I.Bank       },
   other:    { label:'Autre',    color:'#92400e', bg:'#fffbeb', Ic:I.MoreH      },
 };
-const fmtN = n => Number(n || 0).toFixed(2);
+const fmtN = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 // ── FreePriceModal ──────────────────────────────────────────────────────────
 function FreePriceModal({ catName, isCustom, theme: t, onCancel, onConfirm }) {
@@ -119,7 +119,7 @@ function FreePriceModal({ catName, isCustom, theme: t, onCancel, onConfirm }) {
                      style={{ ...inp, paddingRight:32, fontSize:20, fontWeight:500,
                               fontFamily:'monospace', textAlign:'right', color:'#92400e' }}/>
               <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
-                             fontSize:14, color:'#92400e', pointerEvents:'none' }}>€</span>
+                             fontSize:14, color:'#92400e', pointerEvents:'none' }}>DA</span>
             </div>
           </div>
 
@@ -524,11 +524,11 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
               <div style={{ textAlign:'center' }}>
                 <p style={{ fontSize:26, fontWeight:500, color:t.text,
                             fontFamily:'monospace', margin:0 }}>
-                  {fmtN(finalTotal)} €
+                  {fmtN(finalTotal)} DA
                 </p>
                 {promoData && (
                   <p style={{ fontSize:13, color:'#065f46', margin:'4px 0 0' }}>
-                    dont remise -{fmtN(discount)} €
+                    dont remise -{fmtN(discount)} DA
                   </p>
                 )}
                 <p style={{ fontSize:13, color:t.muted, margin:'4px 0 0' }}>
@@ -551,7 +551,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                   </span>
                   <span style={{ fontSize:15, fontWeight:500, color:t.text,
                                  fontFamily:'monospace' }}>
-                    {fmtN(total)} €
+                    {fmtN(total)} DA
                   </span>
                 </div>
                 {cart.map((item, idx) => {
@@ -594,7 +594,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                                   style={{ fontSize:12, fontWeight:500, color:CART_COLOR,
                                            background:'none', border:'none', cursor:'pointer',
                                            padding:0, fontFamily:'inherit' }}>
-                            {fmtN(item.price)} €
+                            {fmtN(item.price)} DA
                           </button>
                         )}
                       </div>
@@ -710,7 +710,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                                 {cat.is_free_price
                                   ? <span style={{ fontSize:12, fontWeight:500, color:'#92400e' }}>Prix libre</span>
                                   : price > 0 && <span style={{ fontSize:13, fontWeight:500, color:'#065f46',
-                                                                fontFamily:'monospace' }}>{fmtN(price)} €</span>
+                                                                fontFamily:'monospace' }}>{fmtN(price)} DA</span>
                                 }
                               </div>
                               {inCart && (
@@ -744,7 +744,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
 
             <Button variant="primary" disabled={cart.length === 0} fullWidth
                     onClick={() => setStep('employee')}>
-              Continuer · {cart.length > 0 ? `${fmtN(promoData ? finalTotal : total)} €` : 'Selectionner des articles'}
+              Continuer · {cart.length > 0 ? `${fmtN(promoData ? finalTotal : total)} DA` : 'Selectionner des articles'}
             </Button>
 
             {freePriceModal && (() => {
@@ -781,7 +781,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                 {cart.length} article{cart.length > 1 ? 's' : ''}
               </span>
               <span style={{ fontSize:16, fontWeight:500, color:CART_COLOR, fontFamily:'monospace' }}>
-                {fmtN(promoData ? finalTotal : total)} €
+                {fmtN(promoData ? finalTotal : total)} DA
               </span>
             </div>
             <p style={{ fontSize:12, color:t.muted, textAlign:'center', margin:'0 0 14px' }}>
@@ -841,15 +841,15 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
               <div style={{ textAlign:'right' }}>
                 {promoData && (
                   <span style={{ fontSize:11, textDecoration:'line-through', display:'block',
-                                 color:t.muted }}>{fmtN(total)} €</span>
+                                 color:t.muted }}>{fmtN(total)} DA</span>
                 )}
                 <span style={{ fontSize:17, fontWeight:500, fontFamily:'monospace',
                                color: promoData ? '#065f46' : t.text }}>
-                  {fmtN(promoData ? finalTotal : total)} €
+                  {fmtN(promoData ? finalTotal : total)} DA
                 </span>
                 {promoData && (
                   <span style={{ fontSize:11, display:'block', color:'#065f46' }}>
-                    −{fmtN(discount)} €
+                    −{fmtN(discount)} DA
                   </span>
                 )}
               </div>
@@ -928,7 +928,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                                         fontSize:13, fontWeight:500, fontFamily:'monospace',
                                         textAlign:'right', outline:'none' }}/>
                         <span style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
-                                       fontSize:11, color:t.muted, pointerEvents:'none' }}>€</span>
+                                       fontSize:11, color:t.muted, pointerEvents:'none' }}>DA</span>
                       </div>
                     </div>
                   );
@@ -939,11 +939,11 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                               background: paymentsValid ? '#f0fdf4' : '#fef2f2' }}>
                   <span style={{ fontSize:12, fontWeight:500,
                                  color: paymentsValid ? '#065f46' : '#991b1b' }}>
-                    {paymentsValid ? 'Repartition OK' : `Il manque ${fmtN(finalTotal - paymentsSum)} €`}
+                    {paymentsValid ? 'Repartition OK' : `Il manque ${fmtN(finalTotal - paymentsSum)} DA`}
                   </span>
                   <span style={{ fontSize:13, fontWeight:500, fontFamily:'monospace',
                                  color: paymentsValid ? '#065f46' : '#991b1b' }}>
-                    {fmtN(paymentsSum)} / {fmtN(finalTotal)} €
+                    {fmtN(paymentsSum)} / {fmtN(finalTotal)} DA
                   </span>
                 </div>
               </div>
@@ -999,7 +999,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {clientRewards.map((r) => {
                     const expStr = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : null;
-                    const valStr = r.type === 'percent' ? `-${r.value}%` : `-${fmtN(r.value)} €`;
+                    const valStr = r.type === 'percent' ? `-${r.value}%` : `-${fmtN(r.value)} DA`;
                     const selected = selectedRewardId === r.id;
                     const isBday   = r.reward_type === 'birthday';
                     const accent   = isBday ? '#9a3412' : '#3c3489';
@@ -1057,7 +1057,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                     {promoData.source === 'referral' ? 'Parrainage' : 'Remise'} de{' '}
                     {promoData.promo?.type === 'percent'
                       ? `${promoData.promo.value}%`
-                      : `${fmtN(promoData.discount)} €`}
+                      : `${fmtN(promoData.discount)} DA`}
                   </p>
                 )}
                 {promoErr && (
@@ -1132,7 +1132,7 @@ function EncaisserSheet({ open, onClose, employees, categories, onAdd, theme: t,
                     onClick={confirm} style={{ marginBottom:8 }}>
               {busy ? 'Enregistrement...'
                    : !paymentsValid ? 'Repartition incomplete'
-                   : `Valider · ${fmtN(finalTotal)} €`}
+                   : `Valider · ${fmtN(finalTotal)} DA`}
             </Button>
             <button onClick={() => setStep('employee')}
                     style={{ width:'100%', padding:8, fontSize:13, color:t.muted,
@@ -1281,12 +1281,12 @@ function DesktopSidebar({ user, theme: t, toggle, isLight, onLogout, onRequestAd
                     padding:'4px 6px 14px',
                     borderBottom:`0.5px solid ${t.separator}`,
                     marginBottom:4 }}>
-        <img src="/images/logo-app.png" alt="FlowIA"
+        <img src="/images/logo-app.png" alt="Salon DZ"
              style={{ width:34, height:34, borderRadius:8, flexShrink:0, objectFit:'contain' }}/>
         <div style={{ minWidth:0, flex:1 }}>
           <p style={{ fontWeight:500, fontSize:13, color:t.text, margin:0, lineHeight:1.2,
                       overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {user?.businessName || 'FlowIA'}
+            {user?.businessName || 'Salon DZ'}
           </p>
           {isAdminMode ? (
             <span style={{ display:'inline-block', marginTop:3,
@@ -1557,9 +1557,9 @@ function TopBar({ onHome, onLogout, theme: t, toggle, isLight }) {
                   backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)',
                   borderBottom:`0.5px solid ${t.separator}` }}>
       <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-        <img src="/images/logo-app.png" alt="FlowIA"
+        <img src="/images/logo-app.png" alt="Salon DZ"
              style={{ width:28, height:28, borderRadius:8, flexShrink:0, objectFit:'contain' }}/>
-        <span style={{ fontWeight:500, fontSize:14, color:t.text }}>FlowIA</span>
+        <span style={{ fontWeight:500, fontSize:14, color:t.text }}>Salon DZ</span>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
         {/* Cloche notifications globale : visible sur toutes les pages mobiles
@@ -1637,7 +1637,7 @@ function Splash({ text = 'Chargement...', theme }) {
         </svg>
       </div>
       <div style={{ textAlign:'center' }}>
-        <p style={{ fontSize:17, fontWeight:500, color:t?.text || '#111827', margin:0 }}>FlowIA</p>
+        <p style={{ fontSize:17, fontWeight:500, color:t?.text || '#111827', margin:0 }}>Salon DZ</p>
         <p style={{ fontSize:13, color:t?.muted || '#6B7280', margin:'4px 0 0' }}>{text}</p>
       </div>
       <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24"

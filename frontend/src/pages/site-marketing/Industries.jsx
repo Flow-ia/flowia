@@ -107,13 +107,13 @@ export default function Industries() {
     <>
       <Seo
         path="/pour-qui"
-        title="FlowIA pour coiffeurs, barbiers, esthétique & spa"
-        description="Coiffeurs, barbershops, manucure, esthétique, spa : FlowIA s'adapte à votre métier. Plus de 500 salons l'utilisent au quotidien."
+        title="Salon DZ pour coiffeurs, barbiers, esthétique & spa"
+        description="Coiffeurs, barbershops, manucure, esthétique, spa : Salon DZ s'adapte à votre métier. Plus de 500 salons l'utilisent au quotidien."
       />
       <PageHero
         label="Pour qui"
-        title="FlowIA s'adapte à votre métier"
-        subtitle="Coiffeurs, barbiers, manucures, esthéticien·ne·s, spas… plus de 500 salons utilisent FlowIA chaque jour."
+        title="Salon DZ s'adapte à votre métier"
+        subtitle="Coiffeurs, barbiers, manucures, esthéticien·ne·s, spas… plus de 500 salons utilisent Salon DZ chaque jour."
       />
 
       <section style={{ padding: '56px 24px 80px' }}>
@@ -141,7 +141,7 @@ export default function Industries() {
             Votre métier n'est pas dans la liste ?
           </h2>
           <p style={{ fontSize: 15, color: S.fgMuted, margin: 0, marginBottom: 24, lineHeight: 1.6 }}>
-            FlowIA est utilisé par toutes sortes de prestataires sur RDV. Tatoueurs, ostéopathes, photographes, coachs… contactez-nous pour qu'on étudie votre cas.
+            Salon DZ est utilisé par toutes sortes de prestataires sur RDV. Tatoueurs, ostéopathes, photographes, coachs… contactez-nous pour qu'on étudie votre cas.
           </p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <PrimaryBtn href={COMMERCANT_URL + '/register'}>Essayer gratuitement</PrimaryBtn>

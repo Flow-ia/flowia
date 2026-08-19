@@ -200,7 +200,7 @@ export default function SvcFormModal({ open, onClose, onSubmit, init, parentId, 
                      min={5} step={5} style={inp}/>
             </div>
             <div>
-              <Label>Prix (€)</Label>
+              <Label>Prix (DA)</Label>
               {freePrice
                 ? <div style={{ ...inp, display:'flex', alignItems:'center', justifyContent:'center',
                                 opacity:0.5 }}>Prix libre</div>

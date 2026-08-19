@@ -171,7 +171,7 @@ module.exports = function attachPaymentRoutes(router) {
       // Sinon Stripe rejette le PaymentIntent.
       if (amountCents < 50) {
         return res.status(400).json({
-          error: 'Montant trop faible pour un paiement en ligne (< 0,50 €).',
+          error: 'Montant trop faible pour un paiement en ligne.',
         });
       }
 
@@ -263,7 +263,7 @@ module.exports = function attachPaymentRoutes(router) {
         if (clientName && clientImmatricule) return `${clientName} (${clientImmatricule})`;
         if (clientName) return clientName;
         if (clientImmatricule) return clientImmatricule;
-        return clientEmail || 'Client FlowIA';
+        return clientEmail || 'Client Salon DZ';
       })();
       const connectedCustomerId = await ensureMerchantConnectedCustomer(pool, {
         merchantUserId:  m.user_id,

@@ -213,12 +213,12 @@ export default function TabLoyalty({ theme }) {
 
             {(program.loyalty_mode || 'stamps') === 'points' && (
               <div>
-                <Label>Points gagnes par euro depense</Label>
+                <Label>Points gagnes par dinar depense</Label>
                 <input type="number" min="0.01" step="0.1" value={program.points_per_euro || 1}
                        onChange={e => setProgram(p => ({ ...p, points_per_euro: parseFloat(e.target.value) || 1 }))}
                        style={inp}/>
                 <p style={{ fontSize:11, color:t.muted, margin:'4px 0 0' }}>
-                  Ex : 1 point = 1 € depense → seuil {program.stamps_required || 100} points
+                  Ex : 1 point = 1 DA depense → seuil {program.stamps_required || 100} points
                 </p>
               </div>
             )}
@@ -241,12 +241,12 @@ export default function TabLoyalty({ theme }) {
                                 onChange={v => setProgram(p => ({ ...p, reward_type:v }))}
                                 options={[
                                   { value:'percent', label:'% Reduction'   },
-                                  { value:'fixed',   label:'€ Montant fixe' },
+                                  { value:'fixed',   label:'DA Montant fixe' },
                                 ]}/>
             </div>
 
             <div>
-              <Label>Valeur de la recompense ({program.reward_type === 'percent' ? '%' : '€'})</Label>
+              <Label>Valeur de la recompense ({program.reward_type === 'percent' ? '%' : 'DA'})</Label>
               <div style={{ position:'relative' }}>
                 <input type="number" min="1" max={program.reward_type === 'percent' ? 100 : 9999} step="0.5"
                        value={program.reward_value || 10}
@@ -254,7 +254,7 @@ export default function TabLoyalty({ theme }) {
                        style={{ ...inp, paddingRight:34 }}/>
                 <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
                                fontWeight:500, color:t.muted, fontSize:14 }}>
-                  {program.reward_type === 'percent' ? '%' : '€'}
+                  {program.reward_type === 'percent' ? '%' : 'DA'}
                 </span>
               </div>
             </div>
@@ -297,7 +297,7 @@ export default function TabLoyalty({ theme }) {
 
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               <div>
-                <Label>Achat minimum (€)</Label>
+                <Label>Achat minimum (DA)</Label>
                 <input type="number" min="0" step="0.5" value={program.min_purchase || 0}
                        onChange={e => setProgram(p => ({ ...p, min_purchase: parseFloat(e.target.value) || 0 }))}
                        style={inp}/>
@@ -312,7 +312,7 @@ export default function TabLoyalty({ theme }) {
 
             <div style={{ background:'#fffbeb', borderRadius:8, padding:'10px 14px' }}>
               <p style={{ fontSize:12, color:'#92400e', margin:0, fontWeight:500 }}>
-                {program.stamps_required} {(program.loyalty_mode || 'stamps') === 'points' ? 'points' : 'passages'} → {program.reward_type === 'percent' ? `${program.reward_value || 10}%` : `${Number(program.reward_value || 10).toFixed(2)} €`} · valide {program.validity_days || 90}j{(program.min_purchase || 0) > 0 ? ` · min ${program.min_purchase}€` : ''}
+                {program.stamps_required} {(program.loyalty_mode || 'stamps') === 'points' ? 'points' : 'passages'} → {program.reward_type === 'percent' ? `${program.reward_value || 10}%` : `${Number(program.reward_value || 10).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`} · valide {program.validity_days || 90}j{(program.min_purchase || 0) > 0 ? ` · min ${program.min_purchase} DA` : ''}
               </p>
             </div>
 
@@ -365,7 +365,7 @@ export default function TabLoyalty({ theme }) {
               <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8, marginBottom:14 }}>
                 {[
                   { l:'Codes generes',     v: codesGeneres,                 c:'#92400e', bg:'#fffbeb' },
-                  { l:'Remises utilisees', v: `${mtUtilise.toFixed(2)} €`,  c:'#991b1b', bg:'#fef2f2' },
+                  { l:'Remises utilisees', v: `${mtUtilise.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`,  c:'#991b1b', bg:'#fef2f2' },
                   { l:'Codes utilises',    v: codesUtilises,                c:'#065f46', bg:'#f0fdf4' },
                   { l:'Codes restants',    v: codesRestants,                c:t.text,    bg:t.cardAlt },
                 ].map(({ l, v, c, bg }) => (
@@ -397,7 +397,7 @@ export default function TabLoyalty({ theme }) {
                     </div>
                     <span style={{ fontSize:13, fontWeight:500, color:'#065f46',
                                    fontFamily:'monospace' }}>
-                      {Number(cl.ca_total).toFixed(2)} €
+                      {Number(cl.ca_total).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                     </span>
                   </div>
                 ))}
@@ -529,7 +529,7 @@ export default function TabLoyalty({ theme }) {
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
               <div>
                 <Label>Email client *</Label>
-                <input type="email" placeholder="client@email.fr"
+                <input type="email" placeholder="client@email.com"
                        value={stampEmail} onChange={e => setStampEmail(e.target.value)} style={inp}/>
               </div>
               <div>
@@ -697,11 +697,11 @@ export default function TabLoyalty({ theme }) {
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0 }}>
                       <p style={{ margin:0, fontWeight:500, fontSize:15, color:t.text }}>
-                        {row.type === 'percent' ? `-${row.value}%` : `-${Number(row.value || 0).toFixed(2)} €`}
+                        {row.type === 'percent' ? `-${row.value}%` : `-${Number(row.value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                       </p>
                       {row.min_purchase > 0 && (
                         <p style={{ margin:'2px 0 0', fontSize:10, color:t.muted }}>
-                          Min. {Number(row.min_purchase).toFixed(2)} €
+                          Min. {Number(row.min_purchase).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                         </p>
                       )}
                     </div>
@@ -727,7 +727,7 @@ export default function TabLoyalty({ theme }) {
                     {row.discount_applied && (
                       <span style={{ color:'#065f46', fontWeight:500 }}>
                         Remise : <strong style={{ fontWeight:500 }}>
-                          -{Number(row.discount_applied).toFixed(2)} €
+                          -{Number(row.discount_applied).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                         </strong>
                       </span>
                     )}

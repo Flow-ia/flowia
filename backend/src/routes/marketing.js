@@ -159,7 +159,7 @@ router.post('/plan/launch', async (req, res) => {
     const balance = parseFloat(balRows[0]?.sms_balance || 0);
     if (balance < totalCost) {
       return res.status(400).json({
-        error: `Solde SMS insuffisant. Cout: ${totalCost.toFixed(2)}€, solde: ${balance.toFixed(2)}€.`,
+        error: `Solde SMS insuffisant. Cout: ${totalCost.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA, solde: ${balance.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA.`,
       });
     }
 

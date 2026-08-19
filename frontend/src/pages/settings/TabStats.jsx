@@ -200,7 +200,7 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
                         background:'#eef2ff' }}>
             <p style={{ fontSize:11, color:'#4338ca', margin:'0 0 6px' }}>CA via RDV</p>
             <p style={{ fontSize:19, fontWeight:500, color:'#4338ca', margin:0 }}>
-              {fmt(caRdvTot)} <span style={{ fontSize:13, opacity:0.5 }}>€</span>
+              {fmt(caRdvTot)} <span style={{ fontSize:13, opacity:0.5 }}>DA</span>
             </p>
             <p style={{ fontSize:10, color:'#4338ca', margin:'4px 0 0', opacity:0.75 }}>
               {rdvRevs.length} RDV · {totR > 0 ? ((caRdvTot / totR) * 100).toFixed(1) : '0.0'}% du CA
@@ -214,7 +214,7 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
               Solde net (CA − Depenses)
             </p>
             <p style={{ fontSize:22, fontWeight:500, color: solde >= 0 ? t.text : '#991b1b', margin:0 }}>
-              {solde >= 0 ? '+' : ''}{fmt(solde)} <span style={{ fontSize:13, opacity:0.5 }}>€</span>
+              {solde >= 0 ? '+' : ''}{fmt(solde)} <span style={{ fontSize:13, opacity:0.5 }}>DA</span>
             </p>
           </div>
         </div>
@@ -231,7 +231,7 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
                              padding:'3px 10px', borderRadius:99, fontSize:11, fontWeight:500,
                              background:'#eef2ff', color:'#4338ca' }}>
                 <I.Calendar style={{ width:10, height:10 }}/>
-                RDV : {fmt(caRdvTot)} €
+                RDV : {fmt(caRdvTot)} DA
               </span>
             )}
           </div>
@@ -257,10 +257,10 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
                       </div>
                     </div>
                     <div style={{ textAlign:'right' }}>
-                      <p style={{ fontSize:13, fontWeight:500, color:p.color, margin:0 }}>{fmt(total)} €</p>
+                      <p style={{ fontSize:13, fontWeight:500, color:p.color, margin:0 }}>{fmt(total)} DA</p>
                       {rdvCnt > 0 && (
                         <p style={{ fontSize:10, color:t.muted, margin:0 }}>
-                          dont {fmt(rdvTotal)} € RDV
+                          dont {fmt(rdvTotal)} DA RDV
                         </p>
                       )}
                     </div>
@@ -308,7 +308,7 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
                       {emp.rdvCnt > 0 && ` · ${emp.rdvCnt} RDV`}
                     </p>
                   </div>
-                  <span style={{ fontSize:13, fontWeight:500, color:t.text }}>{fmt(emp.tot)} €</span>
+                  <span style={{ fontSize:13, fontWeight:500, color:t.text }}>{fmt(emp.tot)} DA</span>
                 </div>
                 <div style={{ width:'100%', maxWidth:'calc(100% - 44px)', marginLeft:44,
                               borderRadius:99, height:6, overflow:'hidden',
@@ -350,7 +350,7 @@ function TabStatsCaisse({ transactions, employees, categories, theme }) {
                       {cat.name}
                     </p>
                     <p style={{ fontSize:10, color:t.muted, margin:0 }}>
-                      {fmt(cat.unit || 0)} €{cat.count > 1 ? ` · ${fmt(cat.total)} € total` : ''}
+                      {fmt(cat.unit || 0)} DA{cat.count > 1 ? ` · ${fmt(cat.total)} DA total` : ''}
                     </p>
                   </div>
                   <span style={{ fontSize:13, fontWeight:500, color:'#065f46' }}>
@@ -400,7 +400,7 @@ function EmpModal({ emp, cats, onClose, theme }) {
           <div>
             <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0 }}>{emp.name}</p>
             <p style={{ fontSize:12, color:t.muted, margin:0 }}>
-              {emp.allTx.length} transactions · CA {fmt(totRev)} €
+              {emp.allTx.length} transactions · CA {fmt(totRev)} DA
             </p>
           </div>
         </div>
@@ -419,7 +419,7 @@ function EmpModal({ emp, cats, onClose, theme }) {
               </div>
             </div>
             <p style={{ fontSize:17, fontWeight:500, color:'#4338ca', margin:0 }}>
-              {fmt(emp.caRdv)} €
+              {fmt(emp.caRdv)} DA
             </p>
           </div>
         )}
@@ -446,10 +446,10 @@ function EmpModal({ emp, cats, onClose, theme }) {
                   <PmIc style={{ width:13, height:13, color:p.color, flexShrink:0 }}/>
                   <p style={{ fontSize:11, fontWeight:500, color:p.color, margin:0 }}>{p.label}</p>
                 </div>
-                <p style={{ fontSize:13, fontWeight:500, color:p.color, margin:0 }}>{fmt(val)} €</p>
+                <p style={{ fontSize:13, fontWeight:500, color:p.color, margin:0 }}>{fmt(val)} DA</p>
                 {rdvVal > 0 && (
                   <p style={{ fontSize:10, color:'#4338ca', margin:'3px 0 0' }}>
-                    dont {fmt(rdvVal)} € RDV
+                    dont {fmt(rdvVal)} DA RDV
                   </p>
                 )}
               </div>
@@ -506,7 +506,7 @@ function EmpModal({ emp, cats, onClose, theme }) {
                 </div>
                 <span style={{ fontSize:13, fontWeight:500, flexShrink:0,
                                color: isRev ? '#065f46' : '#991b1b' }}>
-                  {isRev ? '+' : '-'}{fmt(tx.amount)} €
+                  {isRev ? '+' : '-'}{fmt(tx.amount)} DA
                 </span>
               </div>
             );
@@ -556,7 +556,7 @@ function TabProductStats({ employees, theme }) {
       .catch(e => { setErr(e.message || 'Erreur'); setLoad(false); });
   }, [period, empId]);
 
-  const fmtN = n => Number(n || 0).toFixed(2);
+  const fmtN = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -601,7 +601,7 @@ function TabProductStats({ employees, theme }) {
         <>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
             {[
-              { label:'CA total',     value: fmtN(data.totals?.total_revenue) + ' €', color:t.text,    bg:t.cardAlt },
+              { label:'CA total',     value: fmtN(data.totals?.total_revenue) + ' DA', color:t.text,    bg:t.cardAlt },
               { label:'Transactions', value: data.totals?.total_tx || 0,               color:'#4338ca', bg:'#eef2ff' },
               { label:'Qte vendue',   value: data.totals?.total_qty || 0,              color:'#065f46', bg:'#f0fdf4' },
             ].map(({ label, value, color, bg }) => (
@@ -649,7 +649,7 @@ function TabProductStats({ employees, theme }) {
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0 }}>
                       <p style={{ fontSize:13, fontWeight:500, color:t.text, margin:0 }}>
-                        {fmtN(s.revenue)} €
+                        {fmtN(s.revenue)} DA
                       </p>
                       <p style={{ fontSize:10, color:t.muted, margin:0 }}>
                         {s.qty_sold || 0} vente{(s.qty_sold || 0) > 1 ? 's' : ''}
@@ -679,7 +679,7 @@ function TabProductStats({ employees, theme }) {
                     {c.category_name}
                   </p>
                   <p style={{ fontSize:13, fontWeight:500, color:t.muted, margin:0 }}>
-                    {fmtN(c.revenue)} €
+                    {fmtN(c.revenue)} DA
                   </p>
                 </div>
               ))}

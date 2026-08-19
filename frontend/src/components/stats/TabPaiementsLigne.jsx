@@ -117,7 +117,7 @@ export default function TabPaiementsLigne({ period }) {
           <BreakdownCol label="Frais Stripe (1,4% + 25c)"
                         value={formatCentsSign(-Math.abs(summary.stripe_fee_cents || 0))}
                         color="#FFD9A6" />
-          <BreakdownCol label={"Commission FlowIA" + (policy.commission_rate ? " (" + policy.commission_rate + "%)" : "")}
+          <BreakdownCol label={"Commission Salon DZ" + (policy.commission_rate ? " (" + policy.commission_rate + "%)" : "")}
                         value={formatCentsSign(-Math.abs(summary.platform_fee_cents || 0))}
                         color="#FFD9A6" />
           <BreakdownCol label="Net" value={formatCents(netCents)} color="#A6F4D5" />

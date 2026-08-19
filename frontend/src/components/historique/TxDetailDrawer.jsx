@@ -197,8 +197,8 @@ function validateForm(form) {
     }
     // Tolerance 1 centime (arrondis fr-FR).
     if (Math.abs(paymentsSum - total) > 0.01) {
-      return "Somme des paiements (" + paymentsSum.toFixed(2).replace(".", ",")
-        + " €) ≠ total (" + total.toFixed(2).replace(".", ",") + " €).";
+      return "Somme des paiements (" + Number(paymentsSum || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+        + " DA) ≠ total (" + Number(total || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA).";
     }
   } else {
     if (!form.payments[0] || !METHOD_META[form.payments[0].method]) {
@@ -222,9 +222,9 @@ function validateForm(form) {
       itemsSum += q * u;
     }
     if (Math.abs(itemsSum - total) > 0.01) {
-      return "Somme des prestations (" + itemsSum.toFixed(2).replace(".", ",")
-        + " €) ≠ total (" + total.toFixed(2).replace(".", ",")
-        + " €) — utilisez le bouton « Synchroniser ».";
+      return "Somme des prestations (" + Number(itemsSum || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+        + " DA) ≠ total (" + Number(total || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+        + " DA) — utilisez le bouton « Synchroniser ».";
     }
   }
   return null;
@@ -1060,7 +1060,7 @@ function FeesView({ grossCents, stripeFee, platformFee, netCents, colors }) {
         <FeeLine label="Frais Stripe"     value={"−" + formatCents(stripeFee)}   colors={colors} muted />
       )}
       {platformFee > 0 && (
-        <FeeLine label="Commission FlowIA" value={"−" + formatCents(platformFee)} colors={colors} muted />
+        <FeeLine label="Commission Salon DZ" value={"−" + formatCents(platformFee)} colors={colors} muted />
       )}
       <div style={{
         marginTop: 4, paddingTop: 8,
@@ -1277,7 +1277,7 @@ function BreakdownEdit({ form, updateForm, toggleMulti, setPayment,
               color: sumOk ? "#1D9E75" : "#BA7517",
               fontFamily: MONO,
             }}>
-              {"Somme : " + sum.toFixed(2).replace(".", ",") + " € / " + total.toFixed(2).replace(".", ",") + " €"}
+              {"Somme : " + Number(sum || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA / " + Number(total || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA"}
               {sumOk ? "  ✓" : ""}
             </div>
           </div>
@@ -1293,7 +1293,7 @@ function BreakdownEdit({ form, updateForm, toggleMulti, setPayment,
         marginTop: 12, paddingTop: 12,
         borderTop: "0.5px solid " + colors.separator,
       }}>
-        <Field label="Montant total (€)" colors={colors}>
+        <Field label="Montant total (DA)" colors={colors}>
           <input type="number" step="0.01" min="0"
                  value={form.total_amount}
                  onChange={e => updateForm({ total_amount: e.target.value })}
@@ -1459,14 +1459,14 @@ function ItemsView({ tx, colors, grossCents }) {
                 color: colors.muted, fontSize: 12, flexShrink: 0,
                 fontFamily: MONO, fontVariantNumeric: "tabular-nums",
               }}>
-                {unit.toFixed(2).replace(".", ",") + " €"}
+                {Number(unit || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA"}
               </span>
               <span style={{
                 color: colors.text, fontWeight: 500, minWidth: 64,
                 textAlign: "right", flexShrink: 0,
                 fontFamily: MONO, fontVariantNumeric: "tabular-nums",
               }}>
-                {lineTotal.toFixed(2).replace(".", ",") + " €"}
+                {Number(lineTotal || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA"}
               </span>
             </div>
           );
@@ -1545,7 +1545,7 @@ function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, color
               <input type="number" min="0" step="0.01"
                      value={it.unit_price}
                      onChange={e => setItem(idx, { unit_price: e.target.value })}
-                     aria-label="Prix unitaire (€)"
+                     aria-label="Prix unitaire (DA)"
                      style={{
                        width: "100%", boxSizing: "border-box",
                        padding: "8px 8px", borderRadius: 6,
@@ -1592,7 +1592,7 @@ function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, color
         }}>
           <span>{"Total prestations"}</span>
           <span style={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums" }}>
-            {itemsSum.toFixed(2).replace(".", ",") + " €"}
+            {Number(itemsSum || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA"}
           </span>
         </div>
       )}
@@ -1606,8 +1606,8 @@ function ItemsEdit({ form, setItem, addItem, removeItem, syncTotalToItems, color
           alignItems: "center", gap: 8, flexWrap: "wrap",
         }}>
           <span>
-            {"Écart de " + Math.abs(diff).toFixed(2).replace(".", ",")
-              + " € entre le total prestations et le montant saisi."}
+            {"Écart de " + Number(Math.abs(diff) || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+              + " DA entre le total prestations et le montant saisi."}
           </span>
           <button type="button" onClick={syncTotalToItems}
                   style={{

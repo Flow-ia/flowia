@@ -6,17 +6,19 @@ import { MS, DL } from "./dates";
 
 const NBSP = " "; // espace insecable avant le symbole monetaire (typo FR)
 
-// Formate un montant en cents vers "1 234,56 €" (espace milliers, virgule
-// decimale, espace insecable avant €). Gere null/undefined/NaN -> "0,00 €".
+// Formate un montant en cents vers "1 234 DA" (espace milliers, pas de
+// decimales terminales — marche DZ ; max 2 decimales si le montant est
+// vraiment fractionnaire, on n'affiche jamais un montant faux).
+// Gere null/undefined/NaN -> "0 DA".
 export function formatCents(cents) {
   const n = Number(cents || 0) / 100;
   return n.toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }) + NBSP + "€";
+  }) + NBSP + "DA";
 }
 
-// Formate avec signe explicite : "+30,00 €" / "−25,00 €" / "0,00 €".
+// Formate avec signe explicite : "+30 DA" / "−25 DA" / "0 DA".
 // Le signe moins est le caractere typographique U+2212 (plus large que -).
 export function formatCentsSign(cents) {
   const n = Number(cents || 0);

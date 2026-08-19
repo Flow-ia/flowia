@@ -84,11 +84,11 @@ export default function TabBirthday({ theme, showToast }) {
                     onChange={e => setCfg(c => ({ ...c, discount_type:e.target.value }))}
                     style={{ ...inp, cursor:'pointer' }}>
               <option value="percent">Pourcentage (%)</option>
-              <option value="fixed">Montant fixe (€)</option>
+              <option value="fixed">Montant fixe (DA)</option>
             </select>
           </div>
           <div>
-            <Label>Valeur {cfg.discount_type === 'percent' ? '(%)' : '(€)'}</Label>
+            <Label>Valeur {cfg.discount_type === 'percent' ? '(%)' : '(DA)'}</Label>
             <input type="number" min="0" step="0.01" value={cfg.discount_value}
                    onChange={e => setCfg(c => ({ ...c, discount_value:e.target.value }))} style={inp}/>
           </div>

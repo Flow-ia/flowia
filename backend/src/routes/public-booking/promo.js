@@ -98,7 +98,7 @@ module.exports = function attachPromoRoutes(router) {
       // Vérifier montant minimum d'achat
       const minPurchase = parseFloat(promo.min_purchase) || 0;
       if (minPurchase > 0 && baseAmt > 0 && baseAmt < minPurchase) {
-        return res.json({ valid: false, error: `Ce code nécessite un minimum d'achat de ${minPurchase.toFixed(2)} €. Montant actuel : ${baseAmt.toFixed(2)} €.` });
+        return res.json({ valid: false, error: `Ce code nécessite un minimum d'achat de ${minPurchase.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA. Montant actuel : ${baseAmt.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA.` });
       }
 
       const discount = promo.type === 'percent'

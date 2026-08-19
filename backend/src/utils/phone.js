@@ -5,7 +5,8 @@
 
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 
-const DEFAULT_COUNTRY = 'FR';
+// Salon DZ : pays par defaut Algerie (mobiles 05/06/07, prefixe +213).
+const DEFAULT_COUNTRY = 'DZ';
 
 /**
  * Valide un téléphone et retourne sa forme E.164.
@@ -13,7 +14,7 @@ const DEFAULT_COUNTRY = 'FR';
  * @param {string|null|undefined} raw           - valeur brute (peut déjà être au format +33..., ou local 06..., ou null)
  * @param {object} [opts]
  * @param {boolean} [opts.required=true]        - si false, raw vide/null retourne { valid:true, e164:null }
- * @param {string}  [opts.defaultCountry='FR']  - pays par défaut si raw n'a pas de préfixe international
+ * @param {string}  [opts.defaultCountry='DZ']  - pays par défaut si raw n'a pas de préfixe international
  * @returns {{ valid:boolean, error: 'PHONE_REQUIRED'|'PHONE_INVALID'|'PHONE_PARSE_ERROR'|null, e164: string|null, raw: string|null }}
  */
 function validatePhone(raw, opts = {}) {

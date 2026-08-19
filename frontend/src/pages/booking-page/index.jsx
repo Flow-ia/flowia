@@ -989,7 +989,7 @@ export default function BookingPage({ slug }) {
                       <span style={{fontWeight:500}}>
                         {referralInfo.discount_type === 'percent'
                           ? `${referralInfo.discount_value}%`
-                          : `${Number(referralInfo.discount_value).toFixed(2)} €`}
+                          : `${Number(referralInfo.discount_value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                       </span>{' '}
                       appliquée selon les conditions du commerçant.
                     </p>

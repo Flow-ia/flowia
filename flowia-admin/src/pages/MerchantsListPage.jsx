@@ -65,7 +65,7 @@ export default function MerchantsListPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <AppShell me={me} footer="FlowIA Admin - Commercants">
+    <AppShell me={me} footer="Salon DZ Admin - Commercants">
       <div className="page-head">
         <h1 className="dash-title">{"Commercants"}</h1>
         <span className="page-count">{data.total} {"resultats"}</span>

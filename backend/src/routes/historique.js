@@ -573,7 +573,7 @@ router.get('/export.pdf', async (req, res) => {
 
     const { rows: biz } = await pool.query(
       'SELECT business_name, email FROM users WHERE id=$1', [userId]);
-    const businessName = biz[0]?.business_name || 'FlowIA';
+    const businessName = biz[0]?.business_name || 'Salon DZ';
     const bizEmail     = biz[0]?.email || '';
     const s            = exportSummary(rows);
 
@@ -590,7 +590,7 @@ router.get('/export.pdf', async (req, res) => {
       info: {
         Title: `Historique transactions ${range.from} au ${range.to}`,
         Author: businessName,
-        Subject: 'Export historique FlowIA',
+        Subject: 'Export historique Salon DZ',
       },
     });
     const filename = `historique_${range.from}_${range.to}.pdf`;
@@ -619,7 +619,7 @@ router.get('/export.pdf', async (req, res) => {
       doc.save();
       doc.rect(0, fy - 8, PAGE_W, MB + 16).fillColor('#f3f4f6').fill();
       doc.fill(GRAY).font('Helvetica').fontSize(7)
-         .text(pdf(`${process.env.APP_NAME || 'FlowIA'}  ·  ${businessName}  ·  ${bizEmail}  ·  Export du ${new Date().toLocaleDateString('fr-FR')}`),
+         .text(pdf(`${process.env.APP_NAME || 'Salon DZ'}  ·  ${businessName}  ·  ${bizEmail}  ·  Export du ${new Date().toLocaleDateString('fr-FR')}`),
                ML, fy, { width: W, align: 'center' });
       doc.restore();
     };

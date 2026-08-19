@@ -150,7 +150,7 @@ export default function CaisseCategories({ categories, transactions, onAdd, onUp
                     </span>
                   </div>
                   <p style={{ fontSize:11, color:t.muted, margin:0 }}>
-                    {catProducts.length} produit{catProducts.length !== 1 ? 's' : ''} · {catCnt} tx · {fmt(catTot)} €
+                    {catProducts.length} produit{catProducts.length !== 1 ? 's' : ''} · {catCnt} tx · {fmt(catTot)} DA
                   </p>
                 </div>
 
@@ -232,13 +232,13 @@ export default function CaisseCategories({ categories, transactions, onAdd, onUp
                             {prod.name}
                           </p>
                           <p style={{ fontSize:11, color:t.muted, margin:0 }}>
-                            {prod.price != null ? `${fmt(prod.price)} €` : 'Prix libre'} · {prodCnt} tx
+                            {prod.price != null ? `${fmt(prod.price)} DA` : 'Prix libre'} · {prodCnt} tx
                           </p>
                         </div>
 
                         <span style={{ fontSize:12, fontWeight:500, color:t.muted,
                                        fontFamily:'monospace', flexShrink:0, marginRight:6 }}>
-                          {fmt(prodTot)} €
+                          {fmt(prodTot)} DA
                         </span>
 
                         <div style={{ display:'flex', gap:4, flexShrink:0 }}>
@@ -308,7 +308,7 @@ export default function CaisseCategories({ categories, transactions, onAdd, onUp
                         {prod.name}
                       </p>
                       <p style={{ fontSize:11, color:t.muted, margin:0 }}>
-                        {transactions.filter(tx => tx.category_id === prod.id).length} tx · {fmt(prodTot)} €
+                        {transactions.filter(tx => tx.category_id === prod.id).length} tx · {fmt(prodTot)} DA
                       </p>
                     </div>
                     <div style={{ display:'flex', gap:4 }}>

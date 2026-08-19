@@ -135,7 +135,7 @@ export default function MaintenancePage() {
   );
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Maintenance">
+    <AppShell me={me} footer="Salon DZ Admin — Maintenance">
       <h1 className="dash-title">{"Maintenance plateforme"}</h1>
 
       {loading && <section className="card"><p className="card-sub">{"Chargement..."}</p></section>}

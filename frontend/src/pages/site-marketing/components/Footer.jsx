@@ -69,8 +69,8 @@ export default function Footer() {
         }}>
           <div style={{ minWidth: 200 }}>
             <MarketingLink to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 14 }}>
-              <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
-              <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>FlowIA</span>
+              <img src="/images/logo-salon-dz-mark.svg" alt="Salon DZ" style={{ width: 28, height: 28 }} />
+              <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>Salon DZ</span>
             </MarketingLink>
             <p style={{ fontSize: 13, color: S.fgMuted, lineHeight: 1.6, margin: 0 }}>
               {"Le logiciel tout-en-un qui simplifie la gestion des salons de beauté et de bien-être."}
@@ -108,10 +108,10 @@ export default function Footer() {
           justifyContent: 'space-between', alignItems: 'center',
         }}>
           <p style={{ fontSize: 12, color: S.fgSubtle, margin: 0 }}>
-            © {year} FlowIA — Tous droits réservés.
+            © {year} Salon DZ — Tous droits réservés.
           </p>
           <p style={{ fontSize: 12, color: S.fgSubtle, margin: 0 }}>
-            {"Conçu en France · Hébergement européen · RGPD"}
+            {"Conçu pour l'Algérie · Données protégées · Loi 18-07"}
           </p>
         </div>
       </div>

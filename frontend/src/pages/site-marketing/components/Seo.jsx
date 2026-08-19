@@ -34,8 +34,8 @@ export default function Seo({
       />
 
       <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="FlowIA" />
-      <meta property="og:locale" content="fr_FR" />
+      <meta property="og:site_name" content="Salon DZ" />
+      <meta property="og:locale" content="fr_DZ" />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />

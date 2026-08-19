@@ -42,7 +42,7 @@ const MONO_STACK = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
 //   - footerNote: petit texte gris centre en bas
 function renderShell({ preheader, kicker, title, intro, sections, footerNote }) {
   const safePreheader = escapeHtml(preheader || '');
-  const safeKicker = escapeHtml(kicker || 'FlowIA');
+  const safeKicker = escapeHtml(kicker || 'Salon DZ');
   const safeTitle = escapeHtml(title || '');
   // intro et sections sont consideres comme HTML pre-construit, l'appelant
   // est responsable d'avoir echappe les valeurs dynamiques.

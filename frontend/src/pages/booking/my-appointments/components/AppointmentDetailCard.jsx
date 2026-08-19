@@ -27,7 +27,7 @@ export function AppointmentDetailCard({ appt: a, th, onBack, onCancel }) {
   if (!a) return null;
   const st = getDisplayStatus(a);
   const cents = Number(a.paid_amount_cents || 0);
-  const eur = (cents / 100).toFixed(2).replace('.', ',');
+  const eur = (cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const isCancelled = a.status === 'cancelled';
   const isRefunded = a.payment_status === 'refunded';
   const isPaidOnline = a.payment_status === 'paid' && cents > 0;
@@ -86,7 +86,7 @@ export function AppointmentDetailCard({ appt: a, th, onBack, onCancel }) {
             <div style={{ textAlign:'right', flexShrink:0 }}>
               <p style={{ fontSize:22, fontWeight:500, color:th.text, margin:0,
                 fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {Number(a.service_price).toFixed(2)} €
+                {Number(a.service_price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
               </p>
             </div>
           )}
@@ -141,13 +141,13 @@ export function AppointmentDetailCard({ appt: a, th, onBack, onCancel }) {
             </p>
             {isRefunded && cents > 0 && (
               <p style={{ margin:0, fontSize:13, color:'#065f46', fontWeight:500 }}>
-                Remboursement intégral de {eur} € effectué
+                Remboursement intégral de {eur} DA effectué
                 {cancelDateLabel && <> le {cancelDateLabel}</>}
               </p>
             )}
             {isPaidOnline && !isRefunded && (
               <p style={{ margin:0, fontSize:13, color:'#92400e', fontWeight:500 }}>
-                Acompte de {eur} € conservé par le salon (politique no-show)
+                Acompte de {eur} DA conservé par le salon (politique no-show)
               </p>
             )}
             {!isRefunded && !isPaidOnline && (
@@ -175,7 +175,7 @@ export function AppointmentDetailCard({ appt: a, th, onBack, onCancel }) {
             </p>
             <p style={{ margin:'2px 0 0', fontSize:11, color:th.muted }}>
               {isPaidOnline ? 'Stripe' : 'Caisse'}
-              {cents > 0 ? ` · ${eur} €` : ''}
+              {cents > 0 ? ` · ${eur} DA` : ''}
               {a.paid_at ? ` · ${fmtDateTimeFR(a.paid_at) || ''}` : ''}
             </p>
           </div>

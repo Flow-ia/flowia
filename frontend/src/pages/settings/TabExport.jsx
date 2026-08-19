@@ -45,7 +45,7 @@ export default function TabExport({ employees, categories, theme }) {
   const [loadSum, setLS]      = useState(false);
   const [errMsg,  setErrMsg]  = useState('');
 
-  const fmt = n => Number(n || 0).toFixed(2);
+  const fmt = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   const buildQuery = () => {
     const q = { from, to };
@@ -70,7 +70,7 @@ export default function TabExport({ employees, categories, theme }) {
     try {
       const q = buildQuery();
       const url = fmt_ === 'csv' ? exportApi.getCsvUrl(q) : exportApi.getPdfUrl(q);
-      await exportApi.downloadFile(url, `export-FlowIA-${from}-${to}.${fmt_}`);
+      await exportApi.downloadFile(url, `export-SalonDZ-${from}-${to}.${fmt_}`);
     } catch (e) {
       // Popup inline (FDS-2026) — jamais alert() natif (bloquant + disgracieux).
       setErrMsg(e?.message || 'Erreur inconnue lors de l\'export.');
@@ -186,8 +186,8 @@ export default function TabExport({ employees, categories, theme }) {
         <Section title="Resume de la periode">
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:0 }}>
             {[
-              { label:'CA',             value: fmt(summary.total_revenus)  + ' €', color:'#065f46', bg:'#f0fdf4' },
-              { label:'Depenses',       value: fmt(summary.total_depenses) + ' €', color:'#991b1b', bg:'#fef2f2' },
+              { label:'CA',             value: fmt(summary.total_revenus)  + ' DA', color:'#065f46', bg:'#f0fdf4' },
+              { label:'Depenses',       value: fmt(summary.total_depenses) + ' DA', color:'#991b1b', bg:'#fef2f2' },
               { label:'Transactions',   value: summary.total_tx,                    color:t.text,    bg:t.cardAlt },
               { label:'Employes actifs',value: summary.nb_employes,                 color:'#4338ca', bg:'#eef2ff' },
             ].map(({ label, value, color, bg }, i) => (
@@ -213,7 +213,7 @@ export default function TabExport({ employees, categories, theme }) {
       </div>
 
       <p style={{ margin:0, fontSize:11, color:t.muted, textAlign:'center' }}>
-        Propulse par FlowIA
+        Propulse par Salon DZ
       </p>
 
       <ErrorModal open={!!errMsg} message={errMsg} onClose={() => setErrMsg('')} theme={t}/>

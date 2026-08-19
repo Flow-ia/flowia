@@ -7,13 +7,13 @@ export default function Privacy() {
     <>
       <Seo
         path="/confidentialite"
-        title="Politique de confidentialité | FlowIA"
-        description="Comment FlowIA collecte, utilise et protège vos données personnelles (RGPD)."
+        title="Politique de confidentialité | Salon DZ"
+        description="Comment Salon DZ collecte, utilise et protège vos données personnelles (loi 18-07)."
       />
       <PageHero
         label="Confidentialité"
         title="Politique de confidentialité"
-        subtitle="Comment FlowIA collecte, utilise et protège vos données — et celles de vos clients."
+        subtitle="Comment Salon DZ collecte, utilise et protège vos données — et celles de vos clients."
       />
       <Container maxWidth={760}>
         <Prose>
@@ -23,7 +23,7 @@ export default function Privacy() {
 
           <ProseH2>1. Responsable du traitement</ProseH2>
           <p>
-            {"FlowIA SAS, responsable du traitement des données des commerçants utilisateurs. Pour les données des clients finaux saisies par les commerçants, FlowIA agit comme sous-traitant au sens du RGPD."}
+            {"Salon DZ, responsable du traitement des données des commerçants utilisateurs. Pour les données des clients finaux saisies par les commerçants, Salon DZ agit comme sous-traitant au sens de la loi 18-07."}
           </p>
 
           <ProseH2>2. Données collectées</ProseH2>
@@ -33,7 +33,7 @@ export default function Privacy() {
             <li><strong>Connexion :</strong> adresse IP et données de connexion.</li>
           </ul>
           <p>
-            {"Aucune donnée bancaire n'est conservée par FlowIA."}
+            {"Aucune donnée bancaire n'est conservée par Salon DZ."}
           </p>
 
           <ProseH2>3. Finalités et bases légales</ProseH2>
@@ -51,7 +51,7 @@ export default function Privacy() {
 
           <ProseH2>5. Destinataires</ProseH2>
           <p>
-            {"Des sous-traitants encadrés par contrat conforme au RGPD interviennent pour l'hébergement, l'envoi d'emails et de notifications, le paiement en ligne, la connexion et la synchronisation d'agenda Google, et l'hébergement des images."}
+            {"Des sous-traitants encadrés par contrat conforme à la loi 18-07 interviennent pour l'hébergement, l'envoi d'emails et de notifications, le paiement en ligne, la connexion et la synchronisation d'agenda Google, et l'hébergement des images."}
           </p>
           <p>
             {"Aucune donnée n'est vendue ni transmise à des tiers à des fins commerciales ou publicitaires. Liste nominative communiquée sur demande à "}
@@ -60,22 +60,22 @@ export default function Privacy() {
 
           <ProseH2>6. Localisation des données</ProseH2>
           <p>
-            {"Les données sont hébergées dans l'Union européenne. Aucun transfert hors Espace économique européen sans garanties appropriées au sens du RGPD."}
+            {"Les données sont hébergées sur des infrastructures cloud sécurisées. Tout transfert de données s'effectue avec les garanties appropriées au sens de la loi 18-07."}
           </p>
 
           <ProseH2>7. Sécurité</ProseH2>
           <p>
-            {"FlowIA met en œuvre les mesures techniques et organisationnelles appropriées, conformément à l'article 32 du RGPD."}
+            {"Salon DZ met en œuvre les mesures techniques et organisationnelles appropriées, conformément à la loi 18-07."}
           </p>
 
           <ProseH2>8. Données Google</ProseH2>
           <p>
-            {"La connexion via un compte Google et la synchronisation vers Google Agenda sont optionnelles. FlowIA accède alors à votre identifiant de compte, votre email, votre nom et votre photo de profil. Si la synchronisation est activée, FlowIA gère dans votre agenda "}
+            {"La connexion via un compte Google et la synchronisation vers Google Agenda sont optionnelles. Salon DZ accède alors à votre identifiant de compte, votre email, votre nom et votre photo de profil. Si la synchronisation est activée, Salon DZ gère dans votre agenda "}
             <strong>{"les seuls rendez-vous qu'elle y a créés"}</strong>
             {", et ne consulte pas votre agenda existant."}
           </p>
           <p>
-            {"Ces données servent uniquement à créer votre compte, vous authentifier, afficher votre profil et synchroniser vos rendez-vous. Elles ne sont partagées avec aucun tiers. L'utilisation et le transfert par FlowIA des informations reçues des API Google respectent la "}
+            {"Ces données servent uniquement à créer votre compte, vous authentifier, afficher votre profil et synchroniser vos rendez-vous. Elles ne sont partagées avec aucun tiers. L'utilisation et le transfert par Salon DZ des informations reçues des API Google respectent la "}
             <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">
               {"Google API Services User Data Policy"}
             </a>
@@ -105,7 +105,7 @@ export default function Privacy() {
 
           <ProseH2>11. Réclamation</ProseH2>
           <p>
-            {"Vous pouvez introduire une réclamation auprès de la CNIL (cnil.fr)."}
+            {"Vous pouvez introduire une réclamation auprès de l'ANPDP (Autorité nationale de protection des données à caractère personnel)."}
           </p>
         </Prose>
       </Container>

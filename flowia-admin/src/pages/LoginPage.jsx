@@ -77,7 +77,7 @@ export default function LoginPage() {
       </button>
       {step === 1 && (
         <form className="login-card" onSubmit={onSubmitStep1} autoComplete="off">
-          <div className="login-brand">FlowIA</div>
+          <div className="login-brand">Salon DZ</div>
           <h1 className="login-title">Admin</h1>
           <p className="login-sub">{"Acces restreint"}</p>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
 
       {step === 2 && (
         <form className="login-card" onSubmit={onSubmitStep2} autoComplete="off">
-          <div className="login-brand">FlowIA</div>
+          <div className="login-brand">Salon DZ</div>
           <h1 className="login-title">{"Verification 2FA"}</h1>
           <p className="login-sub">{"Saisissez le code a 6 chiffres affiche par votre application d'authentification."}</p>
 

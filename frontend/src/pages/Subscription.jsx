@@ -31,7 +31,7 @@ const PLANS = [
     id: 'decouverte',
     name: 'Découverte',
     monthly: '0', yearly: '0', annual: '0',
-    desc: 'Pour démarrer et tester FlowIA sans risque.',
+    desc: 'Pour démarrer et tester Salon DZ sans risque.',
     features: [
       "Jusqu'à 50 RDV/mois", '1 employé', 'Page de réservation publique',
       'Caisse intégrée', 'Rappels RDV par email', 'Export CSV',
@@ -42,7 +42,7 @@ const PLANS = [
   {
     id: 'essentiel',
     name: 'Essentiel',
-    monthly: '24', yearly: '20', annual: '240',
+    monthly: '2 400', yearly: '2 000', annual: '24 000',
     desc: 'Tous les outils marketing pour fidéliser vos clients.',
     features: [
       'RDV illimités', "Jusqu'à 5 employés",
@@ -57,7 +57,7 @@ const PLANS = [
   {
     id: 'equipe',
     name: 'Équipe',
-    monthly: '49', yearly: '40,83', annual: '490',
+    monthly: '4 900', yearly: '4 083', annual: '49 000',
     desc: 'Pour les salons qui veulent un accompagnement dédié.',
     features: [
       'Tout du plan Essentiel', 'Employés illimités',
@@ -77,11 +77,11 @@ const PLAN_DEFS = {
   },
   essentiel: {
     id: 'essentiel', name: 'Essentiel',
-    monthly: 24, yearly: 20, annual: 240, rank: 1,
+    monthly: 2400, yearly: 2000, annual: 24000, rank: 1,
   },
   equipe: {
     id: 'equipe', name: 'Équipe',
-    monthly: 49, yearly: 40.83, annual: 490, rank: 2,
+    monthly: 4900, yearly: 4083.33, annual: 49000, rank: 2,
   },
 };
 
@@ -132,7 +132,7 @@ function prevPaidPlanId(currentId) {
   return null; // essentiel = pas de plan payant inférieur
 }
 function formatPrice(n) {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+  return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 export default function Subscription() {
@@ -355,8 +355,8 @@ export default function Subscription() {
     } catch {}
 
     const fmt = (n) => {
-      const v = Math.abs(n).toFixed(2).replace('.', ',');
-      return `${v} €`;
+      const v = Math.abs(Number(n || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      return `${v} DA`;
     };
     const formatLongDate = (iso) => {
       try {
@@ -556,12 +556,12 @@ export default function Subscription() {
                 <p style={{ fontSize: 14, fontWeight: 500, color: t.text, margin: 0, marginBottom: 4 }}>{p.name}</p>
                 <p style={{ fontSize: 12, color: t.muted, margin: 0, marginBottom: 14, lineHeight: 1.4 }}>{p.desc}</p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
-                  <span style={{ fontSize: 32, fontWeight: 500, color: t.text, letterSpacing: '-0.02em' }}>{price + ' €'}</span>
+                  <span style={{ fontSize: 32, fontWeight: 500, color: t.text, letterSpacing: '-0.02em' }}>{price + ' DA'}</span>
                   <span style={{ fontSize: 12, color: t.muted }}>/mois</span>
                 </div>
                 <p style={{ fontSize: 11, color: t.muted, margin: 0, marginBottom: 18 }}>
                   {yearly
-                    ? (p.annual === '0' ? 'Gratuit' : `Facturé ${p.annual} €/an`)
+                    ? (p.annual === '0' ? 'Gratuit' : `Facturé ${p.annual} DA/an`)
                     : (p.monthly === '0' ? 'Gratuit' : 'Facturé mensuellement')}
                 </p>
                 {p.trial && !isCurrentAny && (
@@ -1156,7 +1156,7 @@ function AddCardForm({ onSuccess, onCancel, theme: t, showToast }) {
       )}
 
       <p style={{ fontSize: 11, color: t.muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-        {"Votre carte est tokenisée par Stripe. FlowIA n'a jamais accès au numéro complet."}
+        {"Votre carte est tokenisée par Stripe. Salon DZ n'a jamais accès au numéro complet."}
       </p>
 
       <div style={{ display: 'flex', gap: 10 }}>
@@ -1246,11 +1246,11 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
         </div>
         <p style={{ fontSize: 13, color: t.text, margin: '0 0 2px' }}>
           {isAdminGranted
-            ? <span style={{ color: '#10b981', fontWeight: 500 }}>Gratuit · offert par FlowIA</span>
-            : (isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`)}
+            ? <span style={{ color: '#10b981', fontWeight: 500 }}>Gratuit · offert par Salon DZ</span>
+            : (isYearly ? `${formatPrice(planDef.annual)} DA/an` : `${formatPrice(planDef.monthly)} DA/mois`)}
           {!isAdminGranted && isYearly && (
             <span style={{ color: t.muted, marginLeft: 6 }}>
-              {`(soit ${formatPrice(planDef.yearly)} €/mois)`}
+              {`(soit ${formatPrice(planDef.yearly)} DA/mois)`}
             </span>
           )}
         </p>
@@ -1276,7 +1276,7 @@ function CompactSubscriptionCard({ sub, t, busyAction, showToast,
                 <button onClick={() => onChangePeriod('yearly')}
                         disabled={busyAction === 'change'}
                         style={{ ...btnGhost(t, busyAction === 'change'), width: 'auto', padding: '8px 14px' }}>
-                  {busyAction === 'change' ? '…' : `Passer en annuel · −${annualSavings} €`}
+                  {busyAction === 'change' ? '…' : `Passer en annuel · −${formatPrice(annualSavings)} DA`}
                 </button>
               )}
               {isYearly && (
@@ -1377,14 +1377,14 @@ function StatusInfoBox({ sub, planDef, t }) {
       (parseDate(grant.expires_at).getTime() - parseDate(grant.granted_at).getTime())
         <= 90 * 24 * 3600 * 1000;
     if (isLifetime) {
-      title = 'Plan offert à vie par FlowIA';
+      title = 'Plan offert à vie par Salon DZ';
     } else if (isTrialLike) {
       const days = daysUntil(parseDate(grant.expires_at));
       title = days != null
         ? `Essai gratuit offert · ${days} ${days > 1 ? 'jours' : 'jour'} restant${days > 1 ? 's' : ''}`
-        : 'Essai gratuit offert par FlowIA';
+        : 'Essai gratuit offert par Salon DZ';
     } else {
-      title = 'Plan offert par FlowIA';
+      title = 'Plan offert par Salon DZ';
     }
     const expiresLine = isLifetime
       ? 'Accès gratuit illimité — sans date d\'expiration.'
@@ -1396,7 +1396,7 @@ function StatusInfoBox({ sub, planDef, t }) {
       'Aucun prélèvement — vous bénéficiez de toutes les fonctionnalités sans payer.',
       expiresLine,
       grant.reason ? `Motif : ${grant.reason}` : null,
-      'Pour toute question, contactez le support FlowIA.',
+      'Pour toute question, contactez le support Salon DZ.',
     ].filter(Boolean);
   } else if (isPastDue) {
     color = 'orange';
@@ -1421,7 +1421,7 @@ function StatusInfoBox({ sub, planDef, t }) {
     title = "Période d'essai en cours";
     lines = [
       `Essai gratuit jusqu'au ${formatLong(endDate)}${daysSuffix(daysUntil(endDate))}.`,
-      `Première facturation à cette date : ${recurringPrice} €.`,
+      `Première facturation à cette date : ${formatPrice(recurringPrice)} DA.`,
       "Aucun prélèvement aujourd'hui — annulez à tout moment sans frais.",
     ];
   } else if (isCanceling) {
@@ -1438,7 +1438,7 @@ function StatusInfoBox({ sub, planDef, t }) {
     color = 'gray';
     title = 'Prochaine facturation';
     lines = [
-      `${recurringPrice} € prélevés le ${formatLong(periodEndDate)}${daysSuffix(daysUntil(periodEndDate))}.`,
+      `${formatPrice(recurringPrice)} DA prélevés le ${formatLong(periodEndDate)}${daysSuffix(daysUntil(periodEndDate))}.`,
       `Renouvellement automatique tous les ${isYearly ? 'ans' : 'mois'}. Annulable à tout moment.`,
     ];
   }
@@ -1570,11 +1570,11 @@ function SubscribedPlanView({ sub, t, busyAction, onChangePeriod, onChangePlan, 
         </div>
         <p style={{ fontSize: 14, color: t.text, margin: 0, marginBottom: 4 }}>
           <strong style={{ fontWeight: 500 }}>
-            {isYearly ? `${planDef.annual} €/an` : `${planDef.monthly} €/mois`}
+            {isYearly ? `${formatPrice(planDef.annual)} DA/an` : `${formatPrice(planDef.monthly)} DA/mois`}
           </strong>
           {isYearly && (
             <span style={{ fontSize: 13, color: t.muted, marginLeft: 8 }}>
-              {`(soit ${formatPrice(planDef.yearly)} €/mois)`}
+              {`(soit ${formatPrice(planDef.yearly)} DA/mois)`}
             </span>
           )}
         </p>
@@ -1595,7 +1595,7 @@ function SubscribedPlanView({ sub, t, busyAction, onChangePeriod, onChangePlan, 
                       style={btnPrimary(t, busyAction === 'change')}>
                 {busyAction === 'change'
                   ? 'Changement…'
-                  : `Passer en annuel · économisez ${annualSavings} €`}
+                  : `Passer en annuel · économisez ${formatPrice(annualSavings)} DA`}
               </button>
             )}
             {isYearly && (
@@ -1663,8 +1663,8 @@ function UpgradeCard({ fromId, toId, period, t, busyAction, onConfirm }) {
         {`Passer à ${toDef.name}`}
       </h3>
       <p style={{ fontSize: 13, color: t.muted, margin: '0 0 14px' }}>
-        {`+${formatPrice(diff)} €/mois · soit ${formatPrice(toPrice)} €/mois`}
-        {period === 'yearly' && ` (${toDef.annual} €/an)`}
+        {`+${formatPrice(diff)} DA/mois · soit ${formatPrice(toPrice)} DA/mois`}
+        {period === 'yearly' && ` (${formatPrice(toDef.annual)} DA/an)`}
       </p>
       <p style={{ fontSize: 13, color: t.text, margin: '0 0 8px', fontWeight: 500 }}>
         Vous gagnerez :
@@ -1714,7 +1714,7 @@ function DowngradeCard({ fromId, toId, period, t, busyAction, onConfirm }) {
         {`Repasser à ${toDef.name}`}
       </h3>
       <p style={{ fontSize: 12, color: t.muted, margin: '0 0 14px' }}>
-        {`Économisez ${formatPrice(savings)} €/mois — ${formatPrice(toPrice)} €/mois`}
+        {`Économisez ${formatPrice(savings)} DA/mois — ${formatPrice(toPrice)} DA/mois`}
       </p>
       <div style={{
         padding: '10px 12px', borderRadius: 8,
@@ -2127,7 +2127,7 @@ function InvoicesSection({ theme: t, embedded = false }) {
 function invoiceAmount(inv) {
   if (typeof inv.amount !== 'number') return '—';
   const cur = (inv.currency || 'eur').toUpperCase();
-  if (cur === 'EUR') return `${formatPrice(inv.amount)} €`;
+  if (cur === 'EUR') return `${formatPrice(inv.amount)} DA`;
   return `${formatPrice(inv.amount)} ${cur}`;
 }
 function invoiceStatusLabel(s) {

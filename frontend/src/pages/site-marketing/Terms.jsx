@@ -7,13 +7,13 @@ export default function Terms() {
     <>
       <Seo
         path="/cgu"
-        title="Conditions générales d'utilisation | FlowIA"
-        description="Conditions générales d'utilisation du service FlowIA."
+        title="Conditions générales d'utilisation | Salon DZ"
+        description="Conditions générales d'utilisation du service Salon DZ."
       />
       <PageHero
         label="CGU"
         title="Conditions générales d'utilisation"
-        subtitle="Les règles qui encadrent l'utilisation de FlowIA."
+        subtitle="Les règles qui encadrent l'utilisation de Salon DZ."
       />
       <Container maxWidth={760}>
         <Prose>
@@ -21,7 +21,7 @@ export default function Terms() {
 
           <ProseH2>1. Objet</ProseH2>
           <p>
-            {"Les présentes CGU régissent l'utilisation de l'application FlowIA, éditée par FlowIA SAS, par les commerçants (\"Utilisateurs\")."}
+            {"Les présentes CGU régissent l'utilisation de l'application Salon DZ, éditée par Salon DZ, par les commerçants (\"Utilisateurs\")."}
           </p>
 
           <ProseH2>2. Acceptation</ProseH2>
@@ -31,7 +31,7 @@ export default function Terms() {
 
           <ProseH2>3. Description du service</ProseH2>
           <p>
-            {"FlowIA fournit un logiciel SaaS de gestion pour salons de beauté et bien-être : agenda, réservation en ligne, caisse, fidélité, marketing, gestion d'équipe et reporting."}
+            {"Salon DZ fournit un logiciel SaaS de gestion pour salons de beauté et bien-être : agenda, réservation en ligne, caisse, fidélité, marketing, gestion d'équipe et reporting."}
           </p>
 
           <ProseH2>4. Compte utilisateur</ProseH2>
@@ -46,32 +46,32 @@ export default function Terms() {
 
           <ProseH2>6. Obligations de l'Utilisateur</ProseH2>
           <p>
-            {"L'Utilisateur s'engage à utiliser FlowIA conformément à la loi, à ne pas tenter de contourner la sécurité, à respecter les droits de ses clients (notamment RGPD), et à ne pas envoyer de communications marketing non sollicitées."}
+            {"L'Utilisateur s'engage à utiliser Salon DZ conformément à la loi, à ne pas tenter de contourner la sécurité, à respecter les droits de ses clients (notamment la loi 18-07), et à ne pas envoyer de communications marketing non sollicitées."}
           </p>
 
           <ProseH2>7. Disponibilité</ProseH2>
           <p>
-            {"FlowIA s'efforce d'assurer une disponibilité de 99,5 % (99,9 % sur le plan Équipe). Les interruptions de maintenance sont annoncées à l'avance autant que possible. Aucun engagement contractuel n'est pris sur la disponibilité des services tiers utilisés en arrière-plan."}
+            {"Salon DZ s'efforce d'assurer une disponibilité de 99,5 % (99,9 % sur le plan Équipe). Les interruptions de maintenance sont annoncées à l'avance autant que possible. Aucun engagement contractuel n'est pris sur la disponibilité des services tiers utilisés en arrière-plan."}
           </p>
 
           <ProseH2>8. Propriété des données</ProseH2>
           <p>
-            {"L'Utilisateur reste propriétaire de ses données et de celles saisies par ses clients. FlowIA n'utilise ces données que pour fournir le service. L'export complet est disponible à tout moment depuis l'application."}
+            {"L'Utilisateur reste propriétaire de ses données et de celles saisies par ses clients. Salon DZ n'utilise ces données que pour fournir le service. L'export complet est disponible à tout moment depuis l'application."}
           </p>
 
           <ProseH2>9. Résiliation</ProseH2>
           <p>
-            {"L'Utilisateur peut résilier son abonnement à tout moment depuis son espace. Aucun remboursement n'est dû pour le mois en cours. FlowIA peut résilier en cas de manquement grave après mise en demeure restée sans effet sous 15 jours."}
+            {"L'Utilisateur peut résilier son abonnement à tout moment depuis son espace. Aucun remboursement n'est dû pour le mois en cours. Salon DZ peut résilier en cas de manquement grave après mise en demeure restée sans effet sous 15 jours."}
           </p>
 
           <ProseH2>10. Limitation de responsabilité</ProseH2>
           <p>
-            {"FlowIA est responsable des dommages directs uniquement, dans la limite de 12 mois d'abonnement payé par l'Utilisateur. FlowIA n'est pas responsable des pertes indirectes (chiffre d'affaires, image, etc.)."}
+            {"Salon DZ est responsable des dommages directs uniquement, dans la limite de 12 mois d'abonnement payé par l'Utilisateur. Salon DZ n'est pas responsable des pertes indirectes (chiffre d'affaires, image, etc.)."}
           </p>
 
           <ProseH2>11. Droit applicable</ProseH2>
           <p>
-            {"Les présentes CGU sont soumises au droit français. Tout litige sera porté devant les tribunaux compétents de Paris, sauf disposition impérative contraire."}
+            {"Les présentes CGU sont soumises au droit algérien. Tout litige sera porté devant les tribunaux algériens compétents, sauf disposition impérative contraire."}
           </p>
 
           <ProseH2>12. Contact</ProseH2>

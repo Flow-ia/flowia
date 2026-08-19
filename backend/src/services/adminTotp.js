@@ -10,7 +10,7 @@ const QRCode = require('qrcode');
 // le décalage horloge client/serveur (typique : <30s).
 authenticator.options = { step: 30, digits: 6, window: 1 };
 
-const ISSUER = process.env.ADMIN_TOTP_ISSUER || 'FlowIA Admin';
+const ISSUER = process.env.ADMIN_TOTP_ISSUER || 'Salon DZ Admin';
 
 function generateSecret() {
   return authenticator.generateSecret();

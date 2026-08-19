@@ -59,7 +59,7 @@ export default function AuditPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Audit log">
+    <AppShell me={me} footer="Salon DZ Admin — Audit log">
       <div className="page-head">
         <h1 className="dash-title">{"Audit log"}</h1>
         <span className="page-count">{data.total} {"entrees"}</span>

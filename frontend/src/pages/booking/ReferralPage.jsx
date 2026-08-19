@@ -20,7 +20,7 @@ export function ReferralPage({
   const isActive   = hasProgram && refProgram.is_enabled === true;
 
   const valueStr = (type, value) => type === "percent"
-    ? `${value} %` : `${Number(value).toFixed(2)} €`;
+    ? `${value} %` : `${Number(value).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 
   const businessName = business?.business_name || "ce commerce";
   const firstName    = gcUser?.first_name || "";
@@ -83,10 +83,10 @@ export function ReferralPage({
     return acc + Number(r.value || 0);
   }, 0);
   const availableLabel = availableRewards.length === 0
-    ? "0 €"
+    ? "0 DA"
     : availableRewards.every(r => r.type === "percent")
       ? `${availableRewards.length} bon${availableRewards.length > 1 ? "s" : ""}`
-      : `${availableSum.toFixed(2).replace(/\.00$/, "")} €`;
+      : `${availableSum.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 
   // Récompense parrain (libellé unique pour les 4 cards)
   const parrainRewardStr = isActive
@@ -632,7 +632,7 @@ export function ReferralPage({
               {usedRewards.map((r, i) => {
                 const valStr = r.type === "percent"
                   ? `-${r.value}%`
-                  : `-${Number(r.value).toFixed(2).replace(/\.00$/, "")} €`;
+                  : `-${Number(r.value).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
                 const usedStr = r.used_at
                   ? new Date(r.used_at).toLocaleDateString("fr-FR",
                       { day:"numeric", month:"short", year:"numeric" })

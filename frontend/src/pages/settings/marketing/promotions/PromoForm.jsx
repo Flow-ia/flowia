@@ -42,7 +42,7 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
       const [y, m, dd] = String(d).split('-');
       return `${dd}/${m}/${y}`;
     };
-    const discount = type === 'percent' ? `-${value || 0}%` : `-${value || 0}€`;
+    const discount = type === 'percent' ? `-${value || 0}%` : `-${value || 0} DA`;
     const bn   = merchant?.businessName || '';
     const tel  = merchant?.phone || '';
     const addr = merchant?.address || '';
@@ -122,19 +122,19 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
             <SegmentedControl fullWidth value={type} onChange={setType}
                               options={[
                                 { value:'percent', label:'% Pourcentage'  },
-                                { value:'fixed',   label:'€ Montant fixe' },
+                                { value:'fixed',   label:'DA Montant fixe' },
                               ]}/>
           </div>
           <div>
             <Label>Valeur *</Label>
             <div style={{ position:'relative' }}>
-              <input type="number" min="0" placeholder={type === 'percent' ? '10' : '5.00'}
+              <input type="number" min="0" placeholder={type === 'percent' ? '10' : '500'}
                      value={value} onChange={e => setValue(e.target.value)}
                      style={{ ...inp, paddingRight:34 }}/>
               <span style={{ position:'absolute', right:12, top:'50%',
                              transform:'translateY(-50%)',
                              fontWeight:500, color:t.muted, fontSize:14 }}>
-                {type === 'percent' ? '%' : '€'}
+                {type === 'percent' ? '%' : 'DA'}
               </span>
             </div>
           </div>
@@ -327,15 +327,15 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
                           </p>
                           <p style={{ margin:'3px 0', color:t.text }}>
                             Cout : <strong style={{ fontWeight:500 }}>
-                              {parseFloat(preview.sms.cost || 0).toFixed(2)} €
+                              {parseFloat(preview.sms.cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                             </strong>
                           </p>
                           {preview.sms.sufficient
                             ? <p style={{ margin:'3px 0', color:'#065f46', fontWeight:500 }}>
-                                Solde OK ({parseFloat(preview.sms.balance || 0).toFixed(2)} €)
+                                Solde OK ({parseFloat(preview.sms.balance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA)
                               </p>
                             : <p style={{ margin:'3px 0', color:'#991b1b', fontWeight:500 }}>
-                                Il vous manque {parseFloat((preview.sms.cost || 0) - (preview.sms.balance || 0)).toFixed(2)} €
+                                Il vous manque {parseFloat((preview.sms.cost || 0) - (preview.sms.balance || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                                 <button onClick={() => { onClose && onClose(); navigate('/marketing/sms?recharge=open'); }}
                                         style={{ marginLeft:8, padding:'3px 10px', borderRadius:6,
                                                  fontSize:11, fontWeight:500,
@@ -387,7 +387,7 @@ export default function PromoForm({ open, onClose, init, onSave, theme }) {
                               promo_code_id: saved.id,
                               target_type: campaignTarget, custom_count: customCount,
                               channel: 'sms',
-                              message_sms: smsMessage || `${code}: ${type === 'percent' ? `-${value}%` : `-${value}€`}`,
+                              message_sms: smsMessage || `${code}: ${type === 'percent' ? `-${value}%` : `-${value} DA`}`,
                               promo_code: code,
                             });
                           }

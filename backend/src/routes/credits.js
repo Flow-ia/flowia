@@ -12,6 +12,10 @@ const { authMiddleware } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
 const { employeePinOptional } = require('../middleware/employeePinOptional');
 const router   = express.Router();
+
+// Format monétaire DA (affichage uniquement) — milliers fr-FR, 0 décimale si entier.
+const fmtDA = (v) => Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
+
 router.use(authMiddleware);
 router.use(requireFeature('credits'));
 
@@ -221,7 +225,7 @@ router.post('/grant', employeePinOptional, async (req, res) => {
       await db.query('COMMIT');
       res.json({
         ok: true, credit: updated[0], credit_transaction: ct[0],
-        message: `Crédit de ${amt.toFixed(2)} € accordé. Solde : ${parseFloat(updated[0].balance).toFixed(2)} €`,
+        message: `Crédit de ${fmtDA(amt)} accordé. Solde : ${fmtDA(parseFloat(updated[0].balance))}`,
       });
     } catch (txErr) {
       await db.query('ROLLBACK').catch(() => {});
@@ -301,7 +305,7 @@ router.post('/repay', async (req, res) => {
       const balance = parseFloat(credit.balance);
       if (amt > balance) {
         await db.query('ROLLBACK');
-        return res.status(400).json({ error: `Montant (${amt.toFixed(2)} €) supérieur au solde (${balance.toFixed(2)} €).` });
+        return res.status(400).json({ error: `Montant (${fmtDA(amt)}) supérieur au solde (${fmtDA(balance)}).` });
       }
 
       const clientDisplay  = credit.client_name || client.email;
@@ -335,8 +339,8 @@ router.post('/repay', async (req, res) => {
       res.json({
         ok: true, credit: updated[0], credit_transaction: ct[0], transaction: tx,
         message: parseFloat(updated[0].balance) === 0
-          ? `✓ Crédit soldé intégralement (${amt.toFixed(2)} €)`
-          : `Paiement de ${amt.toFixed(2)} € enregistré. Reste dû : ${parseFloat(updated[0].balance).toFixed(2)} €`,
+          ? `✓ Crédit soldé intégralement (${fmtDA(amt)})`
+          : `Paiement de ${fmtDA(amt)} enregistré. Reste dû : ${fmtDA(parseFloat(updated[0].balance))}`,
       });
     } catch (txErr) {
       await db.query('ROLLBACK').catch(() => {});
@@ -357,7 +361,7 @@ router.delete('/:id', async (req, res) => {
     const { rows } = await pool.query('SELECT * FROM client_credits WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
     if (!rows[0]) return res.status(404).json({ error: 'Crédit introuvable.' });
     if (parseFloat(rows[0].balance) > 0)
-      return res.status(400).json({ error: `Solde restant : ${parseFloat(rows[0].balance).toFixed(2)} €. Soldez d'abord le crédit.` });
+      return res.status(400).json({ error: `Solde restant : ${fmtDA(parseFloat(rows[0].balance))}. Soldez d'abord le crédit.` });
     await pool.query('DELETE FROM client_credits WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: 'Erreur serveur.' }); }

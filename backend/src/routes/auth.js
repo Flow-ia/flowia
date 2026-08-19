@@ -178,7 +178,7 @@ router.post('/register', async (req, res) => {
     if (!isValidBusinessType(businessType))
       return res.status(400).json({ error: 'Type de commerce invalide ou manquant.', code: 'BUSINESS_TYPE_REQUIRED' });
     // Telephone obligatoire + format valide (libphonenumber-js E.164).
-    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'FR' });
+    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'DZ' });
     if (!phoneCheck.valid) {
       const msg = phoneCheck.error === 'PHONE_REQUIRED' ? 'Numero de telephone obligatoire.' : 'Numero de telephone invalide.';
       return res.status(400).json({ error: msg, code: phoneCheck.error });
@@ -192,10 +192,10 @@ router.post('/register', async (req, res) => {
     const { rows } = await pool.query('SELECT id FROM users WHERE email=LOWER($1)', [email]);
     if (rows.length) return res.status(409).json({ error: 'Email déjà existant, merci de changer de mail et réessayer !' });
     const code = genCode();
-    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phoneCheck.e164, address: address.trim(), streetNumber: String(streetNumber).trim(), country: country||'FR', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
+    await saveCode(`reg_${email.toLowerCase()}`, code, { email, password, businessName, businessType, phone: phoneCheck.e164, address: address.trim(), streetNumber: String(streetNumber).trim(), country: country||'DZ', city: city||'', postalCode: postalCode||'', lat: lat||null, lng: lng||null });
     // Répondre immédiatement au client, puis envoyer l'email en arrière-plan
     res.json({ ok: true });
-    setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription FlowIA', 'register').catch(e => console.error('[EMAIL register]', e.message)));
+    setImmediate(() => sendVerificationEmail(email, code, 'Confirmez votre inscription Salon DZ', 'register').catch(e => console.error('[EMAIL register]', e.message)));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -215,7 +215,7 @@ router.post('/register/confirm', async (req, res) => {
       await deleteCode(`reg_${email.toLowerCase()}`);
       return res.status(400).json({ error: 'Type de commerce invalide.', code: 'BUSINESS_TYPE_REQUIRED' });
     }
-    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'FR' });
+    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'DZ' });
     if (!phoneCheck.valid) {
       await deleteCode(`reg_${email.toLowerCase()}`);
       const msg = phoneCheck.error === 'PHONE_REQUIRED' ? 'Numero de telephone obligatoire.' : 'Numero de telephone invalide.';
@@ -233,7 +233,7 @@ router.post('/register/confirm', async (req, res) => {
     try {
       ({ rows } = await pool.query(
         `INSERT INTO users (email,password_hash,business_name,business_type,phone,address,street_number,country,city,postal_code,lat,lng) VALUES (LOWER($1),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id,email,business_name,business_type,phone,address,street_number,country,city,postal_code`,
-        [em, hash, businessName, businessType, phoneCheck.e164, address.trim(), String(streetNumber).trim(), country||'FR', city||null, postalCode||null, lat||null, lng||null]
+        [em, hash, businessName, businessType, phoneCheck.e164, address.trim(), String(streetNumber).trim(), country||'DZ', city||null, postalCode||null, lat||null, lng||null]
       ));
     } catch (e) {
       if (e.code === '23505') {
@@ -309,7 +309,7 @@ router.post('/resend-code', async (req, res) => {
     // Envoyer en arrière-plan
     res.json({ ok: true });
     setImmediate(() =>
-      sendVerificationEmail(email, newCode, 'Confirmez votre inscription FlowIA', 'register')
+      sendVerificationEmail(email, newCode, 'Confirmez votre inscription Salon DZ', 'register')
         .catch(e => console.error('[EMAIL resend-code]', e.message))
     );
   } catch (err) {
@@ -333,7 +333,7 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(String(password), user?.password_hash || DUMMY_BCRYPT);
     if (!user || !valid) return res.status(401).json({ error: INVALID });
     if (user.is_frozen) return res.status(403).json({
-      error: 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.',
+      error: 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.',
       code: 'ACCOUNT_FROZEN',
     });
     if (user.deletion_requested_at) return res.status(403).json({
@@ -395,7 +395,7 @@ router.post('/forgot', async (req, res) => {
     const code = genCode();
     await saveCode(`rst_${em}`, code, { userId: rows[0].id });
     res.json({ ok: true });
-    setImmediate(() => sendVerificationEmail(em, code, 'Réinitialisez votre mot de passe FlowIA').catch(e => console.error('[EMAIL forgot]', e.message)));
+    setImmediate(() => sendVerificationEmail(em, code, 'Réinitialisez votre mot de passe Salon DZ').catch(e => console.error('[EMAIL forgot]', e.message)));
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
 
@@ -455,7 +455,7 @@ router.post('/change-email', authMiddleware, async (req, res) => {
     // 3. Envoyer le code à l'ANCIEN email (authentifie le propriétaire du compte)
     setImmediate(() => sendVerificationEmail(
       currentEmail, code,
-      'Autorisez le changement de votre email — FlowIA',
+      'Autorisez le changement de votre email — Salon DZ',
       'email'
     ).catch(e => console.error('[EMAIL change-email]', e.message)));
   } catch (err) { res.status(500).json({ error: 'Erreur serveur.' }); }
@@ -585,7 +585,7 @@ router.post('/pin-change-request', authMiddleware, async (req, res) => {
     const { email } = rows[0];
     const code = genCode();
     await saveCode(`pin_chg_${req.user.userId}`, code, { userId: req.user.userId }, 10);
-    await sendVerificationEmail(email, code, '🔐 Autorisation changement PIN — FlowIA', 'pin_change');
+    await sendVerificationEmail(email, code, '🔐 Autorisation changement PIN — Salon DZ', 'pin_change');
     res.json({ ok: true, emailMasked: maskEmail(email) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
@@ -619,7 +619,7 @@ router.post('/pin-forgot-request', async (req, res) => {
     const user = rows[0];
     const code = genCode();
     await saveCode(`pin_forgot_${user.id}`, code, { userId: user.id }, 15);
-    await sendVerificationEmail(user.email, code, 'Réinitialisation PIN — FlowIA', 'pin_change');
+    await sendVerificationEmail(user.email, code, 'Réinitialisation PIN — Salon DZ', 'pin_change');
     res.json({ ok: true, emailMasked: maskEmail(user.email) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur.' }); }
 });
@@ -650,9 +650,9 @@ router.post('/pin-lockout-notify', async (req, res) => {
     if (isValidEmail(em)) {
       const { rows } = await pool.query('SELECT id FROM users WHERE email=$1', [em]);
       if (rows.length) {
-        const now = new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+        const now = new Date().toLocaleString('fr-FR', { timeZone: 'Africa/Algiers' });
         await sendVerificationEmail(em, '3 tentatives échouées à ' + now,
-          '⚠️ Alerte sécurité — Tentatives PIN FlowIA', 'lockout_alert');
+          '⚠️ Alerte sécurité — Tentatives PIN Salon DZ', 'lockout_alert');
       }
     }
     res.json({ ok: true }); // réponse uniforme anti-énumération
@@ -904,7 +904,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
         }
         // Pas de phone existant ET vide → on laisse passer null (COALESCE).
       } else {
-        const phoneCheck = validatePhoneE164(raw, { required: true, defaultCountry: before.country || 'FR' });
+        const phoneCheck = validatePhoneE164(raw, { required: true, defaultCountry: before.country || 'DZ' });
         if (!phoneCheck.valid) {
           return res.status(400).json({ error: 'Numero de telephone invalide.', code: phoneCheck.error });
         }
@@ -1212,7 +1212,7 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
     if (!isValidBusinessType(businessType)) {
       return res.status(400).json({ error: 'Type de commerce invalide ou manquant.', code: 'BUSINESS_TYPE_REQUIRED' });
     }
-    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'FR' });
+    const phoneCheck = validatePhoneE164(phone, { required: true, defaultCountry: country || 'DZ' });
     if (!phoneCheck.valid) {
       const msg = phoneCheck.error === 'PHONE_REQUIRED' ? 'Numero de telephone obligatoire.' : 'Numero de telephone invalide.';
       return res.status(400).json({ error: msg, code: phoneCheck.error });
@@ -1228,12 +1228,12 @@ router.post('/onboarding', authMiddleware, async (req, res) => {
       `UPDATE users SET
          first_name = $1, last_name = $2, business_name = $3,
          phone = $4, address = $5, city = $6, postal_code = $7,
-         country = COALESCE($8, 'FR'), lat = $9, lng = $10,
+         country = COALESCE($8, 'DZ'), lat = $9, lng = $10,
          business_type = $11, street_number = $13,
          onboarding_completed = TRUE
        WHERE id = $12
        RETURNING id, email, business_name, business_type, first_name, last_name, phone, address, street_number, city, postal_code, onboarding_completed`,
-      [firstName.trim(), lastName.trim(), businessName.trim(), phoneCheck.e164, address.trim(), city.trim(), postalCode.trim(), country || 'FR', lat || null, lng || null, businessType, req.user.userId, String(streetNumber).trim()]
+      [firstName.trim(), lastName.trim(), businessName.trim(), phoneCheck.e164, address.trim(), city.trim(), postalCode.trim(), country || 'DZ', lat || null, lng || null, businessType, req.user.userId, String(streetNumber).trim()]
     );
     if (!rows.length) return res.status(404).json({ error: 'Compte introuvable.' });
     const u = rows[0];

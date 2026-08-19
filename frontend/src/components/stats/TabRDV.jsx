@@ -91,7 +91,7 @@ export default function TabRDV({ period }) {
             subtitle="Page publique flowiapro.com/book"
             count={onlineSrc.count || 0}
             pct={onlinePct}
-            ca={"€ de CA potentiel : " + formatCents(onlineSrc.ca_cents || 0)}
+            ca={"CA potentiel : " + formatCents(onlineSrc.ca_cents || 0)}
             rows={[
               { iconPaths: PATH_CREDIT_CARD, color: "#185FA5", label: "Stripe 100%",        value: onlineSrc.by_payment_status?.stripe_100 || 0 },
               { iconPaths: PATH_CC_PAY,      color: "#BA7517", label: "Acompte Stripe",     value: onlineSrc.by_payment_status?.stripe_acompte || 0 },

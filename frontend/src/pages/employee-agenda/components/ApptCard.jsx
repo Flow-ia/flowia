@@ -65,12 +65,12 @@ export default function ApptCard({ appt, onClick, theme: t }) {
             {appt.items.map((it, i) => (
               <p key={i} style={{ margin: '1px 0', fontSize: 11, color: t.muted }}>
                 {it.service_name}{it.qty > 1 ? ` ×${it.qty}` : ''} · {it.duration_minutes * (it.qty || 1)}min
-                {it.unit_price > 0 ? ` · ${(it.unit_price * (it.qty || 1)).toFixed(2)} €` : ''}
+                {it.unit_price > 0 ? ` · ${(it.unit_price * (it.qty || 1)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : ''}
               </p>
             ))}
             <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: '#065f46' }}>
               Total : {appt.total_duration || appt.duration_minutes}min
-              {appt.total_amount > 0 ? ` · ${parseFloat(appt.total_amount).toFixed(2)} €` : ''}
+              {appt.total_amount > 0 ? ` · ${parseFloat(appt.total_amount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : ''}
             </p>
           </div>
         ) : (
@@ -78,8 +78,8 @@ export default function ApptCard({ appt, onClick, theme: t }) {
             {appt.items?.length === 1 ? appt.items[0].service_name : (appt.service_name || 'Service')}
             {' · '}{appt.total_duration || appt.duration_minutes}min
             {appt.total_amount > 0
-              ? ` · ${parseFloat(appt.total_amount).toFixed(2)} €`
-              : (appt.service_price ? ` · ${parseFloat(appt.service_price).toFixed(2)} €` : '')}
+              ? ` · ${parseFloat(appt.total_amount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`
+              : (appt.service_price ? ` · ${parseFloat(appt.service_price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : '')}
           </p>
         )}
 

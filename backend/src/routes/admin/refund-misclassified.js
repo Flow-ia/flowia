@@ -55,9 +55,9 @@ async function listCandidates(userId, limit) {
       a.paid_amount_cents,
       a.stripe_payment_intent_id,
       COALESCE(bs.cancellation_policy_hours, 2)   AS policy_hours,
-      COALESCE(bs.timezone, 'Europe/Paris')       AS timezone,
+      COALESCE(bs.timezone, 'Africa/Algiers')       AS timezone,
       EXTRACT(EPOCH FROM (
-        ((a.date + a.start_time) AT TIME ZONE COALESCE(bs.timezone, 'Europe/Paris'))
+        ((a.date + a.start_time) AT TIME ZONE COALESCE(bs.timezone, 'Africa/Algiers'))
         - a.cancelled_at
       )) / 3600 AS hours_before_rdv_at_cancel
     FROM appointments a
@@ -71,7 +71,7 @@ async function listCandidates(userId, limit) {
       AND a.paid_amount_cents IS NOT NULL
       AND a.paid_amount_cents > 0
       AND EXTRACT(EPOCH FROM (
-        ((a.date + a.start_time) AT TIME ZONE COALESCE(bs.timezone, 'Europe/Paris'))
+        ((a.date + a.start_time) AT TIME ZONE COALESCE(bs.timezone, 'Africa/Algiers'))
         - a.cancelled_at
       )) / 3600 >= COALESCE(bs.cancellation_policy_hours, 2)
       ${userFilter}

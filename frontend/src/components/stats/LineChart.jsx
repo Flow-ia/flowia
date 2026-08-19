@@ -68,8 +68,8 @@ function LineChartImpl({ data = [], lines = [], height = 200 }) {
   };
 
   const fmtYLabel = (cents) => {
-    if (niceMax >= 100000) return Math.round(cents / 100) + " €";
-    return (cents / 100).toFixed(0) + " €";
+    if (niceMax >= 100000) return Math.round(cents / 100).toLocaleString("fr-FR") + " DA";
+    return Number((cents || 0) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA";
   };
 
   return (

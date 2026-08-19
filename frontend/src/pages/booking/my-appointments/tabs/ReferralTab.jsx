@@ -43,7 +43,7 @@ export function ReferralTab({
             <strong style={{ color:th.text }}>
               {refInfo.program.parrain_type === 'percent'
                 ? `${refInfo.program.parrain_value}%`
-                : `${Number(refInfo.program.parrain_value).toFixed(2)} €`}
+                : `${Number(refInfo.program.parrain_value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
             </strong>{' '}
             de réduction à valider lors du rendez-vous de votre filleul.
           </p>
@@ -60,7 +60,7 @@ export function ReferralTab({
         const renderCard = (r, opts = {}) => {
           const isBday = r.reward_type === 'birthday';
           const accent = isBday ? '#ec4899' : '#8b5cf6';
-          const valStr = r.type === 'percent' ? `-${r.value}%` : `-${Number(r.value).toFixed(2)} €`;
+          const valStr = r.type === 'percent' ? `-${r.value}%` : `-${Number(r.value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
           const isUsed = opts.isUsed;
           const expStr = r.expires_at ? new Date(r.expires_at).toLocaleDateString('fr-FR') : null;
           return (

@@ -19,7 +19,7 @@ const METHOD_LABELS = {
 const ADD_PRIORITY = ['cash', 'transfer', 'card', 'gift_card', 'other'];
 const MAX_LINES = 4;
 
-function fmtEur(n) { return Number(n || 0).toFixed(2).replace('.', ',') + ' €'; }
+function fmtEur(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA'; }
 function fmtDate(s) {
   if (!s) return '—';
   try {
@@ -77,7 +77,7 @@ export default function LegacyMultiPage() {
   const allDone   = !loading && !loadError && remaining === 0;
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Migration multi legacy">
+    <AppShell me={me} footer="Salon DZ Admin — Migration multi legacy">
       <div className="page-head">
         <h1 className="dash-title">{"Migration des paiements multi legacy"}</h1>
         <span className="page-count">
@@ -304,7 +304,7 @@ function BreakdownModal({ transaction, onClose, onSuccess, onError }) {
                 <input type="text" inputMode="decimal"
                        value={line.amount}
                        onChange={e => updateAmount(idx, e.target.value)}
-                       placeholder="0,00"
+                       placeholder="0"
                        disabled={busy}
                        style={{
                          width: 110, padding: '8px 10px', borderRadius: 6,
@@ -313,7 +313,7 @@ function BreakdownModal({ transaction, onClose, onSuccess, onError }) {
                          fontSize: 14, fontWeight: 500, textAlign: 'right',
                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                        }}/>
-                <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{"€"}</span>
+                <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>{"DA"}</span>
                 {removable ? (
                   <button onClick={() => removeLine(idx)} disabled={busy}
                           aria-label="Supprimer cette méthode"

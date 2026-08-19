@@ -5,8 +5,8 @@ import { getGlobalStats, getMerchantsBySubscriptionFilter } from '../lib/admin.j
 import AppShell from '../components/AppShell.jsx';
 
 function fmt(n)      { return Number(n || 0).toLocaleString('fr-FR'); }
-function fmtMoney(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
-function fmtMoney0(n){ return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €'; }
+function fmtMoney(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA'; }
+function fmtMoney0(n){ return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' DA'; }
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -39,9 +39,9 @@ export default function DashboardPage() {
   }, [navigate]);
 
   return (
-    <AppShell me={me} footer="FlowIA Admin">
+    <AppShell me={me} footer="Salon DZ Admin">
       <h1 className="dash-title">{"Bienvenue " + (me?.name || '') + "."}</h1>
-      <p className="dash-text">{"Vue d'ensemble FlowIA — donnees temps reel."}</p>
+      <p className="dash-text">{"Vue d'ensemble Salon DZ — donnees temps reel."}</p>
 
       {error && <div className="login-error">{error}</div>}
 
@@ -115,19 +115,19 @@ export default function DashboardPage() {
             <div style={planBreakdownGrid}>
               <BreakdownRow label="Essentiel · mensuel"
                             count={stats.subscriptions?.essentiel_monthly}
-                            mrr={(stats.subscriptions?.essentiel_monthly || 0) * 24}
+                            mrr={(stats.subscriptions?.essentiel_monthly || 0) * 2400}
                             onClick={() => openDrill('essentiel_monthly', 'Essentiel mensuel')}/>
               <BreakdownRow label="Essentiel · annuel"
                             count={stats.subscriptions?.essentiel_yearly}
-                            mrr={(stats.subscriptions?.essentiel_yearly || 0) * 20}
+                            mrr={(stats.subscriptions?.essentiel_yearly || 0) * 2000}
                             onClick={() => openDrill('essentiel_yearly', 'Essentiel annuel')}/>
               <BreakdownRow label="Équipe · mensuel"
                             count={stats.subscriptions?.equipe_monthly}
-                            mrr={(stats.subscriptions?.equipe_monthly || 0) * 49}
+                            mrr={(stats.subscriptions?.equipe_monthly || 0) * 4900}
                             onClick={() => openDrill('equipe_monthly', 'Équipe mensuel')}/>
               <BreakdownRow label="Équipe · annuel"
                             count={stats.subscriptions?.equipe_yearly}
-                            mrr={Math.round((stats.subscriptions?.equipe_yearly || 0) * 40.83)}
+                            mrr={Math.round((stats.subscriptions?.equipe_yearly || 0) * 4083)}
                             onClick={() => openDrill('equipe_yearly', 'Équipe annuel')}/>
             </div>
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e5e7eb',
@@ -162,7 +162,7 @@ export default function DashboardPage() {
             </div>
             <div className="stat-card">
               <div className="stat-label">
-                {"Marge FlowIA"}
+                {"Marge Salon DZ"}
                 {stats.sms?.margin_ratio_pct != null && (
                   <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 6 }}>
                     {"(" + stats.sms.margin_ratio_pct + "%)"}

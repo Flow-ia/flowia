@@ -57,7 +57,7 @@ export default function SendPromoEmailModal({ promo, theme, onClose, showToast }
 
   const discountLabel = promo.type === 'percent'
     ? `-${promo.value}%`
-    : `-${Number(promo.value).toFixed(2)} €`;
+    : `-${Number(promo.value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 
   const inp = {
     width:'100%', padding:'9px 12px', borderRadius:8,

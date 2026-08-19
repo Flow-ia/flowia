@@ -49,7 +49,7 @@ function BarChartImpl({ data = [], valueKey = "amount_cents", color = "#185FA5",
     if (isNaN(d.getTime())) return iso || "";
     return d.getDate() + "/" + (d.getMonth() + 1);
   };
-  const fmtYLabel = (cents) => (cents / 100).toFixed(0) + " €";
+  const fmtYLabel = (cents) => Number((cents || 0) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA";
 
   return (
     <svg viewBox={"0 0 " + VIEW_W + " " + height} width="100%" height={height} style={{ display: "block" }}>
@@ -79,7 +79,7 @@ function BarChartImpl({ data = [], valueKey = "amount_cents", color = "#185FA5",
           <rect key={i}
                 x={x} y={y} width={barW} height={h}
                 fill={color} opacity={0.7} rx={2}>
-            <title>{(d.date || "") + " : " + (v / 100).toFixed(2) + " €"}</title>
+            <title>{(d.date || "") + " : " + Number((v || 0) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA"}</title>
           </rect>
         );
       })}

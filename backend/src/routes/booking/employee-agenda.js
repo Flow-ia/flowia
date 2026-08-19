@@ -267,7 +267,7 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
         const [empR, usrR, bsR] = await Promise.all([
           pool.query('SELECT name FROM employees WHERE id=$1', [employee_id]),
           pool.query('SELECT business_name FROM users WHERE id=$1', [req.user.userId]),
-          pool.query("SELECT COALESCE(timezone, 'Europe/Paris') as tz FROM booking_settings WHERE user_id=$1", [req.user.userId]),
+          pool.query("SELECT COALESCE(timezone, 'Africa/Algiers') as tz FROM booking_settings WHERE user_id=$1", [req.user.userId]),
         ]);
         const svcSum = cartItems && cartItems.length > 0
           ? cartItems.map(it => it.qty > 1 ? `${it.service_name} ×${it.qty}` : it.service_name).join(', ')
@@ -277,7 +277,7 @@ module.exports = function attachEmployeeAgendaRoutes(router) {
           businessName: usrR.rows[0]?.business_name,
           serviceName:  svcSum,
           employeeName: empR.rows[0]?.name || null,
-          timezone:     bsR.rows[0]?.tz || 'Europe/Paris',
+          timezone:     bsR.rows[0]?.tz || 'Africa/Algiers',
         }).catch(err => console.warn('[gcal push emp-agenda]', err.message));
       } catch (gcErr) { console.warn('[gcal lookup emp-agenda]', gcErr.message); }
     } catch(e){ console.error('[CHECKOUT ERROR]', e.message); res.status(500).json({ error: e.message || 'Erreur serveur.' }); }

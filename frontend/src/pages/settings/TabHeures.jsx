@@ -79,7 +79,7 @@ export default function TabHeures({ theme }) {
                   const cell = data.grid?.[key];
                   return (
                     <div key={h}
-                         title={cell ? `${cell.count} tx · ${Number(cell.revenue).toFixed(0)} €` : '-'}
+                         title={cell ? `${cell.count} tx · ${Number(cell.revenue || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : '-'}
                          style={{ width:24, height:24, borderRadius:6,
                                   background: getCellColor(cell?.count || 0),
                                   cursor:'default', transition:'transform 0.1s' }}

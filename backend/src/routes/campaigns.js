@@ -680,7 +680,7 @@ router.post('/send', requirePlan('essentiel', 'equipe'), async (req, res) => {
       const balance = parseFloat(rows[0]?.sms_balance || 0);
       if (balance < totalCost) {
         return res.status(400).json({
-          error: `Solde SMS insuffisant. Vous avez ${balance.toFixed(2)}€, cette campagne coute ${totalCost.toFixed(2)}€.`
+          error: `Solde SMS insuffisant. Vous avez ${balance.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA, cette campagne coute ${totalCost.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA.`
         });
       }
     }
@@ -890,9 +890,9 @@ router.get('/auto-plan', async (req, res) => {
     const balance = parseFloat(balR[0]?.sms_balance || 0);
 
     if (!budget || budget < 1)
-      return res.status(400).json({ error: 'Budget doit être supérieur à 1 €.' });
+      return res.status(400).json({ error: 'Budget doit être supérieur à 1 DA.' });
     if (budget > balance)
-      return res.status(400).json({ error: `Budget (${budget}€) supérieur au solde disponible (${balance.toFixed(2)}€).`, code: 'INSUFFICIENT_BALANCE' });
+      return res.status(400).json({ error: `Budget (${budget} DA) supérieur au solde disponible (${balance.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA).`, code: 'INSUFFICIENT_BALANCE' });
     if (!duration || duration < 3 || duration > 30)
       return res.status(400).json({ error: 'La durée doit être entre 3 et 30 jours.' });
 
@@ -925,7 +925,7 @@ router.post('/auto-send', requirePlan('essentiel', 'equipe'), async (req, res) =
     const b = Number(budget);
     const d = parseInt(duration_days);
     if (!Number.isFinite(b) || b < 1 || b > 10000)
-      return res.status(400).json({ error: 'Budget invalide (1-10000€).' });
+      return res.status(400).json({ error: 'Budget invalide (1-10000 DA).' });
     if (!Number.isFinite(d) || d < 3 || d > 30)
       return res.status(400).json({ error: 'Durée invalide (3-30 jours).' });
     if (discounts && typeof discounts === 'object') {

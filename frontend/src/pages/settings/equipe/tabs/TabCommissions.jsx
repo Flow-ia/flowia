@@ -33,7 +33,7 @@ export default function TabCommissions({ employees, theme }) {
     finally { setSaving(p => ({ ...p, [empId]: false })); }
   };
 
-  const fmtN = v => Number(v || 0).toFixed(2);
+  const fmtN = v => Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const inp = {
     padding:'9px 12px', borderRadius:8, outline:'none',
     border:`0.5px solid ${t.borderInput}`,
@@ -130,18 +130,18 @@ export default function TabCommissions({ employees, theme }) {
                   {e.employee_name}
                 </p>
                 <p style={{ fontSize:12, color:t.muted, margin:0 }}>
-                  CA : {fmtN(e.total_revenue)} € · Taux : {e.commission_pct || 0} %
+                  CA : {fmtN(e.total_revenue)} DA · Taux : {e.commission_pct || 0} %
                 </p>
               </div>
               <p style={{ fontSize:16, fontWeight:500, color:t.text, margin:0, fontFamily:'monospace' }}>
-                {fmtN(e.commission_due)} €
+                {fmtN(e.commission_due)} DA
               </p>
             </div>
           ))}
           {data?.employees?.length > 0 && (
             <div style={{ padding:'12px 16px', display:'flex', justifyContent:'flex-end' }}>
               <p style={{ fontSize:14, fontWeight:500, color:t.text, margin:0 }}>
-                Total : {fmtN((data.employees || []).reduce((s, e) => s + Number(e.commission_due || 0), 0))} €
+                Total : {fmtN((data.employees || []).reduce((s, e) => s + Number(e.commission_due || 0), 0))} DA
               </p>
             </div>
           )}

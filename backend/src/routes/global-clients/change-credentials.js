@@ -42,7 +42,7 @@ module.exports = function attachChangeCredentialsRoutes(router) {
       // Envoi asynchrone à l'ancien email — authentifie le propriétaire
       setImmediate(() => sendVerificationEmail(
         currentEmail, code,
-        'Confirmez le changement de votre email — FlowIA',
+        'Confirmez le changement de votre email — Salon DZ',
         'email'
       ).catch(e => console.error('[EMAIL gc change-email]', e.message)));
 
@@ -162,7 +162,7 @@ module.exports = function attachChangeCredentialsRoutes(router) {
 
       setImmediate(() => sendVerificationEmail(
         rows[0].email, code,
-        'Confirmez le changement de votre mot de passe — FlowIA',
+        'Confirmez le changement de votre mot de passe — Salon DZ',
         'password'
       ).catch(e => console.error('[EMAIL gc change-pwd]', e.message)));
 

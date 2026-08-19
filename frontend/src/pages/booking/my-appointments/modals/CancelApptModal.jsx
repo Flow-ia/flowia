@@ -21,7 +21,7 @@ function computeRefundPreview(appt) {
   const safePolicy = Number.isFinite(policyHours) ? policyHours : 2;
   const cents = Number(appt.paid_amount_cents || 0);
   const wasPaidOnline = appt.payment_status === 'paid' && cents > 0;
-  const amountEur = (cents / 100).toFixed(2).replace('.', ',');
+  const amountEur = (cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   // Calcule le delta heures jusqu'au start du RDV (comme cote backend, cf
   // client-profile.js endpoint cancel).
@@ -49,7 +49,7 @@ function computeRefundPreview(appt) {
   if (isWithinPolicy) {
     return {
       kind: 'refund_full',
-      title: `Remboursement intégral de ${amountEur} €`,
+      title: `Remboursement intégral de ${amountEur} DA`,
       message: 'Vous êtes dans les délais d\'annulation : votre carte sera créditée intégralement sous 3 à 5 jours ouvrés.',
       bg: '#f0fdf4', border: '#bbf7d0', accent: '#10b981',
     };
@@ -60,7 +60,7 @@ function computeRefundPreview(appt) {
     : `${safePolicy} h`;
   return {
     kind: 'no_refund_too_late',
-    title: `Aucun remboursement — acompte de ${amountEur} € conservé`,
+    title: `Aucun remboursement — acompte de ${amountEur} DA conservé`,
     message: `Le salon accepte les annulations gratuites jusqu'à ${policyLabel} avant le RDV. Au-delà, l'acompte n'est pas remboursé.`,
     bg: '#fffbeb', border: '#fde68a', accent: '#d97706',
   };

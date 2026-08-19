@@ -151,7 +151,7 @@ export default function TabReferral({ theme, showToast }) {
             <p style={{ fontSize:11, color:'#4338ca', margin:0 }}>
               Total des remises filleul accordees :{' '}
               <strong style={{ fontWeight:500, fontFamily:'var(--mono)' }}>
-                {stats.filleul_discount_total.toFixed(2)} €
+                {stats.filleul_discount_total.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
               </strong>
             </p>
           </div>
@@ -217,7 +217,7 @@ export default function TabReferral({ theme, showToast }) {
                   onChange={e => setCfg(c => ({ ...c, parrain_type:e.target.value }))}
                   style={{ ...inp, cursor:'pointer' }}>
             <option value="percent">%</option>
-            <option value="fixed">Montant fixe (€)</option>
+            <option value="fixed">Montant fixe (DA)</option>
           </select>
           <input type="number" min="0" step="0.01" value={cfg.parrain_value}
                  onChange={e => setCfg(c => ({ ...c, parrain_value:e.target.value }))} style={inp}/>
@@ -229,7 +229,7 @@ export default function TabReferral({ theme, showToast }) {
                   onChange={e => setCfg(c => ({ ...c, filleul_type:e.target.value }))}
                   style={{ ...inp, cursor:'pointer' }}>
             <option value="percent">%</option>
-            <option value="fixed">Montant fixe (€)</option>
+            <option value="fixed">Montant fixe (DA)</option>
           </select>
           <input type="number" min="0" step="0.01" value={cfg.filleul_value}
                  onChange={e => setCfg(c => ({ ...c, filleul_value:e.target.value }))} style={inp}/>

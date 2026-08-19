@@ -173,7 +173,7 @@ export function AuthPanel({ slug, th, onAuth, onClose, requireAccount, initialEm
           // global (useAuth) prend le relais.
           if (ev.data.error === 'ACCOUNT_BLOCKED' || ev.data.error === 'ACCOUNT_FROZEN') {
             setGStatus('idle'); setGError('');
-            const text = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+            const text = 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.';
             try { sessionStorage.setItem('ff_account_blocked_msg', text); } catch {}
             try { window.dispatchEvent(new CustomEvent('ff-account-blocked', { detail: { message: text } })); } catch {}
             return;

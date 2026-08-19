@@ -18,9 +18,11 @@ import Industries    from './pages/site-marketing/Industries';
 import About         from './pages/site-marketing/About';
 import Contact       from './pages/site-marketing/Contact';
 import ClientPortal  from './pages/site-marketing/ClientPortal';
+import GenderGate    from './pages/site-marketing/GenderGate';
 import LegalNotice   from './pages/site-marketing/LegalNotice';
 import Privacy       from './pages/site-marketing/Privacy';
 import Terms         from './pages/site-marketing/Terms';
+import { publicSiteOverride } from './utils/marketingUrl';
 import { AuthProvider } from './hooks/useAuth';
 import { AdminProvider } from './hooks/useAdmin';
 import { ThemeProvider } from './hooks/useTheme';
@@ -69,6 +71,11 @@ function isMarketingHost() {
       window.__PRERENDER_INJECTED.isPrerender) {
     return true;
   }
+  // Salon DZ (branche de test) : ?site=public force le site public (porte
+  // homme/femme + marketplace) sur une preview Vercel ; ?site=app revient a
+  // l'app commercant. Persiste en sessionStorage (cf. utils/marketingUrl).
+  const ov = publicSiteOverride();
+  if (ov !== null) return ov;
   const h = hostname();
   return h === 'flowiapro.com' || h === 'www.flowiapro.com';
 }
@@ -161,6 +168,7 @@ function QuickJoinRedirect() {
 // utils/marketingUrl.MarketingLink, donc on n'arrive ici que par typage
 // d'URL direct ou via un vieux lien externe.
 const MARKETING_PATHS = [
+  '/pro',
   '/fonctionnalites',
   '/tarifs',
   '/pour-qui',
@@ -193,8 +201,12 @@ function RootSwitch() {
   if (isMarketingHost()) {
     return (
       <Routes>
+        {/* Salon DZ : l'entree du site public est la porte homme/femme,
+            rendue HORS MarketingLayout (plein ecran, sans header/footer).
+            Le site vitrine pro (ancienne Landing) vit desormais sur /pro. */}
+        <Route path="/" element={<GenderGate />} />
         <Route element={<MarketingLayout />}>
-          <Route path="/"                  element={<Landing />} />
+          <Route path="/pro"               element={<Landing />} />
           <Route path="/fonctionnalites"   element={<Features />} />
           <Route path="/tarifs"            element={<Pricing />} />
           <Route path="/pour-qui"          element={<Industries />} />

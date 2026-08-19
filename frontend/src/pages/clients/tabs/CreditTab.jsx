@@ -3,6 +3,9 @@ import { fmtDate } from '../helpers';
 import { PAYMENT_METHODS, PLABELS } from '../constants';
 import { Button, Label } from '../../../components/primitives';
 
+// Affichage marche DZ : "1 500" (espace milliers, pas de decimales terminales).
+const fmtDA = (n) => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
 // ─── Onglet Credit ────────────────────────────────────────────────────────────
 export default function CreditTab({
   theme, card, inp, lbl,
@@ -71,7 +74,7 @@ export default function CreditTab({
                 lineHeight: 1,
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               }}>
-                {balance.toFixed(2)} €
+                {fmtDA(balance)} DA
               </p>
             </div>
             <span style={{
@@ -98,20 +101,20 @@ export default function CreditTab({
               <div>
                 <p style={{ fontSize: 10, color: hasDebt ? '#991b1b' : '#065f46', opacity: 0.7, fontWeight: 500, margin: '0 0 2px' }}>Accorde</p>
                 <p style={{ fontSize: 14, fontWeight: 500, color: hasDebt ? '#991b1b' : '#065f46', margin: 0 }}>
-                  {parseFloat(creditData.credit.total_granted).toFixed(2)} €
+                  {fmtDA(parseFloat(creditData.credit.total_granted))} DA
                 </p>
               </div>
               <div>
                 <p style={{ fontSize: 10, color: hasDebt ? '#991b1b' : '#065f46', opacity: 0.7, fontWeight: 500, margin: '0 0 2px' }}>Rembourse</p>
                 <p style={{ fontSize: 14, fontWeight: 500, color: hasDebt ? '#991b1b' : '#065f46', margin: 0 }}>
-                  {parseFloat(creditData.credit.total_repaid).toFixed(2)} €
+                  {fmtDA(parseFloat(creditData.credit.total_repaid))} DA
                 </p>
               </div>
               {hasDebt && (
                 <div>
                   <p style={{ fontSize: 10, color: '#991b1b', opacity: 0.7, fontWeight: 500, margin: '0 0 2px' }}>Reste du</p>
                   <p style={{ fontSize: 14, fontWeight: 500, color: '#991b1b', margin: 0 }}>
-                    {balance.toFixed(2)} €
+                    {fmtDA(balance)} DA
                   </p>
                 </div>
               )}
@@ -169,12 +172,12 @@ export default function CreditTab({
             </p>
 
             <div style={{ marginBottom: 10 }}>
-              <label style={lbl}>Montant (€) *</label>
+              <label style={lbl}>Montant (DA) *</label>
               <input
                 type="number"
                 min="0.01"
                 step="0.01"
-                placeholder="0.00"
+                placeholder="0"
                 value={creditAmt}
                 onChange={e => setCreditAmt(e.target.value)}
                 style={amountInputStyle}
@@ -221,7 +224,7 @@ export default function CreditTab({
                 disabled={creditBusy || !creditAmt || parseFloat(creditAmt) <= 0}
                 style={{ flex: 2 }}
               >
-                {creditBusy ? '...' : `Confirmer ${creditAmt ? parseFloat(creditAmt).toFixed(2) + ' €' : ''}`}
+                {creditBusy ? '...' : `Confirmer ${creditAmt ? fmtDA(parseFloat(creditAmt)) + ' DA' : ''}`}
               </Button>
             </div>
           </div>
@@ -232,16 +235,16 @@ export default function CreditTab({
           <div style={{ ...card, padding: 14, marginBottom: 12 }}>
             <p style={{ fontSize: 13, fontWeight: 500, color: theme.text, margin: '0 0 12px' }}>
               Encaisser un paiement — Solde du :{' '}
-              <span style={{ color: '#991b1b' }}>{balance.toFixed(2)} €</span>
+              <span style={{ color: '#991b1b' }}>{fmtDA(balance)} DA</span>
             </p>
 
             <div style={{ marginBottom: 10 }}>
-              <label style={lbl}>Montant encaisse (€) *</label>
+              <label style={lbl}>Montant encaisse (DA) *</label>
               <input
                 type="number"
                 min="0.01"
                 step="0.01"
-                placeholder="0.00"
+                placeholder="0"
                 max={balance}
                 value={repayAmt}
                 onChange={e => setRepayAmt(e.target.value)}
@@ -272,7 +275,7 @@ export default function CreditTab({
                     }}
                   >
                     {pct}%<br/>
-                    <span style={{ fontSize: 10 }}>{v} €</span>
+                    <span style={{ fontSize: 10 }}>{fmtDA(v)} DA</span>
                   </button>
                 );
               })}
@@ -293,7 +296,7 @@ export default function CreditTab({
                 }}
               >
                 Tout<br/>
-                <span style={{ fontSize: 10 }}>{balance.toFixed(2)} €</span>
+                <span style={{ fontSize: 10 }}>{fmtDA(balance)} DA</span>
               </button>
             </div>
 
@@ -372,7 +375,7 @@ export default function CreditTab({
                 disabled={creditBusy || !repayAmt || parseFloat(repayAmt) <= 0}
                 style={{ flex: 2 }}
               >
-                {creditBusy ? '...' : `Encaisser ${repayAmt ? parseFloat(repayAmt).toFixed(2) + ' €' : ''}`}
+                {creditBusy ? '...' : `Encaisser ${repayAmt ? fmtDA(parseFloat(repayAmt)) + ' DA' : ''}`}
               </Button>
             </div>
           </div>
@@ -418,7 +421,7 @@ export default function CreditTab({
                           flexShrink: 0,
                           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                         }}>
-                          {isGrant ? '+' : '-'}{parseFloat(op.amount).toFixed(2)} €
+                          {isGrant ? '+' : '-'}{fmtDA(parseFloat(op.amount))} DA
                         </span>
                       </div>
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -304,7 +304,7 @@ export default function ServiceDropdown({
                       flexShrink: 0,
                     }}>
                       {svc.price != null
-                        ? Number(svc.price).toFixed(2).replace(".", ",") + " €"
+                        ? Number(svc.price || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " DA"
                         : ""}
                     </span>
                   </button>

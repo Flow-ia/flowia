@@ -77,7 +77,7 @@ export default function ListView({
           <div style={{ display:'flex', gap:6, flexShrink:0 }}>
             {debtsCount > 0 && (
               <button type="button" onClick={() => setView('debts')}
-                      title="Créances (dettes) impayées — recouvrement RGPD"
+                      title="Créances (dettes) impayées — recouvrement loi 18-07"
                       style={{ display:'inline-flex', alignItems:'center', gap:6,
                                padding:'7px 10px', borderRadius:8,
                                background:'rgba(239,68,68,0.08)', color:'#991b1b',
@@ -314,7 +314,7 @@ export default function ListView({
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: theme.text }}>
-                      {Number(cl.total_spent || 0).toFixed(0)} €
+                      {Number(cl.total_spent || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DA
                     </span>
                     <span style={{ fontSize: 11, color: theme.muted }}>
                       {visits} visite{visits !== 1 ? 's' : ''}

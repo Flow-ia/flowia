@@ -203,13 +203,13 @@ export default function MerchantDetailPage() {
     e.preventDefault();
     const amt = Number(String(smsAmount).replace(',', '.'));
     if (!Number.isFinite(amt) || amt <= 0) { setError('Montant invalide.'); return; }
-    if (amt > 1000) { setError('Cap par operation : 1000 euros.'); return; }
+    if (amt > 1000) { setError('Cap par operation : 1000 DA.'); return; }
     if (!smsReason.trim()) { setError('Motif requis.'); return; }
     const delta = smsDir === 'sub' ? -amt : amt;
     setBusy(true); setError(''); setSuccess('');
     try {
       const r = await adjustMerchantSmsBalance(id, { delta, reason: smsReason.trim() });
-      setSuccess(`Solde ajuste : ${r.sms_balance.toFixed(2)} euros (${delta > 0 ? '+' : ''}${delta.toFixed(2)}).`);
+      setSuccess(`Solde ajuste : ${Number(r.sms_balance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA (${delta > 0 ? '+' : ''}${Number(delta || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}).`);
       setSmsOpen(false); setSmsAmount(''); setSmsReason(''); setSmsDir('add');
       await load();
     } catch (err) {
@@ -235,7 +235,7 @@ export default function MerchantDetailPage() {
 
   if (!merchant) {
     return (
-      <AppShell me={me} footer="FlowIA Admin — Commercants">
+      <AppShell me={me} footer="Salon DZ Admin — Commercants">
         <Link to="/merchants" className="btn-ghost">{"← Retour"}</Link>
         {error
           ? <div className="login-error" style={{ marginTop: 16 }}>{error}</div>
@@ -247,7 +247,7 @@ export default function MerchantDetailPage() {
   const stats = merchant.stats || {};
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Commercants">
+    <AppShell me={me} footer="Salon DZ Admin — Commercants">
       <Link to="/merchants" className="btn-ghost">{"← Retour"}</Link>
 
       <div className="page-head" style={{ marginTop: 16 }}>
@@ -291,7 +291,7 @@ export default function MerchantDetailPage() {
               );
             }
             const waMsg = encodeURIComponent(
-              `Bonjour, c'est l'equipe FlowIA. On vous accompagne pour finaliser votre inscription.`
+              `Bonjour, c'est l'equipe Salon DZ. On vous accompagne pour finaliser votre inscription.`
             );
             return (
               <a className="btn-ghost" href={`https://wa.me/${digits}?text=${waMsg}`}
@@ -448,7 +448,7 @@ export default function MerchantDetailPage() {
         <ul className="dash-list">
           <li>
             <span className="k">{"Solde actuel"}</span>
-            <span className="v mono">{merchant.sms_balance != null ? `${Number(merchant.sms_balance).toFixed(2)} €` : '—'}</span>
+            <span className="v mono">{merchant.sms_balance != null ? `${Number(merchant.sms_balance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : '—'}</span>
           </li>
         </ul>
 
@@ -456,14 +456,14 @@ export default function MerchantDetailPage() {
           <form onSubmit={doAdjustSms} className="form-stack" style={{ marginTop: 12 }}>
             <p className="card-sub" style={{ margin: 0 }}>
               {smsDir === 'add' ? "Ajout de credit (geste commercial, compensation, etc.)." : "Retrait de credit (correction d'erreur, ajustement)."}
-              {" Cap par operation : 1000 €. Audit log obligatoire."}
+              {" Cap par operation : 1000 DA. Audit log obligatoire."}
             </p>
-            <label className="field"><span>{"Montant en euros (positif)"}</span>
+            <label className="field"><span>{"Montant en DA (positif)"}</span>
               <input
                 type="number" min="0.01" max="1000" step="0.01"
                 value={smsAmount}
                 onChange={(e) => setSmsAmount(e.target.value)}
-                placeholder="Ex: 25.00"
+                placeholder="Ex: 500"
                 required autoFocus
               />
             </label>
@@ -494,7 +494,7 @@ export default function MerchantDetailPage() {
           <li><span className="k">{"Clients"}</span><span className="v">{stats.clients_count ?? '—'}</span></li>
           <li><span className="k">{"Employes actifs"}</span><span className="v">{stats.employees_active ?? '—'}</span></li>
           <li><span className="k">{"Transactions"}</span><span className="v">{stats.transactions_count ?? '—'}</span></li>
-          <li><span className="k">{"CA total"}</span><span className="v">{stats.revenue_total ? `${Number(stats.revenue_total).toFixed(2)} €` : '—'}</span></li>
+          <li><span className="k">{"CA total"}</span><span className="v">{stats.revenue_total ? `${Number(stats.revenue_total || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : '—'}</span></li>
           <li><span className="k">{"Dernier RDV"}</span><span className="v mono">{stats.last_appointment_at ? new Date(stats.last_appointment_at).toLocaleString('fr-FR') : '—'}</span></li>
         </ul>
       </section>

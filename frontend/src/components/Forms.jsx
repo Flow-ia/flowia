@@ -191,15 +191,15 @@ export function CategoryForm({ open, onClose, onSubmit, init, allCategories = []
                   <input type="number" step="0.01" min="0"
                          value={f.price === 'FREE' ? '' : f.price}
                          onChange={e => setF({ ...f, price:e.target.value })}
-                         placeholder="Ex : 25.00"
+                         placeholder="Ex : 2 500"
                          style={{ flex:1, border:'none', padding:'10px 0', background:'transparent',
                                   outline:'none', color:t.text, fontSize:14, fontFamily:'inherit', minWidth:0 }}/>
-                  <span style={{ fontSize:13, color:t.muted, marginLeft:8, userSelect:'none' }}>€</span>
+                  <span style={{ fontSize:13, color:t.muted, marginLeft:8, userSelect:'none' }}>DA</span>
                 </div>
                 {f.price && f.price !== 'FREE' && parseFloat(f.price) > 0 && (
                   <div style={{ marginTop:8, padding:'6px 12px', borderRadius:8, background:'#f0fdf4' }}>
                     <p style={{ fontSize:12, fontWeight:500, color:'#065f46', margin:0 }}>
-                      {`Prix defini : ${parseFloat(f.price).toFixed(2)} € — appliquera automatiquement en caisse.`}
+                      {`Prix defini : ${Number(f.price || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA — appliquera automatiquement en caisse.`}
                     </p>
                   </div>
                 )}
@@ -636,7 +636,7 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
       ? items.map(it => `${it.service_name || 'Article'} (${parseInt(it.qty) || 1})`).join(' · ')
       : (cat?.name || src.description || (src.type === 'expense' ? 'Depense' : 'Transaction'));
     const isMulti = src.payment_method === 'multi' && Array.isArray(src.payments) && src.payments.length > 0;
-    const amountStr = `${(src.type === 'expense' ? '-' : '+')}${Number(src.amount || 0).toFixed(2)} €`;
+    const amountStr = `${(src.type === 'expense' ? '-' : '+')}${Number(src.amount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 
     return (
       <div style={{ padding:16, borderRadius:10,
@@ -679,7 +679,7 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
                                  padding:'2px 8px', borderRadius:99,
                                  background:pi.bg, color:pi.color,
                                  fontSize:11, fontWeight:500 }}>
-                    {pi.label} {Number(p.amount || 0).toFixed(2)} €
+                    {pi.label} {Number(p.amount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                   </span>
                 );
               })
@@ -721,7 +721,7 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
 
         <div>
           <FormLabel>
-            Montant (€) *{' '}
+            Montant (DA) *{' '}
             {f.items.length > 0 && (
               <span style={{ color:t.dim, fontWeight:400 }}>— calcule depuis les articles</span>
             )}
@@ -731,7 +731,7 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
                      onChange={e => setF({ ...f, amount:e.target.value })}
                      required={f.items.length === 0}
                      readOnly={f.items.length > 0}
-                     placeholder="0.00"
+                     placeholder="0"
                      style={{ fontSize:22, fontWeight:500,
                               fontFamily:'var(--mono,"DM Mono",monospace)',
                               textAlign:'center',
@@ -778,11 +778,11 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
                              style={inputStyle(t, { padding:'8px 10px', fontSize:13, textAlign:'center' })}/>
                       <input type="number" min="0" step="0.01" value={it.unit_price}
                              onChange={e => updItem(i, { unit_price: e.target.value === '' ? '' : e.target.value })}
-                             placeholder="Prix unit. (€)"
+                             placeholder="Prix unit. (DA)"
                              style={inputStyle(t, { padding:'8px 10px', fontSize:13 })}/>
                       <span style={{ fontSize:12, fontWeight:500, color:t.text, fontFamily:'monospace',
                                      minWidth:60, textAlign:'right' }}>
-                        {lineTotal.toFixed(2)} €
+                        {Number(lineTotal || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                       </span>
                     </div>
                   </div>
@@ -792,7 +792,7 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
                             padding:'8px 12px', borderRadius:8, background:t.cardAlt }}>
                 <span style={{ fontSize:12, color:t.muted }}>Total articles</span>
                 <span style={{ fontSize:14, fontWeight:500, color:t.text, fontFamily:'monospace' }}>
-                  {itemsTotal.toFixed(2)} €
+                  {Number(itemsTotal || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                 </span>
               </div>
             </div>
@@ -939,7 +939,7 @@ export function TransactionForm({ open, onClose, onSubmit, employees, categories
                 </span>
                 <span style={{ fontSize:12, fontWeight:500, fontFamily:'monospace',
                                color: splitValid ? '#065f46' : '#991b1b' }}>
-                  {paymentsSum.toFixed(2)} € / {effectiveAmount.toFixed(2)} €
+                  {Number(paymentsSum || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA / {Number(effectiveAmount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                 </span>
               </div>
             </div>

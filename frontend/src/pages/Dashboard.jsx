@@ -34,7 +34,7 @@ const initials = (s = '') => {
 };
 
 const nd   = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
-const fmt  = n => Number(n || 0).toFixed(2);
+const fmt  = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 // Moyens de paiement — pastels sobres (bg + accent text de meme famille).
 // 'card_online' = paiement Stripe Connect (acompte / integral) cote client,
@@ -692,7 +692,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
   if (smsBalance !== null && smsBalance < smsThreshold) {
     alerts.push({
       id: 'sms', level: 'warn',
-      label: "Solde SMS bas · " + smsBalance.toFixed(2) + " € (seuil " + smsThreshold + " €)",
+      label: "Solde SMS bas · " + fmt(smsBalance) + " DA (seuil " + fmt(smsThreshold) + " DA)",
       onClick: () => navigate('/marketing/sms'),
     });
   }
@@ -710,8 +710,8 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
   const empNames   = activeEmps.map(e => e.name).filter(Boolean).join(', ');
   const empById    = id => (employees || []).find(e => e.id === id);
 
-  // Montants façon maquette : entier + séparateur milliers ("1 179 €").
-  const eur = n => Number(n || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
+  // Montants façon maquette : entier + séparateur milliers ("1 179 DA").
+  const eur = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   // KPIs maquette : ticket moyen + RDV terminés/restants.
   const ticket     = nbSales  ? caToday / nbSales : 0;
@@ -903,7 +903,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
                 </p>
                 <p style={{ margin: 0, fontSize: 17, fontWeight: 500, color: t.text,
                             lineHeight: 1 }}>
-                  {eur(byPM[id] || 0)} €
+                  {eur(byPM[id] || 0)} DA
                 </p>
                 <p style={{ margin: 0, fontSize: 10, color: t.muted }}>
                   {(pmTxCount[id] || 0) + " tx"}
@@ -954,13 +954,13 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
             <div style={{ ...card }}>
               <p style={{ ...label, marginBottom: 5 }}>{"CA total"}</p>
               <p style={{ margin: 0, fontSize: 21, fontWeight: 500, color: t.text,
-                          lineHeight: 1 }}>{eur(caToday)} €</p>
+                          lineHeight: 1 }}>{eur(caToday)} DA</p>
               <Pill cur={caToday} prev={caYest}/>
             </div>
             <div style={{ ...card }}>
               <p style={{ ...label, marginBottom: 5 }}>{"Ticket moyen"}</p>
               <p style={{ margin: 0, fontSize: 21, fontWeight: 500, color: t.text,
-                          lineHeight: 1 }}>{eur(ticket)} €</p>
+                          lineHeight: 1 }}>{eur(ticket)} DA</p>
               <Pill cur={ticket} prev={ticketYest}/>
             </div>
             <div style={{ ...card }}>
@@ -976,10 +976,10 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
                           color: smsLow ? '#A32D2D' : t.muted }}>{"SMS restants"}</p>
               <p style={{ margin: 0, fontSize: 21, fontWeight: 500,
                           color: smsLow ? '#A32D2D' : t.text, lineHeight: 1 }}>
-                {smsBalance === null ? "…" : fmt(smsBalance) + " €"}
+                {smsBalance === null ? "…" : fmt(smsBalance) + " DA"}
               </p>
               <p style={{ margin:'4px 0 0', fontSize: 11, color: t.muted }}>
-                {"seuil alerte : " + smsThreshold + " €"}
+                {"seuil alerte : " + smsThreshold + " DA"}
               </p>
             </div>
           </div>
@@ -991,7 +991,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
                         alignItems:'baseline', marginBottom: 8 }}>
             <span style={{ ...label, marginBottom: 0 }}>{"CA · 7 derniers jours"}</span>
             <span style={{ fontSize: 12, fontWeight: 500, color: t.text }}>
-              {"Total : " + eur(total7j) + " €"}
+              {"Total : " + eur(total7j) + " DA"}
             </span>
           </div>
           <svg width="100%" height="52" viewBox={"0 0 " + SW + " " + SH}
@@ -1084,7 +1084,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
                       {price > 0 && (
                         <span style={{ fontSize: 12, fontWeight: 500, color: t.text,
                                        flexShrink: 0 }}>
-                          {eur(price)} €
+                          {eur(price)} DA
                         </span>
                       )}
                     </div>
@@ -1130,7 +1130,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
                   {e.count + " tx"}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 500, color: t.text }}>
-                  {eur(e.ca)} €
+                  {eur(e.ca)} DA
                 </span>
               </div>
             ))}
@@ -1223,7 +1223,7 @@ export default function Dashboard({ transactions, employees, onAdd, onNavigate, 
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 500, color: t.text,
                                  textAlign:'right', fontFamily:'monospace' }}>
-                    {fmt(tx.amount)} €
+                    {fmt(tx.amount)} DA
                   </span>
                 </div>
               );

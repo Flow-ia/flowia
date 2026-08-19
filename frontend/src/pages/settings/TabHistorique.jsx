@@ -124,7 +124,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
                       </p>
                       <span style={{ fontSize:15, fontWeight:500, fontFamily:"'DM Mono', monospace",
                                      color:amountColor, flexShrink:0 }}>
-                        {isRefund ? '-' : (isRev ? '+' : '-')}{fmt(Math.abs(Number(tx.amount)))} €
+                        {isRefund ? '-' : (isRev ? '+' : '-')}{fmt(Math.abs(Number(tx.amount)))} DA
                       </span>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
@@ -189,10 +189,10 @@ export default function TabHistorique({ transactions, employees, categories, onU
                                   <span style={{ overflow:'hidden', textOverflow:'ellipsis',
                                                  whiteSpace:'nowrap' }}>
                                     {q} × {it.service_name}{' '}
-                                    <span style={{ color:t.dim }}>@ {fmt(up)}€</span>
+                                    <span style={{ color:t.dim }}>@ {fmt(up)} DA</span>
                                   </span>
                                   <span style={{ fontWeight:500, flexShrink:0, marginLeft:8 }}>
-                                    {fmt(q * up)} €
+                                    {fmt(q * up)} DA
                                   </span>
                                 </div>
                               );
@@ -212,7 +212,7 @@ export default function TabHistorique({ transactions, employees, categories, onU
                                                padding:'2px 8px', borderRadius:99,
                                                background:pi.bg, color:pi.color,
                                                fontSize:11, fontWeight:500 }}>
-                                  {pi.label} {fmt(p.amount)}€
+                                  {pi.label} {fmt(p.amount)} DA
                                 </span>
                               );
                             })}

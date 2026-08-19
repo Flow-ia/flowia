@@ -180,7 +180,7 @@ export function AppointmentsTab({
                       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                       whiteSpace: 'nowrap',
                     }}>
-                      {Number(a.service_price).toFixed(2)} €
+                      {Number(a.service_price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                     </span>
                   )}
                   <span style={{

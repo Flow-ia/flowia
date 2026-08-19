@@ -144,17 +144,17 @@ async function reconcileOrphanPayments(pool) {
       if (row.client_email) {
         try {
           const { sendMarketingEmailRaw } = require('./emailSender');
-          const amountEur = ((row.amount_cents || 0) / 100).toFixed(2).replace('.', ',');
+          const amountEur = ((row.amount_cents || 0) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
           await sendMarketingEmailRaw({
             to:          row.client_email,
             toName:      '',
             subject:     'Votre paiement a ete rembourse — reservation non aboutie',
             type:        'transactional',
             htmlContent: `<p>Bonjour,</p>
-                          <p>Votre paiement de <b>${amountEur} EUR</b> pour une reservation en ligne n'a pas pu etre finalise (la reservation n'a pas ete enregistree).</p>
+                          <p>Votre paiement de <b>${amountEur} DA</b> pour une reservation en ligne n'a pas pu etre finalise (la reservation n'a pas ete enregistree).</p>
                           <p>Nous venons de le <b>rembourser integralement</b>. Le montant reapparaitra sur votre compte sous 5 a 10 jours ouvres selon votre banque.</p>
                           <p>Vous pouvez refaire votre reservation a tout moment.</p>
-                          <p>L'equipe FlowIA</p>`,
+                          <p>L'equipe Salon DZ</p>`,
           });
         } catch (mailErr) {
           console.error('[CRON orphans] email client fail:', mailErr.message);

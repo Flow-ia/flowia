@@ -39,7 +39,7 @@ function fmtDate(d) {
 function fmtValue(row) {
   const v = parseFloat(row.value);
   if (!Number.isFinite(v)) return '—';
-  return row.type === 'percent' ? `${v}%` : `${v.toFixed(2)} €`;
+  return row.type === 'percent' ? `${v}%` : `${Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 }
 
 export default function MerchantPromoCodesSection({ merchantId }) {

@@ -328,7 +328,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               </p>
             )}
             <p style={{ textAlign:'center', fontSize:12, color:th.muted, margin:'10px 0 0' }}>
-              Un seul compte pour tous vos commerçants FlowIA
+              Un seul compte pour tous vos commerçants Salon DZ
             </p>
           </div>
         )}
@@ -377,7 +377,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                     {fmtD(a.date)} · {(a.start_time||'').slice(0,5)}
                     {a.employee_name ? ` · ${a.employee_name}` : ''}
                   </p>
-                  {a.total_amount && <p style={{ margin:'4px 0 0', fontSize:13, fontWeight: 500, color:'#10b981' }}>{Number(a.total_amount).toFixed(2)} €</p>}
+                  {a.total_amount && <p style={{ margin:'4px 0 0', fontSize:13, fontWeight: 500, color:'#10b981' }}>{Number(a.total_amount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</p>}
                 </div>
               ))}
             </div>
@@ -486,8 +486,8 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
               <div style={{ background:th.card, borderRadius:20, padding:20, border: `0.5px solid ${th.border}` }}>
                 <p style={{ margin:'0 0 4px', fontWeight: 500, fontSize:15, color:th.text }}>📦 Mes données personnelles</p>
                 <p style={{ margin:'0 0 14px', fontSize:12, color:th.muted, lineHeight:1.5 }}>
-                  Conformément au RGPD (Art. 20), vous pouvez télécharger l'ensemble de vos données personnelles
-                  stockées sur FlowIA : compte, rendez-vous, fidélité.
+                  Conformément à la loi 18-07, vous pouvez télécharger l'ensemble de vos données personnelles
+                  stockées sur Salon DZ : compte, rendez-vous, fidélité.
                 </p>
                 <button onClick={exportMyData} disabled={exportLoad}
                   style={{ width:'100%', padding:'12px', borderRadius:12,
@@ -552,7 +552,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                           <div key={i} style={{ display:'flex', justifyContent:'space-between',
                                                 fontSize:12, color:'#7c2d12', padding:'4px 0' }}>
                             <span>{c.merchant_name}</span>
-                            <span style={{ fontWeight:500 }}>{c.amount.toFixed(2)} €</span>
+                            <span style={{ fontWeight:500 }}>{c.amount.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</span>
                           </div>
                         ))}
                         <p style={{ margin:'8px 0 0', fontSize:11, color:'#92400e', lineHeight:1.5 }}>
@@ -572,14 +572,14 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                           <div key={i} style={{ display:'flex', justifyContent:'space-between',
                                                 fontSize:12, color:'#991b1b', padding:'4px 0' }}>
                             <span>{d.merchant_name}</span>
-                            <span style={{ fontWeight:500 }}>−{d.amount.toFixed(2)} €</span>
+                            <span style={{ fontWeight:500 }}>−{d.amount.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</span>
                           </div>
                         ))}
                         <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', lineHeight:1.6 }}>
                           La suppression de votre compte <strong>ne vous libère pas de ces dettes</strong>.
                           Vos coordonnées (nom, email, téléphone) seront <strong>conservées 2 ans</strong>
                           par le(s) commerçant(s) concerné(s) pour permettre le recouvrement, conformément
-                          à l'<strong>Article 17.3.e du RGPD</strong>. Au-delà, elles seront automatiquement effacées.
+                          à la <strong>loi 18-07</strong>. Au-delà, elles seront automatiquement effacées.
                         </p>
                       </div>
                     )}
@@ -626,7 +626,7 @@ export function GlobalAccountView({ th, gcToken, gcUser, onLogin, onLogout, onBa
                       ['Données collectées', 'Lors de votre inscription et de vos réservations, nous collectons : prénom, nom, email, téléphone. Ces données sont nécessaires pour gérer vos rendez-vous.'],
                       ['Finalité', "Vos données sont utilisées exclusivement pour : la gestion de vos réservations, l'envoi de confirmations et rappels, le programme de fidélité."],
                       ['Durée de conservation', 'Vos données personnelles sont conservées le temps de votre inscription. Les historiques de transactions sont conservés de façon anonyme à des fins comptables.'],
-                      ['Vos droits (Art. 15-22 RGPD)', "Vous disposez d'un droit d'accès, de rectification, d'effacement, de portabilité et d'opposition. Exercez-les depuis votre profil ou en contactant le commerçant."],
+                      ['Vos droits (loi 18-07)', "Vous disposez d'un droit d'accès, de rectification, d'effacement, de portabilité et d'opposition. Exercez-les depuis votre profil ou en contactant le commerçant."],
                       ['Sécurité', "Vos mots de passe sont chiffrés (bcrypt). Les communications sont sécurisées par SSL/TLS. Aucune donnée n'est vendue à des tiers."],
                       ['Contact', "Pour toute question relative à vos données personnelles, contactez directement le commerçant ou écrivez à l'adresse indiquée sur le site de réservation."],
                     ].map(([title, text]) => (

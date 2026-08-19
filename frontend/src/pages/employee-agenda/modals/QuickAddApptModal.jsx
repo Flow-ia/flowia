@@ -515,7 +515,7 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
                     type="tel"
                     value={newClient.phone}
                     onChange={e=>setNewClient(p=>({...p,phone:e.target.value}))}
-                    placeholder="06 00 00 00 00"
+                    placeholder="05 50 12 34 56"
                     style={inputStyle}
                   />
                 </div>
@@ -653,7 +653,7 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
                 background: '#f0fdf4',
                 color: '#065f46',
               }}>
-                {autoTotal.toFixed(2)} € · {autoDuration}min
+                {autoTotal.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA · {autoDuration}min
               </span>
             )}
           </div>
@@ -769,7 +769,7 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
                                 }}>{svc.name}</p>
                                 <p style={{ margin:0, fontSize:11, color:t.muted }}>
                                   {svc.duration_minutes}min
-                                  {parseFloat(svc.price) > 0 ? ` · ${parseFloat(svc.price).toFixed(2)} €` : ''}
+                                  {parseFloat(svc.price) > 0 ? ` · ${parseFloat(svc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : ''}
                                 </p>
                               </div>
                               {inCart ? (
@@ -922,7 +922,7 @@ export default function QuickAddApptModal({ employees, services, onSave, onClose
               Creation en cours…
             </>
           ) : (
-            <>Creer le rendez-vous{autoTotal > 0 ? ` · ${autoTotal.toFixed(2)} €` : ''}</>
+            <>Creer le rendez-vous{autoTotal > 0 ? ` · ${autoTotal.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : ''}</>
           )}
         </Button>
 

@@ -21,7 +21,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { I } from '../../utils/icons';
 import { todayStr } from '../../utils/dates';
-import { Card, nd, fmt, PAY_KEYS } from '../settings/shared';
+import { Card, nd, PAY_KEYS } from '../settings/shared';
+
+// Montant marche DZ : "1 500" (espace milliers, pas de decimales terminales).
+const fmtDA = (n) => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 import { PinAccessModal } from '../Dashboard';
 import { useAdminMode } from '../../contexts/AdminModeContext';
 
@@ -377,7 +380,7 @@ export default function Historique({
                       letterSpacing:'0.04em', fontWeight:500 }}>{"CA jour"}</p>
           <p style={{ margin:0, fontSize:20, fontWeight:500, color:t.text,
                       fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {fmt(dayRev)} €
+            {fmtDA(dayRev)} DA
           </p>
           <p style={{ margin:0, fontSize:11, color:t.muted }}>
             {groupedTodayRevs.length + (groupedTodayRevs.length > 1 ? ' transactions' : ' transaction')}
@@ -396,7 +399,7 @@ export default function Historique({
                       letterSpacing:'0.04em', fontWeight:500 }}>{"Panier moyen"}</p>
           <p style={{ margin:0, fontSize:20, fontWeight:500, color:t.text,
                       fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {fmt(panierMoy)} €
+            {fmtDA(panierMoy)} DA
           </p>
         </div>
       </div>
@@ -416,7 +419,7 @@ export default function Historique({
               <p style={{ fontSize:15, fontWeight:500, color:cfg.color,
                           fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                           margin:'0 0 2px', lineHeight:1.1 }}>
-                {fmt(v.total)} €
+                {fmtDA(v.total)} DA
               </p>
               <p style={{ fontSize:10, color:cfg.color, opacity:0.7, margin:0 }}>
                 {v.count} tx
@@ -517,7 +520,7 @@ export default function Historique({
                       fontVariantNumeric:'tabular-nums', fontFamily: MONO,
                       color: totalColor, lineHeight:1.2,
                     }}>
-                      {totalSign + fmt(absAmount) + ' €'}
+                      {totalSign + fmtDA(absAmount) + ' DA'}
                     </div>
                   </div>
 
@@ -545,7 +548,7 @@ export default function Historique({
                             <SvgIcon paths={methodIcon(sub.method)} size={11} color={subCfg.color} />
                             {subCfg.label || sub.method}
                             <span style={{ fontFamily: MONO, fontVariantNumeric:'tabular-nums' }}>
-                              {fmt(sub.amount)} €
+                              {fmtDA(sub.amount)} DA
                             </span>
                           </span>
                         );
@@ -674,7 +677,7 @@ export default function Historique({
                             fontFamily: MONO,
                             flexShrink:0,
                           }}>
-                            {fmt(sub.amount)} €
+                            {fmtDA(sub.amount)} DA
                           </span>
                         </div>
                       );
@@ -703,7 +706,7 @@ export default function Historique({
                     fontFamily: MONO,
                     color: totalColor, lineHeight:1.2,
                   }}>
-                    {totalSign + fmt(absAmount) + ' €'}
+                    {totalSign + fmtDA(absAmount) + ' DA'}
                   </div>
                 </div>
               </div>

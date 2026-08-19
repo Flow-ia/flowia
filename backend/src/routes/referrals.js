@@ -89,9 +89,9 @@ merchantRouter.put('/program', pinAdminMiddleware, async (req, res) => {
     if (filleul_type === 'percent' && fv > 100)
       return res.status(400).json({ error: 'Récompense filleul ≤ 100 %.' });
     if (parrain_type !== 'percent' && pv > 500)
-      return res.status(400).json({ error: 'Récompense parrain ≤ 500 €.' });
+      return res.status(400).json({ error: 'Récompense parrain ≤ 500 DA.' });
     if (filleul_type !== 'percent' && fv > 500)
-      return res.status(400).json({ error: 'Récompense filleul ≤ 500 €.' });
+      return res.status(400).json({ error: 'Récompense filleul ≤ 500 DA.' });
 
     // Limite anti-abus : période + nombre. Période 'unlimited' ou 'lifetime'
     // n'utilise pas limit_count (lifetime = 1 implicite, unlimited = pas de limite).

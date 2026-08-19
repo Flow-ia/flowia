@@ -16,7 +16,7 @@ const STEPS = [
   {
     key: 'welcome',
     centered: true,
-    title: 'Bienvenue sur FlowIA',
+    title: 'Bienvenue sur Salon DZ',
     body: "Faisons un tour rapide en 5 etapes pour vous montrer l'essentiel. Vous pourrez le relancer plus tard depuis Reglages.",
     cta: 'Demarrer la visite',
     route: null,
@@ -33,7 +33,7 @@ const STEPS = [
   {
     key: 'caisse',
     title: 'Encaisser un client',
-    body: "La caisse FlowIA accepte especes, CB locale, cheque et virement, plus le paiement en ligne via Stripe Connect quand active. Tout est traque pour la comptabilite.",
+    body: "La caisse Salon DZ accepte especes, CB locale, cheque et virement, plus le paiement en ligne via Stripe Connect quand active. Tout est traque pour la comptabilite.",
     cta: 'Suivant',
     route: '/caisse',
     anchor: 'nav-caisse',
@@ -50,7 +50,7 @@ const STEPS = [
     key: 'final',
     centered: true,
     title: "C'est parti",
-    body: "Pour aller plus loin : ouvrez Reglages pour configurer votre equipe, vos services, votre abonnement, et activer le PIN admin qui securisera l'acces. Bonne utilisation de FlowIA.",
+    body: "Pour aller plus loin : ouvrez Reglages pour configurer votre equipe, vos services, votre abonnement, et activer le PIN admin qui securisera l'acces. Bonne utilisation de Salon DZ.",
     cta: 'Commencer',
     route: null,
     anchor: null,

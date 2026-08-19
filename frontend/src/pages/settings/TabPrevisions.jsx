@@ -16,8 +16,8 @@ export default function TabPrevisions({ theme }) {
       .catch(() => setLoading(false));
   }, [months]);
 
-  const fmt = v => Number(v || 0).toFixed(0);
-  const fmtFull = v => Number(v || 0).toFixed(2);
+  const fmt = v => Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const fmtFull = v => Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const MONTH_FR = ['Jan','Fev','Mar','Avr','Mai','Juin','Juil','Aou','Sep','Oct','Nov','Dec'];
   const fmtMonth = m => { if (!m) return ''; const [, mm] = m.split('-'); return MONTH_FR[parseInt(mm) - 1]; };
 
@@ -39,7 +39,7 @@ export default function TabPrevisions({ theme }) {
             </p>
             <p style={{ fontSize:20, fontWeight:500, color:'#065f46',
                         fontFamily:'var(--mono)', margin:'6px 0 0' }}>
-              {fmt(data.avg_monthly)} €
+              {fmt(data.avg_monthly)} DA
             </p>
           </div>
           <div style={{ borderRadius:12, padding:'14px 16px',
@@ -50,7 +50,7 @@ export default function TabPrevisions({ theme }) {
             <p style={{ fontSize:20, fontWeight:500,
                         color: positive ? t.text : '#991b1b',
                         fontFamily:'var(--mono)', margin:'6px 0 0' }}>
-              {positive ? '↗' : '↘'} {positive ? '+' : ''}{fmtFull(data.slope)} €/mois
+              {positive ? '↗' : '↘'} {positive ? '+' : ''}{fmtFull(data.slope)} DA/mois
             </p>
           </div>
         </div>
@@ -140,11 +140,11 @@ export default function TabPrevisions({ theme }) {
                     </span>
                     <span style={{ fontSize:16, fontWeight:500,
                                    fontFamily:'var(--mono)', color:'#4338ca' }}>
-                      {fmtFull(f.projected)} €
+                      {fmtFull(f.projected)} DA
                     </span>
                   </div>
                   <p style={{ fontSize:11, color:t.muted, margin:'2px 0 0' }}>
-                    Fourchette : {fmtFull(f.projected_low)} € — {fmtFull(f.projected_high)} €
+                    Fourchette : {fmtFull(f.projected_low)} DA — {fmtFull(f.projected_high)} DA
                   </p>
                 </div>
               ))}

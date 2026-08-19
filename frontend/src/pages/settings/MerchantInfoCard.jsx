@@ -10,7 +10,7 @@ import { getBookingUrl } from '../../utils/publicUrl';
 // Telephone valide = parse libphonenumber-js + isValid(). Le backend refait
 // la verification (defense in depth), mais on bloque ici pour eviter
 // l'aller-retour et donner un retour immediat au commercant.
-function isValidPhone(raw, country = 'FR') {
+function isValidPhone(raw, country = 'DZ') {
   try {
     const p = parsePhoneNumberFromString(String(raw || '').trim(), country);
     return !!p && p.isValid();
@@ -90,7 +90,7 @@ export default function MerchantInfoCard({ theme, showToast }) {
       setProfErr('Le numero de telephone est obligatoire. Vous pouvez le modifier mais pas le supprimer.');
       return;
     }
-    if (!isValidPhone(form.phone, user?.country || 'FR')) {
+    if (!isValidPhone(form.phone, user?.country || 'DZ')) {
       setProfErr('Numero de telephone invalide.');
       return;
     }
@@ -199,7 +199,7 @@ export default function MerchantInfoCard({ theme, showToast }) {
                 <Label>Telephone *</Label>
                 <input type="tel" value={form.phone} required
                        onChange={e => setForm(f => ({ ...f, phone:e.target.value }))}
-                       placeholder="06 00 00 00 00" style={inp}/>
+                       placeholder="05 50 12 34 56" style={inp}/>
                 <p style={{ fontSize:11, color:t.dim, margin:'4px 0 0' }}>
                   Modifiable, mais ne peut pas etre supprime apres inscription.
                 </p>
@@ -217,7 +217,7 @@ export default function MerchantInfoCard({ theme, showToast }) {
                       postalCode: postalCode || f.postalCode,
                     }))
                   }
-                  placeholder="12 rue de la Paix, Paris"
+                  placeholder="12 rue Didouche Mourad, Alger"
                   theme={theme}
                   inputStyle={inp}
                 />
@@ -230,13 +230,13 @@ export default function MerchantInfoCard({ theme, showToast }) {
                   <Label>Code postal</Label>
                   <input value={form.postalCode}
                          onChange={e => setForm(f => ({ ...f, postalCode:e.target.value }))}
-                         placeholder="75001" style={inp}/>
+                         placeholder="16000" style={inp}/>
                 </div>
                 <div>
                   <Label>Ville</Label>
                   <input value={form.city}
                          onChange={e => setForm(f => ({ ...f, city:e.target.value }))}
-                         placeholder="Paris" style={inp}/>
+                         placeholder="Alger" style={inp}/>
                 </div>
               </div>
               <div>

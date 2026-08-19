@@ -16,9 +16,9 @@ const TOPICS = [
 
 const CONTACTS = [
   { label: 'Email',     value: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` },
-  { label: 'Téléphone', value: 'Lun-Dim · 8h-22h',      href: null },
+  { label: 'Téléphone', value: '7j/7 · 8h-22h',         href: null },
   { label: 'Chat live', value: 'Réponse en < 5 min',    href: null },
-  { label: 'Adresse',   value: 'France',                href: null },
+  { label: 'Adresse',   value: 'Alger, Algérie',        href: null },
 ];
 
 export default function Contact() {
@@ -80,8 +80,8 @@ export default function Contact() {
     <>
       <Seo
         path="/contact"
-        title="Contact & démo FlowIA — Réponse sous 24h"
-        description="Une question, une démo ou un devis pour équiper votre salon avec FlowIA ? Notre équipe vous répond sous 24h ouvrées, souvent en moins d'une heure."
+        title="Contact & démo Salon DZ — Réponse sous 24h"
+        description="Une question, une démo ou un devis pour équiper votre salon avec Salon DZ ? Notre équipe vous répond sous 24h ouvrées, souvent en moins d'une heure."
       />
       <PageHero
         label="Contact"
@@ -168,7 +168,7 @@ export default function Contact() {
                   <label style={label}>Téléphone</label>
                   <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} disabled={busy}
                     onFocus={() => setFocused('phone')} onBlur={() => setFocused('')}
-                    style={inp('phone')} placeholder="06 12 34 56 78" />
+                    style={inp('phone')} placeholder="05 50 12 34 56" />
                 </div>
                 <div>
                   <label style={label}>Votre demande *</label>

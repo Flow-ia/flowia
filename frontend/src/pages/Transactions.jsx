@@ -10,7 +10,7 @@ import { useEmployeePinGate } from '../components/EmployeePinModal';
 import { Button, SegmentedControl, StatusBadge } from '../components/primitives';
 
 const nd  = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
-const fmt = n => Number(n || 0).toFixed(2);
+const fmt = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 // Moyens de paiement — pastels sobres (bg + accent meme famille)
 const PM = {
@@ -120,7 +120,7 @@ function TxRow({ tx, cat, emp, isLast, theme: t, onEdit, onDelete, onOpenDetail 
       <span style={{ fontWeight:500, fontSize:14, fontFamily:"'DM Mono', monospace",
                      color:amountColor, flexShrink:0,
                      minWidth:78, textAlign:'right' }}>
-        {isRev ? '+' : '-'}{fmt(tx.amount)} €
+        {isRev ? '+' : '-'}{fmt(tx.amount)} DA
       </span>
 
       {/* Actions admin (Edit/Trash) — stopPropagation pour ne PAS ouvrir le drawer */}
@@ -298,7 +298,7 @@ function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
                 <span style={{ color:t.muted }}>Total</span>
                 <span style={{ fontFamily:"'DM Mono', monospace",
                                color: isRev ? '#065f46' : '#991b1b' }}>
-                  {isRev ? '+' : '-'}{fmt(tx.amount)} €
+                  {isRev ? '+' : '-'}{fmt(tx.amount)} DA
                 </span>
               </div>
             </div>
@@ -325,7 +325,7 @@ function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
                       </span>
                       <span style={{ fontFamily:"'DM Mono', monospace",
                                      fontSize:13, fontWeight:500 }}>
-                        {fmt(p.amount)} €
+                        {fmt(p.amount)} DA
                       </span>
                     </div>
                   );
@@ -343,7 +343,7 @@ function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
                 </span>
                 <span style={{ fontFamily:"'DM Mono', monospace",
                                fontSize:13, fontWeight:500 }}>
-                  {fmt(tx.amount)} €
+                  {fmt(tx.amount)} DA
                 </span>
               </div>
             )}
@@ -400,7 +400,7 @@ function TxDetailDrawer({ tx, employees, categories, theme: t, onClose }) {
                           {it.service_name}
                         </span>
                         <span style={{ color:t.muted, fontFamily:'var(--mono)', flexShrink:0 }}>
-                          {fmt(it.unit_price)} €
+                          {fmt(it.unit_price)} DA
                         </span>
                       </div>
                     );
@@ -608,7 +608,7 @@ export default function Transactions({ transactions, employees, categories, onAd
               </p>
               <p style={{ fontWeight:500, fontSize:30, color:'#065f46',
                           fontFamily:'var(--mono)', margin:'0 0 4px', letterSpacing:'-0.01em' }}>
-                {isAdmin ? fmt(monthCA) : fmt(totRev)} €
+                {isAdmin ? fmt(monthCA) : fmt(totRev)} DA
               </p>
               <p style={{ fontSize:12, color:'#065f46', opacity:0.75, margin:0 }}>
                 {isAdmin
@@ -627,8 +627,8 @@ export default function Transactions({ transactions, employees, categories, onAd
         {/* Stats filtrees */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
           {[
-            { l: isAdmin ? 'CA filtre'  : 'CA du jour',    v:`${fmt(totRev)} €`, bg:'#f0fdf4', c:'#065f46' },
-            { l: isAdmin ? 'Depenses'   : 'Depenses auj.', v:`${fmt(totExp)} €`, bg:'#fef2f2', c:'#991b1b' },
+            { l: isAdmin ? 'CA filtre'  : 'CA du jour',    v:`${fmt(totRev)} DA`, bg:'#f0fdf4', c:'#065f46' },
+            { l: isAdmin ? 'Depenses'   : 'Depenses auj.', v:`${fmt(totExp)} DA`, bg:'#fef2f2', c:'#991b1b' },
             { l: isAdmin ? 'Nb total'   : 'Operations',    v: filtered.length,    bg:t.cardAlt, c:t.text   },
           ].map(({ l, v, bg, c }) => (
             <div key={l} style={{ borderRadius:8, padding:12, textAlign:'center', background:bg }}>
@@ -763,8 +763,8 @@ export default function Transactions({ transactions, employees, categories, onAd
                   {isToday && <span style={{ width:6, height:6, borderRadius:'50%', background:'#10b981', flexShrink:0, display:'inline-block' }}/>}
                 </div>
                 <div style={{ display:'flex', gap:10, fontSize:12, fontWeight:500 }}>
-                  {dayRev > 0 && <span style={{ color:'#065f46', fontFamily:'var(--mono)' }}>+{fmt(dayRev)} €</span>}
-                  {dayExp > 0 && <span style={{ color:'#991b1b', fontFamily:'var(--mono)' }}>-{fmt(dayExp)} €</span>}
+                  {dayRev > 0 && <span style={{ color:'#065f46', fontFamily:'var(--mono)' }}>+{fmt(dayRev)} DA</span>}
+                  {dayExp > 0 && <span style={{ color:'#991b1b', fontFamily:'var(--mono)' }}>-{fmt(dayExp)} DA</span>}
                 </div>
               </div>
               <div style={{ borderRadius:12, overflow:'hidden',

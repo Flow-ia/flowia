@@ -7,15 +7,15 @@ export default function About() {
   const values = [
     {
       title: 'Au service des salons',
-      desc: "FlowIA est conçu en collaboration directe avec des coiffeurs, barbiers et esthéticiennes. Chaque fonctionnalité résout un vrai problème de terrain.",
+      desc: "Salon DZ est conçu en collaboration directe avec des coiffeurs, barbiers et esthéticiennes. Chaque fonctionnalité résout un vrai problème de terrain.",
     },
     {
       title: 'Données respectées',
-      desc: "Hébergement européen, conforme au RGPD. Vos données restent les vôtres — vous pouvez les exporter ou les supprimer à tout moment.",
+      desc: "Hébergement cloud sécurisé, conforme à la loi 18-07. Vos données restent les vôtres — vous pouvez les exporter ou les supprimer à tout moment.",
     },
     {
       title: 'Simplicité avant tout',
-      desc: "Pas besoin d'être un geek pour utiliser FlowIA. Si une fonctionnalité demande plus de 2 clics à comprendre, on la retravaille.",
+      desc: "Pas besoin d'être un geek pour utiliser Salon DZ. Si une fonctionnalité demande plus de 2 clics à comprendre, on la retravaille.",
     },
     {
       title: 'Support humain',
@@ -27,12 +27,12 @@ export default function About() {
     <>
       <Seo
         path="/a-propos"
-        title="À propos de FlowIA — Le logiciel des salons et barbershops"
-        description="L'histoire de FlowIA : un logiciel pensé par des passionnés de la beauté et du bien-être, pour faciliter le quotidien des salons et barbershops."
+        title="À propos de Salon DZ — Le logiciel des salons et barbershops"
+        description="L'histoire de Salon DZ : un logiciel pensé par des passionnés de la beauté et du bien-être, pour faciliter le quotidien des salons et barbershops."
       />
       <PageHero
         label="À propos"
-        title="L'histoire derrière FlowIA"
+        title="L'histoire derrière Salon DZ"
         subtitle="Un logiciel pensé par des passionnés de la beauté et du bien-être, pour des passionnés."
       />
 
@@ -41,13 +41,13 @@ export default function About() {
           fontSize: 17, color: S.fg2, lineHeight: 1.75,
         }}>
           <p style={{ margin: 0, marginBottom: 20 }}>
-            {"FlowIA est née d'un constat simple : la plupart des logiciels de gestion pour salons sont soit trop complexes, soit trop limités, soit trop chers. Les commerçants passent plus de temps à se battre avec leurs outils qu'à s'occuper de leurs clients."}
+            {"Salon DZ est née d'un constat simple : la plupart des logiciels de gestion pour salons sont soit trop complexes, soit trop limités, soit trop chers. Les commerçants passent plus de temps à se battre avec leurs outils qu'à s'occuper de leurs clients."}
           </p>
           <p style={{ margin: 0, marginBottom: 20 }}>
-            {"Nous avons donc construit FlowIA en partant des besoins réels du terrain : une page de réservation simple, un agenda clair, une caisse complète, un programme de fidélité qui marche tout seul, et un marketing qui ne demande pas de compétence technique."}
+            {"Nous avons donc construit Salon DZ en partant des besoins réels du terrain : une page de réservation simple, un agenda clair, une caisse complète, un programme de fidélité qui marche tout seul, et un marketing qui ne demande pas de compétence technique."}
           </p>
           <p style={{ margin: 0, marginBottom: 0 }}>
-            {"Aujourd'hui, plus de 500 salons en France utilisent FlowIA chaque jour. Si vous avez une idée, une remarque ou une critique, écrivez-nous — on lit tout."}
+            {"Aujourd'hui, plus de 500 salons en Algérie utilisent Salon DZ chaque jour. Si vous avez une idée, une remarque ou une critique, écrivez-nous — on lit tout."}
           </p>
         </div>
       </Container>
@@ -110,7 +110,7 @@ export default function About() {
             color: S.fg, letterSpacing: '-0.025em', lineHeight: 1.2,
             margin: 0, marginBottom: 14,
           }}>
-            Rejoignez la communauté FlowIA
+            Rejoignez la communauté Salon DZ
           </h2>
           <p style={{ fontSize: 16, color: S.fgMuted, margin: 0, marginBottom: 28, lineHeight: 1.6 }}>
             {"500+ salons. 50 000+ rendez-vous gérés chaque mois. Et ce n'est qu'un début."}

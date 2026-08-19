@@ -178,7 +178,7 @@ module.exports = function attachMerchantInfoRoutes(router) {
       if (_shit) return res.json(_shit);
 
       const { rows: biz } = await pool.query(
-        `SELECT user_id, min_notice_hours, COALESCE(timezone, 'Europe/Paris') AS timezone
+        `SELECT user_id, min_notice_hours, COALESCE(timezone, 'Africa/Algiers') AS timezone
          FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE`,
         [req.params.slug]
       );
@@ -246,7 +246,7 @@ module.exports = function attachMerchantInfoRoutes(router) {
         return res.status(400).json({ error: 'year, month, service_id requis.' });
 
       const { rows: biz } = await pool.query(
-        `SELECT user_id, min_notice_hours, COALESCE(timezone, 'Europe/Paris') AS timezone
+        `SELECT user_id, min_notice_hours, COALESCE(timezone, 'Africa/Algiers') AS timezone
          FROM booking_settings WHERE slug=$1 AND is_enabled=TRUE`, [req.params.slug]
       );
       if (!biz.length) return res.status(404).json({ error: 'Commerce introuvable.' });

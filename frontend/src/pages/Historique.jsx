@@ -14,7 +14,7 @@ import { I } from '../utils/icons';
 import { PinAccessModal } from './Dashboard';
 
 const nd    = d => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
-const fmtN  = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtN  = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 const PM_CFG = {
   cash:     { label: 'Especes',  color: '#065f46', bg: '#f0fdf4' },
@@ -197,7 +197,7 @@ export default function Historique({ transactions, employees }) {
             <p style={{ fontSize:11, color:t.muted, margin:'0 0 6px' }}>CA total</p>
             <p style={{ fontSize:22, fontWeight:500, color:t.text,
                         fontFamily:'monospace', margin:0 }}>
-              {fmtN(dayRev)} €
+              {fmtN(dayRev)} DA
             </p>
           </div>
           <div style={{ padding:'14px 14px', borderRadius:12,
@@ -231,7 +231,7 @@ export default function Historique({ transactions, employees }) {
                     </p>
                     <p style={{ fontSize:15, fontWeight:500, color:cfg.color,
                                 fontFamily:'monospace', margin:'0 0 2px', lineHeight:1.1 }}>
-                      {fmtN(v.total)} €
+                      {fmtN(v.total)} DA
                     </p>
                     <p style={{ fontSize:10, color:cfg.color, opacity:0.65, margin:0 }}>
                       {v.count} tx
@@ -314,7 +314,7 @@ export default function Historique({ transactions, employees }) {
                   fontSize:16, fontWeight:500, color:t.text,
                   fontFamily:'monospace', whiteSpace:'nowrap',
                 }}>
-                  {fmtN(l.amount)} €
+                  {fmtN(l.amount)} DA
                 </div>
               </div>
             ))

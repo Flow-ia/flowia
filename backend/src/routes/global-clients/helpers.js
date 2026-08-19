@@ -49,7 +49,7 @@ async function isGlobalClientBlocked(globalClientId) {
 
 function blockedResponse(res) {
   return res.status(403).json({
-    error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs FlowIA pour plus de détails.',
+    error: 'Votre compte est bloqué. Merci de contacter notre équipe administrateurs Salon DZ pour plus de détails.',
     code: 'ACCOUNT_BLOCKED',
   });
 }

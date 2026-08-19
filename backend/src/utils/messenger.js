@@ -6,9 +6,9 @@ const SMS_PRICE  = parseFloat((SMS_COST * (1 + SMS_MARGIN / 100)).toFixed(4));
 function formatPhone(phone) {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('33') && digits.length === 11) return '+' + digits;
-  if (digits.startsWith('0') && digits.length === 10) return '+33' + digits.slice(1);
-  if (digits.length === 9) return '+33' + digits;
+  if (digits.startsWith('213') && digits.length === 12) return '+' + digits;
+  if (digits.startsWith('0') && digits.length === 10) return '+213' + digits.slice(1);
+  if (digits.length === 9) return '+213' + digits;
   return null;
 }
 
@@ -23,7 +23,7 @@ async function sendSMS(phone, message) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        sender: 'FlowIA',
+        sender: 'SalonDZ',
         recipient: formatted,
         content: message
       }),

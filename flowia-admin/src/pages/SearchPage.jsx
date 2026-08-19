@@ -14,7 +14,7 @@ const PAGE_SIZE = 50;
 // Format euros depuis cents (paid_amount_cents). Renvoie '—' si nullish.
 function formatEuros(cents) {
   if (cents == null) return '—';
-  return `${(Number(cents) / 100).toFixed(2)} €`;
+  return `${(Number(cents) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 }
 
 // Format date FR depuis ISO YYYY-MM-DD.
@@ -162,7 +162,7 @@ export default function SearchPage() {
   };
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Recherche">
+    <AppShell me={me} footer="Salon DZ Admin — Recherche">
       <div className="page-head">
         <h1 className="dash-title">{"Recherche universelle"}</h1>
         {hasSearched && <span className="page-count">{data.total} {"resultats"}</span>}

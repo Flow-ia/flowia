@@ -192,8 +192,8 @@ router.post('/create', async (req, res) => {
       bank_account_last4: bankLast4,
       bank_name:          bankName,
       message: failed > 0
-        ? `${succeeded} reversement(s) initié(s) (${(releasedCents / 100).toFixed(2).replace('.', ',')} €). ${failed} échec(s), retry automatique.`
-        : `${succeeded} reversement(s) initié(s) pour un total de ${(releasedCents / 100).toFixed(2).replace('.', ',')} €. Arrivée bancaire sous 1-3 jours ouvrés.`,
+        ? `${succeeded} reversement(s) initié(s) (${(releasedCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA). ${failed} échec(s), retry automatique.`
+        : `${succeeded} reversement(s) initié(s) pour un total de ${(releasedCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA. Arrivée bancaire sous 1-3 jours ouvrés.`,
     });
   } catch (e) {
     console.error('[PAYOUT CREATE] unexpected error user=' + userId, e.message);

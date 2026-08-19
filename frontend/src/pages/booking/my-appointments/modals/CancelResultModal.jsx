@@ -75,7 +75,7 @@ export function CancelResultModal({ th, result, onClose }) {
   const cfg = CFG[result.kind] || CFG.simple;
 
   // Construit le corps du message en fonction du cas + montant si applicable.
-  const eur = result.amountEur ? `${result.amountEur} €` : '';
+  const eur = result.amountEur ? `${result.amountEur} DA` : '';
   let mainText = '';
   let secondaryText = '';
   switch (result.kind) {

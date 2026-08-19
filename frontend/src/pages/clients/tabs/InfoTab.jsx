@@ -135,7 +135,7 @@ export default function InfoTab({ fiche, theme, card, setFiche }) {
           {editingPhone ? (
             <>
               <PhoneInput value={phoneDraft} onChange={setPhoneDraft}
-                required defaultCountry="FR"
+                required defaultCountry="DZ"
                 theme={{ text: theme.text, muted: theme.muted, dim: theme.dim,
                   border: theme.border, inputBg: theme.inputBg, inputBorder: theme.inputBorder }}
                 errorOverride={phoneErr || undefined}/>
@@ -263,7 +263,7 @@ export default function InfoTab({ fiche, theme, card, setFiche }) {
         </div>
         <p style={{ margin:'10px 0 0', fontSize:11, color:theme.muted, lineHeight:1.55 }}>
           {optIn
-            ? "Activé : tous les programmes RGPD-conformes sont actifs (anniversaire, parrainage, notifications fidélité par email)."
+            ? "Activé : tous les programmes conformes à la loi 18-07 sont actifs (anniversaire, parrainage, notifications fidélité par email)."
             : "Désactivé : le client cumule sa fidélité en boutique mais ne reçoit aucun email marketing, aucune offre anniversaire et n'est pas éligible au parrainage."}
         </p>
         {err && (

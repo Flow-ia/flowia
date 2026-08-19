@@ -10,7 +10,7 @@ export default function Pricing() {
   const plans = [
     {
       name: 'Découverte', monthly: '0', yearly: '0', annual: '0',
-      desc: "Pour démarrer et tester FlowIA sans risque.",
+      desc: "Pour démarrer et tester Salon DZ sans risque.",
       features: [
         "Jusqu'à 50 RDV/mois", '1 employé', 'Page de réservation publique',
         'Caisse intégrée', 'Rappels RDV par email', 'Export CSV',
@@ -19,7 +19,7 @@ export default function Pricing() {
       cta: 'Commencer gratuitement', highlight: false,
     },
     {
-      name: 'Essentiel', monthly: '24', yearly: '20', annual: '240',
+      name: 'Essentiel', monthly: '2 400', yearly: '2 000', annual: '24 000',
       desc: "Tous les outils marketing pour fidéliser vos clients.",
       features: [
         'RDV illimités', "Jusqu'à 5 employés",
@@ -30,7 +30,7 @@ export default function Pricing() {
       cta: "Démarrer l'essai 1 mois", highlight: true,
     },
     {
-      name: 'Équipe', monthly: '49', yearly: '40,83', annual: '490',
+      name: 'Équipe', monthly: '4 900', yearly: '4 083', annual: '49 000',
       desc: "Pour les salons qui veulent un accompagnement dédié.",
       features: [
         'Tout du plan Essentiel', 'Employés illimités',
@@ -61,7 +61,7 @@ export default function Pricing() {
     <>
       <Seo
         path="/tarifs"
-        title="Tarifs FlowIA — Logiciel salon sans commission, essai gratuit"
+        title="Tarifs Salon DZ — Logiciel salon sans commission, essai gratuit"
         description="Tarification simple et sans engagement pour votre salon ou barbershop. 1 mois d'essai gratuit, sans commission sur vos réservations. Annulez à tout moment."
       />
       <PageHero
@@ -130,12 +130,12 @@ export default function Pricing() {
                 <p style={{ fontSize: 14, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>{p.name}</p>
                 <p style={{ fontSize: 13, color: S.fgSubtle, lineHeight: 1.5, margin: 0, marginBottom: 18 }}>{p.desc}</p>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
-                  <span style={{ fontSize: 38, fontWeight: 500, color: S.fg, letterSpacing: '-0.03em' }}>{price + ' €'}</span>
+                  <span style={{ fontSize: 38, fontWeight: 500, color: S.fg, letterSpacing: '-0.03em' }}>{price + ' DA'}</span>
                   <span style={{ fontSize: 13, color: S.fgSubtle }}>/mois</span>
                 </div>
                 <p style={{ fontSize: 12, color: S.fgSubtle, margin: 0, marginBottom: 22 }}>
                   {yearly
-                    ? (p.annual === '0' ? 'Gratuit' : `Facturé ${p.annual} €/an — 2 mois offerts`)
+                    ? (p.annual === '0' ? 'Gratuit' : `Facturé ${p.annual} DA/an — 2 mois offerts`)
                     : (p.monthly === '0' ? 'Gratuit' : 'Facturé mensuellement')}
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -205,7 +205,7 @@ export default function Pricing() {
             </table>
           </div>
           <p style={{ fontSize: 13, color: S.fgSubtle, textAlign: 'center', marginTop: 18, lineHeight: 1.6 }}>
-            {"Tarifs hors taxes. Les SMS marketing sont facturés à l'usage (à partir de 0,06 € l'unité), réservés aux plans Essentiel et Équipe. La commission de 2 % sur le plan Découverte ne s'applique qu'aux paiements RDV encaissés via la page de réservation en ligne ; tous les plans payants en sont exonérés."}
+            {"Tarifs hors taxes. Les SMS marketing sont facturés à l'usage (à partir de 6 DA l'unité), réservés aux plans Essentiel et Équipe. La commission de 2 % sur le plan Découverte ne s'applique qu'aux paiements RDV encaissés via la page de réservation en ligne ; tous les plans payants en sont exonérés."}
           </p>
         </div>
       </section>

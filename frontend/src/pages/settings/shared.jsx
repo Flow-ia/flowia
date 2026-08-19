@@ -1,7 +1,7 @@
 import { I } from '../../utils/icons';
 
 export const nd = (d) => { if (!d) return ''; const s = typeof d === 'string' ? d : new Date(d).toISOString(); return s.substring(0, 10); };
-export const fmt = (n) => Number(n || 0).toFixed(2);
+export const fmt = (n) => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 export const ML = ['janvier','fevrier','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','decembre'];
 
 // PAY_INFO : table de mapping payment_method (DB) -> affichage UI.
@@ -35,7 +35,7 @@ export function SectionLabel({ children, theme }) {
   return <p className="text-[10px] font-bold uppercase tracking-widest mb-2 px-1" style={{ color: theme.muted }}>{children}</p>;
 }
 
-export function KpiBox({ label, value, unit = '€', color, bg, border }) {
+export function KpiBox({ label, value, unit = 'DA', color, bg, border }) {
   return (
     <div className="rounded-2xl p-3.5" style={{ background: bg, border: `1px solid ${border}` }}>
       <p className="text-[10px] font-semibold mb-1.5" style={{ color }}>{label}</p>

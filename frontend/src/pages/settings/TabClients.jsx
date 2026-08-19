@@ -133,7 +133,7 @@ export default function TabClients({ theme, showToast }) {
     );
   };
 
-  const fmt = n => Number(n || 0).toFixed(2);
+  const fmt = n => Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const fmtDate = s => s ? new Date(s).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' }) : '-';
 
   const statusMap = {
@@ -241,7 +241,7 @@ export default function TabClients({ theme, showToast }) {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10, marginBottom:16 }}>
             {[
               { label:'Visites',        value: fiche.total_visits,                          Ic:I.Calendar, color:t.text,    bg:t.cardAlt },
-              { label:'Total depense',  value: `${fmt(fiche.total_spent)} €`,              Ic:I.Wallet,   color:'#065f46', bg:'#f0fdf4' },
+              { label:'Total depense',  value: `${fmt(fiche.total_spent)} DA`,              Ic:I.Wallet,   color:'#065f46', bg:'#f0fdf4' },
               { label:'Tampons/Points', value: fiche.stamps || fiche.points || 0,           Ic:I.Award,    color:'#92400e', bg:'#fffbeb' },
               { label:'Recompenses',    value: fiche.rewards_earned || 0,                   Ic:I.Gift,     color:'#3c3489', bg:'#eeedfe' },
             ].map(k => (
@@ -322,7 +322,7 @@ export default function TabClients({ theme, showToast }) {
                   </div>
                   <span style={{ fontWeight:500, fontSize:14, color:'#065f46',
                                  fontFamily:'monospace' }}>
-                    {fmt(tx.amount)} €
+                    {fmt(tx.amount)} DA
                   </span>
                 </div>
               ))}
@@ -357,7 +357,7 @@ export default function TabClients({ theme, showToast }) {
                     {a.total_amount && (
                       <span style={{ fontWeight:500, fontSize:13, color:'#065f46',
                                      fontFamily:'monospace' }}>
-                        {fmt(a.total_amount)} €
+                        {fmt(a.total_amount)} DA
                       </span>
                     )}
                   </div>
@@ -387,7 +387,7 @@ export default function TabClients({ theme, showToast }) {
                       )}
                     </div>
                     <span style={{ fontWeight:500, fontSize:13, color:'#991b1b' }}>
-                      -{fmt(p.discount_applied)} €
+                      -{fmt(p.discount_applied)} DA
                     </span>
                     <span style={{ fontSize:11, color:t.muted }}>{fmtDate(p.used_at)}</span>
                   </div>
@@ -550,7 +550,7 @@ export default function TabClients({ theme, showToast }) {
                 </div>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:14, fontWeight:500, color:'#065f46', fontFamily:'monospace' }}>
-                    {Number(cl.total_spent || 0).toFixed(0)}€
+                    {Number(cl.total_spent || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                   </div>
                   <div style={{ fontSize:10, color:t.muted }}>depense</div>
                 </div>

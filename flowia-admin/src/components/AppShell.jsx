@@ -60,7 +60,7 @@ export default function AppShell({ me, children, footer }) {
   return (
     <div className="dash-wrap">
       <header className="dash-header">
-        <div className="dash-brand">{"FlowIA Admin"}</div>
+        <div className="dash-brand">{"Salon DZ Admin"}</div>
 
         <nav className={"dash-nav " + (navOpen ? 'open' : '')}>
           <Link to="/dashboard"  className={"nav-link " + (isActive('/dashboard')  ? 'nav-link-active' : '')}>{"Dashboard"}</Link>
@@ -135,7 +135,7 @@ export default function AppShell({ me, children, footer }) {
 
       <main className="dash-main">{children}</main>
 
-      <footer className="dash-footer">{footer || 'FlowIA Admin'}</footer>
+      <footer className="dash-footer">{footer || 'Salon DZ Admin'}</footer>
     </div>
   );
 }

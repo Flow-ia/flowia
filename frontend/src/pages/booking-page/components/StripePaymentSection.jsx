@@ -189,7 +189,7 @@ function SaveCardCheckbox({ th, checked, onChange, disabled }) {
           {"Sauvegarder cette carte"}
         </span>
         <span style={{ fontSize: 11, color: th.muted, lineHeight: 1.45 }}>
-          {"Reutilisable en 1 clic sur tous les salons FlowIA. Carte chiffree par Stripe, supprimable a tout moment."}
+          {"Reutilisable en 1 clic sur tous les salons Salon DZ. Carte chiffree par Stripe, supprimable a tout moment."}
         </span>
       </span>
     </label>
@@ -243,7 +243,7 @@ function DirectPayForm({ th, amountCents, onPaid, busy, setBusy,
     }
   };
 
-  const amountStr = (amountCents / 100).toFixed(2) + ' €';
+  const amountStr = (amountCents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
 
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 12 }}>
@@ -415,7 +415,7 @@ function SaveCardForm({
         {busy
           ? <>{spinner()}{"Paiement en cours…"}</>
           : (amountCents > 0
-              ? `Payer ${(amountCents/100).toFixed(2)} € et reserver`
+              ? `Payer ${(amountCents/100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA et reserver`
               : "Payer et reserver")}
       </button>
     </form>
@@ -492,7 +492,7 @@ function SavedCardPay({
         {busy
           ? <>{spinner()}{"Paiement en cours…"}</>
           : (intentInfo
-              ? `Payer ${(intentInfo.amount_cents/100).toFixed(2)} € et reserver`
+              ? `Payer ${(intentInfo.amount_cents/100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA et reserver`
               : "Payer et reserver")}
       </button>
     </div>
@@ -715,7 +715,7 @@ function PaymentIntentOrSetupWrapper({
         <p style={{ fontSize: 11, color: th.muted, margin: '0 0 4px' }}>
           {"Montant : "}
           <span style={{ fontWeight: 500, color: th.text }}>
-            {(intent.amount_cents / 100).toFixed(2)} {"€"}
+            {(intent.amount_cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {"DA"}
           </span>
           {intent.payment_percentage && intent.payment_percentage < 100 && (
             <span style={{ color: th.muted }}>

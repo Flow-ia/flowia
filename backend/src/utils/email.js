@@ -15,6 +15,10 @@ const {
   renderHeading,
 } = require('./emailLayout');
 
+// ── Format monétaire DA (dinar algérien) — affichage uniquement ───────────
+// Milliers séparés (fr-FR), 0 décimale si entier, max 2 si fractionnaire.
+const fmtDA = (v) => Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
+
 // Lazy require de emailQueue pour éviter le cycle (emailQueue lazy-require
 // ce module pour le fallback sync). Au 1er appel, Node aura terminé le
 // chargement initial de emailQueue.js → safe.
@@ -35,7 +39,7 @@ async function sendEmail({ to, subject, html, text, headers, replyTo, toName, fr
     || 'contact@flowiapro.com';
   const body = {
     sender: {
-      name: process.env.SENDER_NAME || 'FlowIA',
+      name: process.env.SENDER_NAME || 'Salon DZ',
       email: senderEmail,
     },
     to:       [{ email: to, ...(toName ? { name: toName } : {}) }],
@@ -76,7 +80,7 @@ async function sendVerificationEmail(to, code, subject = 'Votre code de vérific
     email:         'Vérification email',
   };
   const badge = badges[context] || badges.default;
-  const kicker = badge ? `FlowIA · ${badge}` : 'FlowIA';
+  const kicker = badge ? `Salon DZ · ${badge}` : 'Salon DZ';
 
   const intro = context === 'lockout_alert'
     ? `<p style="margin:0;">Une tentative répétée a été détectée sur votre compte. Utilisez le code ci-dessous pour confirmer qu'il s'agit bien de vous :</p>`
@@ -89,12 +93,12 @@ async function sendVerificationEmail(to, code, subject = 'Votre code de vérific
   });
 
   const html = renderShell({
-    preheader: `Votre code de vérification FlowIA`,
+    preheader: `Votre code de vérification Salon DZ`,
     kicker,
     title: escapeHtml(subject),
     intro,
     sections,
-    footerNote: `© ${new Date().getFullYear()} FlowIA`,
+    footerNote: `© ${new Date().getFullYear()} Salon DZ`,
   });
 
   try {
@@ -136,7 +140,7 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
       const qty = it.qty > 1 ? ` × ${escapeHtml(it.qty)}` : '';
       const dur = it.duration_minutes > 0 ? ` · ${escapeHtml(it.duration_minutes)} min` : '';
       const price = it.unit_price > 0
-        ? `<td style="padding:6px 0;font-size:13px;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#111;">${escapeHtml((it.unit_price * it.qty).toFixed(2))} €</td>`
+        ? `<td style="padding:6px 0;font-size:13px;text-align:right;font-family:ui-monospace,Menlo,monospace;color:#111;">${escapeHtml(fmtDA(it.unit_price * it.qty))}</td>`
         : '<td></td>';
       return `<tr><td style="padding:6px 0;font-size:13px;color:#111;">${escapeHtml(it.service_name)}${qty}${dur}</td>${price}</tr>`;
     }).join('');
@@ -147,7 +151,7 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
       { label: 'Service', value: escapeHtml(serviceName) },
     ];
     if (durationMinutes) sRows.push({ label: 'Durée', value: `${escapeHtml(durationMinutes)} min` });
-    if (price) sRows.push({ label: 'Prix', value: `${escapeHtml(Number(price).toFixed(2))} €`, valueIsMono: true });
+    if (price) sRows.push({ label: 'Prix', value: `${escapeHtml(fmtDA(price))}`, valueIsMono: true });
     servicesHtml = renderHeading('Prestation') + renderInfoTable(sRows);
   }
 
@@ -155,20 +159,20 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
   let promoHtml = '';
   if (discountAmount > 0) {
     const promoItems = [
-      { label: 'Prix initial', value: `${(price != null ? Number(price).toFixed(2) : '—')} €`, line_through: true },
-      { label: 'Réduction', value: `-${Number(discountAmount).toFixed(2)} €` },
+      { label: 'Prix initial', value: `${(price != null ? fmtDA(price) : '—')}`, line_through: true },
+      { label: 'Réduction', value: `-${fmtDA(discountAmount)}` },
     ];
     promoHtml = renderHeading(promoCode ? `Code promo · ${promoCode}` : 'Réduction appliquée') +
       renderAmountSummary({
         items: promoItems,
-        total: { label: 'Prix final', value: `${finalPrice != null ? Number(finalPrice).toFixed(2) : '—'} €` },
+        total: { label: 'Prix final', value: `${finalPrice != null ? fmtDA(finalPrice) : '—'}` },
       });
   }
 
   // Phase 5/5 — confirmation paiement en ligne (si applicable)
   const paidHtml = paidAmountCents > 0
     ? renderNotice({ tone: 'success',
-        text: `<strong style="font-weight:500;">Paiement encaissé :</strong> ${(paidAmountCents/100).toFixed(2).replace('.',',')} € via Stripe.` })
+        text: `<strong style="font-weight:500;">Paiement encaissé :</strong> ${fmtDA(paidAmountCents/100)} en ligne.` })
     : '';
 
   // Notes client (utilisateur peut avoir saisi du texte libre, escapeHtml strict).
@@ -187,11 +191,11 @@ async function sendAppointmentConfirmation({ to, clientName, businessName, servi
 
   const html = renderShell({
     preheader: `Confirmation de rendez-vous #${refId} — ${dateCapitalized} à ${startTime.substring(0,5)}`,
-    kicker: 'FlowIA · Confirmation',
+    kicker: 'Salon DZ · Confirmation',
     title: 'Rendez-vous confirmé',
     intro,
     sections,
-    footerNote: `Pour annuler ou modifier, contactez l'établissement ou gérez votre rendez-vous en ligne. Référence #${refId} · ${new Date().getFullYear()} FlowIA`,
+    footerNote: `Pour annuler ou modifier, contactez l'établissement ou gérez votre rendez-vous en ligne. Référence #${refId} · ${new Date().getFullYear()} Salon DZ`,
   });
 
   try {
@@ -210,10 +214,10 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
   const dateFr = dateObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const dateCapitalized = dateFr.charAt(0).toUpperCase() + dateFr.slice(1);
   const subject = `Récap du ${dateCapitalized} — ${businessName}`;
-  const fmtMoney = v => Number(v||0).toFixed(2).replace('.', ',');
+  const fmtMoney = v => Number(v||0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   const kpiRows = [
-    { label: 'Chiffre d\'affaires', value: `${escapeHtml(fmtMoney(ca))} €`, valueIsMono: true },
+    { label: 'Chiffre d\'affaires', value: `${escapeHtml(fmtMoney(ca))} DA`, valueIsMono: true },
     { label: 'Prestations', value: escapeHtml(String(nbPrest || 0)), valueIsMono: true },
     { label: 'Rendez-vous', value: escapeHtml(String(nbRdv || 0)), valueIsMono: true },
   ];
@@ -228,7 +232,7 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
   if (transactions && transactions.length > 0) {
     const lines = transactions.slice(0, 5).map(t => {
       const desc = escapeHtml(t.description || t.category_name || 'Transaction');
-      const amt = `+${fmtMoney(t.amount)} €`;
+      const amt = `+${fmtMoney(t.amount)} DA`;
       return `<tr>
         <td style="padding:8px 0;font-size:13px;color:#374151;border-top:1px solid #e5e7eb;">${desc}</td>
         <td style="padding:8px 0;font-size:13px;color:#111;text-align:right;font-family:ui-monospace,Menlo,monospace;border-top:1px solid #e5e7eb;">${escapeHtml(amt)}</td>
@@ -244,11 +248,11 @@ async function sendDailyRecap({ to, businessName, date, ca, nbPrest, nbRdv, topE
 
   const html = renderShell({
     preheader: `Récap ${dateCapitalized} — ${businessName}`,
-    kicker: 'FlowIA · Récap journalier',
+    kicker: 'Salon DZ · Récap journalier',
     title: 'Récap de la journée',
     intro: `<p style="margin:0;">${escapeHtml(businessName)} — ${escapeHtml(dateCapitalized)}.</p>`,
     sections,
-    footerNote: `Récap automatique généré par FlowIA`,
+    footerNote: `Récap automatique généré par Salon DZ`,
   });
 
   try {
@@ -283,11 +287,11 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
 
   const html = renderShell({
     preheader: `Rappel rendez-vous ${dateCapitalized} ${startTime.substring(0,5)}`,
-    kicker: 'FlowIA · Rappel',
+    kicker: 'Salon DZ · Rappel',
     title: 'Rappel de rendez-vous',
     intro,
     sections,
-    footerNote: `Rappel automatique envoyé par FlowIA`,
+    footerNote: `Rappel automatique envoyé par Salon DZ`,
   });
 
   try {
@@ -302,7 +306,7 @@ async function sendRdvReminder({ to, clientName, businessName, serviceName, date
 async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rewardType, rewardValue, rewardLabel, stampsRequired }) {
   const discountStr = rewardType === 'percent'
     ? `-${rewardValue}%`
-    : `-${Number(rewardValue).toFixed(2)} €`;
+    : `-${fmtDA(rewardValue)}`;
   const subject = `Récompense fidélité débloquée : ${discountStr} chez ${businessName}`;
 
   const rows = [
@@ -324,11 +328,11 @@ async function sendLoyaltyReward({ to, clientName, businessName, rewardCode, rew
 
   const html = renderShell({
     preheader: `Récompense fidélité ${discountStr} — ${businessName}`,
-    kicker: 'FlowIA · Programme fidélité',
+    kicker: 'Salon DZ · Programme fidélité',
     title: 'Récompense débloquée',
     intro,
     sections,
-    footerNote: `Programme fidélité géré via FlowIA`,
+    footerNote: `Programme fidélité géré via Salon DZ`,
   });
 
   try {
@@ -358,11 +362,11 @@ async function sendClientInvite(to, clientName, businessName, inviteUrl) {
 
   const html = renderShell({
     preheader: `Invitation à créer votre compte client ${businessName}`,
-    kicker: 'FlowIA · Invitation',
+    kicker: 'Salon DZ · Invitation',
     title: 'Créez votre compte client',
     intro,
     sections,
-    footerNote: `© ${new Date().getFullYear()} FlowIA`,
+    footerNote: `© ${new Date().getFullYear()} Salon DZ`,
   });
   try {
     await sendEmail({ to, subject, html });
@@ -406,11 +410,11 @@ async function sendAppointmentCancellation({ to, clientName, businessName, servi
 
   const html = renderShell({
     preheader: `Annulation rendez-vous #${refId} — ${businessName}`,
-    kicker: 'FlowIA · Annulation',
+    kicker: 'Salon DZ · Annulation',
     title: 'Rendez-vous annulé',
     intro,
     sections,
-    footerNote: `Référence #${refId} · ${new Date().getFullYear()} FlowIA`,
+    footerNote: `Référence #${refId} · ${new Date().getFullYear()} Salon DZ`,
   });
 
   try {
@@ -446,11 +450,11 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
 
   const html = renderShell({
     preheader: `${clientName} · ${dateCap} ${String(startTime).slice(0,5)}`,
-    kicker: `FlowIA · ${escapeHtml(businessName)}`,
+    kicker: `Salon DZ · ${escapeHtml(businessName)}`,
     title: 'Rappel prestation',
     intro,
     sections,
-    footerNote: `Rappel équipe envoyé par FlowIA`,
+    footerNote: `Rappel équipe envoyé par Salon DZ`,
   });
   try {
     // Migré vers queue (commit 30 — non-critique, cron rappels employés)
@@ -463,7 +467,7 @@ async function sendEmployeeReminder({ to, employeeName, clientName, businessName
 // ── Réinitialisation mot de passe client ──────────────────────────────────────
 async function sendPasswordReset({ to, clientName, code }) {
   const firstName = (clientName || '').split(' ')[0] || 'Client';
-  const subject = 'Réinitialisation de votre mot de passe — FlowIA';
+  const subject = 'Réinitialisation de votre mot de passe — Salon DZ';
 
   const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName)}, utilisez ce code pour réinitialiser votre mot de passe :</p>`;
   const sections =
@@ -474,12 +478,12 @@ async function sendPasswordReset({ to, clientName, code }) {
     });
 
   const html = renderShell({
-    preheader: `Code de réinitialisation FlowIA`,
-    kicker: 'FlowIA · Sécurité',
+    preheader: `Code de réinitialisation Salon DZ`,
+    kicker: 'Salon DZ · Sécurité',
     title: 'Réinitialisation mot de passe',
     intro,
     sections,
-    footerNote: `© ${new Date().getFullYear()} FlowIA`,
+    footerNote: `© ${new Date().getFullYear()} Salon DZ`,
   });
   try {
     await sendEmail({ to, subject, html });
@@ -497,7 +501,7 @@ async function sendPasswordReset({ to, clientName, code }) {
 async function sendPromoEmail({ to, clientName, businessName, promo, businessEmail, businessAddress, businessPhone, unsubscribeToken }) {
   const { code, type, value, valid_from, valid_until, time_allday, time_from, time_until, min_purchase, max_uses, target_clients } = promo;
   const firstName = (clientName || '').split(' ')[0] || clientName || '';
-  const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
+  const discountStr = type === 'percent' ? `-${value}%` : `-${fmtDA(value)}`;
 
   // Sujet personnalisé, ton transactionnel (pas "Offre exclusive" qui trigger Promotions)
   const subject = firstName
@@ -509,7 +513,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
   if (valid_until) conditions.push(`Valable jusqu'au ${new Date(valid_until).toLocaleDateString('fr-FR')}`);
   if (!time_allday && time_from && time_until)
     conditions.push(`Uniquement de ${String(time_from).substring(0,5)} à ${String(time_until).substring(0,5)}`);
-  if (min_purchase > 0) conditions.push(`Achat minimum : ${Number(min_purchase).toFixed(2)} €`);
+  if (min_purchase > 0) conditions.push(`Achat minimum : ${fmtDA(min_purchase)}`);
   if (max_uses) conditions.push(`Limité à ${max_uses} utilisation${max_uses > 1 ? 's' : ''}`);
   if (target_clients === 'new') conditions.push(`Réservé aux nouveaux clients`);
 
@@ -574,7 +578,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
 
   const html = renderShell({
     preheader: `${discountStr} chez ${businessName} — code ${code}`,
-    kicker: `FlowIA · ${safeBusiness}`,
+    kicker: `Salon DZ · ${safeBusiness}`,
     title: subject,
     intro,
     sections: sections + marketingFooter,
@@ -607,7 +611,7 @@ async function sendPromoEmail({ to, clientName, businessName, promo, businessEma
 
 // ── Email récompense parrain (après validation en caisse) ─────────────────
 async function sendReferralReward({ to, parrainName, filleulName, businessName, code, type, value, validUntil, businessEmail, businessPhone, businessAddress, unsubscribeToken }) {
-  const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
+  const discountStr = type === 'percent' ? `-${value}%` : `-${fmtDA(value)}`;
   const firstName = (parrainName || '').split(' ')[0] || 'vous';
   const subject = `${firstName}, votre réduction ${discountStr} chez ${businessName}`;
   const validStr = validUntil ? new Date(validUntil).toLocaleDateString('fr-FR') : null;
@@ -659,7 +663,7 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
 
   const html = renderShell({
     preheader: `Votre récompense parrainage ${discountStr} chez ${businessName}`,
-    kicker: `FlowIA · ${safeBusiness}`,
+    kicker: `Salon DZ · ${safeBusiness}`,
     title: 'Merci pour votre parrainage',
     intro,
     sections: sections + marketingFooter,
@@ -683,7 +687,7 @@ async function sendReferralReward({ to, parrainName, filleulName, businessName, 
 // ── Email anniversaire client ─────────────────────────────────────────────
 // Audit Z : accepte `unsubscribeToken` pour conformité RGPD.
 async function sendBirthdayPromo({ to, clientName, businessName, code, type, value, validUntil, customMessage, businessEmail, businessPhone, businessAddress, unsubscribeToken, monthName, monthNum }) {
-  const discountStr = type === 'percent' ? `-${value}%` : `-${Number(value).toFixed(2)} €`;
+  const discountStr = type === 'percent' ? `-${value}%` : `-${fmtDA(value)}`;
   const firstName = (clientName || '').split(' ')[0] || '';
   // Commit 24b — sujet et corps évoquent le mois (envoi 1er du mois, code
   // valable tout le mois) plutôt que le jour exact.
@@ -745,7 +749,7 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
 
   const html = renderShell({
     preheader: `Joyeux anniversaire — ${discountStr} chez ${businessName}`,
-    kicker: `FlowIA · ${safeBusiness}`,
+    kicker: `Salon DZ · ${safeBusiness}`,
     title: 'Joyeux anniversaire',
     intro: introBody,
     sections: sections + marketingFooter,
@@ -773,7 +777,7 @@ async function sendBirthdayPromo({ to, clientName, businessName, code, type, val
 // du commerçant.
 // ─────────────────────────────────────────────────────────────────────────────
 async function sendReferralWelcome({ to, filleulName, businessName, code, type, value }) {
-  const valStr = type === 'percent' ? `${value}%` : `${Number(value).toFixed(2)} €`;
+  const valStr = type === 'percent' ? `${value}%` : `${fmtDA(value)}`;
   const subject = `Bienvenue chez ${businessName || 'votre commerçant'} — parrainage appliqué`;
   const safeBusiness = escapeHtml(businessName || 'votre commerçant');
 
@@ -795,11 +799,11 @@ async function sendReferralWelcome({ to, filleulName, businessName, code, type, 
 
   const html = renderShell({
     preheader: `Parrainage appliqué — remise de ${valStr}`,
-    kicker: `FlowIA · ${safeBusiness}`,
+    kicker: `Salon DZ · ${safeBusiness}`,
     title: `Bienvenue${filleulName ? ' ' + escapeHtml(filleulName) : ''}`,
     intro,
     sections,
-    footerNote: `FlowIA — email automatique, ne pas répondre`,
+    footerNote: `Salon DZ — email automatique, ne pas répondre`,
   });
   // Migré vers queue (commit 30 — non-critique, envoyé après création code parrainage)
   return enqueue({ to, subject, html });
@@ -995,7 +999,7 @@ async function sendOptInInvite({ to, clientName, businessName, optInToken, busin
     businessName,
   ].join('\n');
   const safeBusiness = escapeHtml(businessName);
-  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName || 'cher client')},<br/>${safeBusiness} met à jour ses pratiques de communication conformément au RGPD. Pour continuer à recevoir nos offres commerciales (promotions, nouveautés) par email ou SMS, confirmez votre inscription en un clic :</p>`;
+  const intro = `<p style="margin:0;">Bonjour ${escapeHtml(firstName || 'cher client')},<br/>${safeBusiness} met à jour ses pratiques de communication conformément à la loi 18-07. Pour continuer à recevoir nos offres commerciales (promotions, nouveautés) par email ou SMS, confirmez votre inscription en un clic :</p>`;
 
   const contactRows = [];
   if (businessEmail) contactRows.push({ label: 'Email', value: escapeHtml(businessEmail) });
@@ -1017,11 +1021,11 @@ async function sendOptInInvite({ to, clientName, businessName, optInToken, busin
 
   const html = renderShell({
     preheader: `Souhaitez-vous recevoir les offres de ${businessName} ?`,
-    kicker: `FlowIA · ${safeBusiness}`,
+    kicker: `Salon DZ · ${safeBusiness}`,
     title: 'Souhaitez-vous recevoir nos offres ?',
     intro,
     sections,
-    footerNote: `Email administratif RGPD — FlowIA`,
+    footerNote: `Email administratif loi 18-07 — Salon DZ`,
   });
   const replyTo = businessEmail ? { email: businessEmail, name: businessName } : undefined;
   // Migré vers queue (commit 30 — non-critique, invitation marketing opt-in)
@@ -1059,7 +1063,7 @@ async function sendNewAppointmentMerchant({
     `Heure : ${startTime || ''}${endTime ? ' - ' + endTime : ''}`,
     serviceName ? `Service : ${serviceName}${durationMinutes ? ' · ' + durationMinutes + ' min' : ''}` : '',
     employeeName ? `Avec : ${employeeName}` : '',
-    price != null ? `Montant : ${Number(price).toFixed(2)} €` : '',
+    price != null ? `Montant : ${fmtDA(price)}` : '',
     '',
     agendaUrl ? `Ouvrir l'agenda : ${agendaUrl}` : '',
     '',
@@ -1076,7 +1080,7 @@ async function sendNewAppointmentMerchant({
   rows.push({ label: 'Créneau', value: `${escapeHtml(startTime || '')}${endTime ? ' - ' + escapeHtml(endTime) : ''}` });
   if (serviceName) rows.push({ label: 'Prestation', value: `${escapeHtml(serviceName)}${durationMinutes ? ' · ' + escapeHtml(durationMinutes) + ' min' : ''}` });
   if (employeeName) rows.push({ label: 'Avec', value: escapeHtml(employeeName) });
-  if (price != null) rows.push({ label: 'Montant', value: `${escapeHtml(Number(price).toFixed(2))} €`, valueIsMono: true });
+  if (price != null) rows.push({ label: 'Montant', value: `${escapeHtml(fmtDA(price))}`, valueIsMono: true });
 
   const intro = `<p style="margin:0;">${escapeHtml(sourceLabel)} chez ${escapeHtml(businessName || '')}.</p>`;
 
@@ -1086,7 +1090,7 @@ async function sendNewAppointmentMerchant({
 
   const html = renderShell({
     preheader: `Nouvelle réservation ${dateCap} à ${startTime || ''}`,
-    kicker: `FlowIA · ${escapeHtml(sourceLabel)}`,
+    kicker: `Salon DZ · ${escapeHtml(sourceLabel)}`,
     title: 'Nouvelle réservation',
     intro,
     sections,
@@ -1124,7 +1128,7 @@ async function sendMerchantOnboardingNudge({ to, firstName, loginUrl, whatsappNu
 
   const waDigits = String(whatsappNumber || '33780827458').replace(/\D/g, '');
   const waText = encodeURIComponent(
-    "Bonjour, je souhaite finaliser mon inscription commerçant FlowIA."
+    "Bonjour, je souhaite finaliser mon inscription commerçant Salon DZ."
   );
   const waHref = `https://wa.me/${waDigits}?text=${waText}`;
   const waDisplay = '+33 7 80 82 74 58';
@@ -1133,12 +1137,12 @@ async function sendMerchantOnboardingNudge({ to, firstName, loginUrl, whatsappNu
   const replyTo = process.env.SENDER_EMAIL || process.env.BREVO_FROM || 'contact@flowiapro.com';
 
   // Sujet transactionnel, neutre — passe les filtres et reste clair.
-  const subject = 'Il reste une étape pour activer votre espace FlowIA';
+  const subject = 'Il reste une étape pour activer votre espace Salon DZ';
 
   // Intro : 2 phrases max, on dit POURQUOI et QUOI tout de suite.
   const intro =
     `<p style="margin:0 0 12px;">${greeting}</p>` +
-    `<p style="margin:0;">Votre espace <strong style="font-weight:500;">FlowIA</strong> est presque prêt. ` +
+    `<p style="margin:0;">Votre espace <strong style="font-weight:500;">Salon DZ</strong> est presque prêt. ` +
     `Il reste <strong style="font-weight:500;">une étape</strong> : compléter le nom, l'adresse et le ` +
     `téléphone de votre établissement pour mettre votre page de réservation en ligne. Moins de 3 minutes.</p>`;
 
@@ -1173,22 +1177,22 @@ async function sendMerchantOnboardingNudge({ to, firstName, loginUrl, whatsappNu
 
   const outro =
     `<p style="margin:22px 0 0;font-size:14px;line-height:1.6;color:#374151;">` +
-    `À très vite,<br/><strong style="font-weight:500;">L'équipe FlowIA</strong></p>`;
+    `À très vite,<br/><strong style="font-weight:500;">L'équipe Salon DZ</strong></p>`;
 
   const sections = benefits + cta + offer + whatsappBlock + outro;
 
   const html = renderShell({
     preheader: 'Activez votre page de réservation en ligne en moins de 3 minutes.',
-    kicker: 'FlowIA',
+    kicker: 'Salon DZ',
     title: 'Activez votre espace en 3 minutes',
     intro,
     sections,
-    footerNote: `FlowIA · ${replyTo} · Vous recevez cet email car une inscription commerçant a été initiée avec cette adresse. Pour ne plus en recevoir, répondez « STOP ».`,
+    footerNote: `Salon DZ · ${replyTo} · Vous recevez cet email car une inscription commerçant a été initiée avec cette adresse. Pour ne plus en recevoir, répondez « STOP ».`,
   });
 
   const text = [
     greeting, '',
-    'Votre espace FlowIA est presque prêt. Il reste une étape : compléter le nom,',
+    'Votre espace Salon DZ est presque prêt. Il reste une étape : compléter le nom,',
     "l'adresse et le téléphone de votre établissement pour mettre votre page de",
     'réservation en ligne (moins de 3 minutes).',
     '',
@@ -1204,7 +1208,7 @@ async function sendMerchantOnboardingNudge({ to, firstName, loginUrl, whatsappNu
     `Une question ? WhatsApp ${waDisplay} : ${waHref}`,
     '',
     'À très vite,',
-    "L'équipe FlowIA",
+    "L'équipe Salon DZ",
     '',
     'Pour ne plus recevoir ce type d\'email, répondez « STOP ».',
   ].join('\n');

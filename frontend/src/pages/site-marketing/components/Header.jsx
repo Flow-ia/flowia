@@ -115,8 +115,8 @@ export default function Header() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24,
       }}>
         <MarketingLink to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
-          <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>FlowIA</span>
+          <img src="/images/logo-salon-dz-mark.svg" alt="Salon DZ" style={{ width: 28, height: 28 }} />
+          <span style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>Salon DZ</span>
         </MarketingLink>
 
         {!isMobile && (
@@ -274,7 +274,7 @@ export default function Header() {
               gap: 16, flexWrap: 'wrap',
             }}>
               <p style={{ fontSize: 13, color: S.fgMuted, margin: 0 }}>
-                {"Découvrez toutes les fonctionnalités de FlowIA en détail."}
+                {"Découvrez toutes les fonctionnalités de Salon DZ en détail."}
               </p>
               <MarketingLink to="/fonctionnalites" onClick={() => setMegaOpen(false)} style={{
                 fontSize: 13, fontWeight: 500, color: S.fg,

@@ -331,7 +331,7 @@ module.exports = function attachBookRoute(router) {
         }
         const minPurchase = parseFloat(promo.min_purchase || 0);
         if (minPurchase > 0 && originalAmt < minPurchase) {
-          return res.status(400).json({ error: `Ce code nécessite un minimum de ${minPurchase.toFixed(2)} €.` });
+          return res.status(400).json({ error: `Ce code nécessite un minimum de ${minPurchase.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA.` });
         }
         // Codes nominatifs : owner_client_email + target_clients='specific'.
         // Couvre fidélité, anniversaire (BDAY-*) et parrainage. Avant 24c le

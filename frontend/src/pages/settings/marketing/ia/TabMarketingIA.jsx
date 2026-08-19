@@ -145,8 +145,8 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
                         background:t.cardAlt, border:`0.5px solid ${t.border}` }}>
             <MiniRow label="SMS planifies"  value={launched.total_sms} theme={theme}/>
             <MiniRow label="Duree"          value={`${launched.duration_days} jours`} theme={theme}/>
-            <MiniRow label="Montant debite" value={`${launched.estimated_cost.toFixed(2)} €`} theme={theme}/>
-            <MiniRow label="Solde restant"  value={`${(launched.new_balance || 0).toFixed(2)} €`} theme={theme}/>
+            <MiniRow label="Montant debite" value={`${launched.estimated_cost.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`} theme={theme}/>
+            <MiniRow label="Solde restant"  value={`${(launched.new_balance || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`} theme={theme}/>
           </div>
           <div style={{ marginTop:18 }}>
             <Button variant="primary" fullWidth type="button" onClick={reset}>
@@ -197,12 +197,12 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
           <KpiCard theme={theme} icon="" label="Clients attendus"
                    value={`${plan.estimated_clients_min}-${plan.estimated_clients_max}`} accent="#92400e"/>
           <KpiCard theme={theme} icon="" label="CA estime"
-                   value={`${plan.estimated_revenue_min}-${plan.estimated_revenue_max}€`} accent="#065f46"/>
+                   value={`${plan.estimated_revenue_min}-${plan.estimated_revenue_max} DA`} accent="#065f46"/>
         </div>
 
         <p style={{ margin:0, fontSize:11, color:t.muted, textAlign:'center', padding:'0 8px' }}>
           Estimation basee sur votre activite reelle — taux retour 8-20%
-          <br/>panier moyen : {plan.avg_price}€ (calcule sur vos transactions)
+          <br/>panier moyen : {plan.avg_price} DA (calcule sur vos transactions)
         </p>
 
         {/* Phases */}
@@ -254,9 +254,9 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
         <div style={{ padding:'14px 16px', borderRadius:12,
                       background:t.card, border:`0.5px solid ${t.border}` }}>
           <MiniRow label="Total SMS"          value={plan.total_sms} theme={theme}/>
-          <MiniRow label="Montant debite"     value={`${plan.estimated_cost.toFixed(2)} €`} theme={theme}/>
+          <MiniRow label="Montant debite"     value={`${plan.estimated_cost.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`} theme={theme}/>
           <MiniRow label="Chiffre estime a gagner"
-                   value={`${plan.estimated_revenue_min}-${plan.estimated_revenue_max} €`}
+                   value={`${plan.estimated_revenue_min}-${plan.estimated_revenue_max} DA`}
                    theme={theme} accent="#065f46"/>
         </div>
 
@@ -285,7 +285,7 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
             <label style={{ fontSize:12, color:t.muted }}>Budget</label>
             <span style={{ fontSize:26, fontWeight:500, color:t.text, fontFamily:'monospace' }}>
-              {budget} €
+              {budget} DA
             </span>
           </div>
           <input type="range" min="5" max="100" step="5" value={budget}
@@ -296,7 +296,7 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
               ≈ <strong style={{ color:t.text, fontWeight:500 }}>{previewSms} SMS</strong> estimes
             </p>
             <p style={{ margin:0, fontSize:11, color: insufficient ? '#991b1b' : t.muted }}>
-              Solde : <strong style={{ fontWeight:500 }}>{balance != null ? balance.toFixed(2) : '—'} €</strong>
+              Solde : <strong style={{ fontWeight:500 }}>{balance != null ? balance.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '—'} DA</strong>
             </p>
           </div>
         </div>
@@ -336,7 +336,7 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
           <span style={{ fontSize:13, color:t.muted }}>Cout total</span>
           <span style={{ fontSize:16, fontWeight:500, color: insufficient ? '#991b1b' : t.text }}>
-            {budget.toFixed(2)} €
+            {budget.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
           </span>
         </div>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -346,7 +346,7 @@ export default function TabMarketingIA({ theme, showToast, onGoToSolde }) {
         {insufficient && (
           <div style={{ marginTop:10, padding:'10px 12px', borderRadius:8, background:'#fef2f2' }}>
             <p style={{ margin:'0 0 8px', fontSize:12, color:'#991b1b', fontWeight:500 }}>
-              Solde insuffisant ({balance?.toFixed(2)} €)
+              Solde insuffisant ({balance?.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA)
             </p>
             <Button variant="danger" size="small" type="button" onClick={onGoToSolde}>
               → Recharger mon solde

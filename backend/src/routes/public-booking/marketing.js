@@ -126,7 +126,7 @@ function renderUnsubPage({ status, data }) {
     <div class="warn">
       <p class="warn-title">Vous perdrez vos avantages exclusifs :</p>
       <ul class="warn-list">
-        <li>Code promo personnel le jour de votre anniversaire (≈ 7€ d&#39;économie)</li>
+        <li>Code promo personnel le jour de votre anniversaire (≈ 700 DA d&#39;économie)</li>
         <li>Programme parrainage (-10% pour vous et votre filleul)</li>
         <li>Notifications de progression de fidélité</li>
       </ul>

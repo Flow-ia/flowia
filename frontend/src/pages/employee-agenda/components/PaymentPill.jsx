@@ -25,7 +25,7 @@ export function resolvePaymentDisplay(appt) {
   const ps = appt.payment_status; // 'none' | 'pending' | 'paid' | 'refunded' | 'failed'
   const isStripe = !!appt.stripe_payment_intent_id;
   const cents = Number(appt.paid_amount_cents || 0);
-  const amountStr = cents > 0 ? ` · ${(cents / 100).toFixed(2)} €` : '';
+  const amountStr = cents > 0 ? ` · ${(cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA` : '';
 
   if (ps === 'paid') {
     if (isStripe) {

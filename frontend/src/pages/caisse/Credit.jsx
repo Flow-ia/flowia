@@ -35,7 +35,7 @@ function avatarColorFor(str) {
 
 function fmt(n) {
   const v = Number(n || 0);
-  return v.toFixed(2).replace('.', ',') + ' €';
+  return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
 }
 
 function initialsOf(name, email) {
@@ -179,7 +179,7 @@ function ClientDetailModal({ clientId, theme: t, onClose }) {
                       <div style={{ fontSize:12, fontWeight:500, textAlign:'right',
                                     color: isGrant ? '#065f46' : '#991b1b',
                                     fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                        {(isGrant ? '+' : '−') + fmt(Math.abs(parseFloat(h.amount || 0))).replace(' €', '')} €
+                        {(isGrant ? '+' : '−') + fmt(Math.abs(parseFloat(h.amount || 0))).replace(' DA', '')} DA
                       </div>
                       <div style={{ fontSize:11, color:t.muted, textAlign:'right',
                                     fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
@@ -391,9 +391,9 @@ function GrantForm({ employees, theme: t, onGranted, showToast }) {
       </div>
 
       <div>
-        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Montant (€) *"}</p>
+        <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Montant (DA) *"}</p>
         <input type="number" step="0.01" min="0.01" value={amount}
-               onChange={e => setAmount(e.target.value)} placeholder="50"
+               onChange={e => setAmount(e.target.value)} placeholder="5 000"
                style={{ ...inp, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                         textAlign:'right' }}/>
       </div>
@@ -632,7 +632,7 @@ export default function Credit({ employees = [], theme, showToast, transactions 
                     {isAnonymous
                       ? (hasDebtRecord
                           ? `${c.debt_email || ''}${c.debt_email && c.debt_phone ? ' · ' : ''}${c.debt_phone || ''}`
-                          : "Email anonymisé RGPD — coordonnées non récupérables (compte supprimé avant mise en place du registre)")
+                          : "Email anonymisé (loi 18-07) — coordonnées non récupérables (compte supprimé avant mise en place du registre)")
                       : (email || summary)}
                   </p>
                 </div>

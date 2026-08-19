@@ -161,7 +161,7 @@ export default function BookingSlugCard({ theme, showToast }) {
                 <Label>Nom dans votre lien</Label>
                 <input value={name}
                        onChange={e => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                       placeholder="haircoiff"
+                       placeholder="barber-el-bahdja"
                        maxLength={30}
                        style={inp}/>
                 <p style={{ fontSize:11, color:t.dim, margin:'4px 0 0' }}>

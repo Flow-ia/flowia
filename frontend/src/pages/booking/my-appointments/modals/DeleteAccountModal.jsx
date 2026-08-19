@@ -58,7 +58,7 @@ export function DeleteAccountModal({
               <div key={i} style={{ display:'flex', justifyContent:'space-between',
                                     fontSize:12, color:'#7c2d12', padding:'4px 0' }}>
                 <span>{c.merchant_name}</span>
-                <span style={{ fontWeight:500 }}>{Number(c.amount).toFixed(2)} €</span>
+                <span style={{ fontWeight:500 }}>{Number(c.amount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</span>
               </div>
             ))}
             <p style={{ margin:'8px 0 0', fontSize:11, color:'#92400e', lineHeight:1.5 }}>
@@ -80,14 +80,14 @@ export function DeleteAccountModal({
               <div key={i} style={{ display:'flex', justifyContent:'space-between',
                                     fontSize:12, color:'#991b1b', padding:'4px 0' }}>
                 <span>{d.merchant_name}</span>
-                <span style={{ fontWeight:500 }}>−{Number(d.amount).toFixed(2)} €</span>
+                <span style={{ fontWeight:500 }}>−{Number(d.amount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA</span>
               </div>
             ))}
             <p style={{ margin:'8px 0 0', fontSize:11, color:'#991b1b', lineHeight:1.6 }}>
               La suppression de votre compte <strong>ne vous libère pas de ces dettes</strong>.
               Vos coordonnées (nom, email, téléphone) seront <strong>conservées 2 ans</strong>
               par le(s) commerçant(s) concerné(s) pour permettre le recouvrement, conformément
-              à l'<strong>Article 17.3.e du RGPD</strong>. Au-delà, elles seront automatiquement effacées.
+              à la <strong>loi 18-07</strong>. Au-delà, elles seront automatiquement effacées.
             </p>
           </div>
         )}

@@ -548,7 +548,7 @@ export function MyAppointments({ slug, th, onBack, onNewBooking, onLogout, initi
       }
 
       const cents = Number(apptBeingCancelled.paid_amount_cents || 0);
-      const amountEur = cents > 0 ? (cents / 100).toFixed(2).replace('.', ',') : '';
+      const amountEur = cents > 0 ? (cents / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '';
       // Format date FR pour le rappel dans la modale resultat.
       let apptDateLabel = '';
       try {

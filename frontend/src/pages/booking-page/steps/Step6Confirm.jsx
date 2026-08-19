@@ -253,7 +253,7 @@ export function Step6Confirm({
             {selSvc?.price && Number(selSvc.price) > 0 && (
               <span style={{fontWeight:500,color:th.text,
                 fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
-                {`${Number(selSvc.price).toFixed(2)} €`}
+                {`${Number(selSvc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
               </span>
             )}
           </p>
@@ -302,12 +302,12 @@ export function Step6Confirm({
             <span style={{ display:'flex', alignItems:'baseline', gap:6 }}>
               {promoData && (
                 <span style={{ fontSize:11, textDecoration:'line-through', color:th.dim }}>
-                  {`${Number(selSvc.price).toFixed(2)} €`}
+                  {`${Number(selSvc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
                 </span>
               )}
               <span style={{ fontSize:14, fontWeight:500, color:th.text,
                 fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {`${(finalPriceCents).toFixed(2)} €`}
+                {`${(finalPriceCents).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
               </span>
             </span>
           )}
@@ -393,7 +393,7 @@ export function Step6Confirm({
               const isSelected = selectedDiscountId === d.id;
               const discountStr = d.discount_type === 'percent'
                 ? `-${d.discount_value}%`
-                : `-${Number(d.discount_value).toFixed(2)} €`;
+                : `-${Number(d.discount_value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
               return (
                 <button key={d.id} type="button"
                         onClick={() => applyDiscount(d)}
@@ -457,7 +457,7 @@ export function Step6Confirm({
                 <span style={{ fontSize: 13, fontWeight: 500, color: '#065f46',
                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                                flexShrink: 0 }}>
-                  {Number(availCredit.balance).toFixed(2)} €
+                  {Number(availCredit.balance).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                 </span>
               </div>
             )}
@@ -530,11 +530,11 @@ export function Step6Confirm({
                       </span>
                     )}
                     <span style={{fontSize:12,fontWeight: 500,color: promoData.source === 'referral' ? '#5b21b6' : '#16a34a'}}>
-                      {promoData.type==='percent'?`-${promoData.value}%`:`-${promoData.discount.toFixed(2)} €`} appliqué !
+                      {promoData.type==='percent'?`-${promoData.value}%`:`-${promoData.discount.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`} appliqué !
                     </span>
                   </div>
                   <span style={{fontSize:13,fontWeight: 500,color: promoData.source === 'referral' ? '#4c1d95' : '#166534',fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',flexShrink:0}}>
-                    {((selSvc?.price||0)-promoData.discount).toFixed(2)} €
+                    {((selSvc?.price||0)-promoData.discount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                   </span>
                 </div>
               )}
@@ -803,9 +803,9 @@ export function Step6Confirm({
           ) : (
             !phoneOk ? 'Telephone requis'
               : promoData
-                ? `Reserver - ${((selSvc?.price||0)-promoData.discount).toFixed(2)} €`
+                ? `Reserver - ${((selSvc?.price||0)-promoData.discount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`
                 : selSvc?.price&&Number(selSvc.price)>0
-                  ? `Reserver - ${Number(selSvc.price).toFixed(2)} €`
+                  ? `Reserver - ${Number(selSvc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`
                   : 'Reserver'
           )}
         </button>
@@ -817,7 +817,7 @@ export function Step6Confirm({
         onClose={() => setConfirmDelPmId(null)}
         onConfirm={handleDeleteSavedPm}
         title="Supprimer cette carte ?"
-        message="Vous devrez la ressaisir pour vos prochaines reservations FlowIA."
+        message="Vous devrez la ressaisir pour vos prochaines reservations Salon DZ."
         danger
       />
     </div>

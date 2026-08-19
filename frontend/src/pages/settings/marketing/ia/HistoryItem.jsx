@@ -16,7 +16,7 @@ export default function HistoryItem({ c, theme }) {
             Campagne {date}
           </p>
           <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
-            {c.total_sms} SMS · {c.duration_days}j · {c.total_cost.toFixed(2)}€
+            {c.total_sms} SMS · {c.duration_days}j · {Number(c.total_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
           </p>
         </div>
         <span style={{ fontSize:11, fontWeight:500, padding:'3px 8px', borderRadius:99,
@@ -36,7 +36,7 @@ export default function HistoryItem({ c, theme }) {
                       display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <span style={{ fontSize:12, color:'#065f46', opacity:0.85 }}>CA reel genere</span>
           <span style={{ fontSize:14, fontWeight:500, color:'#065f46', fontFamily:'monospace' }}>
-            +{c.real_revenue.toFixed(2)}€ {c.roi > 0 && <span style={{ fontSize:11, opacity:0.8 }}>(ROI x{c.roi})</span>}
+            +{Number(c.real_revenue || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA {c.roi > 0 && <span style={{ fontSize:11, opacity:0.8 }}>(ROI x{c.roi})</span>}
           </span>
         </div>
       )}

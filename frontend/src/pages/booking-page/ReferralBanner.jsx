@@ -8,7 +8,7 @@ export function ReferralBanner({
 
   const valueLabel = referralInfo.discount_type === 'percent'
     ? `${referralInfo.discount_value}%`
-    : `${Number(referralInfo.discount_value).toFixed(2)} €`;
+    : `${Number(referralInfo.discount_value).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 
   const ineligible = referralInfo.eligible === false;
   const bg     = ineligible ? '#fffbeb' : '#eef2ff';

@@ -92,7 +92,7 @@ export default function ClientDetailPage() {
 
   if (!client) {
     return (
-      <AppShell me={me} footer="FlowIA Admin — Clients">
+      <AppShell me={me} footer="Salon DZ Admin — Clients">
         <Link to="/clients" className="btn-ghost">{"← Retour"}</Link>
         {error
           ? <div className="login-error" style={{ marginTop: 16 }}>{error}</div>
@@ -105,7 +105,7 @@ export default function ClientDetailPage() {
   const merchants = client.merchants || [];
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Clients">
+    <AppShell me={me} footer="Salon DZ Admin — Clients">
       <Link to="/clients" className="btn-ghost">{"← Retour"}</Link>
 
       <div className="page-head" style={{ marginTop: 16 }}>
@@ -196,7 +196,7 @@ export default function ClientDetailPage() {
           )}
         </div>
         <p className="card-sub" style={{ marginTop: 0 }}>
-          {"Different du blocage total : le client peut toujours se connecter, voir son historique et exporter ses donnees, mais ne peut plus reserver de nouveaux RDV sur AUCUN salon FlowIA."}
+          {"Different du blocage total : le client peut toujours se connecter, voir son historique et exporter ses donnees, mais ne peut plus reserver de nouveaux RDV sur AUCUN salon Salon DZ."}
         </p>
 
         {client.cannot_book ? (
@@ -239,7 +239,7 @@ export default function ClientDetailPage() {
             <h2 className="card-title">{"Zone sensible"}</h2>
           </div>
           <p className="card-sub">
-            {"Bloquer ce client refuse sa connexion sur tous les salons FlowIA. Les RDV existants sont conserves. Action reversible."}
+            {"Bloquer ce client refuse sa connexion sur tous les salons Salon DZ. Les RDV existants sont conserves. Action reversible."}
           </p>
           {!blockOpen
             ? <button className="btn-danger" onClick={() => { setBlockOpen(true); setError(''); }}>{"Bloquer ce client"}</button>

@@ -103,10 +103,10 @@ function MarketplaceHeader() {
           display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none',
           flexShrink: 0,
         }}>
-          <img src="/images/logo-app.svg" alt="FlowIA" style={{ width: 28, height: 28 }} />
+          <img src="/images/logo-salon-dz-mark.svg" alt="Salon DZ" style={{ width: 28, height: 28 }} />
           <span className="mp-h-logo-text"
                 style={{ fontSize: 18, fontWeight: 500, color: S.fg, letterSpacing: '-0.02em' }}>
-            FlowIA
+            Salon DZ
           </span>
         </Link>
 

@@ -19,7 +19,7 @@ function fmtDate(s) {
   try { return new Date(s).toLocaleDateString('fr-FR'); } catch { return ''; }
 }
 function fmtMoney(n) {
-  return Number(n || 0).toFixed(2) + ' €';
+  return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
 }
 function daysUntil(retentionStr) {
   if (!retentionStr) return null;
@@ -90,7 +90,7 @@ export default function DebtsView({ theme, toast, showToast, stickyHeader, card,
           <div style={{ minWidth:0, flex:1 }}>
             <h1 style={{ margin:0, fontSize:20, fontWeight:500, color:t.text }}>Créances impayées (dettes)</h1>
             <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted, lineHeight:1.5 }}>
-              {"Coordonnées conservées 2 ans pour le recouvrement (RGPD Art. 17.3.e). Au-delà, effacement automatique."}
+              {"Coordonnées conservées 2 ans pour le recouvrement (loi 18-07). Au-delà, effacement automatique."}
             </p>
           </div>
         </div>

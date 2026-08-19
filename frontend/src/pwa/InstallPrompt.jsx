@@ -176,7 +176,7 @@ export default function InstallPrompt() {
              style={{ borderRadius: 10, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.2 }}>
-            {showIOSHelp ? 'Installer FlowIA sur iPhone' : 'Installer FlowIA'}
+            {showIOSHelp ? 'Installer Salon DZ sur iPhone' : 'Installer Salon DZ'}
           </div>
           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2, lineHeight: 1.3 }}>
             {showIOSHelp

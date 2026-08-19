@@ -3,6 +3,7 @@
 
 // Téléphone avec indicatif pays — liste des pays supportés
 export const PHONE_COUNTRIES = [
+  { code:'DZ', dial:'+213',flag:'🇩🇿', len:[9],    label:'Algérie' },
   { code:'FR', dial:'+33', flag:'🇫🇷', len:[9,10], label:'France' },
   { code:'BE', dial:'+32', flag:'🇧🇪', len:[8,9],  label:'Belgique' },
   { code:'CH', dial:'+41', flag:'🇨🇭', len:[9,10], label:'Suisse' },
@@ -10,7 +11,6 @@ export const PHONE_COUNTRIES = [
   { code:'CA', dial:'+1',  flag:'🇨🇦', len:[10],   label:'Canada' },
   { code:'MA', dial:'+212',flag:'🇲🇦', len:[9],    label:'Maroc' },
   { code:'TN', dial:'+216',flag:'🇹🇳', len:[8],    label:'Tunisie' },
-  { code:'DZ', dial:'+213',flag:'🇩🇿', len:[9],    label:'Algérie' },
   { code:'SN', dial:'+221',flag:'🇸🇳', len:[9],    label:'Sénégal' },
   { code:'CI', dial:'+225',flag:'🇨🇮', len:[10],   label:'Côte d\'Ivoire' },
   { code:'DE', dial:'+49', flag:'🇩🇪', len:[10,11],label:'Allemagne' },

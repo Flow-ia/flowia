@@ -9,7 +9,7 @@
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const SENDER_EMAIL  = process.env.SENDER_EMAIL  || process.env.BREVO_FROM || 'contact@haircoifflille.fr';
-const SENDER_NAME   = process.env.SENDER_NAME   || 'FlowIA';
+const SENDER_NAME   = process.env.SENDER_NAME   || 'Salon DZ';
 
 // Fonction principale d'envoi email
 async function sendMarketingEmailRaw({ to, toName, subject, htmlContent, type = 'transactional', headers }) {

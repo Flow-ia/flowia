@@ -395,8 +395,8 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
                     <label style={lblForm}>
                       Plan
                       <select value={plan} onChange={e => setPlan(e.target.value)} style={input}>
-                        <option value="essentiel">Essentiel (24 €/mois)</option>
-                        <option value="equipe">Équipe (49 €/mois) — toutes les fonctions</option>
+                        <option value="essentiel">Essentiel (2 400 DA/mois)</option>
+                        <option value="equipe">Équipe (4 900 DA/mois) — toutes les fonctions</option>
                       </select>
                     </label>
                     <label style={lblForm}>
@@ -526,7 +526,7 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
               </span>
             </div>
             <div style={detailRow}>
-              <span style={detailKey}>{"Commission FlowIA"}</span>
+              <span style={detailKey}>{"Commission Salon DZ"}</span>
               <span style={detailVal}>
                 {commissionEdit ? (
                   <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -566,7 +566,7 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
               <div style={{ ...detailRow, gridColumn: '1 / -1' }}>
                 <span/>
                 <span style={{ fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-                  {"Pourcentage prélevé par FlowIA sur chaque paiement de RDV (entre 0 et 30 %). Effet immédiat sur les nouveaux paiements."}
+                  {"Pourcentage prélevé par Salon DZ sur chaque paiement de RDV (entre 0 et 30 %). Effet immédiat sur les nouveaux paiements."}
                 </span>
               </div>
             )}
@@ -608,10 +608,10 @@ export default function MerchantSubscriptionSection({ merchantId, merchant }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {[
                   { v: 'decouverte',         label: 'Découverte',          sub: 'gratuit, fonctionnalités limitées' },
-                  { v: 'essentiel_monthly',  label: 'Essentiel mensuel',   sub: 'offert (24 €/mois) — à vie par défaut' },
-                  { v: 'essentiel_yearly',   label: 'Essentiel annuel',    sub: 'offert (240 €/an) — à vie par défaut' },
-                  { v: 'equipe_monthly',     label: 'Équipe mensuel',      sub: 'offert (49 €/mois) — toutes fonctions' },
-                  { v: 'equipe_yearly',      label: 'Équipe annuel',       sub: 'offert (490 €/an) — toutes fonctions' },
+                  { v: 'essentiel_monthly',  label: 'Essentiel mensuel',   sub: 'offert (2 400 DA/mois) — à vie par défaut' },
+                  { v: 'essentiel_yearly',   label: 'Essentiel annuel',    sub: 'offert (24 000 DA/an) — à vie par défaut' },
+                  { v: 'equipe_monthly',     label: 'Équipe mensuel',      sub: 'offert (4 900 DA/mois) — toutes fonctions' },
+                  { v: 'equipe_yearly',      label: 'Équipe annuel',       sub: 'offert (49 000 DA/an) — toutes fonctions' },
                 ].map(opt => (
                   <label key={opt.v} style={{
                     display: 'flex', alignItems: 'flex-start', gap: 8,

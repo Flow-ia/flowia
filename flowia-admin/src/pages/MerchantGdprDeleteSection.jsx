@@ -5,7 +5,7 @@ const DELETE_PHRASE = 'SUPPRIMER DEFINITIVEMENT';
 
 function money(cents) {
   if (cents == null) return 'inconnu';
-  return `${(Number(cents || 0) / 100).toFixed(2)} EUR`;
+  return `${(Number(cents || 0) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`;
 }
 
 function count(preview, key) {

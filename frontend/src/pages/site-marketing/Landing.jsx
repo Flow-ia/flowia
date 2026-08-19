@@ -11,7 +11,7 @@ export default function Landing() {
     <>
       <Seo
         path="/"
-        title="FlowIA — Logiciel de réservation & gestion pour salon et barbershop"
+        title="Salon DZ — Logiciel de réservation & gestion pour salon et barbershop"
         description="Réservation en ligne 24/7, caisse, SMS de rappel, fidélité, parrainage et IA pour salons de coiffure et barbershops. Sans commission. Essai gratuit."
       />
       <Hero />
@@ -46,7 +46,7 @@ function Integrations() {
           fontSize: 14, color: S.fgMuted, margin: '12px auto 0',
           maxWidth: 560, lineHeight: 1.55,
         }}>
-          {"Pas de migration, pas de friction. FlowIA s'intègre directement avec vos outils favoris."}
+          {"Pas de migration, pas de friction. Salon DZ s'intègre directement avec vos outils favoris."}
         </p>
       </div>
 
@@ -66,7 +66,7 @@ function Integrations() {
             </svg>
           }
           title="Google Calendar"
-          desc="Synchronisez vos rendez-vous FlowIA avec votre agenda Google en un clic. Toute modification ou annulation dans FlowIA met à jour votre Google Calendar instantanément."
+          desc="Synchronisez vos rendez-vous Salon DZ avec votre agenda Google en un clic. Toute modification ou annulation dans Salon DZ met à jour votre Google Calendar instantanément."
           tag="Sync sortant"
           tagColor="#1a73e8"
         />
@@ -79,7 +79,7 @@ function Integrations() {
             </svg>
           }
           title="Stripe"
-          desc="Encaissez les paiements de vos rendez-vous en ligne directement sur votre compte. Acomptes ou paiement intégral, anti no-show. L'argent arrive direct, FlowIA prend zéro intermédiaire."
+          desc="Encaissez les paiements de vos rendez-vous en ligne directement sur votre compte. Acomptes ou paiement intégral, anti no-show. L'argent arrive direct, Salon DZ prend zéro intermédiaire."
           tag="Direct charges"
           tagColor="#635bff"
         />
@@ -89,7 +89,7 @@ function Integrations() {
         fontSize: 12, color: S.fgSubtle, textAlign: 'center',
         margin: '28px auto 0', maxWidth: 600, lineHeight: 1.6,
       }}>
-        {"Google Calendar™ et Stripe® sont des marques déposées de leurs propriétaires respectifs. FlowIA est un partenaire intégrateur indépendant."}
+        {"Google Calendar™ et Stripe® sont des marques déposées de leurs propriétaires respectifs. Salon DZ est un partenaire intégrateur indépendant."}
       </p>
     </Section>
   );
@@ -297,22 +297,22 @@ const HERO_EMPLOYEES = [
 const HERO_DAY_APPTS = {
   k: [
     { start: 0,   dur: 45, name: 'Karim B.', service: 'Coupe + barbe' },
-    { start: 75,  dur: 30, name: 'Lucas P.', service: 'Dégradé' },
+    { start: 75,  dur: 30, name: 'Anis L.',  service: 'Dégradé' },
     { start: 150, dur: 30, name: 'Yanis D.', service: 'Coupe homme' },
   ],
   s: [
     { start: 30,  dur: 90, name: 'Sofia M.', service: 'Couleur' },
-    { start: 150, dur: 45, name: 'Léa T.',   service: 'Brushing' },
+    { start: 150, dur: 45, name: 'Lina T.',  service: 'Brushing' },
   ],
   y: [
     { start: 15,  dur: 20, name: 'Adam K.',  service: 'Barbe' },
-    { start: 60,  dur: 30, name: 'Noah R.',  service: 'Coupe homme' },
-    { start: 180, dur: 45, name: 'Ethan V.', service: 'Coupe + soin' },
+    { start: 60,  dur: 30, name: 'Rayan B.', service: 'Coupe homme' },
+    { start: 180, dur: 45, name: 'Mehdi C.', service: 'Coupe + soin' },
   ],
 };
 const HERO_WEEK = [
   { d: 'Lun', n: 12, today: true  }, { d: 'Mar', n: 9 }, { d: 'Mer', n: 14 },
-  { d: 'Jeu', n: 8 }, { d: 'Ven', n: 16 }, { d: 'Sam', n: 19 }, { d: 'Dim', n: 0 },
+  { d: 'Jeu', n: 8 }, { d: 'Ven', n: 0 }, { d: 'Sam', n: 19 }, { d: 'Dim', n: 16 },
 ];
 
 function HeroAgendaScreen() {
@@ -336,7 +336,7 @@ function HeroAgendaScreen() {
         <div style={{ borderRight: `1px solid ${S.border}`, padding: '14px 10px', background: S.bgMuted }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 6px 14px', borderBottom: `1px solid ${S.border}`, marginBottom: 12 }}>
             <span style={{ width: 22, height: 22, borderRadius: 6, background: S.fg }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: S.fg }}>FlowIA</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: S.fg }}>Salon DZ</span>
           </div>
           {[
             { l: 'Agenda', active: true },
@@ -360,7 +360,7 @@ function HeroAgendaScreen() {
                 {view === 'day' ? 'Lundi 12 mai' : 'Semaine du 12 au 18 mai'}
               </p>
               <p style={{ fontSize: 12, color: S.fgSubtle, margin: '2px 0 0' }}>
-                {view === 'day' ? '8 rendez-vous · 312 € prévus' : '78 rendez-vous · 2 940 € prévus'}
+                {view === 'day' ? '8 rendez-vous · 8 100 DA prévus' : '78 rendez-vous · 76 500 DA prévus'}
               </p>
             </div>
             <div style={{
@@ -508,7 +508,7 @@ function Stats() {
     { v: '+30 %', label: "de chiffre d'affaires moyen" },
     { v: '−70 %', label: 'de no-shows en moins' },
     { v: '24/7',  label: 'de réservations en ligne' },
-    { v: '500+',  label: 'salons actifs en France' },
+    { v: '500+',  label: 'salons actifs en Algérie' },
   ];
   return (
     <section style={{ padding: '64px 24px', background: S.bgInverse, color: S.fgInv }}>
@@ -609,9 +609,9 @@ function FeatureCard({ title, desc, mock, badge }) {
 // ── Mini UI mocks ────────────────────────────────────────────────────────────
 function MockBooking() {
   const services = [
-    { s: 'Coupe homme',   p: '22 €' },
-    { s: 'Coupe + barbe', p: '32 €', sel: true },
-    { s: 'Couleur',       p: '55 €' },
+    { s: 'Coupe homme',   p: '500 DA' },
+    { s: 'Coupe + barbe', p: '800 DA', sel: true },
+    { s: 'Couleur',       p: '3 500 DA' },
   ];
   return (
     <div style={{
@@ -621,7 +621,7 @@ function MockBooking() {
       padding: 10, display: 'flex', flexDirection: 'column', gap: 5,
     }}>
       <p style={{ fontSize: 10, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 2 }}>
-        {"Hair Coiff Lille"}
+        {"Barber Shop El Bahdja — Alger"}
       </p>
       {services.map((it, i) => (
         <div key={i} style={{
@@ -677,7 +677,7 @@ function MockSMS() {
       border: `1px solid ${S.border}`,
     }}>
       <p style={{ fontSize: 9, color: S.fgSubtle, textAlign: 'center', margin: 0 }}>
-        {"SMS · Hair Coiff Lille"}
+        {"SMS · Barber Shop El Bahdja"}
       </p>
       <div style={{
         background: S.bg, borderRadius: '12px 12px 12px 4px',
@@ -708,7 +708,7 @@ function MockCaisse() {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
         <span style={{ fontSize: 10, color: S.fgSubtle }}>{"Coupe + barbe"}</span>
-        <span style={{ fontSize: 13, fontWeight: 500, color: S.fg, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>32,00 €</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: S.fg, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>800 DA</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
         {[
@@ -788,7 +788,7 @@ function AIShowcase() {
           <Eyebrow>Marketing IA</Eyebrow>
           <H2>{"L'IA qui fait grandir votre CA"}</H2>
           <Lede maxWidth={500}>
-            {"FlowIA détecte les clients à reconquérir, génère les SMS, prévoit votre CA. Vous validez en un clic."}
+            {"Salon DZ détecte les clients à reconquérir, génère les SMS, prévoit votre CA. Vous validez en un clic."}
           </Lede>
           <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
@@ -823,7 +823,7 @@ function AIShowcase() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <span style={{ width: 32, height: 32, borderRadius: S.r, background: S.ax.violet }} />
               <div>
-                <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0 }}>{"FlowIA Assistant"}</p>
+                <p style={{ fontSize: 13, fontWeight: 500, color: S.fg, margin: 0 }}>{"Salon DZ Assistant"}</p>
                 <p style={{ fontSize: 11, color: S.fgSubtle, margin: 0 }}>{"Suggestion · il y a 2 min"}</p>
               </div>
             </div>
@@ -843,7 +843,7 @@ function AIShowcase() {
             }}>
               <p style={{ fontSize: 11, color: S.fgSubtle, margin: '0 0 6px' }}>{"SMS suggéré"}</p>
               <p style={{ fontSize: 12, color: S.fg, margin: 0, lineHeight: 1.5 }}>
-                {"Sofia, on vous a vue il y a longtemps ! −20 % sur votre prochaine coupe avec le code SOFIA20. Hair Coiff Lille."}
+                {"Sofia, on vous a vue il y a longtemps ! −20 % sur votre prochaine coupe avec le code SOFIA20. Barber Shop El Bahdja."}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -870,13 +870,13 @@ function AIShowcase() {
 // ── 5. Testimonials ──────────────────────────────────────────────────────────
 function Testimonials() {
   const items = [
-    { name: 'Sofiane Belkacem', role: 'Hair Coiff Lille',  quote: "0 appel par jour. Je me concentre sur mes clients en chaise." },
-    { name: 'Camille Roussel',  role: 'Studio Camille',    quote: "+800 €/mois rien qu'avec les rappels SMS. Imparable." },
-    { name: 'Élodie Marchand',  role: 'Beauty Box',        quote: "La fidélité tourne seule. Mes clientes adorent." },
+    { name: 'Karim Belkacem',   role: 'Barber Shop El Bahdja — Alger', quote: "0 appel par jour. Je me concentre sur mes clients en chaise." },
+    { name: 'Amine Bouzid',     role: 'Salon Amine — Oran',            quote: "+80 000 DA/mois rien qu'avec les rappels SMS. Imparable." },
+    { name: 'Lamia Benali',     role: 'Beauty Box — Annaba',           quote: "La fidélité tourne seule. Mes clientes adorent." },
   ];
   return (
     <Section paddingY={88}>
-      <H2 align="center">{"500+ salons utilisent FlowIA chaque jour"}</H2>
+      <H2 align="center">{"500+ salons utilisent Salon DZ chaque jour"}</H2>
       <div style={{
         marginTop: 36, display: 'grid', gap: 16,
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
@@ -921,13 +921,13 @@ function Pricing() {
       cta: 'Commencer', highlight: false,
     },
     {
-      name: 'Essentiel', price: '24',
+      name: 'Essentiel', price: '2 400',
       desc: "Pour faire grandir.",
       features: ['RDV illimités', "Jusqu'à 5 employés", '0 % de commission', 'Campagnes SMS marketing', 'Fidélité & parrainage', 'Marketing IA', 'Support prioritaire'],
       cta: 'Essayer 1 mois gratuit', highlight: true,
     },
     {
-      name: 'Équipe', price: '49',
+      name: 'Équipe', price: '4 900',
       desc: "Accompagnement dédié.",
       features: ['Tout le plan Essentiel', 'Employés illimités', 'Cadeau anniversaire', 'Support dédié + SLA'],
       cta: 'Nous contacter', highlight: false,
@@ -964,7 +964,7 @@ function Pricing() {
             <p style={{ fontSize: 14, fontWeight: 500, color: S.fg, margin: 0, marginBottom: 4, letterSpacing: '-0.01em' }}>{p.name}</p>
             <p style={{ fontSize: 13, color: S.fgSubtle, margin: 0, marginBottom: 18 }}>{p.desc}</p>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 22 }}>
-              <span style={{ fontSize: 38, fontWeight: 500, color: S.fg, letterSpacing: '-0.03em' }}>{p.price + ' €'}</span>
+              <span style={{ fontSize: 38, fontWeight: 500, color: S.fg, letterSpacing: '-0.03em' }}>{p.price + ' DA'}</span>
               <span style={{ fontSize: 13, color: S.fgSubtle }}>{"/mois"}</span>
             </div>
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -998,10 +998,10 @@ function Pricing() {
 // ── 7. FAQ ───────────────────────────────────────────────────────────────────
 function Faq() {
   const items = [
-    { q: "Puis-je essayer FlowIA gratuitement ?",
+    { q: "Puis-je essayer Salon DZ gratuitement ?",
       a: "Oui. Plan Découverte gratuit à vie. Plan Essentiel offert 1 mois sans carte bancaire." },
     { q: "Mes données sont-elles en sécurité ?",
-      a: "Hébergement Europe, chiffrement, conforme RGPD. Export et suppression à tout moment." },
+      a: "Hébergement cloud sécurisé, chiffrement, conforme à la loi 18-07. Export et suppression à tout moment." },
     { q: "Migration depuis mon ancien outil ?",
       a: "On importe vos clients, prestations et RDV gratuitement (24 à 48h selon volume)." },
     { q: "Engagement ou frais cachés ?",

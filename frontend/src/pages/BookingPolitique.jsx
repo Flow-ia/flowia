@@ -195,9 +195,9 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Durée de conservation"}</H3>
             <P th={th}>{"3 ans à compter de la dernière visite, puis anonymisation. L'historique des transactions est conservé sous forme anonyme au titre des obligations comptables et fiscales."}</P>
             <H3 th={th}>{"Destinataires"}</H3>
-            <P th={th}>{"Des sous-traitants encadrés par contrat conforme au RGPD interviennent pour l'envoi des emails et notifications, le paiement en ligne et l'hébergement des images. Aucune donnée n'est revendue ni transmise à des tiers à des fins commerciales."}</P>
+            <P th={th}>{"Des sous-traitants encadrés par contrat conforme à la loi 18-07 interviennent pour l'envoi des emails et notifications, le paiement en ligne et l'hébergement des images. Aucune donnée n'est revendue ni transmise à des tiers à des fins commerciales."}</P>
             <H3 th={th}>{"Droits du client"}</H3>
-            <P th={th}>{"Droits d'accès, de rectification, d'effacement, de portabilité et d'opposition, exerçables depuis l'espace client ou auprès du salon. Réclamation possible auprès de la CNIL."}</P>
+            <P th={th}>{"Droits d'accès, de rectification, d'effacement, de portabilité et d'opposition, exerçables depuis l'espace client ou auprès du salon. Réclamation possible auprès de l'ANPDP."}</P>
           </Section>
 
           {/* Fidélité */}
@@ -220,7 +220,7 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Limite"}</H3>
             <P th={th}>{"Le code anniversaire est attribué une seule fois par an et par client, y compris en cas de modification de la date de naissance dans le profil."}</P>
             <H3 th={th}>{"Sans opt-in marketing"}</H3>
-            <P th={th}>{"Si le client n'a pas coché la case d'opt-in marketing à son inscription, aucun code anniversaire ne lui est envoyé. Cette règle est conforme au RGPD : un envoi marketing automatique nécessite un consentement explicite préalable."}</P>
+            <P th={th}>{"Si le client n'a pas coché la case d'opt-in marketing à son inscription, aucun code anniversaire ne lui est envoyé. Cette règle est conforme à la loi 18-07 : un envoi marketing automatique nécessite un consentement explicite préalable."}</P>
           </Section>
 
           {/* Parrainage */}
@@ -234,7 +234,7 @@ export default function BookingPolitique({ slug }) {
             <H3 th={th}>{"Validation"}</H3>
             <P th={th}>{"La validation du parrainage est effectuée par le salon après la 1re visite du filleul. Sans cette validation manuelle, aucune récompense n'est émise. Le salon se réserve le droit de refuser un parrainage en cas de fraude suspectée."}</P>
             <H3 th={th}>{"Sans opt-in marketing"}</H3>
-            <P th={th}>{"Si l'un des deux participants (parrain ou filleul) n'a pas accepté les notifications marketing à son inscription, aucune récompense n'est émise. Cette règle est conforme au RGPD : l'envoi du code par email nécessite un consentement explicite des deux participants."}</P>
+            <P th={th}>{"Si l'un des deux participants (parrain ou filleul) n'a pas accepté les notifications marketing à son inscription, aucune récompense n'est émise. Cette règle est conforme à la loi 18-07 : l'envoi du code par email nécessite un consentement explicite des deux participants."}</P>
           </Section>
 
           {/* Annulation */}
@@ -254,8 +254,8 @@ export default function BookingPolitique({ slug }) {
             <P th={th}>{"Le compte est désactivé pendant 30 jours, délai pendant lequel la suppression reste annulable auprès du salon. Au terme de ce délai, les données personnelles sont définitivement anonymisées."}</P>
             <H3 th={th}>{"Export des données"}</H3>
             <P th={th}>{"Le client peut exporter l'intégralité de ses données depuis son espace client (« Exporter mes données ») : identité, rendez-vous, transactions et codes promotionnels."}</P>
-            <H3 th={th}>{"Conformité RGPD"}</H3>
-            <P th={th}>{"L'anonymisation satisfait le droit à l'effacement (article 17 du RGPD) tout en respectant l'obligation de conservation des écritures comptables pendant 10 ans (article L123-22 du Code de commerce)."}</P>
+            <H3 th={th}>{"Conformité loi 18-07"}</H3>
+            <P th={th}>{"L'anonymisation satisfait le droit à l'effacement prévu par la loi 18-07 tout en respectant l'obligation légale de conservation des écritures comptables pendant 10 ans."}</P>
           </Section>
 
         </div>

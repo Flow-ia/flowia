@@ -11,6 +11,9 @@ const { canCreateCashTransaction } = require('../services/transactionValidator')
 const { invalidateUserStatsCache } = require('../utils/paymentV3');
 const router = express.Router();
 
+// Format monétaire DA (affichage uniquement) — milliers fr-FR, 0 décimale si entier.
+const fmtDA = (v) => Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
+
 router.use(authMiddleware);
 // AUDIT perms commit C : si un header x-employee-pin est présent, on
 // charge req.employee (flags can_*). Routes sensibles (POST) utilisent
@@ -289,7 +292,7 @@ router.post('/', async (req, res) => {
     }
     // Audit V : cap NUMERIC(10,2) safe + borne métier réaliste.
     if (amt > MAX_AMOUNT) {
-      return res.status(400).json({ error: `Montant trop élevé (max ${MAX_AMOUNT} €).` });
+      return res.status(400).json({ error: `Montant trop élevé (max ${fmtDA(MAX_AMOUNT)}).` });
     }
     const payListRaw = Array.isArray(payments)
       ? payments.filter(p => p && p.method && parseFloat(p.amount) > 0)
@@ -298,7 +301,7 @@ router.post('/', async (req, res) => {
       const sumPay = payListRaw.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
       if (Math.abs(sumPay - amt) > 0.01) {
         return res.status(400).json({
-          error: `Somme des paiements (${sumPay.toFixed(2)} €) ≠ total (${amt.toFixed(2)} €).`,
+          error: `Somme des paiements (${fmtDA(sumPay)}) ≠ total (${fmtDA(amt)}).`,
           code: 'SPLIT_MISMATCH',
         });
       }
@@ -361,7 +364,7 @@ router.post('/', async (req, res) => {
       );
       if (Math.abs(itemsSum - amt) > 0.01) {
         return res.status(400).json({
-          error: `La somme des prestations (${itemsSum.toFixed(2)} €) ne correspond pas au montant total (${amt.toFixed(2)} €).`,
+          error: `La somme des prestations (${fmtDA(itemsSum)}) ne correspond pas au montant total (${fmtDA(amt)}).`,
           code: 'ITEMS_AMOUNT_MISMATCH',
         });
       }
@@ -456,7 +459,7 @@ router.post('/', async (req, res) => {
       const totalCents = Math.round(amt * 100);
       if (sumCents !== totalCents) {
         return res.status(400).json({
-          error: `La somme du multi-paiement (${(sumCents / 100).toFixed(2)} €) ne correspond pas au total (${amt.toFixed(2)} €).`,
+          error: `La somme du multi-paiement (${fmtDA(sumCents / 100)}) ne correspond pas au total (${fmtDA(amt)}).`,
           code: 'BREAKDOWN_SUM_MISMATCH',
         });
       }
@@ -1247,7 +1250,7 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
       if (Math.abs(itemsSum - amountTarget) > 0.01) {
         client.release();
         return res.status(400).json({
-          error: `La somme des prestations (${itemsSum.toFixed(2)} €) ne correspond pas au montant total (${amountTarget.toFixed(2)} €).`,
+          error: `La somme des prestations (${fmtDA(itemsSum)}) ne correspond pas au montant total (${fmtDA(amountTarget)}).`,
           code: 'ITEMS_AMOUNT_MISMATCH',
         });
       }
@@ -1312,7 +1315,7 @@ router.put('/:id', pinAdminMiddleware, async (req, res) => {
         if (sumCents !== totalCents) {
           client.release();
           return res.status(400).json({
-            error: `La somme des paiements (${(sumCents/100).toFixed(2)} €) doit égaler le total (${(totalCents/100).toFixed(2)} €).`,
+            error: `La somme des paiements (${fmtDA(sumCents/100)}) doit égaler le total (${fmtDA(totalCents/100)}).`,
             code: 'BREAKDOWN_SUM_MISMATCH',
           });
         }

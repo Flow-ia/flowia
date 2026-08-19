@@ -233,7 +233,7 @@ export default function MaintenanceOverlay() {
           </button>
         </div>
         <div style={footerStyle}>
-          {"FlowIA · Notre support reste disponible si besoin."}
+          {"Salon DZ · Notre support reste disponible si besoin."}
         </div>
       </div>
     </div>

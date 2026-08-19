@@ -37,7 +37,7 @@ const PM_CFG_SIMPLE = {
 const ADD_PRIORITY = ['card', 'cash', 'transfer', 'gift_card', 'other'];
 const MAX_BREAKDOWN_LINES = 4;
 
-function fmt(n) { return Number(n || 0).toFixed(2); }
+function fmt(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
 
 export default function Step3Paiement({
   theme: t, cart,
@@ -367,7 +367,7 @@ export default function Step3Paiement({
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: 8 }}>
             <input placeholder="Prénom Nom" value={clientName}
                    onChange={e => setClientName(e.target.value)} style={inp}/>
-            <input type="email" placeholder="email@exemple.fr" value={clientEmail}
+            <input type="email" placeholder="email@exemple.com" value={clientEmail}
                    onChange={e => setClientEmail(e.target.value)} style={inp}/>
           </div>
 
@@ -386,7 +386,7 @@ export default function Step3Paiement({
                 value={clientPhone || ''}
                 onChange={onPhoneChange}
                 required
-                defaultCountry="FR"
+                defaultCountry="DZ"
                 label="Téléphone (obligatoire)"
                 theme={{
                   text: t.text, muted: t.muted, dim: t.dim || t.muted,
@@ -430,7 +430,7 @@ export default function Step3Paiement({
                 </p>
                 <p style={{ margin:'2px 0 0', fontSize:15, fontWeight:500,
                             fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {fmt(clientCredit.balance) + " €"}
+                  {fmt(clientCredit.balance) + " DA"}
                 </p>
                 <p style={{ margin:'3px 0 0', fontSize:11, color:'#065f46', opacity:0.75 }}>
                   {"À utiliser via une ligne « Autre » en mode Multi-paiements."}
@@ -472,7 +472,7 @@ export default function Step3Paiement({
           {promoErr && <p style={{ margin:0, fontSize:11, color:'#991b1b' }}>{promoErr}</p>}
           {promoData && !promoErr && (
             <p style={{ margin:0, fontSize:11, color:'#065f46' }}>
-              {"Remise appliquée : −" + fmt(discount) + " €"}
+              {"Remise appliquée : −" + fmt(discount) + " DA"}
             </p>
           )}
         </div>
@@ -521,7 +521,7 @@ export default function Step3Paiement({
               const valLabel = Number.isFinite(valNum) && valNum > 0
                 ? (r.type === 'percent' || r.type === 'percentage'
                     ? `−${valNum}%`
-                    : `−${fmt(valNum)} €`)
+                    : `−${fmt(valNum)} DA`)
                 : '';
               // Date d'expiration (utile pour informer l'employé).
               const exp = r.expires_at ? new Date(r.expires_at) : null;
@@ -710,7 +710,7 @@ export default function Step3Paiement({
               </span>
               <span style={{ fontSize:16, fontWeight:500, color: t.text,
                              fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {fmt(finalTotal) + " €"}
+                {fmt(finalTotal) + " DA"}
               </span>
             </div>
 
@@ -748,7 +748,7 @@ export default function Step3Paiement({
                   <input type="text" inputMode="decimal"
                          value={line.amount}
                          onChange={e => updateLineAmount(idx, e.target.value)}
-                         placeholder="0,00"
+                         placeholder="0"
                          style={{ width:96, minHeight:40, padding:'8px 10px',
                                   borderRadius:8,
                                   border:`0.5px solid ${t.borderInput}`,
@@ -756,7 +756,7 @@ export default function Step3Paiement({
                                   fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                                   fontSize:14, fontWeight:500,
                                   textAlign:'right', outline:'none', boxSizing:'border-box' }}/>
-                  <span style={{ fontSize:13, fontWeight:500, color: cfg.text }}>{"€"}</span>
+                  <span style={{ fontSize:13, fontWeight:500, color: cfg.text }}>{"DA"}</span>
                   {removable ? (
                     <button onClick={() => removeLine(idx)}
                             aria-label="Supprimer cette méthode"
@@ -801,20 +801,20 @@ export default function Step3Paiement({
             {discount > 0 && (
               <div style={{ display:'flex', justifyContent:'space-between', color:'#9a3412' }}>
                 <span>{"Remise"}</span>
-                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmt(discount)} €</span>
+                <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{"−" + fmt(discount)} DA</span>
               </div>
             )}
             {splitMode && (
               <>
                 <div style={{ display:'flex', justifyContent:'space-between', color: t.muted }}>
                   <span>{"Somme actuelle"}</span>
-                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(paymentsSum)} €</span>
+                  <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{fmt(paymentsSum)} DA</span>
                 </div>
                 <div style={{ display:'flex', justifyContent:'space-between',
                               color: sumMatches ? '#1D9E75' : '#F59E0B' }}>
                   <strong style={{ fontWeight:500 }}>{"Restant à répartir"}</strong>
                   <strong style={{ fontWeight:500, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    {fmt(Math.abs(paymentsDiff))} €
+                    {fmt(Math.abs(paymentsDiff))} DA
                   </strong>
                 </div>
                 {splitMode && sumMatches && breakdownActive.length < 2 && (
@@ -862,7 +862,7 @@ export default function Step3Paiement({
           </span>
           <span style={{ fontSize:22, fontWeight:500,
                          fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-            {fmt(finalTotal) + " €"}
+            {fmt(finalTotal) + " DA"}
           </span>
         </div>
 

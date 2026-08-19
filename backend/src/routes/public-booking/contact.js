@@ -62,7 +62,7 @@ module.exports = (router) => {
       }
 
       const topicLabel = TOPICS[topic] || TOPICS.other;
-      const subject    = `[FlowIA Contact] ${topicLabel} — ${name}`;
+      const subject    = `[Salon DZ Contact] ${topicLabel} — ${name}`;
 
       const html = `
         <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111827;">

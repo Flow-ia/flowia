@@ -19,6 +19,13 @@ import { S } from './shadcn';
 import { mediaApi } from '../../../utils/api';
 import { labelFor as bizTypeLabel } from '../../../utils/businessTypes';
 
+// Montant DA sans decimales terminales (marche DZ) : "1 500 DA".
+function fmtDA(v) {
+  return Number(v || 0).toLocaleString('fr-FR', {
+    minimumFractionDigits: 0, maximumFractionDigits: 2,
+  }) + ' DA';
+}
+
 // Petit composant badge inline (icone + label). Couleurs depuis S.ax.
 function Badge({ icon, label, color, bg }) {
   return (
@@ -80,11 +87,30 @@ const Ic = {
       <circle cx="12" cy="10" r="3"/>
     </svg>
   ),
+  star: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b"
+         strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>
+  ),
+  clock: (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
 };
 
-export default function MerchantSearchCard({ merchant }) {
+// Props Salon DZ (toutes optionnelles, la card reste retro-compatible) :
+//   accent / accentBg : couleurs du segment (vert barber / rose girly)
+//   enrichment        : { priceMin, priceMax, rating, ratingCount } (client-side)
+//   nextSlot          : prochain creneau { date, time } | { none } | null(pending)
+//   nextSlotText      : libelle humain deja formate ("demain 10:00", ...)
+export default function MerchantSearchCard({ merchant, accent, accentBg, enrichment, nextSlot, nextSlotText }) {
   const m = merchant;
   const profile = mediaApi.absoluteUrl(m.profileUrl);
+  const hoverBorder = accent || S.borderHv;
 
   // Carousel covers — fallback sur coverUrl unique si coverUrls absent
   // (cas legacy ou nouveau client/ancien backend). Liste resolue en URLs
@@ -119,7 +145,7 @@ export default function MerchantSearchCard({ merchant }) {
     }}
     className="mp-card"
     onMouseEnter={(e) => {
-      e.currentTarget.style.borderColor = S.borderHv;
+      e.currentTarget.style.borderColor = hoverBorder;
       e.currentTarget.style.boxShadow = S.shadowMd;
       e.currentTarget.style.transform = 'translateY(-2px)';
     }}
@@ -277,6 +303,53 @@ export default function MerchantSearchCard({ merchant }) {
             {[m.city, m.postalCode].filter(Boolean).join(' · ')}
           </p>
         </div>
+
+        {/* Note Google + prix "a partir de" (enrichissement client-side) */}
+        {(enrichment?.rating != null || enrichment?.priceMin != null) && (
+          <div style={{
+            display: 'flex', alignItems: 'center', flexWrap: 'wrap',
+            gap: 10, marginTop: -2,
+          }}>
+            {enrichment?.rating != null && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 12.5, fontWeight: 500, color: S.fg,
+              }}>
+                {Ic.star}
+                {enrichment.rating.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                {enrichment.ratingCount > 0 && (
+                  <span style={{ fontWeight: 400, color: S.fgSubtle }}>
+                    {`(${enrichment.ratingCount} avis)`}
+                  </span>
+                )}
+              </span>
+            )}
+            {enrichment?.priceMin != null && (
+              <span style={{ fontSize: 12.5, color: S.fgMuted }}>
+                {"A partir de "}
+                <span style={{ fontWeight: 500, color: S.fg }}>{fmtDA(enrichment.priceMin)}</span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Prochain creneau (affiche uniquement quand le tri/filtre dispo est actif) */}
+        {nextSlot !== undefined && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            alignSelf: 'flex-start',
+            padding: '4px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 500,
+            background: nextSlot?.none ? S.bgHover : (accentBg || S.bgHover),
+            color: nextSlot?.none ? S.fgSubtle : (accent || S.fg),
+          }}>
+            {Ic.clock}
+            {nextSlot === null || nextSlot === undefined
+              ? 'Recherche du prochain creneau...'
+              : nextSlot.none
+                ? (nextSlotText || 'Complet ces 7 prochains jours')
+                : `Prochain RDV : ${nextSlotText || nextSlot.time}`}
+          </div>
+        )}
 
         {m.businessDescription && (
           <p style={{

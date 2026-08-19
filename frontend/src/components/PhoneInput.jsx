@@ -12,7 +12,7 @@
 //   onChange(e164)  — appelé avec la nouvelle valeur E.164 (string ou undefined si vide)
 //   onValidChange?  — (bool) callback déclenché quand l'état "valide" change
 //   required?       — défaut true
-//   defaultCountry? — défaut 'FR'
+//   defaultCountry? — défaut 'DZ'
 //   label?          — texte au-dessus de l'input (ex: "Téléphone *")
 //   placeholder?    — placeholder (libphonenumber injecte un format pays par défaut)
 //   disabled?       — désactive l'input
@@ -37,7 +37,7 @@ export function PhoneInput({
   onChange,
   onValidChange,
   required = true,
-  defaultCountry = 'FR',
+  defaultCountry = 'DZ',
   label,
   placeholder,
   disabled = false,
@@ -96,7 +96,7 @@ export function PhoneInput({
         international
         countryCallingCodeEditable={false}
         disabled={disabled}
-        placeholder={placeholder || '06 12 34 56 78'}
+        placeholder={placeholder || '05 50 12 34 56'}
       />
       {showError ? (
         <p style={{ margin:'4px 0 0', fontSize:11, color:'#dc2626', fontWeight:500 }}>

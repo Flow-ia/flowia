@@ -58,11 +58,11 @@ export default function HistoryTab({ theme, card, fiche }) {
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   {tx.original_amount && tx.original_amount !== tx.amount && (
                     <p style={{ margin: 0, fontSize: 11, color: theme.muted, textDecoration: 'line-through' }}>
-                      {Number(tx.original_amount).toFixed(2)} €
+                      {Number(tx.original_amount).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                     </p>
                   )}
                   <span style={{ fontSize: 14, fontWeight: 500, color: '#065f46' }}>
-                    {Number(tx.amount || 0).toFixed(2)} €
+                    {Number(tx.amount || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA
                   </span>
                 </div>
               </div>

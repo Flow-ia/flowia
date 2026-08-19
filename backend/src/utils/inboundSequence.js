@@ -49,7 +49,7 @@ function shell(inner, token) {
 ${inner}
 <a href="${registerUrl}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;font-size:14px;font-weight:500;padding:12px 22px;border-radius:8px;margin:6px 0 22px;">Activer mon mois gratuit</a>
 <p style="font-size:12px;color:#9ca3af;line-height:1.6;margin:18px 0 0;border-top:1px solid #e5e7eb;padding-top:16px;">
-FlowIA — logiciel de gestion pour salons et barbershops.<br/>
+Salon DZ — logiciel de gestion pour salons et barbershops.<br/>
 Vous recevez cet email car vous avez demande cette offre sur flowiapro.com.<br/>
 <a href="${unsub}" style="color:#6b7280;">Se desinscrire en un clic</a>
 </p>
@@ -58,19 +58,19 @@ Vous recevez cet email car vous avez demande cette offre sur flowiapro.com.<br/>
 
 const TEMPLATES = {
   welcome: (lead) => ({
-    subject: `Votre mois gratuit FlowIA pour ${lead.salon_name || 'votre salon'}`,
-    html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Bienvenue chez FlowIA</h2>
-<p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">Bonjour,<br/>FlowIA reunit agenda en ligne, caisse, SMS de rappel, fidelite et parrainage en une seule application — sans commission sur vos reservations, et moins cher que Planity.</p>
+    subject: `Votre mois gratuit Salon DZ pour ${lead.salon_name || 'votre salon'}`,
+    html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Bienvenue chez Salon DZ</h2>
+<p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">Bonjour,<br/>Salon DZ reunit agenda en ligne, caisse, SMS de rappel, fidelite et parrainage en une seule application — sans commission sur vos reservations.</p>
 ${offerBlock(lead.email)}`, lead.unsubscribe_token),
   }),
   relance1: (lead) => ({
-    subject: `${lead.salon_name || 'Votre salon'} — votre acces FlowIA vous attend`,
+    subject: `${lead.salon_name || 'Votre salon'} — votre acces Salon DZ vous attend`,
     html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Vous y avez pense ?</h2>
 <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">Votre mois gratuit du plan Essentiel est toujours disponible. La mise en route prend moins de 15 minutes, et vos clients reservent en ligne 24/7 des le premier jour.</p>
 ${offerBlock(lead.email)}`, lead.unsubscribe_token),
   }),
   relance2: (lead) => ({
-    subject: `Dernier rappel — 1 mois offert sur FlowIA`,
+    subject: `Dernier rappel — 1 mois offert sur Salon DZ`,
     html: shell(`<h2 style="font-size:20px;font-weight:500;margin:0 0 14px;">Derniere relance</h2>
 <p style="font-size:14px;color:#374151;line-height:1.6;margin:0 0 16px;">On ne vous recontactera plus apres cet email. Si gerer agenda, caisse et fidelite au meme endroit (sans commission) vous interesse, c'est le moment d'activer votre mois offert.</p>
 ${offerBlock(lead.email)}`, lead.unsubscribe_token),

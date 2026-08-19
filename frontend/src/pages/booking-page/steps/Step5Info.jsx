@@ -39,7 +39,7 @@ export function Step5Info({
           {selSvc?.price && Number(selSvc.price) > 0 && (
             <span style={{fontWeight:500,color:th.text,
               fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace'}}>
-              {`${Number(selSvc.price).toFixed(2)} €`}
+              {`${Number(selSvc.price).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA`}
             </span>
           )}
         </p>

@@ -48,7 +48,7 @@ function dispatchAuthExpired() {
 function handleAccountBlocked(data) {
   const code = data?.code;
   if (code !== 'ACCOUNT_FROZEN' && code !== 'ACCOUNT_BLOCKED') return false;
-  const msg = data?.error || 'Votre compte est bloque. Merci de contacter notre equipe administrateurs FlowIA pour plus de details.';
+  const msg = data?.error || 'Votre compte est bloque. Merci de contacter notre equipe administrateurs Salon DZ pour plus de details.';
   try { sessionStorage.setItem('ff_account_blocked_msg', msg); } catch {}
   ['ff_token','ff_pin_token','ff_oauth_merchant','ff_gc_token','ff_client_token']
     .forEach(k => { try { localStorage.removeItem(k); } catch {} });

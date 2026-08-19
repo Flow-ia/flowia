@@ -14,7 +14,7 @@ function validatePromoInput({ type, value, max_uses }) {
   if (type === 'percent' && v > 100) return 'Remise en % : max 100.';
   // Cap fixed à 10000€ : au-delà, la "remise" dépasse n'importe quelle
   // prestation raisonnable et signale une erreur de saisie (ou fraude).
-  if (type === 'fixed'   && v > 10000) return 'Montant remise trop élevé (max 10000 €).';
+  if (type === 'fixed'   && v > 10000) return 'Montant remise trop élevé (max 10000 DA).';
   if (max_uses != null && max_uses !== '') {
     const mu = parseInt(max_uses);
     if (isNaN(mu) || mu < 1) return 'max_uses doit être ≥ 1.';
@@ -104,7 +104,7 @@ router.post('/check', async (req, res) => {
     // ── Vérifier montant minimum d'achat ────────────────────────────────────
     const minPurchase = parseFloat(promo.min_purchase) || 0;
     if (minPurchase > 0 && baseAmt < minPurchase) {
-      return res.json({ valid: false, error: `Ce code nécessite un minimum d'achat de ${minPurchase.toFixed(2)} €. Montant actuel : ${baseAmt.toFixed(2)} €.` });
+      return res.json({ valid: false, error: `Ce code nécessite un minimum d'achat de ${minPurchase.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA. Montant actuel : ${baseAmt.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} DA.` });
     }
 
     // ── Calcul remise ────────────────────────────────────────────────────────

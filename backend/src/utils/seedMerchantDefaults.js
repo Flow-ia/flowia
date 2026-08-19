@@ -9,63 +9,65 @@
 // Idempotent : tous les INSERT utilisent ON CONFLICT DO NOTHING, donc re-jouer
 // le seed sur un compte deja seede ne casse rien et ne duplique pas.
 
-// Horaires par defaut : Lun-Ven 09h-19h, Sam 09h-17h, Dim ferme.
+// Horaires par defaut (semaine algerienne) : Sam-Jeu 09h-19h, Ven ferme.
+// En Algerie le jour de repos hebdomadaire est le vendredi ; le dimanche
+// est un jour ouvre normal.
 // day_of_week : 0 = dimanche (Postgres EXTRACT(DOW) standard), 1-5 = lun-ven,
 // 6 = samedi. Cohérent avec le reste du code (cf. business_hours table).
 const DEFAULT_HOURS = [
-  { day: 0, open: '09:00', close: '18:00', is_open: false },  // dimanche
+  { day: 0, open: '09:00', close: '19:00', is_open: true  },  // dimanche
   { day: 1, open: '09:00', close: '19:00', is_open: true  },  // lundi
   { day: 2, open: '09:00', close: '19:00', is_open: true  },  // mardi
   { day: 3, open: '09:00', close: '19:00', is_open: true  },  // mercredi
   { day: 4, open: '09:00', close: '19:00', is_open: true  },  // jeudi
-  { day: 5, open: '09:00', close: '19:00', is_open: true  },  // vendredi
-  { day: 6, open: '09:00', close: '17:00', is_open: true  },  // samedi
+  { day: 5, open: '09:00', close: '18:00', is_open: false },  // vendredi
+  { day: 6, open: '09:00', close: '19:00', is_open: true  },  // samedi
 ];
 
 // Services suggeres par type de commerce. Crees avec is_active=FALSE pour
 // ne pas exposer publiquement sur le booking tant que le commercant n'a pas
-// valide ses prix/durees dans le wizard. Prix moyens marche FR 2026 (ordre
-// de grandeur pour donner un point de depart, pas une recommandation
-// commerciale).
+// valide ses prix/durees dans le wizard. Prix moyens marche algerien 2026
+// en dinars (ordre de grandeur pour donner un point de depart, pas une
+// recommandation commerciale).
 const DEFAULT_SERVICES_BY_TYPE = {
   barbier: [
-    { name: 'Coupe homme',       duration: 30, price: 22, color: '#3b82f6' },
-    { name: 'Barbe',             duration: 20, price: 15, color: '#10b981' },
-    { name: 'Coupe + Barbe',     duration: 45, price: 32, color: '#6366f1' },
+    { name: 'Coupe homme',       duration: 30, price: 500,  color: '#3b82f6' },
+    { name: 'Barbe',             duration: 20, price: 300,  color: '#10b981' },
+    { name: 'Coupe + Barbe',     duration: 45, price: 700,  color: '#6366f1' },
   ],
   coiffeur_femme: [
-    { name: 'Coupe femme',       duration: 45, price: 35, color: '#ec4899' },
-    { name: 'Brushing',          duration: 30, price: 25, color: '#f59e0b' },
-    { name: 'Coloration',        duration: 90, price: 60, color: '#8b5cf6' },
+    { name: 'Coupe femme',       duration: 45, price: 1500, color: '#ec4899' },
+    { name: 'Brushing',          duration: 30, price: 1000, color: '#f59e0b' },
+    { name: 'Coloration',        duration: 90, price: 3500, color: '#8b5cf6' },
   ],
   salon_mixte: [
-    { name: 'Coupe homme',       duration: 30, price: 22, color: '#3b82f6' },
-    { name: 'Coupe femme',       duration: 45, price: 35, color: '#ec4899' },
-    { name: 'Brushing',          duration: 30, price: 25, color: '#f59e0b' },
-    { name: 'Coloration',        duration: 90, price: 60, color: '#8b5cf6' },
+    { name: 'Coupe homme',       duration: 30, price: 500,  color: '#3b82f6' },
+    { name: 'Coupe femme',       duration: 45, price: 1500, color: '#ec4899' },
+    { name: 'Brushing',          duration: 30, price: 1000, color: '#f59e0b' },
+    { name: 'Coloration',        duration: 90, price: 3500, color: '#8b5cf6' },
   ],
   onglerie: [
-    { name: 'Manucure simple',          duration: 30, price: 25, color: '#ec4899' },
-    { name: 'Vernis semi-permanent',    duration: 45, price: 30, color: '#f59e0b' },
-    { name: 'Pose de gel',              duration: 60, price: 45, color: '#8b5cf6' },
+    { name: 'Manucure simple',          duration: 30, price: 800,  color: '#ec4899' },
+    { name: 'Vernis semi-permanent',    duration: 45, price: 1500, color: '#f59e0b' },
+    { name: 'Pose de gel',              duration: 60, price: 2500, color: '#8b5cf6' },
   ],
   institut_beaute: [
-    { name: 'Epilation sourcils',  duration: 15, price: 15, color: '#10b981' },
-    { name: 'Soin visage',         duration: 60, price: 60, color: '#ec4899' },
-    { name: 'Maquillage',          duration: 45, price: 50, color: '#8b5cf6' },
+    { name: 'Epilation sourcils',  duration: 15, price: 300,  color: '#10b981' },
+    { name: 'Soin visage',         duration: 60, price: 2500, color: '#ec4899' },
+    { name: 'Maquillage',          duration: 45, price: 3000, color: '#8b5cf6' },
   ],
   spa: [
-    { name: 'Massage relaxant 30min', duration: 30, price: 50, color: '#3b82f6' },
-    { name: 'Massage relaxant 60min', duration: 60, price: 90, color: '#6366f1' },
-    { name: 'Soin du corps',          duration: 60, price: 75, color: '#10b981' },
+    { name: 'Massage relaxant 30min', duration: 30, price: 2000, color: '#3b82f6' },
+    { name: 'Massage relaxant 60min', duration: 60, price: 3500, color: '#6366f1' },
+    { name: 'Soin du corps',          duration: 60, price: 3000, color: '#10b981' },
   ],
 };
 
 // Fallback generique si business_type inconnu/null (devrait pas arriver
 // post-onboarding mais on protege).
 const DEFAULT_SERVICES_FALLBACK = [
-  { name: 'Prestation 1', duration: 30, price: 25, color: '#7c6af7' },
-  { name: 'Prestation 2', duration: 60, price: 50, color: '#3b82f6' },
+  { name: 'Prestation 1', duration: 30, price: 1000, color: '#7c6af7' },
+  { name: 'Prestation 2', duration: 60, price: 2000, color: '#3b82f6' },
 ];
 
 // Insere les 7 lignes business_hours (1 par jour). Idempotent via la

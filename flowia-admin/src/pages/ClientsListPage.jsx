@@ -38,14 +38,14 @@ export default function ClientsListPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
-    <AppShell me={me} footer="FlowIA Admin — Clients">
+    <AppShell me={me} footer="Salon DZ Admin — Clients">
       <div className="page-head">
         <h1 className="dash-title">{"Clients globaux"}</h1>
         <span className="page-count">{data.total} {"resultats"}</span>
       </div>
 
       <p className="page-sub" style={{ marginBottom: '16px' }}>
-        {"Identites cross-merchant (table global_clients). Un blocage refuse la connexion sur tous les salons FlowIA."}
+        {"Identites cross-merchant (table global_clients). Un blocage refuse la connexion sur tous les salons Salon DZ."}
       </p>
 
       <form className="filters" onSubmit={onSearchSubmit}>

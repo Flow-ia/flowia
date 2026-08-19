@@ -44,11 +44,11 @@ function FreePriceModal({ catName, isCustom, theme: t, onCancel, onConfirm }) {
           </div>
         )}
         <div>
-          <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Montant (€) *"}</p>
+          <p style={{ margin:'0 0 4px', fontSize:11, color:t.muted, fontWeight:500 }}>{"Montant (DA) *"}</p>
           <input type="number" step="0.01" min="0.01" value={amount}
                  onChange={e => { setAmount(e.target.value); setErr(''); }}
                  onKeyDown={e => e.key === 'Enter' && confirm()}
-                 placeholder="0.00"
+                 placeholder="0"
                  style={{ ...inp, paddingRight:32, fontSize:18, fontWeight:500,
                           fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',
                           textAlign:'right', color:'#92400e' }}/>
@@ -74,7 +74,7 @@ function FreePriceModal({ catName, isCustom, theme: t, onCancel, onConfirm }) {
   );
 }
 
-function fmt(n) { return Number(n || 0).toFixed(2); }
+function fmt(n) { return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
 
 export default function Step1Panier({
   categories = [], cart, setCart, theme: t, onContinue,
@@ -182,7 +182,7 @@ export default function Step1Panier({
                         </span>
                         <strong style={{ fontSize:15, fontWeight:500, color:t.text,
                                          fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                          {k.is_free_price || !k.price ? 'Libre' : fmt(k.price) + ' €'}
+                          {k.is_free_price || !k.price ? 'Libre' : fmt(k.price) + ' DA'}
                         </strong>
                       </button>
                     ))}
@@ -239,7 +239,7 @@ export default function Step1Panier({
                   {it.name}
                 </p>
                 <p style={{ margin:'2px 0 0', fontSize:11, color:t.muted }}>
-                  {fmt(it.price)} €
+                  {fmt(it.price)} DA
                 </p>
               </div>
               <div style={{ display:'flex', gap:6, alignItems:'center', flexShrink:0 }}>
@@ -265,7 +265,7 @@ export default function Step1Panier({
                 </button>
                 <div style={{ minWidth:68, textAlign:'right', fontWeight:500, fontSize:13, color:t.text,
                               fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                  {fmt(it.price * it.qty)} €
+                  {fmt(it.price * it.qty)} DA
                 </div>
               </div>
             </div>
@@ -277,7 +277,7 @@ export default function Step1Panier({
                           color:t.text, borderTop:`0.5px solid ${t.separator}` }}>
               <span>{"Total"}</span>
               <span style={{ fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {fmt(total)} €
+                {fmt(total)} DA
               </span>
             </div>
           )}
