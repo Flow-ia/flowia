@@ -17,7 +17,7 @@ import Communication from './communication';
 // Une seule source de vérité par carte : subtitle court (3-5 mots-clés).
 // Les détails complets vivent dans la sous-page elle-même (PageHeader subtitle).
 const DOMAINS = [
-  { id:'mon-commerce',  label:'Mon commerce',        subtitle:'Identité, photos, RGPD, sécurité',  color:'#f97316', icon:'storefront' },
+  { id:'mon-commerce',  label:'Mon commerce',        subtitle:'Identité, photos, données, sécurité',  color:'#f97316', icon:'storefront' },
   { id:'reservations',  label:'Réservation en ligne', subtitle:'Lien public, prestations, agenda',  color:'#3b82f6', icon:'calendar'   },
   { id:'caisse-config', label:'Caisse',              subtitle:'Prestations en boutique, QR',       color:'#8b5cf6', icon:'cash'       },
   { id:'equipe',        label:'Équipe / Employés',   subtitle:'Membres, horaires, commissions',    color:'#10b981', icon:'users'      },

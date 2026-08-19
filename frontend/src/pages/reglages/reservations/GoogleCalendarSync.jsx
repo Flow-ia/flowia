@@ -122,10 +122,10 @@ export default function GoogleCalendarSync() {
             <span style={pill('#475569', '#f1f5f9')}>Non connecte</span>
           </div>
           <p style={paragraph(t)}>
-            {"Connectez votre compte Google pour que vos rendez-vous FlowIA apparaissent automatiquement dans votre agenda Google. Pratique pour les notifications mobiles, le partage avec votre equipe, ou pour avoir tous vos RDV au meme endroit."}
+            {"Connectez votre compte Google pour que vos rendez-vous Salon DZ apparaissent automatiquement dans votre agenda Google. Pratique pour les notifications mobiles, le partage avec votre equipe, ou pour avoir tous vos RDV au meme endroit."}
           </p>
           <ul style={bulletList(t)}>
-            <li>{"FlowIA ne lit PAS votre agenda — il ne fait qu'y ajouter vos RDV (scope minimal calendar.events)."}</li>
+            <li>{"Salon DZ ne lit PAS votre agenda — il ne fait qu'y ajouter vos RDV (scope minimal calendar.events)."}</li>
             <li>{"Annulation/modification d'un RDV → l'event Google est mis a jour automatiquement."}</li>
             <li>{"Vous pouvez deconnecter ou mettre en pause a tout moment."}</li>
           </ul>

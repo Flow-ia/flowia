@@ -1060,7 +1060,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
                              fontWeight:500 }}>
               {"conditions d'utilisation et la politique de confidentialite"}
             </button>
-            . Mes donnees sont traitees conformement au RGPD.
+            . Mes donnees sont traitees conformement a la loi 18-07.
           </label>
         </div>
 
@@ -1089,7 +1089,7 @@ function RegisterScreen({ show, onBack, onSent, openGoogle }) {
               ['Donnees collectees', 'Nom du commerce, email, telephone, adresse. Utilises pour gerer votre compte et vos reservations.'],
               ['Utilisation',        'Vos donnees permettent de gerer votre activite (reservations, caisse, statistiques). Elles ne sont jamais vendues a des tiers.'],
               ['Conservation',       'Conservees le temps de votre abonnement. Supprimables a tout moment depuis votre compte.'],
-              ['Vos droits RGPD',    'Acces, rectification, suppression disponibles depuis Parametres > Compte. Delai de reponse : 30 jours max.'],
+              ['Vos droits (loi 18-07)',    'Acces, rectification, suppression disponibles depuis Parametres > Compte. Delai de reponse : 30 jours max.'],
               ['Securite',           'Mots de passe hashes bcrypt. Communications TLS. Acces securise par JWT.'],
               ['Contact',            'Pour toute question : utilisez le formulaire de contact ou supprimez votre compte depuis les parametres.'],
             ].map(([ttl, desc]) => (

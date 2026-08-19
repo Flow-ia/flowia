@@ -261,10 +261,10 @@ export default function ClientDetailPage() {
 
       <section className="card card-danger">
         <div className="card-head">
-          <h2 className="card-title">{"Anonymisation RGPD"}</h2>
+          <h2 className="card-title">{"Anonymisation (loi 18-07)"}</h2>
         </div>
         <p className="card-sub">
-          {"Efface DEFINITIVEMENT les donnees personnelles (nom, email, telephone, mot de passe) tout en preservant les RDV et historiques (anonymises). Action IRREVERSIBLE. A utiliser uniquement sur demande explicite du client (droit a l'oubli RGPD art. 17)."}
+          {"Efface DEFINITIVEMENT les donnees personnelles (nom, email, telephone, mot de passe) tout en preservant les RDV et historiques (anonymises). Action IRREVERSIBLE. A utiliser uniquement sur demande explicite du client (droit a l'oubli, loi 18-07)."}
         </p>
         <button className="btn-danger" onClick={doAnonymize} disabled={busy}>
           {"Anonymiser definitivement"}

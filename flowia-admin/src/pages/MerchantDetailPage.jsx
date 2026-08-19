@@ -308,7 +308,7 @@ export default function MerchantDetailPage() {
         <section className="card card-warning">
           <div className="card-head">
             <h2 className="card-title">
-              {merchant.deletion_requested_at ? "Suppression RGPD programmee" : "Compte gele"}
+              {merchant.deletion_requested_at ? "Suppression des donnees programmee" : "Compte gele"}
             </h2>
             {!merchant.deletion_requested_at && (
               <button className="btn-ghost" onClick={doUnfreeze} disabled={busy}>{"Degeler"}</button>
@@ -319,7 +319,7 @@ export default function MerchantDetailPage() {
             <strong>{"Depuis :"}</strong> {merchant.frozen_at ? new Date(merchant.frozen_at).toLocaleString('fr-FR') : '—'}<br/>
             {merchant.deletion_requested_at && (
               <>
-                <strong>{"Demande RGPD :"}</strong> {new Date(merchant.deletion_requested_at).toLocaleString('fr-FR')}<br/>
+                <strong>{"Demande de suppression :"}</strong> {new Date(merchant.deletion_requested_at).toLocaleString('fr-FR')}<br/>
                 <strong>{"Purge estimee :"}</strong> {new Date(new Date(merchant.deletion_requested_at).getTime() + 30 * 86400000).toLocaleString('fr-FR')}<br/>
               </>
             )}
@@ -574,9 +574,9 @@ export default function MerchantDetailPage() {
               ...prev,
               is_frozen: true,
               deletion_requested_at: result.retention?.requested_at || new Date().toISOString(),
-              frozen_reason: 'Suppression RGPD programmee',
+              frozen_reason: 'Suppression des donnees programmee',
             } : prev);
-            setSuccess('Procedure RGPD programmee. Le compte est ferme et la purge sera traitee apres la fenetre de retention.');
+            setSuccess('Procedure de suppression programmee. Le compte est ferme et la purge sera traitee apres la fenetre de retention.');
           } else {
             navigate('/merchants', { replace: true });
           }

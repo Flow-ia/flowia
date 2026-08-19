@@ -251,7 +251,7 @@ function ConfirmStep({ info, submitting, errorMsg, onConfirm, onCancel }) {
         <ul style={warnList}>
           <li style={warnItem}>
             <span style={warnIcon}><IconGift /></span>
-            <span>{"Code promo personnel le jour de votre anniversaire (≈ 7€ d'économie)"}</span>
+            <span>{"Code promo personnel le jour de votre anniversaire (≈ 700 DA d'économie)"}</span>
           </li>
           <li style={warnItem}>
             <span style={warnIcon}><IconUsers /></span>

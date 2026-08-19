@@ -148,7 +148,7 @@ export default function Paiements() {
             {status === 'not_connected' && (
               <>
                 <p style={paragraph(t)}>
-                  {"Connectez votre compte Stripe pour permettre à vos clients de payer leurs réservations en ligne. L'argent arrive directement sur votre compte Stripe (pas de transit par FlowIA)."}
+                  {"Connectez votre compte Stripe pour permettre à vos clients de payer leurs réservations en ligne. L'argent arrive directement sur votre compte Stripe (pas de transit par Salon DZ)."}
                 </p>
                 <ul style={bulletList(t)}>
                   <li>{"Si vous n'avez pas encore de compte Stripe, vous pourrez le créer pendant l'onboarding."}</li>
@@ -239,7 +239,7 @@ export default function Paiements() {
                     </span>
                   </div>
                   <div style={detailRow}>
-                    <span style={detailKey(t)}>{"Commission FlowIA"}</span>
+                    <span style={detailKey(t)}>{"Commission Salon DZ"}</span>
                     <span style={detailVal(t)}>
                       <strong>{(data.commission_rate || 0).toFixed(1)} %</strong>
                       <span style={{ color: t.muted, fontSize: 11, marginLeft: 6 }}>
@@ -429,7 +429,7 @@ function CancellationPolicySection({ t, showToast }) {
                      fontSize: 12, color: t.text, lineHeight: 1.55 }}>
           <li>
             <strong style={{ color: '#065f46' }}>{"Client annule dans les délais :"}</strong>{' '}
-            remboursement intégral automatique. Notre commission FlowIA
+            remboursement intégral automatique. Notre commission Salon DZ
             vous est aussi rendue.
           </li>
           <li>
@@ -480,7 +480,7 @@ function PerformancePaymentsSection({ t, showToast }) {
   };
   useEffect(() => { load(period); /* eslint-disable-next-line */ }, [period]);
 
-  const fmtEur = (cents) => (Math.round(cents) / 100).toFixed(2).replace('.', ',') + ' €';
+  const fmtEur = (cents) => (Math.round(cents) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
 
   if (loading && !data) {
     return (
@@ -635,7 +635,7 @@ function EscrowPayoutsSection({ t, showToast }) {
   };
   useEffect(() => { load(); }, []);
 
-  const fmtEur = (cents) => (Math.round(cents) / 100).toFixed(2).replace('.', ',') + ' €';
+  const fmtEur = (cents) => (Math.round(cents) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
   const fmtDate = (iso) => {
     if (!iso) return '—';
     try {
@@ -701,7 +701,7 @@ function EscrowPayoutsSection({ t, showToast }) {
         </div>
         <p style={{ margin: '8px 0 0', fontSize: 11, color: '#065f46', lineHeight: 1.5, opacity: 0.85 }}>
           {summary.pending_count
-            ? `Programmation FlowIA : ${summary.pending_count} reversement${summary.pending_count > 1 ? 's' : ''} planifie${summary.pending_count > 1 ? 's' : ''} pour ${fmtEur(summary.pending_cents || 0)} (versés selon le délai après chaque RDV).`
+            ? `Programmation Salon DZ : ${summary.pending_count} reversement${summary.pending_count > 1 ? 's' : ''} planifie${summary.pending_count > 1 ? 's' : ''} pour ${fmtEur(summary.pending_cents || 0)} (versés selon le délai après chaque RDV).`
             : 'Aucun reversement programmé actuellement.'}
         </p>
       </div>
@@ -1385,7 +1385,7 @@ function OnlinePaymentsAnalytics({ t, showToast }) {
           <BreakdownCol label={"Frais Stripe (1,4% + 25c)"}
                         value={formatCentsSign(-Math.abs(summary.stripe_fee_cents || 0))}
                         color="#FFD9A6"/>
-          <BreakdownCol label={"Commission FlowIA" + (policy.commission_rate ? " (" + policy.commission_rate + "%)" : "")}
+          <BreakdownCol label={"Commission Salon DZ" + (policy.commission_rate ? " (" + policy.commission_rate + "%)" : "")}
                         value={formatCentsSign(-Math.abs(summary.platform_fee_cents || 0))}
                         color="#FFD9A6"/>
           <BreakdownCol label={"Net"} value={formatCents(netCents)} color="#A6F4D5"/>

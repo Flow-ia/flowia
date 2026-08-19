@@ -43,7 +43,7 @@ const PERIODS = [
 
 function fmtEur(n) {
   const v = Number(n || 0);
-  return v.toFixed(2).replace('.', ',') + ' €';
+  return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' DA';
 }
 
 function PaymentMethodsBlock({ theme: t, showToast }) {

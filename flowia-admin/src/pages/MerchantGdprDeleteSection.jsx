@@ -143,21 +143,21 @@ export default function MerchantGdprDeleteSection({
         className="btn-danger"
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
       >
-        Procedure RGPD
+        Procedure de suppression
       </button>
     )
     : (
       <section className="card card-danger">
         <div className="card-head">
-          <h2 className="card-title">Procedure RGPD compte marchand</h2>
+          <h2 className="card-title">Procedure de suppression compte marchand</h2>
         </div>
         <p className="card-sub">
           Ferme le compte immediatement, coupe les acces et integrations, puis
           programme la purge definitive apres la fenetre standard de retention.
           Action reservee super-admin.
         </p>
-        {result && <div className="alert-success" style={{ marginBottom: 12 }}>Procedure RGPD programmee.</div>}
-        <button className="btn-danger" onClick={() => setOpen(true)}>Ouvrir la procedure RGPD</button>
+        {result && <div className="alert-success" style={{ marginBottom: 12 }}>Procedure de suppression programmee.</div>}
+        <button className="btn-danger" onClick={() => setOpen(true)}>Ouvrir la procedure de suppression</button>
       </section>
     );
 
@@ -169,7 +169,7 @@ export default function MerchantGdprDeleteSection({
           <div style={modalContent}>
             <div style={modalHeader}>
               <div>
-                <h3 style={{ margin: 0, color: '#991b1b', fontSize: 17 }}>Procedure RGPD compte marchand</h3>
+                <h3 style={{ margin: 0, color: '#991b1b', fontSize: 17 }}>Procedure de suppression compte marchand</h3>
                 <p style={{ margin: '4px 0 0', color: '#7c2d12', fontSize: 12 }}>
                   {expectedName || merchant?.business_name || merchant?.email}
                 </p>
@@ -252,7 +252,7 @@ export default function MerchantGdprDeleteSection({
                   <input
                     value={reason}
                     onChange={e => setReason(e.target.value)}
-                    placeholder="Ex: demande RGPD recue par support"
+                    placeholder="Ex: demande de suppression recue par support"
                     disabled={busy}
                   />
                 </label>

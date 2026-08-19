@@ -292,7 +292,7 @@ export default function Securite({ theme, showToast }) {
           </Row>
 
           <Row theme={t}
-               title="Seuil SMS bas (€)"
+               title="Seuil SMS bas (DA)"
                desc="Alerte sur le dashboard quand le solde SMS passe sous ce montant.">
             <input type="number" min="0" max="10000" step="1"
                    value={state.sms_low_balance_threshold}
